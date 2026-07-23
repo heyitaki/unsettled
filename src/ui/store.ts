@@ -15,7 +15,7 @@ import type {
   Resource,
   TileKind,
 } from '../model/types'
-import { autosaveCurrent, loadCurrent } from '../persistence/localStorage'
+import { loadWorkspace, saveWorkspace } from '../persistence/localStorage'
 
 export type Tool =
   | { kind: 'tile'; tile: TileKind }
@@ -25,12 +25,19 @@ export type Tool =
   | { kind: 'erase' }
   | { kind: 'piece'; tier: 'road' | BuildingTier }
 
-export interface StoreState {
+export interface TabState {
+  id: string
+  title: string
   board: Board
-  tool: Tool
-  activePlayerId: string
   past: Board[]
   future: Board[]
+  activePlayerId: string
+}
+
+export interface StoreState {
+  tabs: TabState[]
+  activeTabId: string
+  tool: Tool
   notice: string | null
   highlight: string | null
 }
@@ -44,19 +51,44 @@ export type StoreAction =
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
   | { type: 'highlight'; ref: string | null }
+  | { type: 'tab-add'; board?: Board; title?: string; id?: string }
+  | { type: 'tab-select'; id: string }
+  | { type: 'tab-rename'; id: string; title: string }
+  | { type: 'tab-close'; id: string }
 
-function initialState(): StoreState {
-  const restored = loadCurrent()
-  const board = restored.ok ? restored.board : createBoard('standard4')
+function createTab(
+  board: Board = createBoard('standard4'),
+  title: string = 'Board 1',
+  id: string = crypto.randomUUID(),
+): TabState {
   return {
+    id,
+    title,
     board,
-    tool: { kind: 'tile', tile: 'wood' },
-    activePlayerId: board.players[0].id,
     past: [],
     future: [],
-    notice: null,
+    activePlayerId: board.players[0].id,
+  }
+}
+
+function initialState(): StoreState {
+  const restored = loadWorkspace()
+  const tabs = restored.ok
+    ? restored.workspace.tabs.map((tab) => createTab(tab.board, tab.title, tab.id))
+    : [createTab()]
+  return {
+    tabs,
+    activeTabId: restored.ok ? restored.workspace.activeTabId : tabs[0].id,
+    tool: { kind: 'tile', tile: 'wood' },
+    notice: restored.ok ? restored.warning ?? null : null,
     highlight: null,
   }
+}
+
+export function activeTab(state: StoreState): TabState {
+  const tab = state.tabs.find((candidate) => candidate.id === state.activeTabId)
+  if (!tab) throw new Error('Active workspace tab was not found')
+  return tab
 }
 
 function activePlayerFor(board: Board, activePlayerId: string): string {
@@ -65,54 +97,115 @@ function activePlayerFor(board: Board, activePlayerId: string): string {
     : board.players[0].id
 }
 
+function updateActiveTab(
+  state: StoreState,
+  update: (tab: TabState) => TabState,
+): StoreState {
+  const current = activeTab(state)
+  const next = update(current)
+  if (next === current) return state
+  const tabs = [...state.tabs]
+  tabs[state.tabs.indexOf(current)] = next
+  return { ...state, tabs }
+}
+
+function unusedBoardTitle(tabs: TabState[]): string {
+  const titles = new Set(tabs.map((tab) => tab.title))
+  let index = 1
+  while (titles.has(`Board ${index}`)) index += 1
+  return `Board ${index}`
+}
+
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
     case 'commit':
-      if (action.board === state.board) return state
-      return {
-        ...state,
-        board: action.board,
-        past: [...state.past, state.board].slice(-50),
-        future: [],
-      }
+      return updateActiveTab(state, (tab) => {
+        if (action.board === tab.board) return tab
+        return {
+          ...tab,
+          board: action.board,
+          past: [...tab.past, tab.board].slice(-50),
+          future: [],
+        }
+      })
     case 'replace':
-      return {
-        ...state,
+      return updateActiveTab(state, (tab) => ({
+        ...tab,
         board: action.board,
-        activePlayerId: activePlayerFor(action.board, state.activePlayerId),
-        past: [...state.past, state.board].slice(-50),
+        activePlayerId: activePlayerFor(action.board, tab.activePlayerId),
+        past: [...tab.past, tab.board].slice(-50),
         future: [],
-      }
+      }))
     case 'tool':
       return { ...state, tool: action.tool }
     case 'active-player':
-      return { ...state, activePlayerId: action.playerId }
-    case 'undo': {
-      const board = state.past.at(-1)
-      if (!board) return state
-      return {
-        ...state,
-        board,
-        activePlayerId: activePlayerFor(board, state.activePlayerId),
-        past: state.past.slice(0, -1),
-        future: [state.board, ...state.future].slice(0, 50),
-      }
-    }
-    case 'redo': {
-      const board = state.future[0]
-      if (!board) return state
-      return {
-        ...state,
-        board,
-        activePlayerId: activePlayerFor(board, state.activePlayerId),
-        past: [...state.past, state.board].slice(-50),
-        future: state.future.slice(1),
-      }
-    }
+      return updateActiveTab(state, (tab) => ({ ...tab, activePlayerId: action.playerId }))
+    case 'undo':
+      return updateActiveTab(state, (tab) => {
+        const board = tab.past.at(-1)
+        if (!board) return tab
+        return {
+          ...tab,
+          board,
+          activePlayerId: activePlayerFor(board, tab.activePlayerId),
+          past: tab.past.slice(0, -1),
+          future: [tab.board, ...tab.future].slice(0, 50),
+        }
+      })
+    case 'redo':
+      return updateActiveTab(state, (tab) => {
+        const board = tab.future[0]
+        if (!board) return tab
+        return {
+          ...tab,
+          board,
+          activePlayerId: activePlayerFor(board, tab.activePlayerId),
+          past: [...tab.past, tab.board].slice(-50),
+          future: tab.future.slice(1),
+        }
+      })
     case 'notice':
       return { ...state, notice: action.message }
     case 'highlight':
       return { ...state, highlight: action.ref }
+    case 'tab-add': {
+      const tab = createTab(
+        action.board,
+        action.title ?? unusedBoardTitle(state.tabs),
+        action.id,
+      )
+      return {
+        ...state,
+        tabs: [...state.tabs, tab],
+        activeTabId: tab.id,
+      }
+    }
+    case 'tab-select':
+      if (!state.tabs.some((tab) => tab.id === action.id)) return state
+      return action.id === state.activeTabId ? state : { ...state, activeTabId: action.id }
+    case 'tab-rename': {
+      if (action.title.trim().length === 0) return state
+      const index = state.tabs.findIndex((tab) => tab.id === action.id)
+      if (index < 0) return state
+      const tabs = [...state.tabs]
+      tabs[index] = { ...tabs[index], title: action.title }
+      return { ...state, tabs }
+    }
+    case 'tab-close': {
+      const index = state.tabs.findIndex((tab) => tab.id === action.id)
+      if (index < 0) return state
+      const tabs = state.tabs.filter((_, tabIndex) => tabIndex !== index)
+      if (tabs.length === 0) {
+        const tab = createTab()
+        return { ...state, tabs: [tab], activeTabId: tab.id }
+      }
+      if (action.id !== state.activeTabId) return { ...state, tabs }
+      return {
+        ...state,
+        tabs,
+        activeTabId: (tabs[index] ?? tabs.at(-1)).id,
+      }
+    }
   }
 }
 
@@ -122,11 +215,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      const result = autosaveCurrent(state.board)
+      const result = saveWorkspace({
+        activeTabId: state.activeTabId,
+        tabs: state.tabs.map(({ id, title, board }) => ({ id, title, board })),
+      })
       if (!result.ok) dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
     }, 500)
     return () => window.clearTimeout(timeout)
-  }, [state.board])
+  }, [state.activeTabId, state.tabs])
   const value = useMemo(() => ({ state, dispatch }), [state])
   return createElement(StoreContext.Provider, { value }, children)
 }

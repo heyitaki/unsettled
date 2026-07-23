@@ -8,7 +8,7 @@ import {
   loadMap,
   saveMap,
 } from '../persistence/localStorage'
-import { useStore } from './store'
+import { activeTab, useStore } from './store'
 
 function downloadBoard(name: string, contents: string) {
   const blob = new Blob([contents], { type: 'application/json' })
@@ -20,6 +20,10 @@ function downloadBoard(name: string, contents: string) {
   URL.revokeObjectURL(url)
 }
 
+function fileTitle(name: string): string {
+  return name.replace(/\.[^/.]+$/, '') || name
+}
+
 function loadedNotice(action: string, board: Parameters<typeof validateBoard>[0]): string {
   const warnings = validateBoard(board).filter((issue) => issue.severity === 'warning')
   if (warnings.length === 0) return action
@@ -29,6 +33,7 @@ function loadedNotice(action: string, board: Parameters<typeof validateBoard>[0]
 
 export function MapsPanel() {
   const { state, dispatch } = useStore()
+  const { board } = activeTab(state)
   const [name, setName] = useState('My board')
   const [revision, setRevision] = useState(0)
   const importRef = useRef<HTMLInputElement>(null)
@@ -37,9 +42,9 @@ export function MapsPanel() {
   void revision
   const notice = (message: string) => dispatch({ type: 'notice', message })
   const chooseLayout = (layout: LayoutId) => {
-    if (layout === state.board.layout) return
+    if (layout === board.layout) return
     if (!window.confirm('Changing layout clears board placements but keeps your players. Continue?')) return
-    dispatch({ type: 'commit', board: setLayout(state.board, layout) })
+    dispatch({ type: 'commit', board: setLayout(board, layout) })
   }
   return (
     <section className="panel maps-panel">
@@ -49,8 +54,8 @@ export function MapsPanel() {
           <h2>Maps</h2>
         </div>
         <div className="layout-toggle">
-          <label><input type="radio" checked={state.board.layout === 'standard4'} onChange={() => chooseLayout('standard4')} /> 4P</label>
-          <label><input type="radio" checked={state.board.layout === 'extension6'} onChange={() => chooseLayout('extension6')} /> 5–6P</label>
+          <label><input type="radio" checked={board.layout === 'standard4'} onChange={() => chooseLayout('standard4')} /> 4P</label>
+          <label><input type="radio" checked={board.layout === 'extension6'} onChange={() => chooseLayout('extension6')} /> 5–6P</label>
         </div>
       </div>
       <div className="map-save-row">
@@ -59,9 +64,9 @@ export function MapsPanel() {
           type="button"
           className="primary"
           onClick={() => {
-            let result = saveMap(name, state.board, false)
+            let result = saveMap(name, board, false)
             if (!result.ok && result.error.includes('already exists') && window.confirm('Overwrite the existing map?')) {
-              result = saveMap(name, state.board, true)
+              result = saveMap(name, board, true)
             }
             notice(result.ok ? `Saved “${name}”` : result.error)
             refresh()
@@ -78,7 +83,7 @@ export function MapsPanel() {
             <button type="button" disabled={!map.valid} onClick={() => {
               const loaded = loadMap(map.name)
               if (loaded.ok) {
-                dispatch({ type: 'replace', board: loaded.board })
+                dispatch({ type: 'tab-add', board: loaded.board, title: map.name })
                 setName(map.name)
                 notice(loadedNotice(`Loaded “${map.name}”`, loaded.board))
               } else notice(loaded.errors.join(', '))
@@ -92,7 +97,7 @@ export function MapsPanel() {
         ))}
       </div>
       <div className="file-actions">
-        <button type="button" onClick={() => downloadBoard(name, serializeBoard(state.board))}>Export JSON</button>
+        <button type="button" onClick={() => downloadBoard(name, serializeBoard(board))}>Export JSON</button>
         <button type="button" onClick={() => importRef.current?.click()}>Import JSON</button>
         <input
           ref={importRef}
@@ -104,7 +109,7 @@ export function MapsPanel() {
             if (!file) return
             const parsed = parseBoard(await file.text())
             if (parsed.ok) {
-              dispatch({ type: 'replace', board: parsed.board })
+              dispatch({ type: 'tab-add', board: parsed.board, title: fileTitle(file.name) })
               notice(loadedNotice(`Imported ${file.name}`, parsed.board))
             } else notice(`Import failed: ${parsed.errors.join('; ')}`)
             event.target.value = ''

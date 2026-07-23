@@ -7,6 +7,10 @@ import {
 import { createBrowserTextReader } from '../parser/textReader'
 import { useStore } from './store'
 
+function fileTitle(name: string): string {
+  return name.replace(/\.[^/.]+$/, '') || name
+}
+
 async function decodeImage(file: File): Promise<RgbaImage> {
   let bitmap: ImageBitmap
   try {
@@ -65,7 +69,7 @@ export function ImportPanel() {
               try {
                 const result = await parseBoardImageWithNames(image, reader)
                 if (result.ok) {
-                  dispatch({ type: 'replace', board: result.board })
+                  dispatch({ type: 'tab-add', board: result.board, title: fileTitle(file.name) })
                   dispatch({ type: 'notice', message: `Imported ${file.name}` })
                   setIssues(result.issues)
                 } else dispatch({ type: 'notice', message: `Screenshot import failed: ${result.error}` })

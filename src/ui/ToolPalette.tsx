@@ -1,6 +1,6 @@
 import { RESOURCES, type BuildingTier, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
-import { useStore, type Tool } from './store'
+import { activeTab, useStore, type Tool } from './store'
 
 const TILES: TileKind[] = [...RESOURCES, 'desert']
 const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
@@ -12,6 +12,7 @@ const keyOf = (tool: Tool): string => tool.kind === 'tile' ? `${tool.kind}:${too
 
 export function ToolPalette() {
   const { state, dispatch } = useStore()
+  const tab = activeTab(state)
   const selected = keyOf(state.tool)
   return (
     <section className="panel tools-panel">
@@ -21,8 +22,8 @@ export function ToolPalette() {
           <h2>Board tools</h2>
         </div>
         <div className="history-buttons">
-          <button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!state.past.length}>Undo</button>
-          <button type="button" onClick={() => dispatch({ type: 'redo' })} disabled={!state.future.length}>Redo</button>
+          <button type="button" onClick={() => dispatch({ type: 'undo' })} disabled={!tab.past.length}>Undo</button>
+          <button type="button" onClick={() => dispatch({ type: 'redo' })} disabled={!tab.future.length}>Redo</button>
         </div>
       </div>
       <div className="tool-group">

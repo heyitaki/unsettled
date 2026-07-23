@@ -1,4 +1,5 @@
 import { BoardCanvas } from './BoardCanvas'
+import { BoardTabs } from './BoardTabs'
 import { ImportPanel } from './ImportPanel'
 import { MapsPanel } from './MapsPanel'
 import { PlayerPanel } from './PlayerPanel'
@@ -32,7 +33,10 @@ function Workspace() {
           <ToolPalette />
           <ImportPanel />
         </aside>
-        <BoardCanvas />
+        <div className="center-column">
+          <BoardTabs />
+          <BoardCanvas />
+        </div>
         <aside className="right-rail">
           <PlayerPanel />
           <MapsPanel />

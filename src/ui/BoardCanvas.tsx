@@ -17,10 +17,10 @@ import {
   setRobber,
   upsertPort,
 } from '../model/board'
-import type { AxialCoord, EdgeId, VertexId } from '../model/types'
+import type { AxialCoord, Board, EdgeId, VertexId } from '../model/types'
 import { INK_COLOR, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { PortPopover } from './PortPopover'
-import { useStore } from './store'
+import { activeTab, useStore } from './store'
 
 const SIZE = 58
 
@@ -51,48 +51,52 @@ function pipDots(number: number, x: number, y: number) {
 
 export function BoardCanvas() {
   const { state, dispatch } = useStore()
+  const tab = activeTab(state)
+  const { board } = tab
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
-  const grid = useMemo(() => boardGrid(state.board.layout), [state.board.layout])
-  const width = state.board.layout === 'extension6' ? 790 : 650
-  const height = state.board.layout === 'extension6' ? 720 : 590
-  const playerColor = (id: string) => state.board.players.find((player) => player.id === id)?.color ?? '#333'
-  const commit = (board: typeof state.board) => dispatch({ type: 'commit', board })
+  const grid = useMemo(() => boardGrid(board.layout), [board.layout])
+  const width = board.layout === 'extension6' ? 790 : 650
+  const height = board.layout === 'extension6' ? 720 : 590
+  const playerColor = (id: string) => board.players.find((player) => player.id === id)?.color ?? '#333'
+  const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
   const onHex = (coord: AxialCoord) => {
-    const hex = state.board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))
+    const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))
     if (!hex) return
-    if (state.tool.kind === 'tile') commit(setHexTile(state.board, coord, state.tool.tile))
+    if (state.tool.kind === 'tile') commit(setHexTile(board, coord, state.tool.tile))
     else if (state.tool.kind === 'token') {
       if (hex.tile === 'desert') {
         dispatch({ type: 'notice', message: 'Desert hexes cannot have number tokens.' })
         return
       }
-      commit(setNumberToken(state.board, coord, state.tool.number))
+      commit(setNumberToken(board, coord, state.tool.number))
     }
-    else if (state.tool.kind === 'robber') commit(setRobber(state.board, coord))
+    else if (state.tool.kind === 'robber') commit(setRobber(board, coord))
     else if (state.tool.kind === 'erase') {
-      let board = setHexTile(state.board, coord, null)
-      if (board.robber && axialKey(board.robber) === axialKey(coord)) board = setRobber(board, null)
-      commit(board)
+      let nextBoard = setHexTile(board, coord, null)
+      if (nextBoard.robber && axialKey(nextBoard.robber) === axialKey(coord)) {
+        nextBoard = setRobber(nextBoard, null)
+      }
+      commit(nextBoard)
     }
   }
   const onEdge = (edgeId: EdgeId) => {
     if (state.tool.kind === 'piece' && state.tool.tier === 'road') {
-      commit(placeRoad(state.board, edgeId, state.activePlayerId))
+      commit(placeRoad(board, edgeId, tab.activePlayerId))
     } else if (state.tool.kind === 'erase') {
-      commit(removePort(removeRoad(state.board, edgeId), edgeId))
+      commit(removePort(removeRoad(board, edgeId), edgeId))
     } else if (state.tool.kind === 'port' && grid.coastalEdgeIds.includes(edgeId)) setEditingPort(edgeId)
   }
   const onVertex = (vertexId: VertexId) => {
     if (state.tool.kind === 'piece' && state.tool.tier !== 'road') {
-      commit(placeBuilding(state.board, vertexId, state.activePlayerId, state.tool.tier))
-    } else if (state.tool.kind === 'erase') commit(removeBuilding(state.board, vertexId))
+      commit(placeBuilding(board, vertexId, tab.activePlayerId, state.tool.tier))
+    } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
   }
   return (
     <section className="board-stage">
       <div className="board-status">
-        <span><strong>{state.board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout</span>
-        <span>{state.board.hexes.filter((hex) => hex.tile).length}/{state.board.hexes.length} terrain</span>
-        <span>{state.board.roads.length + state.board.buildings.length} pieces</span>
+        <span><strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout</span>
+        <span>{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
+        <span>{board.roads.length + board.buildings.length} pieces</span>
       </div>
       <svg
         className="board-canvas"
@@ -100,7 +104,7 @@ export function BoardCanvas() {
         aria-label="Editable Catan board"
       >
         <rect x={-width / 2} y={-height / 2} width={width} height={height} rx="32" fill={SEA_COLOR} />
-        {state.board.hexes.map((hex) => (
+        {board.hexes.map((hex) => (
           <polygon
             key={axialKey(hex.coord)}
             points={hexPoints(hex.coord)}
@@ -110,7 +114,7 @@ export function BoardCanvas() {
             className={state.highlight === axialKey(hex.coord) ? 'highlighted' : ''}
           />
         ))}
-        {state.board.hexes.map((hex) => {
+        {board.hexes.map((hex) => {
           if (hex.numberToken === null) return null
           const point = center(hex.coord)
           const hot = hex.numberToken === 6 || hex.numberToken === 8
@@ -122,8 +126,8 @@ export function BoardCanvas() {
             </g>
           )
         })}
-        {state.board.robber && (() => {
-          const point = center(state.board.robber)
+        {board.robber && (() => {
+          const point = center(board.robber)
           return (
             <g transform={`translate(${point.x} ${point.y})`}>
               <circle cy="-10" r="9" fill="#1c1c1c" />
@@ -131,7 +135,7 @@ export function BoardCanvas() {
             </g>
           )
         })()}
-        {state.board.ports.map((port) => {
+        {board.ports.map((port) => {
           const [a, b] = edgeEndpointVertexIds(port.edgeId).map(vertexPoint)
           const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
           const length = Math.max(1, Math.hypot(midpoint.x, midpoint.y))
@@ -146,7 +150,7 @@ export function BoardCanvas() {
             </g>
           )
         })}
-        {state.board.roads.map((road) => {
+        {board.roads.map((road) => {
           const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
           return (
             <g key={`road:${road.edgeId}`}>
@@ -155,7 +159,7 @@ export function BoardCanvas() {
             </g>
           )
         })}
-        {state.board.buildings.map((building) => {
+        {board.buildings.map((building) => {
           const point = vertexPoint(building.vertexId)
           const color = playerColor(building.playerId)
           const scale = building.tier === 'settlement' ? 0.8 : building.tier === 'city' ? 1 : 1.18
@@ -169,7 +173,7 @@ export function BoardCanvas() {
           )
         })}
         <g className="hit-layers">
-          {state.board.hexes.map((hex) => (
+          {board.hexes.map((hex) => (
             <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />
           ))}
           {grid.edgeIds.map((edgeId) => {
@@ -185,10 +189,10 @@ export function BoardCanvas() {
       {editingPort && (
         <PortPopover
           edgeId={editingPort}
-          port={state.board.ports.find((port) => port.edgeId === editingPort)}
+          port={board.ports.find((port) => port.edgeId === editingPort)}
           onCancel={() => setEditingPort(null)}
           onDelete={() => {
-            commit(removePort(state.board, editingPort))
+            commit(removePort(board, editingPort))
             setEditingPort(null)
           }}
           onSave={(resource, rate) => {
@@ -196,7 +200,7 @@ export function BoardCanvas() {
               dispatch({ type: 'notice', message: 'Port rates must be whole numbers of at least 2.' })
               return
             }
-            commit(upsertPort(state.board, editingPort, resource, rate))
+            commit(upsertPort(board, editingPort, resource, rate))
             setEditingPort(null)
           }}
         />
