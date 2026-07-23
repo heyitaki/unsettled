@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
 import { activeTab, reducer, type StoreState, type TabState } from '../store'
 
@@ -116,6 +116,55 @@ describe('workspace tabs', () => {
     const closed = reducer(start, { type: 'tab-close', id: 't2' })
     expect(closed.activeTabId).toBe('t1')
     expect(closed.tabs).toHaveLength(1)
+  })
+
+  it('creates tab ids without crypto.randomUUID (insecure origins)', () => {
+    const realCrypto = globalThis.crypto
+    vi.stubGlobal('crypto', { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) })
+    try {
+      const added = reducer(state([tab('t1')]), { type: 'tab-add' })
+      const fresh = activeTab(added)
+      expect(fresh.id).toBeTruthy()
+      expect(fresh.id).not.toBe('t1')
+      const again = reducer(added, { type: 'tab-add' })
+      expect(activeTab(again).id).not.toBe(fresh.id)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('adopts an external workspace without losing local tabs or state', () => {
+    const localBoard = createBoard('standard4')
+    const original = createBoard('standard4')
+    const local1 = tab('t1', localBoard, { past: [original] })
+    const local2 = tab('t2')
+    const start = state([local1, local2], 't1')
+
+    const incomingBoard = createBoard('extension6')
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [
+        { id: 't1', title: 'Renamed elsewhere', board: createBoard('extension6') },
+        { id: 't3', title: 'From other window', board: incomingBoard },
+      ],
+    })
+
+    expect(adopted.tabs.map((entry) => entry.id)).toEqual(['t1', 't2', 't3'])
+    expect(adopted.tabs[0]).toBe(local1)
+    expect(adopted.tabs[1]).toBe(local2)
+    expect(adopted.tabs[2].title).toBe('From other window')
+    expect(adopted.tabs[2].board).toBe(incomingBoard)
+    expect(adopted.tabs[2].past).toHaveLength(0)
+    expect(adopted.activeTabId).toBe('t1')
+  })
+
+  it('adopting a workspace with nothing new is a no-op', () => {
+    const start = state([tab('t1'), tab('t2')], 't2')
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [{ id: 't1', title: 'ignored', board: createBoard('standard4') }],
+    })
+    expect(adopted).toBe(start)
   })
 
   it('closing the only tab leaves a fresh default board', () => {

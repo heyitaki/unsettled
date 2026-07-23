@@ -1,4 +1,5 @@
 import { parseBoard, serializeBoard, type ParseBoardResult } from '../model/serialization'
+import { newId } from '../model/ids'
 import type { Board } from '../model/types'
 
 export const MAPS_KEY = 'unsettled.maps.v1'
@@ -17,6 +18,7 @@ export interface WorkspaceTab {
   id: string
   title: string
   board: Board
+  activePlayerId?: string
 }
 
 export interface PersistedWorkspace {
@@ -135,7 +137,7 @@ export function loadWorkspace():
   if (raw === null) {
     const current = loadCurrent()
     if (!current.ok) return { ok: false }
-    const id = crypto.randomUUID()
+    const id = newId()
     return {
       ok: true,
       workspace: {
@@ -159,27 +161,51 @@ export function loadWorkspace():
 
   const invalidTabs: string[] = []
   const tabs: WorkspaceTab[] = []
+  const seenIds = new Set<string>()
+  let lossy = false
   value.tabs.forEach((entry, index) => {
     const label = isRecord(entry) && typeof entry.title === 'string'
       ? entry.title
       : `Tab ${index + 1}`
     if (!isRecord(entry) || typeof entry.id !== 'string' || typeof entry.title !== 'string') {
       invalidTabs.push(label)
+      lossy = true
+      return
+    }
+    if (seenIds.has(entry.id)) {
+      invalidTabs.push(label)
+      lossy = true
       return
     }
     const parsed = parseBoard(entry.board)
     if (!parsed.ok) {
       invalidTabs.push(label)
+      lossy = true
       return
     }
-    tabs.push({ id: entry.id, title: entry.title, board: parsed.board })
+    seenIds.add(entry.id)
+    const activePlayerId = typeof entry.activePlayerId === 'string' &&
+      parsed.board.players.some((player) => player.id === entry.activePlayerId)
+      ? entry.activePlayerId
+      : undefined
+    if (entry.activePlayerId !== undefined && activePlayerId === undefined) lossy = true
+    tabs.push({
+      id: entry.id,
+      title: entry.title,
+      board: parsed.board,
+      ...(activePlayerId === undefined ? {} : { activePlayerId }),
+    })
   })
 
-  if (tabs.length === 0) return { ok: false }
-  const activeTabId = typeof value.activeTabId === 'string' &&
+  if (lossy) corruptWorkspaceBlob = raw
+  if (tabs.length === 0) {
+    corruptWorkspaceBlob = raw
+    return { ok: false }
+  }
+  const hasActiveTab = typeof value.activeTabId === 'string' &&
     tabs.some((tab) => tab.id === value.activeTabId)
-    ? value.activeTabId
-    : tabs[0].id
+  const activeTabId = hasActiveTab ? value.activeTabId as string : tabs[0].id
+  if (!hasActiveTab) corruptWorkspaceBlob = raw
   const workspace = { activeTabId, tabs }
   return invalidTabs.length > 0
     ? { ok: true, workspace, warning: `Ignored invalid workspace tabs: ${invalidTabs.join(', ')}` }

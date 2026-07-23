@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   axialKey,
   axialToPixel,
@@ -54,6 +54,9 @@ export function BoardCanvas() {
   const tab = activeTab(state)
   const { board } = tab
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
+  // The popover edge belongs to the tab it was opened on; keeping it across a
+  // tab switch would edit (or crash on) a different board's coastline.
+  useEffect(() => setEditingPort(null), [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   const width = board.layout === 'extension6' ? 790 : 650
   const height = board.layout === 'extension6' ? 720 : 590

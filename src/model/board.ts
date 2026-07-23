@@ -1,4 +1,5 @@
 import { axialKey, vertexAdjacentVertexIds, vertexTouchingHexes } from './coords'
+import { newId } from './ids'
 import { boardGrid, defaultPortEdges } from './layouts'
 import {
   PLAYER_PALETTE,
@@ -131,7 +132,7 @@ export const removeBuilding = (board: Board, vertexId: VertexId): Board => ({
 
 export function addPlayer(board: Board, input: Omit<Player, 'id'> & { id?: string }): Board {
   if (board.players.length >= 6) return board
-  const id = input.id ?? crypto.randomUUID()
+  const id = input.id ?? newId()
   if (board.players.some((player) => player.id === id)) throw new Error(`Duplicate player ID ${id}`)
   return { ...board, players: [...board.players, { id, name: input.name, color: input.color }] }
 }

@@ -5,17 +5,25 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   type Dispatch,
   type ReactNode,
 } from 'react'
 import { createBoard } from '../model/board'
+import { newId } from '../model/ids'
 import type {
   Board,
   BuildingTier,
   Resource,
   TileKind,
 } from '../model/types'
-import { loadWorkspace, saveWorkspace } from '../persistence/localStorage'
+import {
+  WORKSPACE_KEY,
+  loadWorkspace,
+  saveWorkspace,
+  type PersistedWorkspace,
+  type WorkspaceTab,
+} from '../persistence/localStorage'
 
 export type Tool =
   | { kind: 'tile'; tile: TileKind }
@@ -55,11 +63,13 @@ export type StoreAction =
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
   | { type: 'tab-close'; id: string }
+  | { type: 'workspace-adopt'; tabs: WorkspaceTab[] }
 
 function createTab(
   board: Board = createBoard('standard4'),
   title: string = 'Board 1',
-  id: string = crypto.randomUUID(),
+  id: string = newId(),
+  activePlayerId?: string,
 ): TabState {
   return {
     id,
@@ -67,14 +77,14 @@ function createTab(
     board,
     past: [],
     future: [],
-    activePlayerId: board.players[0].id,
+    activePlayerId: activePlayerFor(board, activePlayerId),
   }
 }
 
 function initialState(): StoreState {
   const restored = loadWorkspace()
   const tabs = restored.ok
-    ? restored.workspace.tabs.map((tab) => createTab(tab.board, tab.title, tab.id))
+    ? restored.workspace.tabs.map((tab) => createTab(tab.board, tab.title, tab.id, tab.activePlayerId))
     : [createTab()]
   return {
     tabs,
@@ -91,8 +101,9 @@ export function activeTab(state: StoreState): TabState {
   return tab
 }
 
-function activePlayerFor(board: Board, activePlayerId: string): string {
-  return board.players.some((player) => player.id === activePlayerId)
+function activePlayerFor(board: Board, activePlayerId?: string): string {
+  return activePlayerId !== undefined &&
+    board.players.some((player) => player.id === activePlayerId)
     ? activePlayerId
     : board.players[0].id
 }
@@ -206,6 +217,23 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         activeTabId: (tabs[index] ?? tabs.at(-1)).id,
       }
     }
+    case 'workspace-adopt': {
+      const ids = new Set(state.tabs.map((tab) => tab.id))
+      const additions: TabState[] = []
+      for (const incoming of action.tabs) {
+        if (ids.has(incoming.id)) continue
+        ids.add(incoming.id)
+        additions.push(createTab(
+          incoming.board,
+          incoming.title,
+          incoming.id,
+          incoming.activePlayerId,
+        ))
+      }
+      return additions.length === 0
+        ? state
+        : { ...state, tabs: [...state.tabs, ...additions] }
+    }
   }
 }
 
@@ -213,16 +241,46 @@ const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<Store
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
+  const pendingWorkspace = useRef<PersistedWorkspace | null>(null)
   useEffect(() => {
+    const workspace: PersistedWorkspace = {
+      activeTabId: state.activeTabId,
+      tabs: state.tabs.map(({ id, title, board, activePlayerId }) => ({
+        id,
+        title,
+        board,
+        activePlayerId,
+      })),
+    }
+    pendingWorkspace.current = workspace
     const timeout = window.setTimeout(() => {
-      const result = saveWorkspace({
-        activeTabId: state.activeTabId,
-        tabs: state.tabs.map(({ id, title, board }) => ({ id, title, board })),
-      })
+      if (pendingWorkspace.current !== workspace) return
+      const result = saveWorkspace(workspace)
+      pendingWorkspace.current = null
       if (!result.ok) dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
     }, 500)
     return () => window.clearTimeout(timeout)
   }, [state.activeTabId, state.tabs])
+  useEffect(() => {
+    const adoptWorkspace = (event: StorageEvent) => {
+      if (event.key !== WORKSPACE_KEY || event.newValue === null) return
+      const restored = loadWorkspace()
+      if (restored.ok) dispatch({ type: 'workspace-adopt', tabs: restored.workspace.tabs })
+    }
+    window.addEventListener('storage', adoptWorkspace)
+    return () => window.removeEventListener('storage', adoptWorkspace)
+  }, [])
+  useEffect(() => {
+    const flushWorkspace = () => {
+      const workspace = pendingWorkspace.current
+      if (workspace === null) return
+      const result = saveWorkspace(workspace)
+      if (pendingWorkspace.current === workspace) pendingWorkspace.current = null
+      if (!result.ok) dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
+    }
+    window.addEventListener('pagehide', flushWorkspace)
+    return () => window.removeEventListener('pagehide', flushWorkspace)
+  }, [])
   const value = useMemo(() => ({ state, dispatch }), [state])
   return createElement(StoreContext.Provider, { value }, children)
 }

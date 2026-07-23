@@ -14,16 +14,29 @@ import {
 describe('workspace persistence', () => {
   beforeEach(() => localStorage.clear())
 
-  it('round-trips a multi-board workspace', () => {
+  it('round-trips a multi-board workspace including per-tab active players', () => {
+    const board = createBoard('standard4')
     const workspace: PersistedWorkspace = {
       activeTabId: 'b',
       tabs: [
-        { id: 'a', title: 'Game 1', board: createBoard('standard4') },
+        { id: 'a', title: 'Game 1', board, activePlayerId: board.players[0].id },
         { id: 'b', title: 'Game 2', board: createBoard('extension6') },
       ],
     }
     expect(saveWorkspace(workspace).ok).toBe(true)
     expect(loadWorkspace()).toEqual({ ok: true, workspace })
+  })
+
+  it('omits an activePlayerId that is not in the roster', () => {
+    const workspace: PersistedWorkspace = {
+      activeTabId: 'a',
+      tabs: [{ id: 'a', title: 'Game 1', board: createBoard('standard4'), activePlayerId: 'ghost' }],
+    }
+    expect(saveWorkspace(workspace).ok).toBe(true)
+    const loaded = loadWorkspace()
+    expect(loaded.ok).toBe(true)
+    if (!loaded.ok) return
+    expect(loaded.workspace.tabs[0].activePlayerId).toBeUndefined()
   })
 
   it('returns ok false when nothing is stored', () => {
@@ -56,6 +69,32 @@ describe('workspace persistence', () => {
     if (!loaded.ok) return
     expect(loaded.workspace.tabs.map((entry) => entry.id)).toEqual(['g'])
     expect(loaded.workspace.activeTabId).toBe('g')
+
+    // A lossy load must preserve the original blob before the next save
+    // rewrites the key, or the dropped tab is destroyed forever.
+    const original = localStorage.getItem(WORKSPACE_KEY)!
+    expect(saveWorkspace(loaded.workspace).ok).toBe(true)
+    expect(localStorage.getItem(WORKSPACE_CORRUPT_KEY)).toBe(original)
+  })
+
+  it('drops duplicate tab ids with a warning and preserves the original blob', () => {
+    const board = createBoard('standard4')
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
+      activeTabId: 'x',
+      tabs: [
+        { id: 'x', title: 'First', board },
+        { id: 'x', title: 'Second', board },
+      ],
+    }))
+
+    const loaded = loadWorkspace()
+    expect(loaded).toMatchObject({ ok: true, warning: expect.stringContaining('Second') })
+    if (!loaded.ok) return
+    expect(loaded.workspace.tabs.map((entry) => entry.title)).toEqual(['First'])
+
+    const original = localStorage.getItem(WORKSPACE_KEY)!
+    expect(saveWorkspace(loaded.workspace).ok).toBe(true)
+    expect(localStorage.getItem(WORKSPACE_CORRUPT_KEY)).toBe(original)
   })
 
   it('reports ok false when no tab survives validation', () => {
