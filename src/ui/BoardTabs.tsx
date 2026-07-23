@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createBoard } from '../model/board'
 import { serializeBoard } from '../model/serialization'
 import { listMaps, loadMap, renameMap } from '../persistence/localStorage'
@@ -17,6 +17,34 @@ export function BoardTabs() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [closingId, setClosingId] = useState<string | null>(null)
+  // Fade whichever end of the tab strip hides cut-off tabs. Tabs shrink to a
+  // CSS min-width floor first; only once they can't fit does the strip scroll,
+  // at which point these flags drive the edge masks.
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ left: false, right: false })
+  const syncEdges = useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const left = el.scrollLeft > 1
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+    setEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }))
+  }, [])
+  // Re-measure when the tab set changes or the strip is resized.
+  useLayoutEffect(syncEdges, [syncEdges, state.tabs.length])
+  // Keep the active tab visible — a newly added or selected tab can land past
+  // the scroll edge. scrollIntoView fires a scroll event, so fades re-measure.
+  useEffect(() => {
+    scrollerRef.current
+      ?.querySelector('.board-tab.active')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [state.activeTabId, state.tabs.length])
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(syncEdges)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [syncEdges])
   const commitEdit = () => {
     const id = editingId
     const next = draft.trim()
@@ -47,7 +75,14 @@ export function BoardTabs() {
   const closingTab = state.tabs.find((tab) => tab.id === closingId)
   return (
     <>
-      <div className="board-tabs" role="tablist" aria-label="Open boards">
+      <div className="board-tabs">
+        <div
+          ref={scrollerRef}
+          className={`board-tabs-scroll ${edges.left ? 'fade-left' : ''} ${edges.right ? 'fade-right' : ''}`}
+          role="tablist"
+          aria-label="Open boards"
+          onScroll={syncEdges}
+        >
         {state.tabs.map((tab) => (
           <div className={`board-tab ${tab.id === state.activeTabId ? 'active' : ''}`} key={tab.id}>
             {editingId === tab.id ? (
@@ -93,6 +128,7 @@ export function BoardTabs() {
             </button>
           </div>
         ))}
+        </div>
         <button
           type="button"
           className="board-tab-add"

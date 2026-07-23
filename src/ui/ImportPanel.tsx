@@ -1,14 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { parseBoard, serializeBoard } from '../model/serialization'
 import {
   parseBoardImageWithNames,
   type ParseIssue,
   type RgbaImage,
 } from '../parser'
-import { useStore } from './store'
-
-function fileTitle(name: string): string {
-  return name.replace(/\.[^/.]+$/, '') || name
-}
+import { listMaps } from '../persistence/localStorage'
+import { downloadBoard, fileTitle, firstFreeName, loadedNotice } from './boardFiles'
+import { activeTab, useStore } from './store'
 
 async function decodeImage(file: File): Promise<RgbaImage> {
   let bitmap: ImageBitmap
@@ -29,15 +28,18 @@ async function decodeImage(file: File): Promise<RgbaImage> {
 }
 
 export function ImportPanel() {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
+  const { title, board } = activeTab(state)
   const [issues, setIssues] = useState<ParseIssue[]>([])
   const [busy, setBusy] = useState(false)
+  const jsonInputRef = useRef<HTMLInputElement>(null)
+  const notice = (message: string) => dispatch({ type: 'notice', message })
   return (
     <section className="panel import-panel">
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Screenshot reader</span>
-          <h2>Import a board</h2>
+          <h2>Import &amp; export</h2>
         </div>
         {busy && <span className="working">Reading…</span>}
       </div>
@@ -72,17 +74,14 @@ export function ImportPanel() {
                 const result = await parseBoardImageWithNames(image, reader)
                 if (result.ok) {
                   dispatch({ type: 'tab-add', board: result.board, title: fileTitle(file.name) })
-                  dispatch({ type: 'notice', message: `Imported ${file.name}` })
+                  notice(`Imported ${file.name}`)
                   setIssues(result.issues)
-                } else dispatch({ type: 'notice', message: `Screenshot import failed: ${result.error}` })
+                } else notice(`Screenshot import failed: ${result.error}`)
               } finally {
                 await reader.terminate?.()
               }
             } catch (error) {
-              dispatch({
-                type: 'notice',
-                message: `Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`,
-              })
+              notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)
             } finally {
               setBusy(false)
               event.target.value = ''
@@ -92,6 +91,33 @@ export function ImportPanel() {
         <strong>{busy ? 'Analyzing board…' : 'Choose a screenshot'}</strong>
         <span>PNG from Settled app</span>
       </label>
+      <div className="file-actions">
+        <button type="button" onClick={() => jsonInputRef.current?.click()}>Import JSON</button>
+        <button type="button" onClick={() => downloadBoard(title, serializeBoard(board))}>Export JSON</button>
+        <input
+          ref={jsonInputRef}
+          hidden
+          type="file"
+          accept=".json,application/json"
+          onChange={async (event) => {
+            const file = event.target.files?.[0]
+            if (!file) return
+            const parsed = parseBoard(await file.text())
+            if (parsed.ok) {
+              // Disambiguate against open tabs and saved maps so the import
+              // never shadows an existing tab's map link.
+              const reserved = new Set([
+                ...state.tabs.map((tab) => tab.title),
+                ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
+              ])
+              const importTitle = firstFreeName(fileTitle(file.name), reserved)
+              dispatch({ type: 'tab-add', board: parsed.board, title: importTitle })
+              notice(loadedNotice(`Imported ${file.name}`, parsed.board))
+            } else notice(`Import failed: ${parsed.errors.join('; ')}`)
+            event.target.value = ''
+          }}
+        />
+      </div>
       {issues.length > 0 && (
         <div className="issue-list">
           {issues.map((issue, index) => (

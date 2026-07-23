@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
 import { BoardTabs } from './BoardTabs'
 import { ImportPanel } from './ImportPanel'
@@ -55,6 +56,7 @@ function Workspace() {
         <aside className="left-rail">
           <ToolPalette />
           <ImportPanel />
+          <MapsPanel />
         </aside>
         <div className="center-column">
           <BoardTabs />
@@ -62,7 +64,7 @@ function Workspace() {
         </div>
         <aside className="right-rail">
           <PlayerPanel />
-          <MapsPanel />
+          <AnalysisPanel />
         </aside>
       </main>
       <footer>
