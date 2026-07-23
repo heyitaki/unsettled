@@ -11,10 +11,13 @@ function imageDataFor(image: RgbaImage): ImageData {
 }
 
 export async function createBrowserTextReader(): Promise<TextReader> {
+  // BASE_URL is '/unsettled/' in the deployed build, '/' in dev — keep the
+  // self-hosted Tesseract assets resolving under whatever base we ship on.
+  const base = import.meta.env.BASE_URL
   const worker = await createWorker('eng', 1, {
-    workerPath: '/tesseract/worker.min.js',
-    corePath: '/tesseract',
-    langPath: '/tessdata',
+    workerPath: `${base}tesseract/worker.min.js`,
+    corePath: `${base}tesseract`,
+    langPath: `${base}tessdata`,
     cacheMethod: 'none',
     gzip: true,
   })

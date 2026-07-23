@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Hosted under akshath.me/unsettled, so every emitted asset URL (and the
+  // BASE_URL the OCR reader reads for its tesseract/tessdata paths) is prefixed.
+  base: '/unsettled/',
   plugins: [react()],
   test: {
     environment: 'node',

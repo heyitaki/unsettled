@@ -4,7 +4,6 @@ import {
   type ParseIssue,
   type RgbaImage,
 } from '../parser'
-import { createBrowserTextReader } from '../parser/textReader'
 import { useStore } from './store'
 
 function fileTitle(name: string): string {
@@ -57,6 +56,9 @@ export function ImportPanel() {
               let reader
               let startupError: unknown
               try {
+                // Dynamic import keeps the tesseract.js wrapper out of the
+                // initial /unsettled bundle — it loads only on first import.
+                const { createBrowserTextReader } = await import('../parser/textReader')
                 reader = await createBrowserTextReader()
               } catch (error) {
                 startupError = error
