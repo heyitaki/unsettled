@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { BoardCanvas } from './BoardCanvas'
 import { BoardTabs } from './BoardTabs'
 import { ImportPanel } from './ImportPanel'
@@ -7,8 +8,31 @@ import { StoreProvider, useStore } from './store'
 import { ToolPalette } from './ToolPalette'
 import './editor.css'
 
+const SUBTITLES = [
+  'Settled board analyzer',
+  'Min-maxing manipulating friends',
+  'GC BWR NW Best-in-dungeon',
+  'Winner POV',
+]
+// Every so often the app roasts you instead.
+const RARE_SUBTITLE = 'Your face is unsettling'
+
+function pickSubtitle(): string {
+  if (Math.random() < 0.1) return RARE_SUBTITLE
+  return SUBTITLES[Math.floor(Math.random() * SUBTITLES.length)]
+}
+
 function Workspace() {
   const { state, dispatch } = useStore()
+  // Chosen once per page load, so the tagline rotates between visits.
+  const [subtitle] = useState(pickSubtitle)
+  // Notices are transient toasts — auto-dismiss so they don't linger. Keyed on
+  // noticeSeq so an identical repeat message still restarts the timer.
+  useEffect(() => {
+    if (!state.notice) return
+    const timeout = window.setTimeout(() => dispatch({ type: 'notice', message: null }), 3500)
+    return () => window.clearTimeout(timeout)
+  }, [state.notice, state.noticeSeq, dispatch])
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -18,10 +42,9 @@ function Workspace() {
           <span />
         </div>
         <div>
-          <span className="eyebrow">Starting position lab</span>
+          <span className="eyebrow">{subtitle}</span>
           <h1>Unsettled</h1>
         </div>
-        <p>Shape the island now. Read the opening later.</p>
       </header>
       {state.notice && (
         <button type="button" className="global-notice" onClick={() => dispatch({ type: 'notice', message: null })}>
@@ -44,7 +67,6 @@ function Workspace() {
       </main>
       <footer>
         <span>Phase 1 · editor + screenshot import</span>
-        <span>All map data stays in this browser.</span>
       </footer>
     </div>
   )

@@ -39,6 +39,16 @@ describe('map persistence', () => {
     expect(listMaps().maps[0].valid).toBe(false)
   })
 
+  it('flags fabricated placeholder names as synthetic but keeps real stored names addressable', () => {
+    localStorage.setItem(MAPS_KEY, JSON.stringify([42, { name: 'bad', board: { schemaVersion: 9 } }]))
+    const [placeholder, named] = listMaps().maps
+    // A non-object entry gets a synthetic label that saveMap cannot address.
+    expect(placeholder).toMatchObject({ name: 'Invalid map 1', synthetic: true })
+    // A real (if invalid) stored name is not synthetic — saveMap would overwrite it.
+    expect(named.name).toBe('bad')
+    expect(named.synthetic).toBeUndefined()
+  })
+
   it('preserves future-schema entries during unrelated saves and deletes', () => {
     const future = { name: 'future', board: { schemaVersion: 2, payload: 'keep exactly' } }
     const unrelated = { marker: 'also keep exactly' }

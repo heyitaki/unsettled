@@ -5,7 +5,6 @@ import {
   removePlayer,
   renamePlayer,
   setMe,
-  setPlayerColor,
 } from '../model/board'
 import { PLAYER_PALETTE } from '../model/types'
 import { activeTab, useStore } from './store'
@@ -49,13 +48,6 @@ export function PlayerPanel() {
               aria-label={`Name for player ${index + 1}`}
               value={player.name}
               onChange={(event) => commit(renamePlayer(board, player.id, event.target.value))}
-            />
-            <input
-              className="color-input"
-              type="color"
-              aria-label={`Color for ${player.name}`}
-              value={player.color}
-              onChange={(event) => commit(setPlayerColor(board, player.id, event.target.value))}
             />
             <label className="me-radio" title="This is me">
               <input type="radio" name="me" checked={board.mePlayerId === player.id} onChange={() => commit(setMe(board, player.id))} />

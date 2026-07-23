@@ -88,7 +88,7 @@ export function ImportPanel() {
           }}
         />
         <strong>{busy ? 'Analyzing board…' : 'Choose a screenshot'}</strong>
-        <span>PNG from the friend app, raw or color-managed</span>
+        <span>PNG from Settled app</span>
       </label>
       {issues.length > 0 && (
         <div className="issue-list">

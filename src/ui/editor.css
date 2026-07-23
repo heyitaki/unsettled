@@ -21,12 +21,11 @@ button { color: inherit; }
 .app-shell { min-height: 100vh; padding: 24px clamp(16px, 3vw, 44px) 18px; }
 .site-header { max-width: 1580px; margin: 0 auto 18px; display: flex; align-items: center; gap: 14px; }
 .site-header h1 { margin: -2px 0 0; font: 800 clamp(26px, 3vw, 42px)/1 Georgia, serif; letter-spacing: -.04em; }
-.site-header p { margin-left: auto; color: var(--muted); font-family: Georgia, serif; font-style: italic; }
-.brand-mark { position: relative; width: 48px; height: 48px; }
+.brand-mark { position: relative; width: 50px; height: 48px; }
 .brand-mark span { position: absolute; width: 28px; height: 32px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
-.brand-mark span:nth-child(1) { left: 0; top: 8px; background: #3d7cb7; }
-.brand-mark span:nth-child(2) { left: 19px; top: 0; background: #c55a3c; }
-.brand-mark span:nth-child(3) { left: 19px; top: 18px; background: #d2a13d; }
+.brand-mark span:nth-child(1) { left: 0; top: 0; background: #3d7cb7; }
+.brand-mark span:nth-child(2) { left: 22px; top: 0; background: #c55a3c; }
+.brand-mark span:nth-child(3) { left: 11px; top: 16px; background: #d2a13d; }
 .eyebrow { display: block; color: var(--accent-dark); font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 
 .workspace { max-width: 1580px; margin: auto; display: grid; grid-template-columns: minmax(230px, 290px) minmax(540px, 1fr) minmax(260px, 330px); gap: 16px; align-items: start; }
@@ -41,6 +40,8 @@ button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55
 button:disabled { opacity: .42; cursor: default; }
 button.primary, button.selected { color: white; background: var(--accent); border-color: var(--accent-dark); }
 button.danger, .icon-danger { color: #a33428; }
+/* A selected danger button (e.g. active erase tool) keeps white text on the accent fill. */
+button.selected.danger { color: #fff; }
 
 .history-buttons { display: flex; gap: 5px; }
 .history-buttons button { padding: 5px 7px; font-size: 11px; }
@@ -63,27 +64,32 @@ button.danger, .icon-danger { color: #a33428; }
 .board-tab button:hover:not(:disabled) { box-shadow: none; }
 .board-tab-select { min-width: 0; flex: 1; overflow: hidden; padding: 7px 5px 7px 9px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .board-tab.active .board-tab-select { color: var(--accent-dark); font-weight: 700; }
+.board-tab-rename { min-width: 0; flex: 1; width: 100%; padding: 6px 4px 6px 8px; border: 0; border-radius: 8px; background: #fffdf7; color: var(--accent-dark); font-weight: 700; outline: 1px solid var(--accent); }
 .board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
 .board-tab-close:hover { color: #a33428; }
-.board-tab-add { flex: none; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
+.board-tab-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
 
 .board-stage { position: static; overflow: hidden; padding: 12px; background: #e9dfca; }
 .board-status { display: flex; justify-content: center; gap: 18px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
-.token-text { font: 700 20px Georgia, serif; fill: var(--ink); }
+/* Wide lining-figure serif (Charter on Mac/Linux, Cambria as the wide Windows
+   fallback). Lining/tabular figures keep every digit on the baseline so the pip
+   gaps stay even — avoid oldstyle-figure serifs (Georgia, Palatino, Athelas). */
+.token-text { font: 700 20px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; fill: var(--ink); }
 .token-text.hot { fill: #af2020; }
-.port-text { font: 700 10px Inter, sans-serif; fill: var(--ink); }
+.port-text { font: 700 11px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; }
 .hit-layers > * { fill: transparent; stroke: transparent; cursor: crosshair; pointer-events: all; }
 .hit-layers line { stroke-width: 14; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
 
 .player-list { display: grid; gap: 7px; }
-.player-row { display: grid; grid-template-columns: 22px minmax(75px, 1fr) 25px 38px 40px 24px; gap: 5px; align-items: center; padding: 6px; border: 1px solid transparent; border-radius: 10px; }
+.player-row { display: grid; grid-template-columns: 22px minmax(75px, 1fr) 38px 40px 24px; gap: 5px; align-items: center; padding: 6px; border: 1px solid transparent; border-radius: 10px; }
 .player-row.active { background: #fff9e9; border-color: #d8bc77; }
 .player-dot { width: 19px; height: 19px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
-.player-row > input:not(.color-input) { min-width: 0; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 5px 2px; }
-.color-input { width: 24px; height: 24px; padding: 1px; border: 0; background: transparent; }
-.me-radio { font-size: 10px; color: var(--muted); }
+.player-row > input { min-width: 0; width: 100%; border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 5px 2px; }
+.player-row > input:hover, .player-row > input:focus { border-bottom-color: var(--line); }
+.me-radio { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--muted); }
+.me-radio input { margin: 0; }
 .reorder-buttons { display: flex; }
 .reorder-buttons button, .icon-danger { padding: 3px 5px; border: 0; background: transparent; }
 .draft-strip { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; gap: 4px; overflow-x: auto; }
@@ -128,7 +134,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
 
 @media (max-width: 760px) {
   .app-shell { padding: 12px; }
-  .site-header p { display: none; }
   .workspace { display: flex; flex-direction: column; }
   .left-rail, .right-rail { display: contents; }
   .center-column { position: static; order: -1; width: 100%; }

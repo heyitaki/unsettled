@@ -12,6 +12,9 @@ export interface ListedMap {
   name: string
   valid: boolean
   errors?: string[]
+  // True when `name` is a fabricated placeholder for a malformed entry rather
+  // than a real stored name — such entries are not addressable by saveMap.
+  synthetic?: boolean
 }
 
 export interface WorkspaceTab {
@@ -68,12 +71,14 @@ export function listMaps(): { maps: ListedMap[]; warning?: string } {
   const raw = readRawMaps()
   const maps: ListedMap[] = raw.entries.map((entry, index) => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      return { name: `Invalid map ${index + 1}`, valid: false, errors: ['Entry must be an object'] }
+      return { name: `Invalid map ${index + 1}`, valid: false, errors: ['Entry must be an object'], synthetic: true }
     }
     const record = entry as Record<string, unknown>
-    const name = typeof record.name === 'string' ? record.name : `Invalid map ${index + 1}`
+    const hasName = typeof record.name === 'string'
+    const name = hasName ? (record.name as string) : `Invalid map ${index + 1}`
     const parsed = parseBoard(record.board)
-    return parsed.ok ? { name, valid: true } : { name, valid: false, errors: parsed.errors }
+    const base = parsed.ok ? { name, valid: true } : { name, valid: false, errors: parsed.errors }
+    return hasName ? base : { ...base, synthetic: true }
   })
   return { maps, ...(raw.warning ? { warning: raw.warning } : {}) }
 }

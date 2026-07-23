@@ -20,6 +20,7 @@ function state(tabs: TabState[], activeTabId = tabs[0].id): StoreState {
     activeTabId,
     tool: { kind: 'tile', tile: 'wood' },
     notice: null,
+    noticeSeq: 0,
     highlight: null,
   }
 }
@@ -174,5 +175,14 @@ describe('workspace tabs', () => {
     expect(fresh.id).not.toBe('t1')
     expect(fresh.title).toBe('Board 1')
     expect(fresh.board.layout).toBe('standard4')
+  })
+
+  it('bumps noticeSeq on every notice so an identical repeat restarts the timer', () => {
+    const start = state([tab('t1')])
+    const first = reducer(start, { type: 'notice', message: 'Map name cannot be empty' })
+    const second = reducer(first, { type: 'notice', message: 'Map name cannot be empty' })
+    expect(first.noticeSeq).toBe(start.noticeSeq + 1)
+    expect(second.noticeSeq).toBe(first.noticeSeq + 1)
+    expect(second.notice).toBe('Map name cannot be empty')
   })
 })

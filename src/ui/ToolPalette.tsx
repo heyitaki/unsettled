@@ -67,7 +67,7 @@ export function ToolPalette() {
               key={tier}
               onClick={() => dispatch({ type: 'tool', tool: { kind: 'piece', tier } })}
             >
-              {tier === 'superCity' ? 'castle' : tier}
+              {tier === 'superCity' ? 'super city' : tier}
             </button>
           ))}
           <button

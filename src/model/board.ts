@@ -142,11 +142,6 @@ export const renamePlayer = (board: Board, playerId: string, name: string): Boar
   players: board.players.map((player) => player.id === playerId ? { ...player, name } : player),
 })
 
-export const setPlayerColor = (board: Board, playerId: string, color: string): Board => ({
-  ...board,
-  players: board.players.map((player) => player.id === playerId ? { ...player, color } : player),
-})
-
 export function movePlayer(board: Board, playerId: string, index: number): Board {
   const current = board.players.findIndex((player) => player.id === playerId)
   if (current < 0) return board

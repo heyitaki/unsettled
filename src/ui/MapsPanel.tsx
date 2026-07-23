@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { setLayout, validateBoard } from '../model/board'
 import { parseBoard, serializeBoard } from '../model/serialization'
 import type { LayoutId } from '../model/types'
@@ -24,6 +24,13 @@ function fileTitle(name: string): string {
   return name.replace(/\.[^/.]+$/, '') || name
 }
 
+// First unused "base (n)" name, so a copy never clobbers an existing map.
+function nextCopyName(base: string, taken: Set<string>): string {
+  let index = 1
+  while (taken.has(`${base} (${index})`)) index += 1
+  return `${base} (${index})`
+}
+
 function loadedNotice(action: string, board: Parameters<typeof validateBoard>[0]): string {
   const warnings = validateBoard(board).filter((issue) => issue.severity === 'warning')
   if (warnings.length === 0) return action
@@ -33,8 +40,11 @@ function loadedNotice(action: string, board: Parameters<typeof validateBoard>[0]
 
 export function MapsPanel() {
   const { state, dispatch } = useStore()
-  const { board } = activeTab(state)
-  const [name, setName] = useState('My board')
+  const { id, title, board } = activeTab(state)
+  const [name, setName] = useState(title)
+  // The save name follows the active tab's title (updating when you switch tabs
+  // or rename one), but stays editable for one-off save names.
+  useEffect(() => { setName(title) }, [id, title])
   const [revision, setRevision] = useState(0)
   const importRef = useRef<HTMLInputElement>(null)
   const listed = listMaps()
@@ -64,11 +74,20 @@ export function MapsPanel() {
           type="button"
           className="primary"
           onClick={() => {
-            let result = saveMap(name, board, false)
-            if (!result.ok && result.error.includes('already exists') && window.confirm('Overwrite the existing map?')) {
-              result = saveMap(name, board, true)
+            // Only real stored names collide with saveMap; synthetic placeholders
+            // for malformed entries are not addressable, so exclude them.
+            const taken = new Set(listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name))
+            let saveName = name
+            let overwrite = false
+            if (taken.has(name)) {
+              if (window.confirm(`A map named “${name}” already exists. Replace it?`)) {
+                overwrite = true
+              } else if (window.confirm(`Save a copy as “${nextCopyName(name, taken)}” instead?`)) {
+                saveName = nextCopyName(name, taken)
+              } else return
             }
-            notice(result.ok ? `Saved “${name}”` : result.error)
+            const result = saveMap(saveName, board, overwrite)
+            notice(result.ok ? `Saved “${saveName}”` : result.error)
             refresh()
           }}
         >Save</button>
@@ -83,8 +102,8 @@ export function MapsPanel() {
             <button type="button" disabled={!map.valid} onClick={() => {
               const loaded = loadMap(map.name)
               if (loaded.ok) {
+                // The new tab becomes active, so the save name syncs to map.name.
                 dispatch({ type: 'tab-add', board: loaded.board, title: map.name })
-                setName(map.name)
                 notice(loadedNotice(`Loaded “${map.name}”`, loaded.board))
               } else notice(loaded.errors.join(', '))
             }}>Load</button>

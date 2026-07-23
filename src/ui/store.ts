@@ -47,6 +47,9 @@ export interface StoreState {
   activeTabId: string
   tool: Tool
   notice: string | null
+  // Bumped on every 'notice' dispatch so the auto-dismiss timer restarts even
+  // when the same message text is shown twice in a row.
+  noticeSeq: number
   highlight: string | null
 }
 
@@ -91,6 +94,7 @@ function initialState(): StoreState {
     activeTabId: restored.ok ? restored.workspace.activeTabId : tabs[0].id,
     tool: { kind: 'tile', tile: 'wood' },
     notice: restored.ok ? restored.warning ?? null : null,
+    noticeSeq: 0,
     highlight: null,
   }
 }
@@ -176,7 +180,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         }
       })
     case 'notice':
-      return { ...state, notice: action.message }
+      return { ...state, notice: action.message, noticeSeq: state.noticeSeq + 1 }
     case 'highlight':
       return { ...state, highlight: action.ref }
     case 'tab-add': {
