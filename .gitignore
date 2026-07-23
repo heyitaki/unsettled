@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.claude/solves/
+.claude/worktrees/
+.DS_Store
