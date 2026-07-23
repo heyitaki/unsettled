@@ -38,13 +38,18 @@ describe('screenshot parser', () => {
     expect(normalized(result.board)).toEqual(normalized(expected as Board))
   })
 
-  it('marks exactly the robber-occluded endgame token unreadable', () => {
+  it('infers the robber-occluded endgame token from the distribution', () => {
     const result = parseBoardImage(image('../../../fixtures/board-endgame-pieces.png'))
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.issues.filter((issue) => issue.severity === 'unreadable')).toEqual([
-      expect.objectContaining({ stage: 'tokens', ref: '-3,1' }),
-    ])
+    // The robber hides one token; the standard distribution accounts for every
+    // other number, so the gap at (-3,1) must be a 6 — recovered, not unreadable.
+    expect(result.issues.filter((issue) => issue.severity === 'unreadable')).toEqual([])
+    const occluded = result.board.hexes.find((hex) => hex.coord.q === -3 && hex.coord.r === 1)
+    expect(occluded?.numberToken).toBe(6)
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ stage: 'tokens', ref: '-3,1', severity: 'warning' }),
+    )
   })
 
   it('parses the draft fixture without token review issues', () => {

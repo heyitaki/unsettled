@@ -1,5 +1,5 @@
 import { axialKey } from '../model/coords'
-import { defaultPortEdges } from '../model/layouts'
+import { defaultPortEdges, inferMissingNumberToken } from '../model/layouts'
 import { parseBoard } from '../model/serialization'
 import {
   PLAYER_PALETTE,
@@ -190,6 +190,20 @@ function parseWithContext(image: RgbaImage): ParseContext {
       issues.push({ stage: 'tokens', severity: 'warning', message: 'Multiple robber candidates were detected' })
     }
     const robber = robberCandidates.sort((a, b) => b.corePixels - a.corePixels)[0]?.coord ?? null
+    // A robber (or a stray glare) can hide exactly one number; if the rest of the
+    // board accounts for every token but one, the distribution names the missing
+    // value for us. Recover it and downgrade the issue to a reviewable warning.
+    const inferred = inferMissingNumberToken(hexes, registration.layout)
+    if (inferred) {
+      const ref = axialKey(inferred.coord)
+      const hex = hexes.find((candidate) => axialKey(candidate.coord) === ref)
+      if (hex) hex.numberToken = inferred.number
+      const issue = issues.find((candidate) => candidate.stage === 'tokens' && candidate.ref === ref)
+      if (issue) {
+        issue.severity = 'warning'
+        issue.message = `Number token was hidden — inferred ${inferred.number} from the standard number distribution`
+      }
+    }
     const board: Board = {
       schemaVersion: 1,
       layout: registration.layout,

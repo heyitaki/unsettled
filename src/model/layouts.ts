@@ -7,7 +7,7 @@ import {
   hexVertexIds,
   parseEdgeId,
 } from './coords'
-import type { AxialCoord, EdgeId, LayoutId, VertexId } from './types'
+import type { AxialCoord, EdgeId, Hex, LayoutId, VertexId } from './types'
 
 interface RowSpec {
   r: number
@@ -112,3 +112,36 @@ export function edgeMidpoint(edgeId: EdgeId, size: number): { x: number; y: numb
 
 export const edgeAt = (coord: AxialCoord, direction: number): EdgeId =>
   edgeIdOf(edgePairAt(coord, direction))
+
+// The fixed multiset of number tokens each standard board ships with. Placement
+// is random but the counts are not, which lets us recover a single token that a
+// screenshot couldn't read (e.g. the robber sitting on top of it).
+export const NUMBER_TOKEN_COUNTS: Record<LayoutId, Readonly<Record<number, number>>> = {
+  standard4: { 2: 1, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 1 },
+  extension6: { 2: 2, 3: 3, 4: 3, 5: 3, 6: 3, 8: 3, 9: 3, 10: 3, 11: 3, 12: 2 },
+}
+
+/**
+ * When exactly one land hex is missing its number, deduce it from the standard
+ * distribution: subtract every read token from the expected counts and, if the
+ * remaining tokens collapse to a single value, that value must belong to the
+ * lone gap. Returns null when the gap isn't unique or the read tokens are
+ * inconsistent with the distribution (i.e. a non-standard board we shouldn't guess on).
+ */
+export function inferMissingNumberToken(
+  hexes: readonly Hex[],
+  layout: LayoutId,
+): { coord: AxialCoord; number: number } | null {
+  const missing = hexes.filter((hex) => hex.tile !== null && hex.tile !== 'desert' && hex.numberToken === null)
+  if (missing.length !== 1) return null
+  const remaining: Record<number, number> = { ...NUMBER_TOKEN_COUNTS[layout] }
+  for (const hex of hexes) {
+    if (hex.numberToken === null) continue
+    if (!(hex.numberToken in remaining)) return null
+    remaining[hex.numberToken] -= 1
+    if (remaining[hex.numberToken] < 0) return null
+  }
+  const candidates = Object.entries(remaining).filter(([, count]) => count > 0)
+  if (candidates.length !== 1 || candidates[0][1] !== 1) return null
+  return { coord: missing[0].coord, number: Number(candidates[0][0]) }
+}
