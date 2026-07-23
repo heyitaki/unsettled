@@ -14,12 +14,14 @@ import {
   removePort,
   removeRoad,
   setHexTile,
+  setLayout,
   setNumberToken,
   setRobber,
   upsertPort,
 } from '../model/board'
-import type { AxialCoord, Board, EdgeId, Port, VertexId } from '../model/types'
+import type { AxialCoord, Board, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { ConfirmDialog } from './ConfirmDialog'
 import { PortPopover } from './PortPopover'
 import { activeTab, useStore } from './store'
 
@@ -77,9 +79,17 @@ export function BoardCanvas() {
   const tab = activeTab(state)
   const { board } = tab
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
+  const [pendingLayout, setPendingLayout] = useState<LayoutId | null>(null)
   // The popover edge belongs to the tab it was opened on; keeping it across a
   // tab switch would edit (or crash on) a different board's coastline.
-  useEffect(() => setEditingPort(null), [state.activeTabId])
+  useEffect(() => {
+    setEditingPort(null)
+    setLayoutMenuOpen(false)
+    // A pending layout change belongs to the tab it was raised on; drop it on a
+    // switch so confirming can't reset a different board.
+    setPendingLayout(null)
+  }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   const ports = useMemo<PortLayout[]>(
     () =>
@@ -135,6 +145,17 @@ export function BoardCanvas() {
   }, [board.hexes, board.buildings, ports])
   const playerColor = (id: string) => board.players.find((player) => player.id === id)?.color ?? '#333'
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
+  const choose = (layout: LayoutId) => {
+    setLayoutMenuOpen(false)
+    if (layout === board.layout) return
+    const hasContent = board.hexes.some((hex) => hex.tile || hex.numberToken !== null) ||
+      board.roads.length > 0 ||
+      board.buildings.length > 0 ||
+      board.ports.length > 0 ||
+      Boolean(board.robber)
+    if (hasContent) setPendingLayout(layout)
+    else commit(setLayout(board, layout))
+  }
   const onHex = (coord: AxialCoord) => {
     const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))
     if (!hex) return
@@ -178,7 +199,47 @@ export function BoardCanvas() {
   return (
     <section className="board-stage">
       <div className="board-status">
-        <span><strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout</span>
+        <div className="layout-status-wrap">
+          <button
+            type="button"
+            className="layout-status"
+            aria-haspopup="listbox"
+            aria-expanded={layoutMenuOpen}
+            onClick={() => setLayoutMenuOpen((open) => !open)}
+          >
+            <strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout ▾
+          </button>
+          {layoutMenuOpen && (
+            <>
+              <button
+                type="button"
+                className="menu-backdrop"
+                aria-label="Close layout menu"
+                onClick={() => setLayoutMenuOpen(false)}
+              />
+              <div className="layout-menu" role="listbox" aria-label="Board layout">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={board.layout === 'standard4'}
+                  className={board.layout === 'standard4' ? 'active' : undefined}
+                  onClick={() => choose('standard4')}
+                >
+                  4 player
+                </button>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={board.layout === 'extension6'}
+                  className={board.layout === 'extension6' ? 'active' : undefined}
+                  onClick={() => choose('extension6')}
+                >
+                  5–6 player
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <span>{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
         <span>{board.roads.length + board.buildings.length} pieces</span>
       </div>
@@ -298,6 +359,24 @@ export function BoardCanvas() {
             commit(upsertPort(board, editingPort, resource, rate))
             setEditingPort(null)
           }}
+        />
+      )}
+      {pendingLayout && (
+        <ConfirmDialog
+          title="Change layout?"
+          message="Switching layouts clears the tiles, tokens, and pieces on this board. Your players are kept."
+          actions={[
+            {
+              label: 'Change layout',
+              variant: 'danger',
+              onClick: () => {
+                commit(setLayout(board, pendingLayout))
+                setPendingLayout(null)
+              },
+            },
+            { label: 'Cancel', onClick: () => setPendingLayout(null) },
+          ]}
+          onCancel={() => setPendingLayout(null)}
         />
       )}
     </section>

@@ -12,6 +12,9 @@ export interface ListedMap {
   name: string
   valid: boolean
   errors?: string[]
+  createdAt?: number
+  modifiedAt?: number
+  openedAt?: number
   // True when `name` is a fabricated placeholder for a malformed entry rather
   // than a real stored name — such entries are not addressable by saveMap.
   synthetic?: boolean
@@ -70,14 +73,20 @@ function writeMaps(maps: unknown[]): WriteResult {
 export function listMaps(): { maps: ListedMap[]; warning?: string } {
   const raw = readRawMaps()
   const maps: ListedMap[] = raw.entries.map((entry, index) => {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    if (!isRecord(entry)) {
       return { name: `Invalid map ${index + 1}`, valid: false, errors: ['Entry must be an object'], synthetic: true }
     }
-    const record = entry as Record<string, unknown>
-    const hasName = typeof record.name === 'string'
-    const name = hasName ? (record.name as string) : `Invalid map ${index + 1}`
-    const parsed = parseBoard(record.board)
-    const base = parsed.ok ? { name, valid: true } : { name, valid: false, errors: parsed.errors }
+    const hasName = typeof entry.name === 'string'
+    const name = hasName ? entry.name as string : `Invalid map ${index + 1}`
+    const timestamps = {
+      ...(typeof entry.createdAt === 'number' ? { createdAt: entry.createdAt } : {}),
+      ...(typeof entry.modifiedAt === 'number' ? { modifiedAt: entry.modifiedAt } : {}),
+      ...(typeof entry.openedAt === 'number' ? { openedAt: entry.openedAt } : {}),
+    }
+    const parsed = parseBoard(entry.board)
+    const base = parsed.ok
+      ? { name, valid: true, ...timestamps }
+      : { name, valid: false, errors: parsed.errors, ...timestamps }
     return hasName ? base : { ...base, synthetic: true }
   })
   return { maps, ...(raw.warning ? { warning: raw.warning } : {}) }
@@ -88,9 +97,34 @@ export function saveMap(name: string, board: Board, overwrite = false): WriteRes
   const maps = [...readRawMaps().entries]
   const index = maps.findIndex((entry) => isNamedMapEntry(entry) && entry.name === name)
   if (index >= 0 && !overwrite) return { ok: false, error: 'A map with this name already exists' }
-  const entry = { name, board }
+  const now = Date.now()
+  const existing = index >= 0 && isRecord(maps[index]) ? maps[index] : null
+  const createdAt = existing && typeof existing.createdAt === 'number' ? existing.createdAt : now
+  const openedAt = existing && typeof existing.openedAt === 'number' ? existing.openedAt : now
+  const entry = { name, board, createdAt, modifiedAt: now, openedAt }
   if (index >= 0) maps[index] = entry
   else maps.push(entry)
+  return writeMaps(maps)
+}
+
+export function markMapOpened(name: string): WriteResult {
+  const maps = [...readRawMaps().entries]
+  const index = maps.findIndex((entry) => isNamedMapEntry(entry) && entry.name === name)
+  if (index < 0) return { ok: true }
+  maps[index] = { ...maps[index] as Record<string, unknown>, openedAt: Date.now() }
+  return writeMaps(maps)
+}
+
+export function renameMap(oldName: string, newName: string): WriteResult {
+  if (newName.length === 0) return { ok: false, error: 'Map name cannot be empty' }
+  if (oldName === newName) return { ok: true }
+  const maps = [...readRawMaps().entries]
+  const index = maps.findIndex((entry) => isNamedMapEntry(entry) && entry.name === oldName)
+  if (index < 0) return { ok: false, error: `Map "${oldName}" was not found` }
+  if (maps.some((entry) => isNamedMapEntry(entry) && entry.name === newName)) {
+    return { ok: false, error: 'A map with this name already exists' }
+  }
+  maps[index] = { ...maps[index] as Record<string, unknown>, name: newName }
   return writeMaps(maps)
 }
 

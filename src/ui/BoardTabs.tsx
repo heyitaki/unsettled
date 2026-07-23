@@ -1,70 +1,125 @@
 import { useState } from 'react'
-import { useStore } from './store'
+import { createBoard } from '../model/board'
+import { serializeBoard } from '../model/serialization'
+import { listMaps, loadMap, renameMap } from '../persistence/localStorage'
+import { ConfirmDialog } from './ConfirmDialog'
+import { type TabState, useStore } from './store'
+
+function tabIsDirty(tab: TabState): boolean {
+  const current = serializeBoard(tab.board)
+  const saved = loadMap(tab.title)
+  if (saved.ok) return serializeBoard(saved.board) !== current
+  return current !== serializeBoard(createBoard(tab.board.layout))
+}
 
 export function BoardTabs() {
   const { state, dispatch } = useStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [closingId, setClosingId] = useState<string | null>(null)
   const commitEdit = () => {
-    if (editingId !== null && draft.trim().length > 0) {
-      dispatch({ type: 'tab-rename', id: editingId, title: draft.trim() })
-    }
+    const id = editingId
+    const next = draft.trim()
     setEditingId(null)
+    if (id === null || next.length === 0) return
+    const tab = state.tabs.find((candidate) => candidate.id === id)
+    if (!tab || next === tab.title) {
+      dispatch({ type: 'tab-rename', id, title: next })
+      return
+    }
+    if (state.tabs.some((candidate) => candidate.id !== id && candidate.title === next)) {
+      dispatch({ type: 'notice', message: `A board named "${next}" is already open` })
+      return
+    }
+    if (listMaps().maps.some((map) => !map.synthetic && map.name === next)) {
+      dispatch({ type: 'notice', message: `A map named "${next}" already exists` })
+      return
+    }
+    if (loadMap(tab.title).ok) {
+      const result = renameMap(tab.title, next)
+      if (!result.ok) {
+        dispatch({ type: 'notice', message: result.error })
+        return
+      }
+    }
+    dispatch({ type: 'tab-rename', id, title: next })
   }
+  const closingTab = state.tabs.find((tab) => tab.id === closingId)
   return (
-    <div className="board-tabs" role="tablist" aria-label="Open boards">
-      {state.tabs.map((tab) => (
-        <div className={`board-tab ${tab.id === state.activeTabId ? 'active' : ''}`} key={tab.id}>
-          {editingId === tab.id ? (
-            // Clicking the active tab drops into an inline rename field.
-            <input
-              className="board-tab-rename"
-              autoFocus
-              value={draft}
-              aria-label={`Rename ${tab.title}`}
-              onChange={(event) => setDraft(event.target.value)}
-              onBlur={commitEdit}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') commitEdit()
-                else if (event.key === 'Escape') setEditingId(null)
-              }}
-            />
-          ) : (
+    <>
+      <div className="board-tabs" role="tablist" aria-label="Open boards">
+        {state.tabs.map((tab) => (
+          <div className={`board-tab ${tab.id === state.activeTabId ? 'active' : ''}`} key={tab.id}>
+            {editingId === tab.id ? (
+              // Clicking the active tab drops into an inline rename field.
+              <input
+                className="board-tab-rename"
+                autoFocus
+                value={draft}
+                aria-label={`Rename ${tab.title}`}
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitEdit()
+                  else if (event.key === 'Escape') setEditingId(null)
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="board-tab-select"
+                role="tab"
+                aria-selected={tab.id === state.activeTabId}
+                onClick={() => {
+                  if (tab.id === state.activeTabId) {
+                    setDraft(tab.title)
+                    setEditingId(tab.id)
+                  } else dispatch({ type: 'tab-select', id: tab.id })
+                }}
+              >
+                {tab.title}
+              </button>
+            )}
             <button
               type="button"
-              className="board-tab-select"
-              role="tab"
-              aria-selected={tab.id === state.activeTabId}
+              className="board-tab-close"
+              aria-label={`Close ${tab.title}`}
               onClick={() => {
-                if (tab.id === state.activeTabId) {
-                  setDraft(tab.title)
-                  setEditingId(tab.id)
-                } else dispatch({ type: 'tab-select', id: tab.id })
+                if (tabIsDirty(tab)) setClosingId(tab.id)
+                else dispatch({ type: 'tab-close', id: tab.id })
               }}
             >
-              {tab.title}
+              ×
             </button>
-          )}
-          <button
-            type="button"
-            className="board-tab-close"
-            aria-label={`Close ${tab.title}`}
-            onClick={() => {
-              if (window.confirm('Close this board?')) dispatch({ type: 'tab-close', id: tab.id })
-            }}
-          >
-            ×
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        className="board-tab-add"
-        aria-label="Add board"
-        onClick={() => dispatch({ type: 'tab-add' })}
-      >
-        +
-      </button>
-    </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="board-tab-add"
+          aria-label="Add board"
+          onClick={() => dispatch({ type: 'tab-add' })}
+        >
+          +
+        </button>
+      </div>
+      {closingTab && (
+        <ConfirmDialog
+          title={`Close "${closingTab.title}"?`}
+          message="This board has unsaved changes that will be lost."
+          actions={[
+            {
+              label: 'Close board',
+              variant: 'danger',
+              onClick: () => {
+                dispatch({ type: 'tab-close', id: closingTab.id })
+                setClosingId(null)
+              },
+            },
+            { label: 'Cancel', onClick: () => setClosingId(null) },
+          ]}
+          onCancel={() => setClosingId(null)}
+        />
+      )}
+    </>
   )
 }

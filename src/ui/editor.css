@@ -71,6 +71,14 @@ button.selected.danger { color: #fff; }
 
 .board-stage { position: static; overflow: hidden; padding: 12px; background: #e9dfca; }
 .board-status { display: flex; justify-content: center; gap: 18px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
+.layout-status-wrap { position: relative; display: inline-flex; align-items: center; }
+.layout-status { border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.layout-status:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
+.menu-backdrop { position: fixed; inset: 0; z-index: 14; border: 0; border-radius: 0; padding: 0; background: transparent; }
+.menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
+.layout-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 145px; display: grid; gap: 3px; padding: 6px; border: 1px solid rgba(255,255,255,.8); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 32px rgba(55,45,32,.22), inset 0 0 0 1px var(--line); }
+.layout-menu button { border: 0; padding: 7px 9px; background: transparent; text-align: left; }
+.layout-menu button.active { color: var(--accent-dark); background: #fff9e9; font-weight: 700; }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
 /* Wide lining-figure serif (Charter on Mac/Linux, Cambria as the wide Windows
    fallback). Lining/tabular figures keep every digit on the baseline so the pip
@@ -96,7 +104,8 @@ button.selected.danger { color: #fff; }
 .draft-strip div { min-width: 34px; max-width: 56px; color: var(--muted); font-size: 9px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .draft-strip span { display: block; width: 15px; height: 15px; margin: auto auto 3px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); }
 
-.layout-toggle { display: flex; gap: 6px; font-size: 11px; }
+.map-sort { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.map-sort select { max-width: 130px; padding: 6px 24px 6px 7px; font-size: 11px; }
 .map-save-row, .file-actions { display: flex; gap: 6px; }
 .map-save-row input { min-width: 0; width: 100%; }
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
@@ -122,6 +131,10 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .port-popover code { display: block; margin-bottom: 15px; color: var(--muted); font-size: 10px; }
 .port-popover label { display: grid; gap: 5px; margin: 9px 0; font-size: 11px; font-weight: 700; }
 .popover-actions { display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px; margin-top: 17px; }
+.confirm-dialog { width: min(430px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.28); }
+.confirm-dialog h3 { margin: 3px 0 8px; font: 700 24px Georgia, serif; }
+.confirm-dialog p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; }
 
 .global-notice { position: fixed; z-index: 30; right: 20px; top: 18px; max-width: min(440px, calc(100vw - 40px)); display: flex; gap: 20px; color: white; background: #3c3b34; border-color: rgba(255,255,255,.2); box-shadow: 0 12px 35px rgba(0,0,0,.25); }
 .global-notice span { margin-left: auto; }

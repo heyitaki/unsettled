@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { setLayout, validateBoard } from '../model/board'
+import { createBoard, validateBoard } from '../model/board'
+import type { Board } from '../model/types'
 import { parseBoard, serializeBoard } from '../model/serialization'
-import type { LayoutId } from '../model/types'
 import {
   deleteMap,
   listMaps,
   loadMap,
+  markMapOpened,
   saveMap,
 } from '../persistence/localStorage'
+import { ConfirmDialog } from './ConfirmDialog'
 import { activeTab, useStore } from './store'
+
+type SortKey = 'name' | 'modifiedAt' | 'createdAt' | 'openedAt'
 
 function downloadBoard(name: string, contents: string) {
   const blob = new Blob([contents], { type: 'application/json' })
@@ -31,6 +35,12 @@ function nextCopyName(base: string, taken: Set<string>): string {
   return `${base} (${index})`
 }
 
+// `base` if free, else the first unused "base (n)". Keeps new tab titles from
+// shadowing another open tab or a saved map (title-as-link stays unambiguous).
+function firstFreeName(base: string, taken: Set<string>): string {
+  return taken.has(base) ? nextCopyName(base, taken) : base
+}
+
 function loadedNotice(action: string, board: Parameters<typeof validateBoard>[0]): string {
   const warnings = validateBoard(board).filter((issue) => issue.severity === 'warning')
   if (warnings.length === 0) return action
@@ -46,15 +56,35 @@ export function MapsPanel() {
   // or rename one), but stays editable for one-off save names.
   useEffect(() => { setName(title) }, [id, title])
   const [revision, setRevision] = useState(0)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  // Capture the board + tab the save targets when the prompt opens, so a tab
+  // switch underneath the dialog can't redirect the save to a different board.
+  const [dupPrompt, setDupPrompt] = useState<
+    { name: string; copyName: string; board: Board; tabId: string } | null
+  >(null)
   const importRef = useRef<HTMLInputElement>(null)
   const listed = listMaps()
+  const sortedMaps = [...listed.maps].sort((left, right) => {
+    if (sortKey === 'name') return left.name.localeCompare(right.name)
+    const leftTimestamp = typeof left[sortKey] === 'number' ? left[sortKey] : -Infinity
+    const rightTimestamp = typeof right[sortKey] === 'number' ? right[sortKey] : -Infinity
+    if (leftTimestamp === rightTimestamp) return 0
+    return rightTimestamp > leftTimestamp ? 1 : -1
+  })
   const refresh = () => setRevision((value) => value + 1)
   void revision
   const notice = (message: string) => dispatch({ type: 'notice', message })
-  const chooseLayout = (layout: LayoutId) => {
-    if (layout === board.layout) return
-    if (!window.confirm('Changing layout clears board placements but keeps your players. Continue?')) return
-    dispatch({ type: 'commit', board: setLayout(board, layout) })
+  const performSave = (saveName: string, overwrite: boolean, target: Board, targetTabId: string) => {
+    const result = saveMap(saveName, target, overwrite)
+    if (!result.ok) {
+      notice(result.error)
+      refresh()
+      return
+    }
+    // Link the saved tab to its map by name (title-as-link).
+    dispatch({ type: 'tab-rename', id: targetTabId, title: saveName })
+    notice(`Saved "${saveName}"`)
+    refresh()
   }
   return (
     <section className="panel maps-panel">
@@ -63,10 +93,15 @@ export function MapsPanel() {
           <span className="eyebrow">Library</span>
           <h2>Maps</h2>
         </div>
-        <div className="layout-toggle">
-          <label><input type="radio" checked={board.layout === 'standard4'} onChange={() => chooseLayout('standard4')} /> 4P</label>
-          <label><input type="radio" checked={board.layout === 'extension6'} onChange={() => chooseLayout('extension6')} /> 5–6P</label>
-        </div>
+        <label className="map-sort">
+          <span>Sort</span>
+          <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+            <option value="name">Name</option>
+            <option value="modifiedAt">Last modified</option>
+            <option value="createdAt">Created</option>
+            <option value="openedAt">Last opened</option>
+          </select>
+        </label>
       </div>
       <div className="map-save-row">
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Map name" />
@@ -74,38 +109,63 @@ export function MapsPanel() {
           type="button"
           className="primary"
           onClick={() => {
+            // saveMap allows whitespace-only names but the reducer rejects a
+            // blank tab-rename, which would leave the tab unlinked — reject here.
+            if (name.trim().length === 0) {
+              notice('Map name cannot be empty')
+              return
+            }
+            if (state.tabs.some((tab) => tab.id !== id && tab.title === name)) {
+              notice(`A board named "${name}" is already open`)
+              return
+            }
+
             // Only real stored names collide with saveMap; synthetic placeholders
             // for malformed entries are not addressable, so exclude them.
             const taken = new Set(listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name))
-            let saveName = name
-            let overwrite = false
             if (taken.has(name)) {
-              if (window.confirm(`A map named “${name}” already exists. Replace it?`)) {
-                overwrite = true
-              } else if (window.confirm(`Save a copy as “${nextCopyName(name, taken)}” instead?`)) {
-                saveName = nextCopyName(name, taken)
-              } else return
-            }
-            const result = saveMap(saveName, board, overwrite)
-            notice(result.ok ? `Saved “${saveName}”` : result.error)
-            refresh()
+              // A copy must dodge both saved maps and open tab titles so it never
+              // shadows another tab's link.
+              const reserved = new Set([...taken, ...state.tabs.map((tab) => tab.title)])
+              setDupPrompt({ name, copyName: nextCopyName(name, reserved), board, tabId: id })
+            } else performSave(name, false, board, id)
           }}
         >Save</button>
       </div>
       {listed.warning && <p className="notice warning">{listed.warning}</p>}
       <div className="saved-maps">
         {listed.maps.length === 0 && <p className="empty-state">No saved maps yet.</p>}
-        {listed.maps.map((map) => (
+        {sortedMaps.map((map) => (
           <div key={map.name} className="saved-map">
             <span>{map.name || <em>empty name</em>}</span>
             {!map.valid && <small>invalid</small>}
             <button type="button" disabled={!map.valid} onClick={() => {
               const loaded = loadMap(map.name)
-              if (loaded.ok) {
-                // The new tab becomes active, so the save name syncs to map.name.
+              if (!loaded.ok) {
+                notice(loaded.errors.join(', '))
+                return
+              }
+              markMapOpened(map.name)
+              refresh()
+              const existing = state.tabs.find((tab) => tab.title === map.name)
+              if (!existing) {
                 dispatch({ type: 'tab-add', board: loaded.board, title: map.name })
-                notice(loadedNotice(`Loaded “${map.name}”`, loaded.board))
-              } else notice(loaded.errors.join(', '))
+                notice(loadedNotice(`Loaded "${map.name}"`, loaded.board))
+                return
+              }
+              dispatch({ type: 'tab-select', id: existing.id })
+              // A tab that only shares the map's name but holds a pristine board
+              // (e.g. a regenerated "Board 1") is an empty shadow: load the saved
+              // board into it instead of focusing a blank one. A tab with real
+              // (edited) content is the map's live tab — just focus it.
+              const existingSig = serializeBoard(existing.board)
+              if (
+                existingSig !== serializeBoard(loaded.board) &&
+                existingSig === serializeBoard(createBoard(existing.board.layout))
+              ) {
+                dispatch({ type: 'replace', board: loaded.board })
+                notice(loadedNotice(`Loaded "${map.name}"`, loaded.board))
+              } else notice(`Switched to "${map.name}"`)
             }}>Load</button>
             <button type="button" className="icon-danger" onClick={() => {
               const result = deleteMap(map.name)
@@ -128,13 +188,44 @@ export function MapsPanel() {
             if (!file) return
             const parsed = parseBoard(await file.text())
             if (parsed.ok) {
-              dispatch({ type: 'tab-add', board: parsed.board, title: fileTitle(file.name) })
+              // Disambiguate against open tabs and saved maps so the import
+              // never shadows an existing tab's map link.
+              const reserved = new Set([
+                ...state.tabs.map((tab) => tab.title),
+                ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
+              ])
+              const importTitle = firstFreeName(fileTitle(file.name), reserved)
+              dispatch({ type: 'tab-add', board: parsed.board, title: importTitle })
               notice(loadedNotice(`Imported ${file.name}`, parsed.board))
             } else notice(`Import failed: ${parsed.errors.join('; ')}`)
             event.target.value = ''
           }}
         />
       </div>
+      {dupPrompt && (
+        <ConfirmDialog
+          title={`A map named "${dupPrompt.name}" already exists`}
+          actions={[
+            {
+              label: 'Replace',
+              variant: 'danger',
+              onClick: () => {
+                performSave(dupPrompt.name, true, dupPrompt.board, dupPrompt.tabId)
+                setDupPrompt(null)
+              },
+            },
+            {
+              label: 'Save as copy',
+              onClick: () => {
+                performSave(dupPrompt.copyName, false, dupPrompt.board, dupPrompt.tabId)
+                setDupPrompt(null)
+              },
+            },
+            { label: 'Cancel', onClick: () => setDupPrompt(null) },
+          ]}
+          onCancel={() => setDupPrompt(null)}
+        />
+      )}
     </section>
   )
 }
