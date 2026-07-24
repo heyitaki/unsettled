@@ -110,7 +110,7 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
       const raw = vertexStats.pips[resource] ?? 0
       const robbed = vertexStats.robbedPips[resource] ?? 0
       const adjusted = raw - robbed * weights.robberDiscount
-      base += raw -
+      base += raw * weights.resourceValue[resource] -
         robbed * weights.robberDiscount +
         adjusted * weights.scarcityWeight * (scarcity[resource] - 1)
     }
@@ -156,17 +156,26 @@ export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: V
   return { vertices: [...holdings.vertices, vertexId], pips: nextPips, tokenPips, ports }
 }
 
+// Fraction of "real coverage" a resource earns at `pips`, gated so a lone
+// low-probability token (2/12 = 1 pip) counts for far less than its linear
+// share. Full credit at `cap` pips; sub-linear below via coverageExponent.
+// The base is clamped to 0 because a fractional exponent turns any negative
+// base into NaN, which would silently void every candidate's total.
+const coverage = (weights: EngineWeights, pips: number, cap: number): number =>
+  Math.max(0, Math.min(pips, cap) / cap) ** weights.coverageExponent
+
 const diversityScore = (
   weights: EngineWeights,
   pipsFor: (resource: Resource) => number,
 ): number => {
   let score = 0
   for (const resource of RESOURCES) {
-    score += weights.diversityWeight * Math.min(pipsFor(resource), weights.diversityCap) / weights.diversityCap
+    score += weights.diversityWeight * weights.resourceValue[resource] *
+      coverage(weights, pipsFor(resource), weights.diversityCap)
   }
   const recipe = (resources: readonly Resource[], bonus: number): number =>
     bonus * Math.min(...resources.map((resource) =>
-      Math.min(pipsFor(resource), weights.recipeCap) / weights.recipeCap))
+      coverage(weights, pipsFor(resource), weights.recipeCap)))
   return score +
     recipe(['wood', 'brick'], weights.recipeRoadBonus) +
     recipe(['ore', 'wheat'], weights.recipeCityBonus) +
@@ -197,6 +206,11 @@ function effectivePortFactor(
   return Math.max(dedicated, genericPortFactor * generic)
 }
 
+// A port monetizes only production *above* the surplus threshold: below it,
+// you consume everything you make and have nothing to trade away.
+const portSurplus = (weights: EngineWeights, pips: number): number =>
+  Math.max(0, pips - weights.portSurplusThreshold)
+
 function portScore(
   weights: EngineWeights,
   pipsFor: (resource: Resource) => number,
@@ -205,7 +219,7 @@ function portScore(
 ): number {
   let score = 0
   for (const resource of RESOURCES) {
-    score += pipsFor(resource) *
+    score += portSurplus(weights, pipsFor(resource)) *
       effectivePortFactor(ports, resource, weights.genericPortFactor, extraPorts)
   }
   return score * weights.portWeight
@@ -219,25 +233,26 @@ function fastDiversityScore(
   brick: number,
   ore: number,
 ): number {
+  const cap = weights.diversityCap
+  const rv = weights.resourceValue
   const spread = weights.diversityWeight * (
-    Math.min(wood, weights.diversityCap) +
-    Math.min(sheep, weights.diversityCap) +
-    Math.min(wheat, weights.diversityCap) +
-    Math.min(brick, weights.diversityCap) +
-    Math.min(ore, weights.diversityCap)
-  ) / weights.diversityCap
+    rv.wood * coverage(weights, wood, cap) +
+    rv.sheep * coverage(weights, sheep, cap) +
+    rv.wheat * coverage(weights, wheat, cap) +
+    rv.brick * coverage(weights, brick, cap) +
+    rv.ore * coverage(weights, ore, cap)
+  )
+  const recipeCap = weights.recipeCap
   const road = weights.recipeRoadBonus *
-    Math.min(Math.min(wood, weights.recipeCap), Math.min(brick, weights.recipeCap)) /
-    weights.recipeCap
+    Math.min(coverage(weights, wood, recipeCap), coverage(weights, brick, recipeCap))
   const city = weights.recipeCityBonus *
-    Math.min(Math.min(ore, weights.recipeCap), Math.min(wheat, weights.recipeCap)) /
-    weights.recipeCap
+    Math.min(coverage(weights, ore, recipeCap), coverage(weights, wheat, recipeCap))
   const settlement = weights.recipeSettlementBonus * Math.min(
-    Math.min(wood, weights.recipeCap),
-    Math.min(brick, weights.recipeCap),
-    Math.min(wheat, weights.recipeCap),
-    Math.min(sheep, weights.recipeCap),
-  ) / weights.recipeCap
+    coverage(weights, wood, recipeCap),
+    coverage(weights, brick, recipeCap),
+    coverage(weights, wheat, recipeCap),
+    coverage(weights, sheep, recipeCap),
+  )
   return spread + road + city + settlement
 }
 
@@ -252,11 +267,11 @@ function fastPortScore(
   ore: number,
 ): number {
   return weights.portWeight * (
-    wood * effectivePortFactor(ports, 'wood', weights.genericPortFactor, extraPorts) +
-    sheep * effectivePortFactor(ports, 'sheep', weights.genericPortFactor, extraPorts) +
-    wheat * effectivePortFactor(ports, 'wheat', weights.genericPortFactor, extraPorts) +
-    brick * effectivePortFactor(ports, 'brick', weights.genericPortFactor, extraPorts) +
-    ore * effectivePortFactor(ports, 'ore', weights.genericPortFactor, extraPorts)
+    portSurplus(weights, wood) * effectivePortFactor(ports, 'wood', weights.genericPortFactor, extraPorts) +
+    portSurplus(weights, sheep) * effectivePortFactor(ports, 'sheep', weights.genericPortFactor, extraPorts) +
+    portSurplus(weights, wheat) * effectivePortFactor(ports, 'wheat', weights.genericPortFactor, extraPorts) +
+    portSurplus(weights, brick) * effectivePortFactor(ports, 'brick', weights.genericPortFactor, extraPorts) +
+    portSurplus(weights, ore) * effectivePortFactor(ports, 'ore', weights.genericPortFactor, extraPorts)
   )
 }
 
@@ -290,7 +305,7 @@ function componentValues(
     const raw = stats.pips[resource] ?? 0
     const robbed = stats.robbedPips[resource] ?? 0
     const adjusted = raw - robbed * ctx.weights.robberDiscount
-    production += raw
+    production += raw * ctx.weights.resourceValue[resource]
     scarcity += adjusted * ctx.weights.scarcityWeight * (ctx.scarcity[resource] - 1)
     robber -= robbed * ctx.weights.robberDiscount
   }
@@ -339,7 +354,7 @@ export function fastMarginalTotal(
       const raw = stats.pips[resource] ?? 0
       const robbed = stats.robbedPips[resource] ?? 0
       const adjusted = raw - robbed * weights.robberDiscount
-      base += raw -
+      base += raw * weights.resourceValue[resource] -
         robbed * weights.robberDiscount +
         adjusted * weights.scarcityWeight * (ctx.scarcity[resource] - 1)
     }

@@ -1,9 +1,18 @@
+import type { Resource } from '../model/types'
+
 export interface EngineWeights {
+  // Intrinsic worth of a pip by resource, normalized so the five average ~1.0.
+  // Wheat/ore dominate win paths; sheep is least-consumed. See MEMORY roadmap.
+  resourceValue: Record<Resource, number>
   scarcityWeight: number
   scarcityClampMin: number
   scarcityClampMax: number
   diversityWeight: number
   diversityCap: number
+  // Curvature of coverage credit: exponent > 1 makes a lone 2/12 (1 pip)
+  // token count for far less than its linear share, so "exposure" only earns
+  // real credit once a resource actually rolls (>=3 pips).
+  coverageExponent: number
   duplicateNumberPenalty: number
   recipeRoadBonus: number
   recipeCityBonus: number
@@ -11,6 +20,10 @@ export interface EngineWeights {
   recipeCap: number
   portWeight: number
   genericPortFactor: number
+  // A port only converts *surplus*: pips at or below this in the matching
+  // resource earn no port credit, so sitting on a port with weak production
+  // (and a sacrificed hex) no longer outranks real production.
+  portSurplusThreshold: number
   robberDiscount: number
   opponentTopK: number
   softmaxTemperature: number
@@ -21,11 +34,13 @@ export interface EngineWeights {
 }
 
 export const DEFAULT_WEIGHTS: EngineWeights = {
+  resourceValue: { wheat: 1.35, ore: 1.3, wood: 0.8, brick: 0.8, sheep: 0.75 },
   scarcityWeight: 0.35,
   scarcityClampMin: 0.5,
   scarcityClampMax: 2,
   diversityWeight: 1.6,
   diversityCap: 4,
+  coverageExponent: 1.5,
   duplicateNumberPenalty: 0.08,
   recipeRoadBonus: 1.5,
   recipeCityBonus: 2,
@@ -33,6 +48,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   recipeCap: 3,
   portWeight: 0.55,
   genericPortFactor: 0.5,
+  portSurplusThreshold: 3,
   robberDiscount: 0.35,
   opponentTopK: 3,
   softmaxTemperature: 1.25,

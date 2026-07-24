@@ -142,6 +142,40 @@ describe('placement valuation', () => {
     expect(variedScore).toBeGreaterThan(duplicateScore)
   })
 
+  it('values a high-worth resource above an equal-pip low-worth one', () => {
+    const ctx = context([[vertices[0], { wheat: 5 }], [vertices[1], { sheep: 5 }]])
+    expect(fastMarginalTotal(ctx, emptyHoldings(), vertices[0]))
+      .toBeGreaterThan(fastMarginalTotal(ctx, emptyHoldings(), vertices[1]))
+  })
+
+  it('credits a port only when matching production is a real surplus', () => {
+    const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
+    const weak = marginalBreakdown(
+      context([[vertices[0], { wood: 3 }, [port]]]),
+      emptyHoldings(),
+      vertices[0],
+    ).port
+    const strong = marginalBreakdown(
+      context([[vertices[0], { wood: 8 }, [port]]]),
+      emptyHoldings(),
+      vertices[0],
+    ).port
+    expect(weak).toBe(0)
+    expect(strong).toBeGreaterThan(0)
+  })
+
+  it('barely rewards a fifth resource reachable only on a lone 2/12 token', () => {
+    const ctx = context([
+      [vertices[0], { wood: 4, brick: 4, wheat: 4, ore: 4 }],
+      [vertices[1], { sheep: 1 }], // a lone 2 or 12 — nearly never rolls
+      [vertices[2], { sheep: 3 }], // a genuine source (e.g. a 4 or 10)
+    ])
+    const holding = addToHoldings(ctx, emptyHoldings(), vertices[0])
+    const tokenDiv = marginalBreakdown(ctx, holding, vertices[1]).diversity
+    const realDiv = marginalBreakdown(ctx, holding, vertices[2]).diversity
+    expect(realDiv).toBeGreaterThan(tokenDiv * 2)
+  })
+
   it('reads numeric port rates and orders 2:1 above 3:1 above 4:1', () => {
     const vertexId = vertices[0]
     const scoreAt = (rate: number) => {
@@ -272,6 +306,29 @@ describe('placement valuation', () => {
     const holding: Holdings = addToHoldings(ctx, emptyHoldings(), vertices[0])
     expect(fastMarginalTotal(ctx, holding, vertices[1]))
       .toBeCloseTo(breakdownTotal(marginalBreakdown(ctx, holding, vertices[1])))
+  })
+
+  // The helper above builds a bare context, so fastMarginalTotal takes its
+  // recompute fallback. Only a real computeBoardContext populates the
+  // precomputed per-vertex cache, so exercise that branch too.
+  it('keeps the precomputed fast path equal to the full breakdown', () => {
+    let board: Board = createBoard('standard4')
+    const resources = ['wood', 'sheep', 'wheat', 'brick', 'ore'] as const
+    for (let index = 0; index < board.hexes.length; index += 1) {
+      board = setTile(
+        board,
+        board.hexes[index].coord,
+        resources[index % resources.length],
+        [6, 8, 5, 9, 4, 10, 3, 11, 2, 12][index % 10],
+      )
+    }
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const grid = boardGrid(board.layout)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const vertexId of grid.vertexIds) {
+      expect(fastMarginalTotal(ctx, holding, vertexId))
+        .toBeCloseTo(breakdownTotal(marginalBreakdown(ctx, holding, vertexId)))
+    }
   })
 
   it('calibrates a 12-pip wood port pair to beat diversity by at least 1.5', () => {

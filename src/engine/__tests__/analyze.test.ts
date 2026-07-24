@@ -33,9 +33,12 @@ import { DEFAULT_WEIGHTS } from '../weights'
 
 const resources: readonly Resource[] = ['wood', 'sheep', 'wheat', 'brick', 'ore']
 const tokens = [6, 8, 5, 9, 4, 10, 3, 11, 2, 12] as const
-const WOOD_PORT_EDGE = 'e:-3,0;-2,0' as const
-const WOOD_PORT_VERTEX = 'v:-3,0;-2,-1;-2,0' as const
-const MIRROR_LEFT = WOOD_PORT_VERTEX
+// This coastal port vertex touches exactly one land hex (-2,0); its other two
+// members are sea. So you can never double-down *on* the port — an on-port
+// settlement gets at most one hex of the matched resource.
+const PORT_EDGE = 'e:-3,0;-2,0' as const
+const PORT_VERTEX = 'v:-3,0;-2,-1;-2,0' as const
+const MIRROR_LEFT = PORT_VERTEX
 const MIRROR_RIGHT = 'v:2,0;2,1;3,0' as const
 
 function filledBoard(playerCount = 2, pattern = 0): Board {
@@ -51,25 +54,42 @@ function filledBoard(playerCount = 2, pattern = 0): Board {
   return board
 }
 
-function strategyBoard(strongWood: boolean): Board {
-  let board = addPlayer(createBoard('standard4'), {
-    id: 'p2',
-    name: 'P2',
-    color: '#333333',
-  })
+// Strong, balanced production across the map plus a low-value wood 2:1 port.
+// A wood-port monopoly should lose here: a port supplements production, it
+// never replaces a hex of it, and wood is a low-worth resource.
+function balancedBoard(): Board {
+  let board = addPlayer(createBoard('standard4'), { id: 'p2', name: 'P2', color: '#333333' })
   board = { ...board, ports: [] }
   const assignments = [
-    [{ q: -2, r: 0 }, 'wood', strongWood ? 6 : 5],
-    ...(strongWood ? [[{ q: -1, r: 0 }, 'wood', 6] as const] : []),
-    [{ q: 1, r: -2 }, 'brick', 5],
-    [{ q: 2, r: -2 }, 'sheep', 4],
-    [{ q: -2, r: 2 }, 'wheat', 5],
-    [{ q: -1, r: 2 }, 'ore', 4],
+    [{ q: -2, r: 0 }, 'wood', 6], // the port hex
+    [{ q: 1, r: -2 }, 'brick', 6],
+    [{ q: 2, r: -2 }, 'sheep', 8],
+    [{ q: -2, r: 2 }, 'wheat', 6],
+    [{ q: -1, r: 2 }, 'ore', 8],
   ] as const
   for (const [coord, resource, token] of assignments) {
     board = setTile(board, coord, resource, token)
   }
-  return upsertPort(board, WOOD_PORT_EDGE, 'wood', 2)
+  return upsertPort(board, PORT_EDGE, 'wood', 2)
+}
+
+// PORT_VERTEX sits on a strong wheat hex with a matched wheat 2:1 port. The
+// port still earns credit end-to-end when real surplus production feeds it —
+// the legitimate niche. (A full "build toward a nearby port" bonus awaits the
+// deferred near-port feature; on-port is capped at this single hex.)
+function matchedPortBoard(): Board {
+  let board = addPlayer(createBoard('standard4'), { id: 'p2', name: 'P2', color: '#333333' })
+  board = { ...board, ports: [] }
+  const assignments = [
+    [{ q: -2, r: 0 }, 'wheat', 6],
+    [{ q: 1, r: -2 }, 'brick', 5],
+    [{ q: 2, r: -2 }, 'sheep', 4],
+    [{ q: -1, r: 2 }, 'ore', 5],
+  ] as const
+  for (const [coord, resource, token] of assignments) {
+    board = setTile(board, coord, resource, token)
+  }
+  return upsertPort(board, PORT_EDGE, 'wheat', 2)
 }
 
 const recommendationPair = (
@@ -81,13 +101,6 @@ const recommendationPair = (
 
 function pairResources(board: Board, pair: readonly VertexId[]): Set<string> {
   return new Set(pair.flatMap((vertexId) => Object.keys(vertexProduction(board, vertexId))))
-}
-
-function pairPips(board: Board, pair: readonly VertexId[], resource: Resource): number {
-  return pair.reduce(
-    (sum, vertexId) => sum + (vertexProduction(board, vertexId)[resource] ?? 0),
-    0,
-  )
 }
 
 const requiredOptions = (overrides: Partial<Required<AnalysisOptions>> = {}): Required<AnalysisOptions> => ({
@@ -185,32 +198,34 @@ describe('joint draft analysis', () => {
     expect(left!.score).toBeCloseTo(right!.score, 12)
   })
 
-  it('lets a 2:1 port double-down and a genuinely diverse plan each win end-to-end', () => {
-    const concentrated = strategyBoard(true)
-    const concentratedAnalysis = analyzeBoard(concentrated, { rollouts: 1, maxResults: 54 })
-    const concentratedTop = concentratedAnalysis.recommendations[0]
-    const concentratedPair = recommendationPair(concentratedTop)
-    const diverseRival = concentratedAnalysis.recommendations.find((entry) =>
-      pairResources(concentrated, recommendationPair(entry)).size >= 3)
-    expect(concentratedPair).toHaveLength(2)
-    expect(pairResources(concentrated, concentratedPair)).toEqual(new Set(['wood']))
-    expect(concentratedPair).toContain(WOOD_PORT_VERTEX)
-    expect(diverseRival).toBeDefined()
-    expect(concentratedTop.rankScore).toBeGreaterThan(diverseRival!.rankScore)
-
-    const diverse = strategyBoard(false)
-    const diverseAnalysis = analyzeBoard(diverse, { rollouts: 1, maxResults: 54 })
-    const diverseTop = diverseAnalysis.recommendations[0]
-    const weakConcentration = diverseAnalysis.recommendations.find((entry) => {
-      const pair = recommendationPair(entry)
-      return pairResources(diverse, pair).size === 1 &&
-        pairResources(diverse, pair).has('wood') &&
-        pair.includes(WOOD_PORT_VERTEX)
+  it('lets production+diversity win over a port monopoly, yet still credits a matched port', () => {
+    // Diversity + production wins end-to-end: the top pick spans multiple
+    // resources, leans on production rather than the port, and no wood-only
+    // port monopoly is even competitive enough to surface.
+    const balanced = balancedBoard()
+    const balancedAnalysis = analyzeBoard(balanced, { rollouts: 1, maxResults: 54 })
+    const balancedTop = balancedAnalysis.recommendations[0]
+    const topResources = pairResources(balanced, recommendationPair(balancedTop))
+    expect(topResources.size).toBeGreaterThanOrEqual(2)
+    expect(topResources).not.toEqual(new Set(['wood']))
+    expect(balancedTop.breakdown.production).toBeGreaterThan(balancedTop.breakdown.port)
+    const woodMonopoly = balancedAnalysis.recommendations.filter((entry) => {
+      const resources = pairResources(balanced, recommendationPair(entry))
+      return resources.size === 1 && resources.has('wood')
     })
-    expect(pairResources(diverse, recommendationPair(diverseTop)).size).toBeGreaterThanOrEqual(3)
-    expect(weakConcentration).toBeDefined()
-    expect(pairPips(diverse, recommendationPair(weakConcentration!), 'wood')).toBeLessThanOrEqual(8)
-    expect(diverseTop.rankScore).toBeGreaterThan(weakConcentration!.rankScore)
+    for (const monopoly of woodMonopoly) {
+      expect(balancedTop.rankScore).toBeGreaterThan(monopoly.rankScore)
+    }
+
+    // A matched 2:1 port still earns real credit when surplus production feeds
+    // it: the on-port wheat spot surfaces with a positive port contribution.
+    const matched = matchedPortBoard()
+    const matchedAnalysis = analyzeBoard(matched, { rollouts: 1, maxResults: 54 })
+    const portRecommendation = matchedAnalysis.recommendations.find(
+      (entry) => entry.firstPick === PORT_VERTEX,
+    )
+    expect(portRecommendation).toBeDefined()
+    expect(portRecommendation!.breakdown.port).toBeGreaterThan(0)
   })
 
   it('simulates opponents before a not-my-turn pick', () => {
