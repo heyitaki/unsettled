@@ -10,6 +10,7 @@ export interface DraftState {
   currentPlayerId: string | null
   myPickIndices: number[]
   myRemainingPickIndices: number[]
+  remainingPickIndices: number[]
   warnings: DraftWarning[]
 }
 
@@ -37,19 +38,36 @@ export function inferDraftState(board: Board): DraftState {
   }
 
   const turnIndex = placedCount < sequence.length ? placedCount : null
+  const total = new Map<string, number>()
+  for (const playerId of sequence) {
+    total.set(playerId, (total.get(playerId) ?? 0) + 1)
+  }
+  const skips = new Map<string, number>()
+  for (const [playerId, totalPicks] of total) {
+    const actualPlaced = Math.min(actual.get(playerId) ?? 0, totalPicks)
+    const expectedPlaced = expected.get(playerId) ?? 0
+    const excess = actualPlaced - expectedPlaced
+    if (excess > 0) skips.set(playerId, excess)
+  }
+  const remainingPickIndices: number[] = []
+  if (turnIndex !== null) {
+    for (let index = turnIndex; index < sequence.length; index += 1) {
+      const playerId = sequence[index]
+      const skip = skips.get(playerId) ?? 0
+      if (skip > 0) {
+        skips.set(playerId, skip - 1)
+        continue
+      }
+      remainingPickIndices.push(index)
+    }
+  }
   const meValid = board.mePlayerId !== null && board.players.some((player) => player.id === board.mePlayerId)
   const myPickIndices = meValid
     ? sequence.flatMap((playerId, index) => playerId === board.mePlayerId ? [index] : [])
     : []
-  const myPlacedCount = meValid
-    ? Math.min(
-        settlements.filter((building) => building.playerId === board.mePlayerId).length,
-        myPickIndices.length,
-      )
-    : 0
-  const remainingCount = myPickIndices.length - myPlacedCount
-  const candidates = turnIndex === null ? [] : myPickIndices.filter((index) => index >= turnIndex)
-  const myRemainingPickIndices = candidates.slice(Math.max(0, candidates.length - remainingCount))
+  const myRemainingPickIndices = meValid
+    ? remainingPickIndices.filter((index) => sequence[index] === board.mePlayerId)
+    : []
 
   return {
     sequence,
@@ -58,6 +76,7 @@ export function inferDraftState(board: Board): DraftState {
     currentPlayerId: turnIndex === null ? null : sequence[turnIndex],
     myPickIndices,
     myRemainingPickIndices,
+    remainingPickIndices,
     warnings,
   }
 }

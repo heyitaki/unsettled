@@ -23,6 +23,7 @@ export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
 export interface VertexStats {
   pips: Partial<Record<Resource, number>>
   robbedPips: Partial<Record<Resource, number>>
+  tokenPips: Partial<Record<number, number>>
   ports: Port[]
 }
 
@@ -35,6 +36,7 @@ export interface BoardContext {
 export interface Holdings {
   vertices: VertexId[]
   pips: Partial<Record<Resource, number>>
+  tokenPips: Partial<Record<number, number>>
   ports: Port[]
 }
 
@@ -54,6 +56,7 @@ const clamp = (value: number, min: number, max: number): number =>
 
 export function computeBoardContext(board: Board, weights: EngineWeights): BoardContext {
   const boardPips: Record<Resource, number> = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+  const hexesByKey = new Map(board.hexes.map((hex) => [axialKey(hex.coord), hex]))
   for (const hex of board.hexes) {
     if (hex.tile === null || hex.tile === 'desert') continue
     boardPips[hex.tile] += pips(hex.numberToken)
@@ -79,13 +82,23 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
     const robbedPips: Partial<Record<Resource, number>> = {}
+    const tokenPips: Partial<Record<number, number>> = {}
+    for (const key of touching) {
+      const hex = hexesByKey.get(key)
+      if (!hex || hex.tile === null || hex.tile === 'desert' || hex.numberToken === null) {
+        continue
+      }
+      const amount = pips(hex.numberToken)
+      if (amount > 0) tokenPips[hex.numberToken] = (tokenPips[hex.numberToken] ?? 0) + amount
+    }
     if (robberKey !== null && touching.has(robberKey)) {
-      const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === robberKey)
+      const hex = hexesByKey.get(robberKey)
       if (hex?.tile && hex.tile !== 'desert') robbedPips[hex.tile] = pips(hex.numberToken)
     }
     stats.set(vertexId, {
       pips: vertexProduction(board, vertexId),
       robbedPips,
+      tokenPips,
       ports: portsByVertex.get(vertexId) ?? [],
     })
   }
@@ -114,7 +127,7 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
   return ctx
 }
 
-export const emptyHoldings = (): Holdings => ({ vertices: [], pips: {}, ports: [] })
+export const emptyHoldings = (): Holdings => ({ vertices: [], pips: {}, tokenPips: {}, ports: [] })
 
 const adjustedPips = (ctx: BoardContext, stats: VertexStats, resource: Resource): number =>
   (stats.pips[resource] ?? 0) -
@@ -128,6 +141,11 @@ export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: V
     const amount = adjustedPips(ctx, stats, resource)
     if (amount !== 0) nextPips[resource] = (nextPips[resource] ?? 0) + amount
   }
+  const tokenPips = { ...holdings.tokenPips }
+  for (const token in stats.tokenPips) {
+    const number = Number(token)
+    tokenPips[number] = (tokenPips[number] ?? 0) + (stats.tokenPips[number] ?? 0)
+  }
   const edgeIds = new Set(holdings.ports.map((port) => port.edgeId))
   const ports = [...holdings.ports]
   for (const port of stats.ports) {
@@ -135,7 +153,7 @@ export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: V
     edgeIds.add(port.edgeId)
     ports.push(port)
   }
-  return { vertices: [...holdings.vertices, vertexId], pips: nextPips, ports }
+  return { vertices: [...holdings.vertices, vertexId], pips: nextPips, tokenPips, ports }
 }
 
 const diversityScore = (
@@ -242,6 +260,22 @@ function fastPortScore(
   )
 }
 
+function duplicateNumberPenalty(
+  weights: EngineWeights,
+  holdings: Holdings,
+  candidate: VertexStats,
+): number {
+  let overlap = 0
+  for (const token in candidate.tokenPips) {
+    const number = Number(token)
+    overlap += Math.min(
+      holdings.tokenPips[number] ?? 0,
+      candidate.tokenPips[number] ?? 0,
+    )
+  }
+  return overlap * weights.duplicateNumberPenalty
+}
+
 function componentValues(
   ctx: BoardContext,
   holdings: Holdings,
@@ -264,10 +298,13 @@ function componentValues(
   const beforePips = (resource: Resource) => holdings.pips[resource] ?? 0
   const afterPips = (resource: Resource) =>
     beforePips(resource) + adjustedPips(ctx, stats, resource)
-  const diversity = diversityScore(ctx.weights, afterPips) -
-    diversityScore(ctx.weights, beforePips)
 
-  // Payout is linear in cards, so same-number covariance is deliberately not modeled.
+  // Expected payout is linear, but same-number income is fully correlated,
+  // lumpier, and vulnerable to one robber-blockable number.
+  const diversity = diversityScore(ctx.weights, afterPips) -
+    diversityScore(ctx.weights, beforePips) -
+    duplicateNumberPenalty(ctx.weights, holdings, stats)
+
   // Port value uses full production; the conservative weight stands in for consumption.
   const port = portScore(ctx.weights, afterPips, holdings.ports, stats.ports) -
     portScore(ctx.weights, beforePips, holdings.ports)
@@ -319,7 +356,8 @@ export function fastMarginalTotal(
   const brickAfter = brickBefore + (fast?.adjustedBrick ?? adjustedPips(ctx, stats, 'brick'))
   const oreAfter = oreBefore + (fast?.adjustedOre ?? adjustedPips(ctx, stats, 'ore'))
   const diversity = fastDiversityScore(weights, woodAfter, sheepAfter, wheatAfter, brickAfter, oreAfter) -
-    fastDiversityScore(weights, woodBefore, sheepBefore, wheatBefore, brickBefore, oreBefore)
+    fastDiversityScore(weights, woodBefore, sheepBefore, wheatBefore, brickBefore, oreBefore) -
+    duplicateNumberPenalty(weights, holdings, stats)
   const port = holdings.ports.length === 0 && stats.ports.length === 0
     ? 0
     : fastPortScore(

@@ -4,6 +4,7 @@ export interface EngineWeights {
   scarcityClampMax: number
   diversityWeight: number
   diversityCap: number
+  duplicateNumberPenalty: number
   recipeRoadBonus: number
   recipeCityBonus: number
   recipeSettlementBonus: number
@@ -25,6 +26,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   scarcityClampMax: 2,
   diversityWeight: 1.6,
   diversityCap: 4,
+  duplicateNumberPenalty: 0.08,
   recipeRoadBonus: 1.5,
   recipeCityBonus: 2,
   recipeSettlementBonus: 1,

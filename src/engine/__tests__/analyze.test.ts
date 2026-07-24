@@ -8,6 +8,7 @@ import {
   upsertPort,
   vertexProduction,
 } from '../../model/board'
+import { edgeEndpointVertexIds, hexVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import type { Board, Resource, VertexId } from '../../model/types'
 import {
@@ -272,6 +273,34 @@ describe('joint draft analysis', () => {
     ).total)
   })
 
+  it('reconciles a placed-early opponent before the pre-window', () => {
+    const base = filledBoard(2, 6)
+    const existing = legalSettlementVertices(base)[0]
+    const board = placeBuilding(base, existing, 'p2', 'settlement')
+    const analysis = analyzeBoard(board, { rollouts: 8, maxResults: 54 })
+
+    expect(analysis.warnings).toContain('snake-inconsistent')
+    expect(analysis.draft.remainingPickIndices
+      .filter((index) => analysis.draft.sequence[index] === 'p2')).toEqual([2])
+    expect(analysis.takenBeforeFirstPick.reduce(
+      (sum, entry) => sum + entry.frequency,
+      0,
+    )).toBeCloseTo(1)
+  })
+
+  it('reconciles a placed-early opponent between my picks', () => {
+    const base = setMe(filledBoard(3, 7), 'p2')
+    const existing = legalSettlementVertices(base)[0]
+    const board = placeBuilding(base, existing, 'p3', 'settlement')
+    const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
+
+    expect(analysis.warnings).toContain('snake-inconsistent')
+    expect(analysis.draft.remainingPickIndices
+      .filter((index) => analysis.draft.sequence[index] === 'p3')).toEqual([3])
+    expect(analysis.recommendations.length).toBeGreaterThan(0)
+    expect(analysis.recommendations.every((entry) => entry.expectedTaken.length === 1)).toBe(true)
+  })
+
   it('routes a per-player modifier through opponent picks', () => {
     const board = setMe(filledBoard(3, 9), 'p2')
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
@@ -341,6 +370,32 @@ describe('hostile states and simulator seams', () => {
     )).toEqual([])
   })
 
+  it('ranks a zero-pip port that synergizes with an existing holding', () => {
+    let board = setMe(addPlayer(createBoard('standard4'), {
+      id: 'p2',
+      name: 'P2',
+      color: '#333333',
+    }), 'p2')
+    board = { ...board, ports: [] }
+    board = setTile(board, { q: 0, r: 0 }, 'wood', 6)
+    const centerVertices = hexVertexIds({ q: 0, r: 0 })
+    board = placeBuilding(board, centerVertices[3], 'aki', 'settlement')
+    board = placeBuilding(board, centerVertices[0], 'p2', 'settlement')
+    const portEdge = boardGrid(board.layout).coastalEdgeIds[0]
+    const portVertex = edgeEndpointVertexIds(portEdge)[0]
+    board = upsertPort(board, portEdge, 'wood', 2)
+
+    expect(legalSettlementVertices(board).every((vertexId) =>
+      Object.values(vertexProduction(board, vertexId))
+        .every((amount) => amount === undefined || amount === 0))).toBe(true)
+    const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
+    const portRecommendation = analysis.recommendations
+      .find((entry) => entry.firstPick === portVertex)
+    expect(analysis.warnings).toEqual([])
+    expect(analysis.status).toBe('ready')
+    expect(portRecommendation?.score).toBeGreaterThan(0)
+  })
+
   it('scores a lone first pick when no legal second survives', () => {
     const board = filledBoard(2)
     const draft = inferDraftState(board)
@@ -388,14 +443,14 @@ describe('hostile states and simulator seams', () => {
       meValid: true,
       meDone: false,
       legalCount: 1,
-      hasProduction: true,
+      hasPositiveScore: true,
       recommendationCount: 1,
     }
     expect(resolveStatus({ ...base, complete: true, meValid: false })).toBe('complete')
     expect(resolveStatus({ ...base, meValid: false, meDone: true })).toBe('no-me')
     expect(resolveStatus({ ...base, meDone: true, legalCount: 0 })).toBe('me-done')
-    expect(resolveStatus({ ...base, legalCount: 0, hasProduction: false })).toBe('no-availability')
-    expect(resolveStatus({ ...base, hasProduction: false, recommendationCount: 0 })).toBe('no-production')
+    expect(resolveStatus({ ...base, legalCount: 0, hasPositiveScore: false })).toBe('no-availability')
+    expect(resolveStatus({ ...base, hasPositiveScore: false, recommendationCount: 0 })).toBe('no-production')
     expect(resolveStatus({ ...base, recommendationCount: 0 })).toBe('no-availability')
     expect(resolveStatus(base)).toBe('ready')
   })

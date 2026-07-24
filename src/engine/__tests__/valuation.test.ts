@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { createBoard } from '../../model/board'
+import { createBoard, setTile } from '../../model/board'
+import { axialKey, vertexTouchingHexes } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
-import type { Port, Resource, VertexId } from '../../model/types'
+import type { Board, Port, Resource, VertexId } from '../../model/types'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   breakdownTotal,
+  computeBoardContext,
   emptyHoldings,
   fastMarginalTotal,
   marginalBreakdown,
@@ -27,7 +29,7 @@ function context(
 ): BoardContext {
   const stats = new Map<VertexId, VertexStats>()
   for (const [vertexId, pips, ports = []] of entries) {
-    stats.set(vertexId, { pips, robbedPips: robbed.get(vertexId) ?? {}, ports })
+    stats.set(vertexId, { pips, robbedPips: robbed.get(vertexId) ?? {}, tokenPips: {}, ports })
   }
   return {
     stats,
@@ -89,6 +91,55 @@ describe('placement valuation', () => {
     )
     expect(fastMarginalTotal(ctx, emptyHoldings(), vertices[1]))
       .toBeGreaterThan(fastMarginalTotal(ctx, emptyHoldings(), vertices[0]))
+  })
+
+  it('prefers otherwise-equivalent 6+8 production over duplicate 6+6 production', () => {
+    let board: Board = { ...createBoard('standard4'), ports: [] }
+    const grid = boardGrid(board.layout)
+    const usedHexes = new Set<string>()
+    const sites: { vertexId: VertexId; coord: Board['hexes'][number]['coord'] }[] = []
+    for (const vertexId of grid.vertexIds) {
+      const land = vertexTouchingHexes(vertexId)
+        .filter((coord) => grid.landKeys.has(axialKey(coord)))
+      if (land.length !== 1 || usedHexes.has(axialKey(land[0]))) continue
+      usedHexes.add(axialKey(land[0]))
+      sites.push({ vertexId, coord: land[0] })
+      if (sites.length === 4) break
+    }
+    expect(sites).toHaveLength(4)
+    for (let index = 0; index < sites.length; index += 1) {
+      board = setTile(board, sites[index].coord, 'wood', index === 3 ? 8 : 6)
+    }
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const scorePair = (first: VertexId, second: VertexId): number => {
+      const firstScore = scoreCandidate(
+        ctx,
+        emptyHoldings(),
+        first,
+        'aki',
+        board,
+        neutralModifier,
+      ).total
+      return firstScore + scoreCandidate(
+        ctx,
+        addToHoldings(ctx, emptyHoldings(), first),
+        second,
+        'aki',
+        board,
+        neutralModifier,
+      ).total
+    }
+
+    const duplicateScore = scorePair(sites[0].vertexId, sites[1].vertexId)
+    const variedScore = scorePair(sites[2].vertexId, sites[3].vertexId)
+    const duplicateHoldings = addToHoldings(ctx, emptyHoldings(), sites[0].vertexId)
+    expect(fastMarginalTotal(ctx, duplicateHoldings, sites[1].vertexId))
+      .toBeCloseTo(breakdownTotal(marginalBreakdown(
+        ctx,
+        duplicateHoldings,
+        sites[1].vertexId,
+      )))
+    expect(variedScore).toBeGreaterThan(duplicateScore)
   })
 
   it('reads numeric port rates and orders 2:1 above 3:1 above 4:1', () => {

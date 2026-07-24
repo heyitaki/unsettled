@@ -81,6 +81,11 @@ interface CandidateAggregate {
   survived: number
 }
 
+interface DraftTurn {
+  playerId: string
+  turnIndex: number
+}
+
 const emptyBreakdown = (): ScoreBreakdown => ({
   production: 0,
   scarcity: 0,
@@ -95,6 +100,18 @@ const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
   target.robber += value.robber
   target.diversity += value.diversity
   target.port += value.port
+}
+
+function remainingTurns(
+  draft: DraftState,
+  startIndex: number,
+  endIndex: number,
+  excludedPlayerId: string | null,
+): DraftTurn[] {
+  return draft.remainingPickIndices
+    .filter((turnIndex) => turnIndex >= startIndex && turnIndex < endIndex)
+    .map((turnIndex) => ({ playerId: draft.sequence[turnIndex], turnIndex }))
+    .filter(({ playerId }) => excludedPlayerId === null || playerId !== excludedPlayerId)
 }
 
 const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holdings> => {
@@ -250,7 +267,12 @@ function replayPreWindowHoldings(
   firstPickIndex: number,
 ): Map<string, Holdings> {
   const holdings = holdingsFromBoard(ctx, board)
-  const scheduled = draft.sequence.slice(draft.turnIndex ?? firstPickIndex, firstPickIndex)
+  const scheduled = remainingTurns(
+    draft,
+    draft.turnIndex ?? firstPickIndex,
+    firstPickIndex,
+    board.mePlayerId,
+  ).map(({ playerId }) => playerId)
   for (let index = 0; index < preWindow.taken.length; index += 1) {
     const playerId = preWindow.pickerIds?.[index] ?? scheduled[index]
     if (playerId === undefined) continue
@@ -288,10 +310,7 @@ export function rankCandidates(
   const secondPickIndex = draft.myRemainingPickIndices[1]
   const midTurns = secondPickIndex === undefined
     ? []
-    : draft.sequence
-        .map((playerId, turnIndex) => ({ playerId, turnIndex }))
-        .slice(firstPickIndex + 1, secondPickIndex)
-        .filter(({ playerId }) => playerId !== me)
+    : remainingTurns(draft, firstPickIndex + 1, secondPickIndex, me)
   const midPickerIds = midTurns.map(({ playerId }) => playerId)
   const candidates = legalSettlementVertices(board)
   const myHoldings = holdingsFromBoard(ctx, board).get(me) ?? emptyHoldings()
@@ -410,14 +429,14 @@ export function resolveStatus(input: {
   meValid: boolean
   meDone: boolean
   legalCount: number
-  hasProduction: boolean
+  hasPositiveScore: boolean
   recommendationCount: number
 }): AnalysisStatus {
   if (input.complete) return 'complete'
   if (!input.meValid) return 'no-me'
   if (input.meDone) return 'me-done'
   if (input.legalCount === 0) return 'no-availability'
-  if (!input.hasProduction) return 'no-production'
+  if (!input.hasPositiveScore) return 'no-production'
   if (input.recommendationCount === 0) return 'no-availability'
   return 'ready'
 }
@@ -437,6 +456,7 @@ export function rolloutCount(
 
 export function analyzeBoard(board: Board, options: AnalysisOptions = {}): DraftAnalysis {
   const weights = options.weights ?? DEFAULT_WEIGHTS
+  const modifier = options.modifier ?? neutralModifier
   const draft = inferDraftState(board)
   const ctx = computeBoardContext(board, weights)
   const legal = legalSettlementVertices(board)
@@ -444,37 +464,30 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
   const meValid = board.mePlayerId !== null &&
     board.players.some((player) => player.id === board.mePlayerId)
   const meDone = draft.myRemainingPickIndices.length === 0
-  const hasProduction = legal.some((vertexId) => {
-    const stats = ctx.stats.get(vertexId)
-    return stats !== undefined &&
-      Object.values(stats.pips).some((amount) => amount !== undefined && amount > 0)
-  })
-  const shouldRank = !complete && meValid && !meDone && legal.length > 0 && hasProduction
+  const me = board.mePlayerId
+  const baseHoldings = holdingsFromBoard(ctx, board)
+  const myHoldings = me === null ? emptyHoldings() : baseHoldings.get(me) ?? emptyHoldings()
+  const canRank = !complete && meValid && !meDone && legal.length > 0 && me !== null
+  const hasPositiveScore = canRank && legal.some((vertexId) =>
+    scoreForScan(ctx, board, myHoldings, vertexId, me, modifier) > 0)
+  const shouldRank = canRank && hasPositiveScore
   let recommendations: Recommendation[] = []
   let takenBeforeFirstPick: TakenVertex[] = []
 
-  if (shouldRank) {
-    const me = board.mePlayerId
+  if (shouldRank && me !== null) {
     const firstPickIndex = draft.myRemainingPickIndices[0]
     const secondPickIndex = draft.myRemainingPickIndices[1]
     const turnIndex = draft.turnIndex ?? firstPickIndex
-    const preTurns = draft.sequence
-      .map((playerId, index) => ({ index, playerId }))
-      .slice(turnIndex, firstPickIndex)
-      .filter(({ playerId }) => playerId !== me)
+    const preTurns = remainingTurns(draft, turnIndex, firstPickIndex, me)
     const prePickerIds = preTurns.map(({ playerId }) => playerId)
     const midPicks = secondPickIndex === undefined
       ? 0
-      : draft.sequence
-          .slice(firstPickIndex + 1, secondPickIndex)
-          .filter((playerId) => playerId !== me)
-          .length
+      : remainingTurns(draft, firstPickIndex + 1, secondPickIndex, me).length
     const rollouts = options.rollouts ??
       rolloutCount(legal.length, prePickerIds.length, midPicks, weights)
     const random = mulberry32(options.seed ?? 7)
     const uniforms = Array.from({ length: rollouts }, () =>
       Array.from({ length: draft.sequence.length }, () => random()))
-    const baseHoldings = holdingsFromBoard(ctx, board)
     const baseBlocked = blockedVertices(
       board.layout,
       board.buildings.map((building) => building.vertexId),
@@ -485,7 +498,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
       let uniformIndex = 0
       const nextUniform = () => rollout === 0
         ? 0
-        : uniforms[rollout][preTurns[uniformIndex++]?.index ?? 0]
+        : uniforms[rollout][preTurns[uniformIndex++]?.turnIndex ?? 0]
       const result = simulateWindowDetailed(
         ctx,
         board,
@@ -493,7 +506,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
         baseHoldings,
         blocked,
         nextUniform,
-        options.modifier ?? neutralModifier,
+        modifier,
       )
       preWindows.push({
         blocked,
@@ -508,7 +521,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
       seed: options.seed ?? 7,
       rollouts,
       weights,
-      modifier: options.modifier ?? neutralModifier,
+      modifier,
       maxResults: options.maxResults ?? weights.maxResults,
     })
     recommendations = ranked.recommendations
@@ -520,7 +533,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
     meValid,
     meDone,
     legalCount: legal.length,
-    hasProduction,
+    hasPositiveScore,
     recommendationCount: recommendations.length,
   })
   return {

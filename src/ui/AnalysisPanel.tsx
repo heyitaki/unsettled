@@ -43,7 +43,7 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
   const factors: [string, number][] = [
     ['Production', recommendation.breakdown.production],
     ['Scarcity', recommendation.breakdown.scarcity],
-    ['Diversity+recipes', recommendation.breakdown.diversity],
+    ['Diversity+recipes+numbers', recommendation.breakdown.diversity],
     ['Port', recommendation.breakdown.port],
     ['Robber', recommendation.breakdown.robber],
   ]
