@@ -1,19 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { createBoard, setTile } from '../../model/board'
-import { axialKey, vertexTouchingHexes } from '../../model/coords'
+import { createBoard, pips, setTile, vertexProduction } from '../../model/board'
+import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
-import type { Board, Port, Resource, VertexId } from '../../model/types'
+import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../../model/types'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   breakdownTotal,
   computeBoardContext,
+  coverageValues,
   emptyHoldings,
-  fastMarginalTotal,
+  marginalTotal,
   marginalBreakdown,
   scoreCandidate,
   type BoardContext,
   type Holdings,
+  type PortAccess,
   type VertexStats,
 } from '../valuation'
 import { DEFAULT_WEIGHTS, type EngineWeights } from '../weights'
@@ -21,53 +23,51 @@ import { DEFAULT_WEIGHTS, type EngineWeights } from '../weights'
 const vertices = boardGrid('standard4').vertexIds
 const edgeIds = boardGrid('standard4').coastalEdgeIds
 
+// A bare `Port` against a vertex means the settlement sits on it (full reach);
+// pass a `PortAccess` to place it a road-build away instead.
+const toAccess = (entry: Port | PortAccess): PortAccess =>
+  'reach' in entry ? entry : { port: entry, reach: 1 }
+
 function context(
-  entries: readonly [VertexId, Partial<Record<Resource, number>>, Port[]?][],
+  entries: readonly [VertexId, Partial<Record<Resource, number>>, (Port | PortAccess)[]?][],
   weights: EngineWeights = DEFAULT_WEIGHTS,
   scarcity: Partial<Record<Resource, number>> = {},
   robbed: ReadonlyMap<VertexId, Partial<Record<Resource, number>>> = new Map(),
 ): BoardContext {
   const stats = new Map<VertexId, VertexStats>()
   for (const [vertexId, pips, ports = []] of entries) {
-    // Ports listed against a vertex here sit on it, i.e. full reach.
     stats.set(vertexId, {
       pips,
       robbedPips: robbed.get(vertexId) ?? {},
       tokenPips: {},
-      ports: ports.map((port) => ({ port, reach: 1 })),
+      ports: ports.map(toAccess),
     })
+  }
+  const boardScarcity = {
+    wood: scarcity.wood ?? 1,
+    sheep: scarcity.sheep ?? 1,
+    wheat: scarcity.wheat ?? 1,
+    brick: scarcity.brick ?? 1,
+    ore: scarcity.ore ?? 1,
   }
   return {
     stats,
-    scarcity: {
-      wood: scarcity.wood ?? 1,
-      sheep: scarcity.sheep ?? 1,
-      wheat: scarcity.wheat ?? 1,
-      brick: scarcity.brick ?? 1,
-      ore: scarcity.ore ?? 1,
-    },
+    scarcity: boardScarcity,
+    coverageValue: coverageValues(weights, boardScarcity),
     weights,
   }
 }
 
-const pairScore = (ctx: BoardContext, first: VertexId, second: VertexId): number => {
-  const firstScore = scoreCandidate(
-    ctx,
-    emptyHoldings(),
-    first,
-    'aki',
-    createBoard('standard4'),
-    neutralModifier,
-  ).total
+const pairScore = (
+  ctx: BoardContext,
+  first: VertexId,
+  second: VertexId,
+  board: Board = createBoard('standard4'),
+): number => {
+  const firstScore = scoreCandidate(ctx, emptyHoldings(), first, 'aki', board, neutralModifier).total
   const holding = addToHoldings(ctx, emptyHoldings(), first)
-  return firstScore + scoreCandidate(
-    ctx,
-    holding,
-    second,
-    'aki',
-    createBoard('standard4'),
-    neutralModifier,
-  ).total
+  return firstScore +
+    scoreCandidate(ctx, holding, second, 'aki', board, neutralModifier).total
 }
 
 describe('placement valuation', () => {
@@ -95,8 +95,8 @@ describe('placement valuation', () => {
       DEFAULT_WEIGHTS,
       { wood: 0.5, brick: 2 },
     )
-    expect(fastMarginalTotal(ctx, emptyHoldings(), vertices[1]))
-      .toBeGreaterThan(fastMarginalTotal(ctx, emptyHoldings(), vertices[0]))
+    expect(marginalTotal(ctx, emptyHoldings(), vertices[1]))
+      .toBeGreaterThan(marginalTotal(ctx, emptyHoldings(), vertices[0]))
   })
 
   it('prefers otherwise-equivalent 6+8 production over duplicate 6+6 production', () => {
@@ -117,29 +117,10 @@ describe('placement valuation', () => {
       board = setTile(board, sites[index].coord, 'wood', index === 3 ? 8 : 6)
     }
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
-    const scorePair = (first: VertexId, second: VertexId): number => {
-      const firstScore = scoreCandidate(
-        ctx,
-        emptyHoldings(),
-        first,
-        'aki',
-        board,
-        neutralModifier,
-      ).total
-      return firstScore + scoreCandidate(
-        ctx,
-        addToHoldings(ctx, emptyHoldings(), first),
-        second,
-        'aki',
-        board,
-        neutralModifier,
-      ).total
-    }
-
-    const duplicateScore = scorePair(sites[0].vertexId, sites[1].vertexId)
-    const variedScore = scorePair(sites[2].vertexId, sites[3].vertexId)
+    const duplicateScore = pairScore(ctx, sites[0].vertexId, sites[1].vertexId, board)
+    const variedScore = pairScore(ctx, sites[2].vertexId, sites[3].vertexId, board)
     const duplicateHoldings = addToHoldings(ctx, emptyHoldings(), sites[0].vertexId)
-    expect(fastMarginalTotal(ctx, duplicateHoldings, sites[1].vertexId))
+    expect(marginalTotal(ctx, duplicateHoldings, sites[1].vertexId))
       .toBeCloseTo(breakdownTotal(marginalBreakdown(
         ctx,
         duplicateHoldings,
@@ -150,8 +131,8 @@ describe('placement valuation', () => {
 
   it('values a high-worth resource above an equal-pip low-worth one', () => {
     const ctx = context([[vertices[0], { wheat: 5 }], [vertices[1], { sheep: 5 }]])
-    expect(fastMarginalTotal(ctx, emptyHoldings(), vertices[0]))
-      .toBeGreaterThan(fastMarginalTotal(ctx, emptyHoldings(), vertices[1]))
+    expect(marginalTotal(ctx, emptyHoldings(), vertices[0]))
+      .toBeGreaterThan(marginalTotal(ctx, emptyHoldings(), vertices[1]))
   })
 
   it('credits a port only when matching production is a real surplus', () => {
@@ -168,6 +149,80 @@ describe('placement valuation', () => {
     ).port
     expect(weak).toBe(0)
     expect(strong).toBeGreaterThan(0)
+  })
+
+  // Pins the curve's shape, not just its direction: a linear curve would make
+  // 1 pip worth exactly a quarter of 4 pips, so this fails if the exponent
+  // regresses to 1. Both the spread and recipe terms scale with the same
+  // coverage of the gating resource, so the ratio isolates the curve.
+  it('makes coverage strongly sub-linear in pips', () => {
+    const others: Partial<Record<Resource, number>> = {
+      wood: DEFAULT_WEIGHTS.diversityCap,
+      brick: DEFAULT_WEIGHTS.diversityCap,
+      wheat: DEFAULT_WEIGHTS.diversityCap,
+      ore: DEFAULT_WEIGHTS.diversityCap,
+    }
+    const sheepCredit = (pips: number): number => {
+      const ctx = context([[vertices[0], others], [vertices[1], { sheep: pips }]])
+      const holding = addToHoldings(ctx, emptyHoldings(), vertices[0])
+      return marginalBreakdown(ctx, holding, vertices[1]).diversity
+    }
+    const token = sheepCredit(1)
+    const full = sheepCredit(DEFAULT_WEIGHTS.diversityCap)
+    expect(full).toBeGreaterThan(0)
+    expect(token / full).toBeLessThan(0.2)
+  })
+
+  it('values a pip of a board-scarce resource above an abundant one', () => {
+    // Exercises computeBoardContext's own scarcity formula rather than a
+    // hand-injected one, so inverting it fails here.
+    let board: Board = { ...createBoard('standard4'), ports: [] }
+    const grid = boardGrid(board.layout)
+    const coords = board.hexes.map((hex) => hex.coord)
+    // Wood everywhere (abundant), one lone brick hex (scarce), equal tokens.
+    for (const coord of coords) board = setTile(board, coord, 'wood', 6)
+    board = setTile(board, coords[0], 'brick', 6)
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    expect(ctx.scarcity.brick).toBeGreaterThan(ctx.scarcity.wood)
+    // Compare corners touching a single land hex, so both sides are 6 pips of
+    // one resource and only the board-scarcity term can separate them.
+    const singleHexPips = pips(6)
+    const singleHexVertex = (resource: Resource): VertexId | undefined =>
+      grid.vertexIds.find((vertexId) => {
+        const production = vertexProduction(board, vertexId)
+        return Object.keys(production).length === 1 &&
+          (production[resource] ?? 0) === singleHexPips
+      })
+    const brickOnly = singleHexVertex('brick')
+    const woodOnly = singleHexVertex('wood')
+    expect(brickOnly).toBeDefined()
+    expect(woodOnly).toBeDefined()
+    const value = (vertexId: VertexId): number => {
+      const breakdown = marginalBreakdown(ctx, emptyHoldings(), vertexId)
+      return breakdown.production + breakdown.scarcity
+    }
+    expect(value(brickOnly!)).toBeGreaterThan(value(woodOnly!))
+  })
+
+  // When a pair has to be broken up, the board decides which half to keep: the
+  // abundant one is the cheaper skip because opponents will trade it away.
+  it('costs less to skip the resource the board is flush with', () => {
+    const ctx = context(
+      [
+        [vertices[0], { wheat: 4, sheep: 4, ore: 4 }],
+        [vertices[1], { wood: 4 }], // keeps wood, skips the scarce brick
+        [vertices[2], { brick: 4 }], // keeps brick, skips the abundant wood
+      ],
+      DEFAULT_WEIGHTS,
+      { wood: 0.5, brick: 2 },
+    )
+    // Equal pips of equally-valued resources, and neither completes a recipe,
+    // so only the cost of the resource left uncovered separates them.
+    expect(DEFAULT_WEIGHTS.resourceValue.wood).toBe(DEFAULT_WEIGHTS.resourceValue.brick)
+    const holding = addToHoldings(ctx, emptyHoldings(), vertices[0])
+    const skipBrick = marginalBreakdown(ctx, holding, vertices[1]).diversity
+    const skipWood = marginalBreakdown(ctx, holding, vertices[2]).diversity
+    expect(skipWood).toBeGreaterThan(skipBrick)
   })
 
   it('barely rewards a fifth resource reachable only on a lone 2/12 token', () => {
@@ -193,14 +248,37 @@ describe('placement valuation', () => {
     expect(scoreAt(4)).toBe(0)
   })
 
+  // Exercises the BFS in computeBoardContext, not just the scoring of a reach
+  // value: a vertex one road out cannot settle the endpoint it neighbours
+  // (distance rule), so it pays the same two roads as a vertex two out.
+  it('charges two roads to reach a port from anywhere off its edge', () => {
+    const board = createBoard('standard4')
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const port = board.ports[0]
+    const reachFor = (vertexId: VertexId): number | undefined =>
+      ctx.stats.get(vertexId)?.ports
+        .find((access) => access.port.edgeId === port.edgeId)?.reach
+    for (const endpoint of edgeEndpointVertexIds(port.edgeId)) {
+      expect(reachFor(endpoint)).toBe(1)
+    }
+    const offEdge = [...ctx.stats]
+      .filter(([vertexId]) => !edgeEndpointVertexIds(port.edgeId).includes(vertexId))
+      .map(([vertexId]) => reachFor(vertexId))
+      .filter((reach): reach is number => reach !== undefined)
+    expect(offEdge.length).toBeGreaterThan(0)
+    for (const reach of offEdge) {
+      expect(reach).toBe(DEFAULT_WEIGHTS.nearPortDecay ** 2)
+    }
+  })
+
   it('decays port reach with each road-build of distance', () => {
     const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
-    const scoreAtReach = (reach: number): number => {
-      const ctx = context([[vertices[0], { wood: 8 }]])
-      const stats = ctx.stats.get(vertices[0])
-      if (stats) stats.ports = [{ port, reach }]
-      return marginalBreakdown(ctx, emptyHoldings(), vertices[0]).port
-    }
+    const scoreAtReach = (reach: number): number =>
+      marginalBreakdown(
+        context([[vertices[0], { wood: 8 }, [{ port, reach }]]]),
+        emptyHoldings(),
+        vertices[0],
+      ).port
     const onPort = scoreAtReach(1)
     const oneRoad = scoreAtReach(DEFAULT_WEIGHTS.nearPortDecay)
     const twoRoads = scoreAtReach(DEFAULT_WEIGHTS.nearPortDecay ** 2)
@@ -211,11 +289,10 @@ describe('placement valuation', () => {
 
   it('keeps the closest access when two settlements reach one port', () => {
     const port: Port = { edgeId: edgeIds[0], resource: 'ore', rate: 2 }
-    const ctx = context([[vertices[0], { ore: 4 }], [vertices[1], { ore: 4 }]])
-    const far = ctx.stats.get(vertices[0])
-    const near = ctx.stats.get(vertices[1])
-    if (far) far.ports = [{ port, reach: 0.25 }]
-    if (near) near.ports = [{ port, reach: 1 }]
+    const ctx = context([
+      [vertices[0], { ore: 4 }, [{ port, reach: 0.25 }]],
+      [vertices[1], { ore: 4 }, [{ port, reach: 1 }]],
+    ])
     const holding = addToHoldings(
       ctx,
       addToHoldings(ctx, emptyHoldings(), vertices[0]),
@@ -341,21 +418,20 @@ describe('placement valuation', () => {
       [vertices[1], { wheat: 5, sheep: 2 }],
     ])
     const holding: Holdings = addToHoldings(ctx, emptyHoldings(), vertices[0])
-    expect(fastMarginalTotal(ctx, holding, vertices[1]))
+    expect(marginalTotal(ctx, holding, vertices[1]))
       .toBeCloseTo(breakdownTotal(marginalBreakdown(ctx, holding, vertices[1])))
   })
 
-  // The helper above builds a bare context, so fastMarginalTotal takes its
+  // The helper above builds a bare context, so marginalTotal takes its
   // recompute fallback. Only a real computeBoardContext populates the
   // precomputed per-vertex cache, so exercise that branch too.
   it('keeps the precomputed fast path equal to the full breakdown', () => {
     let board: Board = createBoard('standard4')
-    const resources = ['wood', 'sheep', 'wheat', 'brick', 'ore'] as const
     for (let index = 0; index < board.hexes.length; index += 1) {
       board = setTile(
         board,
         board.hexes[index].coord,
-        resources[index % resources.length],
+        RESOURCES[index % RESOURCES.length],
         [6, 8, 5, 9, 4, 10, 3, 11, 2, 12][index % 10],
       )
     }
@@ -363,7 +439,7 @@ describe('placement valuation', () => {
     const grid = boardGrid(board.layout)
     const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
     for (const vertexId of grid.vertexIds) {
-      expect(fastMarginalTotal(ctx, holding, vertexId))
+      expect(marginalTotal(ctx, holding, vertexId))
         .toBeCloseTo(breakdownTotal(marginalBreakdown(ctx, holding, vertexId)))
     }
   })

@@ -10,7 +10,7 @@ import {
 } from '../../model/board'
 import { edgeEndpointVertexIds, hexVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
-import type { Board, Resource, VertexId } from '../../model/types'
+import { RESOURCES, type Board, type Resource, type VertexId } from '../../model/types'
 import {
   analyzeBoard,
   rankCandidates,
@@ -31,14 +31,16 @@ import {
 } from '../valuation'
 import { DEFAULT_WEIGHTS } from '../weights'
 
-const resources: readonly Resource[] = ['wood', 'sheep', 'wheat', 'brick', 'ore']
+const resources: readonly Resource[] = RESOURCES
 const tokens = [6, 8, 5, 9, 4, 10, 3, 11, 2, 12] as const
 // This coastal port vertex touches exactly one land hex (-2,0); its other two
 // members are sea. So you can never double-down *on* the port — an on-port
 // settlement gets at most one hex of the matched resource.
 const PORT_EDGE = 'e:-3,0;-2,0' as const
 const PORT_VERTEX = 'v:-3,0;-2,-1;-2,0' as const
-const MIRROR_LEFT = PORT_VERTEX
+// Mirror-image pair used only to check that symmetric spots score identically;
+// the left one happens to be PORT_VERTEX, but that test strips all ports.
+const MIRROR_LEFT = 'v:-3,0;-2,-1;-2,0' as const
 const MIRROR_RIGHT = 'v:2,0;2,1;3,0' as const
 
 function filledBoard(playerCount = 2, pattern = 0): Board {
@@ -75,8 +77,7 @@ function balancedBoard(): Board {
 
 // PORT_VERTEX sits on a strong wheat hex with a matched wheat 2:1 port. The
 // port still earns credit end-to-end when real surplus production feeds it —
-// the legitimate niche. (A full "build toward a nearby port" bonus awaits the
-// deferred near-port feature; on-port is capped at this single hex.)
+// the legitimate niche.
 function matchedPortBoard(): Board {
   let board = addPlayer(createBoard('standard4'), { id: 'p2', name: 'P2', color: '#333333' })
   board = { ...board, ports: [] }
@@ -252,9 +253,14 @@ describe('joint draft analysis', () => {
     const reachFor = (vertexId: VertexId): number =>
       ctx.stats.get(vertexId)?.ports.find((access) => access.port.resource === 'wheat')?.reach ?? 0
 
-    const inland: VertexId = 'v:-2,0;-1,-1;-1,0' // 10 wheat pips, two roads out
-    const onPort: VertexId = 'v:-3,0;-2,-1;-2,0' // 5 wheat pips, on the port
-    const oneRoad: VertexId = 'v:-2,-1;-2,0;-1,-1' // 5 wheat pips, one road out
+    const inland: VertexId = 'v:-2,0;-1,-1;-1,0' // two roads out
+    const onPort: VertexId = 'v:-3,0;-2,-1;-2,0' // on the port edge
+    const oneRoad: VertexId = 'v:-2,-1;-2,0;-1,-1' // one road out
+    // Pin the production these ids are assumed to carry, so a grid re-key
+    // fails here rather than silently comparing different spots.
+    expect(vertexProduction(board, inland)).toEqual({ wheat: 10 })
+    expect(vertexProduction(board, onPort)).toEqual({ wheat: 5 })
+    expect(vertexProduction(board, oneRoad)).toEqual({ wheat: 5 })
     expect(reachFor(onPort)).toBe(1)
     expect(reachFor(inland)).toBeGreaterThan(0)
     expect(reachFor(inland)).toBeLessThan(1)

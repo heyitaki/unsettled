@@ -14,7 +14,7 @@ import {
   breakdownTotal,
   computeBoardContext,
   emptyHoldings,
-  fastMarginalTotal,
+  marginalTotal,
   scoreCandidate,
   type BoardContext,
   type Holdings,
@@ -132,7 +132,7 @@ const scoreForScan = (
   playerId: string,
   modifier: PlacementModifier,
 ): number => modifier === neutralModifier
-  ? fastMarginalTotal(ctx, holdings, vertexId)
+  ? marginalTotal(ctx, holdings, vertexId)
   : scoreCandidate(ctx, holdings, vertexId, playerId, board, modifier).total
 
 function bestLegalCandidate(

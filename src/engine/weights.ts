@@ -13,6 +13,10 @@ export interface EngineWeights {
   // token count for far less than its linear share, so "exposure" only earns
   // real credit once a resource actually rolls (>=3 pips).
   coverageExponent: number
+  // How much board supply changes the cost of *missing* a resource. Skipping a
+  // resource the board is flush with is cheap (someone will trade it away);
+  // skipping a scarce one strands you. 0 makes the drop decision board-blind.
+  coverageScarcityWeight: number
   duplicateNumberPenalty: number
   recipeRoadBonus: number
   recipeCityBonus: number
@@ -46,11 +50,15 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   diversityWeight: 1.6,
   diversityCap: 4,
   coverageExponent: 1.5,
+  coverageScarcityWeight: 0.5,
   duplicateNumberPenalty: 0.08,
   recipeRoadBonus: 1.5,
   recipeCityBonus: 2,
   recipeSettlementBonus: 1,
-  recipeCap: 3,
+  // Matches diversityCap so "real coverage" means one thing everywhere: at a
+  // lower cap a lone 2/12 cleared a larger fraction of the recipe bar and a
+  // never-rolled fifth resource still bought most of a recipe bonus.
+  recipeCap: 4,
   portWeight: 0.55,
   genericPortFactor: 0.5,
   portSurplusThreshold: 3,

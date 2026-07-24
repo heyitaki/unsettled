@@ -42,6 +42,8 @@ export interface VertexStats {
 export interface BoardContext {
   stats: ReadonlyMap<VertexId, VertexStats>
   scarcity: Record<Resource, number>
+  /** What *missing* each resource costs on this board. See `coverageValues`. */
+  coverageValue: Record<Resource, number>
   weights: EngineWeights
 }
 
@@ -54,7 +56,12 @@ export interface Holdings {
   portFactors: Record<Resource, number>
 }
 
-interface FastVertexStats {
+/**
+ * Per-vertex values that depend only on the board, hoisted out of the scan
+ * loop. Resources are spread across named fields rather than a record so the
+ * rollout hot path never allocates or does a keyed lookup.
+ */
+interface VertexPrecompute {
   adjustedBrick: number
   adjustedOre: number
   adjustedSheep: number
@@ -67,31 +74,111 @@ interface FastVertexStats {
   portFactors: Record<Resource, number>
 }
 
-const fastContexts = new WeakMap<BoardContext, ReadonlyMap<VertexId, FastVertexStats>>()
+const precomputes = new WeakMap<BoardContext, ReadonlyMap<VertexId, VertexPrecompute>>()
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value))
 
+// Builds the five-resource record as a literal, so the shape stays statically
+// checked instead of needing a cast back from Object.fromEntries.
+const resourceRecord = (fill: (resource: Resource) => number): Record<Resource, number> => ({
+  wood: fill('wood'),
+  sheep: fill('sheep'),
+  wheat: fill('wheat'),
+  brick: fill('brick'),
+  ore: fill('ore'),
+})
+
+const zeroResources = (): Record<Resource, number> => resourceRecord(() => 0)
+
+/**
+ * Roads needed before a settlement `distance` vertices away can trade through
+ * a port. Trading needs a settlement on one of the port edge's two endpoints,
+ * and those endpoints are adjacent: settling one road out blocks the near one
+ * under the distance rule, leaving the far one — still two roads away.
+ */
+const roadsToPortTrade = (distance: number): number => distance === 1 ? 2 : distance
+
+const adjustedPips = (
+  weights: EngineWeights,
+  stats: VertexStats,
+  resource: Resource,
+): number =>
+  (stats.pips[resource] ?? 0) - (stats.robbedPips[resource] ?? 0) * weights.robberDiscount
+
+/**
+ * Production, board-scarcity and robber value for one vertex, split into the
+ * three reported components. `vertexBase` sums them for the scan path, so the
+ * arithmetic exists once and the breakdown can never drift from the total.
+ */
+function baseParts(
+  weights: EngineWeights,
+  scarcity: Record<Resource, number>,
+  stats: VertexStats,
+): [production: number, scarcity: number, robber: number] {
+  let production = 0
+  let scarcityValue = 0
+  let robber = 0
+  for (const resource of RESOURCES) {
+    const raw = stats.pips[resource] ?? 0
+    const robbed = stats.robbedPips[resource] ?? 0
+    const adjusted = raw - robbed * weights.robberDiscount
+    production += raw * weights.resourceValue[resource]
+    scarcityValue += adjusted * weights.scarcityWeight * (scarcity[resource] - 1)
+    robber -= robbed * weights.robberDiscount
+  }
+  return [production, scarcityValue, robber]
+}
+
+const vertexBase = (
+  weights: EngineWeights,
+  scarcity: Record<Resource, number>,
+  stats: VertexStats,
+): number => {
+  const [production, scarcityValue, robber] = baseParts(weights, scarcity, stats)
+  return production + scarcityValue + robber
+}
+
+/**
+ * The worth of *covering* each resource, i.e. what it costs to go without it.
+ * This is the intrinsic value scaled by board scarcity, because a resource the
+ * board is drowning in can be traded for cheaply if you skip it, while a scarce
+ * one leaves you with no seller. That makes "which resource do I drop?" depend
+ * on the board rather than on a fixed ranking.
+ *
+ * Distinct from the scarcity component, which prices pips you *own*: that term
+ * is zero for a resource you have none of, so it cannot express this at all.
+ */
+export const coverageValues = (
+  weights: EngineWeights,
+  scarcity: Record<Resource, number>,
+): Record<Resource, number> => resourceRecord((resource) =>
+  weights.resourceValue[resource] *
+    Math.max(0, 1 + weights.coverageScarcityWeight * (scarcity[resource] - 1)))
+
 export function computeBoardContext(board: Board, weights: EngineWeights): BoardContext {
-  const boardPips: Record<Resource, number> = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+  const boardPips = zeroResources()
   const hexesByKey = new Map(board.hexes.map((hex) => [axialKey(hex.coord), hex]))
   for (const hex of board.hexes) {
     if (hex.tile === null || hex.tile === 'desert') continue
     boardPips[hex.tile] += pips(hex.numberToken)
   }
   const meanPips = RESOURCES.reduce((sum, resource) => sum + boardPips[resource], 0) / RESOURCES.length
-  const scarcity = Object.fromEntries(
-    RESOURCES.map((resource) => [
-      resource,
-      clamp(meanPips / Math.max(boardPips[resource], 1), weights.scarcityClampMin, weights.scarcityClampMax),
-    ]),
-  ) as Record<Resource, number>
+  const scarcity = resourceRecord((resource) =>
+    clamp(
+      meanPips / Math.max(boardPips[resource], 1),
+      weights.scarcityClampMin,
+      weights.scarcityClampMax,
+    ))
 
   // Walk the road graph out from each port so nearby vertices bank a decayed
   // share of it. Distance is in road-builds: 0 = on the port edge itself.
   const portsByVertex = new Map<VertexId, PortAccess[]>()
   const adjacency = vertexAdjacency(board.layout)
-  const radius = Math.max(0, weights.nearPortRadius)
+  // NaN would defeat every `distance >= radius` test and flood the board.
+  const radius = Number.isFinite(weights.nearPortRadius)
+    ? Math.max(0, weights.nearPortRadius)
+    : 0
   for (const port of board.ports) {
     const distances = new Map<VertexId, number>()
     const queue: VertexId[] = []
@@ -111,7 +198,11 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
       }
     }
     for (const [vertexId, distance] of distances) {
-      const reach = distance === 0 ? 1 : weights.nearPortDecay ** distance
+      const decayed = weights.nearPortDecay ** roadsToPortTrade(distance)
+      // Distance must never become a bonus, so cap at the on-port value; drop
+      // NaN/Infinity before a stray weight poisons every candidate total.
+      // (On the port itself this is `decay ** 0`, which is 1 for any decay.)
+      const reach = Number.isFinite(decayed) ? clamp(decayed, 0, 1) : 0
       if (reach <= 0) continue
       const accesses = portsByVertex.get(vertexId)
       if (accesses) accesses.push({ port, reach })
@@ -143,50 +234,57 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
       ports: portsByVertex.get(vertexId) ?? [],
     })
   }
-  const ctx = { stats, scarcity, weights }
-  const fastStats = new Map<VertexId, FastVertexStats>()
-  for (const [vertexId, vertexStats] of stats) {
-    let base = 0
-    for (const resource of RESOURCES) {
-      const raw = vertexStats.pips[resource] ?? 0
-      const robbed = vertexStats.robbedPips[resource] ?? 0
-      const adjusted = raw - robbed * weights.robberDiscount
-      base += raw * weights.resourceValue[resource] -
-        robbed * weights.robberDiscount +
-        adjusted * weights.scarcityWeight * (scarcity[resource] - 1)
-    }
-    fastStats.set(vertexId, {
-      adjustedBrick: adjustedPips(ctx, vertexStats, 'brick'),
-      adjustedOre: adjustedPips(ctx, vertexStats, 'ore'),
-      adjustedSheep: adjustedPips(ctx, vertexStats, 'sheep'),
-      adjustedWheat: adjustedPips(ctx, vertexStats, 'wheat'),
-      adjustedWood: adjustedPips(ctx, vertexStats, 'wood'),
-      base,
-      portFactors: foldPortFactors(vertexStats.ports, weights.genericPortFactor),
-    })
+  const ctx: BoardContext = {
+    stats,
+    scarcity,
+    coverageValue: coverageValues(weights, scarcity),
+    weights,
   }
-  fastContexts.set(ctx, fastStats)
+  const cache = new Map<VertexId, VertexPrecompute>()
+  for (const [vertexId, vertexStats] of stats) {
+    cache.set(vertexId, buildPrecompute(weights, scarcity, vertexStats))
+  }
+  precomputes.set(ctx, cache)
   return ctx
 }
+
+const buildPrecompute = (
+  weights: EngineWeights,
+  scarcity: Record<Resource, number>,
+  stats: VertexStats,
+): VertexPrecompute => ({
+  adjustedBrick: adjustedPips(weights, stats, 'brick'),
+  adjustedOre: adjustedPips(weights, stats, 'ore'),
+  adjustedSheep: adjustedPips(weights, stats, 'sheep'),
+  adjustedWheat: adjustedPips(weights, stats, 'wheat'),
+  adjustedWood: adjustedPips(weights, stats, 'wood'),
+  base: vertexBase(weights, scarcity, stats),
+  portFactors: foldPortFactors(stats.ports, weights.genericPortFactor),
+})
+
+// Hand-built contexts (tests, callers that bypass computeBoardContext) have no
+// cache, so recompute rather than carrying a second scoring path for them.
+const precomputeFor = (
+  ctx: BoardContext,
+  vertexId: VertexId,
+  stats: VertexStats,
+): VertexPrecompute =>
+  precomputes.get(ctx)?.get(vertexId) ?? buildPrecompute(ctx.weights, ctx.scarcity, stats)
 
 export const emptyHoldings = (): Holdings => ({
   vertices: [],
   pips: {},
   tokenPips: {},
   ports: [],
-  portFactors: { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 },
+  portFactors: zeroResources(),
 })
-
-const adjustedPips = (ctx: BoardContext, stats: VertexStats, resource: Resource): number =>
-  (stats.pips[resource] ?? 0) -
-  (stats.robbedPips[resource] ?? 0) * ctx.weights.robberDiscount
 
 export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: VertexId): Holdings {
   const stats = ctx.stats.get(vertexId)
   if (!stats) return holdings
   const nextPips = { ...holdings.pips }
   for (const resource of RESOURCES) {
-    const amount = adjustedPips(ctx, stats, resource)
+    const amount = adjustedPips(ctx.weights, stats, resource)
     if (amount !== 0) nextPips[resource] = (nextPips[resource] ?? 0) + amount
   }
   const tokenPips = { ...holdings.tokenPips }
@@ -219,147 +317,44 @@ export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: V
 const coverage = (weights: EngineWeights, pips: number, cap: number): number =>
   Math.max(0, Math.min(pips, cap) / cap) ** weights.coverageExponent
 
-const diversityScore = (
-  weights: EngineWeights,
-  pipsFor: (resource: Resource) => number,
-): number => {
-  let score = 0
-  for (const resource of RESOURCES) {
-    score += weights.diversityWeight * weights.resourceValue[resource] *
-      coverage(weights, pipsFor(resource), weights.diversityCap)
-  }
-  const recipe = (resources: readonly Resource[], bonus: number): number =>
-    bonus * Math.min(...resources.map((resource) =>
-      coverage(weights, pipsFor(resource), weights.recipeCap)))
-  return score +
-    recipe(['wood', 'brick'], weights.recipeRoadBonus) +
-    recipe(['ore', 'wheat'], weights.recipeCityBonus) +
-    recipe(['wood', 'brick', 'wheat', 'sheep'], weights.recipeSettlementBonus)
-}
-
-const portFactor = (rate: number): number =>
-  Math.max(0, 1 / rate - 1 / 4) / (1 / 2 - 1 / 4)
-
-function effectivePortFactor(
-  ports: readonly PortAccess[],
-  resource: Resource,
-  genericPortFactor: number,
-  extraPorts: readonly PortAccess[] = [],
-): number {
-  let dedicated = 0
-  let generic = 0
-  // Best access wins rather than accumulating, so holding two corners of the
-  // same port (or a closer road to it) never double-counts.
-  const consider = ({ port, reach }: PortAccess): void => {
-    const factor = portFactor(port.rate) * reach
-    if (port.resource === resource) dedicated = Math.max(dedicated, factor)
-    else if (port.resource === null) generic = Math.max(generic, factor)
-  }
-  for (const access of ports) consider(access)
-  for (const access of extraPorts) consider(access)
-  return Math.max(dedicated, genericPortFactor * generic)
-}
-
-/** All five factors in one pass, for the per-board precompute. */
-function foldPortFactors(
-  accesses: readonly PortAccess[],
-  genericPortFactor: number,
-): Record<Resource, number> {
-  const factors: Record<Resource, number> = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
-  let generic = 0
-  for (const { port, reach } of accesses) {
-    const factor = portFactor(port.rate) * reach
-    if (port.resource === null) generic = Math.max(generic, factor)
-    else factors[port.resource] = Math.max(factors[port.resource], factor)
-  }
-  const discounted = genericPortFactor * generic
-  for (const resource of RESOURCES) {
-    factors[resource] = Math.max(factors[resource], discounted)
-  }
-  return factors
-}
-
-// A port monetizes only production *above* the surplus threshold: below it,
-// you consume everything you make and have nothing to trade away.
-const portSurplus = (weights: EngineWeights, pips: number): number =>
-  Math.max(0, pips - weights.portSurplusThreshold)
-
-function portScore(
-  weights: EngineWeights,
-  pipsFor: (resource: Resource) => number,
-  ports: readonly PortAccess[],
-  extraPorts: readonly PortAccess[] = [],
-): number {
-  let score = 0
-  for (const resource of RESOURCES) {
-    score += portSurplus(weights, pipsFor(resource)) *
-      effectivePortFactor(ports, resource, weights.genericPortFactor, extraPorts)
-  }
-  return score * weights.portWeight
-}
-
-function fastDiversityScore(
-  weights: EngineWeights,
+function diversityScore(
+  ctx: BoardContext,
   wood: number,
   sheep: number,
   wheat: number,
   brick: number,
   ore: number,
 ): number {
+  const weights = ctx.weights
   const cap = weights.diversityCap
-  const rv = weights.resourceValue
+  const value = ctx.coverageValue
+  // Each resource's coverage is reused by the spread and every recipe it
+  // gates, so bind them once: coverage is a fractional Math.pow and this is
+  // the innermost loop of every rollout scan.
+  const woodCover = coverage(weights, wood, cap)
+  const sheepCover = coverage(weights, sheep, cap)
+  const wheatCover = coverage(weights, wheat, cap)
+  const brickCover = coverage(weights, brick, cap)
+  const oreCover = coverage(weights, ore, cap)
   const spread = weights.diversityWeight * (
-    rv.wood * coverage(weights, wood, cap) +
-    rv.sheep * coverage(weights, sheep, cap) +
-    rv.wheat * coverage(weights, wheat, cap) +
-    rv.brick * coverage(weights, brick, cap) +
-    rv.ore * coverage(weights, ore, cap)
+    value.wood * woodCover +
+    value.sheep * sheepCover +
+    value.wheat * wheatCover +
+    value.brick * brickCover +
+    value.ore * oreCover
   )
   const recipeCap = weights.recipeCap
-  const road = weights.recipeRoadBonus *
-    Math.min(coverage(weights, wood, recipeCap), coverage(weights, brick, recipeCap))
-  const city = weights.recipeCityBonus *
-    Math.min(coverage(weights, ore, recipeCap), coverage(weights, wheat, recipeCap))
-  const settlement = weights.recipeSettlementBonus * Math.min(
-    coverage(weights, wood, recipeCap),
-    coverage(weights, brick, recipeCap),
-    coverage(weights, wheat, recipeCap),
-    coverage(weights, sheep, recipeCap),
-  )
+  const sameCap = recipeCap === cap
+  const woodRecipe = sameCap ? woodCover : coverage(weights, wood, recipeCap)
+  const sheepRecipe = sameCap ? sheepCover : coverage(weights, sheep, recipeCap)
+  const wheatRecipe = sameCap ? wheatCover : coverage(weights, wheat, recipeCap)
+  const brickRecipe = sameCap ? brickCover : coverage(weights, brick, recipeCap)
+  const oreRecipe = sameCap ? oreCover : coverage(weights, ore, recipeCap)
+  const road = weights.recipeRoadBonus * Math.min(woodRecipe, brickRecipe)
+  const city = weights.recipeCityBonus * Math.min(oreRecipe, wheatRecipe)
+  const settlement = weights.recipeSettlementBonus *
+    Math.min(woodRecipe, brickRecipe, wheatRecipe, sheepRecipe)
   return spread + road + city + settlement
-}
-
-/**
- * Marginal port value from precomputed factors: the candidate's own factors
- * fold into the holding's by `Math.max`, so no access list is walked per scan.
- */
-function fastPortDelta(
-  weights: EngineWeights,
-  held: Record<Resource, number>,
-  gained: Record<Resource, number>,
-  woodBefore: number,
-  sheepBefore: number,
-  wheatBefore: number,
-  brickBefore: number,
-  oreBefore: number,
-  woodAfter: number,
-  sheepAfter: number,
-  wheatAfter: number,
-  brickAfter: number,
-  oreAfter: number,
-): number {
-  return weights.portWeight * (
-    portSurplus(weights, woodAfter) * Math.max(held.wood, gained.wood) -
-      portSurplus(weights, woodBefore) * held.wood +
-    portSurplus(weights, sheepAfter) * Math.max(held.sheep, gained.sheep) -
-      portSurplus(weights, sheepBefore) * held.sheep +
-    portSurplus(weights, wheatAfter) * Math.max(held.wheat, gained.wheat) -
-      portSurplus(weights, wheatBefore) * held.wheat +
-    portSurplus(weights, brickAfter) * Math.max(held.brick, gained.brick) -
-      portSurplus(weights, brickBefore) * held.brick +
-    portSurplus(weights, oreAfter) * Math.max(held.ore, gained.ore) -
-      portSurplus(weights, oreBefore) * held.ore
-  )
 }
 
 function duplicateNumberPenalty(
@@ -378,39 +373,96 @@ function duplicateNumberPenalty(
   return overlap * weights.duplicateNumberPenalty
 }
 
-function componentValues(
+/**
+ * Diversity gained by adding this vertex. Expected payout is linear, but
+ * same-number income is fully correlated, lumpier, and vulnerable to one
+ * robber-blockable number, hence the duplicate-token penalty.
+ */
+function diversityDelta(
   ctx: BoardContext,
   holdings: Holdings,
-  candidate: VertexId,
-): [number, number, number, number, number] {
-  const stats = ctx.stats.get(candidate)
-  if (!stats) return [0, 0, 0, 0, 0]
-  let production = 0
-  let scarcity = 0
-  let robber = 0
-  for (const resource of RESOURCES) {
-    const raw = stats.pips[resource] ?? 0
-    const robbed = stats.robbedPips[resource] ?? 0
-    const adjusted = raw - robbed * ctx.weights.robberDiscount
-    production += raw * ctx.weights.resourceValue[resource]
-    scarcity += adjusted * ctx.weights.scarcityWeight * (ctx.scarcity[resource] - 1)
-    robber -= robbed * ctx.weights.robberDiscount
-  }
-
-  const beforePips = (resource: Resource) => holdings.pips[resource] ?? 0
-  const afterPips = (resource: Resource) =>
-    beforePips(resource) + adjustedPips(ctx, stats, resource)
-
-  // Expected payout is linear, but same-number income is fully correlated,
-  // lumpier, and vulnerable to one robber-blockable number.
-  const diversity = diversityScore(ctx.weights, afterPips) -
-    diversityScore(ctx.weights, beforePips) -
+  stats: VertexStats,
+  precompute: VertexPrecompute,
+): number {
+  const wood = holdings.pips.wood ?? 0
+  const sheep = holdings.pips.sheep ?? 0
+  const wheat = holdings.pips.wheat ?? 0
+  const brick = holdings.pips.brick ?? 0
+  const ore = holdings.pips.ore ?? 0
+  return diversityScore(
+    ctx,
+    wood + precompute.adjustedWood,
+    sheep + precompute.adjustedSheep,
+    wheat + precompute.adjustedWheat,
+    brick + precompute.adjustedBrick,
+    ore + precompute.adjustedOre,
+  ) -
+    diversityScore(ctx, wood, sheep, wheat, brick, ore) -
     duplicateNumberPenalty(ctx.weights, holdings, stats)
+}
 
-  // Port value uses full production; the conservative weight stands in for consumption.
-  const port = portScore(ctx.weights, afterPips, holdings.ports, stats.ports) -
-    portScore(ctx.weights, beforePips, holdings.ports)
-  return [production, scarcity, robber, diversity, port]
+const portFactor = (rate: number): number =>
+  Math.max(0, 1 / rate - 1 / 4) / (1 / 2 - 1 / 4)
+
+/** Best access per resource in one pass; a generic port hedges at a discount. */
+function foldPortFactors(
+  accesses: readonly PortAccess[],
+  genericPortFactor: number,
+): Record<Resource, number> {
+  const factors = zeroResources()
+  let generic = 0
+  // Best access wins rather than accumulating, so holding two corners of the
+  // same port (or a closer road to it) never double-counts.
+  for (const { port, reach } of accesses) {
+    const factor = portFactor(port.rate) * reach
+    if (port.resource === null) generic = Math.max(generic, factor)
+    else factors[port.resource] = Math.max(factors[port.resource], factor)
+  }
+  const discounted = genericPortFactor * generic
+  for (const resource of RESOURCES) {
+    factors[resource] = Math.max(factors[resource], discounted)
+  }
+  return factors
+}
+
+// A port monetizes only production *above* the surplus threshold: below it,
+// you consume everything you make and have nothing to trade away.
+const portSurplus = (weights: EngineWeights, pips: number): number =>
+  Math.max(0, pips - weights.portSurplusThreshold)
+
+/**
+ * Port value gained by adding this vertex. The candidate's folded factors
+ * combine with the holding's by `Math.max` — each is already a maximum over
+ * its own accesses, so no access list is walked per scan. Surplus uses full
+ * production; the conservative `portWeight` stands in for consumption.
+ */
+function portDelta(
+  ctx: BoardContext,
+  holdings: Holdings,
+  stats: VertexStats,
+  precompute: VertexPrecompute,
+): number {
+  if (holdings.ports.length === 0 && stats.ports.length === 0) return 0
+  const weights = ctx.weights
+  const held = holdings.portFactors
+  const gained = precompute.portFactors
+  const wood = holdings.pips.wood ?? 0
+  const sheep = holdings.pips.sheep ?? 0
+  const wheat = holdings.pips.wheat ?? 0
+  const brick = holdings.pips.brick ?? 0
+  const ore = holdings.pips.ore ?? 0
+  return weights.portWeight * (
+    portSurplus(weights, wood + precompute.adjustedWood) * Math.max(held.wood, gained.wood) -
+      portSurplus(weights, wood) * held.wood +
+    portSurplus(weights, sheep + precompute.adjustedSheep) * Math.max(held.sheep, gained.sheep) -
+      portSurplus(weights, sheep) * held.sheep +
+    portSurplus(weights, wheat + precompute.adjustedWheat) * Math.max(held.wheat, gained.wheat) -
+      portSurplus(weights, wheat) * held.wheat +
+    portSurplus(weights, brick + precompute.adjustedBrick) * Math.max(held.brick, gained.brick) -
+      portSurplus(weights, brick) * held.brick +
+    portSurplus(weights, ore + precompute.adjustedOre) * Math.max(held.ore, gained.ore) -
+      portSurplus(weights, ore) * held.ore
+  )
 }
 
 export function marginalBreakdown(
@@ -418,66 +470,35 @@ export function marginalBreakdown(
   holdings: Holdings,
   candidate: VertexId,
 ): ScoreBreakdown {
-  const [production, scarcity, robber, diversity, port] = componentValues(ctx, holdings, candidate)
-  return { production, scarcity, robber, diversity, port }
+  const stats = ctx.stats.get(candidate)
+  if (!stats) return { production: 0, scarcity: 0, robber: 0, diversity: 0, port: 0 }
+  const precompute = precomputeFor(ctx, candidate, stats)
+  const [production, scarcity, robber] = baseParts(ctx.weights, ctx.scarcity, stats)
+  return {
+    production,
+    scarcity,
+    robber,
+    diversity: diversityDelta(ctx, holdings, stats, precompute),
+    port: portDelta(ctx, holdings, stats, precompute),
+  }
 }
 
 /**
- * Allocation-free neutral score used by rollout scans. Exported so parity with
- * the object form stays testable.
+ * The same score as `marginalBreakdown`, without allocating the breakdown or
+ * running a modifier — the form rollout scans call millions of times. It shares
+ * every term with the breakdown, so the two cannot disagree.
  */
-export function fastMarginalTotal(
+export function marginalTotal(
   ctx: BoardContext,
   holdings: Holdings,
   candidate: VertexId,
 ): number {
   const stats = ctx.stats.get(candidate)
   if (!stats) return 0
-  const weights = ctx.weights
-  const fast = fastContexts.get(ctx)?.get(candidate)
-  let base = fast?.base ?? 0
-  if (!fast) {
-    for (const resource of RESOURCES) {
-      const raw = stats.pips[resource] ?? 0
-      const robbed = stats.robbedPips[resource] ?? 0
-      const adjusted = raw - robbed * weights.robberDiscount
-      base += raw * weights.resourceValue[resource] -
-        robbed * weights.robberDiscount +
-        adjusted * weights.scarcityWeight * (ctx.scarcity[resource] - 1)
-    }
-  }
-
-  const woodBefore = holdings.pips.wood ?? 0
-  const sheepBefore = holdings.pips.sheep ?? 0
-  const wheatBefore = holdings.pips.wheat ?? 0
-  const brickBefore = holdings.pips.brick ?? 0
-  const oreBefore = holdings.pips.ore ?? 0
-  const woodAfter = woodBefore + (fast?.adjustedWood ?? adjustedPips(ctx, stats, 'wood'))
-  const sheepAfter = sheepBefore + (fast?.adjustedSheep ?? adjustedPips(ctx, stats, 'sheep'))
-  const wheatAfter = wheatBefore + (fast?.adjustedWheat ?? adjustedPips(ctx, stats, 'wheat'))
-  const brickAfter = brickBefore + (fast?.adjustedBrick ?? adjustedPips(ctx, stats, 'brick'))
-  const oreAfter = oreBefore + (fast?.adjustedOre ?? adjustedPips(ctx, stats, 'ore'))
-  const diversity = fastDiversityScore(weights, woodAfter, sheepAfter, wheatAfter, brickAfter, oreAfter) -
-    fastDiversityScore(weights, woodBefore, sheepBefore, wheatBefore, brickBefore, oreBefore) -
-    duplicateNumberPenalty(weights, holdings, stats)
-  const port = holdings.ports.length === 0 && stats.ports.length === 0
-    ? 0
-    : fastPortDelta(
-        weights,
-        holdings.portFactors,
-        fast?.portFactors ?? foldPortFactors(stats.ports, weights.genericPortFactor),
-        woodBefore,
-        sheepBefore,
-        wheatBefore,
-        brickBefore,
-        oreBefore,
-        woodAfter,
-        sheepAfter,
-        wheatAfter,
-        brickAfter,
-        oreAfter,
-      )
-  return base + diversity + port
+  const precompute = precomputeFor(ctx, candidate, stats)
+  return precompute.base +
+    diversityDelta(ctx, holdings, stats, precompute) +
+    portDelta(ctx, holdings, stats, precompute)
 }
 
 export function scoreCandidate(
