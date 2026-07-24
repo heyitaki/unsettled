@@ -32,6 +32,7 @@ export type AnalysisStatus =
 
 export interface TakenVertex {
   vertexId: VertexId
+  playerId: string
   frequency: number
 }
 
@@ -252,7 +253,7 @@ const frequencyOrder = (
   denominator: number,
   gridIndex: ReadonlyMap<VertexId, number>,
   threshold = 0,
-): TakenVertex[] =>
+): { vertexId: VertexId; frequency: number }[] =>
   [...counts]
     .filter(([, count]) => count / denominator >= threshold)
     .map(([vertexId, count]) => ({ vertexId, frequency: count / denominator }))
@@ -301,7 +302,17 @@ export function rankCandidates(
     }
   }
   const denominator = Math.max(1, preWindows.length)
-  const takenBeforeFirstPick = frequencyOrder(takenCounts, denominator, gridIndex)
+  // Show the "likely gone" spots from the deterministic (modal) rollout — the
+  // greedy scenario where every opponent takes their top choice. Its picks are
+  // mutually legal (a real snake draft can never take two spots a single road
+  // apart), ordered by draft turn, and each carries the player who takes it.
+  // Frequency across all rollouts annotates how reliably that exact spot goes.
+  const modal = preWindows[0]
+  const takenBeforeFirstPick: TakenVertex[] = (modal?.taken ?? []).map((vertexId, index) => ({
+    vertexId,
+    playerId: modal.pickerIds?.[index] ?? '',
+    frequency: (takenCounts.get(vertexId) ?? 0) / denominator,
+  }))
   const firstPickIndex = draft.myRemainingPickIndices[0]
   if (firstPickIndex === undefined || preWindows.length === 0 || board.mePlayerId === null) {
     return { recommendations: [], takenBeforeFirstPick }

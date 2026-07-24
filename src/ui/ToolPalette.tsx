@@ -99,6 +99,10 @@ export function ToolPalette() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const selected = keyOf(state.tool)
+  // Clicking the already-selected tool clears the selection (kind 'none'), so a
+  // second click on a highlighted button deselects it.
+  const selectTool = (tool: Tool) =>
+    dispatch({ type: 'tool', tool: selected === keyOf(tool) ? { kind: 'none' } : tool })
   // Preview the colour the active player will place with.
   const pieceColor = tab.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? '#8a7a63'
   return (
@@ -137,7 +141,7 @@ export function ToolPalette() {
               type="button"
               className={selected === `tile:${tile}` ? 'selected' : ''}
               key={tile}
-              onClick={() => dispatch({ type: 'tool', tool: { kind: 'tile', tile } })}
+              onClick={() => selectTool({ kind: 'tile', tile })}
             >
               <svg className="hex-swatch" viewBox="0 0 20 22" aria-hidden="true">
                 <polygon points="10,1.2 18.8,6.1 18.8,15.9 10,20.8 1.2,15.9 1.2,6.1" fill={TILE_COLORS[tile]} />
@@ -155,7 +159,7 @@ export function ToolPalette() {
               type="button"
               className={`${selected === `token:${number}` ? 'selected ' : ''}${number === 6 || number === 8 ? 'hot' : ''}`}
               key={number}
-              onClick={() => dispatch({ type: 'tool', tool: { kind: 'token', number } })}
+              onClick={() => selectTool({ kind: 'token', number })}
             >
               {number}
             </button>
@@ -172,7 +176,7 @@ export function ToolPalette() {
                 type="button"
                 key={item.key}
                 className={`${active ? 'selected ' : ''}${item.danger ? 'danger' : ''}`.trim()}
-                onClick={() => dispatch({ type: 'tool', tool: item.tool })}
+                onClick={() => selectTool(item.tool)}
               >
                 <StructureGlyph shape={item.key} color={pieceColor} />
                 {item.label}

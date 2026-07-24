@@ -130,7 +130,8 @@ button.selected.danger { color: #fff; }
 .placement-remove { fill: transparent; stroke: transparent; pointer-events: all; cursor: default; }
 .placement-remove:not(circle) { stroke-width: 14; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
-.vertex-highlight { fill: rgba(231,37,37,.22); stroke: #e72525; stroke-width: 3; filter: drop-shadow(0 0 8px #fff); }
+.vertex-highlight { fill: rgba(231,37,37,.22); stroke: #e72525; stroke-width: 3; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
+.vertex-highlight-label { font-size: 12px; font-weight: 800; }
 
 .player-list { display: grid; gap: 5px; }
 .player-row { display: grid; grid-template-columns: 22px minmax(75px, 1fr) 38px 40px 24px; gap: 5px; align-items: center; padding: 3px 6px; border: 1px solid transparent; border-radius: 10px; }
@@ -200,7 +201,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .analysis-likely-gone span { display: block; margin-bottom: 2px; color: var(--accent-dark); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .analysis-list { display: grid; gap: 6px; }
 .analysis-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 7px; padding: 9px; border-color: var(--line); background: #fbf6ea; text-align: left; }
-.analysis-row:hover:not(:disabled), .analysis-row.pinned { transform: none; border-color: #d8bc77; background: #fff9e9; box-shadow: 0 4px 12px rgba(55,45,32,.08); }
+.analysis-row:hover:not(:disabled) { transform: none; border-color: #d8bc77; background: #fff9e9; box-shadow: 0 4px 12px rgba(55,45,32,.08); }
 .analysis-rank { display: grid; place-items: center; align-self: start; width: 22px; height: 22px; border-radius: 50%; color: white; background: var(--accent); font: 700 12px Georgia, serif; }
 .analysis-row-body { min-width: 0; display: grid; gap: 4px; }
 .analysis-pick-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -210,7 +211,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .analysis-second { color: var(--muted); font-size: 9px; line-height: 1.35; }
 .analysis-factors { display: flex; flex-wrap: wrap; gap: 3px; }
 .analysis-factors span { padding: 2px 5px; border: 1px solid rgba(55,45,32,.1); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.55); font-size: 8px; white-space: nowrap; }
-.analysis-ranking-note { margin: 8px 1px 0; color: var(--muted); font-size: 9px; text-align: right; }
 .analysis-placeholder { display: grid; justify-items: center; gap: 8px; padding: 28px 18px; text-align: center; border: 1px dashed rgba(60,127,191,.42); border-radius: 14px; background: rgba(60,127,191,.05); }
 .analysis-placeholder p { margin: 2px 0 0; font: 700 15px Georgia, serif; }
 .analysis-placeholder > span { max-width: 250px; color: var(--muted); font-size: 11px; line-height: 1.55; }

@@ -282,10 +282,13 @@ describe('joint draft analysis', () => {
     expect(analysis.warnings).toContain('snake-inconsistent')
     expect(analysis.draft.remainingPickIndices
       .filter((index) => analysis.draft.sequence[index] === 'p2')).toEqual([2])
-    expect(analysis.takenBeforeFirstPick.reduce(
-      (sum, entry) => sum + entry.frequency,
-      0,
-    )).toBeCloseTo(1)
+    // The reconciled early p2 placement leaves exactly one opponent pick before
+    // my turn; the modal pre-window attributes that single spot to p2, with a
+    // frequency in (0, 1] reflecting how often that exact spot leads the window.
+    expect(analysis.takenBeforeFirstPick).toHaveLength(1)
+    expect(analysis.takenBeforeFirstPick[0].playerId).toBe('p2')
+    expect(analysis.takenBeforeFirstPick[0].frequency).toBeGreaterThan(0)
+    expect(analysis.takenBeforeFirstPick[0].frequency).toBeLessThanOrEqual(1)
   })
 
   it('reconciles a placed-early opponent between my picks', () => {
@@ -431,9 +434,12 @@ describe('hostile states and simulator seams', () => {
     ]
     const result = rankCandidates(ctx, board, draft, preWindows, requiredOptions({ maxResults: 54 }))
     expect(result.recommendations).toEqual([])
+    // takenBeforeFirstPick reflects the modal (first) pre-window in pick order,
+    // each spot annotated with its frequency across all rollouts. These manual
+    // preWindows carry no pickerIds, so playerId falls back to empty.
     expect(result.takenBeforeFirstPick).toEqual([
-      { vertexId: firstTake, frequency: 1 },
-      { vertexId: secondTake, frequency: 0.5 },
+      { vertexId: firstTake, playerId: '', frequency: 1 },
+      { vertexId: secondTake, playerId: '', frequency: 0.5 },
     ])
   })
 

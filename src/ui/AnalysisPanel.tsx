@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { analyzeBoard, type Recommendation } from '../engine/analyze'
+import { placeBuilding } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
-import { activeTab, useStore } from './store'
+import { activeTab, useStore, type HighlightMark } from './store'
 
 const RESOURCE_LABELS: Record<Resource, string> = {
   wood: 'Wood',
@@ -29,10 +30,15 @@ function vertexDescription(board: Board, vertexId: VertexId): string {
   return [...hexes, ...ports].join(' · ')
 }
 
-const recommendationRefs = (recommendation: Recommendation | undefined): VertexId[] =>
-  recommendation
-    ? [recommendation.firstPick, ...recommendation.plannedSecond.slice(0, 1)]
-    : []
+// A recommendation draws my first pick as "1" and its planned follow-up as "2",
+// both in my colour, so hovering previews the pair I'd end the round holding.
+const recommendationMarks = (
+  recommendation: Recommendation,
+  color: string,
+): HighlightMark[] => [
+  { ref: recommendation.firstPick, color, label: '1' },
+  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2' })),
+]
 
 function formatFactor(value: number): string {
   const magnitude = Math.abs(value).toFixed(1)
@@ -64,34 +70,21 @@ export function AnalysisPanel() {
   const { state, dispatch } = useStore()
   const board = activeTab(state).board
   const analysis = useMemo(() => analyzeBoard(board), [board])
-  const [pinnedRank, setPinnedRank] = useState<number | null>(null)
   const recommendations = analysis.recommendations.slice(0, 5)
 
+  // Clear any hovered board marks whenever the board changes — after a click
+  // places settlements, the previous window's circles are stale.
   useEffect(() => {
-    setPinnedRank(null)
-    dispatch({ type: 'highlight', ref: null })
-    return () => dispatch({ type: 'highlight', ref: null })
+    dispatch({ type: 'highlight', marks: null })
+    return () => dispatch({ type: 'highlight', marks: null })
   }, [board, dispatch])
 
-  const restorePinned = () => {
-    dispatch({
-      type: 'highlight',
-      ref: pinnedRank === null ? null : recommendationRefs(recommendations[pinnedRank]),
-    })
-  }
-  const highlightRecommendation = (recommendation: Recommendation) => {
-    dispatch({ type: 'highlight', ref: recommendationRefs(recommendation) })
-  }
-  const togglePinned = (rank: number) => {
-    const next = pinnedRank === rank ? null : rank
-    setPinnedRank(next)
-    dispatch({
-      type: 'highlight',
-      ref: next === null ? null : recommendationRefs(recommendations[next]),
-    })
-  }
+  const playerColor = (id: string) =>
+    board.players.find((player) => player.id === id)?.color ?? '#8a7a63'
+  const clearHighlight = () => dispatch({ type: 'highlight', marks: null })
 
   const me = board.players.find((player) => player.id === board.mePlayerId)
+  const myColor = me?.color ?? '#8a7a63'
   const pickText = analysis.draft.myPickIndices.map((index) => index + 1).join(' and ')
   const turnText = analysis.draft.turnIndex === null
     ? ''
@@ -100,19 +93,54 @@ export function AnalysisPanel() {
       : `${board.players.find((player) => player.id === analysis.draft.currentPlayerId)?.name ??
         analysis.draft.currentPlayerId}'s turn`
   const context = me
-    ? `You are ${me.name} — picks ${pickText} of ${analysis.draft.sequence.length}${
+    ? `You are ${me.name}, picking ${pickText} of ${analysis.draft.sequence.length}${
       analysis.draft.placedCount > 0 && analysis.draft.turnIndex !== null
-        ? ` · pick ${analysis.draft.turnIndex + 1} of ${analysis.draft.sequence.length} — ${turnText}`
+        ? ` · pick ${analysis.draft.turnIndex + 1} of ${analysis.draft.sequence.length}, ${turnText}`
         : ''
     }`
     : null
-  const likelyGone = analysis.takenBeforeFirstPick.slice(0, 4)
+  // The picks that fall before my next turn, taken from the modal simulation, so
+  // each spot is mutually legal and attributed to the player who takes it.
+  const likelyGone = analysis.takenBeforeFirstPick
+  // Numbered in draft order and tinted to each picker so hovering shows who goes
+  // where, and clicking plays those settlements out on the board (advancing the
+  // draft to my turn, or between my two picks).
+  const likelyGoneMarks: HighlightMark[] = likelyGone.map(({ vertexId, playerId }, index) => ({
+    ref: vertexId,
+    color: playerColor(playerId),
+    label: String(index + 1),
+  }))
+  const placeLikelyGone = () => {
+    let next = board
+    for (const { vertexId, playerId } of likelyGone) {
+      if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
+    }
+    if (next !== board) dispatch({ type: 'commit', board: next })
+  }
+  const placeRecommendation = (recommendation: Recommendation) => {
+    if (board.mePlayerId === null) return
+    // Only place on my actual turn. While opponents still pick before me, my
+    // settlement would land at the wrong point in the draft — skipping those
+    // opponents and tripping the snake-inconsistent path. Guide the user to play
+    // the pre-window out first; the row stays hoverable so the 1/2 preview works.
+    if (likelyGone.length > 0) {
+      dispatch({
+        type: 'notice',
+        message: 'Play out the picks before your turn first: click "Likely gone before your turn".',
+      })
+      return
+    }
+    dispatch({
+      type: 'commit',
+      board: placeBuilding(board, recommendation.firstPick, board.mePlayerId, 'settlement'),
+    })
+  }
 
   const emptyMessage: Partial<Record<typeof analysis.status, string>> = {
     'no-me': 'Mark which player is you (the You chip in Players) to get recommendations.',
     'no-availability': 'No spot is likely to survive until your pick.',
     'no-production': 'Add number tokens to the board to analyze placements.',
-    complete: 'The draft is finished — every starting settlement is placed.',
+    complete: 'The draft is finished. Every starting settlement is placed.',
     'me-done': 'Your starting settlements are placed. Waiting on the rest of the draft.',
   }
 
@@ -127,7 +155,7 @@ export function AnalysisPanel() {
       {context && <p className="analysis-context">{context}</p>}
       {analysis.warnings.includes('snake-inconsistent') && (
         <p className="analysis-warning">
-          Placed settlements don't match a clean snake draft — recommendations are best-effort.
+          Placed settlements don't match a clean snake draft, so recommendations are best-effort.
         </p>
       )}
       {analysis.warnings.includes('solo-roster') && (
@@ -150,27 +178,30 @@ export function AnalysisPanel() {
             <button
               type="button"
               className="analysis-likely-gone"
-              onMouseEnter={() => dispatch({
-                type: 'highlight',
-                ref: likelyGone.map(({ vertexId }) => vertexId),
-              })}
-              onMouseLeave={restorePinned}
+              onMouseEnter={() => dispatch({ type: 'highlight', marks: likelyGoneMarks })}
+              onMouseLeave={clearHighlight}
+              onClick={placeLikelyGone}
             >
-              <span>Likely gone before your turn</span>
-              {likelyGone.map(({ vertexId, frequency }) =>
-                `${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`).join(' · ')}
+              <span>Likely gone before your turn (click to play out)</span>
+              {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+                const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+                return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
+              }).join(' · ')}
             </button>
           )}
-          <div className="analysis-list" onMouseLeave={restorePinned}>
+          <div className="analysis-list" onMouseLeave={clearHighlight}>
             {recommendations.map((recommendation, index) => {
               const factors = displayedFactors(recommendation)
               return (
                 <button
                   type="button"
                   key={recommendation.firstPick}
-                  className={`analysis-row${pinnedRank === index ? ' pinned' : ''}`}
-                  onMouseEnter={() => highlightRecommendation(recommendation)}
-                  onClick={() => togglePinned(index)}
+                  className="analysis-row"
+                  onMouseEnter={() => dispatch({
+                    type: 'highlight',
+                    marks: recommendationMarks(recommendation, myColor),
+                  })}
+                  onClick={() => placeRecommendation(recommendation)}
                 >
                   <span className="analysis-rank">{index + 1}</span>
                   <span className="analysis-row-body">
@@ -200,7 +231,6 @@ export function AnalysisPanel() {
               )
             })}
           </div>
-          <p className="analysis-ranking-note">Ranked by score × availability.</p>
         </>
       )}
     </section>

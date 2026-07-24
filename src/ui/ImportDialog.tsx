@@ -99,7 +99,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             }}
           />
           <strong>{busy ? 'Analyzing board…' : 'Drop screenshot here'}</strong>
-          <span>PNG from Settled app — or click to choose</span>
+          <span>PNG from Settled app, or click to choose</span>
         </label>
         {issues.length > 0 && (
           <div className="issue-list">
@@ -108,7 +108,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 type="button"
                 key={`${issue.stage}:${issue.ref ?? index}`}
                 className={issue.severity}
-                onClick={() => dispatch({ type: 'highlight', ref: issue.ref ?? null })}
+                onClick={() => dispatch({
+                  type: 'highlight',
+                  marks: issue.ref ? [{ ref: issue.ref }] : null,
+                })}
               >
                 <span>{issue.stage}</span>
                 {issue.message}

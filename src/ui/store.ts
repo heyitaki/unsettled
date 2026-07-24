@@ -26,12 +26,24 @@ import {
 } from '../persistence/localStorage'
 
 export type Tool =
+  | { kind: 'none' }
   | { kind: 'tile'; tile: TileKind }
   | { kind: 'token'; number: number }
   | { kind: 'port'; resource: Resource | null; rate: number }
   | { kind: 'robber' }
   | { kind: 'erase' }
   | { kind: 'piece'; tier: 'road' | BuildingTier }
+
+/**
+ * A board mark surfaced from analysis: a highlighted ref (vertex/hex/port id)
+ * optionally tinted to a player's colour and stamped with a short label (a pick
+ * number). Drives the coloured, numbered circles the AnalysisPanel draws.
+ */
+export interface HighlightMark {
+  ref: string
+  color?: string
+  label?: string
+}
 
 export interface TabState {
   id: string
@@ -50,7 +62,7 @@ export interface StoreState {
   // Bumped on every 'notice' dispatch so the auto-dismiss timer restarts even
   // when the same message text is shown twice in a row.
   noticeSeq: number
-  highlight: readonly string[] | null
+  highlight: readonly HighlightMark[] | null
 }
 
 export type StoreAction =
@@ -61,7 +73,7 @@ export type StoreAction =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
-  | { type: 'highlight'; ref: string | readonly string[] | null }
+  | { type: 'highlight'; marks: readonly HighlightMark[] | null }
   | { type: 'tab-add'; board?: Board; title?: string; id?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -182,12 +194,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
     case 'notice':
       return { ...state, notice: action.message, noticeSeq: state.noticeSeq + 1 }
     case 'highlight':
-      return {
-        ...state,
-        highlight: action.ref === null
-          ? null
-          : typeof action.ref === 'string' ? [action.ref] : action.ref,
-      }
+      return { ...state, highlight: action.marks }
     case 'tab-add': {
       const tab = createTab(
         action.board,

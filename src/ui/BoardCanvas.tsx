@@ -38,7 +38,10 @@ const BOARD_MARGIN = 18
 // units. Matches the settlement's original border (2.5 stroke × 0.8 scale).
 const PIECE_STROKE = 2
 // Colored core width of a road; its casing adds PIECE_STROKE on each side.
-const ROAD_CORE = 9
+const ROAD_CORE = 7
+// Corner rounding on the road's rectangular ends (SVG rx on the casing/core
+// rects). Small enough to read as a squared-off plank, not a capsule.
+const ROAD_RADIUS = 2.5
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers/scales (city annex ≈ 20 + outline). Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
@@ -102,7 +105,10 @@ export function BoardCanvas() {
   }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
-  const highlightSet = useMemo(() => new Set(state.highlight ?? []), [state.highlight])
+  const highlightSet = useMemo(
+    () => new Set((state.highlight ?? []).map((mark) => mark.ref)),
+    [state.highlight],
+  )
   const ports = useMemo<PortLayout[]>(
     () =>
       board.ports.map((port) => {
@@ -389,20 +395,45 @@ export function BoardCanvas() {
           // of running under it.
           const endInset = (vertexId: VertexId): number => {
             const building = board.buildings.find((piece) => piece.vertexId === vertexId)
+            // A bare vertex keeps a hair of gap so roads meeting there don't pile
+            // up, but less than before so an unobstructed road runs a touch
+            // longer; a vertex with a building gets a tier-sized gap so the road
+            // stops short of the piece instead of running under it.
             const gap = building
               ? building.tier === 'settlement' ? 18 : building.tier === 'city' ? 22 : 23
-              : length * 0.16
+              : length * 0.1
             return Math.min(gap, length * 0.45)
           }
           const aInset = endInset(vaId)
           const bInset = endInset(vbId)
           const a2 = { x: a.x + dir.x * aInset, y: a.y + dir.y * aInset }
           const b2 = { x: b.x - dir.x * bInset, y: b.y - dir.y * bInset }
+          // Draw the road as a slim rounded rectangle rather than a round-capped
+          // stroke: squarer ends read as a plank, not a capsule. Rotate a
+          // midpoint-centred rect to the edge's angle; the casing is the same
+          // rect grown by PIECE_STROKE on every side.
+          const roadLength = Math.max(0, Math.hypot(b2.x - a2.x, b2.y - a2.y))
+          const mid = { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }
+          const angle = (Math.atan2(b2.y - a2.y, b2.x - a2.x) * 180) / Math.PI
           return (
-            <g key={`road:${road.edgeId}`}>
+            <g key={`road:${road.edgeId}`} transform={`translate(${mid.x} ${mid.y}) rotate(${angle})`}>
               {/* Casing = colored core + PIECE_STROKE outline on each side, matching buildings. */}
-              <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y} stroke="#30271f" strokeWidth={ROAD_CORE + PIECE_STROKE * 2} strokeLinecap="round" />
-              <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y} stroke={playerColor(road.playerId)} strokeWidth={ROAD_CORE} strokeLinecap="round" />
+              <rect
+                x={-roadLength / 2 - PIECE_STROKE}
+                y={-(ROAD_CORE / 2 + PIECE_STROKE)}
+                width={roadLength + PIECE_STROKE * 2}
+                height={ROAD_CORE + PIECE_STROKE * 2}
+                rx={ROAD_RADIUS + PIECE_STROKE}
+                fill="#30271f"
+              />
+              <rect
+                x={-roadLength / 2}
+                y={-ROAD_CORE / 2}
+                width={roadLength}
+                height={ROAD_CORE}
+                rx={ROAD_RADIUS}
+                fill={playerColor(road.playerId)}
+              />
             </g>
           )
         })}
@@ -422,18 +453,35 @@ export function BoardCanvas() {
           )
         })}
         {(state.highlight ?? [])
-          .filter((ref): ref is VertexId => ref.startsWith('v:') && gridVertexSet.has(ref))
-          .map((vertexId) => {
-            const point = vertexPoint(vertexId)
+          .filter((mark) => mark.ref.startsWith('v:') && gridVertexSet.has(mark.ref))
+          .map((mark) => {
+            const point = vertexPoint(mark.ref as VertexId)
+            // A player-tinted circle names who takes the spot; a plain circle
+            // (default accent) is the generic "look here". A label stamps the
+            // pick number, in ink or paper for contrast against the fill.
+            const fill = mark.color
+            const ink = mark.color ? readableInk(mark.color) : undefined
             return (
-              <circle
-                key={`hl:${vertexId}`}
-                className="vertex-highlight"
-                cx={point.x}
-                cy={point.y}
-                r="11"
-                pointerEvents="none"
-              />
+              <g key={`hl:${mark.ref}`} pointerEvents="none">
+                <circle
+                  className="vertex-highlight"
+                  cx={point.x}
+                  cy={point.y}
+                  r="11"
+                  style={fill ? { fill, stroke: '#30271f' } : undefined}
+                />
+                {mark.label && (
+                  <text
+                    x={point.x}
+                    y={point.y + 3.6}
+                    textAnchor="middle"
+                    className="vertex-highlight-label"
+                    fill={ink}
+                  >
+                    {mark.label}
+                  </text>
+                )}
+              </g>
             )
           })}
         <g className="hit-layers">

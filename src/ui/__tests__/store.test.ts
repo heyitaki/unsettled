@@ -188,19 +188,17 @@ describe('workspace tabs', () => {
 })
 
 describe('highlight', () => {
-  it('normalizes a single ref to an array', () => {
-    const highlighted = reducer(state([tab('t1')]), { type: 'highlight', ref: 'x' })
-    expect(highlighted.highlight).toEqual(['x'])
-  })
-
-  it('passes an array through unchanged', () => {
-    const refs = ['x', 'y'] as const
-    const highlighted = reducer(state([tab('t1')]), { type: 'highlight', ref: refs })
-    expect(highlighted.highlight).toBe(refs)
+  it('stores the marks it is given', () => {
+    const marks = [{ ref: 'x', color: '#c23f38', label: '1' }] as const
+    const highlighted = reducer(state([tab('t1')]), { type: 'highlight', marks })
+    expect(highlighted.highlight).toBe(marks)
   })
 
   it('clears highlights with null', () => {
-    const start = reducer(state([tab('t1')]), { type: 'highlight', ref: 'x' })
-    expect(reducer(start, { type: 'highlight', ref: null }).highlight).toBeNull()
+    const start = reducer(state([tab('t1')]), {
+      type: 'highlight',
+      marks: [{ ref: 'x' }],
+    })
+    expect(reducer(start, { type: 'highlight', marks: null }).highlight).toBeNull()
   })
 })

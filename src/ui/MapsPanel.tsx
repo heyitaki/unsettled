@@ -180,7 +180,7 @@ export function MapsPanel() {
         onScroll={syncFades}
       >
         {listed.maps.length === 0 && (
-          <p className="empty-state">No saved maps yet — name the board above and hit Save.</p>
+          <p className="empty-state">No saved maps yet. Name the board above and hit Save.</p>
         )}
         {sortedMaps.map((map) => {
           const stamp = sortKey === 'name' ? map.modifiedAt : map[sortKey]
