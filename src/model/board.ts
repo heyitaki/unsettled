@@ -1,6 +1,6 @@
-import { axialKey, vertexAdjacentVertexIds, vertexTouchingHexes } from './coords'
+import { axialKey, neighbor, parseAxialKey, vertexAdjacentVertexIds, vertexTouchingHexes } from './coords'
 import { newId } from './ids'
-import { boardGrid, defaultPortEdges } from './layouts'
+import { boardGrid, defaultPortEdges, NUMBER_TOKEN_COUNTS } from './layouts'
 import {
   PLAYER_PALETTE,
   RESOURCES,
@@ -41,6 +41,93 @@ export function createBoard(layout: LayoutId): Board {
     buildings: [],
     players: [{ id: 'aki', name: 'aki', color: PLAYER_PALETTE.red }],
     mePlayerId: 'aki',
+  }
+}
+
+// The tiles each layout ships with. Counts (and NUMBER_TOKEN_COUNTS) mirror a
+// physical Catan box, so a randomized board is a legal starting map.
+const RESOURCE_COUNTS: Record<LayoutId, Record<TileKind, number>> = {
+  standard4: { wood: 4, sheep: 4, wheat: 4, brick: 3, ore: 3, desert: 1 },
+  extension6: { wood: 6, sheep: 6, wheat: 6, brick: 5, ore: 5, desert: 2 },
+}
+
+const isRedToken = (token: number): boolean => token === 6 || token === 8
+
+function shuffle<T>(items: readonly T[]): T[] {
+  const array = [...items]
+  for (let index = array.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1))
+    ;[array[index], array[swap]] = [array[swap], array[index]]
+  }
+  return array
+}
+
+const hexesAdjacent = (a: string, b: string): boolean => {
+  const coord = parseAxialKey(a)
+  for (let dir = 0; dir < 6; dir += 1) if (axialKey(neighbor(coord, dir)) === b) return true
+  return false
+}
+
+/**
+ * Generate a legal Catan starting map for the board's layout: the correct
+ * multiset of resource tiles and number tokens, with the red (6/8) high-odds
+ * tokens placed as an independent set so no two ever touch — the one arrangement
+ * rule a hand-dealt board always follows. Players, ports, and mePlayerId are
+ * kept; roads and buildings are cleared and the robber moves onto a desert.
+ */
+export function randomizeBoard(board: Board): Board {
+  const layout = board.layout
+  const coords = boardGrid(layout).landCoords
+
+  // Scatter the tile multiset across every land hex.
+  const tilePool = shuffle(
+    (Object.entries(RESOURCE_COUNTS[layout]) as [TileKind, number][])
+      .flatMap(([tile, count]) => Array.from({ length: count }, () => tile)),
+  )
+  const tiles = new Map<string, TileKind>()
+  coords.forEach((coord, index) => tiles.set(axialKey(coord), tilePool[index]))
+
+  // Every non-desert hex carries a token. Choose the red hexes first as a random
+  // independent set (no two adjacent), then fill the rest with the other tokens.
+  const resourceKeys = coords.map(axialKey).filter((key) => tiles.get(key) !== 'desert')
+  const tokenPool = (Object.entries(NUMBER_TOKEN_COUNTS[layout]) as [string, number][])
+    .flatMap(([token, count]) => Array.from({ length: count }, () => Number(token)))
+  const redCount = tokenPool.filter(isRedToken).length
+
+  let redKeys: string[] = []
+  for (let attempt = 0; attempt < 300 && redKeys.length < redCount; attempt += 1) {
+    const picked: string[] = []
+    for (const key of shuffle(resourceKeys)) {
+      if (picked.length === redCount) break
+      if (picked.every((other) => !hexesAdjacent(key, other))) picked.push(key)
+    }
+    if (picked.length === redCount) redKeys = picked
+  }
+  // Degenerate fallback (should never trigger on real layouts): place greedily.
+  if (redKeys.length < redCount) redKeys = shuffle(resourceKeys).slice(0, redCount)
+
+  const redSet = new Set(redKeys)
+  const reds = shuffle(tokenPool.filter(isRedToken))
+  const others = shuffle(tokenPool.filter((token) => !isRedToken(token)))
+  const tokens = new Map<string, number>()
+  redKeys.forEach((key, index) => tokens.set(key, reds[index]))
+  for (const key of resourceKeys) if (!redSet.has(key)) tokens.set(key, others.pop() as number)
+
+  const desert = coords.find((coord) => tiles.get(axialKey(coord)) === 'desert')
+
+  return {
+    ...board,
+    hexes: coords.map((coord) => {
+      const tile = tiles.get(axialKey(coord)) as TileKind
+      return {
+        coord: { ...coord },
+        tile,
+        numberToken: tile === 'desert' ? null : (tokens.get(axialKey(coord)) as number),
+      }
+    }),
+    robber: desert ? { ...desert } : null,
+    roads: [],
+    buildings: [],
   }
 }
 
@@ -171,6 +258,10 @@ export function setLayout(board: Board, layout: LayoutId): Board {
   const fresh = createBoard(layout)
   return { ...fresh, players: board.players.map((player) => ({ ...player })), mePlayerId: board.mePlayerId }
 }
+
+// Wipe tiles, tokens, pieces, and the robber back to a fresh board, keeping the
+// current layout and roster.
+export const clearBoard = (board: Board): Board => setLayout(board, board.layout)
 
 export function draftOrder(board: Board, rounds = 2): string[] {
   return Array.from({ length: Math.max(0, rounds) }, (_, round) =>

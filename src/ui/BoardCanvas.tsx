@@ -5,6 +5,7 @@ import {
   edgeEndpointVertexIds,
   parseEdgeId,
   parseVertexId,
+  vertexAdjacentVertexIds,
 } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import {
@@ -60,10 +61,19 @@ function hexPoints(coord: AxialCoord): string {
   }).join(' ')
 }
 
-function pipDots(number: number, x: number, y: number) {
+function pipDots(number: number, x: number, y: number, override?: { fill: string; stroke: string }) {
   const count = 6 - Math.abs(7 - number)
+  const fill = override?.fill ?? (number === 6 || number === 8 ? '#af2020' : INK_COLOR)
   return Array.from({ length: count }, (_, index) => (
-    <circle key={index} cx={x + (index - (count - 1) / 2) * 4.2} cy={y + 12} r="1.6" fill={number === 6 || number === 8 ? '#af2020' : INK_COLOR} />
+    <circle
+      key={index}
+      cx={x + (index - (count - 1) / 2) * 4.2}
+      cy={y + 12}
+      r="1.6"
+      fill={fill}
+      stroke={override?.stroke}
+      strokeWidth={override ? 0.8 : undefined}
+    />
   ))
 }
 
@@ -143,6 +153,34 @@ export function BoardCanvas() {
       height: maxY - minY + BOARD_MARGIN * 2,
     }
   }, [board.hexes, board.buildings, ports])
+  // Vertices where the active building tool may legally place: settlements on an
+  // empty vertex respecting the distance rule; cities/super-cities upgrading the
+  // tier below. Used to show placement dots (and gate clicks) for a normal cursor.
+  const placeableVertices = useMemo<VertexId[]>(() => {
+    if (state.tool.kind !== 'piece' || state.tool.tier === 'road') return []
+    const tier = state.tool.tier
+    const byVertex = new Map(board.buildings.map((building) => [building.vertexId, building] as const))
+    return grid.vertexIds.filter((vertexId) => {
+      const here = byVertex.get(vertexId)
+      if (tier === 'settlement') return !here && vertexAdjacentVertexIds(vertexId).every((adj) => !byVertex.has(adj))
+      if (tier === 'city') return here?.tier === 'settlement'
+      return here?.tier === 'city'
+    })
+  }, [state.tool, board.buildings, grid])
+  // Edges where the active player may legally build a road: empty and touching
+  // their own building, or their own road via a vertex no opponent building blocks.
+  const placeableEdges = useMemo<EdgeId[]>(() => {
+    if (state.tool.kind !== 'piece' || state.tool.tier !== 'road') return []
+    const roadEdges = new Set(board.roads.map((road) => road.edgeId))
+    const mine = tab.activePlayerId
+    const myBuildings = new Set(board.buildings.filter((b) => b.playerId === mine).map((b) => b.vertexId))
+    const oppBuildings = new Set(board.buildings.filter((b) => b.playerId !== mine).map((b) => b.vertexId))
+    const myRoadVerts = new Set(board.roads.filter((r) => r.playerId === mine).flatMap((r) => edgeEndpointVertexIds(r.edgeId)))
+    return grid.edgeIds.filter((edgeId) => {
+      if (roadEdges.has(edgeId)) return false
+      return edgeEndpointVertexIds(edgeId).some((v) => myBuildings.has(v) || (myRoadVerts.has(v) && !oppBuildings.has(v)))
+    })
+  }, [state.tool, board.roads, board.buildings, tab.activePlayerId, grid])
   const playerColor = (id: string) => board.players.find((player) => player.id === id)?.color ?? '#333'
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
   const choose = (layout: LayoutId) => {
@@ -196,6 +234,12 @@ export function BoardCanvas() {
       } else commit(placeBuilding(board, vertexId, tab.activePlayerId, state.tool.tier))
     } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
   }
+  const buildTier = state.tool.kind === 'piece' && state.tool.tier !== 'road' ? state.tool.tier : null
+  const buildActive = buildTier !== null
+  const roadActive = state.tool.kind === 'piece' && state.tool.tier === 'road'
+  const eraseActive = state.tool.kind === 'erase'
+  const portActive = state.tool.kind === 'port'
+  const hexActive = state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
   return (
     <section className="board-stage">
       <div className="board-status">
@@ -263,11 +307,18 @@ export function BoardCanvas() {
           if (hex.numberToken === null) return null
           const point = center(hex.coord)
           const hot = hex.numberToken === 6 || hex.numberToken === 8
+          // On the robber's hex, draw only the disc here; its number + pips are
+          // re-drawn in white above the robber below so they stay readable.
+          const underRobber = board.robber !== null && axialKey(hex.coord) === axialKey(board.robber)
           return (
             <g key={`token:${axialKey(hex.coord)}`}>
               <circle cx={point.x} cy={point.y} r="23" fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth="2.5" />
-              <text x={point.x} y={point.y + 6} textAnchor="middle" className={hot ? 'token-text hot' : 'token-text'}>{hex.numberToken}</text>
-              {pipDots(hex.numberToken, point.x, point.y)}
+              {!underRobber && (
+                <>
+                  <text x={point.x} y={point.y + 6} textAnchor="middle" className={hot ? 'token-text hot' : 'token-text'}>{hex.numberToken}</text>
+                  {pipDots(hex.numberToken, point.x, point.y)}
+                </>
+              )}
             </g>
           )
         })}
@@ -277,6 +328,32 @@ export function BoardCanvas() {
             <g transform={`translate(${point.x} ${point.y})`}>
               <circle cy="-10" r="9" fill="#1c1c1c" />
               <path d="M-12,21 C-14,2 -8,-4 0,-4 C8,-4 14,2 12,21 Z" fill="#1c1c1c" />
+            </g>
+          )
+        })()}
+        {board.robber && (() => {
+          // The robber's own number + pips, lifted above the robber in white
+          // (with a dark halo) so they read over both the dark robber and the
+          // paper disc peeking around it.
+          const robberHex = board.hexes.find((hex) => axialKey(hex.coord) === axialKey(board.robber!))
+          if (!robberHex || robberHex.numberToken === null) return null
+          const point = center(board.robber)
+          return (
+            <g key="robber-token-label">
+              <text
+                x={point.x}
+                y={point.y + 6}
+                textAnchor="middle"
+                className="token-text"
+                style={{ fill: '#fff' }}
+                stroke="#1c1c1c"
+                strokeWidth="2.8"
+                paintOrder="stroke"
+                strokeLinejoin="round"
+              >
+                {robberHex.numberToken}
+              </text>
+              {pipDots(robberHex.numberToken, point.x, point.y, { fill: '#fff', stroke: '#1c1c1c' })}
             </g>
           )
         })()}
@@ -299,12 +376,26 @@ export function BoardCanvas() {
           )
         })}
         {board.roads.map((road) => {
-          const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
-          // Pull both ends toward the midpoint so roads meeting at a vertex keep
-          // their shape but leave a small gap instead of piling on top of each other.
-          const inset = 0.16
-          const a2 = { x: a.x + (b.x - a.x) * inset, y: a.y + (b.y - a.y) * inset }
-          const b2 = { x: b.x + (a.x - b.x) * inset, y: b.y + (a.y - b.y) * inset }
+          const [vaId, vbId] = edgeEndpointVertexIds(road.edgeId)
+          const a = vertexPoint(vaId)
+          const b = vertexPoint(vbId)
+          const length = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
+          const dir = { x: (b.x - a.x) / length, y: (b.y - a.y) / length }
+          // Pull each end toward the midpoint. A bare vertex gets a small gap so
+          // roads meeting there don't pile up; a vertex with a building gets a
+          // larger, tier-sized gap so the road stops short of the piece instead
+          // of running under it.
+          const endInset = (vertexId: VertexId): number => {
+            const building = board.buildings.find((piece) => piece.vertexId === vertexId)
+            const gap = building
+              ? building.tier === 'settlement' ? 18 : building.tier === 'city' ? 22 : 23
+              : length * 0.16
+            return Math.min(gap, length * 0.45)
+          }
+          const aInset = endInset(vaId)
+          const bInset = endInset(vbId)
+          const a2 = { x: a.x + dir.x * aInset, y: a.y + dir.y * aInset }
+          const b2 = { x: b.x - dir.x * bInset, y: b.y - dir.y * bInset }
           return (
             <g key={`road:${road.edgeId}`}>
               {/* Casing = colored core + PIECE_STROKE outline on each side, matching buildings. */}
@@ -329,17 +420,44 @@ export function BoardCanvas() {
           )
         })}
         <g className="hit-layers">
-          {board.hexes.map((hex) => (
+          {(hexActive || eraseActive) && board.hexes.map((hex) => (
             <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />
           ))}
-          {grid.edgeIds.map((edgeId) => {
+          {(eraseActive || portActive) && grid.edgeIds.map((edgeId) => {
             const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
             return <line key={`hit:${edgeId}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(edgeId)} />
           })}
-          {grid.vertexIds.map((vertexId) => {
+          {eraseActive && grid.vertexIds.map((vertexId) => {
             const point = vertexPoint(vertexId)
             return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r="9" onClick={() => onVertex(vertexId)} />
           })}
+        </g>
+        {/* Placement affordances: visible, normal-cursor dots at every rule-legal
+            vertex/edge for the active building or road tool. */}
+        <g className="placement-layer">
+          {buildActive && placeableVertices.map((vertexId) => {
+            const point = vertexPoint(vertexId)
+            return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r="8" fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth="2.5" onClick={() => onVertex(vertexId)} />
+          })}
+          {roadActive && placeableEdges.map((edgeId) => {
+            const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
+            return <circle key={`slot:${edgeId}`} className="placement-slot" cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r="7" fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth="2.5" onClick={() => onEdge(edgeId)} />
+          })}
+          {/* Invisible targets over the active player's own same-tier pieces so
+              clicking one with the same tool still toggles it off (onVertex /
+              onEdge route to remove); no visible dot, just a normal-cursor hit. */}
+          {buildTier && board.buildings
+            .filter((piece) => piece.playerId === tab.activePlayerId && piece.tier === buildTier)
+            .map((piece) => {
+              const point = vertexPoint(piece.vertexId)
+              return <circle key={`rm:${piece.vertexId}`} className="placement-remove" cx={point.x} cy={point.y} r="12" onClick={() => onVertex(piece.vertexId)} />
+            })}
+          {roadActive && board.roads
+            .filter((road) => road.playerId === tab.activePlayerId)
+            .map((road) => {
+              const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
+              return <line key={`rm:${road.edgeId}`} className="placement-remove" x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(road.edgeId)} />
+            })}
         </g>
       </svg>
       {editingPort && (

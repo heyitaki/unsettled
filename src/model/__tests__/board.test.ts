@@ -6,13 +6,16 @@ import {
   pips,
   placeBuilding,
   placeRoad,
+  randomizeBoard,
   removePlayer,
   setLayout,
   setTile,
   validateBoard,
   vertexProduction,
 } from '../board'
-import { boardGrid } from '../layouts'
+import { axialKey, neighbor } from '../coords'
+import { boardGrid, NUMBER_TOKEN_COUNTS } from '../layouts'
+import type { LayoutId, TileKind } from '../types'
 
 describe('board operations', () => {
   it('creates both blank layouts with default ports', () => {
@@ -62,5 +65,62 @@ describe('board operations', () => {
       ports: [...board.ports, board.ports[0]],
     } as never
     expect(validateBoard(broken).filter((issue) => issue.severity === 'error')).not.toHaveLength(0)
+  })
+})
+
+describe('randomizeBoard', () => {
+  const layouts: LayoutId[] = ['standard4', 'extension6']
+  const RESOURCE_TOTALS: Record<LayoutId, Record<TileKind, number>> = {
+    standard4: { wood: 4, sheep: 4, wheat: 4, brick: 3, ore: 3, desert: 1 },
+    extension6: { wood: 6, sheep: 6, wheat: 6, brick: 5, ore: 5, desert: 2 },
+  }
+
+  for (const layout of layouts) {
+    // Run many times: placement is random, so invariants must hold every draw.
+    it(`deals a legal ${layout} map every time`, () => {
+      for (let trial = 0; trial < 40; trial += 1) {
+        const board = randomizeBoard(createBoard(layout))
+
+        const tileCounts: Record<string, number> = {}
+        for (const hex of board.hexes) tileCounts[hex.tile as string] = (tileCounts[hex.tile as string] ?? 0) + 1
+        expect(tileCounts).toEqual(RESOURCE_TOTALS[layout])
+
+        const tokenCounts: Record<number, number> = {}
+        for (const hex of board.hexes) {
+          if (hex.tile === 'desert') {
+            expect(hex.numberToken).toBeNull()
+            continue
+          }
+          expect(hex.numberToken).not.toBeNull()
+          tokenCounts[hex.numberToken as number] = (tokenCounts[hex.numberToken as number] ?? 0) + 1
+        }
+        expect(tokenCounts).toEqual(NUMBER_TOKEN_COUNTS[layout])
+
+        // No two red (6/8) tokens may be adjacent.
+        const redKeys = new Set(
+          board.hexes.filter((hex) => hex.numberToken === 6 || hex.numberToken === 8).map((hex) => axialKey(hex.coord)),
+        )
+        for (const hex of board.hexes) {
+          if (!redKeys.has(axialKey(hex.coord))) continue
+          for (let dir = 0; dir < 6; dir += 1) {
+            expect(redKeys.has(axialKey(neighbor(hex.coord, dir)))).toBe(false)
+          }
+        }
+
+        // The robber sits on a desert; pieces are cleared.
+        expect(board.roads).toHaveLength(0)
+        expect(board.buildings).toHaveLength(0)
+        const robberHex = board.hexes.find((hex) => board.robber && axialKey(hex.coord) === axialKey(board.robber))
+        expect(robberHex?.tile).toBe('desert')
+      }
+    })
+  }
+
+  it('keeps players and ports', () => {
+    const base = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
+    const board = randomizeBoard(base)
+    expect(board.players).toEqual(base.players)
+    expect(board.ports).toEqual(base.ports)
+    expect(board.mePlayerId).toBe(base.mePlayerId)
   })
 })

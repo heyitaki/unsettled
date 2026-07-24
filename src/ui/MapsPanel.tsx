@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createBoard } from '../model/board'
 import type { Board } from '../model/types'
 import { serializeBoard } from '../model/serialization'
@@ -66,6 +66,18 @@ export function MapsPanel() {
   })
   const refresh = () => setRevision((value) => value + 1)
   void revision
+  // Fade whichever end of the scrollable map list still hides cut-off rows,
+  // mirroring the tab strip's edge masks.
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [fades, setFades] = useState({ top: false, bottom: false })
+  const syncFades = useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const top = el.scrollTop > 1
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1
+    setFades((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }))
+  }, [])
+  useLayoutEffect(syncFades, [syncFades, sortedMaps.length])
   const notice = (message: string) => dispatch({ type: 'notice', message })
   const performSave = (saveName: string, overwrite: boolean, target: Board, targetTabId: string) => {
     const result = saveMap(saveName, target, overwrite)
@@ -86,7 +98,10 @@ export function MapsPanel() {
       notice('Map name cannot be empty')
       return
     }
-    if (state.tabs.some((tab) => tab.id !== id && tab.title === name)) {
+    // Block only when the user typed a name that belongs to a *different* open
+    // board. Saving the active tab under its own title must always go through —
+    // a stray duplicate tab sharing the title shouldn't stop a legitimate save.
+    if (name !== title && state.tabs.some((tab) => tab.id !== id && tab.title === name)) {
       notice(`A board named "${name}" is already open`)
       return
     }
@@ -144,7 +159,7 @@ export function MapsPanel() {
           placeholder="Map name"
           aria-label="Map name"
         />
-        <button type="button" className="primary" onClick={submitSave}>Save</button>
+        <button type="button" className="primary" onClick={submitSave}>Save to library</button>
       </div>
       {listed.warning && <p className="notice warning">{listed.warning}</p>}
       <div className="library-list-head">
@@ -159,16 +174,20 @@ export function MapsPanel() {
           </select>
         </label>
       </div>
-      <div className="saved-maps">
+      <div
+        ref={scrollerRef}
+        className={`saved-maps ${fades.top ? 'fade-top' : ''} ${fades.bottom ? 'fade-bottom' : ''}`}
+        onScroll={syncFades}
+      >
         {listed.maps.length === 0 && (
           <p className="empty-state">No saved maps yet — name the board above and hit Save.</p>
         )}
         {sortedMaps.map((map) => {
           const stamp = sortKey === 'name' ? map.modifiedAt : map[sortKey]
           const metaLabel = sortKey === 'name' ? SORT_LABEL.modifiedAt : SORT_LABEL[sortKey]
-          // "open" reflects any tab holding this map, matching openMap's
-          // any-tab match rather than only the active tab.
-          const isOpen = state.tabs.some((tab) => tab.title === map.name)
+          // Only the map shown in the active tab is "open" — the focused board
+          // is the one map on screen at any moment.
+          const isOpen = map.name === title
           return (
             <div key={map.name} className={`saved-map ${map.valid ? '' : 'invalid'} ${isOpen ? 'open' : ''}`}>
               <button

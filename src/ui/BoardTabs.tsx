@@ -90,6 +90,10 @@ export function BoardTabs() {
               <input
                 className="board-tab-rename"
                 autoFocus
+                // Size to the text so the field's intrinsic width matches the
+                // truncating select button — otherwise a bare input's wide
+                // default inflates the content-sized strip and shifts every tab.
+                size={Math.max(draft.length, 1)}
                 value={draft}
                 aria-label={`Rename ${tab.title}`}
                 onChange={(event) => setDraft(event.target.value)}

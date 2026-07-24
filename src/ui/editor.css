@@ -29,11 +29,16 @@ button { color: inherit; }
 .eyebrow { display: block; color: var(--accent-dark); font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 
 .workspace { max-width: 1580px; margin: auto; display: grid; grid-template-columns: minmax(248px, 320px) minmax(520px, 1fr) minmax(262px, 336px); gap: 16px; align-items: start; }
-.left-rail, .right-rail { display: grid; gap: 16px; }
+.left-rail, .right-rail { display: grid; gap: 12px; }
+/* Stretch the left rail to the row's height (the tall board column) and let the
+   Library fill the space under the tools, so the saved-maps list can grow down
+   to the board's bottom edge before it scrolls. */
+.left-rail { align-self: stretch; grid-template-rows: auto auto 1fr; min-height: 0; }
+.maps-panel { display: flex; flex-direction: column; min-height: 0; }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel, .board-stage { background: rgba(248, 243, 232, .93); border: 1px solid rgba(255,255,255,.65); border-radius: 18px; box-shadow: 0 18px 50px rgba(62, 45, 21, .12), inset 0 0 0 1px var(--line); }
 .panel { padding: 17px; }
-.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
 .panel-heading h2 { margin: 2px 0 0; font: 700 21px/1.1 Georgia, serif; }
 button { border: 1px solid var(--line); border-radius: 8px; background: #f9f5ea; padding: 7px 10px; cursor: pointer; transition: .16s ease; }
 button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55,45,32,.35); box-shadow: 0 4px 10px rgba(55,45,32,.08); }
@@ -43,17 +48,34 @@ button.danger, .icon-danger { color: #a33428; }
 /* A selected danger button (e.g. active erase tool) keeps white text on the accent fill. */
 button.selected.danger { color: #fff; }
 
-.history-buttons { display: flex; gap: 5px; }
-.history-buttons button { padding: 5px 7px; font-size: 11px; }
-.tool-group + .tool-group { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.tool-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.history-buttons { display: flex; gap: 6px; }
+.history-buttons button { position: relative; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; line-height: 1; }
+/* Name label under the hovered button (replaces the native tooltip). No
+   transition, so switching between buttons swaps the label instantly. */
+.history-buttons button::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: 6px; background: #fbf6ea; color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 7px rgba(55,45,32,.16); opacity: 0; pointer-events: none; z-index: 6; }
+.history-buttons button:hover::after { opacity: 1; }
+.btn-icon { flex: none; width: 16px; height: 16px; fill: currentColor; }
+.tool-group + .tool-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+.tool-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .tool-grid button { padding: 8px 5px; font-size: 11px; text-transform: capitalize; }
-.terrain-grid { grid-template-columns: repeat(2, 1fr); }
-.terrain-grid button { display: flex; align-items: center; gap: 6px; text-align: left; }
-.swatch { width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.2); border-radius: 3px; }
-.token-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
-.token-tools button { padding: 6px 3px; border-radius: 50%; font-family: Georgia, serif; font-weight: 700; }
+/* Structures mirror the terrain tiles: a compact glyph over its label, four to
+   a row so seven pieces fit in two rows. */
+.structure-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+/* Fixed-height icon row so labels share one baseline despite icons of differing
+   heights (settlement 17 → super city 23). */
+.structure-grid button { display: grid; grid-template-rows: 24px auto; place-items: center; gap: 3px; padding: 6px 2px; font-size: 9px; }
+.tool-icon { width: 19px; height: 19px; fill: currentColor; }
+.terrain-grid { grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.terrain-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; font-size: 9px; text-align: center; }
+.hex-swatch { width: 20px; height: 22px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.2)); }
+.hex-swatch polygon { stroke: rgba(0,0,0,.18); stroke-width: 1; }
+/* Selected terrain: a crisp white ring so the hex stays legible on the accent
+   fill (brick's red would otherwise vanish into it). */
+.terrain-grid button.selected .hex-swatch polygon { stroke: #fff; stroke-width: 2; }
+.token-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+/* Match the board's number-token face (see .token-text). */
+.token-tools button { padding: 4px 3px; border-radius: 50%; font-family: Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; font-weight: 700; }
 .token-tools .hot { color: #b12620; }
 .token-tools .selected.hot { color: white; }
 
@@ -61,7 +83,10 @@ button.selected.danger { color: #fff; }
 /* Scrolls horizontally once tabs hit their min-width floor. Scrollbars hidden
    on both axes; the fade classes (toggled from JS) mask whichever end still
    hides cut-off tabs. */
-.board-tabs-scroll { min-width: 0; flex: 1; display: flex; align-items: center; gap: 5px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; }
+/* Grow 0 so the strip stays content-width while tabs fit — the add button
+   then sits right after the last tab. Once tabs exceed the row it shrinks
+   (shrink 1 + min-width:0) and scrolls, pinning the add button to the right. */
+.board-tabs-scroll { min-width: 0; flex: 0 1 auto; display: flex; align-items: center; gap: 5px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; }
 .board-tabs-scroll::-webkit-scrollbar { display: none; }
 .board-tabs-scroll.fade-left { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px); mask-image: linear-gradient(90deg, transparent 0, #000 28px); }
 .board-tabs-scroll.fade-right { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
@@ -72,10 +97,12 @@ button.selected.danger { color: #fff; }
 .board-tab button:hover:not(:disabled) { box-shadow: none; }
 .board-tab-select { min-width: 0; flex: 1; overflow: hidden; padding: 7px 5px 7px 9px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .board-tab.active .board-tab-select { color: var(--accent-dark); font-weight: 700; }
-.board-tab-rename { min-width: 0; flex: 1; width: 100%; padding: 6px 4px 6px 8px; border: 0; border-radius: 8px; background: #fffdf7; color: var(--accent-dark); font-weight: 700; outline: 1px solid var(--accent); }
+/* Inline edit: same box as .board-tab-select so entering rename mode neither
+   shifts the strip nor draws a boxed outline — just an editable caret in place. */
+.board-tab-rename { min-width: 0; flex: 1; padding: 7px 5px 7px 9px; border: 0; background: transparent; color: var(--accent-dark); font-weight: 700; outline: none; }
 .board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
 .board-tab-close:hover { color: #a33428; }
-.board-tab-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
+.board-tab-add, .player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
 
 .board-stage { position: static; overflow: hidden; padding: 12px; background: #e9dfca; }
 .board-status { display: flex; justify-content: center; gap: 18px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
@@ -96,10 +123,16 @@ button.selected.danger { color: #fff; }
 .port-text { font: 700 11px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; }
 .hit-layers > * { fill: transparent; stroke: transparent; cursor: crosshair; pointer-events: all; }
 .hit-layers line { stroke-width: 14; }
+/* Placement dots use a normal cursor (not the crosshair) and brighten on hover. */
+.placement-slot { cursor: default; transition: fill .12s ease; }
+.placement-slot:hover { fill: #fffdf7; }
+/* Invisible remove-targets over own pieces: clickable but unpainted, normal cursor. */
+.placement-remove { fill: transparent; stroke: transparent; pointer-events: all; cursor: default; }
+.placement-remove:not(circle) { stroke-width: 14; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
 
-.player-list { display: grid; gap: 7px; }
-.player-row { display: grid; grid-template-columns: 22px minmax(75px, 1fr) 38px 40px 24px; gap: 5px; align-items: center; padding: 6px; border: 1px solid transparent; border-radius: 10px; }
+.player-list { display: grid; gap: 5px; }
+.player-row { display: grid; grid-template-columns: 22px minmax(75px, 1fr) 38px 40px 24px; gap: 5px; align-items: center; padding: 3px 6px; border: 1px solid transparent; border-radius: 10px; }
 .player-row.active { background: #fff9e9; border-color: #d8bc77; }
 .player-dot { width: 19px; height: 19px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
 .player-row > input { min-width: 0; width: 100%; border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 5px 2px; }
@@ -108,15 +141,25 @@ button.selected.danger { color: #fff; }
 .me-radio input { margin: 0; }
 .reorder-buttons { display: flex; }
 .reorder-buttons button, .icon-danger { padding: 3px 5px; border: 0; background: transparent; }
-.draft-strip { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; gap: 4px; overflow-x: auto; }
+.draft-strip { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); display: flex; gap: 4px; overflow-x: auto; }
 .draft-strip div { min-width: 34px; max-width: 56px; color: var(--muted); font-size: 9px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .draft-strip span { display: block; width: 15px; height: 15px; margin: auto auto 3px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); }
 
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
-.map-save-row, .file-actions { display: flex; gap: 6px; }
-.map-save-row input { min-width: 0; width: 100%; }
-.map-save-row .primary { flex: none; }
-.file-actions button { flex: 1; font-size: 11px; }
+/* Save is fused to the name input as one segmented control — no gap, shared
+   border seam (the button's -1px pulls its edge over the input's). */
+.map-save-row { display: flex; }
+.map-save-row input { min-width: 0; width: 100%; border-top-right-radius: 0; border-bottom-right-radius: 0; font-size: 13px; }
+.map-save-row .primary { flex: none; margin-left: -1px; padding: 0 14px; border-top-left-radius: 0; border-bottom-left-radius: 0; font-size: 12px; font-weight: 600; }
+/* Import / export controls: a dashed screenshot CTA over a subtle JSON pair. */
+.library-io { display: grid; gap: 7px; margin-top: 11px; }
+.io-primary { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1px dashed #b1936a; border-radius: 11px; background: #f8f0de; color: var(--accent-dark); font-size: 12.5px; font-weight: 700; }
+.io-primary:hover:not(:disabled) { transform: none; border-color: var(--accent); background: #fdf5e4; box-shadow: none; }
+.io-json { display: flex; gap: 7px; }
+.io-json button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; font-size: 11px; color: var(--muted); }
+.io-json button:hover:not(:disabled) { color: var(--ink); }
+.io-icon { flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.io-primary .io-icon { width: 17px; height: 17px; }
 .notice.warning { margin: 10px 0 0; padding: 7px 9px; border-radius: 8px; background: #fff0e5; color: var(--accent-dark); font-size: 11px; }
 
 /* Library */
@@ -124,8 +167,13 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .library-list-head > span { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; }
 .map-sort { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .map-sort select { padding: 5px 22px 5px 8px; font-size: 11px; }
-.saved-maps { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; scrollbar-width: none; }
+/* ~5 rows tall before it scrolls; fade classes (toggled from JS, like the tab
+   strip) mask whichever end still hides cut-off rows. */
+.saved-maps { display: grid; grid-auto-rows: max-content; gap: 6px; flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .saved-maps::-webkit-scrollbar { display: none; }
+.saved-maps.fade-top { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
+.saved-maps.fade-bottom { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
+.saved-maps.fade-top.fade-bottom { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); }
 .saved-map { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: #fbf6ea; overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
 .saved-map:hover { border-color: rgba(55,45,32,.3); box-shadow: 0 4px 12px rgba(55,45,32,.09); }
 .saved-map.open { border-color: #d8bc77; background: #fff9e9; }
@@ -133,7 +181,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .saved-map-open { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 8px 11px; border: 0; border-radius: 0; background: transparent; text-align: left; }
 .saved-map-open:hover:not(:disabled) { transform: none; box-shadow: none; background: rgba(255,255,255,.55); }
 .saved-map-open:disabled { opacity: 1; cursor: default; }
-.saved-map-name { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.saved-map-name { overflow: hidden; font-size: 13px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .saved-map.open .saved-map-name { color: var(--accent-dark); }
 .saved-map.invalid .saved-map-name { color: var(--muted); }
 .saved-map-meta { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
@@ -175,9 +223,15 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .confirm-dialog h3 { margin: 3px 0 8px; font: 700 24px Georgia, serif; }
 .confirm-dialog p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; }
+.import-dialog { width: min(420px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.28); }
+.import-dialog h3 { margin: 3px 0 12px; font: 700 22px Georgia, serif; }
+.import-dialog .drop-zone { padding: 26px 16px; }
+.import-dialog .issue-list { margin-top: 12px; }
 
-.global-notice { position: fixed; z-index: 30; right: 20px; top: 18px; max-width: min(440px, calc(100vw - 40px)); display: flex; gap: 20px; color: white; background: #3c3b34; border-color: rgba(255,255,255,.2); box-shadow: 0 12px 35px rgba(0,0,0,.25); }
-.global-notice span { margin-left: auto; }
+.global-notice { position: fixed; z-index: 30; right: 20px; top: 18px; max-width: min(440px, calc(100vw - 40px)); display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; color: white; background: #3c3b34; box-shadow: 0 12px 35px rgba(0,0,0,.25); }
+.global-notice-text { flex: 1; font-size: 13px; line-height: 1.4; user-select: text; -webkit-user-select: text; }
+.global-notice-close { flex: none; margin-top: -1px; padding: 0 3px; border: 0; border-radius: 6px; background: transparent; color: rgba(255,255,255,.65); font-size: 15px; line-height: 1.3; }
+.global-notice-close:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; color: #fff; background: rgba(255,255,255,.12); }
 footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content: space-between; color: rgba(45,41,36,.65); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 
 @media (max-width: 1120px) {

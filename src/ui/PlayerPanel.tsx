@@ -24,6 +24,8 @@ export function PlayerPanel() {
         </div>
         <button
           type="button"
+          className="player-add"
+          aria-label="Add player"
           disabled={board.players.length >= 6}
           onClick={() => {
             const index = board.players.length
@@ -32,7 +34,7 @@ export function PlayerPanel() {
             commit(nextBoard)
             dispatch({ type: 'active-player', playerId: nextBoard.players.at(-1)?.id ?? tab.activePlayerId })
           }}
-        >Add</button>
+        >+</button>
       </div>
       <div className="player-list">
         {board.players.map((player, index) => (

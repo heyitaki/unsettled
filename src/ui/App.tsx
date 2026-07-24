@@ -27,13 +27,16 @@ function Workspace() {
   const { state, dispatch } = useStore()
   // Chosen once per page load, so the tagline rotates between visits.
   const [subtitle] = useState(pickSubtitle)
+  // Pause auto-dismiss while the pointer is over the toast, so it can be read,
+  // clicked, and text-selected; the timer restarts fresh once the pointer leaves.
+  const [noticeHover, setNoticeHover] = useState(false)
   // Notices are transient toasts — auto-dismiss so they don't linger. Keyed on
   // noticeSeq so an identical repeat message still restarts the timer.
   useEffect(() => {
-    if (!state.notice) return
+    if (!state.notice || noticeHover) return
     const timeout = window.setTimeout(() => dispatch({ type: 'notice', message: null }), 3500)
     return () => window.clearTimeout(timeout)
-  }, [state.notice, state.noticeSeq, dispatch])
+  }, [state.notice, state.noticeSeq, noticeHover, dispatch])
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -48,9 +51,27 @@ function Workspace() {
         </div>
       </header>
       {state.notice && (
-        <button type="button" className="global-notice" onClick={() => dispatch({ type: 'notice', message: null })}>
-          {state.notice}<span>×</span>
-        </button>
+        <div
+          className="global-notice"
+          role="status"
+          onMouseEnter={() => setNoticeHover(true)}
+          onMouseLeave={() => setNoticeHover(false)}
+        >
+          <span className="global-notice-text">{state.notice}</span>
+          <button
+            type="button"
+            className="global-notice-close"
+            aria-label="Dismiss notification"
+            // Closing unmounts the toast without firing onMouseLeave, so clear the
+            // hover flag here or the next notice would never auto-dismiss.
+            onClick={() => {
+              setNoticeHover(false)
+              dispatch({ type: 'notice', message: null })
+            }}
+          >
+            ×
+          </button>
+        </div>
       )}
       <main className="workspace">
         <aside className="left-rail">

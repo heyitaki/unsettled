@@ -1,99 +1,49 @@
 import { useRef, useState } from 'react'
 import { parseBoard, serializeBoard } from '../model/serialization'
-import {
-  parseBoardImageWithNames,
-  type ParseIssue,
-  type RgbaImage,
-} from '../parser'
 import { listMaps } from '../persistence/localStorage'
 import { downloadBoard, fileTitle, firstFreeName, loadedNotice } from './boardFiles'
+import { ImportDialog } from './ImportDialog'
 import { activeTab, useStore } from './store'
 
-async function decodeImage(file: File): Promise<RgbaImage> {
-  let bitmap: ImageBitmap
-  try {
-    bitmap = await createImageBitmap(file, { colorSpaceConversion: 'none' })
-  } catch {
-    bitmap = await createImageBitmap(file)
-  }
-  const canvas = document.createElement('canvas')
-  canvas.width = bitmap.width
-  canvas.height = bitmap.height
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context) throw new Error('Canvas image decoding is unavailable')
-  context.drawImage(bitmap, 0, 0)
-  bitmap.close()
-  const data = context.getImageData(0, 0, canvas.width, canvas.height)
-  return { width: canvas.width, height: canvas.height, data: data.data }
-}
-
+// Screenshot + JSON import/export, in their own panel above the Library. The
+// screenshot drop-zone opens as a modal; JSON import/export act on the active tab.
 export function ImportPanel() {
   const { state, dispatch } = useStore()
   const { title, board } = activeTab(state)
-  const [issues, setIssues] = useState<ParseIssue[]>([])
-  const [busy, setBusy] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const jsonInputRef = useRef<HTMLInputElement>(null)
   const notice = (message: string) => dispatch({ type: 'notice', message })
   return (
     <section className="panel import-panel">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Screenshot reader</span>
+          <span className="eyebrow">Board data</span>
           <h2>Import &amp; export</h2>
         </div>
-        {busy && <span className="working">Reading…</span>}
       </div>
-      <label className="drop-zone">
-        <input
-          type="file"
-          accept="image/png,image/jpeg"
-          disabled={busy}
-          onChange={async (event) => {
-            const file = event.target.files?.[0]
-            if (!file) return
-            setBusy(true)
-            setIssues([])
-            try {
-              const image = await decodeImage(file)
-              let reader
-              let startupError: unknown
-              try {
-                // Dynamic import keeps the tesseract.js wrapper out of the
-                // initial /unsettled bundle — it loads only on first import.
-                const { createBrowserTextReader } = await import('../parser/textReader')
-                reader = await createBrowserTextReader()
-              } catch (error) {
-                startupError = error
-                reader = {
-                  async read() {
-                    throw startupError
-                  },
-                }
-              }
-              try {
-                const result = await parseBoardImageWithNames(image, reader)
-                if (result.ok) {
-                  dispatch({ type: 'tab-add', board: result.board, title: fileTitle(file.name) })
-                  notice(`Imported ${file.name}`)
-                  setIssues(result.issues)
-                } else notice(`Screenshot import failed: ${result.error}`)
-              } finally {
-                await reader.terminate?.()
-              }
-            } catch (error) {
-              notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)
-            } finally {
-              setBusy(false)
-              event.target.value = ''
-            }
-          }}
-        />
-        <strong>{busy ? 'Analyzing board…' : 'Choose a screenshot'}</strong>
-        <span>PNG from Settled app</span>
-      </label>
-      <div className="file-actions">
-        <button type="button" onClick={() => jsonInputRef.current?.click()}>Import JSON</button>
-        <button type="button" onClick={() => downloadBoard(title, serializeBoard(board))}>Export JSON</button>
+      <div className="library-io">
+        <button type="button" className="io-primary" onClick={() => setImportOpen(true)}>
+          <svg viewBox="0 0 20 20" className="io-icon" aria-hidden="true">
+            <rect x="2.2" y="3.5" width="15.6" height="13" rx="2.2" />
+            <circle cx="6.7" cy="8" r="1.5" />
+            <path d="M3 14.5 6.8 10.7 9.6 13.5 13 10 17 14" />
+          </svg>
+          Import screenshot
+        </button>
+        <div className="io-json">
+          <button type="button" onClick={() => jsonInputRef.current?.click()}>
+            <svg viewBox="0 0 20 20" className="io-icon" aria-hidden="true">
+              <path d="M10 3 V11.5 M6.4 6.6 10 3 13.6 6.6 M4 14 V16.5 H16 V14" />
+            </svg>
+            Import JSON
+          </button>
+          <button type="button" onClick={() => downloadBoard(title, serializeBoard(board))}>
+            <svg viewBox="0 0 20 20" className="io-icon" aria-hidden="true">
+              <path d="M10 3 V11.5 M6.4 7.9 10 11.5 13.6 7.9 M4 15.5 H16" />
+            </svg>
+            Export JSON
+          </button>
+        </div>
         <input
           ref={jsonInputRef}
           hidden
@@ -118,21 +68,7 @@ export function ImportPanel() {
           }}
         />
       </div>
-      {issues.length > 0 && (
-        <div className="issue-list">
-          {issues.map((issue, index) => (
-            <button
-              type="button"
-              key={`${issue.stage}:${issue.ref ?? index}`}
-              className={issue.severity}
-              onClick={() => dispatch({ type: 'highlight', ref: issue.ref ?? null })}
-            >
-              <span>{issue.stage}</span>
-              {issue.message}
-            </button>
-          ))}
-        </div>
-      )}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </section>
   )
 }
