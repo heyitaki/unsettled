@@ -300,6 +300,16 @@ export function BoardCanvas() {
         viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
         aria-label="Editable Catan board"
       >
+        <defs>
+          {/* Buildings (not roads) sit slightly proud of the board. The filter
+              region is widened past the default 120% so the blur isn't clipped. */}
+          <filter id="piece-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            {/* Near-centred: the piece is opaque, so a large dy would hide the
+                shadow above it and smear it below. Blur carries the lift, and a
+                small dy keeps the piece grounded rather than glowing. */}
+            <feDropShadow dx="0" dy="1" stdDeviation="2.6" floodColor={INK_COLOR} floodOpacity="0.68" />
+          </filter>
+        </defs>
         <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} rx="32" fill={SEA_COLOR} />
         {board.hexes.map((hex) => (
           <polygon
@@ -389,25 +399,14 @@ export function BoardCanvas() {
           const b = vertexPoint(vbId)
           const length = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
           const dir = { x: (b.x - a.x) / length, y: (b.y - a.y) / length }
-          // Pull each end toward the midpoint. A bare vertex gets a small gap so
-          // roads meeting there don't pile up; a vertex with a building gets a
-          // larger, tier-sized gap so the road stops short of the piece instead
-          // of running under it.
-          const endInset = (vertexId: VertexId): number => {
-            const building = board.buildings.find((piece) => piece.vertexId === vertexId)
-            // A bare vertex keeps a hair of gap so roads meeting there don't pile
-            // up, but less than before so an unobstructed road runs a touch
-            // longer; a vertex with a building gets a tier-sized gap so the road
-            // stops short of the piece instead of running under it.
-            const gap = building
-              ? building.tier === 'settlement' ? 18 : building.tier === 'city' ? 22 : 23
-              : length * 0.1
-            return Math.min(gap, length * 0.45)
-          }
-          const aInset = endInset(vaId)
-          const bInset = endInset(vbId)
-          const a2 = { x: a.x + dir.x * aInset, y: a.y + dir.y * aInset }
-          const b2 = { x: b.x - dir.x * bInset, y: b.y - dir.y * bInset }
+          // Pull both ends toward the midpoint by the same gap, so every road is
+          // drawn the same length no matter what sits at its endpoints: roads
+          // meeting at a bare vertex don't pile up, and a road running into a
+          // building is simply hidden by it — buildings paint after roads, and
+          // the inset already tucks the road's tip inside the silhouette.
+          const inset = length * 0.07
+          const a2 = { x: a.x + dir.x * inset, y: a.y + dir.y * inset }
+          const b2 = { x: b.x - dir.x * inset, y: b.y - dir.y * inset }
           // Draw the road as a slim rounded rectangle rather than a round-capped
           // stroke: squarer ends read as a plank, not a capsule. Rotate a
           // midpoint-centred rect to the edge's angle; the casing is the same
@@ -442,13 +441,17 @@ export function BoardCanvas() {
           const color = playerColor(building.playerId)
           const scale = building.tier === 'settlement' ? 0.8 : building.tier === 'city' ? 1 : 1.18
           return (
-            <g key={`building:${building.vertexId}`} transform={`translate(${point.x} ${point.y}) scale(${scale})`} fill={color} stroke="#30271f" strokeWidth={PIECE_STROKE / scale} strokeLinejoin="round">
-              {/* One closed silhouette per tier, matching the source app's pieces:
-                  a house, a house with a rectangle annex, and a twin-gable keep.
-                  strokeWidth is divided by scale so every piece renders the same border. */}
-              {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
-              {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
-              {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
+            // The shadow lives on an outer group so the tier's scale can't shrink
+            // or grow it — every piece casts the same shadow.
+            <g key={`building:${building.vertexId}`} filter="url(#piece-shadow)">
+              <g transform={`translate(${point.x} ${point.y}) scale(${scale})`} fill={color} stroke="#30271f" strokeWidth={PIECE_STROKE / scale} strokeLinejoin="round">
+                {/* One closed silhouette per tier, matching the source app's pieces:
+                    a house, a house with a rectangle annex, and a twin-gable keep.
+                    strokeWidth is divided by scale so every piece renders the same border. */}
+                {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
+                {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
+                {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
+              </g>
             </g>
           )
         })}
