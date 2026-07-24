@@ -186,3 +186,21 @@ describe('workspace tabs', () => {
     expect(second.notice).toBe('Map name cannot be empty')
   })
 })
+
+describe('highlight', () => {
+  it('normalizes a single ref to an array', () => {
+    const highlighted = reducer(state([tab('t1')]), { type: 'highlight', ref: 'x' })
+    expect(highlighted.highlight).toEqual(['x'])
+  })
+
+  it('passes an array through unchanged', () => {
+    const refs = ['x', 'y'] as const
+    const highlighted = reducer(state([tab('t1')]), { type: 'highlight', ref: refs })
+    expect(highlighted.highlight).toBe(refs)
+  })
+
+  it('clears highlights with null', () => {
+    const start = reducer(state([tab('t1')]), { type: 'highlight', ref: 'x' })
+    expect(reducer(start, { type: 'highlight', ref: null }).highlight).toBeNull()
+  })
+})

@@ -1,0 +1,52 @@
+import { describe, expect, it } from 'vitest'
+import {
+  addPlayer,
+  createBoard,
+  randomizeBoard,
+  setMe,
+  setRobber,
+  setTile,
+} from '../../model/board'
+import { analyzeBoard, rolloutCount } from '../analyze'
+import { DEFAULT_WEIGHTS } from '../weights'
+
+function worstCaseBoard() {
+  let board = createBoard('extension6')
+  for (let index = 2; index <= 6; index += 1) {
+    board = addPlayer(board, { id: `p${index}`, name: `P${index}`, color: '#333333' })
+  }
+  board = setMe(board, 'aki')
+  board = randomizeBoard(board)
+  const resources = ['wood', 'sheep', 'wheat', 'brick', 'ore'] as const
+  const tokens = [5, 6, 8, 9, 10, 4, 11, 3] as const
+  for (let index = 0; index < board.hexes.length; index += 1) {
+    board = setTile(
+      board,
+      board.hexes[index].coord,
+      resources[index % resources.length],
+      tokens[index % tokens.length],
+    )
+  }
+  return setRobber(board, board.hexes[0].coord)
+}
+
+describe('rollout performance', () => {
+  it('keeps the adaptive budget formula calibrated for all four draft shapes', () => {
+    expect(rolloutCount(80, 0, 10, DEFAULT_WEIGHTS)).toBe(7)
+    expect(rolloutCount(80, 3, 2, DEFAULT_WEIGHTS)).toBe(24)
+    expect(rolloutCount(80, 5, 0, DEFAULT_WEIGHTS)).toBe(24)
+    expect(rolloutCount(80, 10, 0, DEFAULT_WEIGHTS)).toBe(24)
+  })
+
+  it('analyzes the worst-case six-player opening under the CI tripwire', () => {
+    const board = worstCaseBoard()
+    analyzeBoard(board)
+    const start = performance.now()
+    console.time('analyzeBoard worst-case')
+    const analysis = analyzeBoard(board)
+    console.timeEnd('analyzeBoard worst-case')
+    const elapsed = performance.now() - start
+    expect(analysis.status).toBe('ready')
+    expect(elapsed).toBeLessThan(500)
+  })
+})

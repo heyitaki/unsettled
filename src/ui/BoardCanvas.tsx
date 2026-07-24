@@ -101,6 +101,8 @@ export function BoardCanvas() {
     setPendingLayout(null)
   }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
+  const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
+  const highlightSet = useMemo(() => new Set(state.highlight ?? []), [state.highlight])
   const ports = useMemo<PortLayout[]>(
     () =>
       board.ports.map((port) => {
@@ -300,7 +302,7 @@ export function BoardCanvas() {
             fill={hex.tile ? TILE_COLORS[hex.tile] : '#d8d7cc'}
             stroke="#f8f1dc"
             strokeWidth="4"
-            className={state.highlight === axialKey(hex.coord) ? 'highlighted' : ''}
+            className={highlightSet.has(axialKey(hex.coord)) ? 'highlighted' : ''}
           />
         ))}
         {board.hexes.map((hex) => {
@@ -364,7 +366,7 @@ export function BoardCanvas() {
           return (
             <g
               key={`port:${port.edgeId}`}
-              className={state.highlight === port.edgeId ? 'highlighted' : ''}
+              className={highlightSet.has(port.edgeId) ? 'highlighted' : ''}
               onClick={portTool ? () => setEditingPort(port.edgeId) : undefined}
               style={portTool ? { cursor: 'pointer' } : undefined}
             >
@@ -419,6 +421,21 @@ export function BoardCanvas() {
             </g>
           )
         })}
+        {(state.highlight ?? [])
+          .filter((ref): ref is VertexId => ref.startsWith('v:') && gridVertexSet.has(ref))
+          .map((vertexId) => {
+            const point = vertexPoint(vertexId)
+            return (
+              <circle
+                key={`hl:${vertexId}`}
+                className="vertex-highlight"
+                cx={point.x}
+                cy={point.y}
+                r="11"
+                pointerEvents="none"
+              />
+            )
+          })}
         <g className="hit-layers">
           {(hexActive || eraseActive) && board.hexes.map((hex) => (
             <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />

@@ -50,7 +50,7 @@ export interface StoreState {
   // Bumped on every 'notice' dispatch so the auto-dismiss timer restarts even
   // when the same message text is shown twice in a row.
   noticeSeq: number
-  highlight: string | null
+  highlight: readonly string[] | null
 }
 
 export type StoreAction =
@@ -61,7 +61,7 @@ export type StoreAction =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
-  | { type: 'highlight'; ref: string | null }
+  | { type: 'highlight'; ref: string | readonly string[] | null }
   | { type: 'tab-add'; board?: Board; title?: string; id?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -182,7 +182,12 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
     case 'notice':
       return { ...state, notice: action.message, noticeSeq: state.noticeSeq + 1 }
     case 'highlight':
-      return { ...state, highlight: action.ref }
+      return {
+        ...state,
+        highlight: action.ref === null
+          ? null
+          : typeof action.ref === 'string' ? [action.ref] : action.ref,
+      }
     case 'tab-add': {
       const tab = createTab(
         action.board,

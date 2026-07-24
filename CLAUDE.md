@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Unsettled: an offline, browser-only Catan starting-position analyzer (React 19 + TS + Vite). No backend — all state lives in `localStorage`. Three phases:
 
 - **Phase 1 (done):** board editor + screenshot import.
-- **Phase 2 (not started):** rank the best placements for your pick(s) in a snake draft, accounting for intermediate picks (not just raw pip strength).
+- **Phase 2 (done):** rank the best placements for your pick(s) in a snake draft, accounting for intermediate picks (not just raw pip strength).
 - **Phase 3 (paused, do not start):** boons/curses expansion scoring. Wait for the user's full boon/curse list before building. See [MEMORY.md](.claude/projects/-Users-aki-code-unsettled/memory/catan-companion-roadmap.md).
 
 ## Commands
@@ -20,9 +20,10 @@ Unsettled: an offline, browser-only Catan starting-position analyzer (React 19 +
 
 ## Architecture
 
-Data flows **`parser/` → `model/Board` → `ui/store` → `persistence/`**. The `Board` interface (`model/types.ts`) is the single source of truth passed between all layers.
+Data flows **`parser/` → `model/Board` → `engine/` + `ui/store` → `persistence/`**. The `Board` interface (`model/types.ts`) is the single source of truth passed between all layers.
 
 - **`model/`** — pure geometry + board logic, no React. `coords.ts` is the foundation: axial `{q,r}` hex coords; `VertexId`/`EdgeId` are deterministic strings built from **sorted** member coords (`v:q,r;q,r;q,r`), so any corner/edge has one canonical id regardless of which hex references it. `layouts.ts` defines the `standard4`/`extension6` grids and default port edges. `serialization.ts` validates untrusted board JSON with exact-key structural checks; `board.ts` builds/validates boards.
+- **`engine/`** — pure placement analysis, no React: draft-state inference from building counts, legality, weighted valuation with per-factor breakdowns, seeded opponent rollouts (`analyzeBoard`). Phase-3 boons/curses plug in via `PlacementModifier`.
 - **`parser/`** — offline screenshot → `Board`, all pixel-based (no ML for geometry). Pipeline in `index.ts` (`parseBoardImage` / `parseBoardImageWithNames`): `palette` (sample reference colors) → `registration` (fit hex grid) → `roster`/`tiles`/`tokens`/`ports`/`pieces` (classify by color) → OCR (`textReader`, Tesseract) only for player names + the "You" chip to set `mePlayerId`. Emits `ParseIssue[]` with severities `warning`/`unreadable` rather than throwing.
 - **`ui/`** — `store.ts` is a `useReducer` context holding multiple `TabState`s (each an independent board with its own `past`/`future` undo stacks) + the active `Tool`. Panels: `ToolPalette`, `ImportPanel`, `BoardCanvas`, `BoardTabs`, `PlayerPanel`, `MapsPanel`.
 - **`persistence/localStorage.ts`** — saves the whole workspace (`WORKSPACE_KEY`) and named maps (`MAPS_KEY`); corrupt blobs are preserved under `*.corrupt` keys instead of being discarded.

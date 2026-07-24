@@ -89,7 +89,7 @@ function Workspace() {
         </aside>
       </main>
       <footer>
-        <span>Phase 1 · editor + screenshot import</span>
+        <span>Phase 2 · draft analysis</span>
       </footer>
     </div>
   )
