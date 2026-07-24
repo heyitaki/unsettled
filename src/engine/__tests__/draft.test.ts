@@ -73,6 +73,28 @@ describe('draft-state inference', () => {
     expectInvariant(overfilledDraft)
   })
 
+  it('stays quiet about snake order once the draft is over', () => {
+    const vertices = boardGrid('standard4').vertexIds
+    // Mid-game: aki upgraded one starting settlement and built two more, so the
+    // per-player counts no longer match the snake — that is normal play, not a
+    // broken draft.
+    const midGame = {
+      ...twoPlayerBoard(),
+      buildings: [
+        { vertexId: vertices[0], playerId: 'aki', tier: 'city' as const },
+        { vertexId: vertices[1], playerId: 'b', tier: 'settlement' as const },
+        { vertexId: vertices[2], playerId: 'b', tier: 'settlement' as const },
+        { vertexId: vertices[3], playerId: 'aki', tier: 'settlement' as const },
+        { vertexId: vertices[4], playerId: 'aki', tier: 'settlement' as const },
+        { vertexId: vertices[5], playerId: 'aki', tier: 'settlement' as const },
+      ],
+    }
+    const draft = inferDraftState(midGame)
+    expect(draftIsComplete(midGame, draft)).toBe(true)
+    expect(draft.warnings).not.toContain('snake-inconsistent')
+    expectInvariant(draft)
+  })
+
   it('drops a missing earlier me pick and warns', () => {
     const board = placeBuilding(twoPlayerBoard(), boardGrid('standard4').vertexIds[0], 'b', 'settlement')
     const draft = inferDraftState(board)

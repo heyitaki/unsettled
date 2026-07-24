@@ -14,6 +14,10 @@ export interface DraftState {
   warnings: DraftWarning[]
 }
 
+const draftIsOver = (board: Board, placedCount: number, sequenceLength: number): boolean =>
+  placedCount >= sequenceLength ||
+  board.buildings.some((building) => building.tier === 'city' || building.tier === 'superCity')
+
 export function inferDraftState(board: Board): DraftState {
   const sequence = draftOrder(board, 2)
   const settlements = board.buildings.filter((building) => building.tier === 'settlement')
@@ -33,7 +37,13 @@ export function inferDraftState(board: Board): DraftState {
     actual.set(settlement.playerId, (actual.get(settlement.playerId) ?? 0) + 1)
   }
   const owners = new Set([...expected.keys(), ...actual.keys()])
-  if ([...owners].some((playerId) => (expected.get(playerId) ?? 0) !== (actual.get(playerId) ?? 0))) {
+  // Only meaningful while the draft is still running: once it is over, building
+  // counts drift from the snake through ordinary play (upgrades to cities, extra
+  // settlements), and reading that as a broken draft order is just noise.
+  if (
+    !draftIsOver(board, placedCount, sequence.length) &&
+    [...owners].some((playerId) => (expected.get(playerId) ?? 0) !== (actual.get(playerId) ?? 0))
+  ) {
     warnings.push('snake-inconsistent')
   }
 
@@ -82,5 +92,4 @@ export function inferDraftState(board: Board): DraftState {
 }
 
 export const draftIsComplete = (board: Board, draft: DraftState): boolean =>
-  draft.placedCount >= draft.sequence.length ||
-  board.buildings.some((building) => building.tier === 'city' || building.tier === 'superCity')
+  draftIsOver(board, draft.placedCount, draft.sequence.length)
