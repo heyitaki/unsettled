@@ -42,4 +42,28 @@ describe('board serialization', () => {
     expect(parseBoard({ ...board, surprise: true })).toMatchObject({ ok: false })
     expect(parseBoard({ ...board, roads: [{ edgeId: 'e:99,99;100,99', playerId: 'aki' }] })).toMatchObject({ ok: false })
   })
+
+  it('rejects unparseable piece ids without throwing', () => {
+    const board = createBoard('standard4')
+    expect(parseBoard({ ...board, buildings: [{ vertexId: 'v:garbage', playerId: 'aki', tier: 'settlement' }] }))
+      .toMatchObject({ ok: false })
+    expect(parseBoard({ ...board, roads: [{ edgeId: 'e:garbage', playerId: 'aki' }] })).toMatchObject({ ok: false })
+    expect(parseBoard({ ...board, ports: [{ edgeId: 'e:garbage', resource: null, rate: 3 }] }))
+      .toMatchObject({ ok: false })
+  })
+
+  it('rejects non-canonical piece ids that would evade duplicate detection', () => {
+    const board = createBoard('standard4')
+    const canonical = boardGrid('standard4').vertexIds[0]
+    const shuffled = `v:${canonical.slice(2).split(';').reverse().join(';')}`
+    expect(parseBoard({ ...board, buildings: [{ vertexId: shuffled, playerId: 'aki', tier: 'settlement' }] }))
+      .toMatchObject({ ok: false })
+  })
+
+  it('rejects an empty roster', () => {
+    const board = createBoard('standard4')
+    const result = parseBoard({ ...board, players: [], mePlayerId: null, roads: [], buildings: [] })
+    expect(result).toMatchObject({ ok: false })
+    if (!result.ok) expect(result.errors).toContain('Board has no players')
+  })
 })

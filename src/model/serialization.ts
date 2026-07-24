@@ -1,4 +1,5 @@
 import { validateBoard } from './board'
+import { parseEdgeId, parseVertexId } from './coords'
 import type { AxialCoord, Board, Building, Hex, Player, Port, Road } from './types'
 
 export type ParseBoardResult =
@@ -24,19 +25,33 @@ const isHex = (value: unknown): value is Hex =>
   (value.tile === null || ['wood', 'sheep', 'wheat', 'brick', 'ore', 'desert'].includes(String(value.tile))) &&
   (value.numberToken === null || Number.isInteger(value.numberToken))
 
+// Piece ids must round-trip through the canonical parsers: this rejects both
+// garbage coordinates (which would make downstream geometry helpers throw)
+// and non-canonical orderings that would evade validateBoard's duplicate and
+// adjacency checks, which compare ids as strings.
+const isCanonicalId = (value: unknown, parse: (id: string) => unknown): value is string => {
+  if (typeof value !== 'string') return false
+  try {
+    parse(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 const isPort = (value: unknown): value is Port =>
   isRecord(value) && exactKeys(value, ['edgeId', 'resource', 'rate']) &&
-  typeof value.edgeId === 'string' && value.edgeId.startsWith('e:') &&
+  isCanonicalId(value.edgeId, parseEdgeId) &&
   (value.resource === null || ['wood', 'sheep', 'wheat', 'brick', 'ore'].includes(String(value.resource))) &&
   Number.isInteger(value.rate)
 
 const isRoad = (value: unknown): value is Road =>
   isRecord(value) && exactKeys(value, ['edgeId', 'playerId']) &&
-  typeof value.edgeId === 'string' && value.edgeId.startsWith('e:') && typeof value.playerId === 'string'
+  isCanonicalId(value.edgeId, parseEdgeId) && typeof value.playerId === 'string'
 
 const isBuilding = (value: unknown): value is Building =>
   isRecord(value) && exactKeys(value, ['vertexId', 'playerId', 'tier']) &&
-  typeof value.vertexId === 'string' && value.vertexId.startsWith('v:') &&
+  isCanonicalId(value.vertexId, parseVertexId) &&
   typeof value.playerId === 'string' && ['settlement', 'city', 'superCity'].includes(String(value.tier))
 
 const isPlayer = (value: unknown): value is Player =>

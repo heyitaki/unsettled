@@ -287,6 +287,10 @@ export function validateBoard(board: Board): Issue[] {
   const add = (severity: Issue['severity'], code: string, message: string, ref?: string) =>
     issues.push({ severity, code, message, ...(ref ? { ref } : {}) })
   if (board.schemaVersion !== 1) add('error', 'schema-version', 'Unsupported schema version')
+  // createBoard seeds a player and removePlayer stops at one, so an empty
+  // roster can only arrive via import; the store's active-player fallback
+  // relies on this invariant holding at every border.
+  if (board.players.length === 0) add('error', 'empty-roster', 'Board has no players')
   if (board.layout !== 'standard4' && board.layout !== 'extension6') {
     add('error', 'layout', 'Unknown board layout')
     return issues
