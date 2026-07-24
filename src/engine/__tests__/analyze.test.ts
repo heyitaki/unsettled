@@ -228,6 +228,42 @@ describe('joint draft analysis', () => {
     expect(portRecommendation!.breakdown.port).toBeGreaterThan(0)
   })
 
+  it('prefers strong production near a matching port over sitting on it', () => {
+    // Three wheat hexes inland of a wheat 2:1 port. The port vertex touches
+    // only one of them, so the strong spot is two road-builds away — the case
+    // that is unrepresentable without near-port reach.
+    let board = addPlayer(createBoard('standard4'), { id: 'p2', name: 'P2', color: '#333333' })
+    board = { ...board, ports: [] }
+    const assignments = [
+      [{ q: -2, r: 0 }, 'wheat', 6],
+      [{ q: -1, r: 0 }, 'wheat', 8],
+      [{ q: -1, r: 1 }, 'wheat', 5],
+      [{ q: 1, r: -2 }, 'brick', 4],
+      [{ q: 2, r: -2 }, 'sheep', 10],
+      [{ q: -1, r: 2 }, 'ore', 4],
+    ] as const
+    for (const [coord, resource, token] of assignments) {
+      board = setTile(board, coord, resource, token)
+    }
+    board = upsertPort(board, PORT_EDGE, 'wheat', 2)
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const score = (vertexId: VertexId): number =>
+      scoreCandidate(ctx, emptyHoldings(), vertexId, 'aki', board, neutralModifier).total
+    const reachFor = (vertexId: VertexId): number =>
+      ctx.stats.get(vertexId)?.ports.find((access) => access.port.resource === 'wheat')?.reach ?? 0
+
+    const inland: VertexId = 'v:-2,0;-1,-1;-1,0' // 10 wheat pips, two roads out
+    const onPort: VertexId = 'v:-3,0;-2,-1;-2,0' // 5 wheat pips, on the port
+    const oneRoad: VertexId = 'v:-2,-1;-2,0;-1,-1' // 5 wheat pips, one road out
+    expect(reachFor(onPort)).toBe(1)
+    expect(reachFor(inland)).toBeGreaterThan(0)
+    expect(reachFor(inland)).toBeLessThan(1)
+    // Production wins: double the wheat beats holding the port outright.
+    expect(score(inland)).toBeGreaterThan(score(onPort))
+    // But reach still decays, so equal production prefers the closer access.
+    expect(score(onPort)).toBeGreaterThan(score(oneRoad))
+  })
+
   it('simulates opponents before a not-my-turn pick', () => {
     const board = setMe(filledBoard(5, 3), 'p4')
     const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })

@@ -29,7 +29,13 @@ function context(
 ): BoardContext {
   const stats = new Map<VertexId, VertexStats>()
   for (const [vertexId, pips, ports = []] of entries) {
-    stats.set(vertexId, { pips, robbedPips: robbed.get(vertexId) ?? {}, tokenPips: {}, ports })
+    // Ports listed against a vertex here sit on it, i.e. full reach.
+    stats.set(vertexId, {
+      pips,
+      robbedPips: robbed.get(vertexId) ?? {},
+      tokenPips: {},
+      ports: ports.map((port) => ({ port, reach: 1 })),
+    })
   }
   return {
     stats,
@@ -187,6 +193,37 @@ describe('placement valuation', () => {
     expect(scoreAt(4)).toBe(0)
   })
 
+  it('decays port reach with each road-build of distance', () => {
+    const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
+    const scoreAtReach = (reach: number): number => {
+      const ctx = context([[vertices[0], { wood: 8 }]])
+      const stats = ctx.stats.get(vertices[0])
+      if (stats) stats.ports = [{ port, reach }]
+      return marginalBreakdown(ctx, emptyHoldings(), vertices[0]).port
+    }
+    const onPort = scoreAtReach(1)
+    const oneRoad = scoreAtReach(DEFAULT_WEIGHTS.nearPortDecay)
+    const twoRoads = scoreAtReach(DEFAULT_WEIGHTS.nearPortDecay ** 2)
+    expect(onPort).toBeGreaterThan(oneRoad)
+    expect(oneRoad).toBeGreaterThan(twoRoads)
+    expect(twoRoads).toBeGreaterThan(0)
+  })
+
+  it('keeps the closest access when two settlements reach one port', () => {
+    const port: Port = { edgeId: edgeIds[0], resource: 'ore', rate: 2 }
+    const ctx = context([[vertices[0], { ore: 4 }], [vertices[1], { ore: 4 }]])
+    const far = ctx.stats.get(vertices[0])
+    const near = ctx.stats.get(vertices[1])
+    if (far) far.ports = [{ port, reach: 0.25 }]
+    if (near) near.ports = [{ port, reach: 1 }]
+    const holding = addToHoldings(
+      ctx,
+      addToHoldings(ctx, emptyHoldings(), vertices[0]),
+      vertices[1],
+    )
+    expect(holding.ports).toEqual([{ port, reach: 1 }])
+  })
+
   it('does not stack duplicate or overlapping port capabilities', () => {
     const firstPort: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
     const secondPort: Port = { edgeId: edgeIds[1], resource: 'wood', rate: 2 }
@@ -238,7 +275,7 @@ describe('placement valuation', () => {
       addToHoldings(ctx, emptyHoldings(), vertices[0]),
       vertices[1],
     )
-    expect(holding.ports).toEqual([port])
+    expect(holding.ports).toEqual([{ port, reach: 1 }])
   })
 
   it('isolates robberDiscount in the robber component when other adjusted bonuses are disabled', () => {

@@ -24,6 +24,11 @@ export interface EngineWeights {
   // resource earn no port credit, so sitting on a port with weak production
   // (and a sacrificed hex) no longer outranks real production.
   portSurplusThreshold: number
+  // How many road-builds away a port still counts. A strong inland spot can
+  // build toward a port by mid-game, which beats sitting on it and forfeiting
+  // a hex; reach decays per road so on-port access still ranks highest.
+  nearPortRadius: number
+  nearPortDecay: number
   robberDiscount: number
   opponentTopK: number
   softmaxTemperature: number
@@ -49,6 +54,8 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   portWeight: 0.55,
   genericPortFactor: 0.5,
   portSurplusThreshold: 3,
+  nearPortRadius: 2,
+  nearPortDecay: 0.5,
   robberDiscount: 0.35,
   opponentTopK: 3,
   softmaxTemperature: 1.25,

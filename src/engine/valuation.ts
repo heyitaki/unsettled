@@ -2,6 +2,7 @@ import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/c
 import { pips, vertexProduction } from '../model/board'
 import { boardGrid } from '../model/layouts'
 import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../model/types'
+import { vertexAdjacency } from './legality'
 import type { PlacementModifier } from './modifiers'
 import type { EngineWeights } from './weights'
 
@@ -20,11 +21,22 @@ export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
   breakdown.diversity +
   breakdown.port
 
+/**
+ * A port this vertex can trade through, and how much of its value is really
+ * available. `reach` is 1 when the settlement sits on the port edge and decays
+ * per road-build needed to reach it, so a strong inland spot near a matching
+ * port keeps its production *and* banks most of the port.
+ */
+export interface PortAccess {
+  port: Port
+  reach: number
+}
+
 export interface VertexStats {
   pips: Partial<Record<Resource, number>>
   robbedPips: Partial<Record<Resource, number>>
   tokenPips: Partial<Record<number, number>>
-  ports: Port[]
+  ports: PortAccess[]
 }
 
 export interface BoardContext {
@@ -37,7 +49,9 @@ export interface Holdings {
   vertices: VertexId[]
   pips: Partial<Record<Resource, number>>
   tokenPips: Partial<Record<number, number>>
-  ports: Port[]
+  ports: PortAccess[]
+  /** Derived from `ports` at the single write point, for hot-path lookups. */
+  portFactors: Record<Resource, number>
 }
 
 interface FastVertexStats {
@@ -47,6 +61,10 @@ interface FastVertexStats {
   adjustedWheat: number
   adjustedWood: number
   base: number
+  // The vertex's own best port factor per resource, folded once per board.
+  // Combining these across settlements is a plain `Math.max`, because both the
+  // dedicated and generic-discounted branches are themselves maxima.
+  portFactors: Record<Resource, number>
 }
 
 const fastContexts = new WeakMap<BoardContext, ReadonlyMap<VertexId, FastVertexStats>>()
@@ -69,12 +87,35 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
     ]),
   ) as Record<Resource, number>
 
-  const portsByVertex = new Map<VertexId, Port[]>()
+  // Walk the road graph out from each port so nearby vertices bank a decayed
+  // share of it. Distance is in road-builds: 0 = on the port edge itself.
+  const portsByVertex = new Map<VertexId, PortAccess[]>()
+  const adjacency = vertexAdjacency(board.layout)
+  const radius = Math.max(0, weights.nearPortRadius)
   for (const port of board.ports) {
+    const distances = new Map<VertexId, number>()
+    const queue: VertexId[] = []
     for (const vertexId of edgeEndpointVertexIds(port.edgeId)) {
-      const ports = portsByVertex.get(vertexId)
-      if (ports) ports.push(port)
-      else portsByVertex.set(vertexId, [port])
+      if (distances.has(vertexId)) continue
+      distances.set(vertexId, 0)
+      queue.push(vertexId)
+    }
+    for (let head = 0; head < queue.length; head += 1) {
+      const vertexId = queue[head]
+      const distance = distances.get(vertexId) ?? 0
+      if (distance >= radius) continue
+      for (const neighbor of adjacency.get(vertexId) ?? []) {
+        if (distances.has(neighbor)) continue
+        distances.set(neighbor, distance + 1)
+        queue.push(neighbor)
+      }
+    }
+    for (const [vertexId, distance] of distances) {
+      const reach = distance === 0 ? 1 : weights.nearPortDecay ** distance
+      if (reach <= 0) continue
+      const accesses = portsByVertex.get(vertexId)
+      if (accesses) accesses.push({ port, reach })
+      else portsByVertex.set(vertexId, [{ port, reach }])
     }
   }
   const robberKey = board.robber === null ? null : axialKey(board.robber)
@@ -121,13 +162,20 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
       adjustedWheat: adjustedPips(ctx, vertexStats, 'wheat'),
       adjustedWood: adjustedPips(ctx, vertexStats, 'wood'),
       base,
+      portFactors: foldPortFactors(vertexStats.ports, weights.genericPortFactor),
     })
   }
   fastContexts.set(ctx, fastStats)
   return ctx
 }
 
-export const emptyHoldings = (): Holdings => ({ vertices: [], pips: {}, tokenPips: {}, ports: [] })
+export const emptyHoldings = (): Holdings => ({
+  vertices: [],
+  pips: {},
+  tokenPips: {},
+  ports: [],
+  portFactors: { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 },
+})
 
 const adjustedPips = (ctx: BoardContext, stats: VertexStats, resource: Resource): number =>
   (stats.pips[resource] ?? 0) -
@@ -146,14 +194,21 @@ export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: V
     const number = Number(token)
     tokenPips[number] = (tokenPips[number] ?? 0) + (stats.tokenPips[number] ?? 0)
   }
-  const edgeIds = new Set(holdings.ports.map((port) => port.edgeId))
+  // One entry per port edge, keeping the closest access: a second settlement
+  // nearer the same port upgrades its reach instead of stacking with it.
   const ports = [...holdings.ports]
-  for (const port of stats.ports) {
-    if (edgeIds.has(port.edgeId)) continue
-    edgeIds.add(port.edgeId)
-    ports.push(port)
+  for (const access of stats.ports) {
+    const index = ports.findIndex((held) => held.port.edgeId === access.port.edgeId)
+    if (index === -1) ports.push(access)
+    else if (access.reach > ports[index].reach) ports[index] = access
   }
-  return { vertices: [...holdings.vertices, vertexId], pips: nextPips, tokenPips, ports }
+  return {
+    vertices: [...holdings.vertices, vertexId],
+    pips: nextPips,
+    tokenPips,
+    ports,
+    portFactors: foldPortFactors(ports, ctx.weights.genericPortFactor),
+  }
 }
 
 // Fraction of "real coverage" a resource earns at `pips`, gated so a lone
@@ -186,24 +241,42 @@ const portFactor = (rate: number): number =>
   Math.max(0, 1 / rate - 1 / 4) / (1 / 2 - 1 / 4)
 
 function effectivePortFactor(
-  ports: readonly Port[],
+  ports: readonly PortAccess[],
   resource: Resource,
   genericPortFactor: number,
-  extraPorts: readonly Port[] = [],
+  extraPorts: readonly PortAccess[] = [],
 ): number {
   let dedicated = 0
   let generic = 0
-  for (const port of ports) {
-    const factor = portFactor(port.rate)
+  // Best access wins rather than accumulating, so holding two corners of the
+  // same port (or a closer road to it) never double-counts.
+  const consider = ({ port, reach }: PortAccess): void => {
+    const factor = portFactor(port.rate) * reach
     if (port.resource === resource) dedicated = Math.max(dedicated, factor)
     else if (port.resource === null) generic = Math.max(generic, factor)
   }
-  for (const port of extraPorts) {
-    const factor = portFactor(port.rate)
-    if (port.resource === resource) dedicated = Math.max(dedicated, factor)
-    else if (port.resource === null) generic = Math.max(generic, factor)
-  }
+  for (const access of ports) consider(access)
+  for (const access of extraPorts) consider(access)
   return Math.max(dedicated, genericPortFactor * generic)
+}
+
+/** All five factors in one pass, for the per-board precompute. */
+function foldPortFactors(
+  accesses: readonly PortAccess[],
+  genericPortFactor: number,
+): Record<Resource, number> {
+  const factors: Record<Resource, number> = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+  let generic = 0
+  for (const { port, reach } of accesses) {
+    const factor = portFactor(port.rate) * reach
+    if (port.resource === null) generic = Math.max(generic, factor)
+    else factors[port.resource] = Math.max(factors[port.resource], factor)
+  }
+  const discounted = genericPortFactor * generic
+  for (const resource of RESOURCES) {
+    factors[resource] = Math.max(factors[resource], discounted)
+  }
+  return factors
 }
 
 // A port monetizes only production *above* the surplus threshold: below it,
@@ -214,8 +287,8 @@ const portSurplus = (weights: EngineWeights, pips: number): number =>
 function portScore(
   weights: EngineWeights,
   pipsFor: (resource: Resource) => number,
-  ports: readonly Port[],
-  extraPorts: readonly Port[] = [],
+  ports: readonly PortAccess[],
+  extraPorts: readonly PortAccess[] = [],
 ): number {
   let score = 0
   for (const resource of RESOURCES) {
@@ -256,22 +329,36 @@ function fastDiversityScore(
   return spread + road + city + settlement
 }
 
-function fastPortScore(
+/**
+ * Marginal port value from precomputed factors: the candidate's own factors
+ * fold into the holding's by `Math.max`, so no access list is walked per scan.
+ */
+function fastPortDelta(
   weights: EngineWeights,
-  ports: readonly Port[],
-  extraPorts: readonly Port[],
-  wood: number,
-  sheep: number,
-  wheat: number,
-  brick: number,
-  ore: number,
+  held: Record<Resource, number>,
+  gained: Record<Resource, number>,
+  woodBefore: number,
+  sheepBefore: number,
+  wheatBefore: number,
+  brickBefore: number,
+  oreBefore: number,
+  woodAfter: number,
+  sheepAfter: number,
+  wheatAfter: number,
+  brickAfter: number,
+  oreAfter: number,
 ): number {
   return weights.portWeight * (
-    portSurplus(weights, wood) * effectivePortFactor(ports, 'wood', weights.genericPortFactor, extraPorts) +
-    portSurplus(weights, sheep) * effectivePortFactor(ports, 'sheep', weights.genericPortFactor, extraPorts) +
-    portSurplus(weights, wheat) * effectivePortFactor(ports, 'wheat', weights.genericPortFactor, extraPorts) +
-    portSurplus(weights, brick) * effectivePortFactor(ports, 'brick', weights.genericPortFactor, extraPorts) +
-    portSurplus(weights, ore) * effectivePortFactor(ports, 'ore', weights.genericPortFactor, extraPorts)
+    portSurplus(weights, woodAfter) * Math.max(held.wood, gained.wood) -
+      portSurplus(weights, woodBefore) * held.wood +
+    portSurplus(weights, sheepAfter) * Math.max(held.sheep, gained.sheep) -
+      portSurplus(weights, sheepBefore) * held.sheep +
+    portSurplus(weights, wheatAfter) * Math.max(held.wheat, gained.wheat) -
+      portSurplus(weights, wheatBefore) * held.wheat +
+    portSurplus(weights, brickAfter) * Math.max(held.brick, gained.brick) -
+      portSurplus(weights, brickBefore) * held.brick +
+    portSurplus(weights, oreAfter) * Math.max(held.ore, gained.ore) -
+      portSurplus(weights, oreBefore) * held.ore
   )
 }
 
@@ -375,24 +462,20 @@ export function fastMarginalTotal(
     duplicateNumberPenalty(weights, holdings, stats)
   const port = holdings.ports.length === 0 && stats.ports.length === 0
     ? 0
-    : fastPortScore(
+    : fastPortDelta(
         weights,
-        holdings.ports,
-        stats.ports,
-        woodAfter,
-        sheepAfter,
-        wheatAfter,
-        brickAfter,
-        oreAfter,
-      ) - fastPortScore(
-        weights,
-        holdings.ports,
-        [],
+        holdings.portFactors,
+        fast?.portFactors ?? foldPortFactors(stats.ports, weights.genericPortFactor),
         woodBefore,
         sheepBefore,
         wheatBefore,
         brickBefore,
         oreBefore,
+        woodAfter,
+        sheepAfter,
+        wheatAfter,
+        brickAfter,
+        oreAfter,
       )
   return base + diversity + port
 }
