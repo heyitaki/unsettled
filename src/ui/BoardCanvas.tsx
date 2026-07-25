@@ -20,7 +20,7 @@ import {
   setRobber,
   upsertPort,
 } from '../model/board'
-import type { AxialCoord, Board, EdgeId, LayoutId, Port, VertexId } from '../model/types'
+import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
 import { MenuSelect } from './MenuSelect'
@@ -43,6 +43,10 @@ const ROAD_CORE = 7
 // Corner rounding on the road's rectangular ends (SVG rx on the casing/core
 // rects). Small enough to read as a squared-off plank, not a capsule.
 const ROAD_RADIUS = 2.5
+// Render scale per tier, and the y of each silhouette's base in its own
+// unscaled path units — a highlight number sits just above that footing.
+const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 1, superCity: 1.18 }
+const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, superCity: 11.3 }
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers/scales (city annex ≈ 20 + outline). Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
@@ -107,6 +111,15 @@ export function BoardCanvas() {
   const highlightSet = useMemo(
     () => new Set((state.highlight ?? []).map((mark) => mark.ref)),
     [state.highlight],
+  )
+  // Marks that land on a vertex someone has already built on. The piece itself
+  // takes the emphasis — thick border, deeper shadow, the pick number stamped
+  // on it — instead of a circle parked on top of it, hiding whose it is.
+  const markedBuildings = useMemo(
+    () => new Map(board.buildings
+      .filter((building) => (state.highlight ?? []).some((mark) => mark.ref === building.vertexId))
+      .map((building) => [building.vertexId as string, building] as const)),
+    [state.highlight, board.buildings],
   )
   const ports = useMemo<PortLayout[]>(
     () =>
@@ -284,6 +297,11 @@ export function BoardCanvas() {
                 small dy keeps the piece grounded rather than glowing. */}
             <feDropShadow dx="0" dy="1" stdDeviation="2.6" floodColor={INK_COLOR} floodOpacity="0.68" />
           </filter>
+          {/* Highlighted pieces: the same shadow, deeper and wider, so a hovered
+              draft pick reads as lifted off the board. */}
+          <filter id="piece-highlight" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4.4" floodColor={INK_COLOR} floodOpacity="0.95" />
+          </filter>
         </defs>
         <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} rx="32" fill={SEA_COLOR} />
         {board.hexes.map((hex) => (
@@ -414,12 +432,25 @@ export function BoardCanvas() {
         {board.buildings.map((building) => {
           const point = vertexPoint(building.vertexId)
           const color = playerColor(building.playerId)
-          const scale = building.tier === 'settlement' ? 0.8 : building.tier === 'city' ? 1 : 1.18
+          const scale = TIER_SCALE[building.tier]
           return (
             // The shadow lives on an outer group so the tier's scale can't shrink
             // or grow it — every piece casts the same shadow.
-            <g key={`building:${building.vertexId}`} filter="url(#piece-shadow)">
-              <g transform={`translate(${point.x} ${point.y}) scale(${scale})`} fill={color} stroke="#30271f" strokeWidth={PIECE_STROKE / scale} strokeLinejoin="round">
+            <g
+              key={`building:${building.vertexId}`}
+              filter={markedBuildings.has(building.vertexId) ? 'url(#piece-highlight)' : 'url(#piece-shadow)'}
+            >
+              <g
+                transform={`translate(${point.x} ${point.y}) scale(${scale})`}
+                fill={color}
+                stroke={markedBuildings.has(building.vertexId) ? '#100c06' : '#30271f'}
+                // paint-order draws the stroke first and the fill over it, so the
+                // inner half is covered and the thicker highlight border grows
+                // outward instead of eating into the silhouette.
+                paintOrder={markedBuildings.has(building.vertexId) ? 'stroke' : undefined}
+                strokeWidth={(markedBuildings.has(building.vertexId) ? PIECE_STROKE * 2.6 : PIECE_STROKE) / scale}
+                strokeLinejoin="round"
+              >
                 {/* One closed silhouette per tier, matching the source app's pieces:
                     a house, a house with a rectangle annex, and a twin-gable keep.
                     strokeWidth is divided by scale so every piece renders the same border. */}
@@ -437,21 +468,31 @@ export function BoardCanvas() {
             // A player-tinted circle names who takes the spot; a plain circle
             // (default accent) is the generic "look here". A label stamps the
             // pick number, in ink or paper for contrast against the fill.
+            // On a vertex that is already built, the piece carries the emphasis
+            // (see markedBuildings) and only the number is drawn over it.
+            const marked = markedBuildings.get(mark.ref)
+            // On a piece the number drops to just above its base, where the
+            // silhouette is widest; on a bare circle it stays centred.
+            const labelY = marked
+              ? point.y + TIER_BASE_Y[marked.tier] * TIER_SCALE[marked.tier] - 4.2
+              : point.y + 3.6
             const fill = mark.color
             const ink = mark.color ? readableInk(mark.color) : undefined
             return (
               <g key={`hl:${mark.ref}`} pointerEvents="none">
-                <circle
-                  className="vertex-highlight"
-                  cx={point.x}
-                  cy={point.y}
-                  r="11"
-                  style={fill ? { fill, stroke: '#30271f' } : undefined}
-                />
+                {!marked && (
+                  <circle
+                    className="vertex-highlight"
+                    cx={point.x}
+                    cy={point.y}
+                    r="11"
+                    style={fill ? { fill, stroke: '#30271f' } : undefined}
+                  />
+                )}
                 {mark.label && (
                   <text
                     x={point.x}
-                    y={point.y + 3.6}
+                    y={labelY}
                     textAnchor="middle"
                     className="vertex-highlight-label"
                     fill={ink}
