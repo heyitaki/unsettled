@@ -30,3 +30,4 @@ dist-ssr
 
 # Playwright run artifacts
 test-results/
+playwright-report/
