@@ -12,8 +12,8 @@ import {
   type RgbaImage,
 } from '../index'
 import { nearColor, pixel } from '../image'
-import { choosePalette } from '../palette'
 import { registerBoard } from '../registration'
+import { choosePalette } from '../sources/settled/palette'
 import expectedDraft from './expected/board-draft-empty.json'
 import expectedEndgame from './expected/board-endgame-pieces.json'
 
@@ -80,18 +80,45 @@ function assertStableBoard(actual: Board, expected: Board) {
 function expectSchemaValid(result: ParseBoardImageResult): result is Extract<ParseBoardImageResult, { ok: true }> {
   expect(result.ok).toBe(true)
   if (!result.ok) return false
-  expect(parseBoard(result.board).ok).toBe(true)
+  expect(parseBoard(result.game.board).ok).toBe(true)
   return true
 }
 
 function assertNullTokensFlagged(result: Extract<ParseBoardImageResult, { ok: true }>) {
-  for (const hex of result.board.hexes.filter((candidate) =>
+  for (const hex of result.game.board.hexes.filter((candidate) =>
     candidate.tile !== 'desert' && candidate.numberToken === null)) {
     const ref = `${hex.coord.q},${hex.coord.r}`
     expect(result.issues.some((issue) =>
       issue.stage === 'tokens' && issue.ref === ref &&
       (issue.severity === 'unreadable' || issue.message.toLowerCase().includes('review')),
     )).toBe(true)
+  }
+}
+
+const expectedEndgameStats = {
+  p1: { handUnknown: 12, devCards: 0, knights: 1, vpCards: 0 },
+  p2: { handUnknown: 4, devCards: 5, knights: 0, vpCards: 3 },
+  p3: { handUnknown: 12, devCards: 0, knights: 0, vpCards: 0 },
+  p4: { handUnknown: 3, devCards: 0, knights: 1, vpCards: 0 },
+  p5: { handUnknown: 6, devCards: 2, knights: 3, vpCards: 2 },
+} as const
+
+function assertStatsNeverGuess(result: Extract<ParseBoardImageResult, { ok: true }>) {
+  for (const [playerId, expected] of Object.entries(expectedEndgameStats)) {
+    const actual = result.game.stats[playerId]
+    for (const key of ['handUnknown', 'devCards', 'knights', 'vpCards'] as const) {
+      if (expected[key] === 0) {
+        expect(actual[key]).toBe(0)
+      } else if (actual[key] === 0) {
+        expect(result.issues).toContainEqual(expect.objectContaining({
+          stage: 'stats',
+          severity: 'unreadable',
+          ref: `${playerId}.${key}`,
+        }))
+      } else {
+        expect(actual[key]).toBe(expected[key])
+      }
+    }
   }
 }
 
@@ -201,10 +228,10 @@ describe('hostile parser inputs', () => {
   it('degrades schema-validly after nearest-neighbor downscaling', () => {
     const result = parseBoardImage(nearestHalf(load()))
     if (!expectSchemaValid(result)) return
-    assertStableBoard(result.board, expectedDraft as Board)
+    assertStableBoard(result.game.board, expectedDraft as Board)
     // fixture1-halfscale-parse-output.txt baseline: 26 decoded tokens.
-    expect(result.board.hexes.filter((hex) => hex.numberToken !== null)).toHaveLength(26)
-    for (const hex of result.board.hexes) {
+    expect(result.game.board.hexes.filter((hex) => hex.numberToken !== null)).toHaveLength(26)
+    for (const hex of result.game.board.hexes) {
       const pinned = (expectedDraft as Board).hexes.find((candidate) =>
         candidate.coord.q === hex.coord.q && candidate.coord.r === hex.coord.r)
       if (hex.numberToken !== null) expect(hex.numberToken).toBe(pinned?.numberToken)
@@ -223,16 +250,17 @@ describe('hostile parser inputs', () => {
       data: full.data.slice(top * full.width * 4),
     })
     if (!expectSchemaValid(result)) return
-    expect(result.board.players.length).toBeGreaterThan(0)
+    expect(result.game.board.players.length).toBeGreaterThan(0)
   })
 
   it('retains all endgame pieces after nearest-neighbor downscaling', () => {
     const result = parseBoardImage(nearestHalf(load('../../../fixtures/board-endgame-pieces.png')))
     if (!expectSchemaValid(result)) return
-    assertStableBoard(result.board, expectedEndgame as Board)
+    assertStableBoard(result.game.board, expectedEndgame as Board)
     // fixture2-halfscale-parse-output.txt baseline: 24 decoded tokens.
-    expect(result.board.hexes.filter((hex) => hex.numberToken !== null)).toHaveLength(24)
+    expect(result.game.board.hexes.filter((hex) => hex.numberToken !== null)).toHaveLength(24)
     assertNullTokensFlagged(result)
+    assertStatsNeverGuess(result)
   })
 
   it.each([
@@ -246,9 +274,9 @@ describe('hostile parser inputs', () => {
     expect(softened.data).not.toEqual(nearestHalf(original).data)
     const result = parseBoardImage(softened)
     if (!expectSchemaValid(result)) return
-    assertStableBoard(result.board, expectedEndgame as Board)
+    assertStableBoard(result.game.board, expectedEndgame as Board)
     expect(result.issues.some((issue) => issue.stage === 'sharpness')).toBe(true)
-    const decoded = result.board.hexes.filter((candidate) => candidate.numberToken !== null)
+    const decoded = result.game.board.hexes.filter((candidate) => candidate.numberToken !== null)
     expect(decoded).toHaveLength(decodedCount)
     for (const hex of decoded) {
       const ref = `${hex.coord.q},${hex.coord.r}`
@@ -258,6 +286,7 @@ describe('hostile parser inputs', () => {
       expect(result.issues.some((issue) => issue.stage === 'tokens' && issue.ref === ref)).toBe(true)
     }
     assertNullTokensFlagged(result)
+    assertStatsNeverGuess(result)
   })
 
   it('flags a pixel-copied pill equidistant from two coastal edges', () => {
@@ -269,7 +298,7 @@ describe('hostile parser inputs', () => {
   it('keeps the real robber when a smaller dark-core candidate appears earlier', () => {
     const result = parseBoardImage(withSecondRobberCandidate(load()))
     if (!expectSchemaValid(result)) return
-    expect(result.board.robber).toEqual((expectedDraft as Board).robber)
+    expect(result.game.board.robber).toEqual((expectedDraft as Board).robber)
     expect(result.issues.some((issue) =>
       issue.stage === 'tokens' && issue.message.includes('Multiple robber candidates'),
     )).toBe(true)

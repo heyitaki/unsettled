@@ -8,6 +8,8 @@ import { RESOURCES, type Board, type Issue, type Player, type Resource } from '.
 
 export interface PlayerStats {
   hand: Record<Resource, number>
+  /** Cards known to be held but not to be of a known resource. Settled exposes only the total. */
+  handUnknown: number
   devCards: number
   knights: number
   vpCards: number
@@ -19,11 +21,11 @@ export interface Game {
   stats: Record<string, PlayerStats>
 }
 
-export type StatCounter = 'devCards' | 'knights' | 'vpCards'
+export type StatCounter = 'handUnknown' | 'devCards' | 'knights' | 'vpCards'
 
 export function emptyStats(): PlayerStats {
   const hand = Object.fromEntries(RESOURCES.map((resource) => [resource, 0])) as Record<Resource, number>
-  return { hand, devCards: 0, knights: 0, vpCards: 0 }
+  return { hand, handUnknown: 0, devCards: 0, knights: 0, vpCards: 0 }
 }
 
 /**
