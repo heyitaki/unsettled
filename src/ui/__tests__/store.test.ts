@@ -268,7 +268,11 @@ describe('workspace tabs', () => {
     expect(adopted.tabs[0]).toMatchObject({ mapId: 'map-1', past: [], future: [] })
   })
 
-  it('keeps local content and its own link when both windows have one', () => {
+  it('keeps local content but takes the incoming link when the two differ', () => {
+    // Content cannot be merged, so local wins. A link can only ever be one
+    // value, and keeping the local one leaves the two windows disagreeing
+    // forever, each autosave overwriting the other's idea of where this tab
+    // was saved.
     const original = newGame(createBoard('standard4'))
     const local = tab('t1', undefined, { mapId: 'map-1', past: [original] })
     const start = state([local])
@@ -276,8 +280,59 @@ describe('workspace tabs', () => {
       type: 'workspace-adopt',
       tabs: [{ id: 't1', title: 't1', game: newGame(createBoard('extension6')), mapId: 'map-2' }],
     })
+    expect(adopted.tabs[0]).toMatchObject({ mapId: 'map-2', past: [original] })
+    expect(adopted.tabs[0].game).toBe(local.game)
+  })
+
+  it('keeps a link this window made but has not written yet', () => {
+    // The save that made the link is still in flight, so it is newer than
+    // anything the incoming blob can hold; adopting the older link would let
+    // our own pending write then persist the loss.
+    const local = tab('t1', undefined, { mapId: 'map-2' })
+    const start = state([local])
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [{ id: 't1', title: 't1', game: newGame(createBoard('standard4')), mapId: 'map-1' }],
+      keepLinkIds: ['t1'],
+    })
     expect(adopted).toBe(start)
-    expect(adopted.tabs[0]).toBe(local)
+  })
+
+  it('drops a link a kept local tab shares with an adopted one', () => {
+    // Both windows opened the same map. Two tabs holding one link each treat a
+    // save as "overwrite my own map", so the unflushed duplicate is unlinked
+    // and the persisted tab keeps the map.
+    const start = state([tab('t2', undefined, { mapId: 'map-1' })])
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [{ id: 't1', title: 'Alpha', game: newGame(createBoard('standard4')), mapId: 'map-1' }],
+      keepIds: ['t2'],
+    })
+    expect(adopted.tabs.map((entry) => [entry.id, entry.mapId])).toEqual([
+      ['t1', 'map-1'],
+      ['t2', null],
+    ])
+  })
+
+  it('drops a link the incoming blob gives to two tabs at once', () => {
+    const start = state([tab('t1')])
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [
+        { id: 't1', title: 'Alpha', game: newGame(createBoard('standard4')), mapId: 'map-1' },
+        { id: 't2', title: 'Alpha', game: newGame(createBoard('standard4')), mapId: 'map-1' },
+      ],
+    })
+    expect(adopted.tabs.map((entry) => entry.mapId)).toEqual(['map-1', null])
+  })
+
+  it('unlinks a tab whose link the other window dropped', () => {
+    const start = state([tab('t1', undefined, { mapId: 'map-1' })])
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [{ id: 't1', title: 't1', game: newGame(createBoard('standard4')) }],
+    })
+    expect(adopted.tabs[0].mapId).toBeNull()
   })
 
   it('reports dropped tabs once, not on every echo of the same blob', () => {

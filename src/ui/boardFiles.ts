@@ -24,15 +24,26 @@ export function firstFreeName(base: string, taken: Set<string>): string {
 }
 
 /**
- * Only a real link counts as saving in place: two nulls are not a match, or an
- * unlinked tab would silently overwrite a library entry that has no id yet.
+ * The library map a save writes back into, and the name it writes there — or
+ * null when the save should address the library by name instead (a new map, or
+ * a replacement of some other map that happens to share the name).
+ *
+ * Identity is the id: only a real link counts, or an unlinked tab would
+ * silently overwrite a library entry that has no id yet. `typedName` is the
+ * name the user actually edited, or null for a name field they left following
+ * the tab's title — in which case the save adopts whatever the map is called
+ * now, so a rename that landed in another window cannot fork it in two.
  */
-export function savesInPlace(
+export function inPlaceTarget(
   maps: readonly { id: string | null; name: string }[],
-  name: string,
   mapId: string | null,
-): boolean {
-  return mapId !== null && maps.some((map) => map.id === mapId && map.name === name)
+  typedName: string | null,
+): { id: string; name: string } | null {
+  if (mapId === null) return null
+  const map = maps.find((candidate) => candidate.id === mapId)
+  if (map === undefined || map.id === null) return null
+  if (typedName !== null && typedName !== map.name) return null
+  return { id: map.id, name: typedName ?? map.name }
 }
 
 /** What the library holds for a tab: nothing, a game, or no longer anything. */

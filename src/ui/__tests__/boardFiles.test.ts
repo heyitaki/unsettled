@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
 import { newGame, type Game } from '../../model/game'
 import type { ParseGameResult } from '../../model/serialization'
-import { dirtyTabIds, savedMap, savesInPlace, tabIsDirty } from '../boardFiles'
+import { dirtyTabIds, inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
 
 const pristine = (layout: 'standard4' | 'extension6' = 'standard4') => newGame(createBoard(layout))
 
@@ -52,22 +52,34 @@ describe('savedMap', () => {
   })
 })
 
-describe('savesInPlace', () => {
+describe('inPlaceTarget', () => {
   const maps = [{ id: 'map-1', name: 'Alpha' }, { id: null, name: 'Legacy' }]
 
-  it('is true only for the linked tab writing back to its own map', () => {
-    expect(savesInPlace(maps, 'Alpha', 'map-1')).toBe(true)
+  it('resolves only the linked tab writing back to its own map', () => {
+    expect(inPlaceTarget(maps, 'map-1', 'Alpha')).toEqual({ id: 'map-1', name: 'Alpha' })
     // Same map, new name: that is a save-as, so it must go through the prompt.
-    expect(savesInPlace(maps, 'Beta', 'map-1')).toBe(false)
+    expect(inPlaceTarget(maps, 'map-1', 'Beta')).toBeNull()
     // Same name, someone else's map.
-    expect(savesInPlace(maps, 'Alpha', 'map-2')).toBe(false)
+    expect(inPlaceTarget(maps, 'map-2', 'Alpha')).toBeNull()
+  })
+
+  it('adopts the map’s current name when the user did not type one', () => {
+    // The tab's title can be a rename behind the library. Saving under the
+    // stale name would miss the map by name and fork it into a second entry;
+    // the link says which map this is, and the library says what it is called.
+    expect(inPlaceTarget(maps, 'map-1', null)).toEqual({ id: 'map-1', name: 'Alpha' })
   })
 
   it('never matches an unlinked tab against an entry that has no id', () => {
     // Both sides null would read as "my own map" and overwrite a stranger's
     // map with no confirmation at all.
-    expect(savesInPlace(maps, 'Legacy', null)).toBe(false)
-    expect(savesInPlace(maps, 'Alpha', null)).toBe(false)
+    expect(inPlaceTarget(maps, null, 'Legacy')).toBeNull()
+    expect(inPlaceTarget(maps, null, 'Alpha')).toBeNull()
+    expect(inPlaceTarget(maps, null, null)).toBeNull()
+  })
+
+  it('resolves nothing when the link points at a map that is gone', () => {
+    expect(inPlaceTarget(maps, 'deleted', null)).toBeNull()
   })
 })
 

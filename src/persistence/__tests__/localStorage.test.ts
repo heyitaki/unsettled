@@ -17,6 +17,7 @@ import {
   migrateMapIds,
   renameMap,
   saveMap,
+  updateMap,
 } from '../localStorage'
 
 const game = (layout: LayoutId = 'standard4') => newGame(createBoard(layout))
@@ -293,5 +294,69 @@ describe('map identity', () => {
   it('lists unaddressable entries with a null id', () => {
     localStorage.setItem(MAPS_KEY, JSON.stringify([42]))
     expect(listMaps().maps[0]).toMatchObject({ id: null, synthetic: true })
+  })
+
+  it('migrateMapIds re-mints a repeated id so two rows stop sharing an identity', () => {
+    const board = createBoard('standard4')
+    localStorage.setItem(MAPS_KEY, JSON.stringify([
+      { id: 'shared', name: 'first', board },
+      { id: 'shared', name: 'second', board },
+      { id: '', name: 'blank id', board },
+    ]))
+
+    expect(migrateMapIds().ok).toBe(true)
+    const ids = listMaps().maps.map((map) => map.id)
+    // The first claimant keeps the id; every later one is a distinct map that
+    // would otherwise open — and be deleted — as the first.
+    expect(ids[0]).toBe('shared')
+    expect(new Set(ids).size).toBe(3)
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+  })
+
+  it('deletes one row even when the store repeats an id', () => {
+    localStorage.setItem(MAPS_KEY, JSON.stringify([
+      { id: 'shared', name: 'first', game: game() },
+      { id: 'shared', name: 'second', game: game('extension6') },
+    ]))
+    expect(deleteMap('shared').ok).toBe(true)
+    // Filtering by id would have taken both: deleting one map must never
+    // silently delete another.
+    expect(listMaps().maps.map((map) => map.name)).toEqual(['second'])
+  })
+})
+
+describe('updateMap', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('writes into the map with this id whatever it is now called', () => {
+    const id = savedId('Old')
+    // The rename stands in for another window's: a name-addressed save would
+    // miss the map and fork a second "Old" beside it.
+    expect(renameMap(id, 'New').ok).toBe(true)
+    expect(updateMap(id, 'New', game('extension6'))).toEqual({ ok: true, id })
+    expect(listMaps().maps.map((map) => map.name)).toEqual(['New'])
+    expect(loadMap(id)).toEqual({ ok: true, game: game('extension6') })
+  })
+
+  it('renames the map when the save carries a new name', () => {
+    const id = savedId('Old')
+    expect(updateMap(id, 'Renamed', game()).ok).toBe(true)
+    expect(listMaps().maps[0]).toMatchObject({ id, name: 'Renamed' })
+  })
+
+  it('keeps createdAt and refuses a name another map already holds', () => {
+    const id = savedId('a')
+    savedId('b')
+    const createdAt = listMaps().maps[0].createdAt
+    expect(updateMap(id, 'b', game())).toMatchObject({ ok: false })
+    expect(updateMap(id, 'a', game('extension6')).ok).toBe(true)
+    expect(listMaps().maps[0].createdAt).toBe(createdAt)
+  })
+
+  it('reports a map that is no longer there rather than recreating it', () => {
+    const id = savedId('a')
+    expect(deleteMap(id).ok).toBe(true)
+    expect(updateMap(id, 'a', game())).toMatchObject({ ok: false })
+    expect(listMaps().maps).toEqual([])
   })
 })

@@ -55,8 +55,10 @@ function isNamedMapEntry(entry: unknown): entry is Record<string, unknown> & { n
   return isRecord(entry) && typeof entry.name === 'string'
 }
 
+// An empty string is not an identity: it would compare equal across every
+// entry that carries one, so the migration treats it as missing and re-mints.
 const mapEntryId = (entry: unknown): string | null =>
-  isRecord(entry) && typeof entry.id === 'string' ? entry.id : null
+  isRecord(entry) && typeof entry.id === 'string' && entry.id.length > 0 ? entry.id : null
 
 // Maps are addressed by id everywhere above this layer: names are a label the
 // user can change, ids are what a tab's link points at.
@@ -99,20 +101,31 @@ function writeMaps(maps: unknown[]): WriteResult {
 }
 
 /**
- * Stamp an id on every named entry that lacks one, so maps saved before ids
- * existed become linkable. Deliberately additive and one-shot: entries with no
- * name are unaddressable and left byte-identical, and a store that already has
- * ids everywhere is not rewritten at all.
+ * Stamp an id on every named entry that lacks a usable one, so maps saved
+ * before ids existed become linkable. Deliberately additive and one-shot:
+ * entries with no name are unaddressable and left byte-identical, and a store
+ * whose ids are already unique is not rewritten at all.
  */
 export function migrateMapIds(): WriteResult {
   const maps = readRawMaps().entries
+  const seen = new Set<string>()
   let changed = false
   const migrated = maps.map((entry) => {
-    if (!isNamedMapEntry(entry) || mapEntryId(entry) !== null) return entry
+    const id = mapEntryId(entry)
+    if (id !== null && !seen.has(id)) {
+      seen.add(id)
+      return entry
+    }
+    // A repeated id is worse than none: two rows sharing one address as each
+    // other, so opening the second yields the first. Nothing can be done for an
+    // entry with no name — it is unaddressable either way — so it is left be.
+    if (!isNamedMapEntry(entry)) return entry
     changed = true
-    // Minted id last: an entry carrying a non-string `id` must lose it, or it
-    // stays unaddressable and marks the store dirty on every launch.
-    return { ...entry, id: newId() }
+    // Minted id last: an entry carrying a non-string or duplicate `id` must
+    // lose it, or it stays unaddressable and marks the store dirty every launch.
+    const minted = newId()
+    seen.add(minted)
+    return { ...entry, id: minted }
   })
   return changed ? writeMaps(migrated) : { ok: true }
 }
@@ -169,6 +182,20 @@ export function listMaps(): { maps: ListedMap[]; warning?: string } {
   return { maps, ...(raw.warning ? { warning: raw.warning } : {}) }
 }
 
+// The stored shape of a map, rebuilt from whatever the entry being replaced
+// already held. Shared by both writers so the two cannot drift apart.
+function mapEntry(name: string, game: Game, existing: Record<string, unknown> | null) {
+  const now = Date.now()
+  return {
+    id: (existing && mapEntryId(existing)) ?? newId(),
+    name,
+    game,
+    createdAt: existing && typeof existing.createdAt === 'number' ? existing.createdAt : now,
+    modifiedAt: now,
+    openedAt: existing && typeof existing.openedAt === 'number' ? existing.openedAt : now,
+  }
+}
+
 /**
  * Write `game` under `name`, returning the id of the entry it landed in.
  * Overwriting an existing name keeps that entry's id, so a tab linked to the
@@ -179,14 +206,28 @@ export function saveMap(name: string, game: Game, overwrite = false): SaveMapRes
   const maps = [...readRawMaps().entries]
   const index = maps.findIndex((entry) => isNamedMapEntry(entry) && entry.name === name)
   if (index >= 0 && !overwrite) return { ok: false, error: 'A map with this name already exists' }
-  const now = Date.now()
-  const existing = index >= 0 && isRecord(maps[index]) ? maps[index] : null
-  const createdAt = existing && typeof existing.createdAt === 'number' ? existing.createdAt : now
-  const openedAt = existing && typeof existing.openedAt === 'number' ? existing.openedAt : now
-  const id = (existing && mapEntryId(existing)) ?? newId()
-  const entry = { id, name, game, createdAt, modifiedAt: now, openedAt }
+  const entry = mapEntry(name, game, index >= 0 && isRecord(maps[index]) ? maps[index] : null)
   if (index >= 0) maps[index] = entry
   else maps.push(entry)
+  const result = writeMaps(maps)
+  return result.ok ? { ok: true, id: entry.id } : result
+}
+
+/**
+ * Write `game` into the map with this id, under `name`. Addressed by id rather
+ * than by name, which is what keeps a tab saving back into its own map: if the
+ * map was renamed in another window, a name-addressed write would miss it and
+ * fork the map in two.
+ */
+export function updateMap(id: string, name: string, game: Game): SaveMapResult {
+  if (name.length === 0) return { ok: false, error: 'Map name cannot be empty' }
+  const maps = [...readRawMaps().entries]
+  const index = findMapIndexById(maps, id)
+  if (index < 0) return { ok: false, error: MISSING_MAP }
+  const clash = maps.some((entry, at) =>
+    at !== index && isNamedMapEntry(entry) && entry.name === name)
+  if (clash) return { ok: false, error: 'A map with this name already exists' }
+  maps[index] = mapEntry(name, game, maps[index] as Record<string, unknown>)
   const result = writeMaps(maps)
   return result.ok ? { ok: true, id } : result
 }
@@ -252,11 +293,13 @@ export function loadMaps(ids: readonly string[]): Map<string, ParseGameResult> {
 
 export function deleteMap(id: string): WriteResult {
   const entries = readRawMaps().entries
-  const maps = entries.filter((entry) => mapEntryId(entry) !== id)
-  // Rewriting the whole library to delete nothing is pure cost; reachable when
-  // the map is already gone, deleted in another document.
-  if (maps.length === entries.length) return { ok: true }
-  return writeMaps(maps)
+  const index = findMapIndexById(entries, id)
+  // Deleting nothing is reachable — the map may already be gone, removed in
+  // another document — and rewriting the whole library for it is pure cost.
+  if (index < 0) return { ok: true }
+  // One row, never every row that answers to the id: hand-edited or foreign
+  // data can repeat an id, and deleting a map must not take another with it.
+  return writeMaps(entries.filter((_, at) => at !== index))
 }
 
 export function autosaveCurrent(game: Game): WriteResult {
@@ -284,6 +327,33 @@ export function saveWorkspace(workspace: PersistedWorkspace): WriteResult {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Unable to autosave workspace' }
   }
+}
+
+/**
+ * Tab id → linked map id, exactly as the stored workspace holds them, with no
+ * game validation. This is what a document can be sure is already in shared
+ * storage: anything else it is showing is unflushed local work. Deliberately
+ * re-reads the blob rather than deriving from a loaded workspace, because the
+ * store reconciles links at startup and those changes are not written yet.
+ */
+export function storedTabLinks(): Map<string, string | null> {
+  const links = new Map<string, string | null>()
+  const raw = localStorage.getItem(WORKSPACE_KEY)
+  if (raw === null) return links
+  let value: unknown
+  // A blob that does not parse holds nothing this document can claim to have
+  // written; loadWorkspace is the one that records it for recovery.
+  try {
+    value = JSON.parse(raw)
+  } catch {
+    return links
+  }
+  if (!isRecord(value) || !Array.isArray(value.tabs)) return links
+  for (const entry of value.tabs) {
+    if (!isRecord(entry) || typeof entry.id !== 'string') continue
+    links.set(entry.id, typeof entry.mapId === 'string' ? entry.mapId : null)
+  }
+  return links
 }
 
 export function loadWorkspace():

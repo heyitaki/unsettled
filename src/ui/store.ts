@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type Dispatch,
   type ReactNode,
 } from 'react'
@@ -26,6 +27,7 @@ import {
   migrateMapIds,
   readLibrary,
   saveWorkspace,
+  storedTabLinks,
   type LibraryView,
   type PersistedWorkspace,
   type WorkspaceTab,
@@ -108,8 +110,15 @@ export type StoreAction =
   // The library changed (here or in another document); see LibraryView.
   | { type: 'maps-changed'; library: LibraryView }
   // Replaces the tab set with what another document persisted. `keepIds` lists
-  // local tabs with an unflushed save, which survive the replacement.
-  | { type: 'workspace-adopt'; tabs: WorkspaceTab[]; keepIds?: readonly string[]; warning?: string }
+  // local tabs with an unflushed save, which survive the replacement;
+  // `keepLinkIds` lists tabs whose *link* is unflushed, which keep it.
+  | {
+    type: 'workspace-adopt'
+    tabs: WorkspaceTab[]
+    keepIds?: readonly string[]
+    keepLinkIds?: readonly string[]
+    warning?: string
+  }
 
 /**
  * Settle every tab's link against the library: drop links whose map is gone
@@ -126,6 +135,22 @@ function reconcileLinks(tabs: TabState[], library: LibraryView): TabState[] {
     const name = nameById.get(tab.mapId)
     if (name === undefined) return { ...tab, mapId: null }
     return name === tab.title ? tab : { ...tab, title: name }
+  })
+}
+
+/**
+ * One map is the view of at most one tab. Two tabs holding the same link would
+ * each treat a save as "overwrite my own map" and silently destroy the other's
+ * work, so the first tab keeps the link and any later claimant is unlinked —
+ * it keeps its board, as unsaved work.
+ */
+function withOneTabPerMap(tabs: TabState[]): TabState[] {
+  const linked = new Set<string>()
+  return tabs.map((tab) => {
+    if (tab.mapId === null) return tab
+    if (linked.has(tab.mapId)) return { ...tab, mapId: null }
+    linked.add(tab.mapId)
+    return tab
   })
 }
 
@@ -184,8 +209,13 @@ function initialState(): StoreState {
   // Links are reconciled at startup too, not only on the storage event: a map
   // deleted while this document was closed would otherwise leave every tab
   // pointing at nothing, which reads as "everything is unsaved".
+  // withOneTabPerMap last: a stored workspace can hold two tabs on one map —
+  // hand-edited, or written before the invariant existed — and every path that
+  // creates a link enforces it, so loading one must too.
   const tabs = restored.ok
-    ? reconcileLinks(adoptLegacyLinks(restored.workspace.tabs.map(createTab), library), library)
+    ? withOneTabPerMap(
+      reconcileLinks(adoptLegacyLinks(restored.workspace.tabs.map(createTab), library), library),
+    )
     : [createTab()]
   return {
     tabs,
@@ -365,6 +395,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
       // because our own pending write lands after it.
       const local = new Map(state.tabs.map((tab) => [tab.id, tab]))
       const pending = new Set(action.keepIds ?? [])
+      const pendingLinks = new Set(action.keepLinkIds ?? [])
       const tabs: TabState[] = []
       const adoptedIds = new Set<string>()
       for (const incoming of action.tabs) {
@@ -375,30 +406,36 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
           tabs.push(createTab(incoming))
           continue
         }
-        // Local content and undo stacks win — they cannot be merged — but a
-        // link is an additive fact worth taking, because otherwise our next
-        // autosave rewrites the blob without it and destroys a link the other
-        // document just made.
-        tabs.push(existing.mapId === null && incoming.mapId !== undefined
-          ? { ...existing, mapId: incoming.mapId }
-          : existing)
+        // Local content and undo stacks win — they cannot be merged — but the
+        // link is the incoming blob's to state, because otherwise the two
+        // documents disagree about it forever, each autosave overwriting the
+        // other's. The exception is a link made here and not yet written: that
+        // is newer than anything the blob can hold.
+        const mapId = pendingLinks.has(incoming.id)
+          ? existing.mapId
+          : incoming.mapId ?? null
+        tabs.push(mapId === existing.mapId ? existing : { ...existing, mapId })
       }
       for (const tab of state.tabs) {
         if (!adoptedIds.has(tab.id) && pending.has(tab.id)) tabs.push(tab)
       }
       if (tabs.length === 0) return state
+      // A kept local tab can hold the same link as an adopted one, because both
+      // windows opened the map. Incoming tabs come first, so the persisted link
+      // wins and the unflushed duplicate is the one dropped.
+      const settled = withOneTabPerMap(tabs)
       // An echo of our own list must return the same state object, or the two
       // documents write back and forth forever. Compared by reference, so an
       // adopted link still counts as a change.
-      const unchanged = tabs.length === state.tabs.length &&
-        tabs.every((tab, index) => tab === state.tabs[index])
+      const unchanged = settled.length === state.tabs.length &&
+        settled.every((tab, index) => tab === state.tabs[index])
       if (unchanged) return state
       return {
         ...state,
-        tabs,
-        activeTabId: tabs.some((tab) => tab.id === state.activeTabId)
+        tabs: settled,
+        activeTabId: settled.some((tab) => tab.id === state.activeTabId)
           ? state.activeTabId
-          : tabs[0].id,
+          : settled[0].id,
         // Tabs that failed to parse were dropped from the incoming set; say so
         // here rather than on every echo of a blob that still contains them.
         ...(action.warning === undefined
@@ -418,10 +455,13 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
  * those may outlive an adoption. Tabs it *has* persisted must not, or a tab the
  * other document deliberately closed would be re-added and written straight
  * back — the resurrection this whole mechanism exists to stop.
+ * `unflushedLinkIds` are the same idea one level down: tabs whose link changed
+ * here and has not been written, which therefore outranks the incoming one.
  */
 export function storageActions(
   event: Pick<StorageEvent, 'key' | 'newValue'>,
   unflushedIds: readonly string[],
+  unflushedLinkIds: readonly string[] = [],
 ): StoreAction[] {
   // A null key is localStorage.clear() in another document: everything changed.
   const cleared = event.key === null
@@ -439,6 +479,7 @@ export function storageActions(
       type: 'workspace-adopt',
       tabs: restored.workspace.tabs,
       keepIds: unflushedIds,
+      keepLinkIds: unflushedLinkIds,
       ...(restored.warning === undefined ? {} : { warning: restored.warning }),
     })
   }
@@ -448,20 +489,69 @@ export function storageActions(
   return actions
 }
 
+/**
+ * What this document holds that shared storage does not know about: tabs it
+ * created and links it made since its last write. Only these may outlive an
+ * adoption — everything else in the blob is the other document's to close or
+ * relink. `persisted` maps tab id to linked map id as last written.
+ */
+export function unflushedWork(
+  persisted: ReadonlyMap<string, string | null>,
+  pending: readonly WorkspaceTab[],
+): { tabIds: string[]; linkIds: string[] } {
+  const tabIds: string[] = []
+  const linkIds: string[] = []
+  for (const tab of pending) {
+    if (!persisted.has(tab.id)) tabIds.push(tab.id)
+    else if (persisted.get(tab.id) !== (tab.mapId ?? null)) linkIds.push(tab.id)
+  }
+  return { tabIds, linkIds }
+}
+
+/**
+ * The same map after adopting another document's workspace. Every tab in an
+ * incoming blob is in shared storage by definition, and recording that is what
+ * stops a tab adopted now, then closed there, from counting as local work and
+ * being written straight back — the resurrection this mechanism exists to stop.
+ */
+export function withAdopted(
+  persisted: ReadonlyMap<string, string | null>,
+  tabs: readonly WorkspaceTab[],
+  keptLinkIds: readonly string[],
+): Map<string, string | null> {
+  const next = new Map(persisted)
+  for (const tab of tabs) {
+    // A link kept because this document's own save is still in flight stays
+    // unflushed; the tab's existence is already recorded, or it could not have
+    // been kept in the first place.
+    if (!keptLinkIds.includes(tab.id)) next.set(tab.id, tab.mapId ?? null)
+  }
+  return next
+}
+
 const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<StoreAction> } | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
   const pendingWorkspace = useRef<PersistedWorkspace | null>(null)
-  // Tab ids this document has already written to storage. What was persisted
-  // and is now absent from an incoming blob was closed on purpose, so only the
-  // difference against this set may survive an adoption. Seeded from the
-  // restored workspace, which is by definition already persisted.
-  const persistedIds = useRef(new Set(state.tabs.map((tab) => tab.id)))
+  // Tab id → linked map id, as this document has written them to storage. What
+  // was persisted and is now absent from an incoming blob was closed on
+  // purpose, so only the difference against this map may survive an adoption.
+  // Seeded from the stored blob rather than from the initial tabs, because
+  // startup reconciliation can already have changed links nothing has written,
+  // and a tab invented because no workspace was stored is unflushed work.
+  // Read during the first render, never later: read from inside the storage
+  // handler it would pick up another document's write and mistake those tabs
+  // for ones this document had flushed itself.
+  const [flushedAtBoot] = useState(storedTabLinks)
+  const persistedTabs = useRef(flushedAtBoot)
   const persist = (workspace: PersistedWorkspace) => {
     const result = saveWorkspace(workspace)
-    if (result.ok) persistedIds.current = new Set(workspace.tabs.map((tab) => tab.id))
-    else dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
+    if (result.ok) {
+      persistedTabs.current = new Map(
+        workspace.tabs.map((tab) => [tab.id, tab.mapId ?? null]),
+      )
+    } else dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
   }
   useEffect(() => {
     const workspace: PersistedWorkspace = {
@@ -486,10 +576,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state.activeTabId, state.tabs])
   useEffect(() => {
     const adoptStorage = (event: StorageEvent) => {
-      const unflushed = (pendingWorkspace.current?.tabs ?? [])
-        .map((tab) => tab.id)
-        .filter((id) => !persistedIds.current.has(id))
-      for (const action of storageActions(event, unflushed)) dispatch(action)
+      const flushed = persistedTabs.current
+      const unflushed = unflushedWork(flushed, pendingWorkspace.current?.tabs ?? [])
+      for (const action of storageActions(event, unflushed.tabIds, unflushed.linkIds)) {
+        if (action.type === 'workspace-adopt') {
+          persistedTabs.current = withAdopted(flushed, action.tabs, unflushed.linkIds)
+        }
+        dispatch(action)
+      }
     }
     window.addEventListener('storage', adoptStorage)
     return () => window.removeEventListener('storage', adoptStorage)

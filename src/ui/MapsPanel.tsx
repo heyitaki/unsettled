@@ -9,8 +9,9 @@ import {
   migrateMapIds,
   readLibrary,
   saveMap,
+  updateMap,
 } from '../persistence/localStorage'
-import { loadedNotice, nextCopyName, savesInPlace } from './boardFiles'
+import { inPlaceTarget, loadedNotice, nextCopyName } from './boardFiles'
 import { ConfirmDialog } from './ConfirmDialog'
 import { activeTab, useStore } from './store'
 
@@ -46,9 +47,19 @@ export function MapsPanel() {
   const { state, dispatch } = useStore()
   const { id, title, game, mapId } = activeTab(state)
   const [name, setName] = useState(title)
+  // Whether the name in the field is one the user typed rather than the tab's
+  // title following along. It decides two things: whether a retitle may
+  // overwrite the field, and whether a save means "this map, under its current
+  // name" or "a map called this".
+  const typed = useRef(false)
+  // A different tab means a different intent — whatever was half-typed for the
+  // old one is not a name for this board.
+  useEffect(() => { typed.current = false }, [id])
   // The save name follows the active tab's title (updating when you switch tabs
-  // or rename one), but stays editable for one-off save names.
-  useEffect(() => { setName(title) }, [id, title])
+  // or rename one), but never overwrites a name being typed: the title also
+  // moves when another window renames the map, and that must not reach in and
+  // rewrite the field mid-edit.
+  useEffect(() => { if (!typed.current) setName(title) }, [id, title])
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
   // Capture the game + tab the save targets when the prompt opens, so a tab
   // switch underneath the dialog can't redirect the save to a different board.
@@ -85,9 +96,16 @@ export function MapsPanel() {
       return null
     }
     refresh()
-    const stamped = listMaps().maps[map.index]?.id ?? null
-    if (stamped === null) notice('This map entry is malformed and cannot be opened or deleted')
-    return stamped
+    const stamped = listMaps().maps[map.index]
+    // Another document can have added or removed rows since this list was
+    // rendered, sliding that position onto a different map. Refuse rather than
+    // address the wrong one; the refresh above re-renders the row with its id.
+    if (stamped === undefined || stamped.name !== map.name) {
+      notice('The library changed in another window — open it again')
+      return null
+    }
+    if (stamped.id === null) notice('This map entry is malformed and cannot be opened or deleted')
+    return stamped.id
   }
   // Fade whichever end of the scrollable map list still hides cut-off rows,
   // mirroring the tab strip's edge masks.
@@ -102,8 +120,17 @@ export function MapsPanel() {
   }, [])
   useLayoutEffect(syncFades, [syncFades, sortedMaps.length])
   const notice = (message: string) => dispatch({ type: 'notice', message })
-  const performSave = (saveName: string, overwrite: boolean, target: Game, targetTabId: string) => {
-    const result = saveMap(saveName, target, overwrite)
+  /** `into` is the map id to write back into, or null to address by name. */
+  const performSave = (
+    saveName: string,
+    target: Game,
+    targetTabId: string,
+    into: string | null,
+    overwrite = false,
+  ) => {
+    const result = into === null
+      ? saveMap(saveName, target, overwrite)
+      : updateMap(into, saveName, target)
     if (!result.ok) {
       notice(result.error)
       refresh()
@@ -111,6 +138,7 @@ export function MapsPanel() {
     }
     // Attach the saved tab to the map it landed in, by id. Overwriting reuses
     // the existing map's id, so re-saving keeps the same link.
+    typed.current = false
     dispatch({ type: 'tab-link', id: targetTabId, mapId: result.id, title: saveName })
     notice(`Saved "${saveName}"`)
     refresh()
@@ -128,8 +156,9 @@ export function MapsPanel() {
     // Saving a linked tab back into its own map is the ordinary case, not a
     // collision: overwrite it without asking. The prompt is there to stop a
     // save from clobbering some *other* map that happens to share the name.
-    if (savesInPlace(named, name, mapId)) {
-      performSave(name, true, game, id)
+    const inPlace = inPlaceTarget(named, mapId, typed.current ? name : null)
+    if (inPlace !== null) {
+      performSave(inPlace.name, game, id, inPlace.id)
       return
     }
     const taken = new Set(named.map((map) => map.name))
@@ -138,7 +167,7 @@ export function MapsPanel() {
       // carry identity, but a duplicate title is still confusing to read.
       const reserved = new Set([...taken, ...state.tabs.map((tab) => tab.title)])
       setDupPrompt({ name, copyName: nextCopyName(name, reserved), game, tabId: id })
-    } else performSave(name, false, game, id)
+    } else performSave(name, game, id, null)
   }
   const openMap = (map: ListedMap) => {
     const mapKey = addressable(map)
@@ -172,7 +201,10 @@ export function MapsPanel() {
       <div className="map-save-row">
         <input
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            typed.current = true
+            setName(event.target.value)
+          }}
           onKeyDown={(event) => { if (event.key === 'Enter') submitSave() }}
           placeholder="Map name"
           aria-label="Map name"
@@ -261,14 +293,14 @@ export function MapsPanel() {
               label: 'Replace',
               variant: 'danger',
               onClick: () => {
-                performSave(dupPrompt.name, true, dupPrompt.game, dupPrompt.tabId)
+                performSave(dupPrompt.name, dupPrompt.game, dupPrompt.tabId, null, true)
                 setDupPrompt(null)
               },
             },
             {
               label: 'Save as copy',
               onClick: () => {
-                performSave(dupPrompt.copyName, false, dupPrompt.game, dupPrompt.tabId)
+                performSave(dupPrompt.copyName, dupPrompt.game, dupPrompt.tabId, null)
                 setDupPrompt(null)
               },
             },
