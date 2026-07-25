@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createBoard } from '../../model/board'
 import { newGame } from '../../model/game'
 import {
+  ACTIVE_TAB_KEY,
   MAPS_KEY,
   WORKSPACE_KEY,
   saveMap,
   saveWorkspace,
   storedTabLinks,
 } from '../../persistence/localStorage'
+import { bootActiveTab } from '../store'
 import {
   NOTHING_UNFLUSHED,
   storageActions,
@@ -16,7 +18,7 @@ import {
   withAdopted,
   writeVerdict,
   type UnflushedWork,
-} from '../store'
+} from '../workspaceSync'
 
 const game = () => newGame(createBoard('standard4'))
 
@@ -110,6 +112,37 @@ describe('storageActions', () => {
     expect(storageActions(event(null, null))).toEqual([
       { type: 'maps-changed', library: { readable: true, maps: [] } },
     ])
+  })
+})
+
+describe('bootActiveTab', () => {
+  const tabs = ['t1', 't2'].map((id) => ({
+    id,
+    title: id,
+    game: game(),
+    past: [],
+    future: [],
+    activePlayerId: 'aki',
+    mapId: null,
+  }))
+
+  beforeEach(() => sessionStorage.clear())
+
+  it('opens on the board this window was looking at before the reload', () => {
+    sessionStorage.setItem(ACTIVE_TAB_KEY, 't2')
+    expect(bootActiveTab(tabs, 't1')).toBe('t2')
+  })
+
+  it('falls back to the shared field for a window with no session of its own', () => {
+    // A blob written before the active tab moved out of it, or a window opened
+    // into a workspace someone else was already using.
+    expect(bootActiveTab(tabs, 't2')).toBe('t2')
+  })
+
+  it('falls back to the first board when neither names an open tab', () => {
+    sessionStorage.setItem(ACTIVE_TAB_KEY, 'closed-in-another-window')
+    expect(bootActiveTab(tabs, 'also-gone')).toBe('t1')
+    expect(bootActiveTab(tabs, undefined)).toBe('t1')
   })
 })
 

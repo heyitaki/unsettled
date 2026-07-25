@@ -7,14 +7,8 @@ import {
   saveWorkspace,
   type PersistedWorkspace,
 } from '../../persistence/localStorage'
-import {
-  createWorkspaceSync,
-  persistedWorkspace,
-  reducer,
-  type StoreAction,
-  type StoreState,
-  type TabState,
-} from '../store'
+import { reducer, type StoreAction, type StoreState, type TabState } from '../store'
+import { createWorkspaceSync, persistedWorkspace } from '../workspaceSync'
 
 const game = () => newGame(createBoard('standard4'))
 
@@ -69,7 +63,7 @@ class Doc {
 
   /** StoreProvider's arming layout effect, which runs on every commit. */
   private commit() {
-    this.armed = persistedWorkspace(this.state.tabs, this.state.activeTabId)
+    this.armed = persistedWorkspace(this.state.tabs)
     this.sync.arm(this.armed)
   }
 
@@ -108,7 +102,7 @@ class Doc {
    * persistedWorkspace builds a fresh object, so this is never the armed one.
    */
   flushSuperseded() {
-    this.sync.flush(persistedWorkspace(this.state.tabs, this.state.activeTabId))
+    this.sync.flush(persistedWorkspace(this.state.tabs))
   }
 
   edit(tabId: string) {
@@ -128,7 +122,7 @@ describe('two documents on one workspace', () => {
 
   beforeEach(() => {
     localStorage.clear()
-    saveWorkspace(persistedWorkspace(stateOf(OPEN).tabs, OPEN[0]))
+    saveWorkspace(persistedWorkspace(stateOf(OPEN).tabs))
     writes = 0
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
       this: Storage,
@@ -160,20 +154,20 @@ describe('two documents on one workspace', () => {
     expect(writes).toBe(before)
   })
 
-  it('still echoes when only the active tab differs', () => {
-    // Not a desired behaviour — a pin on a known cost. `activeTabId` is
-    // per-window but rides in the shared blob, so two windows looking at
-    // different tabs never agree byte-for-byte and the skip above cannot fire.
-    // The echo is harmless now that an adoption refuses tabs closed here, but
-    // it is the traffic that put the two windows' debounces in phase to begin
-    // with. Flip this to toBeNull() when the active tab moves out of the blob.
+  it('does not echo just because the two windows look at different tabs', () => {
+    // Which board a window has in front is its own business and is not in the
+    // shared blob, so two windows on different tabs still agree byte-for-byte
+    // and the skip holds. While it was shared, every adoption was answered with
+    // a rewrite of every board — the traffic that put the two windows'
+    // debounces in phase in the first place.
     const [a, b] = both()
     b.dispatch({ type: 'tab-select', id: 't3' })
     a.dispatch({ type: 'tab-close', id: 't1' })
 
     b.receive(a.flush()!)
     expect(b.ids).toEqual(['t2', 't3', 't4'])
-    expect(b.flush()).not.toBeNull()
+    expect(b.state.activeTabId).toBe('t3')
+    expect(b.flush()).toBeNull()
   })
 
   it('keeps a close whose write is still in flight', () => {

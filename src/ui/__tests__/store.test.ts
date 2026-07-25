@@ -1,14 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { addPlayer, createBoard, removePlayer } from '../../model/board'
 import { adjustHand, newGame, type Game } from '../../model/game'
-import {
-  NOTHING_UNFLUSHED,
-  activeTab,
-  reducer,
-  type StoreState,
-  type TabState,
-  type UnflushedWork,
-} from '../store'
+import { activeTab, reducer, type StoreState, type TabState } from '../store'
+import { NOTHING_UNFLUSHED, type UnflushedWork } from '../workspaceSync'
 
 const unflushed = (work: Partial<UnflushedWork> = {}): UnflushedWork => ({
   ...NOTHING_UNFLUSHED,

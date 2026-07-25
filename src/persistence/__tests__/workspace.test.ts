@@ -95,7 +95,7 @@ describe('workspace persistence', () => {
     expect(localStorage.getItem(CURRENT_KEY)).not.toBeNull()
   })
 
-  it('drops invalid tabs with a warning and reconciles the active id', () => {
+  it('drops invalid tabs with a warning and ignores an unresolvable active id', () => {
     const good = { id: 'g', title: 'Good', game: newGame(createBoard('standard4')) }
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
       activeTabId: 'missing',
@@ -106,7 +106,9 @@ describe('workspace persistence', () => {
     expect(loaded).toMatchObject({ ok: true, warning: expect.stringContaining('Bad') })
     if (!loaded.ok) return
     expect(loaded.workspace.tabs.map((entry) => entry.id)).toEqual(['g'])
-    expect(loaded.workspace.activeTabId).toBe('g')
+    // Which tab is in front is per-window state the blob no longer owns, so an
+    // id naming no open tab is simply not carried; the store picks the fallback.
+    expect(loaded.workspace.activeTabId).toBeUndefined()
 
     // A lossy load must preserve the original blob before the next save
     // rewrites the key, or the dropped tab is destroyed forever.

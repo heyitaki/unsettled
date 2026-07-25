@@ -6,6 +6,8 @@ export const MAPS_KEY = 'unsettled.maps.v1'
 export const CURRENT_KEY = 'unsettled.current.v1'
 export const MAPS_CORRUPT_KEY = `${MAPS_KEY}.corrupt`
 export const WORKSPACE_KEY = 'unsettled.workspace.v1'
+// Session-scoped, so it is per browser tab and fires no cross-document events.
+export const ACTIVE_TAB_KEY = 'unsettled.activeTab.v1'
 export const WORKSPACE_CORRUPT_KEY = `${WORKSPACE_KEY}.corrupt`
 
 export interface ListedMap {
@@ -37,8 +39,14 @@ export interface WorkspaceTab {
 }
 
 export interface PersistedWorkspace {
-  activeTabId: string
   tabs: WorkspaceTab[]
+  /**
+   * Only ever read, never written: which tab is in front is per-window state,
+   * and it lives in ACTIVE_TAB_KEY now. Blobs written before that carry it, and
+   * it is still the best cold-start guess for a window with no session of its
+   * own, so loading keeps honouring it.
+   */
+  activeTabId?: string
 }
 
 type WriteResult = { ok: true } | { ok: false; error: string }
@@ -332,6 +340,32 @@ export function readWorkspaceBlob(): string | null {
 }
 
 /**
+ * Which tab this window has in front. Session storage, not local: it is the one
+ * piece of workspace state that is per-window rather than shared, and keeping it
+ * in the shared blob meant two windows looking at different tabs could never
+ * agree on the bytes — so every adoption was answered with a rewrite of every
+ * board, purely to say which tab the answering window was looking at.
+ *
+ * A failure here costs the user a tab selection on reload, so it is swallowed
+ * rather than surfaced.
+ */
+export function saveActiveTab(id: string): void {
+  try {
+    sessionStorage.setItem(ACTIVE_TAB_KEY, id)
+  } catch {
+    // Session storage is full or blocked; the fallback chain still resolves.
+  }
+}
+
+export function loadActiveTab(): string | null {
+  try {
+    return sessionStorage.getItem(ACTIVE_TAB_KEY)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Tab id → linked map id: the shape every comparison of "what storage holds
  * against what this document shows" is made in, with `mapId` normalised to null
  * so an absent link and a null one cannot read as different.
@@ -467,11 +501,14 @@ export function loadWorkspace():
     corruptWorkspaceBlob = raw
     return { ok: false }
   }
+  // A blob with no active tab is the normal shape now, and one naming a tab
+  // this window cannot see is an ordinary disagreement between windows, not
+  // damage — neither is worth preserving a corrupt copy over.
   const hasActiveTab = typeof value.activeTabId === 'string' &&
     tabs.some((tab) => tab.id === value.activeTabId)
-  const activeTabId = hasActiveTab ? value.activeTabId as string : tabs[0].id
-  if (!hasActiveTab) corruptWorkspaceBlob = raw
-  const workspace = { activeTabId, tabs }
+  const workspace: PersistedWorkspace = hasActiveTab
+    ? { tabs, activeTabId: value.activeTabId as string }
+    : { tabs }
   return invalidTabs.length > 0
     ? { ok: true, workspace, warning: `Ignored invalid workspace tabs: ${invalidTabs.join(', ')}` }
     : { ok: true, workspace }
