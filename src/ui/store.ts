@@ -105,7 +105,9 @@ export type StoreAction =
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
   | { type: 'highlight'; marks: readonly HighlightMark[] | null }
-  | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
+  // `after` places the new tab beside an existing one (a duplicate belongs next
+  // to its source) rather than at the end of the strip.
+  | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string; after?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
   | { type: 'tab-close'; id: string }
@@ -351,9 +353,16 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         id: action.id,
         mapId: action.mapId,
       })
+      const tabs = [...state.tabs]
+      // An anchor that is no longer open (closed in this window or another)
+      // appends, which is where a tab with no anchor goes anyway.
+      const anchor = action.after === undefined
+        ? -1
+        : tabs.findIndex((candidate) => candidate.id === action.after)
+      tabs.splice(anchor < 0 ? tabs.length : anchor + 1, 0, tab)
       return {
         ...state,
-        tabs: [...state.tabs, tab],
+        tabs,
         activeTabId: tab.id,
       }
     }
@@ -424,7 +433,6 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         // pending write would then persist it — the resurrection users hit when
         // they close several tabs with a second window open, each close racing
         // that window's echo of the workspace as it was a moment ago.
-        if (closedHere.has(incoming.id)) continue
         if (adoptedIds.has(incoming.id)) continue
         adoptedIds.add(incoming.id)
         const existing = local.get(incoming.id)

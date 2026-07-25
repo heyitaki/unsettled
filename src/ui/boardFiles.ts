@@ -1,10 +1,12 @@
 // Shared board-file helpers: title derivation for the import/export panel and
-// the map library, plus the comparison behind "this tab has unsaved work".
+// the map library, the comparison behind "this tab has unsaved work", and the
+// one-shot save behind the tab strip's close prompt.
 
 import { createBoard, validateBoard } from '../model/board'
 import { newGame, type Game } from '../model/game'
 import { serializeGame, type ParseGameResult } from '../model/serialization'
 import type { LayoutId } from '../model/types'
+import { readLibrary, saveMap, takenMapNames, updateMap } from '../persistence/localStorage'
 
 export function fileTitle(name: string): string {
   return name.replace(/\.[^/.]+$/, '') || name
@@ -21,6 +23,17 @@ export function nextCopyName(base: string, taken: Set<string>): string {
 // read as the same board. Cosmetic only — links are ids, not titles.
 export function firstFreeName(base: string, taken: Set<string>): string {
   return taken.has(base) ? nextCopyName(base, taken) : base
+}
+
+/**
+ * What to call a copy of `title`: the first free "title (n)". A title that is
+ * already a copy counts up from what it was copied from — duplicating
+ * "Board 1 (1)" gives "Board 1 (2)", not "Board 1 (1) (1)" — but only when
+ * stripping the suffix leaves an actual name behind.
+ */
+export function copyTitle(title: string, taken: Set<string>): string {
+  const stripped = title.replace(/ \(\d+\)$/, '')
+  return nextCopyName(stripped.length === 0 ? title : stripped, taken)
 }
 
 /**
@@ -104,6 +117,44 @@ export function dirtyTabIds(
       ))
       .map((tab) => tab.id),
   )
+}
+
+export type SaveTabResult =
+  | { ok: true; id: string; name: string }
+  | { ok: false; error: string }
+
+/**
+ * Save a tab into the library, with no prompt: the tab strip saves a board on
+ * the way out, where there is no name field to answer with and nowhere to put
+ * the answer. It writes back into the tab's own map where there is one, and
+ * otherwise adds an entry — never over one that already holds the name.
+ */
+export function saveTab(
+  tab: { title: string; game: Game; mapId: string | null },
+): SaveTabResult {
+  const wanted = tab.title.trim()
+  if (wanted.length === 0) return { ok: false, error: 'Map name cannot be empty' }
+  const library = readLibrary()
+  // An unreadable library holds no addressable maps, so a save there is a fresh
+  // entry — and saveMap is what moves the corrupt blob aside.
+  const maps = library.readable ? library.maps : []
+  // Under the map's own name, not the tab's title: a save is not a rename, and
+  // inPlaceTarget is where that rule lives for every save path.
+  const inPlace = inPlaceTarget(maps, tab.mapId, null)
+  if (inPlace !== null) {
+    const updated = updateMap(inPlace.id, inPlace.name, tab.game)
+    return updated.ok ? { ok: true, id: updated.id, name: inPlace.name } : updated
+  }
+  // A new entry: an unlinked tab, or a linked one whose map was deleted
+  // meanwhile and which now holds the only copy of the board. It lands beside a
+  // name that is taken rather than replacing it, because a save with no prompt
+  // is never permission to overwrite somebody else's map. The names come from
+  // the writer's own rule, not from the library view: an entry saveMap would
+  // refuse over but readLibrary cannot address would otherwise be invisible
+  // here and fatal one line later, with no prompt to resolve it.
+  const name = firstFreeName(wanted, takenMapNames())
+  const result = saveMap(name, tab.game)
+  return result.ok ? { ok: true, id: result.id, name } : result
 }
 
 // Summarizes any non-blocking warnings so a load/import notice surfaces them.

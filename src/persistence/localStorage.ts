@@ -161,6 +161,21 @@ export function readLibrary(): LibraryView {
   return { readable: true, maps }
 }
 
+/**
+ * Every name a save would collide with — by the same predicate saveMap refuses
+ * on, which is deliberately not readLibrary's. An entry can carry a name and no
+ * id (written before ids, and left that way by a failed migration): unaddressable,
+ * so absent from the library view, yet still enough to make saveMap refuse. A
+ * caller picking a free name has to see those, or it picks one that is taken.
+ */
+export function takenMapNames(): Set<string> {
+  const names = new Set<string>()
+  for (const entry of readRawMaps().entries) {
+    if (isNamedMapEntry(entry)) names.add(entry.name)
+  }
+  return names
+}
+
 export function listMaps(): { maps: ListedMap[]; warning?: string } {
   const raw = readRawMaps()
   const maps: ListedMap[] = raw.entries.map((entry, index) => {

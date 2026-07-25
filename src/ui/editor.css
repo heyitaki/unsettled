@@ -1,6 +1,9 @@
 :root {
   --paper: #f1ead9;
   --paper-deep: #e4d8bf;
+  /* The rails' and board stage's fill, which they lay over the page gradient at
+     93%. Anything that floats over the board takes it opaque. */
+  --paper-light: #f8f3e8;
   --ink: #2d2924;
   --muted: #776f64;
   --line: rgba(55, 45, 32, 0.16);
@@ -36,7 +39,7 @@ button { color: inherit; }
 .left-rail { align-self: stretch; grid-template-rows: auto auto 1fr; min-height: 0; }
 .maps-panel { display: flex; flex-direction: column; min-height: 0; }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
-.panel, .board-stage { background: rgba(248, 243, 232, .93); border: 1px solid rgba(255,255,255,.65); border-radius: 18px; box-shadow: 0 18px 50px rgba(62, 45, 21, .12), inset 0 0 0 1px var(--line); }
+.panel, .board-stage { background: rgba(248, 243, 232, .93); /* var(--paper-light), let through */ border: 1px solid rgba(255,255,255,.65); border-radius: 18px; box-shadow: 0 18px 50px rgba(62, 45, 21, .12), inset 0 0 0 1px var(--line); }
 .panel { padding: 17px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
 .panel-heading h2 { margin: 2px 0 0; font: 700 21px/1.1 Georgia, serif; }
@@ -121,6 +124,24 @@ button.selected.danger { color: #fff; }
 .menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 145px; display: grid; gap: 3px; padding: 6px; border: 1px solid rgba(255,255,255,.8); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 32px rgba(55,45,32,.22), inset 0 0 0 1px var(--line); }
 .menu-popup button { border: 0; padding: 7px 9px; background: transparent; text-align: left; }
 .menu-popup button.active { color: var(--accent-dark); background: #fff9e9; font-weight: 700; }
+.menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: #fff9e9; }
+/* Pinned to the pointer (ContextMenu supplies left/top), wide enough that the
+   chord column never crowds the longest label, and on the rails' paper so the
+   menu reads as part of the same surface — opaque, because it opens over the
+   board rather than over the page. Rendered as a sibling of the tab strip, not
+   inside it: .board-tabs-scroll's mask would otherwise become its containing
+   block and clip it. */
+.context-menu { position: fixed; min-width: 216px; background: var(--paper-light); }
+.context-menu button { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; white-space: nowrap; }
+.context-menu button.separated { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 9px; }
+/* Its own tone rather than --muted, which lands at 4.47:1 on this paper — just
+   under AA for text this size. */
+.menu-shortcut { flex: none; color: #665f55; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+/* On this paper the highlight has to go darker, not lighter: the cream the
+   other menus use for it disappears against a near-white row. Keyboard focus
+   takes the same treatment, so walking the menu with Tab reads like hovering. */
+.context-menu button:hover:not(:disabled), .context-menu button:focus-visible { background: var(--paper-deep); color: var(--accent-dark); }
+.context-menu button:hover:not(:disabled) .menu-shortcut, .context-menu button:focus-visible .menu-shortcut { color: var(--accent-dark); }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
 /* Wide lining-figure serif (Charter on Mac/Linux, Cambria as the wide Windows
    fallback). Lining/tabular figures keep every digit on the baseline so the pip

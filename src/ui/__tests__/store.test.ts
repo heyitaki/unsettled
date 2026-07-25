@@ -139,6 +139,20 @@ describe('workspace tabs', () => {
     expect(activeTab(added).title).toBe('Game with ben')
   })
 
+  it('inserts a tab after its anchor, and appends when the anchor is gone', () => {
+    const start = state([tab('t1'), tab('t2'), tab('t3')], 't1')
+    const game = newGame(createBoard('extension6'))
+
+    // A duplicate belongs beside the board it came from, not at the far end of
+    // a strip the user may have to scroll to reach.
+    const beside = reducer(start, { type: 'tab-add', game, title: 't1 (1)', id: 'dup', after: 't1' })
+    expect(beside.tabs.map((entry) => entry.id)).toEqual(['t1', 'dup', 't2', 't3'])
+    expect(beside.activeTabId).toBe('dup')
+
+    const appended = reducer(start, { type: 'tab-add', game, id: 'dup', after: 'closed-already' })
+    expect(appended.tabs.map((entry) => entry.id)).toEqual(['t1', 't2', 't3', 'dup'])
+  })
+
   it('selects known tabs and ignores unknown ids', () => {
     const start = state([tab('t1'), tab('t2')], 't1')
     expect(reducer(start, { type: 'tab-select', id: 't2' }).activeTabId).toBe('t2')
