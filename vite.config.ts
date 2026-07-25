@@ -11,6 +11,8 @@ export default defineConfig({
     environment: 'node',
     // .claude/worktrees holds full repo copies (agent worktrees); without this
     // vitest runs every test twice and heavy parser tests hit their timeouts.
-    exclude: [...configDefaults.exclude, '.claude/**'],
+    // e2e/ is Playwright's: its specs import @playwright/test, which vitest
+    // cannot run.
+    exclude: [...configDefaults.exclude, '.claude/**', 'e2e/**'],
   },
 })

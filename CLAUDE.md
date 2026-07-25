@@ -14,6 +14,7 @@ Unsettled: an offline, browser-only Catan starting-position analyzer (React 19 +
 
 - `npm run dev` — Vite dev server
 - `npm test` — `vitest run` (single run). Watch: `npx vitest`. One file: `npx vitest run src/model/__tests__/board.test.ts`. By name: `npx vitest run -t "substring"`
+- `npm run test:e2e` — Playwright (`e2e/`), which starts its own dev server on port 5199. Covers only what needs two real browser windows sharing one origin: the cross-document workspace sync. To check a regression test really bites, point it at a worktree of an older commit — `UNSETTLED_E2E_PORT=5201 UNSETTLED_E2E_ROOT=<worktree> npm run test:e2e`
 - `npm run typecheck` — `tsc -b` (strict; no `any`)
 - `npm run lint` — `oxlint`
 - `npm run build` — typecheck + Vite build
@@ -34,4 +35,5 @@ Data flows **`parser/` → `model/Board` → `engine/` + `ui/store` → `persist
 - Tesseract is self-hosted in `public/tesseract` + `public/tessdata` (offline). Don't switch to a CDN.
 - Simulator changes run `cargo test` in BOTH profiles from `simulator/`: release compiles out `debug_assert!(invariants_hold)`, the only detector for a class of piece/VP accounting bugs. Determinism is a product guarantee — same seed, byte-identical `results.json` at any `--threads`, so never let `HashMap` iteration or float accumulation order reach an output.
 - Parser correctness is guarded by fixture snapshots: `fixtures/*.png` → `src/parser/__tests__/expected/*.json`. Regenerating expected output means re-verifying it by hand.
+- Cross-window sync (`ui/workspaceSync.ts`) is timing-sensitive, so a test for it is worthless until it has been shown to fail against the code it was written for. Two paces matter: a close pace under the 500ms autosave debounce coalesces into one write and races nothing, and a second window that is merely open — rather than also being written in — never answers mid-sequence. Both make a green run meaningless.
 - `.claude/worktrees` holds full repo copies; `vite.config.ts` excludes it from vitest so tests don't double-run.
