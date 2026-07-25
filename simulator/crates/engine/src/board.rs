@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::rules::{Resource, RuleConfig};
+use crate::rules::{RESOURCE_COUNT, Resource, RuleConfig};
+use crate::state::MAX_VERTICES;
 use crate::topology::{Edge, Hex, Layout, Topology, Vertex};
 use crate::wire::{BuildingTier, TileKind, WireBoard};
+
+/// `port_vertices` addresses vertices by bit, as the caches in `view` and `longest_road` also do.
+const _: () = assert!(MAX_VERTICES <= u128::BITS as usize);
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ConversionOptions {
@@ -52,6 +56,12 @@ pub struct SimBoard {
     buildings: Vec<InitialBuilding>,
     player_ids: Vec<String>,
     saturated_rates: usize,
+    /// Total pips per resource across the whole board. A fixed property of the tiles, yet the
+    /// scarcity term of every vertex score wants it, so it is derived once here.
+    resource_pips: [u16; RESOURCE_COUNT],
+    /// Per port, the vertices its edge touches, as a bitset aligned with `ports`. Vertex scoring
+    /// asks "is this port on one of my edges" for every port at every vertex it weighs.
+    port_vertices: Vec<u128>,
 }
 
 impl SimBoard {
@@ -110,7 +120,7 @@ impl SimBoard {
             .map(|(seat, player)| (player.id.as_str(), seat as u8))
             .collect();
         let mut saturated_rates = 0;
-        let ports = wire
+        let ports: Vec<SimPort> = wire
             .ports
             .iter()
             .map(|port| {
@@ -166,6 +176,21 @@ impl SimBoard {
         }) {
             return Err(ConversionError::OccupiedOverlap);
         }
+        let port_vertices = ports
+            .iter()
+            .map(|port| {
+                topology
+                    .edge_endpoints(port.edge)
+                    .iter()
+                    .fold(0_u128, |set, vertex| set | 1 << vertex)
+            })
+            .collect();
+        let mut resource_pips = [0_u16; RESOURCE_COUNT];
+        for (tile, token) in tiles.iter().zip(&tokens) {
+            if let (Some(resource), Some(token)) = (tile, token) {
+                resource_pips[resource.index()] += u16::from(crate::view::pips(*token));
+            }
+        }
         Ok(Self {
             layout: wire.layout,
             tiles,
@@ -176,6 +201,8 @@ impl SimBoard {
             buildings,
             player_ids: wire.players.into_iter().map(|player| player.id).collect(),
             saturated_rates,
+            resource_pips,
+            port_vertices,
         })
     }
 
@@ -217,6 +244,19 @@ impl SimBoard {
 
     pub fn saturated_rates(&self) -> usize {
         self.saturated_rates
+    }
+
+    pub const fn resource_pips(&self) -> &[u16; RESOURCE_COUNT] {
+        &self.resource_pips
+    }
+
+    /// The ports on edges incident to `vertex`, in the same order as [`Self::ports`].
+    pub fn ports_at(&self, vertex: Vertex) -> impl Iterator<Item = &SimPort> {
+        self.ports
+            .iter()
+            .zip(&self.port_vertices)
+            .filter(move |(_, vertices)| *vertices & (1 << vertex) != 0)
+            .map(|(port, _)| port)
     }
 }
 

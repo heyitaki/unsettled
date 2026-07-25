@@ -1,3 +1,4 @@
+use crate::policy::PolicyScratch;
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, Resource};
 use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction};
@@ -101,10 +102,13 @@ pub fn pre_roll(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar) -> Option
     selected
 }
 
-pub fn action(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar) -> Action {
-    let mut out = ActionBuf::new();
-    legal_actions(view, rng, &mut out);
-    let actions = out.as_slice();
+pub fn action(
+    view: &DecisionView<'_>,
+    scratch: &mut PolicyScratch,
+    rng: &mut Xoshiro256StarStar,
+) -> Action {
+    legal_actions(view, rng, &mut scratch.actions);
+    let actions = scratch.actions.as_slice();
     if actions.len() == 1 {
         return Action::Pass;
     }

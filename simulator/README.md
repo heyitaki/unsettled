@@ -107,20 +107,29 @@ Regeneration must leave `topology/standard4.json` and `topology/extension6.json`
 
 To add a placement heuristic, add a `PlacementKind` entry and name mapping in `crates/engine/src/placement/mod.rs`, then supply its vertex-score preset or implementation. The CLI registry and result keys use that stable name.
 
-Rule changes belong in `RuleConfig`, `BuildableSpec`, or `PlayerModifiers`. Parameter-only changes flatten into per-player cost and trade-rate tables. Port changes use `PortRule`; `heuristic-v1-noports` is exactly this mechanism applied to itself, declaring a `PortSelector::All` / `PortAction::Disable` rule via `PolicyKind::port_rules` so the seat's flattened trade rates fall back to the bank rate. A "ports removed" curse would be the same rule reached through `PlayerModifiers` instead. A behavioral boon or curse adds an `Effect` variant and handles it at the pre-roll, production, build, or trade hook. Policy code receives `DecisionView`, not `GameState`; app-facing recommendation code should use the `recommend` adapter while simulation code uses `score_actions` with an `ActionBuf`.
+Rule changes belong in `RuleConfig`, `BuildableSpec`, or `PlayerModifiers`. Parameter-only changes flatten into per-player cost and trade-rate tables. Port changes use `PortRule`; `heuristic-v1-noports` is exactly this mechanism applied to itself, declaring a `PortSelector::All` / `PortAction::Disable` rule via `PolicyKind::port_rules` so the seat's flattened trade rates fall back to the bank rate. A "ports removed" curse would be the same rule reached through `PlayerModifiers` instead. A behavioral boon or curse adds an `Effect` variant and handles it at the pre-roll, production, build, or trade hook. Policy code receives `DecisionView`, not `GameState`; app-facing recommendation code should use the `recommend` adapter while simulation code scores into the `ActionBuf` its `PolicyScratch` already owns. Anything a new rule derives per decision and reads board-wide belongs in the `DecisionView` cache next to production pips; anything fixed by the board or the layout belongs on `SimBoard` or `Topology` at load.
 
 ## Measured performance
 
-Measured on the acceptance machine with Rust 1.94.0, 18 physical and 18 logical cores, release mode, 20,000 standard4 games. Reported as the median of consecutive runs, because this benchmark is noisy: repeated single-core samples of the same binary spanned 273-299 games/sec, and any measurement taken while another job holds a core is meaningless.
+Measured on the acceptance machine with Rust 1.94.0, 18 logical cores (6 performance, 12 efficiency), release mode, standard4. Reported as the median of consecutive runs, because this benchmark is noisy: any sample taken while another job holds a core is meaningless and reads 20-30% low.
 
-| Mode | Workers | Games/sec | Efficiency |
-| --- | ---: | ---: | ---: |
-| Single core | 1 | 280 | 100% |
-| All cores | 18 | ~2,300 | ~45% |
+| Mode | Workers | Games/sec |
+| --- | ---: | ---: |
+| Single core | 1 | ~1,295 |
+| All cores | 18 | ~12,100 |
 
-Throughput is down from an earlier 544 games/sec single core, and that is the price of playing the two bonus cards. Evaluating a prospective road runs an exponential edge-simple-trail search, and choosing a robber target scans every hex against every seat.
+Ignore the `parallel efficiency` figure the bench prints. It divides by the logical core count, which assumes 18 interchangeable cores; this machine has two kinds. Scaling is near-linear to 8 workers (8.2x) and then flattens as work lands on efficiency cores.
 
-Two mitigations keep it to this much. `best_road` is computed once per decision and shared with `best_goal` (it previously ran up to three times). The knight is scored only when it takes Largest Army, unblocks our own production, or we hold a spare. A third, tempting mitigation is deliberately absent: the trail search is *not* gated on `current_length + 1`, because a single road can bridge two components into `a + b + 1` and every seat leaves setup with two disconnected stubs -- that bound is false and silently declines game-winning roads. The guard bounds by segments owned instead, which is sound but fires far more often.
+The trail search behind Longest Road dominates everything else, so most of the speed is in `RoadNetwork` (`longest_road.rs`) and these four properties are load-bearing:
+
+- **Adjacency, not an edge list.** The search follows the two or three segments at a vertex instead of rescanning every edge on the board at every step of every branch.
+- **Build once, probe per candidate.** Scoring a seat's roads costs one full search plus one small search per candidate. `best_road` builds the network and hands the same one to `best_goal`.
+- **Component scope.** A probe searches only the component its segments touch; a trail never leaves its component, and the rest was already measured into the base length.
+- **Pruned starts.** A maximum trail ends at odd-degree or blocked vertices, and a component with neither is Eulerian and needs no search at all. This is an argument about trails rather than an obvious property, so `pruned_search_matches_exhaustive_reference` checks it against a brute-force reference over thousands of random graphs. Change the search and that test is the thing to trust.
+
+One tempting mitigation is deliberately absent: the search is *not* gated on `current_length + 1`, because a single road can bridge two components into `a + b + 1` and every seat leaves setup with two disconnected stubs -- that bound is false and silently declines game-winning roads. The guard bounds by segments owned instead, which is sound but fires far more often.
+
+Elsewhere, `DecisionView` memoises what it derives from the borrowed `GameState` -- production pips, legal settlements and roads as bitsets -- because the scoring passes ask for those board-wide within a single decision. Board and topology constants (resource pips, port incidence, edge neighbours) are computed at load. Policies score into a buffer owned by `PolicyScratch` rather than a fresh one per decision.
 
 The allocator test warms 50 games and then observes zero allocations across 200 games through the buffer-based scoring path.
 

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, PortAction, PortRule, PortSelector};
-use crate::view::{Action, DecisionView, DevPlay};
+use crate::view::{Action, ActionBuf, DecisionView, DevPlay};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -51,9 +51,24 @@ impl PolicyKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+/// Per-seat working memory that outlives a single decision.
+///
+/// It carries the seat's last chosen goal across the phases of a turn, and owns the action buffer
+/// so scoring a decision reuses one scratch area instead of zeroing a fresh `MAX_ACTIONS`-wide
+/// array every time a policy is asked to move. The buffer is boxed because a seat's worth of them
+/// is far too large for a worker thread's stack, and it should stay sizeable enough that new
+/// action kinds never have to justify themselves against a bound.
+#[derive(Clone, Debug, Default)]
 pub struct PolicyScratch {
     pub goal: Option<Buildable>,
+    pub actions: Box<ActionBuf>,
+}
+
+impl PolicyScratch {
+    pub fn reset(&mut self) {
+        self.goal = None;
+        self.actions.clear();
+    }
 }
 
 pub fn pre_roll(
@@ -84,7 +99,7 @@ pub fn action(
     rng: &mut Xoshiro256StarStar,
 ) -> Action {
     match kind {
-        PolicyKind::RandomLegal => random_legal::action(view, rng),
+        PolicyKind::RandomLegal => random_legal::action(view, scratch, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::action(view),
         PolicyKind::PriorityTrader => priority_trader::action(view, scratch),
         PolicyKind::HeuristicV1 => heuristic_v1::action(

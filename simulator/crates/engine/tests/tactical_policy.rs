@@ -134,6 +134,7 @@ fn discard_preserves_the_active_city_cost() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let mut scratch = PolicyScratch {
         goal: Some(Buildable::City),
+        ..PolicyScratch::default()
     };
     let discarded = heuristic_v1::discard(&view, 4, &mut scratch);
     assert_eq!(discarded[Resource::Wheat.index()], 0);

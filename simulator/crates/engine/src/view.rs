@@ -1,12 +1,19 @@
+use std::cell::Cell;
+
 use serde::{Deserialize, Serialize};
 
 use crate::board::{SimBoard, SimPort};
-use crate::longest_road::longest_road;
+use crate::longest_road::RoadNetwork;
 use crate::rules::{Buildable, FlattenedRules, OwnedPort, RESOURCE_COUNT, Resource};
 use crate::state::{EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 
 pub const MAX_ACTIONS: usize = 4096;
+
+/// The cached legality sets below address vertices and edges by bit, so a layout can hold no more
+/// of either than a `u128` has room for.
+const _: () = assert!(MAX_VERTICES <= u128::BITS as usize);
+const _: () = assert!(MAX_EDGES <= u128::BITS as usize);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,7 +73,7 @@ const EMPTY_ACTION: ScoredAction = ScoredAction {
     score: f32::NEG_INFINITY,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ActionBuf {
     values: [ScoredAction; MAX_ACTIONS],
     len: usize,
@@ -141,6 +148,42 @@ pub struct SimPortSnapshot {
     pub rate: u32,
 }
 
+/// The observer's road segments, summarised for the legality checks that run per vertex and edge.
+#[derive(Clone, Copy)]
+struct OwnRoads {
+    /// One bit per vertex the observer's network reaches.
+    vertices: u128,
+    count: u8,
+}
+
+/// Facts derived from the borrowed `GameState` that several scoring passes need.
+///
+/// The state cannot change while the view lives, so a value computed once is good for the whole
+/// decision. Without this, board-wide sums are recomputed inside loops that already run once per
+/// vertex and once per edge -- `vertex_score` alone re-derived the observer's entire production
+/// on every call.
+struct ViewCache {
+    production: [Cell<Option<[u16; RESOURCE_COUNT]>>; MAX_SEATS],
+    own_roads: Cell<Option<OwnRoads>>,
+    /// Legal placements as vertex and edge bitsets. Several passes ask for these across the whole
+    /// board within one decision, so they are derived as a set rather than tested one at a time.
+    settlements: Cell<Option<u128>>,
+    roads: Cell<Option<u128>>,
+    sites: Cell<Option<u128>>,
+}
+
+impl ViewCache {
+    const fn new() -> Self {
+        Self {
+            production: [const { Cell::new(None) }; MAX_SEATS],
+            own_roads: Cell::new(None),
+            settlements: Cell::new(None),
+            roads: Cell::new(None),
+            sites: Cell::new(None),
+        }
+    }
+}
+
 pub struct DecisionView<'a> {
     state: &'a GameState,
     board: &'a SimBoard,
@@ -151,6 +194,7 @@ pub struct DecisionView<'a> {
     dev_deck_remaining: u8,
     dev_played_this_turn: bool,
     phase: DecisionPhase,
+    cache: ViewCache,
 }
 
 impl<'a> DecisionView<'a> {
@@ -176,6 +220,7 @@ impl<'a> DecisionView<'a> {
             dev_deck_remaining,
             dev_played_this_turn,
             phase,
+            cache: ViewCache::new(),
         }
     }
 
@@ -335,43 +380,67 @@ impl<'a> DecisionView<'a> {
         self.rules.largest_army_vp()
     }
 
+    fn own_roads(&self) -> OwnRoads {
+        if let Some(cached) = self.cache.own_roads.get() {
+            return cached;
+        }
+        let mut summary = OwnRoads {
+            vertices: 0,
+            count: 0,
+        };
+        for edge in 0..self.topology.edge_count() {
+            if self.state.edge_owner[edge] == self.observer as u8 {
+                for vertex in self.topology.edge_endpoints(edge as Edge) {
+                    summary.vertices |= 1 << vertex;
+                }
+                summary.count = summary.count.saturating_add(1);
+            }
+        }
+        self.cache.own_roads.set(Some(summary));
+        summary
+    }
+
     /// How many roads the observer owns. A trail cannot use more edges than exist, so this is a
     /// sound upper bound on any achievable road length -- unlike the current longest trail, which
     /// a single edge can raise by much more than one (it may bridge two separate components, or
     /// close a cycle and unlock an Euler trail).
     pub fn own_road_count(&self) -> u8 {
-        (0..self.topology.edge_count())
-            .filter(|edge| self.edge_owner(*edge as Edge) == Some(self.observer as u8))
-            .count()
-            .min(u8::MAX as usize) as u8
+        self.own_roads().count
+    }
+
+    /// The observer's road graph, ready to be probed with prospective segments. Scoring passes that
+    /// weigh many candidate roads build this once and call [`Self::road_length_on`] per candidate.
+    pub fn road_network(&self) -> RoadNetwork {
+        RoadNetwork::for_seat(
+            self.topology,
+            &self.state.vertex_owner,
+            &self.state.edge_owner,
+            self.observer as u8,
+        )
     }
 
     pub fn road_length_after(&self, first: Edge, second: Option<Edge>) -> u8 {
-        // Headroom for the one or two prospective segments appended below.
-        let mut road_edges = [[0_u8; 2]; MAX_EDGES + 2];
-        let mut count = 0;
-        for edge in 0..self.topology.edge_count() {
-            if self.edge_owner(edge as Edge) == Some(self.observer as u8) {
-                road_edges[count] = self.topology.edge_endpoints(edge as Edge);
-                count += 1;
+        self.road_length_on(&mut self.road_network(), first, second, u8::MAX)
+    }
+
+    /// As [`Self::road_length_after`], but over a network the caller already built and bounded by
+    /// `cap` -- see [`RoadNetwork::probe`] for what capping does and does not promise.
+    pub fn road_length_on(
+        &self,
+        network: &mut RoadNetwork,
+        first: Edge,
+        second: Option<Edge>,
+        cap: u8,
+    ) -> u8 {
+        let mut segments = [self.topology.edge_endpoints(first); 2];
+        let count = match second {
+            Some(second) => {
+                segments[1] = self.topology.edge_endpoints(second);
+                2
             }
-        }
-        road_edges[count] = self.topology.edge_endpoints(first);
-        count += 1;
-        if let Some(second) = second {
-            road_edges[count] = self.topology.edge_endpoints(second);
-            count += 1;
-        }
-        let mut blocked = [false; MAX_VERTICES];
-        for (vertex, value) in blocked
-            .iter_mut()
-            .enumerate()
-            .take(self.topology.vertex_count())
-        {
-            let owner = self.vertex_owner(vertex as Vertex);
-            *value = owner.is_some_and(|owner| owner != self.observer as u8);
-        }
-        longest_road(&road_edges[..count], &blocked)
+            None => 1,
+        };
+        network.probe(&segments[..count], cap)
     }
 
     pub fn costs(&self, buildable: Buildable) -> &[[u8; RESOURCE_COUNT]] {
@@ -450,15 +519,9 @@ impl<'a> DecisionView<'a> {
                 .max()
                 .unwrap_or(0);
             let mut found_second = false;
-            for second in 0..self.topology.edge_count() {
-                let second = second as Edge;
-                let first_endpoints = self.topology.edge_endpoints(first);
-                let second_endpoints = self.topology.edge_endpoints(second);
-                if !first_endpoints
-                    .iter()
-                    .any(|vertex| second_endpoints.contains(vertex))
-                    || !self.legal_road_after(first, second)
-                {
+            for second in self.topology.edge_neighbors(first) {
+                let second = *second;
+                if !self.legal_road_after(first, second) {
                     continue;
                 }
                 found_second = true;
@@ -500,18 +563,12 @@ impl<'a> DecisionView<'a> {
                     }
                 }
             }
-            let first_endpoints = self.topology.edge_endpoints(first);
-            for second in 0..self.topology.edge_count() {
-                let second = second as Edge;
-                let second_endpoints = self.topology.edge_endpoints(second);
-                if !first_endpoints
-                    .iter()
-                    .any(|vertex| second_endpoints.contains(vertex))
-                    || !self.legal_road_after(first, second)
-                {
+            for second in self.topology.edge_neighbors(first) {
+                let second = *second;
+                if !self.legal_road_after(first, second) {
                     continue;
                 }
-                for target in second_endpoints {
+                for target in self.topology.edge_endpoints(second) {
                     if self.is_expansion_target(target) {
                         let score = self.vertex_pips(target, true) * 2;
                         if best.is_none() || score > best_score {
@@ -526,33 +583,85 @@ impl<'a> DecisionView<'a> {
     }
 
     pub fn legal_settlement(&self, vertex: Vertex) -> bool {
-        self.pieces(self.observer, Buildable::Settlement) > 0
-            && self.vertex_owner(vertex).is_none()
-            && self
-                .topology
-                .vertex_adjacent(vertex)
-                .iter()
-                .all(|adjacent| self.vertex_owner(*adjacent).is_none())
-            && self
-                .topology
-                .vertex_edges(vertex)
-                .iter()
-                .any(|edge| self.edge_owner(*edge) == Some(self.observer as u8))
+        self.legal_settlements() & (1 << vertex) != 0
+    }
+
+    /// Every vertex the observer may settle. Only vertices their roads already reach can qualify,
+    /// so this walks that handful rather than the whole board.
+    fn legal_settlements(&self) -> u128 {
+        if let Some(cached) = self.cache.settlements.get() {
+            return cached;
+        }
+        let mut legal = 0_u128;
+        if self.pieces(self.observer, Buildable::Settlement) > 0 {
+            let mut rest = self.own_roads().vertices;
+            while rest != 0 {
+                let vertex = rest.trailing_zeros() as Vertex;
+                rest &= rest - 1;
+                if self.vertex_owner(vertex).is_none()
+                    && self
+                        .topology
+                        .vertex_adjacent(vertex)
+                        .iter()
+                        .all(|adjacent| self.vertex_owner(*adjacent).is_none())
+                {
+                    legal |= 1 << vertex;
+                }
+            }
+        }
+        self.cache.settlements.set(Some(legal));
+        legal
     }
 
     pub fn legal_road(&self, edge: Edge) -> bool {
-        if self.edge_owner(edge).is_some() || self.pieces(self.observer, Buildable::Road) == 0 {
-            return false;
+        self.legal_roads() & (1 << edge) != 0
+    }
+
+    /// Every edge the observer may build on: unowned, and touching a vertex they hold or an empty
+    /// vertex their network already reaches.
+    fn legal_roads(&self) -> u128 {
+        if let Some(cached) = self.cache.roads.get() {
+            return cached;
         }
-        self.topology.edge_endpoints(edge).iter().any(|endpoint| {
-            self.vertex_owner(*endpoint) == Some(self.observer as u8)
-                || (self.vertex_owner(*endpoint).is_none()
+        let mut legal = 0_u128;
+        if self.pieces(self.observer, Buildable::Road) > 0 {
+            let sites = self.build_sites();
+            for edge in 0..self.topology.edge_count() {
+                if self.state.edge_owner[edge] == EMPTY
                     && self
                         .topology
-                        .vertex_edges(*endpoint)
+                        .edge_endpoints(edge as Edge)
                         .iter()
-                        .any(|incident| self.edge_owner(*incident) == Some(self.observer as u8)))
-        })
+                        .any(|endpoint| sites & (1 << endpoint) != 0)
+                {
+                    legal |= 1 << edge;
+                }
+            }
+        }
+        self.cache.roads.set(Some(legal));
+        legal
+    }
+
+    /// Vertices the observer can extend a road from.
+    fn build_sites(&self) -> u128 {
+        if let Some(cached) = self.cache.sites.get() {
+            return cached;
+        }
+        let computed = self.compute_build_sites();
+        self.cache.sites.set(Some(computed));
+        computed
+    }
+
+    fn compute_build_sites(&self) -> u128 {
+        let reached = self.own_roads().vertices;
+        let mut sites = 0_u128;
+        for vertex in 0..self.topology.vertex_count() {
+            let owner = self.state.vertex_owner[vertex];
+            if owner == self.observer as u8 || (owner == EMPTY && reached & (1 << vertex) != 0) {
+                sites |= 1 << vertex;
+            }
+        }
+        sites
     }
 
     pub fn legal_road_after(&self, first: Edge, second: Edge) -> bool {
@@ -562,18 +671,17 @@ impl<'a> DecisionView<'a> {
         {
             return false;
         }
-        self.topology.edge_endpoints(second).iter().any(|endpoint| {
-            self.vertex_owner(*endpoint) == Some(self.observer as u8)
-                || (self.vertex_owner(*endpoint).is_none()
-                    && self
-                        .topology
-                        .vertex_edges(*endpoint)
-                        .iter()
-                        .any(|incident| {
-                            *incident == first
-                                || self.edge_owner(*incident) == Some(self.observer as u8)
-                        }))
-        })
+        // `first` is prospective, so it is not among the build sites yet: an empty endpoint shared
+        // with `first` is reachable through it.
+        let laid = self.topology.edge_endpoints(first);
+        let sites = self.build_sites();
+        self.topology
+            .edge_endpoints(second)
+            .iter()
+            .any(|endpoint| {
+                sites & (1 << endpoint) != 0
+                    || (self.vertex_owner(*endpoint).is_none() && laid.contains(endpoint))
+            })
     }
 
     pub fn legal_city(&self, vertex: Vertex) -> bool {
@@ -630,6 +738,15 @@ impl<'a> DecisionView<'a> {
     }
 
     pub fn production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {
+        if let Some(cached) = self.cache.production[seat].get() {
+            return cached;
+        }
+        let computed = self.compute_production_pips(seat);
+        self.cache.production[seat].set(Some(computed));
+        computed
+    }
+
+    fn compute_production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {
         let mut result = [0; RESOURCE_COUNT];
         for vertex_index in 0..self.topology.vertex_count() {
             let vertex = vertex_index as Vertex;
@@ -652,16 +769,8 @@ impl<'a> DecisionView<'a> {
         result
     }
 
-    pub fn board_resource_pips(&self) -> [u16; RESOURCE_COUNT] {
-        let mut result = [0; RESOURCE_COUNT];
-        for hex in 0..self.topology.hex_count() {
-            if let (Some(resource), Some(token)) =
-                (self.board.tiles()[hex], self.board.tokens()[hex])
-            {
-                result[resource.index()] += u16::from(pips(token));
-            }
-        }
-        result
+    pub const fn board_resource_pips(&self) -> [u16; RESOURCE_COUNT] {
+        *self.board.resource_pips()
     }
 
     pub fn hex_touches_seat(&self, hex: Hex, seat: usize) -> bool {

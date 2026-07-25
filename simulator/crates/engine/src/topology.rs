@@ -22,6 +22,44 @@ impl Layout {
     }
 }
 
+/// A vertex sits on at most three hexes, three edges and three neighbouring vertices.
+const VERTEX_FANOUT: usize = 3;
+/// A hex borders at most six others.
+const HEX_FANOUT: usize = 6;
+/// An edge shares each endpoint with at most two further edges.
+const EDGE_FANOUT: usize = 4;
+/// Vertex degree, which `RoadNetwork` also relies on when sizing its incidence slots.
+const MAX_VERTEX_DEGREE: usize = 3;
+
+/// A fixed-capacity list stored inline.
+///
+/// Board geometry bounds every one of these, and the scoring loops walk them once per vertex and
+/// once per edge, so holding them here rather than in a `Vec<Vec<_>>` takes a pointer chase out of
+/// the innermost iteration.
+#[derive(Clone, Copy, Debug)]
+struct SmallList<T, const N: usize> {
+    values: [T; N],
+    len: u8,
+}
+
+impl<T: Copy + Default, const N: usize> SmallList<T, N> {
+    fn new(values: &[T], what: &str) -> Result<Self, String> {
+        if values.len() > N {
+            return Err(format!("{what} has {} members, over the {N} cap", values.len()));
+        }
+        let mut list = Self {
+            values: [T::default(); N],
+            len: values.len() as u8,
+        };
+        list.values[..values.len()].copy_from_slice(values);
+        Ok(list)
+    }
+
+    fn as_slice(&self) -> &[T] {
+        &self.values[..usize::from(self.len)]
+    }
+}
+
 #[derive(Debug)]
 pub struct Topology {
     layout: Layout,
@@ -30,11 +68,15 @@ pub struct Topology {
     edge_ids: Vec<String>,
     hex_vertices: Vec<[Vertex; 6]>,
     hex_edges: Vec<[Edge; 6]>,
-    hex_neighbors: Vec<Vec<Hex>>,
-    vertex_hexes: Vec<Vec<Hex>>,
-    vertex_edges: Vec<Vec<Edge>>,
-    vertex_adjacent: Vec<Vec<Vertex>>,
+    hex_neighbors: Vec<SmallList<Hex, HEX_FANOUT>>,
+    vertex_hexes: Vec<SmallList<Hex, VERTEX_FANOUT>>,
+    vertex_edges: Vec<SmallList<Edge, VERTEX_FANOUT>>,
+    vertex_adjacent: Vec<SmallList<Vertex, VERTEX_FANOUT>>,
     edge_endpoints: Vec<[Vertex; 2]>,
+    /// Edges sharing an endpoint with each edge, ascending and excluding the edge itself. The
+    /// scoring passes that weigh a road and a follow-on road used to rescan the whole board for
+    /// this; the answer is fixed by geometry.
+    edge_neighbors: Vec<SmallList<Edge, EDGE_FANOUT>>,
     coastal_edges: Vec<Edge>,
     default_port_edges: Vec<Edge>,
     resource_counts: [u8; 6],
@@ -126,23 +168,29 @@ impl Topology {
     }
 
     pub fn hex_neighbors(&self, hex: Hex) -> &[Hex] {
-        &self.hex_neighbors[usize::from(hex)]
+        self.hex_neighbors[usize::from(hex)].as_slice()
     }
 
     pub fn vertex_hexes(&self, vertex: Vertex) -> &[Hex] {
-        &self.vertex_hexes[usize::from(vertex)]
+        self.vertex_hexes[usize::from(vertex)].as_slice()
     }
 
     pub fn vertex_edges(&self, vertex: Vertex) -> &[Edge] {
-        &self.vertex_edges[usize::from(vertex)]
+        self.vertex_edges[usize::from(vertex)].as_slice()
     }
 
     pub fn vertex_adjacent(&self, vertex: Vertex) -> &[Vertex] {
-        &self.vertex_adjacent[usize::from(vertex)]
+        self.vertex_adjacent[usize::from(vertex)].as_slice()
     }
 
     pub fn edge_endpoints(&self, edge: Edge) -> [Vertex; 2] {
         self.edge_endpoints[usize::from(edge)]
+    }
+
+    /// Edges sharing an endpoint with `edge`, ascending. Iterating these is equivalent to scanning
+    /// every edge and keeping the ones that touch `edge`, and preserves that scan's order.
+    pub fn edge_neighbors(&self, edge: Edge) -> &[Edge] {
+        self.edge_neighbors[usize::from(edge)].as_slice()
     }
 
     pub fn coastal_edges(&self) -> &[Edge] {
@@ -170,6 +218,7 @@ impl Topology {
             return Err("edge endpoint pair is degenerate".into());
         }
         for (vertex, adjacent) in self.vertex_adjacent.iter().enumerate() {
+            let adjacent = adjacent.as_slice();
             if !(2..=3).contains(&adjacent.len()) {
                 return Err(format!(
                     "vertex {vertex} has off-board degree {}",
@@ -177,8 +226,33 @@ impl Topology {
                 ));
             }
             for other in adjacent {
-                if !self.vertex_adjacent[usize::from(*other)].contains(&(vertex as Vertex)) {
+                if !self
+                    .vertex_adjacent(*other)
+                    .contains(&(vertex as Vertex))
+                {
                     return Err(format!("adjacency is asymmetric at vertex {vertex}"));
+                }
+            }
+        }
+        // Legality and scoring read vertex-edge incidence from both directions -- `edge_neighbors`
+        // and `vertex_edges` one way, `RoadNetwork` and port incidence the other -- so the two must
+        // agree. A pack where they drift would not fail; it would quietly stop offering some legal
+        // roads and settlements. Vertex degree is checked here for the same reason: `RoadNetwork`
+        // stores incidence in fixed-width slots and would otherwise panic mid-simulation.
+        for (edge, endpoints) in self.edge_endpoints.iter().enumerate() {
+            for vertex in endpoints {
+                if !self.vertex_edges(*vertex).contains(&(edge as Edge)) {
+                    return Err(format!("edge {edge} is missing from vertex {vertex}'s edges"));
+                }
+            }
+        }
+        for (vertex, edges) in self.vertex_edges.iter().enumerate() {
+            if edges.as_slice().len() > MAX_VERTEX_DEGREE {
+                return Err(format!("vertex {vertex} has degree above {MAX_VERTEX_DEGREE}"));
+            }
+            for edge in edges.as_slice() {
+                if !self.edge_endpoints[usize::from(*edge)].contains(&(vertex as Vertex)) {
+                    return Err(format!("vertex {vertex} claims unrelated edge {edge}"));
                 }
             }
         }
@@ -245,17 +319,17 @@ impl Topology {
             .hex_neighbors
             .iter()
             .map(|values| {
-                values
+                let mapped = values
                     .iter()
-                    .map(|value| {
-                        Hex::try_from(*value).map_err(|_| "hex index overflow".to_string())
-                    })
-                    .collect()
+                    .map(|value| Hex::try_from(*value).map_err(|_| "hex index overflow".to_string()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                SmallList::new(&mapped, "hex neighbors")
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let vertex_hexes = map_lists(&raw.vertex_hexes, map_hex)?;
-        let vertex_edges = map_lists(&raw.vertex_edges, map_edge)?;
-        let vertex_adjacent = map_lists(&raw.vertex_adjacent, map_vertex)?;
+        let vertex_hexes = map_lists(&raw.vertex_hexes, map_hex, "vertex hexes")?;
+        let vertex_edges = map_lists(&raw.vertex_edges, map_edge, "vertex edges")?;
+        let vertex_adjacent = map_lists(&raw.vertex_adjacent, map_vertex, "vertex adjacency")?;
+        let edge_neighbors = derive_edge_neighbors(&edge_endpoints, &vertex_edges)?;
         let coastal_edges = raw
             .coastal_edges
             .iter()
@@ -294,6 +368,7 @@ impl Topology {
             vertex_edges,
             vertex_adjacent,
             edge_endpoints,
+            edge_neighbors,
             coastal_edges,
             default_port_edges,
             resource_counts,
@@ -342,12 +417,46 @@ fn map_fixed<T: Copy, const N: usize>(
         .collect()
 }
 
-fn map_lists<T>(
+fn map_lists<T: Copy + Default, const N: usize>(
     values: &[Vec<String>],
     map: impl Fn(&String) -> Result<T, String>,
-) -> Result<Vec<Vec<T>>, String> {
+    what: &str,
+) -> Result<Vec<SmallList<T, N>>, String> {
     values
         .iter()
-        .map(|items| items.iter().map(&map).collect())
+        .map(|items| {
+            let mapped = items.iter().map(&map).collect::<Result<Vec<_>, _>>()?;
+            SmallList::new(&mapped, what)
+        })
+        .collect()
+}
+
+fn derive_edge_neighbors(
+    edge_endpoints: &[[Vertex; 2]],
+    vertex_edges: &[SmallList<Edge, VERTEX_FANOUT>],
+) -> Result<Vec<SmallList<Edge, EDGE_FANOUT>>, String> {
+    edge_endpoints
+        .iter()
+        .enumerate()
+        .map(|(edge, endpoints)| {
+            // Derived before `validate`, so an endpoint naming a vertex the pack never declared has
+            // to surface as an error rather than an index panic.
+            let mut touching = Vec::new();
+            for vertex in endpoints {
+                let incident = vertex_edges
+                    .get(usize::from(*vertex))
+                    .ok_or_else(|| format!("edge {edge} names unknown vertex {vertex}"))?;
+                touching.extend(
+                    incident
+                        .as_slice()
+                        .iter()
+                        .copied()
+                        .filter(|other| usize::from(*other) != edge),
+                );
+            }
+            touching.sort_unstable();
+            touching.dedup();
+            SmallList::new(&touching, "edge neighbors")
+        })
         .collect()
 }

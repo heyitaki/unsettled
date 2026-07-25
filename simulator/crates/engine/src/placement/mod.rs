@@ -165,9 +165,7 @@ pub fn vertex_score(
     let city =
         f32::from(production[Resource::Wheat.index()] * 2 + production[Resource::Ore.index()] * 3);
     let port = board
-        .ports()
-        .iter()
-        .filter(|candidate| topology.vertex_edges(vertex).contains(&candidate.edge))
+        .ports_at(vertex)
         .map(|candidate| {
             let rate = candidate.rate.max(2) as f32;
             match candidate.resource {

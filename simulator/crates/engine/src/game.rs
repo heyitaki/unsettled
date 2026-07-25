@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::board::SimBoard;
-use crate::longest_road::{leading_holder, longest_road, update_road_card};
+use crate::longest_road::{RoadNetwork, leading_holder, update_road_card};
 use crate::placement::{PlacementKind, choose};
 use crate::policy::{self, PolicyKind, PolicyScratch};
 use crate::rng::Streams;
@@ -9,7 +9,7 @@ use crate::rules::{
     Buildable, Effect, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource,
     RuleConfig,
 };
-use crate::state::{EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES};
+use crate::state::{EMPTY, GameState, MAX_SEATS};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 use crate::view::{Action, DecisionPhase, DecisionView, DevPlay, can_pay};
 
@@ -74,7 +74,7 @@ impl Default for GameArena {
             streams: Streams::new(0),
             flattened: [FlattenedRules::default(); MAX_SEATS],
             policies: [PolicyKind::HeuristicV1; MAX_SEATS],
-            scratch: [PolicyScratch::default(); MAX_SEATS],
+            scratch: std::array::from_fn(|_| PolicyScratch::default()),
             dev_deck: [0; 40],
             dev_len: 0,
             dev_cursor: 0,
@@ -190,7 +190,9 @@ impl GameArena {
         self.state.bank = rules.bank_supply;
         self.state.robber = board.robber();
         self.streams = Streams::new(config.seed);
-        self.scratch = [PolicyScratch::default(); MAX_SEATS];
+        for scratch in &mut self.scratch {
+            scratch.reset();
+        }
         self.illegal_actions = 0;
         self.dev_played_this_turn = false;
         for road in board.roads() {
@@ -1117,24 +1119,24 @@ impl GameArena {
     }
 
     fn recompute_all_roads(&mut self, topology: &Topology, rules: &RuleConfig, seats: usize) {
-        let before = self.state.longest_road.holder;
         for seat in 0..seats {
-            let mut road_edges = [[0_u8; 2]; MAX_EDGES];
-            let mut count = 0;
-            for edge_index in 0..topology.edge_count() {
-                if self.state.edge_owner[edge_index] == seat as u8 {
-                    road_edges[count] = topology.edge_endpoints(edge_index as Edge);
-                    count += 1;
-                }
-            }
-            let mut blocked = [false; MAX_VERTICES];
-            for (vertex, value) in blocked.iter_mut().enumerate().take(topology.vertex_count()) {
-                let owner = self.state.vertex_owner[vertex];
-                *value = owner != EMPTY && owner != seat as u8;
-            }
-            self.state.players[seat].longest_road_len =
-                longest_road(&road_edges[..count], &blocked);
+            self.state.players[seat].longest_road_len = self.road_length(topology, seat);
         }
+        self.award_road_card(rules, seats);
+    }
+
+    fn road_length(&self, topology: &Topology, seat: usize) -> u8 {
+        RoadNetwork::for_seat(
+            topology,
+            &self.state.vertex_owner,
+            &self.state.edge_owner,
+            seat as u8,
+        )
+        .base_length()
+    }
+
+    fn award_road_card(&mut self, rules: &RuleConfig, seats: usize) {
+        let before = self.state.longest_road.holder;
         let lengths: [u8; MAX_SEATS] =
             std::array::from_fn(|seat| self.state.players[seat].longest_road_len);
         update_road_card(

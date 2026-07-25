@@ -7,6 +7,11 @@ edition = "2024"
 license = "MIT"
 rust-version = "1.94"
 
+[profile.release]
+# The hot loop spans the engine and CLI crates, so cross-crate inlining is worth the build time.
+lto = "fat"
+codegen-units = 1
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -35,18 +35,18 @@ pub fn action(
     params: &HeuristicParams,
     rng: &mut Xoshiro256StarStar,
 ) -> Action {
-    let mut out = ActionBuf::new();
     let road = best_road(view, params);
-    score_actions_with(view, params, &mut out, road);
-    scratch.goal = best_goal_with(view, params, road).map(|goal| goal.kind);
-    let best_score = out
+    let PolicyScratch { goal, actions } = scratch;
+    score_actions_with(view, params, actions, road);
+    *goal = best_goal_with(view, params, road).map(|goal| goal.kind);
+    let best_score = actions
         .as_slice()
         .iter()
         .map(|action| action.score)
         .fold(f32::NEG_INFINITY, f32::max);
     let mut selected = Action::Pass;
     let mut ties = 0;
-    for candidate in out
+    for candidate in actions
         .as_slice()
         .iter()
         .filter(|candidate| candidate.score == best_score)
@@ -70,22 +70,26 @@ fn score_actions_with(
     road: Option<RoadGoal>,
 ) {
     out.clear();
-    for vertex in 0..view.topology().vertex_count() {
-        let vertex = vertex as u8;
-        if view.legal_city(vertex) && view.can_afford(Buildable::City) {
-            out.push(ScoredAction {
-                action: Action::UpgradeCity(vertex),
-                score: 10_000.0 + vertex_score(view, vertex, params),
-            });
+    if view.can_afford(Buildable::City) {
+        for vertex in 0..view.topology().vertex_count() {
+            let vertex = vertex as u8;
+            if view.legal_city(vertex) {
+                out.push(ScoredAction {
+                    action: Action::UpgradeCity(vertex),
+                    score: 10_000.0 + vertex_score(view, vertex, params),
+                });
+            }
         }
     }
-    for vertex in 0..view.topology().vertex_count() {
-        let vertex = vertex as u8;
-        if view.legal_settlement(vertex) && view.can_afford(Buildable::Settlement) {
-            out.push(ScoredAction {
-                action: Action::BuildSettlement(vertex),
-                score: 500.0 + vertex_score(view, vertex, params),
-            });
+    if view.can_afford(Buildable::Settlement) {
+        for vertex in 0..view.topology().vertex_count() {
+            let vertex = vertex as u8;
+            if view.legal_settlement(vertex) {
+                out.push(ScoredAction {
+                    action: Action::BuildSettlement(vertex),
+                    score: 500.0 + vertex_score(view, vertex, params),
+                });
+            }
         }
     }
     if view.can_afford(Buildable::Road)
@@ -162,7 +166,10 @@ fn score_actions_with(
 }
 
 pub fn recommend(view: &DecisionView<'_>, params: &HeuristicParams) -> Vec<ScoredAction> {
-    let mut out = ActionBuf::new();
+    // Boxed to keep the buffer out of this frame; this is the entry point the app calls, and the
+    // engine is meant to stay wasm-portable. Not a hard guarantee -- `Box::new` may still build the
+    // value in place first -- so `MAX_ACTIONS` growing by orders of magnitude would need revisiting.
+    let mut out = Box::new(ActionBuf::new());
     score_actions(view, params, &mut out);
     out.as_slice().to_vec()
 }
@@ -308,9 +315,8 @@ pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParam
         .filter(|(resource, value)| **value > 0 && own[*resource] == 0)
         .count() as f32;
     let port_synergy = view
-        .ports()
-        .iter()
-        .filter(|port| view.topology().vertex_edges(vertex).contains(&port.edge))
+        .board()
+        .ports_at(vertex)
         .map(|port| {
             Resource::ALL
                 .iter()
@@ -399,18 +405,19 @@ fn best_goal_with(
 
 fn best_road(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<RoadGoal> {
     let mut best = None;
-    let contesting = longest_road_reachable(view, 1);
+    // The trail search is the dominant cost of a decision, so the graph it walks is built once
+    // here and probed per candidate -- and not at all when the card is out of reach.
+    let mut network = longest_road_reachable(view, 1).then(|| view.road_network());
+    let cap = road_length_cap(view);
     for edge in 0..view.topology().edge_count() {
         let edge = edge as u8;
         if !view.legal_road(edge) {
             continue;
         }
         let expansion_score = expansion_road_score(view, edge, params);
-        let new_length = if contesting {
-            view.road_length_after(edge, None)
-        } else {
-            0
-        };
+        let new_length = network
+            .as_mut()
+            .map_or(0, |network| view.road_length_on(network, edge, None, cap));
         let Some((action_bonus, goal_bonus)) = longest_road_value(view, new_length) else {
             if expansion_score.is_none() {
                 continue;
@@ -453,18 +460,12 @@ fn expansion_road_score(
             }
         }
     }
-    let first_endpoints = view.topology().edge_endpoints(first);
-    for second in 0..view.topology().edge_count() {
-        let second = second as u8;
-        let second_endpoints = view.topology().edge_endpoints(second);
-        if !first_endpoints
-            .iter()
-            .any(|vertex| second_endpoints.contains(vertex))
-            || !view.legal_road_after(first, second)
-        {
+    for second in view.topology().edge_neighbors(first) {
+        let second = *second;
+        if !view.legal_road_after(first, second) {
             continue;
         }
-        for target in second_endpoints {
+        for target in view.topology().edge_endpoints(second) {
             if view.is_expansion_target(target) {
                 let score = vertex_score(view, target, params);
                 if best_score.is_none_or(|best| score > best) {
@@ -488,19 +489,34 @@ fn expansion_road_score(
 /// tighter-looking bound is false and would skip roads that win the card outright. The slack of 2
 /// keeps the near-miss progress branch of `longest_road_value` reachable.
 fn longest_road_reachable(view: &DecisionView<'_>, added: u8) -> bool {
-    let observer = view.observer();
-    if view.longest_road_holder() == Some(observer) {
+    if view.longest_road_holder() == Some(view.observer()) {
         return false;
     }
+    let target = longest_road_target(view);
+    view.own_road_count().saturating_add(added) >= target.saturating_sub(PROGRESS_SLACK)
+}
+
+/// The trail length that would take the Longest Road card.
+fn longest_road_target(view: &DecisionView<'_>) -> u8 {
     let opponent_best = (0..view.seats())
-        .filter(|seat| *seat != observer)
+        .filter(|seat| *seat != view.observer())
         .map(|seat| view.longest_road_len(seat))
         .max()
         .unwrap_or_default();
-    let target = view
-        .longest_road_min()
-        .max(opponent_best.saturating_add(1));
-    view.own_road_count().saturating_add(added) >= target.saturating_sub(PROGRESS_SLACK)
+    view.longest_road_min().max(opponent_best.saturating_add(1))
+}
+
+/// The longest trail worth measuring exactly when scoring a prospective road.
+///
+/// `longest_road_value` reads a trail through two thresholds only: it is worthless at or below the
+/// seat's current length, and it wins the card at or above the target. Every length beyond the
+/// target scores the same, so the search may stop there -- which is precisely where a long
+/// late-game network gets expensive to walk.
+fn road_length_cap(view: &DecisionView<'_>) -> u8 {
+    longest_road_target(view).max(
+        view.longest_road_len(view.observer())
+            .saturating_add(1),
+    )
 }
 
 /// How far below the card's threshold `longest_road_value` still pays a progress bonus.
@@ -511,14 +527,7 @@ fn longest_road_value(view: &DecisionView<'_>, new_length: u8) -> Option<(f32, f
     if view.longest_road_holder() == Some(observer) {
         return None;
     }
-    let opponent_best = (0..view.seats())
-        .filter(|seat| *seat != observer)
-        .map(|seat| view.longest_road_len(seat))
-        .max()
-        .unwrap_or_default();
-    let target = view
-        .longest_road_min()
-        .max(opponent_best.saturating_add(1));
+    let target = longest_road_target(view);
     let current = view.longest_road_len(observer);
     if new_length <= current {
         return None;
@@ -625,35 +634,30 @@ fn best_road_building_pair(
     let mut best = (None, None);
     let mut best_score = f32::NEG_INFINITY;
     // Road building lays two segments, so the card is reachable from two further out.
-    let contesting = longest_road_reachable(view, 2);
+    let mut network = longest_road_reachable(view, 2).then(|| view.road_network());
+    let cap = road_length_cap(view);
     for first in 0..view.topology().edge_count() {
         let first = first as u8;
         if !view.legal_road(first) {
             continue;
         }
-        let first_endpoints = view.topology().edge_endpoints(first);
         let mut found_second = false;
-        for second in 0..view.topology().edge_count() {
-            let second = second as u8;
-            let second_endpoints = view.topology().edge_endpoints(second);
-            if !first_endpoints
-                .iter()
-                .any(|vertex| second_endpoints.contains(vertex))
-                || !view.legal_road_after(first, second)
-            {
+        for second in view.topology().edge_neighbors(first) {
+            let second = *second;
+            if !view.legal_road_after(first, second) {
                 continue;
             }
             found_second = true;
-            let expansion_score = second_endpoints
+            let expansion_score = view
+                .topology()
+                .edge_endpoints(second)
                 .iter()
                 .map(|vertex| vertex_score(view, *vertex, params))
                 .fold(f32::NEG_INFINITY, f32::max);
-            let road_bonus = if contesting {
-                longest_road_value(view, view.road_length_after(first, Some(second)))
-                    .map_or(0.0, |(action_score, _)| action_score)
-            } else {
-                0.0
-            };
+            let road_bonus = network.as_mut().map_or(0.0, |network| {
+                let length = view.road_length_on(network, first, Some(second), cap);
+                longest_road_value(view, length).map_or(0.0, |(action_score, _)| action_score)
+            });
             let score = expansion_score + road_bonus;
             if score > best_score {
                 best = (Some(first), Some(second));
