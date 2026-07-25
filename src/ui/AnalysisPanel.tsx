@@ -161,7 +161,7 @@ export function AnalysisPanel() {
           options={board.players.map((player) => ({ value: player.id, label: player.name }))}
           onSelect={(playerId) => dispatch({ type: 'commit', board: setMe(board, playerId) })}
         >
-          <strong>{me ? me.name : 'choose player'}</strong> ▾
+          <strong>{me ? me.name : 'choose player'}</strong>
         </MenuSelect>
         {contextTail}
       </p>

@@ -11,7 +11,7 @@ export function MenuSelect<T extends string>({ ariaLabel, value, options, onSele
   value: T | null
   options: readonly { value: T; label: string }[]
   onSelect: (value: T) => void
-  /** Trigger content — include the ▾ affordance. */
+  /** Trigger content; the ▾ affordance is appended by this component. */
   children: ReactNode
 }) {
   const [open, setOpen] = useState(false)
@@ -25,6 +25,7 @@ export function MenuSelect<T extends string>({ ariaLabel, value, options, onSele
         onClick={() => setOpen((current) => !current)}
       >
         {children}
+        <span className="menu-caret" aria-hidden="true">▾</span>
       </button>
       {open && (
         <>

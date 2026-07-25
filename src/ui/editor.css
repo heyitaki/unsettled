@@ -113,6 +113,9 @@ button.selected.danger { color: #fff; }
 .menu-wrap { position: relative; display: inline-flex; align-items: center; }
 .menu-trigger { border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
 .menu-trigger:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
+/* The ▾ affordance, owned by MenuSelect so every dropdown gets the same one. The
+   glyph is thin at label size; scaleX widens it without growing the line box. */
+.menu-caret { display: inline-block; margin-left: .38em; font-size: 1.2em; line-height: 1; transform: scaleX(1.35); }
 .menu-backdrop { position: fixed; inset: 0; z-index: 14; border: 0; border-radius: 0; padding: 0; background: transparent; }
 .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
 .menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 145px; display: grid; gap: 3px; padding: 6px; border: 1px solid rgba(255,255,255,.8); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 32px rgba(55,45,32,.22), inset 0 0 0 1px var(--line); }

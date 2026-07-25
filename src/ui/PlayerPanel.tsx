@@ -252,7 +252,7 @@ export function PlayerPanel() {
             options={VIEW_OPTIONS}
             onSelect={setView}
           >
-            <strong>{VIEW_OPTIONS.find((option) => option.value === view)?.label}</strong> ▾
+            <strong>{VIEW_OPTIONS.find((option) => option.value === view)?.label}</strong>
           </MenuSelect>
           <div className="tally-header" aria-hidden="true">
             {columns.map((column) => (

@@ -278,7 +278,7 @@ export function BoardCanvas() {
           ]}
           onSelect={choose}
         >
-          <strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout ▾
+          <strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout
         </MenuSelect>
         <span>{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
         <span>{board.roads.length + board.buildings.length} pieces</span>
