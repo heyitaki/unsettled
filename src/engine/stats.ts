@@ -4,7 +4,7 @@
 
 import { edgeEndpointVertexIds } from '../model/coords'
 import type { Game } from '../model/game'
-import type { Board, VertexId } from '../model/types'
+import type { Board, EdgeId, VertexId } from '../model/types'
 
 export const SUPER_CITY_VP = 3
 // A super city collects 3 resources per bordering tile roll (a city collects
@@ -40,10 +40,16 @@ export interface PlayerStanding {
  */
 export function longestRoadLength(board: Board, playerId: string): number {
   const edges = board.roads.filter((road) => road.playerId === playerId).map((road) => road.edgeId)
+  return runLength(edges, blockedFor(board, playerId))
+}
+
+/** Vertices where an opponent's building breaks this player's road. */
+const blockedFor = (board: Board, playerId: string): Set<VertexId> => new Set(
+  board.buildings.filter((building) => building.playerId !== playerId).map((building) => building.vertexId),
+)
+
+function runLength(edges: readonly EdgeId[], blocked: ReadonlySet<VertexId>): number {
   if (edges.length === 0) return 0
-  const blocked = new Set(
-    board.buildings.filter((building) => building.playerId !== playerId).map((building) => building.vertexId),
-  )
   const endpoints = edges.map((edge) => edgeEndpointVertexIds(edge))
   const incident = new Map<VertexId, number[]>()
   endpoints.forEach((vertices, index) => {
@@ -74,9 +80,49 @@ export function longestRoadLength(board: Board, playerId: string): number {
   return best
 }
 
+/**
+ * Who holds longest road, by replaying road placements in board order: the
+ * first player to reach the minimum takes the card and keeps it until someone
+ * else *beats* their run — matching it is not enough. Board order is placement
+ * order for boards built in the editor; an imported board carries the parser's
+ * spatial order, so its holder is best-effort, the same caveat the draft-slot
+ * mapping carries.
+ *
+ * Blocking uses the final buildings rather than replaying those too: the board
+ * records no placement order across piece types, and a settlement dropped on an
+ * opponent's road only ever shortens a run that already earned the card.
+ */
+export function longestRoadHolder(board: Board): string | null {
+  let holder: string | null = null
+  let holderRun = LONGEST_ROAD_MIN - 1
+  const laid = new Map<string, EdgeId[]>()
+  const blocked = new Map<string, Set<VertexId>>()
+  for (const road of board.roads) {
+    const edges = laid.get(road.playerId) ?? []
+    edges.push(road.edgeId)
+    laid.set(road.playerId, edges)
+    // Below the minimum no run can qualify, so skip the short prefixes and keep
+    // the replay near the cost of a single pass.
+    if (edges.length < LONGEST_ROAD_MIN) continue
+    let own = blocked.get(road.playerId)
+    if (!own) {
+      own = blockedFor(board, road.playerId)
+      blocked.set(road.playerId, own)
+    }
+    const run = runLength(edges, own)
+    if (run < LONGEST_ROAD_MIN) continue
+    if (road.playerId === holder) holderRun = run
+    else if (run > holderRun) {
+      holder = road.playerId
+      holderRun = run
+    }
+  }
+  return holder
+}
+
 // The award holder is the unique owner of the maximum at or above the
-// threshold. On a tie we award nobody: without move history there is no way to
-// know who reached the max first (real Catan lets the first achiever keep it).
+// threshold. On a tie we award nobody: knights carry no placement order, so
+// unlike longest road there is no way to know who reached the max first.
 function uniqueMaxHolder(values: ReadonlyMap<string, number>, threshold: number): string | null {
   let holder: string | null = null
   let max = threshold - 1
@@ -117,10 +163,7 @@ function standingsFor(game: Game): PlayerStanding[] {
       longestRoad: longestRoadLength(board, player.id),
     }
   })
-  const roadHolder = uniqueMaxHolder(
-    new Map(counts.map((entry) => [entry.playerId, entry.longestRoad])),
-    LONGEST_ROAD_MIN,
-  )
+  const roadHolder = longestRoadHolder(board)
   const armyHolder = uniqueMaxHolder(
     new Map(board.players.map((player) => [player.id, stats[player.id]?.knights ?? 0])),
     LARGEST_ARMY_MIN,

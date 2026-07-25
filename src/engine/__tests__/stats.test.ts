@@ -8,6 +8,9 @@ import { computeStandings, longestRoadLength, SUPER_CITY_VP } from '../stats'
 // Edges around the center hex form a 6-cycle; edge d and edge d+1 share one
 // vertex, so consecutive slices are connected chains.
 const ring = hexEdgeIds({ q: 0, r: 0 })
+// A ring two hexes out: shares no edge with `ring`, so two players can build
+// five each without overwriting one another.
+const outerRing = hexEdgeIds({ q: 2, r: -2 })
 
 const sharedVertex = (a: EdgeId, b: EdgeId): VertexId => {
   const other = new Set(edgeEndpointVertexIds(b))
@@ -114,7 +117,7 @@ describe('computeStandings', () => {
     })
   })
 
-  it('awards longest road at five plus, unique max only', () => {
+  it('awards longest road at five plus, to whoever got there first', () => {
     let board = roads(twoPlayerBoard(), 'aki', ring.slice(0, 5))
     let game = newGame(board)
     expect(standingFor(game, 'aki')).toMatchObject({ longestRoad: 5, hasLongestRoad: true })
@@ -124,12 +127,37 @@ describe('computeStandings', () => {
     game = newGame(roads(twoPlayerBoard(), 'aki', ring.slice(0, 4)))
     expect(standingFor(game, 'aki').hasLongestRoad).toBe(false)
 
-    // A tie at the max awards nobody — we cannot know who reached it first.
+    // A tie leaves the card where it is: aki reached five first, so matching it
+    // does not take it away. b builds on a hex that shares no edge with the
+    // centre ring, or placeRoad would overwrite aki's roads instead.
     board = roads(twoPlayerBoard(), 'aki', ring.slice(0, 5))
-    board = roads(board, 'b', hexEdgeIds({ q: -1, r: 1 }).slice(0, 5))
+    board = roads(board, 'b', outerRing.slice(0, 5))
     game = newGame(board)
-    expect(standingFor(game, 'aki').hasLongestRoad).toBe(false)
-    expect(standingFor(game, 'b').hasLongestRoad).toBe(false)
+    expect(standingFor(game, 'aki')).toMatchObject({ longestRoad: 5, hasLongestRoad: true })
+    expect(standingFor(game, 'b')).toMatchObject({ longestRoad: 5, hasLongestRoad: false })
+
+    // Beating it outright does take it, and the loser keeps their run length.
+    board = roads(board, 'b', outerRing.slice(5, 6))
+    game = newGame(board)
+    expect(standingFor(game, 'aki')).toMatchObject({ longestRoad: 5, hasLongestRoad: false })
+    expect(standingFor(game, 'b')).toMatchObject({ longestRoad: 6, hasLongestRoad: true })
+  })
+
+  it('gives longest road back when the original holder retakes the lead', () => {
+    // aki to five, b overtakes at six, aki extends past them.
+    let board = roads(twoPlayerBoard(), 'aki', ring.slice(0, 5))
+    board = roads(board, 'b', outerRing)
+    expect(standingFor(newGame(board), 'b').hasLongestRoad).toBe(true)
+
+    // A spur off the centre ring pushes aki's run past b's, which takes the
+    // card back — the rule is strictly-beats, in either direction.
+    const spur = hexEdgeIds({ q: 1, r: 0 }).filter((edge) => !ring.includes(edge))
+    board = roads(board, 'aki', spur)
+    const aki = standingFor(newGame(board), 'aki')
+    const bee = standingFor(newGame(board), 'b')
+    expect(aki.longestRoad).toBeGreaterThan(bee.longestRoad)
+    expect(aki.hasLongestRoad).toBe(true)
+    expect(bee.hasLongestRoad).toBe(false)
   })
 
   it('awards largest army at three plus knights, unique max only', () => {
