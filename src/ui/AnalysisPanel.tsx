@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from 'react'
-import { analyzeBoard, type Recommendation } from '../engine/analyze'
-import { placeBuilding } from '../model/board'
+import { useEffect } from 'react'
+import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
+import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
+import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore, type HighlightMark } from './store'
 
 const RESOURCE_LABELS: Record<Resource, string> = {
@@ -68,8 +69,8 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
 
 export function AnalysisPanel() {
   const { state, dispatch } = useStore()
-  const board = activeTab(state).board
-  const analysis = useMemo(() => analyzeBoard(board), [board])
+  const board = activeTab(state).game.board
+  const analysis = analyzeBoardCached(board)
   const recommendations = analysis.recommendations.slice(0, 5)
 
   // Clear any hovered board marks whenever the board changes — after a click
@@ -92,8 +93,8 @@ export function AnalysisPanel() {
       ? 'your turn'
       : `${board.players.find((player) => player.id === analysis.draft.currentPlayerId)?.name ??
         analysis.draft.currentPlayerId}'s turn`
-  const context = me
-    ? `You are ${me.name}, picking ${pickText} of ${analysis.draft.sequence.length}${
+  const contextTail = me
+    ? `, picking ${pickText} of ${analysis.draft.sequence.length}${
       analysis.draft.placedCount > 0 && analysis.draft.turnIndex !== null
         ? ` · pick ${analysis.draft.turnIndex + 1} of ${analysis.draft.sequence.length}, ${turnText}`
         : ''
@@ -137,7 +138,7 @@ export function AnalysisPanel() {
   }
 
   const emptyMessage: Partial<Record<typeof analysis.status, string>> = {
-    'no-me': 'Mark which player is you (the You chip in Players) to get recommendations.',
+    'no-me': 'Pick who you are above to get recommendations.',
     'no-availability': 'No spot is likely to survive until your pick.',
     'no-production': 'Add number tokens to the board to analyze placements.',
     complete: 'The draft is finished. Every starting settlement is placed.',
@@ -152,7 +153,18 @@ export function AnalysisPanel() {
           <h2>Best picks</h2>
         </div>
       </div>
-      {context && <p className="analysis-context">{context}</p>}
+      <p className="analysis-context">
+        You are{' '}
+        <MenuSelect
+          ariaLabel="Which player is you"
+          value={board.mePlayerId}
+          options={board.players.map((player) => ({ value: player.id, label: player.name }))}
+          onSelect={(playerId) => dispatch({ type: 'commit', board: setMe(board, playerId) })}
+        >
+          <strong>{me ? me.name : 'choose player'}</strong> ▾
+        </MenuSelect>
+        {contextTail}
+      </p>
       {analysis.warnings.includes('snake-inconsistent') && (
         <p className="analysis-warning">
           Placed settlements don't match a clean snake draft, so recommendations are best-effort.

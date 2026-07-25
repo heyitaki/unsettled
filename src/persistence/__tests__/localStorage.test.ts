@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoard } from '../../model/board'
+import { newGame } from '../../model/game'
+import type { LayoutId } from '../../model/types'
 import {
   CURRENT_KEY,
   MAPS_CORRUPT_KEY,
@@ -10,33 +12,53 @@ import {
   listMaps,
   loadCurrent,
   loadMap,
+  loadMaps,
   markMapOpened,
+  migrateMapIds,
   renameMap,
   saveMap,
 } from '../localStorage'
+
+const game = (layout: LayoutId = 'standard4') => newGame(createBoard(layout))
+
+// Most tests address a map by the id its save returned; this keeps that terse.
+function savedId(name: string, layout: LayoutId = 'standard4'): string {
+  const result = saveMap(name, game(layout), true)
+  if (!result.ok) throw new Error(result.error)
+  return result.id
+}
 
 describe('map persistence', () => {
   beforeEach(() => localStorage.clear())
   afterEach(() => vi.restoreAllMocks())
 
   it.each(['__proto__', 'constructor', '  ', '名前 with spaces'])('stores hostile legal name %j', (name) => {
-    expect(saveMap(name, createBoard('standard4'), true).ok).toBe(true)
-    expect(loadMap(name)).toMatchObject({ ok: true })
-    expect(deleteMap(name).ok).toBe(true)
+    const id = savedId(name)
+    expect(loadMap(id)).toMatchObject({ ok: true })
+    expect(deleteMap(id).ok).toBe(true)
     expect(Object.getPrototypeOf({})).toBe(Object.prototype)
   })
 
   it('rejects the empty name and requires overwrite confirmation', () => {
-    expect(saveMap('', createBoard('standard4'), true).ok).toBe(false)
-    expect(saveMap('map', createBoard('standard4'), false).ok).toBe(true)
-    expect(saveMap('map', createBoard('extension6'), false).ok).toBe(false)
-    expect(saveMap('map', createBoard('extension6'), true).ok).toBe(true)
+    expect(saveMap('', game(), true).ok).toBe(false)
+    expect(saveMap('map', game(), false).ok).toBe(true)
+    expect(saveMap('map', game('extension6'), false).ok).toBe(false)
+    expect(saveMap('map', game('extension6'), true).ok).toBe(true)
+  })
+
+  it('loads a legacy entry holding a bare board as a zero-stat game', () => {
+    const board = createBoard('standard4')
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'legacy', board }]))
+    expect(migrateMapIds().ok).toBe(true)
+    const listed = listMaps().maps[0]
+    expect(listed).toMatchObject({ name: 'legacy', valid: true, id: expect.any(String) })
+    expect(loadMap(listed.id!)).toEqual({ ok: true, game: newGame(board) })
   })
 
   it('backs up a corrupt store and reports invalid entries', () => {
     localStorage.setItem(MAPS_KEY, 'broken')
     expect(listMaps()).toMatchObject({ warning: expect.any(String), maps: [] })
-    expect(saveMap('next', createBoard('standard4'), true).ok).toBe(true)
+    expect(saveMap('next', game(), true).ok).toBe(true)
     expect(localStorage.getItem(MAPS_CORRUPT_KEY)).toBe('broken')
     localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'bad', board: { schemaVersion: 9 } }]))
     expect(listMaps().maps[0].valid).toBe(false)
@@ -54,35 +76,39 @@ describe('map persistence', () => {
 
   it('preserves future-schema entries during unrelated saves and deletes', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
-    const future = { name: 'future', board: { schemaVersion: 2, payload: 'keep exactly' } }
+    const future = { name: 'future', game: { schemaVersion: 2, payload: 'keep exactly' } }
     const unrelated = { marker: 'also keep exactly' }
     localStorage.setItem(MAPS_KEY, JSON.stringify([future, unrelated]))
 
-    expect(saveMap('new', createBoard('standard4'), true).ok).toBe(true)
-    // Only the entry we write gains timestamps; foreign entries stay byte-identical.
+    const id = savedId('new')
+    // Only the entry we write gains an id and timestamps; foreign entries stay
+    // byte-identical, so an unrelated save never rewrites what it can't parse.
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([
       future,
       unrelated,
-      { name: 'new', board: createBoard('standard4'), createdAt: 1000, modifiedAt: 1000, openedAt: 1000 },
+      { id, name: 'new', game: game(), createdAt: 1000, modifiedAt: 1000, openedAt: 1000 },
     ])
 
-    expect(deleteMap('new').ok).toBe(true)
+    expect(deleteMap(id).ok).toBe(true)
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([future, unrelated])
   })
 
-  it('can overwrite and delete a named entry with no board field', () => {
+  it('can overwrite and delete a named entry with no game field', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
     localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'bad' }]))
 
-    expect(saveMap('bad', createBoard('standard4'), false).ok).toBe(false)
+    expect(saveMap('bad', game(), false).ok).toBe(false)
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([{ name: 'bad' }])
-    expect(saveMap('bad', createBoard('standard4'), true).ok).toBe(true)
+    const id = savedId('bad')
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([
-      { name: 'bad', board: createBoard('standard4'), createdAt: 1000, modifiedAt: 1000, openedAt: 1000 },
+      { id, name: 'bad', game: game(), createdAt: 1000, modifiedAt: 1000, openedAt: 1000 },
     ])
 
+    // Reset to the no-game shape so the delete half exercises that entry too,
+    // routed through the migration because deleteMap is id-addressed.
     localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'bad' }]))
-    expect(deleteMap('bad').ok).toBe(true)
+    expect(migrateMapIds().ok).toBe(true)
+    expect(deleteMap(listMaps().maps[0].id!).ok).toBe(true)
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([])
   })
 
@@ -90,14 +116,14 @@ describe('map persistence', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
       throw new DOMException('full', 'QuotaExceededError')
     })
-    expect(saveMap('map', createBoard('standard4'), true).ok).toBe(false)
+    expect(saveMap('map', game(), true).ok).toBe(false)
   })
 
-  it('autosaves and restores current board', () => {
-    const board = createBoard('extension6')
-    expect(autosaveCurrent(board).ok).toBe(true)
+  it('autosaves and restores the current game', () => {
+    const current = game('extension6')
+    expect(autosaveCurrent(current).ok).toBe(true)
     expect(localStorage.getItem(CURRENT_KEY)).not.toBeNull()
-    expect(loadCurrent()).toEqual({ ok: true, board })
+    expect(loadCurrent()).toEqual({ ok: true, game: current })
   })
 })
 
@@ -107,7 +133,7 @@ describe('map timestamps and sorting metadata', () => {
 
   it('stamps created, modified, and opened on first save and surfaces them in listMaps', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
-    expect(saveMap('m', createBoard('standard4'), true).ok).toBe(true)
+    expect(saveMap('m', game(), true).ok).toBe(true)
     expect(listMaps().maps[0]).toMatchObject({
       name: 'm',
       valid: true,
@@ -119,39 +145,153 @@ describe('map timestamps and sorting metadata', () => {
 
   it('preserves createdAt and openedAt but bumps modifiedAt on overwrite', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
-    saveMap('m', createBoard('standard4'), true)
+    saveMap('m', game(), true)
     now.mockReturnValue(2000)
-    expect(saveMap('m', createBoard('extension6'), true).ok).toBe(true)
+    expect(saveMap('m', game('extension6'), true).ok).toBe(true)
     expect(listMaps().maps[0]).toMatchObject({ createdAt: 1000, modifiedAt: 2000, openedAt: 1000 })
   })
 
-  it('markMapOpened updates only openedAt and no-ops safely for unknown names', () => {
+  it('markMapOpened updates only openedAt and no-ops safely for unknown ids', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
-    saveMap('m', createBoard('standard4'), true)
+    const id = savedId('m')
     now.mockReturnValue(3000)
-    expect(markMapOpened('m').ok).toBe(true)
+    expect(markMapOpened(id).ok).toBe(true)
     expect(listMaps().maps[0]).toMatchObject({ createdAt: 1000, modifiedAt: 1000, openedAt: 3000 })
-    // An unknown name is a harmless no-op, not a failure.
+    // An unknown id is a harmless no-op, not a failure.
     expect(markMapOpened('nope').ok).toBe(true)
   })
 
-  it('renameMap moves an entry, preserving its board and timestamps', () => {
+  it('renameMap moves an entry, preserving its id, game, and timestamps', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
-    saveMap('a', createBoard('extension6'), true)
-    expect(renameMap('a', 'b').ok).toBe(true)
-    expect(loadMap('a')).toMatchObject({ ok: false })
-    expect(loadMap('b')).toMatchObject({ ok: true })
-    expect(listMaps().maps[0]).toMatchObject({ name: 'b', createdAt: 1000, modifiedAt: 1000, openedAt: 1000 })
+    const id = savedId('a', 'extension6')
+    expect(renameMap(id, 'b').ok).toBe(true)
+    // The id is the identity: it survives the rename, and the map stays loadable
+    // under it. This is what keeps a linked tab attached across a rename.
+    expect(loadMap(id)).toMatchObject({ ok: true })
+    expect(listMaps().maps[0]).toMatchObject({ id, name: 'b', createdAt: 1000, modifiedAt: 1000, openedAt: 1000 })
   })
 
   it('renameMap rejects empty targets, missing sources, and collisions', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
-    saveMap('a', createBoard('standard4'), true)
-    saveMap('b', createBoard('standard4'), true)
-    expect(renameMap('a', '').ok).toBe(false)
+    const a = savedId('a')
+    savedId('b')
+    expect(renameMap(a, '').ok).toBe(false)
     expect(renameMap('missing', 'x').ok).toBe(false)
-    expect(renameMap('a', 'b').ok).toBe(false)
+    expect(renameMap(a, 'b').ok).toBe(false)
     // A no-op rename to the same name is allowed.
-    expect(renameMap('a', 'a').ok).toBe(true)
+    expect(renameMap(a, 'a').ok).toBe(true)
+  })
+})
+
+describe('map identity', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => vi.restoreAllMocks())
+
+  it('keeps a map addressable by id across renames and overwrites', () => {
+    const id = savedId('first')
+    expect(renameMap(id, 'second').ok).toBe(true)
+    // Saving over the renamed map reuses its id rather than minting a new one,
+    // so a tab linked before the overwrite stays linked after it.
+    expect(saveMap('second', game('extension6'), true)).toEqual({ ok: true, id })
+    expect(loadMap(id)).toMatchObject({ ok: true, game: game('extension6') })
+  })
+
+  it('gives distinct maps distinct ids, including a delete-then-recreate', () => {
+    const first = savedId('m')
+    expect(deleteMap(first).ok).toBe(true)
+    // Same name, different map: the recreated entry must not inherit the old id,
+    // or a tab linked to the deleted map would silently re-attach to this one.
+    const second = savedId('m')
+    expect(second).not.toBe(first)
+    expect(loadMap(first)).toMatchObject({ ok: false })
+  })
+
+  it('migrateMapIds stamps ids on named legacy entries and leaves the rest alone', () => {
+    const board = createBoard('standard4')
+    const junk = 42
+    const unnamed = { marker: 'keep exactly' }
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'legacy', board }, junk, unnamed]))
+
+    expect(migrateMapIds().ok).toBe(true)
+    const stored = JSON.parse(localStorage.getItem(MAPS_KEY)!)
+    expect(stored[0]).toEqual({ id: expect.any(String), name: 'legacy', board })
+    // Entries with no name are unaddressable, so they gain nothing.
+    expect(stored[1]).toBe(junk)
+    expect(stored[2]).toEqual(unnamed)
+  })
+
+  it('migrateMapIds is idempotent and does not rewrite an already-migrated store', () => {
+    savedId('m')
+    const before = localStorage.getItem(MAPS_KEY)
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    expect(migrateMapIds().ok).toBe(true)
+    expect(setItem).not.toHaveBeenCalled()
+    expect(localStorage.getItem(MAPS_KEY)).toBe(before)
+  })
+
+  it('migrateMapIds replaces a non-string id rather than keeping it', () => {
+    const board = createBoard('standard4')
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ id: 42, name: 'legacy', board }]))
+
+    expect(migrateMapIds().ok).toBe(true)
+    const id = listMaps().maps[0].id
+    expect(typeof id).toBe('string')
+    expect(loadMap(id!)).toEqual({ ok: true, game: newGame(board) })
+    expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([{ id, name: 'legacy', board }])
+
+    // A kept-bad id would leave the entry unaddressable and mark the store dirty
+    // on every launch, rewriting the whole blob forever.
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    expect(migrateMapIds().ok).toBe(true)
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('migrateMapIds leaves the store untouched when the write fails', () => {
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'legacy', board: createBoard('standard4') }]))
+    const before = localStorage.getItem(MAPS_KEY)
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError')
+    })
+
+    expect(migrateMapIds()).toMatchObject({ ok: false, error: expect.any(String) })
+    expect(localStorage.getItem(MAPS_KEY)).toBe(before)
+  })
+
+  it('loadMaps answers for every id it is given, in one pass', () => {
+    const first = savedId('a')
+    const second = savedId('b', 'extension6')
+    const reads = vi.spyOn(Storage.prototype, 'getItem')
+
+    const loaded = loadMaps([first, second, 'gone'])
+    expect(loaded.get(first)).toEqual({ ok: true, game: game() })
+    expect(loaded.get(second)).toEqual({ ok: true, game: game('extension6') })
+    // A deleted map is reported, not omitted — the tab strip must be able to
+    // tell "no longer saved" apart from "not linked".
+    expect(loaded.get('gone')).toMatchObject({ ok: false })
+    // Three ids, one read of the blob.
+    expect(reads).toHaveBeenCalledTimes(1)
+  })
+
+  it('loadMaps resolves a duplicated id to the first entry, like loadMap', () => {
+    const id = 'shared'
+    localStorage.setItem(MAPS_KEY, JSON.stringify([
+      { id, name: 'first', game: game() },
+      { id, name: 'second', game: game('extension6') },
+    ]))
+    // Duplicate ids can only arrive by hand-edit, but both readers must agree on
+    // which entry wins or a tab would load a different map than the library shows.
+    expect(loadMaps([id]).get(id)).toEqual({ ok: true, game: game() })
+    expect(loadMaps([id]).get(id)).toEqual(loadMap(id))
+  })
+
+  it('loadMaps touches storage at all only when asked for something', () => {
+    const reads = vi.spyOn(Storage.prototype, 'getItem')
+    expect(loadMaps([]).size).toBe(0)
+    expect(reads).not.toHaveBeenCalled()
+  })
+
+  it('lists unaddressable entries with a null id', () => {
+    localStorage.setItem(MAPS_KEY, JSON.stringify([42]))
+    expect(listMaps().maps[0]).toMatchObject({ id: null, synthetic: true })
   })
 })

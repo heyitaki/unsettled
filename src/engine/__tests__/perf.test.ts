@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   addPlayer,
   createBoard,
+  placeRoad,
   randomizeBoard,
   setMe,
   setRobber,
   setTile,
 } from '../../model/board'
+import { boardGrid } from '../../model/layouts'
 import { analyzeBoard, rolloutCount } from '../analyze'
+import { longestRoadLength } from '../stats'
 import { DEFAULT_WEIGHTS } from '../weights'
 
 function worstCaseBoard() {
@@ -36,6 +39,22 @@ describe('rollout performance', () => {
     expect(rolloutCount(80, 3, 2, DEFAULT_WEIGHTS)).toBe(24)
     expect(rolloutCount(80, 5, 0, DEFAULT_WEIGHTS)).toBe(24)
     expect(rolloutCount(80, 10, 0, DEFAULT_WEIGHTS)).toBe(24)
+  })
+
+  it('bounds the longest-road search when one player owns every edge', () => {
+    // Nothing caps a player at 15 roads, so the road tool and legacy imports can
+    // both reach this; exhaustively it ran ~22s and froze the tab.
+    const board = boardGrid('standard4').edgeIds.reduce(
+      (acc, edgeId) => placeRoad(acc, edgeId, 'aki'),
+      createBoard('standard4'),
+    )
+    longestRoadLength(board, 'aki')
+    const start = performance.now()
+    console.time('longestRoadLength all-edges')
+    const length = longestRoadLength(board, 'aki')
+    console.timeEnd('longestRoadLength all-edges')
+    expect(length).toBeGreaterThan(0)
+    expect(performance.now() - start).toBeLessThan(500)
   })
 
   it('analyzes the worst-case six-player opening under the CI tripwire', () => {

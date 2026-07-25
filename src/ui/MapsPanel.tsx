@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createBoard } from '../model/board'
-import type { Board } from '../model/types'
-import { serializeBoard } from '../model/serialization'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { Game } from '../model/game'
 import {
   deleteMap,
   type ListedMap,
   listMaps,
   loadMap,
   markMapOpened,
+  migrateMapIds,
+  readLibrary,
   saveMap,
 } from '../persistence/localStorage'
-import { loadedNotice, nextCopyName } from './boardFiles'
+import { loadedNotice, nextCopyName, savesInPlace } from './boardFiles'
 import { ConfirmDialog } from './ConfirmDialog'
 import { activeTab, useStore } from './store'
 
@@ -44,28 +44,51 @@ function relativeTime(ts: number): string {
 
 export function MapsPanel() {
   const { state, dispatch } = useStore()
-  const { id, title, board } = activeTab(state)
+  const { id, title, game, mapId } = activeTab(state)
   const [name, setName] = useState(title)
   // The save name follows the active tab's title (updating when you switch tabs
   // or rename one), but stays editable for one-off save names.
   useEffect(() => { setName(title) }, [id, title])
-  const [revision, setRevision] = useState(0)
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
-  // Capture the board + tab the save targets when the prompt opens, so a tab
+  // Capture the game + tab the save targets when the prompt opens, so a tab
   // switch underneath the dialog can't redirect the save to a different board.
   const [dupPrompt, setDupPrompt] = useState<
-    { name: string; copyName: string; board: Board; tabId: string } | null
+    { name: string; copyName: string; game: Game; tabId: string } | null
   >(null)
-  const listed = listMaps()
-  const sortedMaps = [...listed.maps].sort((left, right) => {
+  // Listing validates every stored board, so it is re-read only when the
+  // library actually changed rather than on every render of every panel. The
+  // revision is the cache key for a localStorage read React cannot observe.
+  const listed = useMemo(() => {
+    void state.mapsRevision
+    return listMaps()
+  }, [state.mapsRevision])
+  const sortedMaps = useMemo(() => [...listed.maps].sort((left, right) => {
     if (sortKey === 'name') return left.name.localeCompare(right.name)
     const leftTimestamp = typeof left[sortKey] === 'number' ? left[sortKey] : -Infinity
     const rightTimestamp = typeof right[sortKey] === 'number' ? right[sortKey] : -Infinity
     if (leftTimestamp === rightTimestamp) return 0
     return rightTimestamp > leftTimestamp ? 1 : -1
-  })
-  const refresh = () => setRevision((value) => value + 1)
-  void revision
+  }), [listed, sortKey])
+  const refresh = () => dispatch({ type: 'maps-changed', library: readLibrary() })
+  /**
+   * An entry with no id is one the startup migration could not stamp: its write
+   * failed, or it has no name to be addressed by. Retry on demand so a
+   * transient failure heals rather than leaving the row permanently unopenable
+   * and undeletable. Resolved by position, never by name — matching on a name
+   * is what this whole mechanism replaced.
+   */
+  const addressable = (map: ListedMap): string | null => {
+    if (map.id !== null) return map.id
+    const result = migrateMapIds()
+    if (!result.ok) {
+      notice(`Could not upgrade the map library: ${result.error}`)
+      return null
+    }
+    refresh()
+    const stamped = listMaps().maps[map.index]?.id ?? null
+    if (stamped === null) notice('This map entry is malformed and cannot be opened or deleted')
+    return stamped
+  }
   // Fade whichever end of the scrollable map list still hides cut-off rows,
   // mirroring the tab strip's edge masks.
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -79,69 +102,64 @@ export function MapsPanel() {
   }, [])
   useLayoutEffect(syncFades, [syncFades, sortedMaps.length])
   const notice = (message: string) => dispatch({ type: 'notice', message })
-  const performSave = (saveName: string, overwrite: boolean, target: Board, targetTabId: string) => {
+  const performSave = (saveName: string, overwrite: boolean, target: Game, targetTabId: string) => {
     const result = saveMap(saveName, target, overwrite)
     if (!result.ok) {
       notice(result.error)
       refresh()
       return
     }
-    // Link the saved tab to its map by name (title-as-link).
-    dispatch({ type: 'tab-rename', id: targetTabId, title: saveName })
+    // Attach the saved tab to the map it landed in, by id. Overwriting reuses
+    // the existing map's id, so re-saving keeps the same link.
+    dispatch({ type: 'tab-link', id: targetTabId, mapId: result.id, title: saveName })
     notice(`Saved "${saveName}"`)
     refresh()
   }
   const submitSave = () => {
-    // saveMap allows whitespace-only names but the reducer rejects a blank
-    // tab-rename, which would leave the tab unlinked — reject here.
+    // saveMap allows whitespace-only names, but a blank tab title reads as a
+    // broken tab — reject here rather than storing one.
     if (name.trim().length === 0) {
       notice('Map name cannot be empty')
       return
     }
-    // Block only when the user typed a name that belongs to a *different* open
-    // board. Saving the active tab under its own title must always go through —
-    // a stray duplicate tab sharing the title shouldn't stop a legitimate save.
-    if (name !== title && state.tabs.some((tab) => tab.id !== id && tab.title === name)) {
-      notice(`A board named "${name}" is already open`)
-      return
-    }
     // Only real stored names collide with saveMap; synthetic placeholders for
     // malformed entries are not addressable, so exclude them.
-    const taken = new Set(listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name))
+    const named = listMaps().maps.filter((map) => !map.synthetic)
+    // Saving a linked tab back into its own map is the ordinary case, not a
+    // collision: overwrite it without asking. The prompt is there to stop a
+    // save from clobbering some *other* map that happens to share the name.
+    if (savesInPlace(named, name, mapId)) {
+      performSave(name, true, game, id)
+      return
+    }
+    const taken = new Set(named.map((map) => map.name))
     if (taken.has(name)) {
-      // A copy must dodge both saved maps and open tab titles so it never
-      // shadows another tab's link.
+      // A copy must dodge both saved maps and open tab titles: names no longer
+      // carry identity, but a duplicate title is still confusing to read.
       const reserved = new Set([...taken, ...state.tabs.map((tab) => tab.title)])
-      setDupPrompt({ name, copyName: nextCopyName(name, reserved), board, tabId: id })
-    } else performSave(name, false, board, id)
+      setDupPrompt({ name, copyName: nextCopyName(name, reserved), game, tabId: id })
+    } else performSave(name, false, game, id)
   }
   const openMap = (map: ListedMap) => {
-    const loaded = loadMap(map.name)
+    const mapKey = addressable(map)
+    if (mapKey === null) return
+    const loaded = loadMap(mapKey)
     if (!loaded.ok) {
       notice(loaded.errors.join(', '))
       return
     }
-    markMapOpened(map.name)
+    markMapOpened(mapKey)
     refresh()
-    const existing = state.tabs.find((tab) => tab.title === map.name)
-    if (!existing) {
-      dispatch({ type: 'tab-add', board: loaded.board, title: map.name })
-      notice(loadedNotice(`Loaded "${map.name}"`, loaded.board))
+    // The map's tab is the one linked to its id. A tab that merely shares the
+    // name is a different board and is left alone.
+    const existing = state.tabs.find((tab) => tab.mapId === mapKey)
+    if (existing) {
+      dispatch({ type: 'tab-select', id: existing.id })
+      notice(`Switched to "${map.name}"`)
       return
     }
-    dispatch({ type: 'tab-select', id: existing.id })
-    // A tab that only shares the map's name but holds a pristine board (e.g. a
-    // regenerated "Board 1") is an empty shadow: load the saved board into it
-    // instead of focusing a blank one. A tab with real (edited) content is the
-    // map's live tab — just focus it.
-    const existingSig = serializeBoard(existing.board)
-    if (
-      existingSig !== serializeBoard(loaded.board) &&
-      existingSig === serializeBoard(createBoard(existing.board.layout))
-    ) {
-      dispatch({ type: 'replace', board: loaded.board })
-      notice(loadedNotice(`Loaded "${map.name}"`, loaded.board))
-    } else notice(`Switched to "${map.name}"`)
+    dispatch({ type: 'tab-add', game: loaded.game, title: map.name, mapId: mapKey })
+    notice(loadedNotice(`Loaded "${map.name}"`, loaded.game.board))
   }
   return (
     <section className="panel maps-panel">
@@ -182,14 +200,17 @@ export function MapsPanel() {
         {listed.maps.length === 0 && (
           <p className="empty-state">No saved maps yet. Name the board above and hit Save.</p>
         )}
-        {sortedMaps.map((map) => {
+        {sortedMaps.map((map, index) => {
           const stamp = sortKey === 'name' ? map.modifiedAt : map[sortKey]
           const metaLabel = sortKey === 'name' ? SORT_LABEL.modifiedAt : SORT_LABEL[sortKey]
           // Only the map shown in the active tab is "open" — the focused board
-          // is the one map on screen at any moment.
-          const isOpen = map.name === title
+          // is the one map on screen at any moment. Matched by link, so a blank
+          // board that happens to share a name never claims to be this map.
+          const isOpen = map.id !== null && map.id === mapId
+          // Legacy data can hold duplicate names, so an entry with no id keys
+          // off its position rather than a name that may collide.
           return (
-            <div key={map.name} className={`saved-map ${map.valid ? '' : 'invalid'} ${isOpen ? 'open' : ''}`}>
+            <div key={map.id ?? `unaddressable:${index}`} className={`saved-map ${map.valid ? '' : 'invalid'} ${isOpen ? 'open' : ''}`}>
               <button
                 type="button"
                 className="saved-map-open"
@@ -212,10 +233,17 @@ export function MapsPanel() {
                 type="button"
                 className="saved-map-delete"
                 aria-label={`Delete ${map.name}`}
-                title={`Delete "${map.name}"`}
+                // Only an entry with no name at all is beyond addressing; one
+                // that merely lacks an id gets stamped on demand.
+                disabled={map.synthetic === true}
+                title={map.synthetic === true
+                  ? 'This map entry is malformed and cannot be deleted'
+                  : `Delete "${map.name}"`}
                 onClick={() => {
-                  const result = deleteMap(map.name)
-                  notice(result.ok ? `Deleted “${map.name}”` : result.error)
+                  const mapKey = addressable(map)
+                  if (mapKey === null) return
+                  const result = deleteMap(mapKey)
+                  notice(result.ok ? `Deleted "${map.name}"` : result.error)
                   refresh()
                 }}
               >
@@ -233,14 +261,14 @@ export function MapsPanel() {
               label: 'Replace',
               variant: 'danger',
               onClick: () => {
-                performSave(dupPrompt.name, true, dupPrompt.board, dupPrompt.tabId)
+                performSave(dupPrompt.name, true, dupPrompt.game, dupPrompt.tabId)
                 setDupPrompt(null)
               },
             },
             {
               label: 'Save as copy',
               onClick: () => {
-                performSave(dupPrompt.copyName, false, dupPrompt.board, dupPrompt.tabId)
+                performSave(dupPrompt.copyName, false, dupPrompt.game, dupPrompt.tabId)
                 setDupPrompt(null)
               },
             },

@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createBoard } from '../model/board'
-import { serializeBoard } from '../model/serialization'
-import { listMaps, loadMap, renameMap } from '../persistence/localStorage'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { loadMaps, renameMap } from '../persistence/localStorage'
+import { dirtyTabIds } from './boardFiles'
 import { ConfirmDialog } from './ConfirmDialog'
+import { readLibrary } from '../persistence/localStorage'
 import { type TabState, useStore } from './store'
 
-function tabIsDirty(tab: TabState): boolean {
-  const current = serializeBoard(tab.board)
-  const saved = loadMap(tab.title)
-  if (saved.ok) return serializeBoard(saved.board) !== current
-  return current !== serializeBoard(createBoard(tab.board.layout))
-}
+const dirtyTabs = (tabs: readonly TabState[]): Set<string> => dirtyTabIds(
+  tabs,
+  loadMaps(tabs.map((tab) => tab.mapId).filter((id): id is string => id !== null)),
+)
 
 export function BoardTabs() {
   const { state, dispatch } = useStore()
@@ -55,23 +53,30 @@ export function BoardTabs() {
       dispatch({ type: 'tab-rename', id, title: next })
       return
     }
-    if (state.tabs.some((candidate) => candidate.id !== id && candidate.title === next)) {
-      dispatch({ type: 'notice', message: `A board named "${next}" is already open` })
-      return
-    }
-    if (listMaps().maps.some((map) => !map.synthetic && map.name === next)) {
-      dispatch({ type: 'notice', message: `A map named "${next}" already exists` })
-      return
-    }
-    if (loadMap(tab.title).ok) {
-      const result = renameMap(tab.title, next)
-      if (!result.ok) {
+    // Only a real link may rename a map — titles carry no identity, so a
+    // same-named tab that owns nothing cannot rename someone else's map.
+    if (tab.mapId !== null) {
+      const result = renameMap(tab.mapId, next)
+      const library = readLibrary()
+      const gone = library.readable && !library.maps.some((map) => map.id === tab.mapId)
+      // A map deleted in another window must not block a local rename: unlink
+      // and let the tab be renamed, rather than refusing over a map the user
+      // cannot see and cannot act on.
+      if (!result.ok && !gone) {
         dispatch({ type: 'notice', message: result.error })
         return
       }
+      dispatch({ type: 'maps-changed', library })
     }
     dispatch({ type: 'tab-rename', id, title: next })
   }
+  // dirtyTabs reads the library from localStorage, which React cannot observe;
+  // the revision is the cache key for that read, so it belongs in the deps and
+  // is read here to say so. Nothing else should be `void`-read this way.
+  const dirty = useMemo(() => {
+    void state.mapsRevision
+    return dirtyTabs(state.tabs)
+  }, [state.tabs, state.mapsRevision])
   const closingTab = state.tabs.find((tab) => tab.id === closingId)
   return (
     <>
@@ -117,6 +122,9 @@ export function BoardTabs() {
                 }}
               >
                 {tab.title}
+                {tab.mapId !== null && dirty.has(tab.id) && (
+                  <span className="board-tab-dirty" aria-label="Unsaved changes" title="Unsaved changes">•</span>
+                )}
               </button>
             )}
             <button
@@ -124,7 +132,7 @@ export function BoardTabs() {
               className="board-tab-close"
               aria-label={`Close ${tab.title}`}
               onClick={() => {
-                if (tabIsDirty(tab)) setClosingId(tab.id)
+                if (dirty.has(tab.id)) setClosingId(tab.id)
                 else dispatch({ type: 'tab-close', id: tab.id })
               }}
             >

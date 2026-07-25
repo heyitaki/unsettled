@@ -100,20 +100,22 @@ button.selected.danger { color: #fff; }
 /* Inline edit: same box as .board-tab-select so entering rename mode neither
    shifts the strip nor draws a boxed outline — just an editable caret in place. */
 .board-tab-rename { min-width: 0; flex: 1; padding: 7px 5px 7px 9px; border: 0; background: transparent; color: var(--accent-dark); font-weight: 700; outline: none; }
+.board-tab-dirty { margin-left: 4px; color: var(--accent-dark); font-weight: 700; }
 .board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
 .board-tab-close:hover { color: #a33428; }
 .board-tab-add, .player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
 
 .board-stage { position: static; overflow: hidden; padding: 12px; background: #e9dfca; }
 .board-status { display: flex; justify-content: center; gap: 18px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
-.layout-status-wrap { position: relative; display: inline-flex; align-items: center; }
-.layout-status { border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
-.layout-status:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
+/* Shared popup-listbox dropdown (MenuSelect): board-layout picker + "You are". */
+.menu-wrap { position: relative; display: inline-flex; align-items: center; }
+.menu-trigger { border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.menu-trigger:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
 .menu-backdrop { position: fixed; inset: 0; z-index: 14; border: 0; border-radius: 0; padding: 0; background: transparent; }
 .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
-.layout-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 145px; display: grid; gap: 3px; padding: 6px; border: 1px solid rgba(255,255,255,.8); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 32px rgba(55,45,32,.22), inset 0 0 0 1px var(--line); }
-.layout-menu button { border: 0; padding: 7px 9px; background: transparent; text-align: left; }
-.layout-menu button.active { color: var(--accent-dark); background: #fff9e9; font-weight: 700; }
+.menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 145px; display: grid; gap: 3px; padding: 6px; border: 1px solid rgba(255,255,255,.8); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 32px rgba(55,45,32,.22), inset 0 0 0 1px var(--line); }
+.menu-popup button { border: 0; padding: 7px 9px; background: transparent; text-align: left; }
+.menu-popup button.active { color: var(--accent-dark); background: #fff9e9; font-weight: 700; }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
 /* Wide lining-figure serif (Charter on Mac/Linux, Cambria as the wide Windows
    fallback). Lining/tabular figures keep every digit on the baseline so the pip
@@ -133,19 +135,72 @@ button.selected.danger { color: #fff; }
 .vertex-highlight { fill: rgba(231,37,37,.22); stroke: #e72525; stroke-width: 3; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 .vertex-highlight-label { font-size: 12px; font-weight: 800; }
 
-.player-list { display: grid; gap: 5px; }
-.player-row { display: grid; grid-template-columns: 22px minmax(75px, 1fr) 38px 40px 24px; gap: 5px; align-items: center; padding: 3px 6px; border: 1px solid transparent; border-radius: 10px; }
-.player-row.active { background: #fff9e9; border-color: #d8bc77; }
-.player-dot { width: 19px; height: 19px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
-.player-row > input { min-width: 0; width: 100%; border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 5px 2px; }
-.player-row > input:hover, .player-row > input:focus { border-bottom-color: var(--line); }
-.me-radio { display: flex; align-items: center; gap: 3px; font-size: 10px; color: var(--muted); }
-.me-radio input { margin: 0; }
-.reorder-buttons { display: flex; }
-.reorder-buttons button, .icon-danger { padding: 3px 5px; border: 0; background: transparent; }
-.draft-strip { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); display: flex; gap: 4px; overflow-x: auto; }
-.draft-strip div { min-width: 34px; max-width: 56px; color: var(--muted); font-size: 9px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
-.draft-strip span { display: block; width: 15px; height: 15px; margin: auto auto 3px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); }
+/* Row metrics live here so the tally header (outside the cards) and every
+   card's number columns derive their alignment from the same values. */
+.player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 4px; --card-pad: 6px; --remove-width: 18px; --name-indent: 33px; }
+.player-card { padding: 2px var(--card-pad) 3px; border: 1px solid transparent; border-radius: 10px; }
+.player-card.active { background: #fff9e9; border-color: #d8bc77; }
+.player-card.dragging { opacity: .45; }
+/* Drop cue: the dragged player will take this row's position. */
+.player-card.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
+/* handle · dot · name · score · tally · remove. Only the name flexes, so the
+   tally block keeps a fixed offset from the row's right edge — that is what
+   lets the header strip line up with it. */
+.player-row { display: grid; grid-template-columns: 12px 17px minmax(28px, 1fr) auto auto var(--remove-width); gap: var(--row-gap); align-items: center; }
+.drag-handle { color: var(--muted); font-size: 12px; line-height: 1; cursor: grab; user-select: none; }
+.player-card.dragging .drag-handle { cursor: grabbing; }
+.player-dot { width: 17px; height: 17px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
+/* Name reads as text and only becomes an input once clicked. */
+.player-name { min-width: 0; overflow: hidden; padding: 3px 2px; border: 0; background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.player-name:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; text-decoration: underline dotted; text-underline-offset: 2px; }
+/* Own focus ring: the browser default is a blue rectangle that reads as a
+   foreign control on the parchment card. */
+.player-name-input { min-width: 0; width: 100%; padding: 2px 3px; border-radius: 6px; outline: none; }
+.player-name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(187, 76, 50, .18); }
+.player-vp { color: var(--ink); font-weight: 800; }
+.icon-danger { width: var(--remove-width); padding: 2px 0; border: 0; background: transparent; }
+/* Tally table: the header strip and every player's row share this column
+   definition, and each has one cell per column, so `grid-auto-columns` keeps
+   them aligned without either side knowing how many columns there are. The
+   header's right padding is the row chrome that follows the tally. */
+.tally-header, .player-tally { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tally-col); align-items: center; }
+/* Headings share one baseline: uniform-height glyphs, bottom-aligned. */
+.tally-header { align-items: end; }
+.tally-header > span { position: relative; }
+.vp-head { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+/* Hover label, same idiom as the history buttons — the native tooltip's delay
+   is too slow for a strip of icons you are trying to decode. */
+.tally-header > span::after { content: attr(data-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: 6px; background: #fbf6ea; color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 7px rgba(55,45,32,.16); opacity: 0; pointer-events: none; z-index: 6; }
+.tally-header > span:hover::after { opacity: 1; }
+.tally-header > span, .player-tally > span { display: inline-flex; justify-content: center; }
+.tally-header { justify-content: end; padding: 0 calc(var(--card-pad) + var(--remove-width) + var(--row-gap)) 3px 0; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.player-tally { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* Dim the empty cells so the counts that matter carry the row. */
+.player-tally .zero { opacity: .32; }
+/* Trailing margin separates the awards from the first tally column; it grows
+   this grid cell, so the tally keeps its offset from the row's right edge. */
+.player-awards { display: inline-flex; align-items: center; gap: 3px; }
+.player-awards:not(:empty) { margin-right: 4px; }
+.award { display: inline-flex; padding: 1px 3px; border-radius: 5px; background: var(--accent); color: #fff; }
+/* −/count/+ chips for the active player's hand and dev-card counters. */
+.player-steppers { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0 2px var(--name-indent); }
+.stat-chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; background: #f9f5ea; }
+.stat-chip button { width: 17px; padding: 2px 0; border: 0; background: transparent; font-size: 11px; line-height: 1.2; }
+.stat-chip button:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--accent-dark); }
+.stat-face { display: inline-flex; align-items: center; gap: 3px; min-width: 20px; justify-content: center; font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Resource/counter line art. Sized here (unlike the piece silhouettes, which
+   carry their own tier scaling inline) so one rule covers both rows. */
+.stat-icon { flex: none; width: 13px; height: 13px; }
+.tally-header .stat-icon { width: 15px; height: 15px; }
+.award .stat-icon { width: 12px; height: 12px; }
+.draft-strip { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; gap: 3px; overflow-x: auto; }
+/* One snake-draft pick: numbered circle in the player's colour over the name.
+   Hover highlights the placed settlement (or predicted spot) on the board. */
+.draft-slot { flex: 0 1 auto; min-width: 32px; max-width: 56px; display: grid; justify-items: center; gap: 2px; padding: 2px 1px; border: 0; background: transparent; color: var(--muted); font-size: 9px; }
+.draft-slot:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--ink); }
+.slot-circle { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.draft-slot.pending .slot-circle { opacity: .5; }
+.slot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
 /* Save is fused to the name input as one segmented control — no gap, shared
@@ -196,6 +251,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 
 /* Analysis */
 .analysis-context { margin: -2px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+/* The name inside "You are …" doubles as the me-selector trigger. */
+.analysis-context .menu-trigger { color: var(--accent-dark); }
 .analysis-warning { margin: 5px 0; color: var(--accent-dark); font-size: 10px; line-height: 1.4; }
 .analysis-likely-gone { width: 100%; margin-bottom: 8px; padding: 8px 10px; border-style: dashed; color: var(--muted); background: rgba(187,76,50,.04); font-size: 9px; line-height: 1.4; text-align: left; }
 .analysis-likely-gone span { display: block; margin-bottom: 2px; color: var(--accent-dark); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }

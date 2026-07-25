@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { newGame } from '../model/game'
 import {
   parseBoardImageWithNames,
   type ParseIssue,
@@ -75,14 +76,14 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   const result = await parseBoardImageWithNames(image, reader)
                   if (result.ok) {
                     // Disambiguate the title against open tabs and saved maps so a
-                    // repeat import never spawns a second tab with an identical
-                    // title — duplicate titles desync the title-as-link to maps.
+                    // repeat import never spawns a second tab that reads as the
+                    // same board. Cosmetic — links are ids, not titles.
                     const reserved = new Set([
                       ...state.tabs.map((tab) => tab.title),
                       ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
                     ])
                     const importTitle = firstFreeName(fileTitle(file.name), reserved)
-                    dispatch({ type: 'tab-add', board: result.board, title: importTitle })
+                    dispatch({ type: 'tab-add', game: newGame(result.board), title: importTitle })
                     notice(`Imported ${file.name}`)
                     setIssues(result.issues)
                     if (result.issues.length === 0) onClose()

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { parseBoard, serializeBoard } from '../model/serialization'
+import { parseGame, serializeGame } from '../model/serialization'
 import { listMaps } from '../persistence/localStorage'
 import { downloadBoard, fileTitle, firstFreeName, loadedNotice } from './boardFiles'
 import { ImportDialog } from './ImportDialog'
@@ -9,7 +9,7 @@ import { activeTab, useStore } from './store'
 // screenshot drop-zone opens as a modal; JSON import/export act on the active tab.
 export function ImportPanel() {
   const { state, dispatch } = useStore()
-  const { title, board } = activeTab(state)
+  const { title, game } = activeTab(state)
   const [importOpen, setImportOpen] = useState(false)
   const jsonInputRef = useRef<HTMLInputElement>(null)
   const notice = (message: string) => dispatch({ type: 'notice', message })
@@ -37,7 +37,7 @@ export function ImportPanel() {
             </svg>
             Import JSON
           </button>
-          <button type="button" onClick={() => downloadBoard(title, serializeBoard(board))}>
+          <button type="button" onClick={() => downloadBoard(title, serializeGame(game))}>
             <svg viewBox="0 0 20 20" className="io-icon" aria-hidden="true">
               <path d="M10 3 V11.5 M6.4 7.9 10 11.5 13.6 7.9 M4 15.5 H16" />
             </svg>
@@ -52,17 +52,17 @@ export function ImportPanel() {
           onChange={async (event) => {
             const file = event.target.files?.[0]
             if (!file) return
-            const parsed = parseBoard(await file.text())
+            const parsed = parseGame(await file.text())
             if (parsed.ok) {
-              // Disambiguate against open tabs and saved maps so the import
-              // never shadows an existing tab's map link.
+              // Disambiguate against open tabs and saved maps so two boards never
+              // read as the same board. Cosmetic — links are ids, not titles.
               const reserved = new Set([
                 ...state.tabs.map((tab) => tab.title),
                 ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
               ])
               const importTitle = firstFreeName(fileTitle(file.name), reserved)
-              dispatch({ type: 'tab-add', board: parsed.board, title: importTitle })
-              notice(loadedNotice(`Imported ${file.name}`, parsed.board))
+              dispatch({ type: 'tab-add', game: parsed.game, title: importTitle })
+              notice(loadedNotice(`Imported ${file.name}`, parsed.game.board))
             } else notice(`Import failed: ${parsed.errors.join('; ')}`)
             event.target.value = ''
           }}

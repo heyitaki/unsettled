@@ -8,8 +8,9 @@ import {
   setTile,
   upsertPort,
 } from '../board'
+import { adjustCounter, adjustHand, emptyStats, newGame } from '../game'
 import { boardGrid } from '../layouts'
-import { parseBoard, serializeBoard } from '../serialization'
+import { parseBoard, parseGame, serializeBoard, serializeGame } from '../serialization'
 
 describe('board serialization', () => {
   it.each(['standard4', 'extension6'] as const)('round trips a populated %s board', (layout) => {
@@ -65,5 +66,44 @@ describe('board serialization', () => {
     const result = parseBoard({ ...board, players: [], mePlayerId: null, roads: [], buildings: [] })
     expect(result).toMatchObject({ ok: false })
     if (!result.ok) expect(result.errors).toContain('Board has no players')
+  })
+})
+
+describe('game serialization', () => {
+  it('round trips a game with live stats', () => {
+    const board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
+    let game = newGame(board)
+    game = adjustHand(game, 'aki', 'ore', 3)
+    game = adjustCounter(game, 'b', 'knights', 2)
+    expect(parseGame(serializeGame(game))).toEqual({ ok: true, game })
+  })
+
+  it('wraps a legacy bare board with zero-filled stats', () => {
+    const board = createBoard('standard4')
+    const result = parseGame(serializeBoard(board))
+    expect(result).toEqual({ ok: true, game: newGame(board) })
+  })
+
+  it('zero-fills stats entries missing from the roster', () => {
+    const board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
+    const result = parseGame({ schemaVersion: 1, board, stats: {} })
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) expect(result.game.stats.b).toEqual(emptyStats())
+  })
+
+  it('rejects malformed stats, unknown stat players, and bad envelopes', () => {
+    const game = newGame(createBoard('standard4'))
+    expect(parseGame('{')).toMatchObject({ ok: false })
+    expect(parseGame({ ...game, schemaVersion: 2 })).toMatchObject({ ok: false })
+    expect(parseGame({ ...game, surprise: true })).toMatchObject({ ok: false })
+    expect(parseGame({ ...game, stats: { ghost: emptyStats() } })).toMatchObject({ ok: false })
+    expect(parseGame({ ...game, stats: { aki: { ...emptyStats(), devCards: -1 } } })).toMatchObject({ ok: false })
+    expect(parseGame({ ...game, stats: { aki: { ...emptyStats(), hand: { wood: 1 } } } })).toMatchObject({ ok: false })
+    expect(parseGame({ ...game, stats: { aki: { ...emptyStats(), extra: 1 } } })).toMatchObject({ ok: false })
+  })
+
+  it('rejects a game whose embedded board is invalid', () => {
+    const game = newGame(createBoard('standard4'))
+    expect(parseGame({ ...game, board: { ...game.board, schemaVersion: 2 } })).toMatchObject({ ok: false })
   })
 })

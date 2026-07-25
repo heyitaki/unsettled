@@ -23,6 +23,7 @@ import {
 import type { AxialCoord, Board, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
+import { MenuSelect } from './MenuSelect'
 import { PortPopover } from './PortPopover'
 import { activeTab, useStore } from './store'
 
@@ -90,15 +91,13 @@ interface PortLayout {
 export function BoardCanvas() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
-  const { board } = tab
+  const { board } = tab.game
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
-  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false)
   const [pendingLayout, setPendingLayout] = useState<LayoutId | null>(null)
   // The popover edge belongs to the tab it was opened on; keeping it across a
   // tab switch would edit (or crash on) a different board's coastline.
   useEffect(() => {
     setEditingPort(null)
-    setLayoutMenuOpen(false)
     // A pending layout change belongs to the tab it was raised on; drop it on a
     // switch so confirming can't reset a different board.
     setPendingLayout(null)
@@ -166,19 +165,26 @@ export function BoardCanvas() {
   // tier below. Used to show placement dots (and gate clicks) for a normal cursor.
   const placeableVertices = useMemo<VertexId[]>(() => {
     if (state.tool.kind !== 'piece' || state.tool.tier === 'road') return []
+    // With nobody selected there is no owner to place for; the settlement branch
+    // below is legality-only, so it would otherwise light up every empty vertex.
+    if (tab.activePlayerId === null) return []
     const tier = state.tool.tier
     const byVertex = new Map(board.buildings.map((building) => [building.vertexId, building] as const))
     return grid.vertexIds.filter((vertexId) => {
       const here = byVertex.get(vertexId)
       if (tier === 'settlement') return !here && vertexAdjacentVertexIds(vertexId).every((adj) => !byVertex.has(adj))
-      if (tier === 'city') return here?.tier === 'settlement'
-      return here?.tier === 'city'
+      // Upgrades apply to your own piece only: without the owner check the city
+      // tool would overwrite an opponent's settlement, moving it and its VP.
+      if (here?.playerId !== tab.activePlayerId) return false
+      if (tier === 'city') return here.tier === 'settlement'
+      return here.tier === 'city'
     })
-  }, [state.tool, board.buildings, grid])
+  }, [state.tool, board.buildings, tab.activePlayerId, grid])
   // Edges where the active player may legally build a road: empty and touching
   // their own building, or their own road via a vertex no opponent building blocks.
   const placeableEdges = useMemo<EdgeId[]>(() => {
     if (state.tool.kind !== 'piece' || state.tool.tier !== 'road') return []
+    if (tab.activePlayerId === null) return []
     const roadEdges = new Set(board.roads.map((road) => road.edgeId))
     const mine = tab.activePlayerId
     const myBuildings = new Set(board.buildings.filter((b) => b.playerId === mine).map((b) => b.vertexId))
@@ -189,10 +195,9 @@ export function BoardCanvas() {
       return edgeEndpointVertexIds(edgeId).some((v) => myBuildings.has(v) || (myRoadVerts.has(v) && !oppBuildings.has(v)))
     })
   }, [state.tool, board.roads, board.buildings, tab.activePlayerId, grid])
-  const playerColor = (id: string) => board.players.find((player) => player.id === id)?.color ?? '#333'
+  const playerColor = (id: string | null) => board.players.find((player) => player.id === id)?.color ?? '#333'
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
   const choose = (layout: LayoutId) => {
-    setLayoutMenuOpen(false)
     if (layout === board.layout) return
     const hasContent = board.hexes.some((hex) => hex.tile || hex.numberToken !== null) ||
       board.roads.length > 0 ||
@@ -223,7 +228,7 @@ export function BoardCanvas() {
     }
   }
   const onEdge = (edgeId: EdgeId) => {
-    if (state.tool.kind === 'piece' && state.tool.tier === 'road') {
+    if (state.tool.kind === 'piece' && state.tool.tier === 'road' && tab.activePlayerId !== null) {
       // Clicking your own road again toggles it off.
       const existing = board.roads.find((road) => road.edgeId === edgeId)
       if (existing?.playerId === tab.activePlayerId) commit(removeRoad(board, edgeId))
@@ -233,9 +238,9 @@ export function BoardCanvas() {
     } else if (state.tool.kind === 'port' && grid.coastalEdgeIds.includes(edgeId)) setEditingPort(edgeId)
   }
   const onVertex = (vertexId: VertexId) => {
-    if (state.tool.kind === 'piece' && state.tool.tier !== 'road') {
+    if (state.tool.kind === 'piece' && state.tool.tier !== 'road' && tab.activePlayerId !== null) {
       // Clicking your own building of the same tier toggles it off; a different
-      // tier (or a different player's piece) upgrades/replaces it instead.
+      // tier upgrades it. placeableVertices keeps opponents' pieces unreachable.
       const existing = board.buildings.find((building) => building.vertexId === vertexId)
       if (existing?.playerId === tab.activePlayerId && existing.tier === state.tool.tier) {
         commit(removeBuilding(board, vertexId))
@@ -251,47 +256,17 @@ export function BoardCanvas() {
   return (
     <section className="board-stage">
       <div className="board-status">
-        <div className="layout-status-wrap">
-          <button
-            type="button"
-            className="layout-status"
-            aria-haspopup="listbox"
-            aria-expanded={layoutMenuOpen}
-            onClick={() => setLayoutMenuOpen((open) => !open)}
-          >
-            <strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout ▾
-          </button>
-          {layoutMenuOpen && (
-            <>
-              <button
-                type="button"
-                className="menu-backdrop"
-                aria-label="Close layout menu"
-                onClick={() => setLayoutMenuOpen(false)}
-              />
-              <div className="layout-menu" role="listbox" aria-label="Board layout">
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={board.layout === 'standard4'}
-                  className={board.layout === 'standard4' ? 'active' : undefined}
-                  onClick={() => choose('standard4')}
-                >
-                  4 player
-                </button>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={board.layout === 'extension6'}
-                  className={board.layout === 'extension6' ? 'active' : undefined}
-                  onClick={() => choose('extension6')}
-                >
-                  5–6 player
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <MenuSelect
+          ariaLabel="Board layout"
+          value={board.layout}
+          options={[
+            { value: 'standard4', label: '4 player' },
+            { value: 'extension6', label: '5–6 player' },
+          ]}
+          onSelect={choose}
+        >
+          <strong>{board.layout === 'extension6' ? '5–6 player' : '4 player'}</strong> layout ▾
+        </MenuSelect>
         <span>{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
         <span>{board.roads.length + board.buildings.length} pieces</span>
       </div>

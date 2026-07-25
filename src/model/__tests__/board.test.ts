@@ -35,6 +35,23 @@ describe('board operations', () => {
     expect(pips(8)).toBe(5)
   })
 
+  it('upgrades a building in place, keeping array order', () => {
+    // The draft strip maps a player's k-th building to their k-th pick.
+    const vertices = boardGrid('standard4').vertexIds
+    let board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
+    board = placeBuilding(board, vertices[0], 'aki', 'settlement')
+    board = placeBuilding(board, vertices[10], 'b', 'settlement')
+    board = placeBuilding(board, vertices[0], 'aki', 'city')
+    expect(board.buildings.map((building) => building.vertexId)).toEqual([vertices[0], vertices[10]])
+    expect(board.buildings[0].tier).toBe('city')
+
+    // Taking over another player's vertex is that player's first building there,
+    // so it appends rather than inheriting the previous owner's index.
+    const stolen = placeBuilding(board, vertices[0], 'b', 'city')
+    expect(stolen.buildings.map((building) => building.playerId)).toEqual(['b', 'b'])
+    expect(stolen.buildings.map((building) => building.vertexId)).toEqual([vertices[10], vertices[0]])
+  })
+
   it('replaces occupants and strips a removed player pieces', () => {
     let board = addPlayer(createBoard('standard4'), {
       id: 'b',

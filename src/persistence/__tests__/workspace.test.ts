@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createBoard } from '../../model/board'
+import { newGame } from '../../model/game'
 import {
   CURRENT_KEY,
   WORKSPACE_CORRUPT_KEY,
@@ -15,12 +16,12 @@ describe('workspace persistence', () => {
   beforeEach(() => localStorage.clear())
 
   it('round-trips a multi-board workspace including per-tab active players', () => {
-    const board = createBoard('standard4')
+    const game = newGame(createBoard('standard4'))
     const workspace: PersistedWorkspace = {
       activeTabId: 'b',
       tabs: [
-        { id: 'a', title: 'Game 1', board, activePlayerId: board.players[0].id },
-        { id: 'b', title: 'Game 2', board: createBoard('extension6') },
+        { id: 'a', title: 'Game 1', game, activePlayerId: game.board.players[0].id },
+        { id: 'b', title: 'Game 2', game: newGame(createBoard('extension6')) },
       ],
     }
     expect(saveWorkspace(workspace).ok).toBe(true)
@@ -30,7 +31,7 @@ describe('workspace persistence', () => {
   it('omits an activePlayerId that is not in the roster', () => {
     const workspace: PersistedWorkspace = {
       activeTabId: 'a',
-      tabs: [{ id: 'a', title: 'Game 1', board: createBoard('standard4'), activePlayerId: 'ghost' }],
+      tabs: [{ id: 'a', title: 'Game 1', game: newGame(createBoard('standard4')), activePlayerId: 'ghost' }],
     }
     expect(saveWorkspace(workspace).ok).toBe(true)
     const loaded = loadWorkspace()
@@ -43,25 +44,62 @@ describe('workspace persistence', () => {
     expect(loadWorkspace().ok).toBe(false)
   })
 
+  it('round-trips a tab’s library link and leaves unlinked tabs unlinked', () => {
+    const game = newGame(createBoard('standard4'))
+    const workspace: PersistedWorkspace = {
+      activeTabId: 'a',
+      tabs: [
+        { id: 'a', title: 'Alpha', game, mapId: 'map-1' },
+        { id: 'b', title: 'Board 2', game },
+      ],
+    }
+    expect(saveWorkspace(workspace).ok).toBe(true)
+    expect(loadWorkspace()).toEqual({ ok: true, workspace })
+  })
+
+  it('drops a malformed mapId rather than carrying a link it cannot trust', () => {
+    const game = newGame(createBoard('standard4'))
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
+      activeTabId: 'a',
+      tabs: [{ id: 'a', title: 'Alpha', game, mapId: 42 }],
+    }))
+    const loaded = loadWorkspace()
+    expect(loaded.ok).toBe(true)
+    if (!loaded.ok) return
+    expect(loaded.workspace.tabs[0].mapId).toBeUndefined()
+  })
+
+  it('loads legacy tabs that stored a bare board as zero-stat games', () => {
+    const board = createBoard('standard4')
+    localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
+      activeTabId: 'a',
+      tabs: [{ id: 'a', title: 'Game 1', board }],
+    }))
+    const loaded = loadWorkspace()
+    expect(loaded.ok).toBe(true)
+    if (!loaded.ok) return
+    expect(loaded.workspace.tabs[0].game).toEqual(newGame(board))
+  })
+
   it('migrates the legacy single-board autosave without deleting it', () => {
-    const board = createBoard('extension6')
-    expect(autosaveCurrent(board).ok).toBe(true)
+    const game = newGame(createBoard('extension6'))
+    expect(autosaveCurrent(game).ok).toBe(true)
 
     const loaded = loadWorkspace()
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
     expect(loaded.workspace.tabs).toHaveLength(1)
     expect(loaded.workspace.tabs[0].title).toBe('Board 1')
-    expect(loaded.workspace.tabs[0].board).toEqual(board)
+    expect(loaded.workspace.tabs[0].game).toEqual(game)
     expect(loaded.workspace.activeTabId).toBe(loaded.workspace.tabs[0].id)
     expect(localStorage.getItem(CURRENT_KEY)).not.toBeNull()
   })
 
   it('drops invalid tabs with a warning and reconciles the active id', () => {
-    const good = { id: 'g', title: 'Good', board: createBoard('standard4') }
+    const good = { id: 'g', title: 'Good', game: newGame(createBoard('standard4')) }
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
       activeTabId: 'missing',
-      tabs: [good, { id: 'bad', title: 'Bad', board: { schemaVersion: 9 } }],
+      tabs: [good, { id: 'bad', title: 'Bad', game: { schemaVersion: 9 } }],
     }))
 
     const loaded = loadWorkspace()
@@ -78,12 +116,12 @@ describe('workspace persistence', () => {
   })
 
   it('drops duplicate tab ids with a warning and preserves the original blob', () => {
-    const board = createBoard('standard4')
+    const game = newGame(createBoard('standard4'))
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
       activeTabId: 'x',
       tabs: [
-        { id: 'x', title: 'First', board },
-        { id: 'x', title: 'Second', board },
+        { id: 'x', title: 'First', game },
+        { id: 'x', title: 'Second', game },
       ],
     }))
 
@@ -100,7 +138,7 @@ describe('workspace persistence', () => {
   it('reports ok false when no tab survives validation', () => {
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
       activeTabId: 'bad',
-      tabs: [{ id: 'bad', title: 'Bad', board: { schemaVersion: 9 } }],
+      tabs: [{ id: 'bad', title: 'Bad', game: { schemaVersion: 9 } }],
     }))
     expect(loadWorkspace().ok).toBe(false)
   })
@@ -111,7 +149,7 @@ describe('workspace persistence', () => {
 
     const workspace: PersistedWorkspace = {
       activeTabId: 'a',
-      tabs: [{ id: 'a', title: 'Game 1', board: createBoard('standard4') }],
+      tabs: [{ id: 'a', title: 'Game 1', game: newGame(createBoard('standard4')) }],
     }
     expect(saveWorkspace(workspace).ok).toBe(true)
     expect(localStorage.getItem(WORKSPACE_CORRUPT_KEY)).toBe('broken')

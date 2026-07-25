@@ -1,12 +1,19 @@
 import { validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
-import type { AxialCoord, Board, Building, Hex, Player, Port, Road } from './types'
+import { newGame, reconcileStats, validateGameStats, type Game, type PlayerStats } from './game'
+import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type Player, type Port, type Road } from './types'
 
 export type ParseBoardResult =
   | { ok: true; board: Board }
   | { ok: false; errors: string[] }
 
+export type ParseGameResult =
+  | { ok: true; game: Game }
+  | { ok: false; errors: string[] }
+
 export const serializeBoard = (board: Board): string => JSON.stringify(board, null, 2)
+
+export const serializeGame = (game: Game): string => JSON.stringify(game, null, 2)
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -84,6 +91,11 @@ export function parseBoard(data: unknown): ParseBoardResult {
     } catch {
       return { ok: false, errors: ['Invalid JSON'] }
     }
+  } else {
+    // Own the result outright. A caller that keeps a handle on the object it
+    // passed in must not be able to mutate a live Board afterwards: the analysis
+    // and standings caches both key on board/game identity.
+    value = structuredClone(data)
   }
   const errors = structuralErrors(value)
   if (errors.length > 0) return { ok: false, errors }
@@ -92,4 +104,59 @@ export function parseBoard(data: unknown): ParseBoardResult {
   const invariantErrors = issues.filter((issue) => issue.severity === 'error')
   if (invariantErrors.length > 0) return { ok: false, errors: invariantErrors.map((issue) => issue.message) }
   return { ok: true, board }
+}
+
+const isCount = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0
+
+const isPlayerStats = (value: unknown): value is PlayerStats =>
+  isRecord(value) && exactKeys(value, ['hand', 'devCards', 'knights', 'vpCards']) &&
+  isRecord(value.hand) && exactKeys(value.hand, RESOURCES) &&
+  RESOURCES.every((resource) => isCount((value.hand as Record<string, unknown>)[resource])) &&
+  isCount(value.devCards) && isCount(value.knights) && isCount(value.vpCards)
+
+/**
+ * Parse a persisted or pasted game. Accepts either the Game envelope or a bare
+ * legacy Board (everything saved before games existed), which is wrapped with
+ * zero-filled stats. Stats entries are validated strictly, but a game whose
+ * stats are missing roster entries is repaired by zero-filling rather than
+ * rejected — absence of data is benign, unlike malformed data.
+ */
+export function parseGame(data: unknown): ParseGameResult {
+  let value = data
+  if (typeof data === 'string') {
+    try {
+      value = JSON.parse(data)
+    } catch {
+      return { ok: false, errors: ['Invalid JSON'] }
+    }
+  }
+  // Bare boards carry their hexes at the top level; the Game envelope nests
+  // everything under `board`.
+  if (isRecord(value) && !('board' in value)) {
+    const parsed = parseBoard(value)
+    return parsed.ok ? { ok: true, game: newGame(parsed.board) } : parsed
+  }
+  if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
+  if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
+  if (!exactKeys(value, ['schemaVersion', 'board', 'stats'])) {
+    return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
+  }
+  const parsedBoard = parseBoard(value.board)
+  if (!parsedBoard.ok) return parsedBoard
+  if (!isRecord(value.stats) || !Object.values(value.stats).every(isPlayerStats)) {
+    return { ok: false, errors: ['Invalid player stats'] }
+  }
+  // Cloned for the same ownership reason as the board above.
+  const stats = structuredClone(value.stats) as Record<string, PlayerStats>
+  const game: Game = {
+    schemaVersion: 1,
+    board: parsedBoard.board,
+    stats: reconcileStats(stats, parsedBoard.board.players),
+  }
+  // reconcileStats zero-fills missing entries, so any surviving issue is a
+  // stats key pointing at a player outside the roster.
+  const statErrors = validateGameStats({ ...game, stats })
+    .filter((issue) => issue.code === 'stats-unknown-player')
+  if (statErrors.length > 0) return { ok: false, errors: statErrors.map((issue) => issue.message) }
+  return { ok: true, game }
 }
