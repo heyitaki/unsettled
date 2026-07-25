@@ -18,11 +18,17 @@ use crate::stats::{normal_quantile, wilson};
 
 pub const TUNING_SEED: u64 = 0x7a11_1e5e_ed20_2607;
 pub const EVAL_SEED: u64 = 0xe7a1_5eed_2026_0724;
+/// Third domain, deliberately unspent. `eval` was burned for the `resourceValue`
+/// spread question, and a domain cannot be un-spent: once a parameter has been
+/// screened against it, its estimate for *that* parameter is no longer unbiased.
+/// Reserve this one for the final adoption gate and screen nothing against it.
+pub const GATE_SEED: u64 = 0x6a7e_5eed_2026_0725;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EvaluationDomain {
     Tuning,
     Eval,
+    Gate,
 }
 
 impl EvaluationDomain {
@@ -30,6 +36,7 @@ impl EvaluationDomain {
         match value {
             "tuning" => Ok(Self::Tuning),
             "eval" => Ok(Self::Eval),
+            "gate" => Ok(Self::Gate),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
     }
@@ -38,6 +45,7 @@ impl EvaluationDomain {
         match self {
             Self::Tuning => "tuning",
             Self::Eval => "eval",
+            Self::Gate => "gate",
         }
     }
 
@@ -45,6 +53,7 @@ impl EvaluationDomain {
         match self {
             Self::Tuning => TUNING_SEED,
             Self::Eval => EVAL_SEED,
+            Self::Gate => GATE_SEED,
         }
     }
 }
