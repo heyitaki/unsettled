@@ -173,24 +173,24 @@ export function BoardCanvas() {
       height: maxY - minY + BOARD_MARGIN * 2,
     }
   }, [board.hexes, board.buildings, ports])
-  // Vertices where the active building tool may legally place: settlements on an
-  // empty vertex respecting the distance rule; cities/super-cities upgrading the
-  // tier below. Used to show placement dots (and gate clicks) for a normal cursor.
+  // Placement dots (and click gate) for the active building tool: any tier drops
+  // straight onto a distance-legal empty vertex — these are admin controls for
+  // mirroring a live game, so a city needs no settlement under it — or re-tiers
+  // one of your own pieces.
   const placeableVertices = useMemo<VertexId[]>(() => {
     if (state.tool.kind !== 'piece' || state.tool.tier === 'road') return []
-    // With nobody selected there is no owner to place for; the settlement branch
+    // With nobody selected there is no owner to place for; the empty-vertex branch
     // below is legality-only, so it would otherwise light up every empty vertex.
     if (tab.activePlayerId === null) return []
     const tier = state.tool.tier
     const byVertex = new Map(board.buildings.map((building) => [building.vertexId, building] as const))
     return grid.vertexIds.filter((vertexId) => {
       const here = byVertex.get(vertexId)
-      if (tier === 'settlement') return !here && vertexAdjacentVertexIds(vertexId).every((adj) => !byVertex.has(adj))
-      // Upgrades apply to your own piece only: without the owner check the city
-      // tool would overwrite an opponent's settlement, moving it and its VP.
-      if (here?.playerId !== tab.activePlayerId) return false
-      if (tier === 'city') return here.tier === 'settlement'
-      return here.tier === 'city'
+      if (!here) return vertexAdjacentVertexIds(vertexId).every((adj) => !byVertex.has(adj))
+      // Own pieces only, or the city tool would take over an opponent's settlement
+      // and its VP. Same-tier is left to the toggle-off targets below, which draw
+      // no dot over the piece.
+      return here.playerId === tab.activePlayerId && here.tier !== tier
     })
   }, [state.tool, board.buildings, tab.activePlayerId, grid])
   // Edges where the active player may legally build a road: empty and touching
