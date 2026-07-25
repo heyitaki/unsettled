@@ -1,4 +1,6 @@
 pub mod boardgen;
+pub mod evaluate;
+pub mod heuristics;
 pub mod output;
 pub mod runner;
 pub mod schedule;

@@ -1,19 +1,22 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use clap::{Args, Parser, Subcommand};
 use serde::Deserialize;
 use unsettled_engine::board::{ConversionOptions, SimBoard};
-use unsettled_engine::placement::app_formula::EngineWeights;
-use unsettled_engine::placement::{
-    PlacementKind, prepare_app_formula_boards, register_app_formula,
-};
+use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::mix64;
 use unsettled_engine::rules::RuleConfig;
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::wire::WireBoard;
 use unsettled_sim::boardgen::generate_board;
+use unsettled_sim::evaluate::{
+    EvaluateRequest, EvaluationDomain, evaluate, evaluation_meta, parse_arm_spec,
+    write_evaluation_outputs,
+};
+use unsettled_sim::heuristics::parse_heuristic;
 use unsettled_sim::runner::{RunRequest, benchmark, run};
 use unsettled_sim::schedule::{simulate_schedule, tournament_schedule};
 
@@ -32,6 +35,8 @@ struct Cli {
 enum Command {
     /// Compare placement heuristics across boards, repetitions, and seat rotations.
     Tournament(TournamentArgs),
+    /// Evaluate labelled hero placement arms against a fixed field.
+    Evaluate(EvaluateArgs),
     /// Simulate games from an app-exported Board JSON file.
     Simulate(SimulateArgs),
     /// Measure single-core and parallel game throughput.
@@ -112,6 +117,38 @@ struct SimulateArgs {
 }
 
 #[derive(Args)]
+struct EvaluateArgs {
+    #[arg(long, default_value = "standard4")]
+    layout: String,
+    #[arg(long)]
+    seats: Option<usize>,
+    #[arg(long)]
+    domain: String,
+    #[arg(long)]
+    field: String,
+    #[arg(long)]
+    arm: Vec<String>,
+    #[arg(long)]
+    reference: Option<String>,
+    #[arg(long)]
+    boards: usize,
+    #[arg(long)]
+    reps: usize,
+    #[arg(long, default_value = "heuristic-v1")]
+    policy: String,
+    #[arg(long, default_value_t = 0.01, allow_hyphen_values = true)]
+    threshold: f64,
+    #[arg(long, default_value_t = 0.05)]
+    alpha: f64,
+    #[arg(long, default_value_t = 0)]
+    threads: usize,
+    #[arg(long)]
+    out: PathBuf,
+    #[arg(long)]
+    allow_unofficial: bool,
+}
+
+#[derive(Args)]
 struct BenchArgs {
     #[arg(long, default_value = "standard4")]
     layout: String,
@@ -131,6 +168,7 @@ fn main() {
 fn execute(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::Tournament(args) => tournament(args),
+        Command::Evaluate(args) => evaluate_command(args),
         Command::Simulate(args) => simulate(args),
         Command::Bench(args) => bench(args),
     }
@@ -242,6 +280,74 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
     Ok(())
 }
 
+fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
+    let layout = parse_layout(&args.layout)?;
+    let seats = args
+        .seats
+        .unwrap_or(if layout == Layout::Standard4 { 4 } else { 6 });
+    let domain = EvaluationDomain::parse(&args.domain)?;
+    let parsed_arms = args
+        .arm
+        .iter()
+        .map(|arm| parse_arm_spec(arm))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut labels = parsed_arms
+        .iter()
+        .map(|(label, _)| label.as_str())
+        .collect::<Vec<_>>();
+    labels.sort_unstable();
+    if let Some(collision) = labels.windows(2).find(|pair| pair[0] == pair[1]) {
+        return Err(format!("duplicate arm label {}", collision[0]));
+    }
+    let field = parse_heuristic(&args.field)?;
+    let arms = parsed_arms
+        .iter()
+        .map(|(label, spec)| Ok((label.clone(), parse_heuristic(spec)?)))
+        .collect::<Result<Vec<_>, String>>()?;
+    let arm_specs = parsed_arms
+        .iter()
+        .map(|(_, spec)| spec.clone())
+        .collect::<Vec<_>>();
+    let policy = parse_policy(&args.policy)?;
+    let started = Instant::now();
+    let evaluation = evaluate(EvaluateRequest {
+        layout,
+        seats,
+        domain,
+        field_spec: &args.field,
+        field,
+        arms: &arms,
+        arm_specs: &arm_specs,
+        reference: args.reference.as_deref(),
+        boards: args.boards,
+        reps: args.reps,
+        policy,
+        policy_name: &args.policy,
+        threshold: args.threshold,
+        alpha: args.alpha,
+        threads: args.threads,
+        allow_unofficial: args.allow_unofficial,
+    })?;
+    let elapsed = started.elapsed().as_secs_f64();
+    let games = evaluation
+        .config
+        .units
+        .checked_mul(evaluation.arms.len())
+        .ok_or_else(|| "evaluation game count overflow".to_string())?;
+    let meta = evaluation_meta(elapsed, games, args.threads);
+    write_evaluation_outputs(&args.out, &evaluation, &meta)?;
+    println!(
+        "completed evaluation domain {} ({}) with {} arms, {} units, {} games, illegal actions: {}",
+        evaluation.config.domain,
+        evaluation.config.domain_seed,
+        evaluation.arms.len(),
+        evaluation.config.units,
+        games,
+        evaluation.illegal_actions
+    );
+    Ok(())
+}
+
 fn simulate(args: SimulateArgs) -> Result<(), String> {
     let source = fs::read_to_string(&args.board).map_err(|error| error.to_string())?;
     let wire = WireBoard::parse_str(&source).map_err(|error| error.to_string())?;
@@ -336,26 +442,6 @@ fn parse_heuristics(value: &str) -> Result<Vec<PlacementKind>, String> {
         ));
     }
     Ok(heuristics)
-}
-
-fn parse_heuristic(name: &str) -> Result<PlacementKind, String> {
-    let Some(path) = name.strip_prefix("app_formula:") else {
-        return PlacementKind::parse(name).ok_or_else(|| format!("unknown heuristic {name}"));
-    };
-    if path.is_empty() {
-        return Err("app_formula requires a weights JSON path".into());
-    }
-    let path = Path::new(path);
-    let stem = path
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .filter(|stem| !stem.is_empty())
-        .ok_or_else(|| format!("app formula weights path has no UTF-8 file stem: {path:?}"))?;
-    let source = fs::read_to_string(path)
-        .map_err(|error| format!("failed to read app formula weights {path:?}: {error}"))?;
-    let weights: EngineWeights = serde_json::from_str(&source)
-        .map_err(|error| format!("invalid app formula weights {path:?}: {error}"))?;
-    register_app_formula(format!("app_formula:{stem}"), weights)
 }
 
 fn parse_policy(value: &str) -> Result<PolicyKind, String> {
