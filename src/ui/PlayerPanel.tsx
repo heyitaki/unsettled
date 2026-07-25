@@ -96,12 +96,20 @@ const TALLY_COLUMNS: TallyColumn[] = [
 ]
 
 /** The other view: what everyone is holding right now. */
-const RESOURCE_COLUMNS: TallyColumn[] = RESOURCES.map((resource) => ({
-  key: resource,
-  label: RESOURCE_LABELS[resource],
-  icon: <ResourceGlyph resource={resource} />,
-  value: (_standing, stats) => stats.hand[resource],
-}))
+const RESOURCE_COLUMNS: TallyColumn[] = [
+  ...RESOURCES.map((resource) => ({
+    key: resource,
+    label: RESOURCE_LABELS[resource],
+    icon: <ResourceGlyph resource={resource} />,
+    value: (_standing: PlayerStanding, stats: PlayerStats) => stats.hand[resource],
+  })),
+  {
+    key: 'handUnknown',
+    label: 'Unknown',
+    icon: <CounterGlyph shape="unknownCard" />,
+    value: (_standing, stats) => stats.handUnknown,
+  },
+]
 
 const vpBreakdown = (standing: PlayerStanding, vpCards: number): string => [
   `${standing.settlements} × settlement`,
@@ -375,6 +383,12 @@ export function PlayerPanel() {
                       adjust={(delta) => commitGame(adjustHand(game, player.id, resource, delta))}
                     />
                   ))}
+                  <StatChip
+                    label="Unknown"
+                    icon={<CounterGlyph shape="unknownCard" />}
+                    count={stats.handUnknown}
+                    adjust={(delta) => commitGame(adjustCounter(game, player.id, 'handUnknown', delta))}
+                  />
                   {(['devCards', 'knights'] as StatCounter[]).map((counter) => (
                     <StatChip
                       key={counter}

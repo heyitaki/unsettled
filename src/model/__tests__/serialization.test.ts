@@ -84,6 +84,17 @@ describe('game serialization', () => {
     expect(result).toEqual({ ok: true, game: newGame(board) })
   })
 
+  it('normalizes legacy four-key player stats with an unknown hand count of zero', () => {
+    const game = newGame(createBoard('standard4'))
+    const { handUnknown: _handUnknown, ...legacyStats } = game.stats.aki
+    const result = parseGame({
+      ...game,
+      stats: { aki: legacyStats },
+    })
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) expect(result.game.stats.aki).toEqual(emptyStats())
+  })
+
   it('zero-fills stats entries missing from the roster', () => {
     const board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
     const result = parseGame({ schemaVersion: 1, board, stats: {} })

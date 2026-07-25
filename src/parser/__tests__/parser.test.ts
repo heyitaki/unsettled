@@ -34,8 +34,8 @@ describe('screenshot parser', () => {
     const result = parseBoardImage(image(path))
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(parseBoard(result.board).ok).toBe(true)
-    expect(normalized(result.board)).toEqual(normalized(expected as Board))
+    expect(parseBoard(result.game.board).ok).toBe(true)
+    expect(normalized(result.game.board)).toEqual(normalized(expected as Board))
   })
 
   it('infers the robber-occluded endgame token from the distribution', () => {
@@ -45,7 +45,7 @@ describe('screenshot parser', () => {
     // The robber hides one token; the standard distribution accounts for every
     // other number, so the gap at (-3,1) must be a 6 — recovered, not unreadable.
     expect(result.issues.filter((issue) => issue.severity === 'unreadable')).toEqual([])
-    const occluded = result.board.hexes.find((hex) => hex.coord.q === -3 && hex.coord.r === 1)
+    const occluded = result.game.board.hexes.find((hex) => hex.coord.q === -3 && hex.coord.r === 1)
     expect(occluded?.numberToken).toBe(6)
     expect(result.issues).toContainEqual(
       expect.objectContaining({ stage: 'tokens', ref: '-3,1', severity: 'warning' }),
@@ -76,9 +76,9 @@ describe.skipIf(!existsSync(`${tessdata}/eng.traineddata.gz`))('offline name OCR
         const result = await parseBoardImageWithNames(image(path), reader)
         expect(result.ok).toBe(true)
         if (!result.ok) continue
-        const names = result.board.players.map((player) => player.name.toLowerCase())
+        const names = result.game.board.players.map((player) => player.name.toLowerCase())
         expect(names.filter((name, index) => name.startsWith(prefixes[index])).length).toBeGreaterThanOrEqual(3)
-        expect(result.board.mePlayerId).toBe(me)
+        expect(result.game.board.mePlayerId).toBe(me)
       }
     } finally {
       await reader.terminate?.()

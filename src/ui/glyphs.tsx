@@ -198,7 +198,7 @@ export function ResourceGlyph({ resource }: { resource: Resource }) {
   }
 }
 
-export type CounterShape = 'devCard' | 'knight' | 'vpCard'
+export type CounterShape = 'unknownCard' | 'devCard' | 'knight' | 'vpCard'
 
 /**
  * A tracked stat with no piece of its own. Drawn as a filled silhouette over
@@ -217,6 +217,19 @@ export function CounterGlyph({ shape, color = GLYPH_MUTED }: { shape: CounterSha
     'aria-hidden': true,
   }
   switch (shape) {
+    case 'unknownCard':
+      return (
+        <svg {...shell}>
+          <path d="M4.6 2.8h10.8v14.4H4.6Z" />
+          <path
+            d="M7.3 7.1c.1-1.5 1.1-2.4 2.7-2.4 1.5 0 2.6.8 2.6 2.2 0 1.1-.6 1.7-1.6 2.3-.8.5-1 1-1 2"
+            fill="none"
+            stroke={PIECE_INK}
+            strokeWidth="1.7"
+          />
+          <path d="M9 13.5h2v2H9Z" fill={PIECE_INK} stroke="none" />
+        </svg>
+      )
     case 'devCard': // a card with its top corner turned back
       return (
         <svg {...shell}>

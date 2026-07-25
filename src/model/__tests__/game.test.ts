@@ -40,6 +40,14 @@ describe('game state', () => {
     expect(game.stats.aki.knights).toBe(0)
   })
 
+  it('adjustCounter tracks cards with an unknown resource', () => {
+    let game = newGame(createBoard('standard4'))
+    game = adjustCounter(game, 'aki', 'handUnknown', 3)
+    expect(game.stats.aki.handUnknown).toBe(3)
+    game = adjustCounter(game, 'aki', 'handUnknown', -5)
+    expect(game.stats.aki.handUnknown).toBe(0)
+  })
+
   it('mutators reject unknown players and no-op deltas return the same game', () => {
     const game = newGame(createBoard('standard4'))
     expect(() => adjustHand(game, 'ghost', 'wood', 1)).toThrow(RangeError)

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { newGame } from '../model/game'
 import {
   parseBoardImageWithNames,
   type ParseIssue,
@@ -83,7 +82,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                       ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
                     ])
                     const importTitle = firstFreeName(fileTitle(file.name), reserved)
-                    dispatch({ type: 'tab-add', game: newGame(result.board), title: importTitle })
+                    dispatch({ type: 'tab-add', game: result.game, title: importTitle })
                     notice(`Imported ${file.name}`)
                     setIssues(result.issues)
                     if (result.issues.length === 0) onClose()

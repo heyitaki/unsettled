@@ -108,16 +108,32 @@ export function parseBoard(data: unknown): ParseBoardResult {
 
 const isCount = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0
 
-const isPlayerStats = (value: unknown): value is PlayerStats =>
-  isRecord(value) && exactKeys(value, ['hand', 'devCards', 'knights', 'vpCards']) &&
-  isRecord(value.hand) && exactKeys(value.hand, RESOURCES) &&
-  RESOURCES.every((resource) => isCount((value.hand as Record<string, unknown>)[resource])) &&
-  isCount(value.devCards) && isCount(value.knights) && isCount(value.vpCards)
+function normalizePlayerStats(value: unknown): PlayerStats | null {
+  if (!isRecord(value)) return null
+  const legacyKeys = ['hand', 'devCards', 'knights', 'vpCards']
+  const currentKeys = [...legacyKeys, 'handUnknown']
+  if (!exactKeys(value, legacyKeys) && !exactKeys(value, currentKeys)) return null
+  const hand = value.hand
+  if (!isRecord(hand) || !exactKeys(hand, RESOURCES) ||
+    !RESOURCES.every((resource) => isCount(hand[resource])) ||
+    !isCount(value.devCards) || !isCount(value.knights) || !isCount(value.vpCards) ||
+    ('handUnknown' in value && !isCount(value.handUnknown))) {
+    return null
+  }
+  return {
+    hand: Object.fromEntries(RESOURCES.map((resource) => [resource, hand[resource]])) as PlayerStats['hand'],
+    handUnknown: 'handUnknown' in value ? value.handUnknown as number : 0,
+    devCards: value.devCards,
+    knights: value.knights,
+    vpCards: value.vpCards,
+  }
+}
 
 /**
  * Parse a persisted or pasted game. Accepts either the Game envelope or a bare
  * legacy Board (everything saved before games existed), which is wrapped with
- * zero-filled stats. Stats entries are validated strictly, but a game whose
+ * zero-filled stats. Version 1 remains compatible because legacy four-key
+ * stats normalize forward with handUnknown zero-filled. A game whose
  * stats are missing roster entries is repaired by zero-filling rather than
  * rejected — absence of data is benign, unlike malformed data.
  */
@@ -143,11 +159,19 @@ export function parseGame(data: unknown): ParseGameResult {
   }
   const parsedBoard = parseBoard(value.board)
   if (!parsedBoard.ok) return parsedBoard
-  if (!isRecord(value.stats) || !Object.values(value.stats).every(isPlayerStats)) {
+  if (!isRecord(value.stats)) {
     return { ok: false, errors: ['Invalid player stats'] }
   }
-  // Cloned for the same ownership reason as the board above.
-  const stats = structuredClone(value.stats) as Record<string, PlayerStats>
+
+  // Normalization rebuilds the stats graph so parsed games never alias input.
+  const normalizedEntries = Object.entries(value.stats).map(([id, stats]) => {
+    const normalized = normalizePlayerStats(stats)
+    return normalized ? [id, normalized] as const : null
+  })
+  if (normalizedEntries.some((entry) => entry === null)) {
+    return { ok: false, errors: ['Invalid player stats'] }
+  }
+  const stats = Object.fromEntries(normalizedEntries as [string, PlayerStats][])
   const game: Game = {
     schemaVersion: 1,
     board: parsedBoard.board,

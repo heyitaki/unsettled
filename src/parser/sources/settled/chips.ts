@@ -1,12 +1,13 @@
-import { PLAYER_PALETTE, type Player } from '../model/types'
-import { colorDistanceSquared, pixel, type Rect, type Rgb, type RgbaImage } from './image'
+import { PLAYER_PALETTE, type Player } from '../../../model/types'
+import { colorDistanceSquared, pixel, type Rect, type Rgb, type RgbaImage } from '../../image'
 import {
   classifyPlayerSeed,
   type ParserPalette,
   type PlayerSeed,
-} from './palette'
-import type { Registration } from './registration'
-import { YOU_TEMPLATE } from './youTemplate'
+} from '../../palette'
+import type { Registration } from '../../registration'
+import type { SourceRoster } from '../types'
+import { YOU_TEMPLATE } from './templates'
 
 export interface DetectedPlayer {
   player: Player
@@ -15,6 +16,12 @@ export interface DetectedPlayer {
   y: number
   radius: number
   labelRect: Rect
+  chipRect: Rect
+}
+
+export interface SettledRoster extends SourceRoster {
+  players: DetectedPlayer[]
+  templateScore: number
 }
 
 interface Dot {
@@ -100,7 +107,7 @@ export function detectRoster(
   image: RgbaImage,
   palette: ParserPalette,
   registration: Registration,
-): { players: DetectedPlayer[]; mePlayerId: string | null; templateScore: number } {
+): SettledRoster {
   const seen = new Set<string>()
   const dots: Dot[] = []
   for (let y = 0; y < registration.bandTop; y += 1) {
@@ -172,7 +179,28 @@ export function detectRoster(
   }
   const chipRow = rows.filter((row) => row.dots.length >= 3).sort((a, b) => b.dots.length - a.dots.length)[0]
   if (!chipRow) return { players: [], mePlayerId: null, templateScore: 0 }
-  const players = chipRow.dots.sort((a, b) => a.x - b.x).map((dot, index): DetectedPlayer => {
+  const sortedDots = chipRow.dots.sort((a, b) => a.x - b.x)
+
+  // These multipliers were measured from dot centers to the fixture card bounds.
+  const dotRects = sortedDots.map((dot) => ({
+    dot,
+    x: Math.round(dot.x - 3.4 * dot.radius),
+    y: Math.round(dot.y - 3.4 * dot.radius),
+    width: Math.round(19.6 * dot.radius),
+    height: Math.max(1, Math.round(registration.bandTop - dot.y + 1.6 * dot.radius)),
+  }))
+
+  // Overlapping dot-derived bounds share their midpoint so ink cannot cross cards.
+  const players = dotRects.map((entry, index): DetectedPlayer => {
+    const { dot } = entry
+    const previous = dotRects[index - 1]
+    const next = dotRects[index + 1]
+    const left = previous
+      ? Math.max(entry.x, Math.round((previous.x + previous.width + entry.x) / 2))
+      : entry.x
+    const right = next
+      ? Math.min(entry.x + entry.width, Math.round((entry.x + entry.width + next.x) / 2))
+      : entry.x + entry.width
     const id = `p${index + 1}`
     return {
       player: { id, name: `P${index + 1}`, color: canonicalColor[dot.seed] },
@@ -181,6 +209,12 @@ export function detectRoster(
       y: dot.y,
       radius: dot.radius,
       labelRect: labelRectFor(dot),
+      chipRect: {
+        x: left,
+        y: entry.y,
+        width: Math.max(1, right - left),
+        height: entry.height,
+      },
     }
   })
   let bestScore = 0
