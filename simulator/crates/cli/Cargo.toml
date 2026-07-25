@@ -1,0 +1,14 @@
+[package]
+name = "unsettled-sim"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+num_cpus.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+unsettled-engine = { path = "../engine" }

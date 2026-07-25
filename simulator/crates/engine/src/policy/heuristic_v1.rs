@@ -1,0 +1,802 @@
+use serde::{Deserialize, Serialize};
+
+use crate::policy::PolicyScratch;
+use crate::rng::Xoshiro256StarStar;
+use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
+use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction, can_pay, pips};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct HeuristicParams {
+    pub production_weight: f32,
+    pub scarcity_weight: f32,
+    pub diversity_bonus: f32,
+    pub port_weight: f32,
+    pub expansion_weight: f32,
+    pub robber_block_threshold: u8,
+}
+
+impl Default for HeuristicParams {
+    fn default() -> Self {
+        Self {
+            production_weight: 1.0,
+            scarcity_weight: 0.35,
+            diversity_bonus: 1.4,
+            port_weight: 0.1,
+            expansion_weight: 0.15,
+            robber_block_threshold: 4,
+        }
+    }
+}
+
+pub fn action(
+    view: &DecisionView<'_>,
+    scratch: &mut PolicyScratch,
+    params: &HeuristicParams,
+    rng: &mut Xoshiro256StarStar,
+) -> Action {
+    let mut out = ActionBuf::new();
+    let road = best_road(view, params);
+    score_actions_with(view, params, &mut out, road);
+    scratch.goal = best_goal_with(view, params, road).map(|goal| goal.kind);
+    let best_score = out
+        .as_slice()
+        .iter()
+        .map(|action| action.score)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let mut selected = Action::Pass;
+    let mut ties = 0;
+    for candidate in out
+        .as_slice()
+        .iter()
+        .filter(|candidate| candidate.score == best_score)
+    {
+        ties += 1;
+        if rng.range(ties) == 0 {
+            selected = candidate.action;
+        }
+    }
+    selected
+}
+
+pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mut ActionBuf) {
+    score_actions_with(view, params, out, best_road(view, params));
+}
+
+fn score_actions_with(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    out: &mut ActionBuf,
+    road: Option<RoadGoal>,
+) {
+    out.clear();
+    for vertex in 0..view.topology().vertex_count() {
+        let vertex = vertex as u8;
+        if view.legal_city(vertex) && view.can_afford(Buildable::City) {
+            out.push(ScoredAction {
+                action: Action::UpgradeCity(vertex),
+                score: 10_000.0 + vertex_score(view, vertex, params),
+            });
+        }
+    }
+    for vertex in 0..view.topology().vertex_count() {
+        let vertex = vertex as u8;
+        if view.legal_settlement(vertex) && view.can_afford(Buildable::Settlement) {
+            out.push(ScoredAction {
+                action: Action::BuildSettlement(vertex),
+                score: 500.0 + vertex_score(view, vertex, params),
+            });
+        }
+    }
+    if view.can_afford(Buildable::Road)
+        && let Some(road) = road
+    {
+        out.push(ScoredAction {
+            action: Action::BuildRoad(road.edge),
+            score: road.action_score,
+        });
+    }
+    if let Some(goal) = best_goal_with(view, params, road)
+        && !view.can_afford(goal.kind)
+    {
+        for trade in completing_or_improving_trades(view, goal.kind) {
+            out.push(ScoredAction {
+                action: trade,
+                score: if trade_completes(view, goal.kind, trade) {
+                    400.0 + goal.score
+                } else {
+                    300.0 + goal.score
+                },
+            });
+        }
+    }
+    let dev_score = dev_card_score(view);
+    if view.dev_deck_remaining() > 0 && !view.can_buy_dev() {
+        for give in Resource::ALL {
+            for get in Resource::ALL {
+                let trade = Action::TradeBank {
+                    give,
+                    get,
+                    count: 1,
+                };
+                if view.legal_trade(give, get, 1)
+                    && trade_completes_cost(view, view.dev_cost(), trade)
+                {
+                    out.push(ScoredAction {
+                        action: trade,
+                        score: 350.0 + dev_score - 45.0,
+                    });
+                }
+            }
+        }
+    }
+    if view.can_buy_dev() {
+        out.push(ScoredAction {
+            action: Action::BuyDev,
+            score: dev_score,
+        });
+    }
+    // Only evaluate the knight when there is a motive: it takes Largest Army, it unblocks our own
+    // production, or we hold a spare. Choosing the robber target scans every hex against every
+    // seat, so doing it on turns where a lone knight is simply being held costs throughput for a
+    // move that would not be played anyway. (The old gate required a spare knight outright, which
+    // made Largest Army unreachable.)
+    if view.can_play_dev(0)
+        && (view.knight_takes_largest_army()
+            || view.hex_touches_seat(view.robber(), view.observer())
+            || view.own_playable_dev()[0] >= 2)
+    {
+        let (destination, victim) = robber(view);
+        out.push(ScoredAction {
+            action: Action::PlayDev(DevPlay::Knight {
+                destination,
+                victim,
+            }),
+            score: knight_action_score(view, destination, victim),
+        });
+    }
+    out.push(ScoredAction {
+        action: Action::Pass,
+        score: 0.0,
+    });
+}
+
+pub fn recommend(view: &DecisionView<'_>, params: &HeuristicParams) -> Vec<ScoredAction> {
+    let mut out = ActionBuf::new();
+    score_actions(view, params, &mut out);
+    out.as_slice().to_vec()
+}
+
+pub fn pre_roll(
+    view: &DecisionView<'_>,
+    scratch: &mut PolicyScratch,
+    params: &HeuristicParams,
+) -> Option<DevPlay> {
+    let blocked_pips = if view.hex_touches_seat(view.robber(), view.observer()) {
+        view.board().tokens()[usize::from(view.robber())].map_or(0, pips)
+    } else {
+        0
+    };
+    if view.can_play_dev(0)
+        && (view.knight_takes_largest_army() || blocked_pips >= params.robber_block_threshold)
+    {
+        let (destination, victim) = robber(view);
+        return Some(DevPlay::Knight {
+            destination,
+            victim,
+        });
+    }
+    let goal = best_goal(view, params);
+    scratch.goal = goal.map(|value| value.kind);
+    if view.can_play_dev(3)
+        && let Some((first, second)) = goal.and_then(|value| plenty_for_goal(view, value.kind))
+    {
+        return Some(DevPlay::YearOfPlenty { first, second });
+    }
+    if view.can_play_dev(4)
+        && let Some(resource) = goal.and_then(|value| monopoly_for_goal(view, value.kind))
+    {
+        return Some(DevPlay::Monopoly { resource });
+    }
+    if view.can_play_dev(2) {
+        let (first, second) = best_road_building_pair(view, params);
+        if first.is_some() {
+            return Some(DevPlay::RoadBuilding { first, second });
+        }
+    }
+    None
+}
+
+pub fn discard(
+    view: &DecisionView<'_>,
+    count: u8,
+    scratch: &mut PolicyScratch,
+) -> [u8; RESOURCE_COUNT] {
+    let goal = scratch
+        .goal
+        .or_else(|| best_goal(view, &HeuristicParams::default()).map(|value| value.kind));
+    let cost = goal
+        .and_then(|kind| view.costs(kind).first())
+        .copied()
+        .unwrap_or([0; RESOURCE_COUNT]);
+    let mut remaining = *view.own_hand();
+    let mut discarded = [0; RESOURCE_COUNT];
+    for _ in 0..count {
+        let resource = (0..RESOURCE_COUNT)
+            .max_by_key(|index| remaining[*index] - i16::from(cost[*index]))
+            .unwrap_or(0);
+        if remaining[resource] == 0 {
+            break;
+        }
+        remaining[resource] -= 1;
+        discarded[resource] += 1;
+    }
+    discarded
+}
+
+pub fn robber(view: &DecisionView<'_>) -> (u8, Option<u8>) {
+    let mut best = view.robber();
+    let mut best_score = i32::MIN;
+    for hex in 0..view.topology().hex_count() {
+        let hex = hex as u8;
+        if hex == view.robber() || view.hex_touches_seat(hex, view.observer()) {
+            continue;
+        }
+        let token_pips = i32::from(view.board().tokens()[usize::from(hex)].map_or(0, pips));
+        // Blocking production is the main motive and must dominate: an unscaled hand-size term is
+        // commensurate with the block value, which would send the robber to a desert next to a fat
+        // hand over a 5-pip hex. Divided down, it only breaks ties between comparable blocks.
+        let score = (0..view.seats())
+            .filter(|seat| *seat != view.observer() && view.victim_on_hex(hex, *seat))
+            .map(|seat| {
+                token_pips * (1 + i32::from(view.public_vp(seat)))
+                    + i32::from(view.hand_size(seat).min(12)) / 3
+            })
+            .sum();
+        if score > best_score {
+            best = hex;
+            best_score = score;
+        }
+    }
+    if best == view.robber() {
+        best = (0..view.topology().hex_count())
+            .map(|hex| hex as u8)
+            .find(|hex| *hex != view.robber())
+            .expect("board has another hex");
+    }
+    // Only a seat holding cards is worth naming -- targeting an empty-handed leader wastes the
+    // steal entirely. Among those, still prefer the VP leader (denying the player closest to
+    // winning outranks taking the largest hand), breaking ties toward the richer hand.
+    let victim = (0..view.seats())
+        .filter(|seat| *seat != view.observer() && view.stealable_on_hex(best, *seat))
+        .max_by_key(|seat| (view.public_vp(*seat), view.hand_size(*seat)))
+        .map(|seat| seat as u8);
+    (best, victim)
+}
+
+pub fn turns_to_afford(view: &DecisionView<'_>, buildable: Buildable) -> f32 {
+    view.costs(buildable)
+        .iter()
+        .map(|cost| turns_for_cost(view, cost))
+        .fold(f32::INFINITY, f32::min)
+}
+
+pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParams) -> f32 {
+    let board_totals = view.board_resource_pips();
+    let own = view.production_pips(view.observer());
+    let mut production = [0_u16; RESOURCE_COUNT];
+    for hex in view.topology().vertex_hexes(vertex) {
+        if *hex == view.robber() {
+            continue;
+        }
+        if let (Some(resource), Some(token)) = (
+            view.board().tiles()[usize::from(*hex)],
+            view.board().tokens()[usize::from(*hex)],
+        ) {
+            production[resource.index()] += u16::from(pips(token));
+        }
+    }
+    let raw: u16 = production.iter().sum();
+    let scarcity = production
+        .iter()
+        .enumerate()
+        .map(|(resource, value)| f32::from(*value) / f32::from(board_totals[resource].max(1)))
+        .sum::<f32>();
+    let diversity = production
+        .iter()
+        .enumerate()
+        .filter(|(resource, value)| **value > 0 && own[*resource] == 0)
+        .count() as f32;
+    let port_synergy = view
+        .ports()
+        .iter()
+        .filter(|port| view.topology().vertex_edges(vertex).contains(&port.edge))
+        .map(|port| {
+            Resource::ALL
+                .iter()
+                .map(|resource| {
+                    let current = view.trade_rate(*resource);
+                    let prospective = view.prospective_trade_rate(*port, *resource);
+                    if prospective < current {
+                        f32::from(production[resource.index()])
+                            * (1.0 / prospective as f32 - 1.0 / current as f32)
+                    } else {
+                        0.0
+                    }
+                })
+                .sum::<f32>()
+        })
+        .sum::<f32>();
+    let expansion = view
+        .topology()
+        .vertex_adjacent(vertex)
+        .iter()
+        .filter(|adjacent| view.vertex_owner(**adjacent).is_none())
+        .count() as f32;
+    f32::from(raw) * params.production_weight
+        + scarcity * params.scarcity_weight * 10.0
+        + diversity * params.diversity_bonus
+        + port_synergy * params.port_weight
+        + expansion * params.expansion_weight
+}
+
+#[derive(Clone, Copy)]
+struct Goal {
+    kind: Buildable,
+    score: f32,
+}
+
+#[derive(Clone, Copy)]
+struct RoadGoal {
+    edge: u8,
+    action_score: f32,
+    goal_score: f32,
+}
+
+fn best_goal(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<Goal> {
+    best_goal_with(view, params, best_road(view, params))
+}
+
+/// `best_road` scans every legal edge and, when the Longest Road card is in reach, runs an
+/// exponential trail search per candidate. Callers that already have its result pass it in rather
+/// than paying for it again -- a decision used to repeat that search three times over.
+fn best_goal_with(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    road: Option<RoadGoal>,
+) -> Option<Goal> {
+    let mut best = None;
+    if (0..view.topology().vertex_count())
+        .map(|vertex| vertex as u8)
+        .any(|vertex| view.legal_city(vertex))
+    {
+        best = Some(Goal {
+            kind: Buildable::City,
+            score: 2.0 / turns_to_afford(view, Buildable::City).max(0.25),
+        });
+    }
+    if let Some(vertex) = view.best_legal_settlement() {
+        let candidate = Goal {
+            kind: Buildable::Settlement,
+            score: (1.0 + vertex_score(view, vertex, params) / 20.0)
+                / turns_to_afford(view, Buildable::Settlement).max(0.25),
+        };
+        if best.is_none_or(|current| candidate.score > current.score) {
+            best = Some(candidate);
+        }
+    }
+    if let Some(road) = road {
+        let candidate = Goal {
+            kind: Buildable::Road,
+            score: road.goal_score / turns_to_afford(view, Buildable::Road).max(0.25),
+        };
+        if best.is_none_or(|current| candidate.score > current.score) {
+            best = Some(candidate);
+        }
+    }
+    best
+}
+
+fn best_road(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<RoadGoal> {
+    let mut best = None;
+    let contesting = longest_road_reachable(view, 1);
+    for edge in 0..view.topology().edge_count() {
+        let edge = edge as u8;
+        if !view.legal_road(edge) {
+            continue;
+        }
+        let expansion_score = expansion_road_score(view, edge, params);
+        let new_length = if contesting {
+            view.road_length_after(edge, None)
+        } else {
+            0
+        };
+        let Some((action_bonus, goal_bonus)) = longest_road_value(view, new_length) else {
+            if expansion_score.is_none() {
+                continue;
+            }
+            let candidate = RoadGoal {
+                edge,
+                action_score: 40.0 + expansion_score.unwrap_or_default(),
+                goal_score: 0.35,
+            };
+            if best.is_none_or(|current: RoadGoal| {
+                candidate.action_score > current.action_score
+            }) {
+                best = Some(candidate);
+            }
+            continue;
+        };
+        let candidate = RoadGoal {
+            edge,
+            action_score: action_bonus + expansion_score.unwrap_or_default(),
+            goal_score: 0.35 + goal_bonus,
+        };
+        if best.is_none_or(|current: RoadGoal| candidate.action_score > current.action_score) {
+            best = Some(candidate);
+        }
+    }
+    best
+}
+
+fn expansion_road_score(
+    view: &DecisionView<'_>,
+    first: u8,
+    params: &HeuristicParams,
+) -> Option<f32> {
+    let mut best_score = None;
+    for target in view.topology().edge_endpoints(first) {
+        if view.is_expansion_target(target) {
+            let score = vertex_score(view, target, params) + 0.25;
+            if best_score.is_none_or(|best| score > best) {
+                best_score = Some(score);
+            }
+        }
+    }
+    let first_endpoints = view.topology().edge_endpoints(first);
+    for second in 0..view.topology().edge_count() {
+        let second = second as u8;
+        let second_endpoints = view.topology().edge_endpoints(second);
+        if !first_endpoints
+            .iter()
+            .any(|vertex| second_endpoints.contains(vertex))
+            || !view.legal_road_after(first, second)
+        {
+            continue;
+        }
+        for target in second_endpoints {
+            if view.is_expansion_target(target) {
+                let score = vertex_score(view, target, params);
+                if best_score.is_none_or(|best| score > best) {
+                    best_score = Some(score);
+                }
+            }
+        }
+    }
+    best_score
+}
+
+/// Whether laying `added` more segments could possibly earn any Longest Road bonus.
+///
+/// `road_length_after` runs an exponential edge-simple-trail search, and the scoring loops call it
+/// once per candidate road (and once per *pair* for road building), so evaluating it
+/// unconditionally dominates the hot loop. This bounds the achievable trail by the number of
+/// segments the observer would own, which is sound because a trail cannot reuse edges.
+///
+/// The bound is deliberately NOT `current_length + added`: one edge can bridge two disconnected
+/// components into `a + b + 1`, and every seat starts setup with two separate road stubs, so that
+/// tighter-looking bound is false and would skip roads that win the card outright. The slack of 2
+/// keeps the near-miss progress branch of `longest_road_value` reachable.
+fn longest_road_reachable(view: &DecisionView<'_>, added: u8) -> bool {
+    let observer = view.observer();
+    if view.longest_road_holder() == Some(observer) {
+        return false;
+    }
+    let opponent_best = (0..view.seats())
+        .filter(|seat| *seat != observer)
+        .map(|seat| view.longest_road_len(seat))
+        .max()
+        .unwrap_or_default();
+    let target = view
+        .longest_road_min()
+        .max(opponent_best.saturating_add(1));
+    view.own_road_count().saturating_add(added) >= target.saturating_sub(PROGRESS_SLACK)
+}
+
+/// How far below the card's threshold `longest_road_value` still pays a progress bonus.
+const PROGRESS_SLACK: u8 = 2;
+
+fn longest_road_value(view: &DecisionView<'_>, new_length: u8) -> Option<(f32, f32)> {
+    let observer = view.observer();
+    if view.longest_road_holder() == Some(observer) {
+        return None;
+    }
+    let opponent_best = (0..view.seats())
+        .filter(|seat| *seat != observer)
+        .map(|seat| view.longest_road_len(seat))
+        .max()
+        .unwrap_or_default();
+    let target = view
+        .longest_road_min()
+        .max(opponent_best.saturating_add(1));
+    let current = view.longest_road_len(observer);
+    if new_length <= current {
+        return None;
+    }
+    if new_length >= target {
+        return Some((
+            contested_card_score(
+                view,
+                view.longest_road_vp(),
+                view.longest_road_holder().is_some(),
+            ),
+            30.0 + 10.0 * win_proximity(view),
+        ));
+    }
+    let before = target.saturating_sub(current);
+    let after = target.saturating_sub(new_length);
+    if after >= before || after > 2 {
+        return None;
+    }
+    let progress = f32::from(before - after);
+    let proximity = win_proximity(view);
+    Some((
+        40.0 + progress * (35.0 + 65.0 * proximity) / f32::from(after.max(1)),
+        progress * (0.5 + 1.5 * proximity) / f32::from(after.max(1)),
+    ))
+}
+
+fn contested_card_score(view: &DecisionView<'_>, vp: u8, denies_holder: bool) -> f32 {
+    if view.own_total_vp().saturating_add(vp) >= view.win_vp() {
+        return 100_000.0 + f32::from(vp) * 100.0;
+    }
+    // Scale with the VP the card actually carries rather than sitting on a flat floor above the
+    // city band: a variant that makes a bonus card worth 1 VP must not outrank a 2-VP city. At the
+    // base-rules value of 2 this is the same 11_000 as before.
+    5_500.0 * f32::from(vp)
+        + f32::from(vp) * 250.0
+        + win_proximity(view) * 2_000.0
+        + if denies_holder { 250.0 } else { 0.0 }
+}
+
+fn dev_card_score(view: &DecisionView<'_>) -> f32 {
+    if view.largest_army_holder() == Some(view.observer()) {
+        return 45.0;
+    }
+    let holder_count = view
+        .largest_army_holder()
+        .map_or(0, |holder| view.knights_played(holder));
+    let target = view
+        .largest_army_min()
+        .max(holder_count.saturating_add(u8::from(
+            view.largest_army_holder().is_some(),
+        )));
+    let gap = target.saturating_sub(view.knights_played(view.observer()));
+    let contest_bonus = match gap {
+        0 | 1 => 160.0,
+        2 => 80.0,
+        3 => 25.0,
+        _ => 0.0,
+    };
+    45.0 + contest_bonus * (0.5 + win_proximity(view))
+}
+
+fn knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<u8>) -> f32 {
+    if view.knight_takes_largest_army() {
+        return contested_card_score(
+            view,
+            view.largest_army_vp(),
+            view.largest_army_holder().is_some(),
+        );
+    }
+    let next = view
+        .knights_played(view.observer())
+        .saturating_add(1)
+        .min(view.largest_army_min());
+    let progress = f32::from(next) / f32::from(view.largest_army_min().max(1))
+        * (45.0 + 35.0 * win_proximity(view));
+    let blocked = if view.hex_touches_seat(view.robber(), view.observer()) {
+        f32::from(view.board().tokens()[usize::from(view.robber())].map_or(0, pips)) * 12.0
+    } else {
+        0.0
+    };
+    let steal = victim.map_or(0.0, |seat| {
+        f32::from(view.hand_size(usize::from(seat)).min(12)) * 2.0
+    });
+    20.0
+        + progress
+        + blocked
+        + steal
+        + if destination != view.robber() {
+            1.0
+        } else {
+            0.0
+        }
+}
+
+fn win_proximity(view: &DecisionView<'_>) -> f32 {
+    f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1))
+}
+
+fn best_road_building_pair(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+) -> (Option<u8>, Option<u8>) {
+    let mut best = (None, None);
+    let mut best_score = f32::NEG_INFINITY;
+    // Road building lays two segments, so the card is reachable from two further out.
+    let contesting = longest_road_reachable(view, 2);
+    for first in 0..view.topology().edge_count() {
+        let first = first as u8;
+        if !view.legal_road(first) {
+            continue;
+        }
+        let first_endpoints = view.topology().edge_endpoints(first);
+        let mut found_second = false;
+        for second in 0..view.topology().edge_count() {
+            let second = second as u8;
+            let second_endpoints = view.topology().edge_endpoints(second);
+            if !first_endpoints
+                .iter()
+                .any(|vertex| second_endpoints.contains(vertex))
+                || !view.legal_road_after(first, second)
+            {
+                continue;
+            }
+            found_second = true;
+            let expansion_score = second_endpoints
+                .iter()
+                .map(|vertex| vertex_score(view, *vertex, params))
+                .fold(f32::NEG_INFINITY, f32::max);
+            let road_bonus = if contesting {
+                longest_road_value(view, view.road_length_after(first, Some(second)))
+                    .map_or(0.0, |(action_score, _)| action_score)
+            } else {
+                0.0
+            };
+            let score = expansion_score + road_bonus;
+            if score > best_score {
+                best = (Some(first), Some(second));
+                best_score = score;
+            }
+        }
+        if !found_second && best.0.is_none() {
+            best = (Some(first), None);
+        }
+    }
+    best
+}
+
+fn turns_for_cost(view: &DecisionView<'_>, cost: &[u8; RESOURCE_COUNT]) -> f32 {
+    let income = view.production_pips(view.observer());
+    let mut turns = 0.0_f32;
+    for resource in Resource::ALL {
+        let missing =
+            (i16::from(cost[resource.index()]) - view.own_hand()[resource.index()]).max(0);
+        if missing == 0 {
+            continue;
+        }
+        let direct = f32::from(income[resource.index()]) / 36.0;
+        let trade_income = Resource::ALL
+            .iter()
+            .filter(|other| **other != resource)
+            .map(|other| f32::from(income[other.index()]) / 36.0 / view.trade_rate(*other) as f32)
+            .sum::<f32>();
+        let rate = direct + trade_income;
+        turns = turns.max(if rate > 0.0 {
+            f32::from(missing) / rate
+        } else {
+            100.0
+        });
+    }
+    turns.max(0.25)
+}
+
+fn completing_or_improving_trades<'a>(
+    view: &'a DecisionView<'a>,
+    goal: Buildable,
+) -> impl Iterator<Item = Action> + 'a {
+    Resource::ALL.into_iter().flat_map(move |give| {
+        Resource::ALL.into_iter().filter_map(move |get| {
+            if give == get || !view.legal_trade(give, get, 1) {
+                return None;
+            }
+            let before = view
+                .costs(goal)
+                .iter()
+                .map(|cost| missing_units(view.own_hand(), cost))
+                .min()
+                .unwrap_or(u16::MAX);
+            let mut hand = *view.own_hand();
+            hand[give.index()] -= view.trade_rate(give) as i16;
+            hand[get.index()] += 1;
+            let improves = view
+                .costs(goal)
+                .iter()
+                .any(|cost| can_pay(&hand, cost) || missing_units(&hand, cost) < before);
+            improves.then_some(Action::TradeBank {
+                give,
+                get,
+                count: 1,
+            })
+        })
+    })
+}
+
+fn missing_units(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_COUNT]) -> u16 {
+    (0..RESOURCE_COUNT)
+        .map(|index| u16::try_from((i16::from(cost[index]) - hand[index]).max(0)).unwrap_or(0))
+        .sum()
+}
+
+fn trade_completes(view: &DecisionView<'_>, goal: Buildable, trade: Action) -> bool {
+    view.costs(goal)
+        .iter()
+        .any(|cost| trade_completes_cost(view, cost, trade))
+}
+
+fn trade_completes_cost(
+    view: &DecisionView<'_>,
+    cost: &[u8; RESOURCE_COUNT],
+    trade: Action,
+) -> bool {
+    let Action::TradeBank { give, get, count } = trade else {
+        return false;
+    };
+    let mut hand = *view.own_hand();
+    hand[give.index()] -= (view.trade_rate(give) * u32::from(count)) as i16;
+    hand[get.index()] += i16::from(count);
+    can_pay(&hand, cost)
+}
+
+fn plenty_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<(Resource, Resource)> {
+    for cost in view.costs(goal) {
+        let mut missing = [0_u8; RESOURCE_COUNT];
+        let mut total = 0;
+        for resource in 0..RESOURCE_COUNT {
+            missing[resource] =
+                u8::try_from((i16::from(cost[resource]) - view.own_hand()[resource]).max(0))
+                    .unwrap_or(0);
+            total += missing[resource];
+        }
+        if total == 2 {
+            let first = (0..RESOURCE_COUNT).find(|index| missing[*index] > 0)?;
+            missing[first] -= 1;
+            let second = (0..RESOURCE_COUNT)
+                .find(|index| missing[*index] > 0)
+                .unwrap_or(first);
+            let first = Resource::ALL[first];
+            let second = Resource::ALL[second];
+            let needed = u16::from(first == second) + 1;
+            if view.bank(first) > 0 && view.bank(second) >= needed {
+                return Some((first, second));
+            }
+        }
+    }
+    None
+}
+
+fn monopoly_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<Resource> {
+    let cost = view.costs(goal).first()?;
+    Resource::ALL
+        .into_iter()
+        .filter(|resource| view.own_hand()[resource.index()] < i16::from(cost[resource.index()]))
+        .max_by_key(|resource| expected_monopoly(view, *resource))
+        .filter(|resource| expected_monopoly(view, *resource) > 0)
+}
+
+fn expected_monopoly(view: &DecisionView<'_>, resource: Resource) -> u32 {
+    (0..view.seats())
+        .filter(|seat| *seat != view.observer())
+        .map(|seat| {
+            let production = view.production_pips(seat);
+            let total: u16 = production.iter().sum();
+            if total == 0 {
+                0
+            } else {
+                u32::from(view.hand_size(seat)) * u32::from(production[resource.index()])
+                    / u32::from(total)
+            }
+        })
+        .sum()
+}
