@@ -49,11 +49,13 @@ button.danger, .icon-danger { color: #a33428; }
 button.selected.danger { color: #fff; }
 
 .history-buttons { display: flex; gap: 6px; }
-.history-buttons button { position: relative; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; line-height: 1; }
-/* Name label under the hovered button (replaces the native tooltip). No
-   transition, so switching between buttons swaps the label instantly. */
-.history-buttons button::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: 6px; background: #fbf6ea; color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 7px rgba(55,45,32,.16); opacity: 0; pointer-events: none; z-index: 6; }
-.history-buttons button:hover::after { opacity: 1; }
+.history-buttons button { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; line-height: 1; }
+/* Name label under the hovered button (replaces the native tooltip). Bare text
+   — no pill, border, or shadow. No transition, so switching between buttons
+   swaps the label instantly. */
+.history-buttons button, .player-add { position: relative; }
+.history-buttons button::after, .player-add::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 9px; font-weight: 400; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 6; }
+.history-buttons button:hover::after, .player-add:hover:not(:disabled)::after { opacity: 1; }
 .btn-icon { flex: none; width: 16px; height: 16px; fill: currentColor; }
 .tool-group + .tool-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
 .tool-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
