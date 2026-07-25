@@ -331,17 +331,36 @@ export function readWorkspaceBlob(): string | null {
   return localStorage.getItem(WORKSPACE_KEY)
 }
 
-export function saveWorkspace(workspace: PersistedWorkspace): WriteResult {
+/**
+ * Tab id → linked map id: the shape every comparison of "what storage holds
+ * against what this document shows" is made in, with `mapId` normalised to null
+ * so an absent link and a null one cannot read as different.
+ */
+export function tabLinks(tabs: readonly WorkspaceTab[]): Map<string, string | null> {
+  return new Map(tabs.map((tab) => [tab.id, tab.mapId ?? null]))
+}
+
+/**
+ * Writes an already-serialized workspace. The caller serializes when it needs
+ * the bytes for itself — to compare them against what is stored — and passing
+ * them through means the bytes it recorded are by construction the bytes that
+ * landed, rather than a second stringify that merely ought to agree.
+ */
+export function saveWorkspaceBlob(blob: string): WriteResult {
   try {
     if (corruptWorkspaceBlob !== null) {
       localStorage.setItem(WORKSPACE_CORRUPT_KEY, corruptWorkspaceBlob)
       corruptWorkspaceBlob = null
     }
-    localStorage.setItem(WORKSPACE_KEY, workspaceBlob(workspace))
+    localStorage.setItem(WORKSPACE_KEY, blob)
     return { ok: true }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Unable to autosave workspace' }
   }
+}
+
+export function saveWorkspace(workspace: PersistedWorkspace): WriteResult {
+  return saveWorkspaceBlob(workspaceBlob(workspace))
 }
 
 /**

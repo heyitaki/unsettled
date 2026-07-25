@@ -3,6 +3,7 @@ import {
   createElement,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useState,
@@ -26,8 +27,9 @@ import {
   migrateMapIds,
   readLibrary,
   readWorkspaceBlob,
-  saveWorkspace,
+  saveWorkspaceBlob,
   storedTabLinks,
+  tabLinks,
   workspaceBlob,
   type LibraryView,
   type PersistedWorkspace,
@@ -513,23 +515,26 @@ export function storageActions(
 /**
  * This document's divergence from shared storage, as the difference between
  * what it last wrote or adopted (`persisted`: tab id → linked map id) and the
- * workspace waiting on the autosave debounce. `pending` is null when no write
- * is in flight, and then nothing is unflushed by definition — a document with
- * an empty outbox must not read its whole tab list as freshly closed.
+ * tabs it is showing. Deliberately NOT the workspace awaiting a write: a close
+ * is unflushed from the moment it happens until the moment it lands, which
+ * spans a write that failed and a write that stood down to reconcile.
+ *
+ * `open` is null only before the first arm, when this document has not yet said
+ * what it is showing and has nothing to claim against an incoming blob.
  */
 export function unflushedWork(
   persisted: ReadonlyMap<string, string | null>,
-  pending: readonly WorkspaceTab[] | null,
+  open: readonly WorkspaceTab[] | null,
 ): UnflushedWork {
-  if (pending === null) return NOTHING_UNFLUSHED
+  if (open === null) return NOTHING_UNFLUSHED
   const added: string[] = []
   const relinked: string[] = []
-  for (const tab of pending) {
+  for (const tab of open) {
     if (!persisted.has(tab.id)) added.push(tab.id)
     else if (persisted.get(tab.id) !== (tab.mapId ?? null)) relinked.push(tab.id)
   }
-  const open = new Set(pending.map((tab) => tab.id))
-  const closed = [...persisted.keys()].filter((id) => !open.has(id))
+  const here = new Set(open.map((tab) => tab.id))
+  const closed = [...persisted.keys()].filter((id) => !here.has(id))
   return { added, relinked, closed }
 }
 
@@ -545,12 +550,11 @@ export function withAdopted(
   tabs: readonly WorkspaceTab[],
   unflushed: UnflushedWork,
 ): Map<string, string | null> {
-  const relinked = new Set(unflushed.relinked)
-  const next = new Map<string, string | null>()
-  for (const tab of tabs) {
-    // A link made here and not yet written stays unflushed: the adoption
-    // refused the incoming one, so the difference is still ours to save.
-    next.set(tab.id, relinked.has(tab.id) ? persisted.get(tab.id) ?? null : tab.mapId ?? null)
+  const next = tabLinks(tabs)
+  // A link made here and not yet written stays unflushed: the adoption refused
+  // the incoming one, so the difference is still ours to save.
+  for (const id of unflushed.relinked) {
+    if (next.has(id)) next.set(id, persisted.get(id) ?? null)
   }
   return next
 }
@@ -599,10 +603,12 @@ export function persistedWorkspace(
 }
 
 export type FlushOutcome =
-  // Written, or already exactly what storage held: either way, settled.
+  // Nothing more this flush can do: written, already stored, or failed and left
+  // owed for the next commit to retry.
   | 'settled'
-  // Stood down and adopted instead; the workspace is still owed a write.
-  | 'resynced'
+  // Nothing was written and the work is still owed: the caller re-arms so the
+  // next debounce writes the reconciled workspace in its place.
+  | 'deferred'
 
 /**
  * This document's side of the shared workspace key: what it has written, what
@@ -622,11 +628,18 @@ export function createWorkspaceSync(dispatch: (action: StoreAction) => void) {
   let persistedTabs = storedTabLinks()
   // The workspace blob this document last wrote or read; see writeVerdict.
   let seen = readWorkspaceBlob()
-  let pending: PersistedWorkspace | null = null
+  // Which tabs are open here, as of the last commit. Null only before the first
+  // arm. Deliberately separate from `owed`, and never cleared by a write: the
+  // two answer different questions, and conflating them is what let a write that
+  // stood down — or one that failed — forget that a tab had been closed at all,
+  // so the next incoming blob put it straight back.
+  let open: readonly WorkspaceTab[] | null = null
+  // The workspace still owed a write, or null when storage is up to date.
+  let owed: PersistedWorkspace | null = null
 
   const receive = (event: Pick<StorageEvent, 'key' | 'newValue'>) => {
     const flushed = persistedTabs
-    const unflushed = unflushedWork(flushed, pending?.tabs ?? null)
+    const unflushed = unflushedWork(flushed, open)
     // Reading the blob is what makes it seen, whether or not it yields an
     // adoption: one that no longer parses produces no actions and must still be
     // overwritable, or this document could never write again.
@@ -640,44 +653,58 @@ export function createWorkspaceSync(dispatch: (action: StoreAction) => void) {
   }
 
   return {
-    /** The workspace this document now owes storage, replacing any earlier one. */
+    /**
+     * The tabs this document is showing, and the workspace it now owes storage.
+     * Called on every commit, so `open` tracks the strip even while no write is
+     * outstanding.
+     */
     arm(workspace: PersistedWorkspace) {
-      pending = workspace
+      open = workspace.tabs
+      owed = workspace
     },
     receive,
+    /**
+     * Re-reads shared storage from scratch. For a document restored from
+     * bfcache, which was frozen through every write it should have adopted: a
+     * cleared-origin event is exactly "assume nothing you hold is current".
+     */
+    resync() {
+      receive({ key: null, newValue: null })
+    },
     /**
      * Writes what is owed. `only` holds the write to that workspace, so a
      * debounce a newer edit has already superseded does nothing.
      */
     flush(only?: PersistedWorkspace): FlushOutcome {
-      const workspace = pending
+      const workspace = owed
       if (workspace === null || (only !== undefined && only !== workspace)) return 'settled'
       const blob = workspaceBlob(workspace)
       const stored = readWorkspaceBlob()
       const verdict = writeVerdict(blob, stored, seen)
       if (verdict === 'resync') {
-        // Dropped, not held: what was owed described the tabs as they stood
-        // before the adoption, and writing that afterwards would undo it. The
-        // caller re-arms from the reconciled state instead.
-        pending = null
+        // Adopt first, then drop what was owed: it described the tabs as they
+        // stood before the adoption, so writing it afterwards would undo it.
+        // `open` survives, which is what lets the adoption still refuse a tab
+        // closed here. The caller re-arms from the reconciled state.
         receive({ key: WORKSPACE_KEY, newValue: stored })
-        return 'resynced'
+        owed = null
+        return 'deferred'
       }
       if (verdict === 'write') {
-        const result = saveWorkspace(workspace)
+        const result = saveWorkspaceBlob(blob)
         if (!result.ok) {
-          // Not owed a retry: the same write would fail the same way, and the
-          // state is still here to be saved on the user's next edit.
-          pending = null
+          // Left owed, so the next commit — or the unload flush — retries it,
+          // but without re-arming here: an immediate retry would fail the same
+          // way and do it every 500ms.
           dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
           return 'settled'
         }
       }
       // Storage now holds exactly this, whether this document wrote it or found
       // it already there.
-      pending = null
+      owed = null
       seen = blob
-      persistedTabs = new Map(workspace.tabs.map((tab) => [tab.id, tab.mapId ?? null]))
+      persistedTabs = tabLinks(workspace.tabs)
       return 'settled'
     },
   }
@@ -690,30 +717,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Created on the first render, when its reads of shared storage are still
   // this document's own history rather than another document's write.
   const [sync] = useState(() => createWorkspaceSync(dispatch))
-  // Bumped when a write stood down to adopt a blob this document had not seen,
-  // to re-arm the autosave so the reconciled workspace is written in its place.
-  const [resyncs, setResyncs] = useState(0)
-  useEffect(() => {
+  // A write that stood down leaves work owed, and the reconciled workspace only
+  // exists after a render — so the retry is a render this asks for. Nothing
+  // reads the token; it is the dependency that re-runs the arming effect.
+  const [rearmToken, rearm] = useReducer((token: number) => token + 1, 0)
+  // Layout, not passive: a storage event delivered between this commit and the
+  // arming would have `receive` diff an incoming blob against the tab set as it
+  // was *before* the edit, so a tab closed a moment ago reads as still open and
+  // the adoption puts it back. Layout effects run in the same task as the
+  // commit, so nothing can be delivered in between.
+  useLayoutEffect(() => {
     const workspace = persistedWorkspace(state.tabs, state.activeTabId)
     sync.arm(workspace)
     const timeout = window.setTimeout(() => {
-      // A resync drops what was owed in favour of what it adopted; re-running
-      // this effect is what arms the reconciled workspace in its place.
-      if (sync.flush(workspace) === 'resynced') setResyncs((count) => count + 1)
+      if (sync.flush(workspace) === 'deferred') rearm()
     }, 500)
     return () => window.clearTimeout(timeout)
-  }, [sync, state.tabs, state.activeTabId, resyncs])
-  useEffect(() => {
+  }, [sync, state.tabs, state.activeTabId, rearmToken])
+  // Layout, for the same reason as the arming above and because this effect is
+  // declared after it: a write landing between the first commit and a passive
+  // listener would never be delivered at all, leaving `seen` stale from birth.
+  useLayoutEffect(() => {
     window.addEventListener('storage', sync.receive)
     return () => window.removeEventListener('storage', sync.receive)
   }, [sync])
   useEffect(() => {
-    // A write that stands down here is not retried: the page is going away, and
-    // overwriting a blob this document never saw would resurrect, in the window
-    // that is staying, whatever it just closed.
+    // Hiding is the last moment a write can be retried with the page still
+    // alive, so flush there rather than waiting for pagehide — by then a
+    // document whose storage moved underneath it can only stand down, and
+    // whatever it still owed is lost.
     const flushWorkspace = () => void sync.flush()
+    // A document restored from bfcache missed every write while it was frozen.
+    // Reading storage back is what stops its stale view from being written out.
+    const resyncRestored = (event: PageTransitionEvent) => {
+      if (event.persisted) sync.resync()
+    }
+    const flushHidden = () => {
+      if (document.visibilityState === 'hidden') flushWorkspace()
+    }
     window.addEventListener('pagehide', flushWorkspace)
-    return () => window.removeEventListener('pagehide', flushWorkspace)
+    window.addEventListener('pageshow', resyncRestored)
+    document.addEventListener('visibilitychange', flushHidden)
+    return () => {
+      window.removeEventListener('pagehide', flushWorkspace)
+      window.removeEventListener('pageshow', resyncRestored)
+      document.removeEventListener('visibilitychange', flushHidden)
+    }
   }, [sync])
   const value = useMemo(() => ({ state, dispatch }), [state])
   return createElement(StoreContext.Provider, { value }, children)

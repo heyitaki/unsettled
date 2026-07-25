@@ -200,11 +200,14 @@ describe('flush tracking', () => {
   })
 
   it('keeps an unflushed close recognisable across a repeat of the same blob', () => {
-    // The blob still lists the closed tab, so the id stays on record and the
-    // next event for it is refused too — right up until this document's own
-    // write lands and takes the tab out of the blob.
-    const closed = unflushedWork(new Map([['a', null], ['b', null]]), [tab('a')])
-    const adopted = withAdopted(new Map([['a', null], ['b', null]]), [tab('a'), tab('b')], closed)
+    // The blob still lists the closed tab `b`, so the id stays on record and
+    // the next event for it is refused too — right up until this document's own
+    // write lands and takes the tab out of the blob. `c` is in the record but
+    // not in the blob, so only a mirror drops it: were the map merged instead,
+    // the same close would read as two.
+    const persisted = new Map([['a', null], ['b', null], ['c', null]])
+    const closed = unflushedWork(persisted, [tab('a')])
+    const adopted = withAdopted(persisted, [tab('a'), tab('b')], closed)
     expect(unflushedWork(adopted, [tab('a')])).toEqual(unflushed({ closed: ['b'] }))
   })
 
