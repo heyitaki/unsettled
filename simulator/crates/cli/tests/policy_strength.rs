@@ -2,13 +2,11 @@ use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::placement::PlacementKind;
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::{derive_evaluation_seed, mix64};
-use unsettled_engine::rules::RuleConfig;
+use unsettled_engine::rules::{Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_sim::boardgen::generate_board;
+use unsettled_sim::evaluate::{EVAL_SEED, TUNING_SEED};
 use unsettled_sim::stats::wilson95;
-
-const EVAL_SEED: u64 = 0xe7a1_5eed_2026_0724;
-const TUNING_SEED: u64 = 0x7a11_1e5e_ed20_2607;
 
 fn evaluate(hero: PolicyKind, baseline: PolicyKind, games: usize) -> (u64, f64) {
     let topology = Topology::load(Layout::Standard4).unwrap();
@@ -36,7 +34,31 @@ fn evaluate(hero: PolicyKind, baseline: PolicyKind, games: usize) -> (u64, f64) 
 
 #[test]
 fn tuning_and_evaluation_seed_domains_are_disjoint() {
-    assert_ne!(TUNING_SEED, EVAL_SEED);
+    let seeds = |domain| {
+        (0..5)
+            .flat_map(move |board| {
+                (0..3).flat_map(move |rep| {
+                    (0..4)
+                        .map(move |hero_seat| derive_evaluation_seed(domain, board, rep, hero_seat))
+                })
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    assert!(seeds(TUNING_SEED).is_disjoint(&seeds(EVAL_SEED)));
+
+    let boards = |domain| {
+        (0..5)
+            .map(|index| {
+                let board = generate_board(Layout::Standard4, 4, mix64(domain ^ index)).unwrap();
+                (
+                    board.tiles().to_vec(),
+                    board.tokens().to_vec(),
+                    board.robber(),
+                )
+            })
+            .collect::<Vec<(Vec<Option<Resource>>, Vec<Option<u8>>, u8)>>()
+    };
+    assert_ne!(boards(TUNING_SEED), boards(EVAL_SEED));
 }
 
 #[test]

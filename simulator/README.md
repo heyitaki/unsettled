@@ -32,6 +32,36 @@ cargo run --release -p unsettled-sim -- tournament \
 
 `--threads 0` selects all logical cores. The schedule is `boards × reps × heuristic-count rotations`. Rotation `j` assigns seat `s` to heuristic `(s + j) mod k`, so every heuristic visits every seat even when the number of heuristics differs from the seat count.
 
+Evaluate labelled hero-placement arms against one fixed field placement:
+
+```sh
+cargo run --release -p unsettled-sim -- evaluate \
+  --layout standard4 \
+  --seats 4 \
+  --domain tuning \
+  --field app_formula:placement/default-weights.json \
+  --arm base=app_formula:placement/default-weights.json \
+  --arm candidate=max_pips \
+  --reference base \
+  --boards 40 \
+  --reps 20 \
+  --policy heuristic-v1 \
+  --threshold 0.01 \
+  --alpha 0.05 \
+  --threads 0 \
+  --out runs/evaluation
+```
+
+An evaluation unit is one `(board, rep, hero seat)` triple. The schedule fully crosses every generated board, repetition, and seat, then plays every labelled arm on every unit while every non-hero seat uses `--field`. Arm values split on the first `=`, so labels form their own namespace and a spec path may contain `=`. Labels must be unique, while specs may repeat. `--reference` is required for two or more arms and optional for a single-arm marginal run.
+
+`--layout` defaults to `standard4`; the corresponding default seat counts are four for `standard4` and six for `extension6`. Board and repetition counts must be positive. `--policy`, `--threshold`, `--alpha`, and `--threads` default to `heuristic-v1`, `0.01`, `0.05`, and all logical cores, respectively; the threshold must be non-negative and alpha must be strictly between zero and one. As with tournament, non-official seat counts require `--allow-unofficial`.
+
+The required `--domain tuning|eval` selects the committed tuning (`0x7a11_1e5e_ed20_2607`) or held-out evaluation (`0xe7a1_5eed_2026_0724`) seed domain. It deliberately has no default so tuning work cannot accidentally use the held-out evaluation domain. The domain seed drives both board generation and each game's dice, deck, chance, and policy streams. On a given unit, the game seed depends only on `(domain seed, board, rep, hero seat)`, never the arm, so paired arms use common random numbers.
+
+For an arm and its reference, `b` counts units won only by the arm and `c` counts units won only by the reference. The paired estimate is `(b-c)/n`. The artifact reports both a McNemar Wald interval for the correlated per-unit differences and an interval clustered by generated board. It always selects the wider interval, choosing the clustered interval on an exact width tie. With only one board, between-board variance is unknowable, so the clustered interval is `[-1, 1]`, `clusteredDegenerate` is true, and the verdict is necessarily `inconclusive`.
+
+For selected interval `[lo, hi]` and threshold `t`, the pre-registered verdict is `better` when `lo > t`, `worse` when `hi < -t`, `equivalent` when `lo > -t` and `hi < t`, and `inconclusive` otherwise. The chosen `alpha`, threshold, and normal quantile are recorded in the artifact. Prefer increasing `--boards` over increasing `--reps`: clustered precision comes from the number of boards, and the normal-quantile interval can still understate uncertainty when there are few clusters.
+
 Use an app Board JSON file:
 
 ```sh
@@ -87,7 +117,9 @@ Each run writes:
 - `meta.json`: elapsed time, throughput, worker count, and version data.
 - Optional JSONL: ordered per-game schedule coordinates, seat placements, and result.
 
-`results.json` contains no time or thread-count fields. A game's seed is derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams. Dice, deck, chance, and each seat policy use independent xoshiro256** streams. Rayon collects the indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed produces byte-identical `results.json` at any worker count.
+`evaluate` instead writes deterministic `evaluation.json` plus `meta.json`, with no CSV. Its evaluation artifact contains the run configuration, label-keyed arm marginals, ordered paired comparisons, and the total illegal-action count.
+
+`results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, and each seat policy use independent xoshiro256** streams. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
 
 Games that reach the configured 500-round cap are recorded as draws. Illegal policy actions are counted and must remain zero.
 
