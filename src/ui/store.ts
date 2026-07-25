@@ -433,6 +433,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         // pending write would then persist it — the resurrection users hit when
         // they close several tabs with a second window open, each close racing
         // that window's echo of the workspace as it was a moment ago.
+        if (closedHere.has(incoming.id)) continue
         if (adoptedIds.has(incoming.id)) continue
         adoptedIds.add(incoming.id)
         const existing = local.get(incoming.id)
