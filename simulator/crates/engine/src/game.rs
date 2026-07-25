@@ -549,6 +549,7 @@ impl GameArena {
             board,
             topology,
             &self.state.vertex_owner,
+            seat as u8,
             &production,
             &mut self.streams.policy[seat],
         ) else {

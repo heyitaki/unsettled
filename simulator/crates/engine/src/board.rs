@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
+use crate::placement::app_formula::AppFormulaScorer;
 use crate::rules::{RESOURCE_COUNT, Resource, RuleConfig};
 use crate::state::MAX_VERTICES;
 use crate::topology::{Edge, Hex, Layout, Topology, Vertex};
@@ -62,6 +63,7 @@ pub struct SimBoard {
     /// Per port, the vertices its edge touches, as a bitset aligned with `ports`. Vertex scoring
     /// asks "is this port on one of my edges" for every port at every vertex it weighs.
     port_vertices: Vec<u128>,
+    app_formula_scorers: Vec<(u8, AppFormulaScorer)>,
 }
 
 impl SimBoard {
@@ -203,6 +205,7 @@ impl SimBoard {
             saturated_rates,
             resource_pips,
             port_vertices,
+            app_formula_scorers: Vec::new(),
         })
     }
 
@@ -257,6 +260,24 @@ impl SimBoard {
             .zip(&self.port_vertices)
             .filter(move |(_, vertices)| *vertices & (1 << vertex) != 0)
             .map(|(port, _)| port)
+    }
+
+    pub(crate) fn app_formula_scorer(&self, index: u8) -> Option<&AppFormulaScorer> {
+        self.app_formula_scorers
+            .iter()
+            .find_map(|(candidate, scorer)| (*candidate == index).then_some(scorer))
+    }
+
+    pub(crate) fn prepare_app_formula(
+        &mut self,
+        index: u8,
+        topology: &Topology,
+        weights: crate::placement::app_formula::EngineWeights,
+    ) {
+        if self.app_formula_scorer(index).is_none() {
+            self.app_formula_scorers
+                .push((index, AppFormulaScorer::new(self, topology, weights)));
+        }
     }
 }
 

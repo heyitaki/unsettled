@@ -1,6 +1,6 @@
 # Unsettled self-play simulator
 
-`unsettled-sim` is a seeded Rust simulator for complete base-Catan games without player-to-player trading. It supports the 19-hex `standard4` and 30-hex `extension6` layouts, app-exported Board JSON, generated legal boards, six starting-placement heuristics, and three post-placement policies plus a no-ports ablation.
+`unsettled-sim` is a seeded Rust simulator for complete base-Catan games without player-to-player trading. It supports the 19-hex `standard4` and 30-hex `extension6` layouts, app-exported Board JSON, generated legal boards, six built-in starting-placement heuristics, weights-file-parameterized app-formula arms, and three post-placement policies plus a no-ports ablation.
 
 The engine crate has no threading, CLI, or filesystem dependency. The CLI owns board generation, rayon scheduling, aggregation, and output.
 
@@ -50,7 +50,7 @@ Measure throughput:
 cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
 ```
 
-Available placement names are `random`, `max_pips`, `pip_diversity`, `pip_scarcity`, `port_synergy`, and `city_focus`. Available policies are `random-legal`, `greedy-no-trade`, `priority-trader`, `heuristic-v1`, and `heuristic-v1-noports`.
+Available built-in placement names are `random`, `max_pips`, `pip_diversity`, `pip_scarcity`, `port_synergy`, and `city_focus`. `app_formula:<path/to/weights.json>` loads the app's settlement formula at run time and reports it as `app_formula:<file-stem>`, so multiple weights files with distinct stems can be arms in the same run. Available policies are `random-legal`, `greedy-no-trade`, `priority-trader`, `heuristic-v1`, and `heuristic-v1-noports`.
 
 Official simulation-ready combinations are three or four seats on `standard4` and five or six seats on `extension6`. `--allow-unofficial` permits two through six seats on either layout and is echoed in `results.json`.
 
@@ -105,7 +105,7 @@ Regeneration must leave `topology/standard4.json` and `topology/extension6.json`
 
 ## Extending the study
 
-To add a placement heuristic, add a `PlacementKind` entry and name mapping in `crates/engine/src/placement/mod.rs`, then supply its vertex-score preset or implementation. The CLI registry and result keys use that stable name.
+To add a built-in placement heuristic, add a `PlacementKind` entry and name mapping in `crates/engine/src/placement/mod.rs`, then supply its vertex-score preset or implementation. The CLI registry and result keys use that stable name. The parameterized app formula lives in `crates/engine/src/placement/app_formula.rs`; the CLI loads each weights file, registers its stable file-stem name, and prepares its board-fixed port reach and scarcity context before games start.
 
 Rule changes belong in `RuleConfig`, `BuildableSpec`, or `PlayerModifiers`. Parameter-only changes flatten into per-player cost and trade-rate tables. Port changes use `PortRule`; `heuristic-v1-noports` is exactly this mechanism applied to itself, declaring a `PortSelector::All` / `PortAction::Disable` rule via `PolicyKind::port_rules` so the seat's flattened trade rates fall back to the bank rate. A "ports removed" curse would be the same rule reached through `PlayerModifiers` instead. A behavioral boon or curse adds an `Effect` variant and handles it at the pre-roll, production, build, or trade hook. Policy code receives `DecisionView`, not `GameState`; app-facing recommendation code should use the `recommend` adapter while simulation code scores into the `ActionBuf` its `PolicyScratch` already owns. Anything a new rule derives per decision and reads board-wide belongs in the `DecisionView` cache next to production pips; anything fixed by the board or the layout belongs on `SimBoard` or `Topology` at load.
 
