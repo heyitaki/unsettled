@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use clap::{Args, Parser, Subcommand};
 use serde::Deserialize;
 use unsettled_engine::board::{ConversionOptions, SimBoard};
-use unsettled_engine::placement::PlacementKind;
+use unsettled_engine::placement::app_formula::EngineWeights;
+use unsettled_engine::placement::{
+    PlacementKind, prepare_app_formula_boards, register_app_formula,
+};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::mix64;
 use unsettled_engine::rules::RuleConfig;
@@ -216,6 +219,7 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
         return Err("tournament boards must be draft-empty".into());
     }
     let heuristics = parse_heuristics(&heuristic_names)?;
+    prepare_app_formula_boards(&mut boards, &topology, &heuristics);
     let policy = parse_policy(&policy_name)?;
     let schedule = tournament_schedule(boards.len(), reps, heuristics.len());
     let result = run(RunRequest {
@@ -242,7 +246,7 @@ fn simulate(args: SimulateArgs) -> Result<(), String> {
     let source = fs::read_to_string(&args.board).map_err(|error| error.to_string())?;
     let wire = WireBoard::parse_str(&source).map_err(|error| error.to_string())?;
     let topology = Topology::load(wire.layout)?;
-    let board = SimBoard::try_from_wire(
+    let mut board = SimBoard::try_from_wire(
         wire,
         &topology,
         &RuleConfig::base(topology.layout()),
@@ -252,6 +256,7 @@ fn simulate(args: SimulateArgs) -> Result<(), String> {
     )
     .map_err(|error| error.to_string())?;
     let heuristics = parse_heuristics(&args.heuristics)?;
+    prepare_app_formula_boards(std::slice::from_mut(&mut board), &topology, &heuristics);
     let policy = parse_policy(&args.policy)?;
     let schedule = simulate_schedule(args.games, heuristics.len());
     run(RunRequest {
@@ -317,18 +322,40 @@ fn parse_layout(name: &str) -> Result<Layout, String> {
 fn parse_heuristics(value: &str) -> Result<Vec<PlacementKind>, String> {
     let heuristics = value
         .split(',')
-        .map(|name| PlacementKind::parse(name).ok_or_else(|| format!("unknown heuristic {name}")))
+        .map(parse_heuristic)
         .collect::<Result<Vec<_>, _>>()?;
     if heuristics.is_empty() {
         return Err("at least one heuristic is required".into());
     }
-    let mut unique = heuristics.clone();
-    unique.sort_by_key(|kind| kind.name());
-    unique.dedup();
-    if unique.len() != heuristics.len() {
-        return Err("heuristic names must be distinct".into());
+    let mut names = heuristics.iter().map(|kind| kind.name()).collect::<Vec<_>>();
+    names.sort_unstable();
+    if let Some(collision) = names.windows(2).find(|pair| pair[0] == pair[1]) {
+        return Err(format!(
+            "heuristic name collision: {} is used by multiple arms",
+            collision[0]
+        ));
     }
     Ok(heuristics)
+}
+
+fn parse_heuristic(name: &str) -> Result<PlacementKind, String> {
+    let Some(path) = name.strip_prefix("app_formula:") else {
+        return PlacementKind::parse(name).ok_or_else(|| format!("unknown heuristic {name}"));
+    };
+    if path.is_empty() {
+        return Err("app_formula requires a weights JSON path".into());
+    }
+    let path = Path::new(path);
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .ok_or_else(|| format!("app formula weights path has no UTF-8 file stem: {path:?}"))?;
+    let source = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read app formula weights {path:?}: {error}"))?;
+    let weights: EngineWeights = serde_json::from_str(&source)
+        .map_err(|error| format!("invalid app formula weights {path:?}: {error}"))?;
+    register_app_formula(format!("app_formula:{stem}"), weights)
 }
 
 fn parse_policy(value: &str) -> Result<PolicyKind, String> {
