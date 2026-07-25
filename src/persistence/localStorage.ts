@@ -316,13 +316,28 @@ export function loadCurrent(): ParseGameResult {
   return value === null ? { ok: false, errors: ['No autosave found'] } : parseGame(value)
 }
 
+/**
+ * The exact bytes a workspace persists as. Documents compare blobs to tell an
+ * autosave that would change nothing from one that would, and to notice that
+ * storage moved since they last looked, so the serialization has to be the one
+ * saveWorkspace performs and not a second, subtly different one.
+ */
+export function workspaceBlob(workspace: PersistedWorkspace): string {
+  return JSON.stringify(workspace)
+}
+
+/** The stored workspace, unparsed: the blob to compare a write against. */
+export function readWorkspaceBlob(): string | null {
+  return localStorage.getItem(WORKSPACE_KEY)
+}
+
 export function saveWorkspace(workspace: PersistedWorkspace): WriteResult {
   try {
     if (corruptWorkspaceBlob !== null) {
       localStorage.setItem(WORKSPACE_CORRUPT_KEY, corruptWorkspaceBlob)
       corruptWorkspaceBlob = null
     }
-    localStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspace))
+    localStorage.setItem(WORKSPACE_KEY, workspaceBlob(workspace))
     return { ok: true }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Unable to autosave workspace' }

@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { addPlayer, createBoard, removePlayer } from '../../model/board'
 import { adjustHand, newGame, type Game } from '../../model/game'
-import { activeTab, reducer, type StoreState, type TabState } from '../store'
+import {
+  NOTHING_UNFLUSHED,
+  activeTab,
+  reducer,
+  type StoreState,
+  type TabState,
+  type UnflushedWork,
+} from '../store'
+
+const unflushed = (work: Partial<UnflushedWork> = {}): UnflushedWork => ({
+  ...NOTHING_UNFLUSHED,
+  ...work,
+})
 
 function tab(id: string, game = newGame(createBoard('standard4')), extra: Partial<TabState> = {}): TabState {
   return {
@@ -221,7 +233,7 @@ describe('workspace tabs', () => {
     const adopted = reducer(start, {
       type: 'workspace-adopt',
       tabs: [{ id: 't1', title: 't1', game: newGame(createBoard('standard4')) }],
-      keepIds: ['t1', 't2'],
+      unflushed: unflushed({ added: ['t1', 't2'] }),
     })
     expect(adopted.tabs.map((entry) => entry.id)).toEqual(['t1', 't2'])
     expect(adopted.tabs[1]).toBe(local2)
@@ -293,7 +305,7 @@ describe('workspace tabs', () => {
     const adopted = reducer(start, {
       type: 'workspace-adopt',
       tabs: [{ id: 't1', title: 't1', game: newGame(createBoard('standard4')), mapId: 'map-1' }],
-      keepLinkIds: ['t1'],
+      unflushed: unflushed({ relinked: ['t1'] }),
     })
     expect(adopted).toBe(start)
   })
@@ -306,7 +318,7 @@ describe('workspace tabs', () => {
     const adopted = reducer(start, {
       type: 'workspace-adopt',
       tabs: [{ id: 't1', title: 'Alpha', game: newGame(createBoard('standard4')), mapId: 'map-1' }],
-      keepIds: ['t2'],
+      unflushed: unflushed({ added: ['t2'] }),
     })
     expect(adopted.tabs.map((entry) => [entry.id, entry.mapId])).toEqual([
       ['t1', 'map-1'],
@@ -356,15 +368,50 @@ describe('workspace tabs', () => {
   })
 
   it('does not resurrect a tab that was persisted and then closed elsewhere', () => {
-    // keepIds carries only tabs this window has never written. A tab it did
+    // `added` carries only tabs this window has never written. A tab it did
     // write, now missing from the incoming set, was closed on purpose.
     const start = state([tab('t1'), tab('t2')], 't1')
     const adopted = reducer(start, {
       type: 'workspace-adopt',
       tabs: [{ id: 't1', title: 't1', game: newGame(createBoard('standard4')) }],
-      keepIds: [],
+      unflushed: NOTHING_UNFLUSHED,
     })
     expect(adopted.tabs.map((entry) => entry.id)).toEqual(['t1'])
+  })
+
+  it('does not resurrect a tab closed here whose write is still in flight', () => {
+    // The other window echoes the workspace as it stood a moment ago, and that
+    // echo lands inside this one's autosave debounce. Adopting it would put the
+    // tab back and this window's own pending write would then persist it.
+    const start = state([tab('t1')], 't1')
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: [
+        { id: 't1', title: 't1', game: newGame(createBoard('standard4')) },
+        { id: 't2', title: 't2', game: newGame(createBoard('standard4')) },
+      ],
+      unflushed: unflushed({ closed: ['t2'] }),
+    })
+    expect(adopted).toBe(start)
+  })
+
+  it('keeps the replacement tab alone after every tab was closed here', () => {
+    // Closing the last tab mints a blank one, which is unflushed by definition.
+    // Adopting the pre-close blob around it is the "several tabs pop back up"
+    // report: the whole closed set, with the blank tab trailing them.
+    const blank = tab('fresh')
+    const start = state([blank], 'fresh')
+    const adopted = reducer(start, {
+      type: 'workspace-adopt',
+      tabs: ['t1', 't2', 't3'].map((id) => ({
+        id,
+        title: id,
+        game: newGame(createBoard('standard4')),
+      })),
+      unflushed: unflushed({ added: ['fresh'], closed: ['t1', 't2', 't3'] }),
+    })
+    expect(adopted.tabs.map((entry) => entry.id)).toEqual(['fresh'])
+    expect(adopted.activeTabId).toBe('fresh')
   })
 })
 
