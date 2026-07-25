@@ -1,7 +1,7 @@
 import { clearBoard, randomizeBoard } from '../model/board'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
-import { StructureGlyph, type StructureShape } from './glyphs'
+import { GLYPH_MUTED, StructureGlyph, type StructureShape } from './glyphs'
 import { activeTab, useStore, type Tool } from './store'
 
 const TILES: TileKind[] = [...RESOURCES, 'desert']
@@ -29,8 +29,9 @@ export function ToolPalette() {
   // second click on a highlighted button deselects it.
   const selectTool = (tool: Tool) =>
     dispatch({ type: 'tool', tool: selected === keyOf(tool) ? { kind: 'none' } : tool })
-  // Preview the colour the active player will place with.
-  const pieceColor = tab.game.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? '#8a7a63'
+  // Preview the colour the active player will place with; with nobody selected
+  // (their dot toggled off) the palette falls back to the neutral glyph beige.
+  const pieceColor = tab.game.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? GLYPH_MUTED
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">

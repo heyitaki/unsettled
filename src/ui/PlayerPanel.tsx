@@ -12,6 +12,7 @@ import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounte
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource, type VertexId } from '../model/types'
 import { readableInk } from './colors'
 import { CounterGlyph, GLYPH_MUTED, ResourceGlyph, StructureGlyph } from './glyphs'
+import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 
 const RESOURCE_LABELS: Record<Resource, string> = {
@@ -27,7 +28,7 @@ const RESOURCE_LABELS: Record<Resource, string> = {
 // column can never drift out of alignment with its heading. Heading glyphs are
 // uniform-height and bottom-aligned (see .tally-header), so the strip scans as
 // one row of labels rather than a skyline.
-const TALLY_PX = 15
+const TALLY_PX = 13
 
 interface TallyColumn {
   key: string
@@ -36,33 +37,48 @@ interface TallyColumn {
   value: (standing: PlayerStanding, stats: PlayerStats) => number
   /** Longer per-row tooltip where the bare count leaves something out. */
   detail?: (standing: PlayerStanding) => string
+  /** Marks the count that won a card — the award holder's roads/knights. */
+  emphasize?: (standing: PlayerStanding) => boolean
 }
+
+type TallyView = 'pieces' | 'resources'
+
+const VIEW_OPTIONS: readonly { value: TallyView; label: string }[] = [
+  { value: 'pieces', label: 'Pieces' },
+  { value: 'resources', label: 'Resources' },
+]
 
 const TALLY_COLUMNS: TallyColumn[] = [
   {
     key: 'settlements',
     label: 'Settlements',
-    icon: <StructureGlyph shape="settlement" color={GLYPH_MUTED} size={TALLY_PX} uniform />,
+    icon: <StructureGlyph shape="settlement" color={GLYPH_MUTED} size={TALLY_PX} />,
     value: (standing) => standing.settlements,
   },
   {
     key: 'cities',
     label: 'Cities',
-    icon: <StructureGlyph shape="city" color={GLYPH_MUTED} size={TALLY_PX} uniform />,
+    icon: <StructureGlyph shape="city" color={GLYPH_MUTED} size={TALLY_PX} />,
     value: (standing) => standing.cities,
   },
   {
     key: 'superCities',
     label: 'Super cities',
-    icon: <StructureGlyph shape="superCity" color={GLYPH_MUTED} size={TALLY_PX} uniform />,
+    icon: <StructureGlyph shape="superCity" color={GLYPH_MUTED} size={TALLY_PX} />,
     value: (standing) => standing.superCities,
   },
   {
+    // The award is about the longest single run, so that is the number worth a
+    // column; the total is a footnote in the tooltip.
     key: 'roads',
-    label: 'Roads',
-    icon: <StructureGlyph shape="road" color={GLYPH_MUTED} size={TALLY_PX} uniform />,
-    value: (standing) => standing.roads,
-    detail: (standing) => `longest run ${standing.longestRoad}`,
+    label: 'Longest road',
+    icon: <StructureGlyph shape="road" color={GLYPH_MUTED} size={TALLY_PX} />,
+    value: (standing) => standing.longestRoad,
+    // Carries the "+2 VP" the removed award badge used to spell out.
+    detail: (standing) => standing.hasLongestRoad
+      ? `${standing.roads} roads placed · holds the card, +2 VP`
+      : `${standing.roads} roads placed`,
+    emphasize: (standing) => standing.hasLongestRoad,
   },
   {
     key: 'devCards',
@@ -75,8 +91,17 @@ const TALLY_COLUMNS: TallyColumn[] = [
     label: 'Knights played',
     icon: <CounterGlyph shape="knight" />,
     value: (_standing, stats) => stats.knights,
+    emphasize: (standing) => standing.hasLargestArmy,
   },
 ]
+
+/** The other view: what everyone is holding right now. */
+const RESOURCE_COLUMNS: TallyColumn[] = RESOURCES.map((resource) => ({
+  key: resource,
+  label: RESOURCE_LABELS[resource],
+  icon: <ResourceGlyph resource={resource} />,
+  value: (_standing, stats) => stats.hand[resource],
+}))
 
 const vpBreakdown = (standing: PlayerStanding, vpCards: number): string => [
   `${standing.settlements} × settlement`,
@@ -118,7 +143,10 @@ export function PlayerPanel() {
   // The super-city tally only appears once one is on the board — the base game
   // never has them, so the column would be noise.
   const showSuperCities = standings.some((standing) => standing.superCities > 0)
-  const columns = TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
+  const [view, setView] = useState<TallyView>('pieces')
+  const columns = view === 'resources'
+    ? RESOURCE_COLUMNS
+    : TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
 
   const analysis = analyzeBoardCached(board)
   const draft = analysis.draft
@@ -165,16 +193,17 @@ export function PlayerPanel() {
   }
   const clearHighlight = () => dispatch({ type: 'highlight', marks: null })
 
-  // Native HTML5 row reorder. Cards are draggable only while the pointer is
-  // down on the ⠿ handle, so dragging never fights name-input text selection.
+  // Native HTML5 row reorder, dragged from anywhere on the card — only a row
+  // being renamed is undraggable, so the input keeps its text selection.
+  // Dropping on the trash row (which only exists mid-drag) removes the player.
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
-  const [dragArmed, setDragArmed] = useState<string | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [overTrash, setOverTrash] = useState(false)
   const endDrag = () => {
     setDragId(null)
-    setDragArmed(null)
     setOverIndex(null)
+    setOverTrash(false)
   }
   const dropOn = (event: DragEvent, index: number) => {
     event.preventDefault()
@@ -186,7 +215,7 @@ export function PlayerPanel() {
     <section className="panel player-panel">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Turn order</span>
+          <span className="eyebrow">Points ledger</span>
           <h2>Players</h2>
         </div>
         <button
@@ -204,15 +233,25 @@ export function PlayerPanel() {
         >+</button>
       </div>
       <div className="player-list">
-        {/* Column headings. Each player's numbers carry their own aria-label,
-            so the icon strip is decorative for assistive tech. The label rides
-            in data-label: a CSS tooltip beats the native one's delay, and it
-            matches the history buttons' idiom. */}
-        <div className="tally-header" aria-hidden="true">
-          {columns.map((column) => (
-            <span key={column.key} data-label={column.label}>{column.icon}</span>
-          ))}
-          <span className="vp-head" data-label="Victory points">VP</span>
+        {/* Column headings, with the view switch on their left. Each player's
+            numbers carry their own aria-label, so the icon strip is decorative
+            for assistive tech. The label rides in data-label: a CSS tooltip
+            beats the native one's delay, and it matches the history buttons. */}
+        <div className="tally-bar">
+          <MenuSelect
+            ariaLabel="Player table view"
+            value={view}
+            options={VIEW_OPTIONS}
+            onSelect={setView}
+          >
+            <strong>{VIEW_OPTIONS.find((option) => option.value === view)?.label}</strong> ▾
+          </MenuSelect>
+          <div className="tally-header" aria-hidden="true">
+            {columns.map((column) => (
+              <span key={column.key} data-label={column.label}>{column.icon}</span>
+            ))}
+            <span className="vp-head" data-label="Victory points">VP</span>
+          </div>
         </div>
         {board.players.map((player, index) => {
           const standing = standings[index]
@@ -228,7 +267,7 @@ export function PlayerPanel() {
                 dragId !== null && overIndex === index ? 'drag-over' : '',
               ].join(' ')}
               key={player.id}
-              draggable={dragArmed === player.id}
+              draggable={renamingId !== player.id}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = 'move'
                 setDragId(player.id)
@@ -243,13 +282,7 @@ export function PlayerPanel() {
               onClick={() => dispatch({ type: 'active-player', playerId: player.id })}
             >
               <div className="player-row">
-                <span
-                  className="drag-handle"
-                  title="Drag to reorder"
-                  aria-hidden="true"
-                  onMouseDown={() => setDragArmed(player.id)}
-                  onMouseUp={() => setDragArmed(null)}
-                >⠿</span>
+                <span className="drag-handle" title="Drag to reorder, or onto the trash to remove" aria-hidden="true">⠿</span>
                 <button
                   className="player-dot"
                   type="button"
@@ -289,16 +322,9 @@ export function PlayerPanel() {
                 {/* Awards sit beside the name, not in the tally columns: they
                     are worth +2 VP each and would otherwise break the table's
                     alignment on the rows that hold them. */}
+                {/* No badge for longest road: the bolded run in its column says
+                    who holds it, and the pill's road glyph read as a slash. */}
                 <span className="player-awards">
-                  {standing.hasLongestRoad && (
-                    <span
-                      className="award"
-                      title={`Longest road (${standing.longestRoad}) · +2 VP`}
-                      aria-label={`Longest road: ${standing.longestRoad}, +2 victory points`}
-                    >
-                      <StructureGlyph shape="road" color="#fff" size={TALLY_PX} />
-                    </span>
-                  )}
                   {standing.hasLargestArmy && (
                     <span
                       className="award"
@@ -316,7 +342,10 @@ export function PlayerPanel() {
                     return (
                       <span
                         key={column.key}
-                        className={count === 0 ? 'zero' : ''}
+                        className={[
+                          count === 0 ? 'zero' : '',
+                          column.emphasize?.(standing) ? 'strong' : '',
+                        ].join(' ').trim()}
                         title={detail ? `${column.label}: ${count} (${detail})` : `${column.label}: ${count}`}
                         aria-label={`${column.label}: ${count}`}
                       >
@@ -334,18 +363,6 @@ export function PlayerPanel() {
                     {standing.victoryPoints}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="icon-danger"
-                  aria-label={`Remove ${player.name}`}
-                  disabled={board.players.length === 1}
-                  onClick={(event) => {
-                    // Or the click bubbles to the card and selects the player
-                    // this handler just removed. The reducer re-selects for us.
-                    event.stopPropagation()
-                    commit(removePlayer(board, player.id))
-                  }}
-                >×</button>
               </div>
               {active && (
                 <div className="player-steppers">
@@ -380,6 +397,27 @@ export function PlayerPanel() {
             </div>
           )
         })}
+        {/* Only exists mid-drag: removing a player is rare enough that it does
+            not deserve permanent UI, and the drag is already in the hand. */}
+        {dragId !== null && board.players.length > 1 && (
+          <div
+            className={`player-trash ${overTrash ? 'over' : ''}`}
+            onDragOver={(event) => {
+              event.preventDefault()
+              setOverIndex(null)
+              setOverTrash(true)
+            }}
+            onDragLeave={() => setOverTrash(false)}
+            onDrop={(event) => {
+              event.preventDefault()
+              commit(removePlayer(board, dragId))
+              endDrag()
+            }}
+          >
+            <StructureGlyph shape="erase" color="currentColor" size={15} />
+            Drop here to remove
+          </div>
+        )}
       </div>
       <div className="draft-strip" aria-label="Snake draft order" onMouseLeave={clearHighlight}>
         {draft.sequence.map((playerId, slot) => {

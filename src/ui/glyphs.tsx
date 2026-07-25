@@ -20,75 +20,100 @@ const PIECE_INK = '#30271f'
  */
 export const GLYPH_MUTED = '#c2ae8c'
 
-// Relative scale reads as tiers: settlement < city < super city. Port gets a
-// bump because its silhouette carries a lot of empty margin.
-const PIECE_SCALE: Record<string, number> = {
-  settlement: 17 / 19,
-  city: 21 / 19,
-  superCity: 23 / 19,
-  port: 22 / 19,
-}
-
 export type StructureShape =
   | 'road' | 'settlement' | 'city' | 'superCity' | 'robber' | 'port' | 'erase'
 
+// SVG scales stroke-width with the viewBox, so a shared number would render at
+// a different thickness per shape. Each outline is instead this fraction of its
+// own viewBox span, which lands every border on the same rendered width.
+const STROKE_RATIO = 2 / 36
+const VIEW_SPAN: Record<StructureShape, number> = {
+  road: 20, settlement: 36, city: 37, superCity: 32, robber: 44, port: 15, erase: 20,
+}
+const strokeFor = (shape: StructureShape): number => STROKE_RATIO * VIEW_SPAN[shape]
+/** The same rendered width for the line art drawn in a 20-unit box. */
+export const LINE_STROKE = STROKE_RATIO * 20
+
 /**
- * A board piece silhouette. `size` is the px box for a shape of scale 1; the
- * per-shape scale above then keeps the tiers visually ordered at any size.
- * Pass `uniform` to drop that scaling — a heading strip wants one height for
- * every icon, not settlement < city < super city.
+ * Per-shape viewBox, cropped tight to the silhouette (stroke included) with the
+ * aspect that crop implies. The tight crop is what lets a row of glyphs line up:
+ * `size` is the rendered height of the artwork rather than of a box with a
+ * different margin per shape, so every glyph stands the same height and every
+ * bottom edge falls on one line, whatever its proportions. Width follows the
+ * silhouette — a city is wider than a settlement, a robber narrower.
  */
-export function StructureGlyph({ shape, color, size = 19, uniform = false }: {
+const GEOMETRY: Record<StructureShape, { view: string; aspect: number }> = {
+  road: { view: '1.05 2.24 17.9 15.52', aspect: 17.9 / 15.52 },
+  settlement: { view: '-16 -16 32 30', aspect: 32 / 30 },
+  city: { view: '-14.03 -15.13 35.06 28.36', aspect: 35.06 / 28.36 },
+  superCity: { view: '-15.89 -12.19 31.78 24.38', aspect: 31.78 / 24.38 },
+  robber: { view: '-13 -19 26 40', aspect: 26 / 40 },
+  port: { view: '4 3.2 12 12.4', aspect: 12 / 12.4 },
+  erase: { view: '3.04 2.74 13.92 15.12', aspect: 13.92 / 15.12 },
+}
+
+/**
+ * A board piece silhouette standing `size` px tall, outlined at the same
+ * rendered width as every other glyph — so a row of them reads as one set. Tier
+ * is carried by the silhouettes themselves, not by scaling them up.
+ */
+export function StructureGlyph({ shape, color, size = 16 }: {
   shape: StructureShape
   color: string
   size?: number
-  uniform?: boolean
 }) {
-  const box = uniform ? size : size * (PIECE_SCALE[shape] ?? 1)
-  const style = { width: box, height: box }
+  const { view, aspect } = GEOMETRY[shape]
+  const style = { height: size, width: size * aspect }
   switch (shape) {
     case 'road':
       // Two rects, not a stroked one: the board draws an ink casing around a
       // colored core (BoardCanvas ROAD_CORE/ROAD_RADIUS), and the proportions
       // are copied from it — long, slim, and squared off rather than a capsule.
       return (
-        <svg className="tool-icon" style={style} viewBox="0 0 20 20" aria-hidden="true">
+        <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
           <g transform="rotate(-38 10 10)">
             <rect x="0.6" y="7.5" width="18.8" height="5" rx="2.1" fill={PIECE_INK} />
-            <rect x="1.5" y="8.4" width="17" height="3.2" rx="1.1" fill={color} />
+            <rect
+              x={0.6 + LINE_STROKE}
+              y={7.5 + LINE_STROKE}
+              width={18.8 - LINE_STROKE * 2}
+              height={5 - LINE_STROKE * 2}
+              rx={2.1 - LINE_STROKE}
+              fill={color}
+            />
           </g>
         </svg>
       )
     case 'settlement':
       return (
-        <svg className="tool-icon" style={style} viewBox="-18 -18 36 36" aria-hidden="true">
-          <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" fill={color} stroke={PIECE_INK} strokeWidth="2" strokeLinejoin="round" />
+        <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
+          <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" fill={color} stroke={PIECE_INK} strokeWidth={strokeFor('settlement')} strokeLinejoin="round" />
         </svg>
       )
     case 'city':
       return (
-        <svg className="tool-icon" style={style} viewBox="-16 -17 37 34" aria-hidden="true">
-          <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" fill={color} stroke={PIECE_INK} strokeWidth="2" strokeLinejoin="round" />
+        <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
+          <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" fill={color} stroke={PIECE_INK} strokeWidth={strokeFor('city')} strokeLinejoin="round" />
         </svg>
       )
     case 'superCity':
       return (
-        <svg className="tool-icon" style={style} viewBox="-16 -13 32 27" aria-hidden="true">
-          <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" fill={color} stroke={PIECE_INK} strokeWidth="2" strokeLinejoin="round" />
+        <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
+          <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" fill={color} stroke={PIECE_INK} strokeWidth={strokeFor('superCity')} strokeLinejoin="round" />
         </svg>
       )
     case 'robber':
       // Inherit currentColor (like port/erase) so it inverts to white when the
       // robber tile is selected, instead of staying black on the accent fill.
       return (
-        <svg className="tool-icon" style={style} viewBox="-16 -22 32 44" aria-hidden="true">
+        <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
           <circle cy="-10" r="9" />
           <path d="M-12,21 C-14,2 -8,-4 0,-4 C8,-4 14,2 12,21 Z" />
         </svg>
       )
     case 'port':
       return (
-        <svg className="tool-icon" style={style} viewBox="2.5 2.5 15 14" aria-hidden="true">
+        <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
           <path d="M4 11h12l-1.9 4.6H5.9z" />
           <path d="M10.7 3.2 14.6 9.4H10.7z" />
           <rect x="9.7" y="3.4" width="1" height="8" />
@@ -98,10 +123,10 @@ export function StructureGlyph({ shape, color, size = 19, uniform = false }: {
       return (
         <svg
           className="tool-icon"
-          viewBox="0 0 20 20"
+          viewBox={view}
           style={{ ...style, fill: 'none' }}
           stroke="currentColor"
-          strokeWidth="1.5"
+          strokeWidth={strokeFor('erase')}
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden="true"
@@ -122,7 +147,7 @@ export function ResourceGlyph({ resource }: { resource: Resource }) {
     className: 'stat-icon',
     viewBox: '0 0 20 20',
     stroke: PIECE_INK,
-    strokeWidth: 1.1,
+    strokeWidth: LINE_STROKE,
     strokeLinejoin: 'round' as const,
     strokeLinecap: 'round' as const,
     'aria-hidden': true,
@@ -186,7 +211,7 @@ export function CounterGlyph({ shape, color = GLYPH_MUTED }: { shape: CounterSha
     viewBox: '0 0 20 20',
     fill: color,
     stroke: PIECE_INK,
-    strokeWidth: 1.4,
+    strokeWidth: LINE_STROKE,
     strokeLinejoin: 'round' as const,
     strokeLinecap: 'round' as const,
     'aria-hidden': true,
@@ -196,7 +221,7 @@ export function CounterGlyph({ shape, color = GLYPH_MUTED }: { shape: CounterSha
       return (
         <svg {...shell}>
           <path d="M4.9 2.9h6.6l3.6 3.6v10.6H4.9Z" />
-          <path d="M11.5 2.9v3.6h3.6" fill="none" strokeWidth="1.2" />
+          <path d="M11.5 2.9v3.6h3.6" fill="none" />
         </svg>
       )
     case 'knight': // shield — also the largest-army badge. A visored helmet was
