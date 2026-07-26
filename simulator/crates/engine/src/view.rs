@@ -3,8 +3,9 @@ use std::cell::Cell;
 use serde::{Deserialize, Serialize};
 
 use crate::board::{SimBoard, SimPort};
+use crate::game::can_build_road;
 use crate::longest_road::RoadNetwork;
-use crate::rules::{Buildable, FlattenedRules, OwnedPort, RESOURCE_COUNT, Resource};
+use crate::rules::{Buildable, FlattenedRules, OwnedPort, RESOURCE_COUNT, Resource, TradeConfig};
 use crate::state::{EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 
@@ -55,6 +56,11 @@ pub enum Action {
     BuyDev,
     PlayDev(DevPlay),
     TradeBank {
+        give: Resource,
+        get: Resource,
+        count: u8,
+    },
+    OfferTrade {
         give: Resource,
         get: Resource,
         count: u8,
@@ -113,6 +119,7 @@ pub enum DecisionPhase {
     PreRoll,
     Action,
     SpecialBuild,
+    TradeResponse,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -193,6 +200,7 @@ pub struct DecisionView<'a> {
     seats: usize,
     dev_deck_remaining: u8,
     dev_played_this_turn: bool,
+    offers_remaining_this_turn: u8,
     phase: DecisionPhase,
     cache: ViewCache,
 }
@@ -208,6 +216,7 @@ impl<'a> DecisionView<'a> {
         seats: usize,
         dev_deck_remaining: u8,
         dev_played_this_turn: bool,
+        offers_remaining_this_turn: u8,
         phase: DecisionPhase,
     ) -> Self {
         Self {
@@ -219,6 +228,7 @@ impl<'a> DecisionView<'a> {
             seats,
             dev_deck_remaining,
             dev_played_this_turn,
+            offers_remaining_this_turn,
             phase,
             cache: ViewCache::new(),
         }
@@ -274,6 +284,10 @@ impl<'a> DecisionView<'a> {
             + self.state.players[seat].vp_dev
     }
 
+    pub const fn dev_plays_revealed(&self, seat: usize) -> &[u8; 5] {
+        &self.state.players[seat].dev_plays_revealed
+    }
+
     pub const fn knights_played(&self, seat: usize) -> u8 {
         self.state.players[seat].knights_played
     }
@@ -292,6 +306,18 @@ impl<'a> DecisionView<'a> {
 
     pub const fn trade_rate(&self, resource: Resource) -> u32 {
         self.rules.trade_rate(resource)
+    }
+
+    pub const fn trade_config(&self) -> Option<TradeConfig> {
+        self.rules.trade_config()
+    }
+
+    pub const fn offers_remaining_this_turn(&self) -> u8 {
+        if self.trade_config().is_some() {
+            self.offers_remaining_this_turn
+        } else {
+            0
+        }
     }
 
     pub fn prospective_trade_rate(&self, port: SimPort, resource: Resource) -> u32 {
@@ -358,22 +384,26 @@ impl<'a> DecisionView<'a> {
         self.rules.largest_army_min()
     }
 
-    /// Whether playing one more knight would take the Largest Army card. A derived fact about the
-    /// game state rather than a policy preference, so every policy agrees on it.
-    pub fn knight_takes_largest_army(&self) -> bool {
-        if self.largest_army_holder() == Some(self.observer) {
+    pub fn knight_takes_largest_army_for(&self, seat: usize) -> bool {
+        if self.largest_army_holder() == Some(seat) {
             return false;
         }
-        let next = self.knights_played(self.observer).saturating_add(1);
+        let next = self.knights_played(seat).saturating_add(1);
         if next < self.largest_army_min() {
             return false;
         }
         match self.largest_army_holder() {
             Some(holder) => next > self.knights_played(holder),
             None => (0..self.seats())
-                .filter(|seat| *seat != self.observer)
-                .all(|seat| next > self.knights_played(seat)),
+                .filter(|candidate| *candidate != seat)
+                .all(|candidate| next > self.knights_played(candidate)),
         }
+    }
+
+    /// Whether playing one more knight would take the Largest Army card. A derived fact about the
+    /// game state rather than a policy preference, so every policy agrees on it.
+    pub fn knight_takes_largest_army(&self) -> bool {
+        self.knight_takes_largest_army_for(self.observer)
     }
 
     pub const fn largest_army_vp(&self) -> u8 {
@@ -411,12 +441,50 @@ impl<'a> DecisionView<'a> {
     /// The observer's road graph, ready to be probed with prospective segments. Scoring passes that
     /// weigh many candidate roads build this once and call [`Self::road_length_on`] per candidate.
     pub fn road_network(&self) -> RoadNetwork {
+        self.road_network_for(self.observer)
+    }
+
+    pub fn road_network_for(&self, seat: usize) -> RoadNetwork {
         RoadNetwork::for_seat(
             self.topology,
             &self.state.vertex_owner,
             &self.state.edge_owner,
-            self.observer as u8,
+            seat as u8,
         )
+    }
+
+    pub fn road_takes_longest_road(&self, seat: usize) -> bool {
+        if self.longest_road_holder() == Some(seat) || self.pieces(seat, Buildable::Road) == 0 {
+            return false;
+        }
+        let required = match self.longest_road_holder() {
+            Some(holder) => self
+                .road_network_for(holder)
+                .base_length()
+                .saturating_add(1)
+                .max(self.longest_road_min()),
+            None => (0..self.seats())
+                .filter(|candidate| *candidate != seat)
+                .map(|candidate| self.road_network_for(candidate).base_length())
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+                .max(self.longest_road_min()),
+        };
+        let mut network = self.road_network_for(seat);
+        (0..self.topology.edge_count())
+            .map(|edge| edge as Edge)
+            .filter(|edge| {
+                can_build_road(
+                    self.topology,
+                    &self.state.vertex_owner,
+                    &self.state.edge_owner,
+                    seat as u8,
+                    *edge,
+                    self.pieces(seat, Buildable::Road),
+                )
+            })
+            .any(|edge| network.probe(&[self.topology.edge_endpoints(edge)], required) >= required)
     }
 
     pub fn road_length_after(&self, first: Edge, second: Option<Edge>) -> u8 {
@@ -724,6 +792,20 @@ impl<'a> DecisionView<'a> {
         offered <= i16::MAX as u64
             && i64::from(self.own_hand()[give.index()]) >= offered as i64
             && self.bank(get) >= u16::from(count)
+    }
+
+    pub fn legal_offer_trade(&self, give: Resource, get: Resource, count: u8) -> bool {
+        self.trade_config().is_some()
+            && self.phase == DecisionPhase::Action
+            && give != get
+            && (count == 1 || count == 2)
+            && self.own_hand()[give.index()] >= i16::from(count)
+            && self.offers_remaining_this_turn() > 0
+            && self.seats() >= 2
+    }
+
+    pub const fn dev_victory_points(&self) -> u8 {
+        self.rules.dev_victory_points()
     }
 
     pub fn vertex_pips(&self, vertex: Vertex, robber_aware: bool) -> u16 {

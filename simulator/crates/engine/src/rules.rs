@@ -82,6 +82,26 @@ pub struct DevDeckConfig {
     pub monopoly: u8,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TradeConfig {
+    pub opponent_gain_weight: f32,
+    pub acceptance_temperature: f32,
+    pub max_offers_per_turn: u8,
+    pub hidden_vp_confidence: f64,
+}
+
+impl Default for TradeConfig {
+    fn default() -> Self {
+        Self {
+            opponent_gain_weight: 1.0,
+            acceptance_temperature: 0.5,
+            max_offers_per_turn: 2,
+            hidden_vp_confidence: 0.9,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuleConfig {
@@ -98,6 +118,8 @@ pub struct RuleConfig {
     pub largest_army_min: u8,
     pub largest_army_vp: u8,
     pub turn_cap: u16,
+    #[serde(default)]
+    pub player_trading: Option<TradeConfig>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -219,6 +241,8 @@ pub struct FlattenedRules {
     longest_road_vp: u8,
     largest_army_min: u8,
     largest_army_vp: u8,
+    dev_victory_points: u8,
+    player_trading: Option<TradeConfig>,
 }
 
 impl RuleConfig {
@@ -277,6 +301,7 @@ impl RuleConfig {
             largest_army_min: 3,
             largest_army_vp: 2,
             turn_cap: 500,
+            player_trading: None,
         }
     }
 
@@ -324,6 +349,8 @@ impl RuleConfig {
             longest_road_vp: self.longest_road_vp,
             largest_army_min: self.largest_army_min,
             largest_army_vp: self.largest_army_vp,
+            dev_victory_points: self.dev_deck.victory_point,
+            player_trading: self.player_trading,
             ..FlattenedRules::default()
         };
         for spec in &self.buildables {
@@ -364,6 +391,10 @@ impl FlattenedRules {
         self.trade_rate[resource.index()]
     }
 
+    pub const fn trade_config(&self) -> Option<TradeConfig> {
+        self.player_trading
+    }
+
     pub const fn limit(&self, buildable: Buildable) -> u8 {
         self.limits[buildable.index()]
     }
@@ -395,6 +426,10 @@ impl FlattenedRules {
 
     pub const fn dev_cost(&self) -> &[u8; RESOURCE_COUNT] {
         &self.dev_cost
+    }
+
+    pub const fn dev_victory_points(&self) -> u8 {
+        self.dev_victory_points
     }
 
     pub const fn win_vp(&self) -> u8 {

@@ -7,5 +7,6 @@ pub mod rng;
 pub mod rules;
 pub mod state;
 pub mod topology;
+pub mod trade;
 pub mod view;
 pub mod wire;

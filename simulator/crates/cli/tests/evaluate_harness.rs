@@ -18,6 +18,7 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::PriorityTrader => "priority-trader",
         PolicyKind::HeuristicV1 => "heuristic-v1",
         PolicyKind::HeuristicV1Noports => "heuristic-v1-noports",
+        PolicyKind::HeuristicV1Trader => "heuristic-v1-trader",
     }
 }
 
@@ -49,6 +50,7 @@ fn run(
         reps,
         policy,
         policy_name: policy_name(policy),
+        player_trading: None,
         threshold: 0.01,
         alpha: 0.05,
         threads,

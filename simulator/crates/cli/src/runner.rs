@@ -10,7 +10,7 @@ use unsettled_engine::game::{GameArena, GameConfig, GameResult};
 use unsettled_engine::placement::PlacementKind;
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::derive_game_seed;
-use unsettled_engine::rules::RuleConfig;
+use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::Topology;
 
 use crate::output::{Meta, ResultConfig, Results, write_outputs};
@@ -24,6 +24,7 @@ pub struct RunRequest<'a> {
     pub heuristics: &'a [PlacementKind],
     pub policy: PolicyKind,
     pub policy_name: &'a str,
+    pub player_trading: Option<TradeConfig>,
     pub seed: u64,
     pub threads: usize,
     pub allow_unofficial: bool,
@@ -39,7 +40,8 @@ pub fn run(request: RunRequest<'_>) -> Result<Results, String> {
     if request.boards.iter().any(|board| board.seats() != seats) {
         return Err("all boards in one run must have the same seat count".into());
     }
-    let rules = RuleConfig::base(request.topology.layout());
+    let mut rules = RuleConfig::base(request.topology.layout());
+    rules.player_trading = request.player_trading;
     let workers = if request.threads == 0 {
         num_cpus::get()
     } else {
@@ -82,6 +84,7 @@ pub fn run(request: RunRequest<'_>) -> Result<Results, String> {
         config: ResultConfig {
             layout: request.topology.layout().as_str().to_string(),
             policy: request.policy_name.to_string(),
+            player_trading: request.player_trading,
             seed: request.seed,
             schedule_size: request.schedule.len(),
             allow_unofficial: request.allow_unofficial,

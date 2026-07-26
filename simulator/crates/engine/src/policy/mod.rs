@@ -1,5 +1,6 @@
 pub mod greedy_no_trade;
 pub mod heuristic_v1;
+pub mod heuristic_v1_trader;
 pub mod priority_trader;
 pub mod random_legal;
 
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, PortAction, PortRule, PortSelector};
+use crate::trade::{TradeOffer, vp_estimate};
 use crate::view::{Action, ActionBuf, DecisionView, DevPlay};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -17,6 +19,7 @@ pub enum PolicyKind {
     PriorityTrader,
     HeuristicV1,
     HeuristicV1Noports,
+    HeuristicV1Trader,
 }
 
 /// Disables every owned port, so the seat trades at the base bank rate.
@@ -35,7 +38,11 @@ impl PolicyKind {
     pub const fn port_rules(self) -> &'static [PortRule] {
         match self {
             Self::HeuristicV1Noports => &NO_PORTS,
-            _ => &[],
+            Self::RandomLegal
+            | Self::GreedyNoTrade
+            | Self::PriorityTrader
+            | Self::HeuristicV1
+            | Self::HeuristicV1Trader => &[],
         }
     }
 
@@ -46,6 +53,7 @@ impl PolicyKind {
             "priority-trader" => Some(Self::PriorityTrader),
             "heuristic-v1" => Some(Self::HeuristicV1),
             "heuristic-v1-noports" => Some(Self::HeuristicV1Noports),
+            "heuristic-v1-trader" => Some(Self::HeuristicV1Trader),
             _ => None,
         }
     }
@@ -84,6 +92,9 @@ pub fn pre_roll(
         PolicyKind::HeuristicV1 => {
             heuristic_v1::pre_roll(view, scratch, &heuristic_v1::HeuristicParams::default())
         }
+        PolicyKind::HeuristicV1Trader => {
+            heuristic_v1::pre_roll(view, scratch, &heuristic_v1::HeuristicParams::default())
+        }
         PolicyKind::HeuristicV1Noports => {
             let mut params = heuristic_v1::HeuristicParams::default();
             params.port_weight = 0.0;
@@ -108,6 +119,7 @@ pub fn action(
             &heuristic_v1::HeuristicParams::default(),
             rng,
         ),
+        PolicyKind::HeuristicV1Trader => heuristic_v1_trader::action(view, scratch, rng),
         PolicyKind::HeuristicV1Noports => {
             let mut params = heuristic_v1::HeuristicParams::default();
             params.port_weight = 0.0;
@@ -127,9 +139,9 @@ pub fn discard(
         PolicyKind::RandomLegal => random_legal::discard(view, count, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::discard(view, count),
         PolicyKind::PriorityTrader => priority_trader::discard(view, count, scratch),
-        PolicyKind::HeuristicV1 | PolicyKind::HeuristicV1Noports => {
-            heuristic_v1::discard(view, count, scratch)
-        }
+        PolicyKind::HeuristicV1
+        | PolicyKind::HeuristicV1Noports
+        | PolicyKind::HeuristicV1Trader => heuristic_v1::discard(view, count, scratch),
     }
 }
 
@@ -142,6 +154,58 @@ pub fn robber(
         PolicyKind::RandomLegal => random_legal::robber(view, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::robber(view),
         PolicyKind::PriorityTrader => priority_trader::robber(view),
-        PolicyKind::HeuristicV1 | PolicyKind::HeuristicV1Noports => heuristic_v1::robber(view),
+        PolicyKind::HeuristicV1
+        | PolicyKind::HeuristicV1Noports
+        | PolicyKind::HeuristicV1Trader => heuristic_v1::robber(view),
     }
+}
+
+pub fn respond_trade(
+    kind: PolicyKind,
+    view: &DecisionView<'_>,
+    offer: TradeOffer,
+    rng: &mut Xoshiro256StarStar,
+) -> bool {
+    match kind {
+        PolicyKind::HeuristicV1Trader => heuristic_v1_trader::respond_trade(view, offer, rng),
+        PolicyKind::RandomLegal
+        | PolicyKind::GreedyNoTrade
+        | PolicyKind::PriorityTrader
+        | PolicyKind::HeuristicV1
+        | PolicyKind::HeuristicV1Noports => false,
+    }
+}
+
+pub fn select_counterparty(
+    kind: PolicyKind,
+    view: &DecisionView<'_>,
+    acceptors: &[usize],
+) -> usize {
+    match kind {
+        PolicyKind::RandomLegal
+        | PolicyKind::GreedyNoTrade
+        | PolicyKind::PriorityTrader
+        | PolicyKind::HeuristicV1
+        | PolicyKind::HeuristicV1Noports
+        | PolicyKind::HeuristicV1Trader => farthest_from_winning(view, acceptors),
+    }
+}
+
+fn farthest_from_winning(view: &DecisionView<'_>, acceptors: &[usize]) -> usize {
+    let confidence = view
+        .trade_config()
+        .unwrap_or_default()
+        .hidden_vp_confidence;
+    acceptors
+        .iter()
+        .copied()
+        .min_by_key(|seat| {
+            let rotation_rank =
+                (*seat + view.seats() - view.observer()) % view.seats();
+            (
+                vp_estimate(view, *seat, confidence),
+                view.seats() - rotation_rank,
+            )
+        })
+        .expect("counterparty selection requires an acceptor")
 }

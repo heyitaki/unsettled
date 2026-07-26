@@ -4,6 +4,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use serde::Serialize;
+use unsettled_engine::rules::TradeConfig;
 
 use crate::stats::HeuristicStats;
 
@@ -12,6 +13,8 @@ use crate::stats::HeuristicStats;
 pub struct ResultConfig {
     pub layout: String,
     pub policy: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player_trading: Option<TradeConfig>,
     pub seed: u64,
     pub schedule_size: usize,
     pub allow_unofficial: bool,
