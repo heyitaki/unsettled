@@ -1,6 +1,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
+use unsettled_engine::etw;
 use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::placement::app_formula::EngineWeights;
 use unsettled_engine::placement::{
@@ -8,6 +9,7 @@ use unsettled_engine::placement::{
 };
 use unsettled_engine::rules::RuleConfig;
 use unsettled_engine::topology::{Layout as BoardLayout, Topology};
+use unsettled_engine::view::DecisionPhase;
 use unsettled_sim::boardgen::generate_board;
 
 struct CountingAllocator;
@@ -70,6 +72,33 @@ fn game_hot_loop_has_zero_steady_state_allocations() {
     for seed in 300..500 {
         config.seed = seed;
         arena.play(&board, &topology, &rules, &config);
+    }
+    COUNTING.store(false, Ordering::SeqCst);
+    assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn etw_evaluation_is_allocation_free() {
+    let topology = Topology::load(BoardLayout::Standard4).unwrap();
+    let board = generate_board(BoardLayout::Standard4, 4, 17).unwrap();
+    let rules = RuleConfig::base(BoardLayout::Standard4);
+    let mut arena = GameArena::default();
+    let mut config = GameConfig::default();
+    arena.play(&board, &topology, &rules, &config);
+    for seat in 0..board.seats() {
+        let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
+        std::hint::black_box(etw::etw_for_seat(&view, seat));
+    }
+
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::SeqCst);
+    for seed in 1..50 {
+        config.seed = seed;
+        arena.play(&board, &topology, &rules, &config);
+        for seat in 0..board.seats() {
+            let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
+            std::hint::black_box(etw::etw_for_seat(&view, seat));
+        }
     }
     COUNTING.store(false, Ordering::SeqCst);
     assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);

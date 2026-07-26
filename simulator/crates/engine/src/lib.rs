@@ -1,4 +1,6 @@
+pub mod belief;
 pub mod board;
+pub mod etw;
 pub mod game;
 pub mod longest_road;
 pub mod placement;

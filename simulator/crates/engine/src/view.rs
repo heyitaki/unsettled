@@ -2,6 +2,7 @@ use std::cell::Cell;
 
 use serde::{Deserialize, Serialize};
 
+use crate::belief::BeliefState;
 use crate::board::{SimBoard, SimPort};
 use crate::game::can_build_road;
 use crate::longest_road::RoadNetwork;
@@ -125,6 +126,7 @@ pub enum DecisionPhase {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DecisionSnapshot {
+    pub belief: BeliefState,
     pub observer: u8,
     pub seats: u8,
     pub vertex_owner: Vec<u8>,
@@ -196,6 +198,7 @@ pub struct DecisionView<'a> {
     board: &'a SimBoard,
     topology: &'a Topology,
     rules: &'a FlattenedRules,
+    all_rules: &'a [FlattenedRules; MAX_SEATS],
     observer: usize,
     seats: usize,
     dev_deck_remaining: u8,
@@ -212,6 +215,7 @@ impl<'a> DecisionView<'a> {
         board: &'a SimBoard,
         topology: &'a Topology,
         rules: &'a FlattenedRules,
+        all_rules: &'a [FlattenedRules; MAX_SEATS],
         observer: usize,
         seats: usize,
         dev_deck_remaining: u8,
@@ -224,6 +228,7 @@ impl<'a> DecisionView<'a> {
             board,
             topology,
             rules,
+            all_rules,
             observer,
             seats,
             dev_deck_remaining,
@@ -236,6 +241,14 @@ impl<'a> DecisionView<'a> {
 
     pub const fn observer(&self) -> usize {
         self.observer
+    }
+
+    pub const fn belief(&self) -> &BeliefState {
+        &self.state.belief
+    }
+
+    pub const fn rules_for(&self, seat: usize) -> &FlattenedRules {
+        &self.all_rules[seat]
     }
 
     pub const fn seats(&self) -> usize {
@@ -877,6 +890,7 @@ impl<'a> DecisionView<'a> {
 
     pub fn to_owned(&self) -> DecisionSnapshot {
         DecisionSnapshot {
+            belief: self.state.belief,
             observer: self.observer as u8,
             seats: self.seats as u8,
             vertex_owner: self.state.vertex_owner[..self.topology.vertex_count()].to_vec(),

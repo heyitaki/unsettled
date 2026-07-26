@@ -267,6 +267,7 @@ impl GameArena {
             board,
             topology,
             &self.flattened[seat],
+            &self.flattened,
             seat,
             board.seats(),
             (self.dev_len - self.dev_cursor) as u8,
@@ -418,6 +419,18 @@ impl GameArena {
     }
 
     #[doc(hidden)]
+    pub fn produce_for_test(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        config: &GameConfig,
+        roll: u8,
+        seats: usize,
+    ) {
+        self.produce(board, topology, config, roll, seats);
+    }
+
+    #[doc(hidden)]
     pub fn set_next_dev_for_test(&mut self, kind: usize) {
         let index = (self.dev_cursor..self.dev_len)
             .find(|index| usize::from(self.dev_deck[*index]) == kind)
@@ -518,6 +531,21 @@ impl GameArena {
                 return false;
             }
         }
+        // Belief soundness is gated because tests may poke hands without producing public events.
+        // A test that pokes a hand should keep its total distinct or use the public test seams.
+        if (0..seats).all(|seat| {
+            self.state.belief.total(seat) == u32::from(self.state.players[seat].hand_size())
+        }) {
+            for seat in 0..seats {
+                if !self
+                    .state
+                    .belief
+                    .contains(seat, &self.state.players[seat].resources)
+                {
+                    return false;
+                }
+            }
+        }
         true
     }
 
@@ -582,6 +610,7 @@ impl GameArena {
                     if self.state.bank[index] > 0 {
                         self.state.bank[index] -= 1;
                         self.state.players[seat].resources[index] += 1;
+                        self.state.belief.gain(seat, index, 1);
                     }
                 }
             }
@@ -602,6 +631,7 @@ impl GameArena {
             board,
             topology,
             &self.flattened[seat],
+            &self.flattened,
             seat,
             board.seats(),
             (self.dev_len - self.dev_cursor) as u8,
@@ -660,6 +690,7 @@ impl GameArena {
                 board,
                 topology,
                 &self.flattened[seat],
+                &self.flattened,
                 seat,
                 board.seats(),
                 (self.dev_len - self.dev_cursor) as u8,
@@ -707,6 +738,7 @@ impl GameArena {
                     board,
                     topology,
                     &self.flattened[player],
+                    &self.flattened,
                     player,
                     board.seats(),
                     (self.dev_len - self.dev_cursor) as u8,
@@ -729,6 +761,9 @@ impl GameArena {
             for resource in 0..RESOURCE_COUNT {
                 self.state.players[player].resources[resource] -= i16::from(discard[resource]);
                 self.state.bank[resource] += u16::from(discard[resource]);
+                self.state
+                    .belief
+                    .lose(player, resource, u16::from(discard[resource]));
             }
         }
         let (destination, victim) = {
@@ -737,6 +772,7 @@ impl GameArena {
                 board,
                 topology,
                 &self.flattened[seat],
+                &self.flattened,
                 seat,
                 board.seats(),
                 (self.dev_len - self.dev_cursor) as u8,
@@ -782,6 +818,7 @@ impl GameArena {
                 board,
                 topology,
                 &self.flattened[seat],
+                &self.flattened,
                 seat,
                 board.seats(),
                 (self.dev_len - self.dev_cursor) as u8,
@@ -816,6 +853,7 @@ impl GameArena {
                     board,
                     topology,
                     &self.flattened[responder],
+                    &self.flattened,
                     responder,
                     board.seats(),
                     (self.dev_len - self.dev_cursor) as u8,
@@ -843,6 +881,7 @@ impl GameArena {
             board,
             topology,
             &self.flattened[proposer],
+            &self.flattened,
             proposer,
             board.seats(),
             (self.dev_len - self.dev_cursor) as u8,
@@ -864,6 +903,14 @@ impl GameArena {
         };
         let applied = trade_players(proposer_hand, responder_hand, give, get, count);
         debug_assert!(applied);
+        self.state
+            .belief
+            .lose(proposer, give.index(), u16::from(count));
+        self.state.belief.gain(proposer, get.index(), 1);
+        self.state
+            .belief
+            .gain(selected, give.index(), u16::from(count));
+        self.state.belief.lose(selected, get.index(), 1);
         debug_assert!(self.invariants_hold(board, topology, rules));
     }
 
@@ -916,6 +963,11 @@ impl GameArena {
                     count,
                 );
                 debug_assert!(applied);
+                let given = rate
+                    .saturating_mul(u32::from(count))
+                    .min(u32::from(u16::MAX)) as u16;
+                self.state.belief.lose(seat, give.index(), given);
+                self.state.belief.gain(seat, get.index(), u16::from(count));
                 if self.flattened[seat].has_effects() {
                     on_trade(&config.modifiers[seat].effects);
                 }
@@ -1020,19 +1072,28 @@ impl GameArena {
                     if self.state.bank[index] > 0 {
                         self.state.bank[index] -= 1;
                         self.state.players[seat].resources[index] += 1;
+                        self.state.belief.gain(seat, index, 1);
                     }
                 }
             }
             DevPlay::Monopoly { resource } => {
                 let index = resource.index();
+                let mut total_taken = 0_u16;
                 for other in 0..board.seats() {
                     if other == seat {
                         continue;
                     }
                     let count = self.state.players[other].resources[index];
+                    let public_count = u16::try_from(count).unwrap_or(0);
+                    self.state.belief.reveal_exact(other, index, public_count);
                     self.state.players[other].resources[index] = 0;
                     self.state.players[seat].resources[index] += count;
+                    if public_count > 0 {
+                        self.state.belief.lose(other, index, public_count);
+                    }
+                    total_taken = total_taken.saturating_add(public_count);
                 }
+                self.state.belief.gain(seat, index, total_taken);
             }
         }
         let _ = config;
@@ -1092,6 +1153,14 @@ impl GameArena {
         let mut hands = std::array::from_fn(|seat| self.state.players[seat].resources);
         apply_production(&mut self.state.bank, &mut hands, &demand, seats);
         for (seat, hand) in hands.into_iter().enumerate().take(seats) {
+            for resource in 0..RESOURCE_COUNT {
+                let delta = hand[resource] - self.state.players[seat].resources[resource];
+                if let Ok(delta) = u16::try_from(delta) {
+                    if delta > 0 {
+                        self.state.belief.gain(seat, resource, delta);
+                    }
+                }
+            }
             self.state.players[seat].resources = hand;
             if self.flattened[seat].has_effects() {
                 on_production(&config.modifiers[seat].effects);
@@ -1161,6 +1230,7 @@ impl GameArena {
         if total <= 0 {
             return;
         }
+        self.state.belief.steal(seat, victim);
         let mut draw = self.streams.chance.range(total as u32) as i16;
         for resource in 0..RESOURCE_COUNT {
             let count = self.state.players[victim].resources[resource];
@@ -1226,6 +1296,9 @@ impl GameArena {
         for resource in 0..RESOURCE_COUNT {
             self.state.players[seat].resources[resource] -= i16::from(cost[resource]);
             self.state.bank[resource] += u16::from(cost[resource]);
+            self.state
+                .belief
+                .lose(seat, resource, u16::from(cost[resource]));
         }
     }
 

@@ -1,3 +1,4 @@
+use crate::belief::BeliefState;
 use crate::longest_road::RoadCard;
 use crate::rules::RESOURCE_COUNT;
 use crate::topology::Hex;
@@ -52,6 +53,7 @@ impl Default for PlayerState {
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    pub belief: BeliefState,
     pub vertex_owner: [u8; MAX_VERTICES],
     pub vertex_tier: [u8; MAX_VERTICES],
     pub edge_owner: [u8; MAX_EDGES],
@@ -67,6 +69,7 @@ pub struct GameState {
 impl Default for GameState {
     fn default() -> Self {
         Self {
+            belief: BeliefState::default(),
             vertex_owner: [EMPTY; MAX_VERTICES],
             vertex_tier: [0; MAX_VERTICES],
             edge_owner: [EMPTY; MAX_EDGES],
