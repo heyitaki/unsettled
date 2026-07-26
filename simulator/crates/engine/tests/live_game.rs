@@ -4,12 +4,15 @@ use std::path::PathBuf;
 
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::game::{GameArena, GameConfig};
-use unsettled_engine::placement::PlacementKind;
+use unsettled_engine::placement::app_formula::{AppFormulaScorer, EngineWeights};
+use unsettled_engine::placement::{
+    PlacementKind, prepare_app_formula_boards, register_app_formula,
+};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rules::{Buildable, PlayerModifiers, Resource, RuleConfig};
 use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
 use unsettled_engine::view::{Action, DecisionPhase, DevPlay, pips};
-use unsettled_engine::wire::WireBoard;
+use unsettled_engine::wire::{TileKind, WireBoard};
 
 fn wire_fixture() -> WireBoard {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -239,6 +242,110 @@ fn second_setup_settlement_grants_only_adjacent_non_desert_resources() {
         return;
     }
     panic!("no deterministic random setup pick touched the desert");
+}
+
+#[test]
+fn app_formula_setup_pick_wires_the_second_settlement_grant_flag() {
+    let (topology, original, rules) = fixture();
+    let desert = original.tiles().iter().position(Option::is_none).unwrap() as u8;
+    let low_pair = (0..topology.vertex_count())
+        .find_map(|vertex| {
+            let hexes = topology
+                .vertex_hexes(vertex as Vertex)
+                .iter()
+                .copied()
+                .filter(|hex| *hex != desert)
+                .take(2)
+                .collect::<Vec<_>>();
+            (hexes.len() == 2).then_some([hexes[0], hexes[1]])
+        })
+        .expect("fixture has a vertex touching two producing hexes");
+    let high_hex = (0..topology.hex_count())
+        .map(|hex| hex as u8)
+        .find(|hex| {
+            *hex != desert
+                && topology.hex_vertices(*hex).iter().all(|vertex| {
+                    topology
+                        .vertex_hexes(*vertex)
+                        .iter()
+                        .all(|neighbor| !low_pair.contains(neighbor))
+                })
+        })
+        .expect("fixture has a hex separated from the low-card pair");
+    let mut wire = wire_fixture();
+    for hex in &mut wire.hexes {
+        let index = topology.hex_by_key(&hex.coord.key()).unwrap();
+        if index == desert {
+            continue;
+        }
+        hex.tile = Some(if low_pair.contains(&index) || index == high_hex {
+            TileKind::Wood
+        } else {
+            TileKind::Sheep
+        });
+        hex.number_token = Some(if index == high_hex { 6.0 } else { 2.0 });
+    }
+    let mut board =
+        SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
+    let default_weights: EngineWeights =
+        serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
+    let argmax = |scorer: &AppFormulaScorer, grant| {
+        let mut vertices = Vec::new();
+        let mut best_score = f64::NEG_INFINITY;
+        for vertex_index in 0..topology.vertex_count() {
+            let vertex = vertex_index as Vertex;
+            let score = scorer.marginal_total(&[], vertex, grant);
+            if score > best_score {
+                vertices.clear();
+                vertices.push(vertex);
+                best_score = score;
+            } else if score == best_score {
+                vertices.push(vertex);
+            }
+        }
+        vertices
+    };
+    let mut weights = default_weights.clone();
+    weights.resource_value.wood = 1.0;
+    weights.resource_value.sheep = 0.0;
+    weights.resource_value.wheat = 0.0;
+    weights.resource_value.brick = 0.0;
+    weights.resource_value.ore = 0.0;
+    weights.hand_value_weight = 1_000.0;
+    weights.scarcity_weight = 0.0;
+    weights.diversity_weight = 0.0;
+    weights.recipe_road_bonus = 0.0;
+    weights.recipe_city_bonus = 0.0;
+    weights.recipe_settlement_bonus = 0.0;
+    weights.port_weight = 0.0;
+    weights.robber_discount = 0.0;
+    let scorer = AppFormulaScorer::new(&board, &topology, weights.clone());
+    let first_argmax = argmax(&scorer, false);
+    let second_argmax = argmax(&scorer, true);
+    assert!(
+        first_argmax
+            .iter()
+            .all(|vertex| !second_argmax.contains(vertex))
+    );
+
+    let placement = register_app_formula("app_formula:grant-wiring".into(), weights).unwrap();
+    prepare_app_formula_boards(std::slice::from_mut(&mut board), &topology, &[placement]);
+    let mut config = GameConfig::default();
+    config.placements[0] = placement;
+    let pick = |grant| {
+        let mut arena = GameArena::default();
+        arena.prepare(&board, &topology, &rules, &config);
+        arena
+            .setup_pick_for_test(&board, &topology, &rules, &config, 0, grant)
+            .expect("fixture has a legal setup placement")
+    };
+    let first = pick(false);
+    let second = pick(true);
+
+    assert_ne!(first, second);
+    assert!(first_argmax.contains(&first));
+    assert!(second_argmax.contains(&second));
+    assert!(!first_argmax.contains(&second));
 }
 
 #[test]

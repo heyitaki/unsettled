@@ -31,6 +31,7 @@ impl ResourceValues {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EngineWeights {
     pub resource_value: ResourceValues,
+    pub hand_value_weight: f64,
     pub scarcity_weight: f64,
     pub scarcity_clamp_min: f64,
     pub scarcity_clamp_max: f64,
@@ -64,12 +65,21 @@ pub struct ScoreBreakdown {
     pub robber: f64,
     pub diversity: f64,
     pub port: f64,
+    pub hand_value: f64,
 }
 
 impl ScoreBreakdown {
     pub fn total(self) -> f64 {
-        self.production + self.scarcity + self.robber + self.diversity + self.port
+        self.production + self.scarcity + self.robber + self.diversity + self.port + self.hand_value
     }
+}
+
+pub fn hand_value(weights: &EngineWeights, counts: &[f64; RESOURCE_COUNT]) -> f64 {
+    let mut value = 0.0;
+    for resource in Resource::ALL {
+        value += counts[resource.index()] * weights.resource_value.get(resource);
+    }
+    weights.hand_value_weight * value
 }
 
 #[derive(Clone, Debug)]
@@ -86,6 +96,7 @@ struct VertexStats {
     robbed_pips: [f64; RESOURCE_COUNT],
     token_pips: [f64; 13],
     has_ports: bool,
+    setup_grant: [f64; RESOURCE_COUNT],
     precompute: VertexPrecompute,
 }
 
@@ -94,6 +105,7 @@ struct VertexPrecompute {
     adjusted: [f64; RESOURCE_COUNT],
     base: f64,
     port_factors: [f64; RESOURCE_COUNT],
+    setup_grant_value: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -149,15 +161,18 @@ impl AppFormulaScorer {
             let vertex = vertex_index as Vertex;
             let mut raw_pips = [0.0; RESOURCE_COUNT];
             let mut robbed_pips = [0.0; RESOURCE_COUNT];
+            let mut setup_grant = [0.0; RESOURCE_COUNT];
             let mut token_pips = [0.0; 13];
             for hex in topology.vertex_hexes(vertex) {
                 let index = usize::from(*hex);
-                if let (Some(resource), Some(token)) =
-                    (board.tiles()[index], board.tokens()[index])
+                if let (Some(resource), Some(token)) = (board.tiles()[index], board.tokens()[index])
                 {
                     let amount = f64::from(pips(token));
                     raw_pips[resource.index()] += amount;
                     token_pips[usize::from(token)] += amount;
+                    if amount > 0.0 {
+                        setup_grant[resource.index()] += 1.0;
+                    }
                 }
             }
             if topology.vertex_hexes(vertex).contains(&board.robber())
@@ -171,8 +186,7 @@ impl AppFormulaScorer {
             let mut adjusted = [0.0; RESOURCE_COUNT];
             for resource in Resource::ALL {
                 let index = resource.index();
-                adjusted[index] =
-                    raw_pips[index] - robbed_pips[index] * weights.robber_discount;
+                adjusted[index] = raw_pips[index] - robbed_pips[index] * weights.robber_discount;
             }
             let (production, scarcity_value, robber) =
                 base_parts(&weights, &scarcity, &raw_pips, &robbed_pips);
@@ -181,10 +195,12 @@ impl AppFormulaScorer {
                 robbed_pips,
                 token_pips,
                 has_ports: has_ports[vertex_index],
+                setup_grant,
                 precompute: VertexPrecompute {
                     adjusted,
                     base: production + scarcity_value + robber,
                     port_factors: port_factors[vertex_index],
+                    setup_grant_value: hand_value(&weights, &setup_grant),
                 },
             });
         }
@@ -196,14 +212,24 @@ impl AppFormulaScorer {
         }
     }
 
-    pub fn breakdown(&self, holdings: &[Vertex], candidate: Vertex) -> ScoreBreakdown {
+    pub fn breakdown(
+        &self,
+        holdings: &[Vertex],
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> ScoreBreakdown {
         let holdings = self.build_holdings(holdings.iter().copied());
-        self.breakdown_with_holdings(holdings, candidate)
+        self.breakdown_with_holdings(holdings, candidate, receives_grant)
     }
 
-    pub fn marginal_total(&self, holdings: &[Vertex], candidate: Vertex) -> f64 {
+    pub fn marginal_total(
+        &self,
+        holdings: &[Vertex],
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> f64 {
         let holdings = self.build_holdings(holdings.iter().copied());
-        self.total_with_holdings(holdings, candidate)
+        self.total_with_holdings(holdings, candidate, receives_grant)
     }
 
     pub(crate) fn score_for_owner(
@@ -211,6 +237,7 @@ impl AppFormulaScorer {
         vertex_owner: &[u8],
         seat: u8,
         candidate: Vertex,
+        receives_grant: bool,
     ) -> f64 {
         let holdings = self.build_holdings(
             vertex_owner
@@ -218,7 +245,7 @@ impl AppFormulaScorer {
                 .enumerate()
                 .filter_map(|(vertex, owner)| (*owner == seat).then_some(vertex as Vertex)),
         );
-        self.total_with_holdings(holdings, candidate)
+        self.total_with_holdings(holdings, candidate, receives_grant)
     }
 
     fn add_to_holdings(&self, holdings: &mut Holdings, vertex: Vertex) {
@@ -256,6 +283,7 @@ impl AppFormulaScorer {
         &self,
         holdings: Holdings,
         candidate: Vertex,
+        receives_grant: bool,
     ) -> ScoreBreakdown {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
@@ -266,6 +294,11 @@ impl AppFormulaScorer {
             robber,
             diversity: self.diversity_delta(&holdings, stats, precompute),
             port: self.port_delta(&holdings, stats, precompute),
+            hand_value: if receives_grant {
+                hand_value(&self.weights, &stats.setup_grant)
+            } else {
+                0.0
+            },
         }
     }
 
@@ -377,10 +410,8 @@ impl AppFormulaScorer {
         let brick = holdings.pips[Resource::Brick.index()];
         let ore = holdings.pips[Resource::Ore.index()];
         weights.port_weight
-            * (port_surplus(
-                weights,
-                wood + precompute.adjusted[Resource::Wood.index()],
-            ) * js_max(held[Resource::Wood.index()], gained[Resource::Wood.index()])
+            * (port_surplus(weights, wood + precompute.adjusted[Resource::Wood.index()])
+                * js_max(held[Resource::Wood.index()], gained[Resource::Wood.index()])
                 - port_surplus(weights, wood) * held[Resource::Wood.index()]
                 + port_surplus(
                     weights,
@@ -406,19 +437,27 @@ impl AppFormulaScorer {
                     gained[Resource::Brick.index()],
                 )
                 - port_surplus(weights, brick) * held[Resource::Brick.index()]
-                + port_surplus(
-                    weights,
-                    ore + precompute.adjusted[Resource::Ore.index()],
-                ) * js_max(held[Resource::Ore.index()], gained[Resource::Ore.index()])
+                + port_surplus(weights, ore + precompute.adjusted[Resource::Ore.index()])
+                    * js_max(held[Resource::Ore.index()], gained[Resource::Ore.index()])
                 - port_surplus(weights, ore) * held[Resource::Ore.index()])
     }
 
-    fn total_with_holdings(&self, holdings: Holdings, candidate: Vertex) -> f64 {
+    fn total_with_holdings(
+        &self,
+        holdings: Holdings,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> f64 {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
         precompute.base
             + self.diversity_delta(&holdings, stats, precompute)
             + self.port_delta(&holdings, stats, precompute)
+            + if receives_grant {
+                precompute.setup_grant_value
+            } else {
+                0.0
+            }
     }
 }
 
@@ -437,8 +476,7 @@ fn base_parts(
         let robbed = robbed_pips[index];
         let adjusted = raw - robbed * weights.robber_discount;
         production += raw * weights.resource_value.get(resource);
-        scarcity_value +=
-            adjusted * weights.scarcity_weight * (scarcity[index] - 1.0);
+        scarcity_value += adjusted * weights.scarcity_weight * (scarcity[index] - 1.0);
         robber -= robbed * weights.robber_discount;
     }
     (production, scarcity_value, robber)
@@ -529,8 +567,7 @@ fn port_precompute(
             let factor = port_factor(port.rate) * reach;
             if let Some(resource) = port.resource {
                 let index = resource.index();
-                factors[vertex_index][index] =
-                    js_max(factors[vertex_index][index], factor);
+                factors[vertex_index][index] = js_max(factors[vertex_index][index], factor);
             } else {
                 generic[vertex_index] = js_max(generic[vertex_index], factor);
             }

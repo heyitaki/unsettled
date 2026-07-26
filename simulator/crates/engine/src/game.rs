@@ -551,6 +551,7 @@ impl GameArena {
             &self.state.vertex_owner,
             seat as u8,
             &production,
+            grant,
             &mut self.streams.policy[seat],
         ) else {
             return None;

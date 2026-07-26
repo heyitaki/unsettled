@@ -111,10 +111,11 @@ pub fn choose(
     vertex_owner: &[u8],
     seat: u8,
     own_production: &[u16; 5],
+    grant: bool,
     rng: &mut Xoshiro256StarStar,
 ) -> Option<(Vertex, Edge)> {
     if let PlacementKind::AppFormula(index) = kind {
-        return choose_app_formula(index, board, topology, vertex_owner, seat, rng);
+        return choose_app_formula(index, board, topology, vertex_owner, seat, grant, rng);
     }
     let mut selected = None;
     let mut selected_score = f32::NEG_INFINITY;
@@ -179,12 +180,13 @@ fn choose_app_formula(
     topology: &Topology,
     vertex_owner: &[u8],
     seat: u8,
+    grant: bool,
     rng: &mut Xoshiro256StarStar,
 ) -> Option<(Vertex, Edge)> {
     let name = app_formula_definition(index).name;
-    let scorer = board.app_formula_scorer(index).unwrap_or_else(|| {
-        panic!("app formula arm {name} has no prepared context for this board")
-    });
+    let scorer = board
+        .app_formula_scorer(index)
+        .unwrap_or_else(|| panic!("app formula arm {name} has no prepared context for this board"));
     let mut selected = None;
     let mut selected_score = f64::NEG_INFINITY;
     let mut ties = 0_u32;
@@ -198,7 +200,7 @@ fn choose_app_formula(
         {
             continue;
         }
-        let score = scorer.score_for_owner(vertex_owner, seat, vertex);
+        let score = scorer.score_for_owner(vertex_owner, seat, vertex, grant);
         if score > selected_score {
             selected = Some(vertex);
             selected_score = score;
@@ -221,7 +223,9 @@ fn choose_app_formula(
         } else {
             endpoints[0]
         };
-        let score = scorer.score_for_owner(vertex_owner, seat, destination);
+        // The road points toward a future expansion site, not a settlement
+        // being placed now, so setup cards do not belong in this score.
+        let score = scorer.score_for_owner(vertex_owner, seat, destination, false);
         if score > selected_edge_score {
             selected_edge = *edge;
             selected_edge_score = score;
