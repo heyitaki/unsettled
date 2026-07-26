@@ -11,6 +11,7 @@ use crate::rules::{
 };
 use crate::state::{EMPTY, GameState, MAX_SEATS};
 use crate::topology::{Edge, Hex, Topology, Vertex};
+use crate::trade::{TradeOffer, embargoed};
 use crate::view::{Action, DecisionPhase, DecisionView, DevPlay, can_pay};
 
 const DEV_KNIGHT: usize = 0;
@@ -64,6 +65,7 @@ pub struct GameArena {
     dev_len: usize,
     dev_cursor: usize,
     dev_played_this_turn: bool,
+    offers_this_turn: u8,
     illegal_actions: u32,
 }
 
@@ -79,6 +81,7 @@ impl Default for GameArena {
             dev_len: 0,
             dev_cursor: 0,
             dev_played_this_turn: false,
+            offers_this_turn: 0,
             illegal_actions: 0,
         }
     }
@@ -195,6 +198,7 @@ impl GameArena {
         }
         self.illegal_actions = 0;
         self.dev_played_this_turn = false;
+        self.offers_this_turn = 0;
         for road in board.roads() {
             self.state.edge_owner[usize::from(road.edge)] = road.seat;
         }
@@ -267,6 +271,7 @@ impl GameArena {
             board.seats(),
             (self.dev_len - self.dev_cursor) as u8,
             self.dev_played_this_turn,
+            self.offers_remaining(seat),
             phase,
         )
     }
@@ -342,6 +347,7 @@ impl GameArena {
             }
             Action::BuyDev => view.can_buy_dev(),
             Action::TradeBank { give, get, count } => view.legal_trade(give, get, count),
+            Action::OfferTrade { give, get, count } => view.legal_offer_trade(give, get, count),
             Action::PlayDev(play) => self.validate_dev_play(&view, play),
             Action::Pass => true,
         }
@@ -376,6 +382,12 @@ impl GameArena {
     pub fn dice_trace_for_test<const N: usize>(&self) -> [u8; N] {
         let mut dice = self.streams.dice.clone();
         std::array::from_fn(|_| (dice.range(6) + dice.range(6) + 2) as u8)
+    }
+
+    #[doc(hidden)]
+    pub fn trade_trace_for_test<const N: usize>(&self) -> [u64; N] {
+        let mut trade = self.streams.trade.clone();
+        std::array::from_fn(|_| trade.next_u64())
     }
 
     #[doc(hidden)]
@@ -593,6 +605,7 @@ impl GameArena {
             board.seats(),
             (self.dev_len - self.dev_cursor) as u8,
             self.dev_played_this_turn,
+            self.offers_remaining(seat),
             phase,
         );
         policy::action(
@@ -613,6 +626,7 @@ impl GameArena {
     ) -> bool {
         self.promote_dev(seat);
         self.dev_played_this_turn = false;
+        self.offers_this_turn = 0;
         if self.total_vp(seat) >= rules.win_vp {
             return true;
         }
@@ -621,6 +635,14 @@ impl GameArena {
         }
         self.run_pre_roll(board, topology, rules, config, seat);
         self.total_vp(seat) >= rules.win_vp
+    }
+
+    fn offers_remaining(&self, seat: usize) -> u8 {
+        self.flattened[seat].trade_config().map_or(0, |config| {
+            config
+                .max_offers_per_turn
+                .saturating_sub(self.offers_this_turn)
+        })
     }
 
     fn run_pre_roll(
@@ -641,6 +663,7 @@ impl GameArena {
                 board.seats(),
                 (self.dev_len - self.dev_cursor) as u8,
                 self.dev_played_this_turn,
+                self.offers_remaining(seat),
                 DecisionPhase::PreRoll,
             );
             policy::pre_roll(
@@ -687,6 +710,7 @@ impl GameArena {
                     board.seats(),
                     (self.dev_len - self.dev_cursor) as u8,
                     self.dev_played_this_turn,
+                    self.offers_remaining(player),
                     DecisionPhase::Action,
                 );
                 policy::discard(
@@ -716,6 +740,7 @@ impl GameArena {
                 board.seats(),
                 (self.dev_len - self.dev_cursor) as u8,
                 self.dev_played_this_turn,
+                self.offers_remaining(seat),
                 DecisionPhase::Action,
             );
             policy::robber(config.policies[seat], &view, &mut self.streams.policy[seat])
@@ -735,6 +760,110 @@ impl GameArena {
         } else {
             self.move_robber_and_steal(topology, seat, destination, victim.map(usize::from));
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_player_trade(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+        proposer: usize,
+        give: Resource,
+        get: Resource,
+        count: u8,
+    ) {
+        let mut embargoes = [false; MAX_SEATS];
+        for (seat, value) in embargoes.iter_mut().enumerate().take(board.seats()) {
+            let view = DecisionView::new(
+                &self.state,
+                board,
+                topology,
+                &self.flattened[seat],
+                seat,
+                board.seats(),
+                (self.dev_len - self.dev_cursor) as u8,
+                self.dev_played_this_turn,
+                self.offers_remaining(seat),
+                DecisionPhase::TradeResponse,
+            );
+            *value = embargoed(&view, seat);
+        }
+        if embargoes[proposer] {
+            return;
+        }
+
+        let offer = TradeOffer {
+            proposer,
+            give,
+            get,
+            count,
+        };
+        let mut acceptors = [0_usize; MAX_SEATS];
+        let mut acceptor_count = 0;
+        for responder in 0..board.seats() {
+            if responder == proposer
+                || embargoes[responder]
+                || self.state.players[responder].resources[get.index()] < 1
+            {
+                continue;
+            }
+            let accepted = {
+                let view = DecisionView::new(
+                    &self.state,
+                    board,
+                    topology,
+                    &self.flattened[responder],
+                    responder,
+                    board.seats(),
+                    (self.dev_len - self.dev_cursor) as u8,
+                    self.dev_played_this_turn,
+                    self.offers_remaining(responder),
+                    DecisionPhase::TradeResponse,
+                );
+                policy::respond_trade(
+                    config.policies[responder],
+                    &view,
+                    offer,
+                    &mut self.streams.trade,
+                )
+            };
+            if accepted {
+                acceptors[acceptor_count] = responder;
+                acceptor_count += 1;
+            }
+        }
+        if acceptor_count == 0 {
+            return;
+        }
+        let selection_view = DecisionView::new(
+            &self.state,
+            board,
+            topology,
+            &self.flattened[proposer],
+            proposer,
+            board.seats(),
+            (self.dev_len - self.dev_cursor) as u8,
+            self.dev_played_this_turn,
+            self.offers_remaining(proposer),
+            DecisionPhase::TradeResponse,
+        );
+        let selected = policy::select_counterparty(
+            config.policies[proposer],
+            &selection_view,
+            &acceptors[..acceptor_count],
+        );
+        let (proposer_hand, responder_hand) = if proposer < selected {
+            let (left, right) = self.state.players.split_at_mut(selected);
+            (&mut left[proposer].resources, &mut right[0].resources)
+        } else {
+            let (left, right) = self.state.players.split_at_mut(proposer);
+            (&mut right[0].resources, &mut left[selected].resources)
+        };
+        let applied = trade_players(proposer_hand, responder_hand, give, get, count);
+        debug_assert!(applied);
+        debug_assert!(self.invariants_hold(board, topology, rules));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -790,6 +919,10 @@ impl GameArena {
                     on_trade(&config.modifiers[seat].effects);
                 }
             }
+            Action::OfferTrade { give, get, count } => {
+                self.offers_this_turn = self.offers_this_turn.saturating_add(1);
+                self.resolve_player_trade(board, topology, rules, config, seat, give, get, count);
+            }
             Action::PlayDev(play) => {
                 self.apply_dev_play(board, topology, rules, config, seat, play);
             }
@@ -839,6 +972,7 @@ impl GameArena {
     ) {
         let kind = play.kind_index();
         self.state.players[seat].playable_dev[kind] -= 1;
+        self.state.players[seat].dev_plays_revealed[kind] += 1;
         self.dev_played_this_turn = true;
         match play {
             DevPlay::Knight {
@@ -1286,6 +1420,27 @@ pub fn trade_bank(
     hand[get.index()] += i16::from(count);
     bank[give.index()] = bank[give.index()].saturating_add(offered.min(u64::from(u16::MAX)) as u16);
     bank[get.index()] -= u16::from(count);
+    true
+}
+
+pub fn trade_players(
+    proposer: &mut [i16; RESOURCE_COUNT],
+    responder: &mut [i16; RESOURCE_COUNT],
+    give: Resource,
+    get: Resource,
+    count: u8,
+) -> bool {
+    if give == get
+        || (count != 1 && count != 2)
+        || proposer[give.index()] < i16::from(count)
+        || responder[get.index()] < 1
+    {
+        return false;
+    }
+    proposer[give.index()] -= i16::from(count);
+    responder[give.index()] += i16::from(count);
+    responder[get.index()] -= 1;
+    proposer[get.index()] += 1;
     true
 }
 

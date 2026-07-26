@@ -8,7 +8,7 @@ use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::mix64;
-use unsettled_engine::rules::RuleConfig;
+use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::wire::WireBoard;
 use unsettled_sim::boardgen::generate_board;
@@ -73,6 +73,8 @@ struct TournamentArgs {
     config: Option<PathBuf>,
     #[arg(long)]
     jsonl: Option<PathBuf>,
+    #[command(flatten)]
+    trade: TradeArgs,
 }
 
 #[derive(Default, Deserialize)]
@@ -114,6 +116,8 @@ struct SimulateArgs {
     out: PathBuf,
     #[arg(long)]
     allow_unofficial: bool,
+    #[command(flatten)]
+    trade: TradeArgs,
 }
 
 #[derive(Args)]
@@ -146,6 +150,8 @@ struct EvaluateArgs {
     out: PathBuf,
     #[arg(long)]
     allow_unofficial: bool,
+    #[command(flatten)]
+    trade: TradeArgs,
 }
 
 #[derive(Args)]
@@ -156,6 +162,42 @@ struct BenchArgs {
     games: usize,
     #[arg(long, default_value_t = 0)]
     threads: usize,
+}
+
+#[derive(Args, Clone, Copy, Default)]
+struct TradeArgs {
+    #[arg(long)]
+    player_trading: bool,
+    #[arg(long, requires = "player_trading")]
+    opponent_gain_weight: Option<f32>,
+    #[arg(long, requires = "player_trading", allow_hyphen_values = true)]
+    acceptance_temperature: Option<f32>,
+    #[arg(long, requires = "player_trading")]
+    max_offers_per_turn: Option<u8>,
+    #[arg(long, requires = "player_trading")]
+    hidden_vp_confidence: Option<f64>,
+}
+
+impl TradeArgs {
+    fn config(self) -> Option<TradeConfig> {
+        self.player_trading.then(|| {
+            let defaults = TradeConfig::default();
+            TradeConfig {
+                opponent_gain_weight: self
+                    .opponent_gain_weight
+                    .unwrap_or(defaults.opponent_gain_weight),
+                acceptance_temperature: self
+                    .acceptance_temperature
+                    .unwrap_or(defaults.acceptance_temperature),
+                max_offers_per_turn: self
+                    .max_offers_per_turn
+                    .unwrap_or(defaults.max_offers_per_turn),
+                hidden_vp_confidence: self
+                    .hidden_vp_confidence
+                    .unwrap_or(defaults.hidden_vp_confidence),
+            }
+        })
+    }
 }
 
 fn main() {
@@ -175,6 +217,7 @@ fn execute(cli: Cli) -> Result<(), String> {
 }
 
 fn tournament(args: TournamentArgs) -> Result<(), String> {
+    let player_trading = args.trade.config();
     let file_config = if let Some(path) = &args.config {
         serde_json::from_str::<TournamentFileConfig>(
             &fs::read_to_string(path).map_err(|error| error.to_string())?,
@@ -267,6 +310,7 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
         heuristics: &heuristics,
         policy,
         policy_name: &policy_name,
+        player_trading,
         seed,
         threads,
         allow_unofficial,
@@ -281,6 +325,7 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
 }
 
 fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
+    let player_trading = args.trade.config();
     let layout = parse_layout(&args.layout)?;
     let seats = args
         .seats
@@ -323,6 +368,7 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         reps: args.reps,
         policy,
         policy_name: &args.policy,
+        player_trading,
         threshold: args.threshold,
         alpha: args.alpha,
         threads: args.threads,
@@ -349,6 +395,7 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
 }
 
 fn simulate(args: SimulateArgs) -> Result<(), String> {
+    let player_trading = args.trade.config();
     let source = fs::read_to_string(&args.board).map_err(|error| error.to_string())?;
     let wire = WireBoard::parse_str(&source).map_err(|error| error.to_string())?;
     let topology = Topology::load(wire.layout)?;
@@ -372,6 +419,7 @@ fn simulate(args: SimulateArgs) -> Result<(), String> {
         heuristics: &heuristics,
         policy,
         policy_name: &args.policy,
+        player_trading,
         seed: args.seed,
         threads: args.threads,
         allow_unofficial: args.allow_unofficial,

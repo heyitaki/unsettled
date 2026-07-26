@@ -27,6 +27,7 @@ fn jsonl_is_created_inside_a_fresh_output_directory() {
         heuristics: &heuristics,
         policy: PolicyKind::HeuristicV1,
         policy_name: "heuristic-v1",
+        player_trading: None,
         seed: 7,
         threads: 1,
         allow_unofficial: false,

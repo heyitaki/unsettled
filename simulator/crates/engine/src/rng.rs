@@ -53,6 +53,7 @@ pub struct Streams {
     pub dice: Xoshiro256StarStar,
     pub deck: Xoshiro256StarStar,
     pub chance: Xoshiro256StarStar,
+    pub trade: Xoshiro256StarStar,
     pub policy: [Xoshiro256StarStar; MAX_SEATS],
 }
 
@@ -63,6 +64,7 @@ impl Streams {
             dice: derive(0xd1ce_d1ce_d1ce_d1ce),
             deck: derive(0xdec0_dec0_dec0_dec0),
             chance: derive(0xc4a9_ce00_c4a9_ce00),
+            trade: derive(0x7ade_7ade_7ade_7ade),
             policy: std::array::from_fn(|seat| derive(0x9011_c100_0000_0000 ^ seat as u64)),
         }
     }

@@ -9,7 +9,7 @@ use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::{derive_evaluation_seed, mix64};
-use unsettled_engine::rules::RuleConfig;
+use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout, Topology};
 
 use crate::boardgen::generate_board;
@@ -71,6 +71,7 @@ pub struct EvaluateRequest<'a> {
     pub reps: usize,
     pub policy: PolicyKind,
     pub policy_name: &'a str,
+    pub player_trading: Option<TradeConfig>,
     pub threshold: f64,
     pub alpha: f64,
     pub threads: usize,
@@ -92,6 +93,8 @@ pub struct EvaluationConfig {
     pub layout: String,
     pub seats: usize,
     pub policy: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player_trading: Option<TradeConfig>,
     pub boards: usize,
     pub reps: usize,
     pub hero_seats: usize,
@@ -242,7 +245,8 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
         .num_threads(workers)
         .build()
         .map_err(|error| error.to_string())?;
-    let rules = RuleConfig::base(request.layout);
+    let mut rules = RuleConfig::base(request.layout);
+    rules.player_trading = request.player_trading;
     let outcomes: Vec<EvaluationOutcome> = pool.install(|| {
         jobs.par_iter()
             .map_init(GameArena::default, |arena, job| {
@@ -359,6 +363,7 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
             layout: request.layout.as_str().to_string(),
             seats: request.seats,
             policy: request.policy_name.to_string(),
+            player_trading: request.player_trading,
             boards: request.boards,
             reps: request.reps,
             hero_seats: request.seats,

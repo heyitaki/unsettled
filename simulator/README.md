@@ -1,6 +1,6 @@
 # Unsettled self-play simulator
 
-`unsettled-sim` is a seeded Rust simulator for complete base-Catan games without player-to-player trading. It supports the 19-hex `standard4` and 30-hex `extension6` layouts, app-exported Board JSON, generated legal boards, six built-in starting-placement heuristics, weights-file-parameterized app-formula arms, and three post-placement policies plus a no-ports ablation.
+`unsettled-sim` is a seeded Rust simulator for complete base-Catan games. It supports the 19-hex `standard4` and 30-hex `extension6` layouts, app-exported Board JSON, generated legal boards, six built-in starting-placement heuristics, weights-file-parameterized app-formula arms, and post-placement policies including optional player-to-player trading.
 
 The engine crate has no threading, CLI, or filesystem dependency. The CLI owns board generation, rayon scheduling, aggregation, and output.
 
@@ -82,7 +82,11 @@ Measure throughput:
 cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
 ```
 
-Available built-in placement names are `random`, `max_pips`, `pip_diversity`, `pip_scarcity`, `port_synergy`, and `city_focus`. `app_formula:<path/to/weights.json>` loads the app's settlement formula at run time and reports it as `app_formula:<file-stem>`, so multiple weights files with distinct stems can be arms in the same run. `placement/default-weights.json` mirrors the app's `DEFAULT_WEIGHTS` and is the field to compare candidates against; a vitest case fails if the two drift, because nothing else detects it. `placement/arms/` holds single-parameter perturbations of it — `spread_*` scale the `resourceValue` spread, `gpf_*` vary `genericPortFactor`, `flat_swamp` is an external formula's resource ratios renormalized to the same mean. Available policies are `random-legal`, `greedy-no-trade`, `priority-trader`, `heuristic-v1`, and `heuristic-v1-noports`.
+Available built-in placement names are `random`, `max_pips`, `pip_diversity`, `pip_scarcity`, `port_synergy`, and `city_focus`. `app_formula:<path/to/weights.json>` loads the app's settlement formula at run time and reports it as `app_formula:<file-stem>`, so multiple weights files with distinct stems can be arms in the same run. `placement/default-weights.json` mirrors the app's `DEFAULT_WEIGHTS` and is the field to compare candidates against; a vitest case fails if the two drift, because nothing else detects it. `placement/arms/` holds single-parameter perturbations of it — `spread_*` scale the `resourceValue` spread, `gpf_*` vary `genericPortFactor`, `flat_swamp` is an external formula's resource ratios renormalized to the same mean. Available policies are `random-legal`, `greedy-no-trade`, `priority-trader`, `heuristic-v1`, `heuristic-v1-noports`, and `heuristic-v1-trader`.
+
+Player trading is disabled by default. Set `RuleConfig::player_trading` to `Some(TradeConfig)` and use `heuristic-v1-trader` to exercise it. `TradeConfig` exposes `opponent_gain_weight`, `acceptance_temperature`, `max_offers_per_turn`, and `hidden_vp_confidence`; their defaults are placeholders for a later parameter sweep, not tuned values. When several responders accept, the proposer trades with the acceptor having the lowest hidden-VP-aware estimate from the proposer's view; equal estimates prefer the seat furthest away in rotation order. The mechanism supports only offers giving one or two units of one resource for exactly one unit of another. Multi-resource baskets, bundles, counteroffers, and bank-trade changes are outside its scope.
+
+The `tournament`, `evaluate`, and `simulate` commands enable the mechanism with `--player-trading`. Their optional `--opponent-gain-weight`, `--acceptance-temperature`, `--max-offers-per-turn`, and `--hidden-vp-confidence` flags override the corresponding defaults and require `--player-trading`. Deterministic result artifacts include a `playerTrading` config block only when the mechanism is enabled, so default-off output remains byte-identical.
 
 Official simulation-ready combinations are three or four seats on `standard4` and five or six seats on `extension6`. `--allow-unofficial` permits two through six seats on either layout and is echoed in `results.json`.
 
@@ -121,7 +125,7 @@ Each run writes:
 
 `evaluate` instead writes deterministic `evaluation.json` plus `meta.json`, with no CSV. Its evaluation artifact contains the run configuration, label-keyed arm marginals, ordered paired comparisons, and the total illegal-action count.
 
-`results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, and each seat policy use independent xoshiro256** streams. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
+`results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, player trading, and each seat policy use independent xoshiro256** streams. Player-trade response softening uses only the trade stream; acceptor selection is deterministic from the proposer's view. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
 
 Games that reach the configured 500-round cap are recorded as draws. Illegal policy actions are counted and must remain zero.
 
@@ -141,7 +145,33 @@ Regeneration must leave `topology/standard4.json` and `topology/extension6.json`
 
 To add a built-in placement heuristic, add a `PlacementKind` entry and name mapping in `crates/engine/src/placement/mod.rs`, then supply its vertex-score preset or implementation. The CLI registry and result keys use that stable name. The parameterized app formula lives in `crates/engine/src/placement/app_formula.rs`; the CLI loads each weights file, registers its stable file-stem name, and prepares its board-fixed port reach and scarcity context before games start.
 
-Rule changes belong in `RuleConfig`, `BuildableSpec`, or `PlayerModifiers`. Parameter-only changes flatten into per-player cost and trade-rate tables. Port changes use `PortRule`; `heuristic-v1-noports` is exactly this mechanism applied to itself, declaring a `PortSelector::All` / `PortAction::Disable` rule via `PolicyKind::port_rules` so the seat's flattened trade rates fall back to the bank rate. A "ports removed" curse would be the same rule reached through `PlayerModifiers` instead. A behavioral boon or curse adds an `Effect` variant and handles it at the pre-roll, production, build, or trade hook. Policy code receives `DecisionView`, not `GameState`; app-facing recommendation code should use the `recommend` adapter while simulation code scores into the `ActionBuf` its `PolicyScratch` already owns. Anything a new rule derives per decision and reads board-wide belongs in the `DecisionView` cache next to production pips; anything fixed by the board or the layout belongs on `SimBoard` or `Topology` at load.
+Rule changes belong in `RuleConfig`, `BuildableSpec`, or `PlayerModifiers`. Parameter-only changes flatten into per-player cost and trade-rate tables. `RuleConfig::player_trading` is the default-off gate for player offers and carries the responder model's swept parameters. Port changes use `PortRule`; `heuristic-v1-noports` is exactly this mechanism applied to itself, declaring a `PortSelector::All` / `PortAction::Disable` rule via `PolicyKind::port_rules` so the seat's flattened trade rates fall back to the bank rate. A "ports removed" curse would be the same rule reached through `PlayerModifiers` instead. A behavioral boon or curse adds an `Effect` variant and handles it at the pre-roll, production, build, or trade hook. Policy code receives `DecisionView`, not `GameState`; app-facing recommendation code should use the `recommend` adapter while simulation code scores into the `ActionBuf` its `PolicyScratch` already owns. Anything a new rule derives per decision and reads board-wide belongs in the `DecisionView` cache next to production pips; anything fixed by the board or the layout belongs on `SimBoard` or `Topology` at load.
+
+## Programme and phase order
+
+The simulator exists to measure which starting placements win, and ultimately to calibrate the app's own scorer (`src/engine/weights.ts`). The phase order below was revised after two findings, and the revision matters more than the list: **weight tuning now runs last.**
+
+Why: a full-power sweep of the `resourceValue` spread found the optimum is policy-dependent and tracks trading volume — a light-trading policy and a heavy-trading one disagree about the best value, and neither answer is the answer. Every result measured so far was measured against a field of *self-regarding* policies, which model opponents almost not at all. Making the field threat-aware will invalidate those results the same way trading threatened to. Tuning weights against a field that is about to be replaced spends held-out seed domains on answers that will not survive.
+
+**Phases E, F and G were reassigned in this revision.** They previously meant "re-tune across the trading grid", "structural formula terms" and "adopt"; those survive as H and I below. An older note referring to Phase E or F means the old plan.
+
+- **A — done.** The app formula as a playable arm, with a TS/Rust parity fixture.
+- **B — done.** The paired `evaluate` harness.
+- **C — retired.** Was the first tuning pass under no-trade. Superseded: tuning moved to the end, for the reason above.
+- **D — built.** Player-to-player trading with the endgame embargo and farthest-from-winning counterparty selection.
+- **E — opponent belief state.** Per-seat resource counts derived from public events, plus a bounded uncertainty pool from robber steals. Production, bank and port trades, player trades, purchases, discards, monopoly and year-of-plenty are all public; only the robber steal and dev-card identity are hidden, and a steal moves exactly one card, so bounds stay tight. Pure derived state with no RNG and no behaviour change until a policy reads it, so it is corpus-safe and independently testable. It must never read private state, and its updates must be O(1) — this runs on every action of every game.
+- **F — expected turns to win**, closed-form over the belief state. Never a mini-rollout. VP alone is a lagging indicator: six VP with two cities queued and strong production beats eight VP built out.
+- **G — threat-aware decisions, measured one at a time**: robber placement first (highest-frequency, needs only belief and production), then monopoly and dev-card timing (pure belief), then trade selection and acceptance, then goal switching and denial last — it is the most entangled and needs a good ETW, not merely a present one.
+- **H — re-tune weights** across the resulting grid, including the structural formula terms that were the old Phase F.
+- **I — adopt** against the untouched `gate` domain.
+
+Two rules hold across all of it.
+
+**Measure each consumer separately.** A single policy bundling belief, ETW, robber, monopoly and goal-switching that wins by several points teaches nothing about which part earned it and leaves none of it tunable. The paired `evaluate` harness gives clean per-consumer A/B; use it.
+
+**Pin the opponent model to a fixed reference implementation.** If opponents' ETW is computed with the same value function being tuned, the model moves with the arm and every sweep measures two changes at once.
+
+One design note worth keeping, because it is easy to get wrong: a lexicographic tie-break ladder is the wrong shape for ranking opponents. Each rung fires only on an exact tie of the rung above, so replacing a coarse integer criterion with a continuous one makes ties vanish and silently deletes every lower rung. Use a scalar score with weighted terms and sweep the weights. Relatedly, there is one opponent-threat function, not two: the acceptance rule's estimate of opponent gain and the counterparty-selection ranking are the same question over different arguments, and a parallel second model will drift out of agreement with the first.
 
 ## Measured performance
 

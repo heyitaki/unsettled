@@ -35,10 +35,20 @@ pub fn action(
     params: &HeuristicParams,
     rng: &mut Xoshiro256StarStar,
 ) -> Action {
+    action_with_goal(view, scratch, params, rng).0
+}
+
+pub(crate) fn action_with_goal(
+    view: &DecisionView<'_>,
+    scratch: &mut PolicyScratch,
+    params: &HeuristicParams,
+    rng: &mut Xoshiro256StarStar,
+) -> (Action, Option<Goal>) {
     let road = best_road(view, params);
     let PolicyScratch { goal, actions } = scratch;
     score_actions_with(view, params, actions, road);
-    *goal = best_goal_with(view, params, road).map(|goal| goal.kind);
+    let selected_goal = best_goal_with(view, params, road);
+    *goal = selected_goal.map(|goal| goal.kind);
     let best_score = actions
         .as_slice()
         .iter()
@@ -56,7 +66,7 @@ pub fn action(
             selected = candidate.action;
         }
     }
-    selected
+    (selected, selected_goal)
 }
 
 pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mut ActionBuf) {
@@ -347,9 +357,9 @@ pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParam
 }
 
 #[derive(Clone, Copy)]
-struct Goal {
-    kind: Buildable,
-    score: f32,
+pub(crate) struct Goal {
+    pub(crate) kind: Buildable,
+    pub(crate) score: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -359,7 +369,7 @@ struct RoadGoal {
     goal_score: f32,
 }
 
-fn best_goal(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<Goal> {
+pub(crate) fn best_goal(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<Goal> {
     best_goal_with(view, params, best_road(view, params))
 }
 
@@ -727,7 +737,7 @@ fn completing_or_improving_trades<'a>(
     })
 }
 
-fn missing_units(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_COUNT]) -> u16 {
+pub(crate) fn missing_units(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_COUNT]) -> u16 {
     (0..RESOURCE_COUNT)
         .map(|index| u16::try_from((i16::from(cost[index]) - hand[index]).max(0)).unwrap_or(0))
         .sum()

@@ -153,6 +153,17 @@ pub fn legal_actions(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar, out:
             }
         }
     }
+    if view.trade_config().is_some() {
+        for give in Resource::ALL {
+            for get in Resource::ALL {
+                for count in [1, 2] {
+                    if view.legal_offer_trade(give, get, count) {
+                        out.push(scored(Action::OfferTrade { give, get, count }));
+                    }
+                }
+            }
+        }
+    }
     if view.can_buy_dev() {
         out.push(scored(Action::BuyDev));
     }
