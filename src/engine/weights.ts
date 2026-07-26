@@ -4,6 +4,8 @@ export interface EngineWeights {
   // Intrinsic worth of a pip by resource, normalized so the five average ~1.0.
   // Wheat/ore dominate win paths; sheep is least-consumed. See MEMORY roadmap.
   resourceValue: Record<Resource, number>
+  // Cards held immediately after the action, priced through resourceValue.
+  handValueWeight: number
   scarcityWeight: number
   scarcityClampMin: number
   scarcityClampMax: number
@@ -44,6 +46,9 @@ export interface EngineWeights {
 
 export const DEFAULT_WEIGHTS: EngineWeights = {
   resourceValue: { wheat: 1.35, ore: 1.3, wood: 0.8, brick: 0.8, sheep: 0.75 },
+  // An immediate card is meaningful on turn one, but still worth less than a
+  // pip's production across a full game.
+  handValueWeight: 0.4,
   scarcityWeight: 0.35,
   scarcityClampMin: 0.5,
   scarcityClampMax: 2,

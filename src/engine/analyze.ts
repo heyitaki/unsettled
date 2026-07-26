@@ -17,6 +17,7 @@ import {
   marginalTotal,
   scoreCandidate,
   type BoardContext,
+  type HandCounts,
   type Holdings,
   type ScoreBreakdown,
 } from './valuation'
@@ -82,8 +83,12 @@ interface CandidateAggregate {
   survived: number
 }
 
-interface DraftTurn {
+interface ScoredTurn {
   playerId: string
+  receivesGrant: boolean
+}
+
+interface DraftTurn extends ScoredTurn {
   turnIndex: number
 }
 
@@ -93,6 +98,7 @@ const emptyBreakdown = (): ScoreBreakdown => ({
   robber: 0,
   diversity: 0,
   port: 0,
+  handValue: 0,
 })
 
 const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
@@ -101,7 +107,29 @@ const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
   target.robber += value.robber
   target.diversity += value.diversity
   target.port += value.port
+  target.handValue += value.handValue
 }
+
+const receivesSecondSettlementGrant = (
+  draft: DraftState,
+  turnIndex: number,
+): boolean => {
+  const playerId = draft.sequence[turnIndex]
+  if (playerId === undefined) return false
+  let earlierPicks = 0
+  for (let index = 0; index < turnIndex; index += 1) {
+    if (draft.sequence[index] === playerId) earlierPicks += 1
+  }
+  return earlierPicks === 1
+}
+
+const handForCandidate = (
+  ctx: BoardContext,
+  vertexId: VertexId,
+  receivesGrant: boolean,
+): HandCounts | null => receivesGrant
+  ? ctx.stats.get(vertexId)?.setupGrant ?? null
+  : null
 
 function remainingTurns(
   draft: DraftState,
@@ -111,7 +139,11 @@ function remainingTurns(
 ): DraftTurn[] {
   return draft.remainingPickIndices
     .filter((turnIndex) => turnIndex >= startIndex && turnIndex < endIndex)
-    .map((turnIndex) => ({ playerId: draft.sequence[turnIndex], turnIndex }))
+    .map((turnIndex) => ({
+      playerId: draft.sequence[turnIndex],
+      receivesGrant: receivesSecondSettlementGrant(draft, turnIndex),
+      turnIndex,
+    }))
     .filter(({ playerId }) => excludedPlayerId === null || playerId !== excludedPlayerId)
 }
 
@@ -131,9 +163,18 @@ const scoreForScan = (
   vertexId: VertexId,
   playerId: string,
   modifier: PlacementModifier,
+  receivesGrant: boolean,
 ): number => modifier === neutralModifier
-  ? marginalTotal(ctx, holdings, vertexId)
-  : scoreCandidate(ctx, holdings, vertexId, playerId, board, modifier).total
+  ? marginalTotal(ctx, holdings, vertexId, handForCandidate(ctx, vertexId, receivesGrant))
+  : scoreCandidate(
+      ctx,
+      holdings,
+      vertexId,
+      playerId,
+      board,
+      modifier,
+      handForCandidate(ctx, vertexId, receivesGrant),
+    ).total
 
 function bestLegalCandidate(
   ctx: BoardContext,
@@ -142,12 +183,21 @@ function bestLegalCandidate(
   blocked: ReadonlySet<VertexId>,
   playerId: string,
   modifier: PlacementModifier,
+  receivesGrant: boolean,
 ): VertexId | null {
   let best: VertexId | null = null
   let bestScore = -Infinity
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
-    const score = scoreForScan(ctx, board, holdings, vertexId, playerId, modifier)
+    const score = scoreForScan(
+      ctx,
+      board,
+      holdings,
+      vertexId,
+      playerId,
+      modifier,
+      receivesGrant,
+    )
     if (score > bestScore) {
       best = vertexId
       bestScore = score
@@ -164,13 +214,22 @@ function opponentPick(
   blocked: ReadonlySet<VertexId>,
   uniform: number,
   modifier: PlacementModifier,
+  receivesGrant: boolean,
 ): VertexId | null {
   const topVertices: VertexId[] = []
   const topScores: number[] = []
   const topK = Math.max(1, ctx.weights.opponentTopK)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
-    const score = scoreForScan(ctx, board, holdings, vertexId, playerId, modifier)
+    const score = scoreForScan(
+      ctx,
+      board,
+      holdings,
+      vertexId,
+      playerId,
+      modifier,
+      receivesGrant,
+    )
     let index = 0
     while (index < topScores.length && score <= topScores[index]) index += 1
     if (index >= topK) continue
@@ -202,7 +261,7 @@ function opponentPick(
 function simulateWindowDetailed(
   ctx: BoardContext,
   board: Board,
-  pickerIds: readonly string[],
+  turns: readonly ScoredTurn[],
   initialHoldings: ReadonlyMap<string, Holdings>,
   blocked: Set<VertexId>,
   nextUniform: () => number,
@@ -212,10 +271,19 @@ function simulateWindowDetailed(
   const taken: VertexId[] = []
   const actualPickers: string[] = []
   const adjacency = vertexAdjacency(board.layout)
-  for (const playerId of pickerIds) {
+  for (const { playerId, receivesGrant } of turns) {
     const uniform = nextUniform()
     const held = holdings.get(playerId) ?? emptyHoldings()
-    const vertexId = opponentPick(ctx, board, playerId, held, blocked, uniform, modifier)
+    const vertexId = opponentPick(
+      ctx,
+      board,
+      playerId,
+      held,
+      blocked,
+      uniform,
+      modifier,
+      receivesGrant,
+    )
     if (vertexId === null) continue
     blockVertex(adjacency, blocked, vertexId)
     holdings.set(playerId, addToHoldings(ctx, held, vertexId))
@@ -240,7 +308,7 @@ export function simulateOpponentWindow(
   return simulateWindowDetailed(
     ctx,
     board,
-    pickerIds,
+    pickerIds.map((playerId) => ({ playerId, receivesGrant: false })),
     holdings,
     blocked,
     nextUniform,
@@ -322,12 +390,20 @@ export function rankCandidates(
   const midTurns = secondPickIndex === undefined
     ? []
     : remainingTurns(draft, firstPickIndex + 1, secondPickIndex, me)
-  const midPickerIds = midTurns.map(({ playerId }) => playerId)
   const candidates = legalSettlementVertices(board)
   const myHoldings = holdingsFromBoard(ctx, board).get(me) ?? emptyHoldings()
+  const firstReceivesGrant = receivesSecondSettlementGrant(draft, firstPickIndex)
   const firstScores = new Map(candidates.map((candidate) => [
     candidate,
-    scoreCandidate(ctx, myHoldings, candidate, me, board, options.modifier),
+    scoreCandidate(
+      ctx,
+      myHoldings,
+      candidate,
+      me,
+      board,
+      options.modifier,
+      handForCandidate(ctx, candidate, firstReceivesGrant),
+    ),
   ]))
   const aggregates = new Map<VertexId, CandidateAggregate>()
   const adjacency = vertexAdjacency(board.layout)
@@ -360,7 +436,7 @@ export function rankCandidates(
       const midWindow = simulateWindowDetailed(
         ctx,
         board,
-        midPickerIds,
+        midTurns,
         opponentHoldings,
         blocked,
         nextUniform,
@@ -376,6 +452,7 @@ export function rankCandidates(
         blocked,
         me,
         options.modifier,
+        receivesSecondSettlementGrant(draft, secondPickIndex),
       )
       if (second === null) continue
       const secondScore = scoreCandidate(
@@ -385,6 +462,11 @@ export function rankCandidates(
         me,
         board,
         options.modifier,
+        handForCandidate(
+          ctx,
+          second,
+          receivesSecondSettlementGrant(draft, secondPickIndex),
+        ),
       )
       addBreakdown(aggregate.breakdown, secondScore.breakdown)
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
@@ -402,6 +484,7 @@ export function rankCandidates(
       robber: aggregate.breakdown.robber / aggregate.survived,
       diversity: aggregate.breakdown.diversity / aggregate.survived,
       port: aggregate.breakdown.port / aggregate.survived,
+      handValue: aggregate.breakdown.handValue / aggregate.survived,
     }
     const survival = aggregate.survived / preWindows.length
     const score = breakdownTotal(breakdown)
@@ -479,8 +562,19 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
   const baseHoldings = holdingsFromBoard(ctx, board)
   const myHoldings = me === null ? emptyHoldings() : baseHoldings.get(me) ?? emptyHoldings()
   const canRank = !complete && meValid && !meDone && legal.length > 0 && me !== null
+  const pendingPickIndex = draft.myRemainingPickIndices[0]
+  const pendingReceivesGrant = pendingPickIndex !== undefined &&
+    receivesSecondSettlementGrant(draft, pendingPickIndex)
   const hasPositiveScore = canRank && legal.some((vertexId) =>
-    scoreForScan(ctx, board, myHoldings, vertexId, me, modifier) > 0)
+    scoreForScan(
+      ctx,
+      board,
+      myHoldings,
+      vertexId,
+      me,
+      modifier,
+      pendingReceivesGrant,
+    ) > 0)
   const shouldRank = canRank && hasPositiveScore
   let recommendations: Recommendation[] = []
   let takenBeforeFirstPick: TakenVertex[] = []
@@ -490,12 +584,11 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
     const secondPickIndex = draft.myRemainingPickIndices[1]
     const turnIndex = draft.turnIndex ?? firstPickIndex
     const preTurns = remainingTurns(draft, turnIndex, firstPickIndex, me)
-    const prePickerIds = preTurns.map(({ playerId }) => playerId)
     const midPicks = secondPickIndex === undefined
       ? 0
       : remainingTurns(draft, firstPickIndex + 1, secondPickIndex, me).length
     const rollouts = options.rollouts ??
-      rolloutCount(legal.length, prePickerIds.length, midPicks, weights)
+      rolloutCount(legal.length, preTurns.length, midPicks, weights)
     const random = mulberry32(options.seed ?? 7)
     const uniforms = Array.from({ length: rollouts }, () =>
       Array.from({ length: draft.sequence.length }, () => random()))
@@ -513,7 +606,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
       const result = simulateWindowDetailed(
         ctx,
         board,
-        prePickerIds,
+        preTurns,
         baseHoldings,
         blocked,
         nextUniform,

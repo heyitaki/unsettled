@@ -11,10 +11,10 @@ use unsettled_engine::topology::Topology;
 use unsettled_engine::wire::WireBoard;
 
 const TOLERANCE: f64 = 1e-9;
-const REQUIRED_CLASSES: [&str; 32] = [
-    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "B1", "B2", "B3",
-    "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4", "P5",
-    "H1", "H2", "H3", "H4", "F1", "F2",
+const REQUIRED_CLASSES: [&str; 38] = [
+    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "B1", "B2", "B3", "B4", "B5",
+    "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4", "P5", "H1", "H2", "H3", "H4",
+    "F1", "F2", "G1", "G2", "G3", "G4", "G5", "G6",
 ];
 
 #[derive(Deserialize)]
@@ -32,6 +32,7 @@ struct FixtureCase {
     weights: Value,
     holdings: Vec<String>,
     candidate: String,
+    receives_grant: bool,
     components: FixtureBreakdown,
     marginal_total: FixtureNumber,
     breakdown_total: FixtureNumber,
@@ -40,12 +41,14 @@ struct FixtureCase {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct FixtureBreakdown {
     production: FixtureNumber,
     scarcity: FixtureNumber,
     robber: FixtureNumber,
     diversity: FixtureNumber,
     port: FixtureNumber,
+    hand_value: FixtureNumber,
 }
 
 #[derive(Deserialize)]
@@ -125,13 +128,13 @@ fn typescript_and_rust_placement_formulas_match() {
                     .map(|vertex| topology.vertex_by_id(vertex).unwrap())
                     .collect::<Vec<_>>();
                 let candidate = topology.vertex_by_id(&case.candidate).unwrap();
-                let actual = scorer.breakdown(&holdings, candidate);
+                let actual = scorer.breakdown(&holdings, candidate, case.receives_grant);
                 compare_breakdown(&case, actual, &mut maximum);
                 compare(
                     &case.id,
                     "marginalTotal",
                     case.marginal_total.value(),
-                    scorer.marginal_total(&holdings, candidate),
+                    scorer.marginal_total(&holdings, candidate, case.receives_grant),
                     case.degenerate,
                     &mut maximum,
                 );
@@ -209,7 +212,11 @@ fn compare_breakdown(
             case.components.production.value(),
             actual.production,
         ),
-        ("scarcity", case.components.scarcity.value(), actual.scarcity),
+        (
+            "scarcity",
+            case.components.scarcity.value(),
+            actual.scarcity,
+        ),
         ("robber", case.components.robber.value(), actual.robber),
         (
             "diversity",
@@ -217,15 +224,13 @@ fn compare_breakdown(
             actual.diversity,
         ),
         ("port", case.components.port.value(), actual.port),
+        (
+            "handValue",
+            case.components.hand_value.value(),
+            actual.hand_value,
+        ),
     ] {
-        compare(
-            &case.id,
-            name,
-            expected,
-            actual,
-            case.degenerate,
-            maximum,
-        );
+        compare(&case.id, name, expected, actual, case.degenerate, maximum);
     }
 }
 
@@ -240,6 +245,7 @@ fn parse_weights(value: &Value) -> EngineWeights {
             brick: fixture_number(&resources["brick"]),
             ore: fixture_number(&resources["ore"]),
         },
+        hand_value_weight: number("handValueWeight"),
         scarcity_weight: number("scarcityWeight"),
         scarcity_clamp_min: number("scarcityClampMin"),
         scarcity_clamp_max: number("scarcityClampMax"),

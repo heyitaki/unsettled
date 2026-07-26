@@ -306,6 +306,7 @@ describe('joint draft analysis', () => {
         'aki',
         board,
         neutralModifier,
+        ctx.stats.get(analysis.recommendations[0].firstPick)?.setupGrant ?? null,
       ).total,
     )
   })
@@ -327,6 +328,7 @@ describe('joint draft analysis', () => {
       'p2',
       board,
       neutralModifier,
+      ctx.stats.get(analysis.recommendations[0].firstPick)?.setupGrant ?? null,
     ).total)
   })
 

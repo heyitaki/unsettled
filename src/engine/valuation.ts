@@ -12,6 +12,7 @@ export interface ScoreBreakdown {
   robber: number
   diversity: number
   port: number
+  handValue: number
 }
 
 export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
@@ -19,7 +20,18 @@ export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
   breakdown.scarcity +
   breakdown.robber +
   breakdown.diversity +
-  breakdown.port
+  breakdown.port +
+  breakdown.handValue
+
+export type HandCounts = Readonly<Partial<Record<Resource, number>>>
+
+export const handValue = (weights: EngineWeights, counts: HandCounts): number => {
+  let value = 0
+  for (const resource of RESOURCES) {
+    value += (counts[resource] ?? 0) * weights.resourceValue[resource]
+  }
+  return weights.handValueWeight * value
+}
 
 /**
  * A port this vertex can trade through, and how much of its value is really
@@ -37,6 +49,8 @@ export interface VertexStats {
   robbedPips: Partial<Record<Resource, number>>
   tokenPips: Partial<Record<number, number>>
   ports: PortAccess[]
+  /** Cards granted when this vertex is built as a second setup settlement. */
+  setupGrant: HandCounts
 }
 
 export interface BoardContext {
@@ -68,6 +82,7 @@ interface VertexPrecompute {
   adjustedWheat: number
   adjustedWood: number
   base: number
+  setupGrantValue: number
   // The vertex's own best port factor per resource, folded once per board.
   // Combining these across settlements is a plain `Math.max`, because both the
   // dedicated and generic-discounted branches are themselves maxima.
@@ -214,14 +229,17 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
     const robbedPips: Partial<Record<Resource, number>> = {}
+    const setupGrant = zeroResources()
     const tokenPips: Partial<Record<number, number>> = {}
     for (const key of touching) {
       const hex = hexesByKey.get(key)
-      if (!hex || hex.tile === null || hex.tile === 'desert' || hex.numberToken === null) {
-        continue
-      }
+      if (!hex || hex.tile === null || hex.tile === 'desert') continue
       const amount = pips(hex.numberToken)
-      if (amount > 0) tokenPips[hex.numberToken] = (tokenPips[hex.numberToken] ?? 0) + amount
+      if (amount <= 0) continue
+      setupGrant[hex.tile] += 1
+      if (hex.numberToken !== null) {
+        tokenPips[hex.numberToken] = (tokenPips[hex.numberToken] ?? 0) + amount
+      }
     }
     if (robberKey !== null && touching.has(robberKey)) {
       const hex = hexesByKey.get(robberKey)
@@ -232,6 +250,7 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
       robbedPips,
       tokenPips,
       ports: portsByVertex.get(vertexId) ?? [],
+      setupGrant,
     })
   }
   const ctx: BoardContext = {
@@ -259,6 +278,7 @@ const buildPrecompute = (
   adjustedWheat: adjustedPips(weights, stats, 'wheat'),
   adjustedWood: adjustedPips(weights, stats, 'wood'),
   base: vertexBase(weights, scarcity, stats),
+  setupGrantValue: handValue(weights, stats.setupGrant),
   portFactors: foldPortFactors(stats.ports, weights.genericPortFactor),
 })
 
@@ -469,9 +489,12 @@ export function marginalBreakdown(
   ctx: BoardContext,
   holdings: Holdings,
   candidate: VertexId,
+  hand: HandCounts | null = null,
 ): ScoreBreakdown {
   const stats = ctx.stats.get(candidate)
-  if (!stats) return { production: 0, scarcity: 0, robber: 0, diversity: 0, port: 0 }
+  if (!stats) {
+    return { production: 0, scarcity: 0, robber: 0, diversity: 0, port: 0, handValue: 0 }
+  }
   const precompute = precomputeFor(ctx, candidate, stats)
   const [production, scarcity, robber] = baseParts(ctx.weights, ctx.scarcity, stats)
   return {
@@ -480,25 +503,35 @@ export function marginalBreakdown(
     robber,
     diversity: diversityDelta(ctx, holdings, stats, precompute),
     port: portDelta(ctx, holdings, stats, precompute),
+    handValue: hand === null ? 0 : handValue(ctx.weights, hand),
   }
 }
 
 /**
  * The same score as `marginalBreakdown`, without allocating the breakdown or
- * running a modifier — the form rollout scans call millions of times. It shares
- * every term with the breakdown, so the two cannot disagree.
+ * running a modifier, the form rollout scans call millions of times. It shares
+ * every term with the breakdown, including pricing the same hand counts, so
+ * the two cannot disagree.
  */
 export function marginalTotal(
   ctx: BoardContext,
   holdings: Holdings,
   candidate: VertexId,
+  hand: HandCounts | null = null,
 ): number {
   const stats = ctx.stats.get(candidate)
   if (!stats) return 0
   const precompute = precomputeFor(ctx, candidate, stats)
   return precompute.base +
     diversityDelta(ctx, holdings, stats, precompute) +
-    portDelta(ctx, holdings, stats, precompute)
+    portDelta(ctx, holdings, stats, precompute) +
+    (hand === null
+      ? 0
+      // Setup callers pass this exact precomputed vector. Its scalar was built
+      // under the same weights, avoiding five resource lookups per rollout scan.
+      : hand === stats.setupGrant
+        ? precompute.setupGrantValue
+        : handValue(ctx.weights, hand))
 }
 
 export function scoreCandidate(
@@ -508,8 +541,9 @@ export function scoreCandidate(
   playerId: string,
   board: Board,
   modifier: PlacementModifier,
+  hand: HandCounts | null = null,
 ): { breakdown: ScoreBreakdown; total: number } {
-  const breakdown = modifier(playerId, marginalBreakdown(ctx, holdings, candidate), {
+  const breakdown = modifier(playerId, marginalBreakdown(ctx, holdings, candidate, hand), {
     board,
     vertexId: candidate,
     held: holdings.vertices,

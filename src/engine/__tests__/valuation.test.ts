@@ -41,6 +41,7 @@ function context(
       robbedPips: robbed.get(vertexId) ?? {},
       tokenPips: {},
       ports: ports.map(toAccess),
+      setupGrant: {},
     })
   }
   const boardScarcity = {

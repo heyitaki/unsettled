@@ -53,6 +53,7 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
     ['Diversity+recipes+numbers', recommendation.breakdown.diversity],
     ['Port', recommendation.breakdown.port],
     ['Robber', recommendation.breakdown.robber],
+    ['Starting cards', recommendation.breakdown.handValue],
   ]
   const tenths = factors.map(([label, value]) => [label, Math.round(value * 10)] as [string, number])
   const target = Math.round(recommendation.score * 10)

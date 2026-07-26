@@ -44,6 +44,7 @@ interface CaseInput {
   weights?: EngineWeights
   holdings?: VertexId[]
   candidate: VertexId
+  receivesGrant?: boolean
   ingestion?: {
     outcome: 'reject'
     error: 'NullTile' | 'MissingToken' | 'NoRobberPlacement'
@@ -139,7 +140,10 @@ function scoreCase(input: CaseInput) {
     (held, vertex) => addToHoldings(ctx, held, vertex),
     emptyHoldings(),
   )
-  const components = marginalBreakdown(ctx, holdings, input.candidate)
+  const hand = input.receivesGrant
+    ? ctx.stats.get(input.candidate)?.setupGrant ?? null
+    : null
+  const components = marginalBreakdown(ctx, holdings, input.candidate, hand)
   return {
     id: input.id,
     covers: input.covers,
@@ -147,8 +151,9 @@ function scoreCase(input: CaseInput) {
     weights,
     holdings: input.holdings ?? [],
     candidate: input.candidate,
+    receivesGrant: input.receivesGrant ?? false,
     components,
-    marginalTotal: marginalTotal(ctx, holdings, input.candidate),
+    marginalTotal: marginalTotal(ctx, holdings, input.candidate, hand),
     breakdownTotal: breakdownTotal(components),
     ingestion: input.ingestion ?? { outcome: 'score' as const },
     degenerate: input.degenerate ?? false,
@@ -206,7 +211,14 @@ const endgame = readBoardFixture('board-endgame-pieces.json')
 const cases: CaseInput[] = [
   {
     id: 'standard-empty-three-hex',
-    covers: ['B7', 'B10', 'H1'],
+    covers: ['B7', 'B10', 'H1', 'G1'],
+    board: standard,
+    candidate: threeHex,
+    receivesGrant: true,
+  },
+  {
+    id: 'standard-empty-three-hex-no-grant',
+    covers: ['G2'],
     board: standard,
     candidate: threeHex,
   },
@@ -243,9 +255,10 @@ const cases: CaseInput[] = [
   },
   {
     id: 'desert-touching-vertex',
-    covers: ['B2'],
+    covers: ['B2', 'G3'],
     board: standard,
     candidate: desertVertex,
+    receivesGrant: true,
   },
   {
     id: 'null-tile-rejected',
@@ -272,6 +285,13 @@ const cases: CaseInput[] = [
     covers: ['B9'],
     board: extension,
     candidate: vertexWithHexCount(extension, 3),
+  },
+  {
+    id: 'extension-granted-hand',
+    covers: ['G5'],
+    board: extension,
+    candidate: vertexWithHexCount(extension, 3),
+    receivesGrant: true,
   },
   {
     id: 'nonfinite-radius',
@@ -342,6 +362,14 @@ const cases: CaseInput[] = [
     candidate: threeHex,
   },
   {
+    id: 'zero-hand-value-weight',
+    covers: ['G4'],
+    board: standard,
+    weights: cloneWeights({ handValueWeight: 0 }),
+    candidate: threeHex,
+    receivesGrant: true,
+  },
+  {
     id: 'different-coverage-caps',
     covers: ['W10'],
     board: standard,
@@ -387,6 +415,14 @@ const cases: CaseInput[] = [
     board: draftEmpty,
     holdings: [],
     candidate: boardGrid(draftEmpty.layout).vertexIds[20],
+  },
+  {
+    id: 'real-draft-empty-granted',
+    covers: ['G6'],
+    board: draftEmpty,
+    holdings: [],
+    candidate: boardGrid(draftEmpty.layout).vertexIds[20],
+    receivesGrant: true,
   },
   {
     id: 'real-endgame-pieces',

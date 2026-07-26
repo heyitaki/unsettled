@@ -6,6 +6,7 @@
     "brick": 0.9,
     "sheep": 0.875
   },
+  "handValueWeight": 0.4,
   "scarcityWeight": 0.35,
   "scarcityClampMin": 0.5,
   "scarcityClampMax": 2,
