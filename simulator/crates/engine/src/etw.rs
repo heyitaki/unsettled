@@ -64,7 +64,7 @@ pub fn inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
         city_vp: rules.vp(Buildable::City),
         trade_rates: Resource::ALL.map(|resource| view.trade_rate_for(seat, resource)),
         belief_expected: view.belief().expected(seat),
-        hand_total: u32::from(view.hand_size(seat)),
+        hand_total: view.hand_total(seat),
     }
 }
 

@@ -238,3 +238,16 @@ fn fix1_zero_trade_rate_saturates_credit_for_a_positive_surplus() {
     zero_rate.trade_rates = [0; RESOURCE_COUNT];
     assert!(expected_turns_to_win(&zero_rate) <= expected_turns_to_win(&ordinary));
 }
+
+#[test]
+fn etw_inputs_survive_hands_beyond_u16() {
+    let modifiers = std::array::from_fn(|_| PlayerModifiers::default());
+    let (topology, board, _rules, _config, mut arena) = fixture(modifiers);
+    // An 87,000-card hand is legal under large configured bank supplies and must not
+    // reach EtwInputs through a u16 total.
+    for resource in 0..3 {
+        arena.state.players[0].resources[resource] = 29_000;
+    }
+    let view = view_for(&arena, &board, &topology, 0);
+    assert_eq!(inputs_for_seat(&view, 0).hand_total, 87_000);
+}

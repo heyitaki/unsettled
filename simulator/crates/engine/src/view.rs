@@ -283,6 +283,10 @@ impl<'a> DecisionView<'a> {
         self.state.players[seat].hand_size()
     }
 
+    pub fn hand_total(&self, seat: usize) -> u32 {
+        self.state.players[seat].hand_total()
+    }
+
     pub const fn public_vp(&self, seat: usize) -> u8 {
         self.state.players[seat].vp_public
     }

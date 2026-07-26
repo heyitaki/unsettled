@@ -18,6 +18,16 @@ impl PlayerState {
             .map(|count| u16::try_from(*count).unwrap_or(0))
             .sum()
     }
+
+    /// Cards in hand without u16 truncation: five i16 resource counts can legally sum past
+    /// `u16::MAX` under large configured bank supplies, which the belief/ETW paths support.
+    /// Same negative-clamp rule as `hand_size`.
+    pub fn hand_total(&self) -> u32 {
+        self.resources
+            .iter()
+            .map(|count| u32::try_from(*count).unwrap_or(0))
+            .sum()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

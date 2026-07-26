@@ -463,6 +463,20 @@ fn poked_one_card_steal_keeps_the_gated_invariant_quiet() {
 }
 
 #[test]
+fn invariant_gate_survives_hands_beyond_u16() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    rules.bank_supply = [30_000; RESOURCE_COUNT];
+    arena.prepare(&board, &topology, &rules, &config);
+    // Move 29,000 of three resources from the bank to seat 0, preserving conservation.
+    // The 87,000-card hand exceeds u16::MAX, so the soundness gate must not total it through u16.
+    for resource in 0..3 {
+        arena.state.bank[resource] -= 29_000;
+        arena.state.players[0].resources[resource] += 29_000;
+    }
+    assert!(arena.invariants_hold(&board, &topology, &rules));
+}
+
+#[test]
 fn belief_bounds_survive_supplies_beyond_u8() {
     let mut belief = BeliefState::new();
     belief.gain(1, Resource::Ore.index(), 300);

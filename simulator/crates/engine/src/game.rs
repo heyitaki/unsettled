@@ -534,7 +534,7 @@ impl GameArena {
         // Belief soundness is gated because tests may poke hands without producing public events.
         // A test that pokes a hand should keep its total distinct or use the public test seams.
         if (0..seats).all(|seat| {
-            self.state.belief.total(seat) == u32::from(self.state.players[seat].hand_size())
+            self.state.belief.total(seat) == self.state.players[seat].hand_total()
         }) {
             for seat in 0..seats {
                 if !self
