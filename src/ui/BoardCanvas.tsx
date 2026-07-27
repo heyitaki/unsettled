@@ -30,9 +30,11 @@ import { PortPopover } from './PortPopover'
 import { activeTab, useStore } from './store'
 
 const SIZE = 58
-// How far the port bubble sits beyond its coastal edge, radially outward from
-// the board center. Large enough that both dotted leader lines stay visible.
-const PORT_OFFSET = 50
+// How far the port bubble sits beyond its coastal edge, along the outward
+// normal. A full apothem (SIZE·√3/2) would center it on the phantom neighbour
+// hex, making the leaders equilateral; squashing flattens that triangle.
+const PORT_TRIANGLE_SQUASH = 0.7
+const PORT_OFFSET = (SIZE * Math.sqrt(3)) / 2 * PORT_TRIANGLE_SQUASH
 const PORT_HALF_W = 25
 const PORT_HALF_H = 13
 // Sea margin kept around the outermost drawn content on every side.
