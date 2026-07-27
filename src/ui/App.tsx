@@ -10,7 +10,7 @@ import { ToolPalette } from './ToolPalette'
 import './editor.css'
 
 const SUBTITLES = [
-  'Settled board analyzer',
+  'Catan Map Analyzer',
   'Min-maxing manipulating friends',
   'GC BWR NW Best-in-dungeon',
   'Winner POV',
