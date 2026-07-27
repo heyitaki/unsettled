@@ -19,6 +19,8 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::HeuristicV1 => "heuristic-v1",
         PolicyKind::HeuristicV1Noports => "heuristic-v1-noports",
         PolicyKind::HeuristicV1Threat => "heuristic-v1-threat",
+        PolicyKind::HeuristicV1Devcards => "heuristic-v1-devcards",
+        PolicyKind::HeuristicV1ThreatDevcards => "heuristic-v1-threat-devcards",
         PolicyKind::HeuristicV1Trader => "heuristic-v1-trader",
     }
 }

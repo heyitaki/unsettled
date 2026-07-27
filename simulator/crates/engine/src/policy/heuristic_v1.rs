@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::policy::PolicyScratch;
+use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::threat::{self, ThreatParams};
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
@@ -18,6 +19,9 @@ pub struct HeuristicParams {
     /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
     /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
     pub threat: Option<ThreatParams>,
+    /// `None` keeps the fixed pre-roll ladder and production-share Monopoly proxy. `Some`
+    /// selects the belief-and-ETW comparison in `policy::devcards`.
+    pub dev_cards: Option<DevCardParams>,
 }
 
 impl Default for HeuristicParams {
@@ -30,6 +34,7 @@ impl Default for HeuristicParams {
             expansion_weight: 0.15,
             robber_block_threshold: 4,
             threat: None,
+            dev_cards: None,
         }
     }
 }
@@ -215,6 +220,17 @@ pub fn pre_roll(
     }
     let goal = best_goal(view, params);
     scratch.goal = goal.map(|value| value.kind);
+    match params.dev_cards.as_ref() {
+        None => ladder_pre_roll(view, params, goal),
+        Some(cards) => devcards_pre_roll(view, params, cards, goal),
+    }
+}
+
+fn ladder_pre_roll(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    goal: Option<Goal>,
+) -> Option<DevPlay> {
     if view.can_play_dev(3)
         && let Some((first, second)) = goal.and_then(|value| plenty_for_goal(view, value.kind))
     {
@@ -232,6 +248,115 @@ pub fn pre_roll(
         }
     }
     None
+}
+
+fn devcards_pre_roll(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    cards: &DevCardParams,
+    goal: Option<Goal>,
+) -> Option<DevPlay> {
+    let offers = devcards::DevOffers {
+        plenty: view
+            .can_play_dev(3)
+            .then(|| goal.and_then(|value| plenty_for_goal(view, value.kind)))
+            .flatten(),
+        monopoly: view.can_play_dev(4),
+        road: view
+            .can_play_dev(2)
+            .then(|| best_road_building_pair(view, params))
+            .filter(|pair| pair.0.is_some()),
+    };
+    let goal_cost = goal.and_then(|value| view.costs(value.kind).first().copied());
+    let choice = devcards::pre_roll_choice(view, cards, offers, goal_cost);
+    #[cfg(test)]
+    record_devcards_outcome(view, cards, offers, goal_cost, choice);
+    choice
+}
+
+#[cfg(test)]
+static DEVCARDS_COUNTS: [std::sync::atomic::AtomicUsize; 4] =
+    [const { std::sync::atomic::AtomicUsize::new(0) }; 4];
+
+#[cfg(test)]
+static DEVCARDS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+std::thread_local! {
+    static M21_LIVE_FLIPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static M21_REVIEW_STATE_FLIPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn record_devcards_outcome(
+    view: &DecisionView<'_>,
+    params: &DevCardParams,
+    offers: devcards::DevOffers,
+    goal_cost: Option<[u8; RESOURCE_COUNT]>,
+    choice: Option<DevPlay>,
+) {
+    use std::sync::atomic::Ordering;
+
+    if !(view.can_play_dev(2) || view.can_play_dev(3) || view.can_play_dev(4)) {
+        return;
+    }
+    DEVCARDS_COUNTS[3].fetch_add(1, Ordering::Relaxed);
+    if offers == devcards::DevOffers::default() {
+        DEVCARDS_COUNTS[2].fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+    let candidates = devcards::score_candidates(view, params, offers, goal_cost);
+    let any_play = candidates
+        .scored
+        .iter()
+        .flatten()
+        .any(|candidate| candidate.play.is_some());
+    if !any_play {
+        DEVCARDS_COUNTS[2].fetch_add(1, Ordering::Relaxed);
+    } else if choice.is_some() {
+        DEVCARDS_COUNTS[0].fetch_add(1, Ordering::Relaxed);
+    } else {
+        DEVCARDS_COUNTS[1].fetch_add(1, Ordering::Relaxed);
+    }
+
+    let Some(_) = candidates.scored[2] else {
+        return;
+    };
+    let context = &candidates.context;
+    let projected_own =
+        std::array::from_fn(|resource| context.own[resource] + context.own_round_income[resource]);
+    let mut projected_inputs = context.inputs.clone();
+    projected_inputs.belief_expected = projected_own;
+    let projected_etw = crate::etw::expected_turns_to_win(&projected_inputs);
+    let projected_haul = std::array::from_fn(|resource| {
+        context.haul_expected[resource] + params.haul_growth * context.haul_round_growth[resource]
+    });
+    let mutant_hold = devcards::monopoly_resource(
+        context,
+        params,
+        &context.own,
+        projected_etw,
+        &projected_haul,
+    )
+    .map_or(0.0, |(_, score)| params.hold_discount * score);
+    let mut mutant_scored = candidates.scored;
+    mutant_scored[0].as_mut().unwrap().score = mutant_hold;
+    let mut mutant_best = None;
+    for candidate in mutant_scored.iter().flatten() {
+        if candidate.score.is_finite()
+            && mutant_best
+                .is_none_or(|current: devcards::ScoredDevPlay| candidate.score > current.score)
+        {
+            mutant_best = Some(*candidate);
+        }
+    }
+    let mutant_choice = mutant_best.and_then(|winner| winner.play);
+    if choice != mutant_choice {
+        M21_LIVE_FLIPS.with(|count| count.set(count.get() + 1));
+        if *view.own_hand() == [1, 1, 1, 0, 0] && view.public_vp(view.observer()) == 2 {
+            M21_REVIEW_STATE_FLIPS.with(|count| count.set(count.get() + 1));
+        }
+    }
 }
 
 pub fn discard(
@@ -822,4 +947,158 @@ fn expected_monopoly(view: &DecisionView<'_>, resource: Resource) -> u32 {
             }
         })
         .sum()
+}
+
+#[cfg(test)]
+mod devcards_rate_tests {
+    use std::fs;
+    use std::path::PathBuf;
+
+    use crate::board::{ConversionOptions, SimBoard};
+    use crate::game::{GameArena, GameConfig};
+    use crate::policy::PolicyKind;
+    use crate::rules::RuleConfig;
+    use crate::topology::{Layout, Topology};
+    use crate::wire::{Coord, TileKind, WireBoard, WireHex, WirePlayer};
+
+    fn standard_board(topology: &Topology, rules: &RuleConfig) -> SimBoard {
+        let mut tiles = vec![
+            TileKind::Wood,
+            TileKind::Wood,
+            TileKind::Wood,
+            TileKind::Wood,
+            TileKind::Sheep,
+            TileKind::Sheep,
+            TileKind::Sheep,
+            TileKind::Sheep,
+            TileKind::Wheat,
+            TileKind::Wheat,
+            TileKind::Wheat,
+            TileKind::Wheat,
+            TileKind::Brick,
+            TileKind::Brick,
+            TileKind::Brick,
+            TileKind::Ore,
+            TileKind::Ore,
+            TileKind::Ore,
+            TileKind::Desert,
+        ];
+        let mut tokens =
+            vec![5, 2, 6, 3, 8, 10, 9, 12, 11, 4, 8, 10, 9, 4, 5, 6, 3, 11].into_iter();
+        let hexes = (0..topology.hex_count())
+            .map(|hex| {
+                let key = topology.hex_key(hex as u8);
+                let (q, r) = key.split_once(',').unwrap();
+                let tile = tiles.remove(0);
+                WireHex {
+                    coord: Coord {
+                        q: q.parse().unwrap(),
+                        r: r.parse().unwrap(),
+                    },
+                    number_token: (tile != TileKind::Desert)
+                        .then(|| f64::from(tokens.next().unwrap())),
+                    tile: Some(tile),
+                }
+            })
+            .collect();
+        let wire = WireBoard {
+            schema_version: 1,
+            layout: Layout::Standard4,
+            hexes,
+            ports: Vec::new(),
+            robber: None,
+            roads: Vec::new(),
+            buildings: Vec::new(),
+            players: (0..4)
+                .map(|seat| WirePlayer {
+                    id: format!("p{seat}"),
+                    name: format!("P{seat}"),
+                    color: "red".into(),
+                })
+                .collect(),
+            me_player_id: None,
+        };
+        SimBoard::try_from_wire(wire, topology, rules, ConversionOptions::default()).unwrap()
+    }
+
+    #[test]
+    fn devcards_arm_hold_and_decline_rates_are_reported() {
+        use std::sync::atomic::Ordering;
+
+        let _guard = super::DEVCARDS_TEST_LOCK.lock().unwrap();
+        for layout in [Layout::Standard4, Layout::Extension6] {
+            let topology = Topology::load(layout).unwrap();
+            let rules = RuleConfig::base(layout);
+            let board = if layout == Layout::Standard4 {
+                standard_board(&topology, &rules)
+            } else {
+                let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+                let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
+                SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default())
+                    .unwrap()
+            };
+            for counter in &super::DEVCARDS_COUNTS {
+                counter.store(0, Ordering::Relaxed);
+            }
+            let mut arena = GameArena::default();
+            for seed in 0..100 {
+                arena.play(
+                    &board,
+                    &topology,
+                    &rules,
+                    &GameConfig {
+                        policies: [PolicyKind::HeuristicV1Devcards; 6],
+                        seed,
+                        ..GameConfig::default()
+                    },
+                );
+            }
+            let played = super::DEVCARDS_COUNTS[0].load(Ordering::Relaxed);
+            let hold_won = super::DEVCARDS_COUNTS[1].load(Ordering::Relaxed);
+            let no_offer = super::DEVCARDS_COUNTS[2].load(Ordering::Relaxed);
+            let playable = super::DEVCARDS_COUNTS[3].load(Ordering::Relaxed);
+            let ratio = hold_won as f64 / (hold_won + played) as f64;
+            eprintln!(
+                "layout={layout:?} played={played} hold_won={hold_won} no_offer={no_offer} playable={playable} ratio={ratio:.9}"
+            );
+            assert_eq!(played + hold_won + no_offer, playable);
+            assert!(hold_won + played > 0);
+            assert!(
+                [played, hold_won, no_offer]
+                    .into_iter()
+                    .filter(|count| *count > 0)
+                    .count()
+                    > 1,
+                "three buckets must be distinguishable"
+            );
+        }
+    }
+
+    #[test]
+    fn m21_projection_flip_is_reachable_in_legal_play() {
+        let _guard = super::DEVCARDS_TEST_LOCK.lock().unwrap();
+        let layout = Layout::Standard4;
+        let topology = Topology::load(layout).unwrap();
+        let rules = RuleConfig::base(layout);
+        let board = standard_board(&topology, &rules);
+        super::M21_LIVE_FLIPS.with(|count| count.set(0));
+        super::M21_REVIEW_STATE_FLIPS.with(|count| count.set(0));
+        let mut arena = GameArena::default();
+        arena.play(
+            &board,
+            &topology,
+            &rules,
+            &GameConfig {
+                policies: [PolicyKind::HeuristicV1Devcards; 6],
+                seed: 182,
+                ..GameConfig::default()
+            },
+        );
+        let flips = super::M21_LIVE_FLIPS.with(std::cell::Cell::get);
+        let review_state_flips = super::M21_REVIEW_STATE_FLIPS.with(std::cell::Cell::get);
+        eprintln!("legal M21 flip seed=182 flips={flips} reviewStateFlips={review_state_flips}");
+        assert!(flips > 0);
+        assert!(review_state_flips > 0);
+    }
 }

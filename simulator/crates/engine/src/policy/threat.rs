@@ -256,6 +256,17 @@ fn assert_params(params: &ThreatParams) {
 }
 
 fn need_share(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {
+    let shortfall = cheapest_route_shortfall(inputs);
+    let total = shortfall.iter().sum::<f64>();
+    if total == 0.0 || !total.is_finite() {
+        return [0.0; RESOURCE_COUNT];
+    }
+    shortfall.map(|value| value / total)
+}
+
+/// Raw per-resource shortfall of the route with the smallest total shortfall, over the same
+/// three routes `etw::expected_turns_to_win` considers. Zero when no route is available.
+pub fn cheapest_route_shortfall(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {
     let mut best = None;
     if inputs.pieces_city > 0
         && inputs.settlements_on_board > 0
@@ -279,13 +290,7 @@ fn need_share(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {
     {
         consider_shortfall(inputs, cost.map(f64::from), &mut best);
     }
-    let Some((total, shortfall)) = best else {
-        return [0.0; RESOURCE_COUNT];
-    };
-    if total == 0.0 || !total.is_finite() {
-        return [0.0; RESOURCE_COUNT];
-    }
-    shortfall.map(|value| value / total)
+    best.map_or([0.0; RESOURCE_COUNT], |(_, shortfall)| shortfall)
 }
 
 fn consider_shortfall(
