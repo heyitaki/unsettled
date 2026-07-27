@@ -66,6 +66,8 @@ pub struct EvaluateRequest<'a> {
     pub field: PlacementKind,
     pub arms: &'a [(String, PlacementKind)],
     pub arm_specs: &'a [String],
+    pub arm_policies: &'a [Option<PolicyKind>],
+    pub arm_policy_names: &'a [Option<String>],
     pub reference: Option<&'a str>,
     pub boards: usize,
     pub reps: usize,
@@ -93,6 +95,8 @@ pub struct EvaluationConfig {
     pub layout: String,
     pub seats: usize,
     pub policy: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arm_policies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player_trading: Option<TradeConfig>,
     pub boards: usize,
@@ -257,6 +261,9 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
                     config.policies[seat] = request.policy;
                 }
                 config.placements[unit.hero_seat] = request.arms[job.arm_index].1;
+                if let Some(policy) = request.arm_policies[job.arm_index] {
+                    config.policies[unit.hero_seat] = policy;
+                }
                 config.seed = derive_evaluation_seed(
                     domain_seed,
                     unit.board as u64,
@@ -363,6 +370,19 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
             layout: request.layout.as_str().to_string(),
             seats: request.seats,
             policy: request.policy_name.to_string(),
+            arm_policies: {
+                let values = request
+                    .arms
+                    .iter()
+                    .zip(request.arm_policy_names)
+                    .filter_map(|((label, _), policy)| {
+                        policy
+                            .as_ref()
+                            .map(|policy| (label.clone(), policy.clone()))
+                    })
+                    .collect::<BTreeMap<_, _>>();
+                (!values.is_empty()).then_some(values)
+            },
             player_trading: request.player_trading,
             boards: request.boards,
             reps: request.reps,
@@ -601,6 +621,11 @@ fn validate_request(request: &EvaluateRequest<'_>) -> Result<(), String> {
     }
     if request.arm_specs.len() != request.arms.len() {
         return Err("each evaluation arm must have exactly one spec".into());
+    }
+    if request.arm_policies.len() != request.arms.len()
+        || request.arm_policy_names.len() != request.arms.len()
+    {
+        return Err("each evaluation arm must have exactly one policy override slot".into());
     }
     let mut labels = request
         .arms

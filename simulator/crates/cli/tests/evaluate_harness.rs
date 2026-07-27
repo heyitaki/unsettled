@@ -18,6 +18,7 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::PriorityTrader => "priority-trader",
         PolicyKind::HeuristicV1 => "heuristic-v1",
         PolicyKind::HeuristicV1Noports => "heuristic-v1-noports",
+        PolicyKind::HeuristicV1Threat => "heuristic-v1-threat",
         PolicyKind::HeuristicV1Trader => "heuristic-v1-trader",
     }
 }
@@ -37,6 +38,8 @@ fn run(
     policy: PolicyKind,
     allow_unofficial: bool,
 ) -> unsettled_sim::evaluate::Evaluation {
+    let arm_policies = vec![None; arms.len()];
+    let arm_policy_names = vec![None; arms.len()];
     evaluate(EvaluateRequest {
         layout,
         seats,
@@ -45,6 +48,8 @@ fn run(
         field,
         arms,
         arm_specs,
+        arm_policies: &arm_policies,
+        arm_policy_names: &arm_policy_names,
         reference,
         boards,
         reps,

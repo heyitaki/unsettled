@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::policy::PolicyScratch;
+use crate::policy::threat::{self, ThreatParams};
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
 use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction, can_pay, pips};
@@ -14,6 +15,9 @@ pub struct HeuristicParams {
     pub port_weight: f32,
     pub expansion_weight: f32,
     pub robber_block_threshold: u8,
+    /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
+    /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
+    pub threat: Option<ThreatParams>,
 }
 
 impl Default for HeuristicParams {
@@ -25,6 +29,7 @@ impl Default for HeuristicParams {
             port_weight: 0.1,
             expansion_weight: 0.15,
             robber_block_threshold: 4,
+            threat: None,
         }
     }
 }
@@ -160,13 +165,18 @@ fn score_actions_with(
             || view.hex_touches_seat(view.robber(), view.observer())
             || view.own_playable_dev()[0] >= 2)
     {
-        let (destination, victim) = robber(view);
+        let (off_destination, off_victim) = self_regarding_robber(view);
+        let (destination, victim) = match params.threat.as_ref() {
+            Some(threat_params) => threat::robber(view, threat_params),
+            None => (off_destination, off_victim),
+        };
         out.push(ScoredAction {
             action: Action::PlayDev(DevPlay::Knight {
                 destination,
                 victim,
             }),
-            score: knight_action_score(view, destination, victim),
+            // Keep play/hold on the baseline choice so this arm varies placement only.
+            score: knight_action_score(view, off_destination, off_victim),
         });
     }
     out.push(ScoredAction {
@@ -197,7 +207,7 @@ pub fn pre_roll(
     if view.can_play_dev(0)
         && (view.knight_takes_largest_army() || blocked_pips >= params.robber_block_threshold)
     {
-        let (destination, victim) = robber(view);
+        let (destination, victim) = robber(view, params);
         return Some(DevPlay::Knight {
             destination,
             victim,
@@ -251,7 +261,14 @@ pub fn discard(
     discarded
 }
 
-pub fn robber(view: &DecisionView<'_>) -> (u8, Option<u8>) {
+pub fn robber(view: &DecisionView<'_>, params: &HeuristicParams) -> (u8, Option<u8>) {
+    match params.threat.as_ref() {
+        Some(params) => threat::robber(view, params),
+        None => self_regarding_robber(view),
+    }
+}
+
+pub(crate) fn self_regarding_robber(view: &DecisionView<'_>) -> (u8, Option<u8>) {
     let mut best = view.robber();
     let mut best_score = i32::MIN;
     for hex in 0..view.topology().hex_count() {
@@ -437,9 +454,7 @@ fn best_road(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<RoadGo
                 action_score: 40.0 + expansion_score.unwrap_or_default(),
                 goal_score: 0.35,
             };
-            if best.is_none_or(|current: RoadGoal| {
-                candidate.action_score > current.action_score
-            }) {
+            if best.is_none_or(|current: RoadGoal| candidate.action_score > current.action_score) {
                 best = Some(candidate);
             }
             continue;
@@ -523,10 +538,7 @@ fn longest_road_target(view: &DecisionView<'_>) -> u8 {
 /// target scores the same, so the search may stop there -- which is precisely where a long
 /// late-game network gets expensive to walk.
 fn road_length_cap(view: &DecisionView<'_>) -> u8 {
-    longest_road_target(view).max(
-        view.longest_road_len(view.observer())
-            .saturating_add(1),
-    )
+    longest_road_target(view).max(view.longest_road_len(view.observer()).saturating_add(1))
 }
 
 /// How far below the card's threshold `longest_road_value` still pays a progress bonus.
@@ -587,9 +599,7 @@ fn dev_card_score(view: &DecisionView<'_>) -> f32 {
         .map_or(0, |holder| view.knights_played(holder));
     let target = view
         .largest_army_min()
-        .max(holder_count.saturating_add(u8::from(
-            view.largest_army_holder().is_some(),
-        )));
+        .max(holder_count.saturating_add(u8::from(view.largest_army_holder().is_some())));
     let gap = target.saturating_sub(view.knights_played(view.observer()));
     let contest_bonus = match gap {
         0 | 1 => 160.0,
@@ -622,8 +632,7 @@ fn knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<
     let steal = victim.map_or(0.0, |seat| {
         f32::from(view.hand_size(usize::from(seat)).min(12)) * 2.0
     });
-    20.0
-        + progress
+    20.0 + progress
         + blocked
         + steal
         + if destination != view.robber() {

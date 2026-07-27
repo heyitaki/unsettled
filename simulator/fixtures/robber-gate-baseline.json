@@ -1,0 +1,722 @@
+[
+  {
+    "board": 0,
+    "seed": 0,
+    "winner": 0,
+    "turns": 101,
+    "vp": [
+      11,
+      3,
+      3,
+      2,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 1,
+    "winner": 0,
+    "turns": 113,
+    "vp": [
+      11,
+      8,
+      6,
+      5,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 2,
+    "winner": 0,
+    "turns": 113,
+    "vp": [
+      10,
+      8,
+      9,
+      2,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 3,
+    "winner": 3,
+    "turns": 132,
+    "vp": [
+      7,
+      6,
+      6,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 4,
+    "winner": 1,
+    "turns": 110,
+    "vp": [
+      6,
+      10,
+      4,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 5,
+    "winner": 3,
+    "turns": 160,
+    "vp": [
+      5,
+      6,
+      8,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 6,
+    "winner": 0,
+    "turns": 69,
+    "vp": [
+      10,
+      4,
+      4,
+      4,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 7,
+    "winner": 0,
+    "turns": 125,
+    "vp": [
+      10,
+      9,
+      4,
+      8,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 8,
+    "winner": 0,
+    "turns": 149,
+    "vp": [
+      10,
+      8,
+      6,
+      8,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 9,
+    "winner": 1,
+    "turns": 114,
+    "vp": [
+      6,
+      10,
+      6,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 10,
+    "winner": 3,
+    "turns": 124,
+    "vp": [
+      7,
+      8,
+      8,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 0,
+    "seed": 11,
+    "winner": 1,
+    "turns": 86,
+    "vp": [
+      8,
+      10,
+      5,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 0,
+    "winner": 1,
+    "turns": 98,
+    "vp": [
+      7,
+      10,
+      5,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 1,
+    "winner": 0,
+    "turns": 113,
+    "vp": [
+      10,
+      9,
+      9,
+      4,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 2,
+    "winner": 1,
+    "turns": 74,
+    "vp": [
+      7,
+      10,
+      4,
+      9,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 3,
+    "winner": 0,
+    "turns": 113,
+    "vp": [
+      10,
+      4,
+      6,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 4,
+    "winner": 0,
+    "turns": 105,
+    "vp": [
+      10,
+      6,
+      8,
+      2,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 5,
+    "winner": 0,
+    "turns": 121,
+    "vp": [
+      10,
+      9,
+      7,
+      9,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 6,
+    "winner": 1,
+    "turns": 90,
+    "vp": [
+      9,
+      10,
+      7,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 7,
+    "winner": 2,
+    "turns": 95,
+    "vp": [
+      6,
+      9,
+      10,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 8,
+    "winner": 0,
+    "turns": 97,
+    "vp": [
+      10,
+      8,
+      8,
+      9,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 9,
+    "winner": 0,
+    "turns": 97,
+    "vp": [
+      10,
+      7,
+      9,
+      4,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 10,
+    "winner": 1,
+    "turns": 106,
+    "vp": [
+      6,
+      10,
+      7,
+      5,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 1,
+    "seed": 11,
+    "winner": 3,
+    "turns": 76,
+    "vp": [
+      4,
+      9,
+      4,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 0,
+    "winner": 2,
+    "turns": 75,
+    "vp": [
+      3,
+      4,
+      10,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 1,
+    "winner": 0,
+    "turns": 117,
+    "vp": [
+      10,
+      3,
+      8,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 2,
+    "winner": 2,
+    "turns": 123,
+    "vp": [
+      7,
+      5,
+      10,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 3,
+    "winner": 1,
+    "turns": 134,
+    "vp": [
+      5,
+      10,
+      9,
+      7,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 4,
+    "winner": 0,
+    "turns": 113,
+    "vp": [
+      10,
+      6,
+      7,
+      4,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 5,
+    "winner": 3,
+    "turns": 104,
+    "vp": [
+      8,
+      7,
+      9,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 6,
+    "winner": 3,
+    "turns": 100,
+    "vp": [
+      4,
+      7,
+      9,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 7,
+    "winner": 2,
+    "turns": 119,
+    "vp": [
+      7,
+      7,
+      10,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 8,
+    "winner": 1,
+    "turns": 98,
+    "vp": [
+      5,
+      10,
+      5,
+      8,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 9,
+    "winner": 1,
+    "turns": 74,
+    "vp": [
+      5,
+      10,
+      5,
+      5,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 10,
+    "winner": 0,
+    "turns": 153,
+    "vp": [
+      10,
+      9,
+      9,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 2,
+    "seed": 11,
+    "winner": 3,
+    "turns": 88,
+    "vp": [
+      8,
+      8,
+      3,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 0,
+    "winner": 2,
+    "turns": 127,
+    "vp": [
+      4,
+      8,
+      10,
+      5,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 1,
+    "winner": 2,
+    "turns": 119,
+    "vp": [
+      9,
+      8,
+      10,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 2,
+    "winner": 1,
+    "turns": 94,
+    "vp": [
+      4,
+      10,
+      8,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 3,
+    "winner": 3,
+    "turns": 116,
+    "vp": [
+      6,
+      7,
+      7,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 4,
+    "winner": 2,
+    "turns": 123,
+    "vp": [
+      8,
+      3,
+      10,
+      8,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 5,
+    "winner": 2,
+    "turns": 135,
+    "vp": [
+      5,
+      9,
+      10,
+      9,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 6,
+    "winner": 1,
+    "turns": 74,
+    "vp": [
+      5,
+      10,
+      6,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 7,
+    "winner": 0,
+    "turns": 133,
+    "vp": [
+      11,
+      5,
+      9,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 8,
+    "winner": 3,
+    "turns": 104,
+    "vp": [
+      4,
+      7,
+      3,
+      10,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 9,
+    "winner": 1,
+    "turns": 98,
+    "vp": [
+      4,
+      10,
+      6,
+      6,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 10,
+    "winner": 1,
+    "turns": 94,
+    "vp": [
+      6,
+      10,
+      7,
+      8,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  },
+  {
+    "board": 3,
+    "seed": 11,
+    "winner": 0,
+    "turns": 121,
+    "vp": [
+      10,
+      5,
+      5,
+      9,
+      0,
+      0
+    ],
+    "illegalActions": 0
+  }
+]

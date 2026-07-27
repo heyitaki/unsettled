@@ -213,7 +213,8 @@ fn robber_prefers_a_victim_holding_cards_over_an_empty_handed_leader() {
     arena.state.players[2].resources = [0, 0, 0, 0, 3];
 
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let (destination, victim) = heuristic_v1::robber(&view);
+    let (destination, victim) =
+        heuristic_v1::robber(&view, &heuristic_v1::HeuristicParams::default());
     if destination == target {
         assert_eq!(
             victim,

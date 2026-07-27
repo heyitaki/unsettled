@@ -133,6 +133,8 @@ struct EvaluateArgs {
     #[arg(long)]
     arm: Vec<String>,
     #[arg(long)]
+    arm_policy: Vec<String>,
+    #[arg(long)]
     reference: Option<String>,
     #[arg(long)]
     boards: usize,
@@ -353,6 +355,23 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         .iter()
         .map(|(_, spec)| spec.clone())
         .collect::<Vec<_>>();
+    let mut arm_policies = vec![None; arms.len()];
+    let mut arm_policy_names = vec![None; arms.len()];
+    for override_spec in &args.arm_policy {
+        let (label, policy_name) = parse_arm_spec(override_spec)?;
+        let arm_index = arms
+            .iter()
+            .position(|(arm_label, _)| *arm_label == label)
+            .ok_or_else(|| format!("arm policy {label} does not name an arm"))?;
+        if arm_policies[arm_index].is_some() {
+            return Err(format!("duplicate arm policy label {label}"));
+        }
+        arm_policies[arm_index] = Some(
+            PolicyKind::parse(&policy_name)
+                .ok_or_else(|| format!("unknown policy {policy_name}"))?,
+        );
+        arm_policy_names[arm_index] = Some(policy_name);
+    }
     let policy = parse_policy(&args.policy)?;
     let started = Instant::now();
     let evaluation = evaluate(EvaluateRequest {
@@ -363,6 +382,8 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         field,
         arms: &arms,
         arm_specs: &arm_specs,
+        arm_policies: &arm_policies,
+        arm_policy_names: &arm_policy_names,
         reference: args.reference.as_deref(),
         boards: args.boards,
         reps: args.reps,
@@ -481,7 +502,10 @@ fn parse_heuristics(value: &str) -> Result<Vec<PlacementKind>, String> {
     if heuristics.is_empty() {
         return Err("at least one heuristic is required".into());
     }
-    let mut names = heuristics.iter().map(|kind| kind.name()).collect::<Vec<_>>();
+    let mut names = heuristics
+        .iter()
+        .map(|kind| kind.name())
+        .collect::<Vec<_>>();
     names.sort_unstable();
     if let Some(collision) = names.windows(2).find(|pair| pair[0] == pair[1]) {
         return Err(format!(

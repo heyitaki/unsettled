@@ -123,7 +123,10 @@ fn robber_targets_the_leaders_highest_pip_hex_without_hitting_self() {
     arena.state.vertex_owner[usize::from(topology.hex_vertices(low)[0])] = 2;
     arena.state.players[2].vp_public = 2;
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    assert_eq!(heuristic_v1::robber(&view), (target, Some(1)));
+    assert_eq!(
+        heuristic_v1::robber(&view, &HeuristicParams::default()),
+        (target, Some(1))
+    );
 }
 
 #[test]
@@ -216,7 +219,10 @@ fn deterministic_robber_policies_always_move_when_every_hex_touches_self() {
     let current = arena.state.robber;
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
 
-    assert_ne!(heuristic_v1::robber(&view).0, current);
+    assert_ne!(
+        heuristic_v1::robber(&view, &HeuristicParams::default()).0,
+        current
+    );
     assert_ne!(greedy_no_trade::robber(&view).0, current);
     assert_ne!(priority_trader::robber(&view).0, current);
 }
