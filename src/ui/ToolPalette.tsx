@@ -32,6 +32,10 @@ export function ToolPalette() {
   // Preview the colour the active player will place with; with nobody selected
   // (their dot toggled off) the palette falls back to the neutral glyph beige.
   const pieceColor = tab.game.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? GLYPH_MUTED
+  // Super cities are a variant piece: offer the tool only on boards that already
+  // have one (e.g. imported from a screenshot), so the palette stays base-game.
+  const hasSuperCity = tab.game.board.buildings.some((building) => building.tier === 'superCity')
+  const structures = hasSuperCity ? STRUCTURES : STRUCTURES.filter((item) => item.key !== 'superCity')
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -96,7 +100,7 @@ export function ToolPalette() {
       <div className="tool-group">
         <span className="tool-label">Structures</span>
         <div className="tool-grid structure-grid">
-          {STRUCTURES.map((item) => {
+          {structures.map((item) => {
             const active = selected === keyOf(item.tool)
             return (
               <button
