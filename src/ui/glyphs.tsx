@@ -23,12 +23,22 @@ export const GLYPH_MUTED = '#c2ae8c'
 export type StructureShape =
   | 'road' | 'settlement' | 'city' | 'superCity' | 'robber' | 'port' | 'erase'
 
+/**
+ * The robber, in board units, shared with BoardCanvas so the palette icon and
+ * the board piece cannot drift apart. Its base is an arc of the number token's
+ * disc rim, baked into the path rather than clipped, so the icon keeps the same
+ * silhouette without a disc behind it.
+ */
+export const ROBBER_HEAD = { cy: -10.5, r: 10 }
+export const ROBBER_BODY =
+  'M0,-5.5 C10,-5.5 15.5,5 14.5,17.85 A23,23 0 0 1 -14.5,17.85 C-15.5,5 -10,-5.5 0,-5.5 Z'
+
 // SVG scales stroke-width with the viewBox, so a shared number would render at
 // a different thickness per shape. Each outline is instead this fraction of its
 // own viewBox span, which lands every border on the same rendered width.
 const STROKE_RATIO = 2 / 36
 const VIEW_SPAN: Record<StructureShape, number> = {
-  road: 20, settlement: 36, city: 37, superCity: 32, robber: 44, port: 15, erase: 20,
+  road: 20, settlement: 36, city: 37, superCity: 32, robber: 43.5, port: 15, erase: 20,
 }
 const strokeFor = (shape: StructureShape): number => STROKE_RATIO * VIEW_SPAN[shape]
 /** The same rendered width for the line art drawn in a 20-unit box. */
@@ -47,7 +57,7 @@ const GEOMETRY: Record<StructureShape, { view: string; aspect: number }> = {
   settlement: { view: '-16 -16 32 30', aspect: 32 / 30 },
   city: { view: '-14.03 -15.13 35.06 28.36', aspect: 35.06 / 28.36 },
   superCity: { view: '-15.89 -12.19 31.78 24.38', aspect: 31.78 / 24.38 },
-  robber: { view: '-13 -19 26 40', aspect: 26 / 40 },
+  robber: { view: '-14.7 -20.5 29.4 43.5', aspect: 29.4 / 43.5 },
   port: { view: '4 3.2 12 12.4', aspect: 12 / 12.4 },
   erase: { view: '3.04 2.74 13.92 15.12', aspect: 13.92 / 15.12 },
 }
@@ -107,8 +117,8 @@ export function StructureGlyph({ shape, color, size = 16 }: {
       // robber tile is selected, instead of staying black on the accent fill.
       return (
         <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
-          <circle cy="-10" r="9" />
-          <path d="M-12,21 C-14,2 -8,-4 0,-4 C8,-4 14,2 12,21 Z" />
+          <circle cy={ROBBER_HEAD.cy} r={ROBBER_HEAD.r} />
+          <path d={ROBBER_BODY} />
         </svg>
       )
     case 'port':

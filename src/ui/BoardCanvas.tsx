@@ -23,6 +23,7 @@ import {
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ROBBER_BODY, ROBBER_HEAD } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { PortPopover } from './PortPopover'
 import { activeTab, useStore } from './store'
@@ -337,15 +338,15 @@ export function BoardCanvas() {
           const point = center(board.robber)
           return (
             <g transform={`translate(${point.x} ${point.y})`}>
-              <circle cy="-10" r="9" fill="#1c1c1c" />
-              <path d="M-12,21 C-14,2 -8,-4 0,-4 C8,-4 14,2 12,21 Z" fill="#1c1c1c" />
+              <circle cy={ROBBER_HEAD.cy} r={ROBBER_HEAD.r} fill="#1c1c1c" />
+              <path d={ROBBER_BODY} fill="#1c1c1c" />
             </g>
           )
         })()}
         {board.robber && (() => {
-          // The robber's own number + pips, lifted above the robber in white
-          // (with a dark halo) so they read over both the dark robber and the
-          // paper disc peeking around it.
+          // The robber's own number + pips, redrawn in white with a dark halo so
+          // they read over both the robber and the paper rim still showing
+          // around it.
           const robberHex = board.hexes.find((hex) => axialKey(hex.coord) === axialKey(board.robber!))
           if (!robberHex || robberHex.numberToken === null) return null
           const point = center(board.robber)
