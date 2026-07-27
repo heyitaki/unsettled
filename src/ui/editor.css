@@ -1,8 +1,8 @@
 :root {
   --paper: #f1ead9;
   --paper-deep: #e4d8bf;
-  /* The rails' and board stage's fill, which they lay over the page gradient at
-     93%. Anything that floats over the board takes it opaque. */
+  /* The rails' fill, laid over the page gradient at 93%. Anything floating over
+     the board takes it opaque. */
   --paper-light: #f8f3e8;
   --ink: #2d2924;
   --muted: #776f64;
@@ -33,11 +33,10 @@ button { color: inherit; }
 
 .workspace { max-width: 1580px; margin: auto; display: grid; grid-template-columns: minmax(248px, 320px) minmax(520px, 1fr) minmax(262px, 336px); gap: 16px; align-items: start; }
 .left-rail, .right-rail { display: grid; gap: 12px; }
-/* Stretch the left rail to the row's height (the tall board column) and let the
-   Library fill the space under the tools, so the saved-maps list can grow down
-   to the board's bottom edge before it scrolls. */
-.left-rail { align-self: stretch; grid-template-rows: auto auto 1fr; min-height: 0; }
-.maps-panel { display: flex; flex-direction: column; min-height: 0; }
+.left-rail { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
+.left-rail > * { flex: none; }
+.maps-panel { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+.maps-panel > :not(.saved-maps) { flex: none; }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel, .board-stage { background: rgba(248, 243, 232, .93); /* var(--paper-light), let through */ border: 1px solid rgba(255,255,255,.65); border-radius: 18px; box-shadow: 0 18px 50px rgba(62, 45, 21, .12), inset 0 0 0 1px var(--line); }
 .panel { padding: 17px; }
@@ -48,14 +47,11 @@ button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55
 button:disabled { opacity: .42; cursor: default; }
 button.primary, button.selected { color: white; background: var(--accent); border-color: var(--accent-dark); }
 button.danger { color: #a33428; }
-/* A selected danger button (e.g. active erase tool) keeps white text on the accent fill. */
 button.selected.danger { color: #fff; }
 
 .history-buttons { display: flex; gap: 6px; }
 .history-buttons button { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; line-height: 1; }
-/* Name label under the hovered button (replaces the native tooltip). Bare text
-   — no pill, border, or shadow. No transition, so switching between buttons
-   swaps the label instantly. */
+/* Hover label from aria-label, replacing the native tooltip and its delay. */
 .history-buttons button, .player-add { position: relative; }
 .history-buttons button::after, .player-add::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 9px; font-weight: 400; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 6; }
 .history-buttons button:hover::after, .player-add:hover:not(:disabled)::after { opacity: 1; }
@@ -64,19 +60,14 @@ button.selected.danger { color: #fff; }
 .tool-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .tool-grid button { padding: 8px 5px; font-size: 11px; text-transform: capitalize; }
-/* Structures mirror the terrain tiles: a compact glyph over its label, four to
-   a row so seven pieces fit in two rows. */
 .structure-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
-/* Fixed-height icon row, glyphs sitting on its floor: same box, same outline
-   width, bottoms on one line — the treatment the player table's headings use. */
 .structure-grid button { display: grid; grid-template-rows: 22px auto; place-items: end center; gap: 3px; padding: 6px 2px; font-size: 9px; }
 .tool-icon { flex: none; fill: currentColor; }
 .terrain-grid { grid-template-columns: repeat(6, 1fr); gap: 4px; }
 .terrain-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; font-size: 9px; text-align: center; }
 .hex-swatch { width: 20px; height: 22px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.2)); }
 .hex-swatch polygon { stroke: rgba(0,0,0,.18); stroke-width: 1; }
-/* Selected terrain: a crisp white ring so the hex stays legible on the accent
-   fill (brick's red would otherwise vanish into it). */
+/* White ring so brick's red doesn't vanish into the accent fill. */
 .terrain-grid button.selected .hex-swatch polygon { stroke: #fff; stroke-width: 2; }
 .token-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 /* Match the board's number-token face (see .token-text). */
@@ -85,12 +76,9 @@ button.selected.danger { color: #fff; }
 .token-tools .selected.hot { color: white; }
 
 .board-tabs { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 7px; border: 1px solid rgba(255,255,255,.65); border-radius: 14px; background: rgba(238, 229, 209, .96); box-shadow: 0 10px 28px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
-/* Scrolls horizontally once tabs hit their min-width floor. Scrollbars hidden
-   on both axes; the fade classes (toggled from JS) mask whichever end still
-   hides cut-off tabs. */
-/* Grow 0 so the strip stays content-width while tabs fit — the add button
-   then sits right after the last tab. Once tabs exceed the row it shrinks
-   (shrink 1 + min-width:0) and scrolls, pinning the add button to the right. */
+/* Grow 0 keeps the strip content-width while tabs fit, so the add button sits
+   right after the last tab; it shrinks and scrolls only once they overflow.
+   The fade classes are toggled from JS. */
 .board-tabs-scroll { min-width: 0; flex: 0 1 auto; display: flex; align-items: center; gap: 5px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; }
 .board-tabs-scroll::-webkit-scrollbar { display: none; }
 .board-tabs-scroll.fade-left { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px); mask-image: linear-gradient(90deg, transparent 0, #000 28px); }
@@ -102,8 +90,7 @@ button.selected.danger { color: #fff; }
 .board-tab button:hover:not(:disabled) { box-shadow: none; }
 .board-tab-select { min-width: 0; flex: 1; overflow: hidden; padding: 7px 5px 7px 9px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .board-tab.active .board-tab-select { color: var(--accent-dark); font-weight: 700; }
-/* Inline edit: same box as .board-tab-select so entering rename mode neither
-   shifts the strip nor draws a boxed outline — just an editable caret in place. */
+/* Same box as .board-tab-select, so entering rename mode doesn't shift the strip. */
 .board-tab-rename { min-width: 0; flex: 1; padding: 7px 5px 7px 9px; border: 0; background: transparent; color: var(--accent-dark); font-weight: 700; outline: none; }
 .board-tab-dirty { margin-left: 4px; color: var(--accent-dark); font-weight: 700; }
 .board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
@@ -112,12 +99,11 @@ button.selected.danger { color: #fff; }
 
 .board-stage { position: static; overflow: hidden; padding: 12px; background: #e9dfca; }
 .board-status { display: flex; justify-content: center; gap: 18px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
-/* Shared popup-listbox dropdown (MenuSelect): board-layout picker + "You are". */
+/* MenuSelect */
 .menu-wrap { position: relative; display: inline-flex; align-items: center; }
 .menu-trigger { border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
 .menu-trigger:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
-/* The ▾ affordance, owned by MenuSelect so every dropdown gets the same one. The
-   glyph is thin at label size; scaleX widens it without growing the line box. */
+/* scaleX widens the thin ▾ glyph without growing the line box. */
 .menu-caret { display: inline-block; margin-left: .38em; font-size: 1.2em; line-height: 1; transform: scaleX(1.35); }
 .menu-backdrop { position: fixed; inset: 0; z-index: 14; border: 0; border-radius: 0; padding: 0; background: transparent; }
 .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
@@ -125,117 +111,87 @@ button.selected.danger { color: #fff; }
 .menu-popup button { border: 0; padding: 7px 9px; background: transparent; text-align: left; }
 .menu-popup button.active { color: var(--accent-dark); background: #fff9e9; font-weight: 700; }
 .menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: #fff9e9; }
-/* Pinned to the pointer (ContextMenu supplies left/top), wide enough that the
-   chord column never crowds the longest label, and on the rails' paper so the
-   menu reads as part of the same surface — opaque, because it opens over the
-   board rather than over the page. Rendered as a sibling of the tab strip, not
-   inside it: .board-tabs-scroll's mask would otherwise become its containing
-   block and clip it. */
+/* Pinned to the pointer (ContextMenu supplies left/top), and opaque because it
+   opens over the board. Rendered as a sibling of the tab strip, never inside
+   it: .board-tabs-scroll's mask would become its containing block and clip it. */
 .context-menu { position: fixed; min-width: 216px; background: var(--paper-light); }
 .context-menu button { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; white-space: nowrap; }
 .context-menu button.separated { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 9px; }
-/* Its own tone rather than --muted, which lands at 4.47:1 on this paper — just
-   under AA for text this size. */
+/* Its own tone: --muted lands at 4.47:1 on this paper, under AA at this size. */
 .menu-shortcut { flex: none; color: #665f55; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
-/* On this paper the highlight has to go darker, not lighter: the cream the
-   other menus use for it disappears against a near-white row. Keyboard focus
-   takes the same treatment, so walking the menu with Tab reads like hovering. */
+/* Darker, not lighter: the cream the other menus use disappears on this paper. */
 .context-menu button:hover:not(:disabled), .context-menu button:focus-visible { background: var(--paper-deep); color: var(--accent-dark); }
 .context-menu button:hover:not(:disabled) .menu-shortcut, .context-menu button:focus-visible .menu-shortcut { color: var(--accent-dark); }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
-/* Wide lining-figure serif (Charter on Mac/Linux, Cambria as the wide Windows
-   fallback). Lining/tabular figures keep every digit on the baseline so the pip
-   gaps stay even — avoid oldstyle-figure serifs (Georgia, Palatino, Athelas). */
+/* Lining/tabular figures keep every digit on the baseline so the pip gaps stay
+   even. Never an oldstyle-figure serif here (Georgia, Palatino, Athelas). */
 .token-text { font: 700 20px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; fill: var(--ink); }
 .token-text.hot { fill: #af2020; }
 .port-text { font: 700 11px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; }
 .hit-layers > * { fill: transparent; stroke: transparent; cursor: crosshair; pointer-events: all; }
 .hit-layers line { stroke-width: 14; }
-/* Placement dots use a normal cursor (not the crosshair) and brighten on hover. */
 .placement-slot { cursor: default; transition: fill .12s ease; }
 .placement-slot:hover { fill: #fffdf7; }
-/* Invisible remove-targets over own pieces: clickable but unpainted, normal cursor. */
+/* Invisible remove-targets over your own pieces: clickable but unpainted. */
 .placement-remove { fill: transparent; stroke: transparent; pointer-events: all; cursor: default; }
 .placement-remove:not(circle) { stroke-width: 14; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
 .vertex-highlight { fill: rgba(231,37,37,.22); stroke: #e72525; stroke-width: 3; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 .vertex-highlight-label { font-size: 12px; font-weight: 800; }
 
-/* Row metrics live here so the tally header (outside the cards) and every
-   card's number columns derive their alignment from the same values. */
+/* Row metrics live here so the tally header, which sits outside the cards,
+   aligns to the same values the cards use. */
 .player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 4px; --card-pad: 6px; --name-indent: 33px; }
 .player-card { padding: 2px var(--card-pad) 3px; border: 1px solid transparent; border-radius: 10px; cursor: grab; }
 .player-card.active { background: #fff9e9; border-color: #d8bc77; }
 .player-card.dragging { opacity: .45; }
-/* Drop cue: the dragged player will take this row's position. */
 .player-card.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
-/* handle · dot · name · awards · tally. Only the name flexes, so the tally
-   block keeps a fixed offset from the row's right edge — that is what lets the
-   header strip line up with it. */
+/* handle, dot, name, awards, tally. Only the name flexes, so the tally keeps a
+   fixed offset from the row's right edge for the header strip to line up with. */
 .player-row { display: grid; grid-template-columns: 12px 17px minmax(28px, 1fr) auto auto; gap: var(--row-gap); align-items: center; }
 .drag-handle { color: var(--muted); font-size: 12px; line-height: 1; cursor: grab; user-select: none; }
 .player-card .player-name, .player-card .player-dot, .player-card button { cursor: pointer; }
 .player-card.dragging .drag-handle { cursor: grabbing; }
 .player-dot { width: 17px; height: 17px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
-/* Name reads as text and only becomes an input once clicked. */
 .player-name { min-width: 0; overflow: hidden; padding: 3px 2px; border: 0; background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .player-name:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; text-decoration: underline dotted; text-underline-offset: 2px; }
-/* Own focus ring: the browser default is a blue rectangle that reads as a
-   foreign control on the parchment card. */
 .player-name-input { min-width: 0; width: 100%; padding: 2px 3px; border-radius: 6px; outline: none; }
 .player-name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(187, 76, 50, .18); }
 .player-vp { color: var(--ink); font-weight: 800; }
-/* Drop target for deleting a player, present only while a row is in the air. */
 .player-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px; border: 1px dashed rgba(163, 52, 40, .5); border-radius: 10px; color: #a33428; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .player-trash.over { border-style: solid; background: rgba(163, 52, 40, .12); }
 /* Children would otherwise swallow the dragleave/drop events as the pointer
    crosses them, making the row flicker out from under the drop. */
 .player-trash > * { pointer-events: none; }
-/* Tally table: the header strip and every player's row share this column
-   definition, and each has one cell per column, so `grid-auto-columns` keeps
-   them aligned without either side knowing how many columns there are. The
-   header's right padding is the row chrome that follows the tally. */
+/* The header strip and every player's row share this definition and put one
+   cell in each column, so grid-auto-columns keeps them aligned without either
+   side knowing the column count. */
 .tally-header, .player-tally { display: grid; grid-auto-flow: column; grid-auto-columns: var(--tally-col); align-items: center; }
-/* Headings share one baseline: uniform-height glyphs, bottom-aligned. */
 .tally-header { align-items: end; }
 .tally-header > span { position: relative; }
 .vp-head { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
-/* Hover label, same idiom as the history buttons — the native tooltip's delay
-   is too slow for a strip of icons you are trying to decode. */
 .tally-header > span::after { content: attr(data-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: 6px; background: #fbf6ea; color: var(--muted); font-size: 10px; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 7px rgba(55,45,32,.16); opacity: 0; pointer-events: none; z-index: 6; }
 .tally-header > span:hover::after { opacity: 1; }
 .tally-header > span, .player-tally > span { display: inline-flex; justify-content: center; }
-/* View switch on the left, headings on the right; the rule under both is what
-   reads as the table's header edge. */
 .tally-bar { display: flex; align-items: end; justify-content: end; gap: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
-/* Same recipe as the board-status and analysis dropdowns: muted context
-   text, the value in bold, a ▾ after it. */
 .tally-bar .menu-trigger { color: var(--muted); font-size: 11px; }
 .tally-header { justify-content: end; padding-right: var(--card-pad); }
 .player-tally { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-/* Dim the empty cells so the counts that matter carry the row. */
 .player-tally .zero { opacity: .32; }
-/* The count that won a card: longest road's roads, largest army's knights. */
 .player-tally .strong { color: var(--ink); font-weight: 800; }
-/* Trailing margin separates the awards from the first tally column; it grows
-   this grid cell, so the tally keeps its offset from the row's right edge. */
 .player-awards { display: inline-flex; align-items: center; gap: 3px; }
 .player-awards:not(:empty) { margin-right: 4px; }
 .award { display: inline-flex; padding: 1px 3px; border-radius: 5px; background: var(--accent); color: #fff; }
-/* −/count/+ chips for the active player's hand and dev-card counters. */
 .player-steppers { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0 2px var(--name-indent); }
 .stat-chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; background: #f9f5ea; }
 .stat-chip button { width: 17px; padding: 2px 0; border: 0; background: transparent; font-size: 11px; line-height: 1.2; }
 .stat-chip button:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--accent-dark); }
 .stat-face { display: inline-flex; align-items: center; gap: 3px; min-width: 20px; justify-content: center; font-size: 11px; font-variant-numeric: tabular-nums; }
-/* Resource/counter line art. Sized here (unlike the piece silhouettes, which
-   carry their own tier scaling inline) so one rule covers both rows. */
+/* Sized here, unlike the piece silhouettes, which scale per tier inline. */
 .stat-icon { flex: none; width: 13px; height: 13px; }
 .tally-header .stat-icon { width: 15px; height: 15px; }
 .award .stat-icon { width: 12px; height: 12px; }
 .draft-strip { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; gap: 3px; overflow-x: auto; }
-/* One snake-draft pick: numbered circle in the player's colour over the name.
-   Hover highlights the placed settlement (or predicted spot) on the board. */
 .draft-slot { flex: 0 1 auto; min-width: 32px; max-width: 56px; display: grid; justify-items: center; gap: 2px; padding: 2px 1px; border: 0; background: transparent; color: var(--muted); font-size: 9px; }
 .draft-slot:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--ink); }
 .slot-circle { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -243,12 +199,10 @@ button.selected.danger { color: #fff; }
 .slot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
-/* Save is fused to the name input as one segmented control — no gap, shared
-   border seam (the button's -1px pulls its edge over the input's). */
+/* One segmented control: the button's -1px pulls its edge over the input's. */
 .map-save-row { display: flex; }
 .map-save-row input { min-width: 0; width: 100%; border-top-right-radius: 0; border-bottom-right-radius: 0; font-size: 13px; }
 .map-save-row .primary { flex: none; margin-left: -1px; padding: 0 14px; border-top-left-radius: 0; border-bottom-left-radius: 0; font-size: 12px; font-weight: 600; }
-/* Import / export controls: a dashed screenshot CTA over a subtle JSON pair. */
 .library-io { display: grid; gap: 7px; margin-top: 11px; }
 .io-primary { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1px dashed #b1936a; border-radius: 11px; background: #f8f0de; color: var(--accent-dark); font-size: 12.5px; font-weight: 700; }
 .io-primary:hover:not(:disabled) { transform: none; border-color: var(--accent); background: #fdf5e4; box-shadow: none; }
@@ -264,9 +218,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .library-list-head > span { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; }
 .map-sort { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .map-sort select { padding: 5px 22px 5px 8px; font-size: 11px; }
-/* ~5 rows tall before it scrolls; fade classes (toggled from JS, like the tab
-   strip) mask whichever end still hides cut-off rows. */
-.saved-maps { display: grid; grid-auto-rows: max-content; gap: 6px; flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+/* Fade classes are toggled from JS, like the tab strip's. */
+.saved-maps { display: grid; grid-auto-rows: max-content; gap: 6px; flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .saved-maps::-webkit-scrollbar { display: none; }
 .saved-maps.fade-top { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
 .saved-maps.fade-bottom { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
@@ -291,7 +244,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 
 /* Analysis */
 .analysis-context { margin: -2px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.45; }
-/* The name inside "You are …" doubles as the me-selector trigger. */
 .analysis-context .menu-trigger { color: var(--accent-dark); }
 .analysis-warning { margin: 5px 0; color: var(--accent-dark); font-size: 10px; line-height: 1.4; }
 .analysis-likely-gone { width: 100%; margin-bottom: 8px; padding: 8px 10px; border-style: dashed; color: var(--muted); background: rgba(187,76,50,.04); font-size: 9px; line-height: 1.4; text-align: left; }
