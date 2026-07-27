@@ -16,6 +16,15 @@ import {
   type VertexId,
 } from './types'
 
+// Every mutator below returns the board it was given when the edit would change
+// nothing, and composes: an edit built from several of them (erase hits a road
+// and a port) hands back the original reference when none of them bit. The
+// store keys its undo stack on board identity, so this is what keeps a stray
+// click — repainting a wheat hex wheat, erasing empty water — from becoming an
+// undo step that visibly does nothing.
+const sameCoord = (a: AxialCoord | null, b: AxialCoord | null): boolean =>
+  a === b || (a !== null && b !== null && a.q === b.q && a.r === b.r)
+
 const replaceHex = (
   board: Board,
   coord: AxialCoord,
@@ -23,8 +32,22 @@ const replaceHex = (
 ): Board => {
   const key = axialKey(coord)
   if (!boardGrid(board.layout).landKeys.has(key)) throw new RangeError(`Unknown hex ${key}`)
-  return { ...board, hexes: board.hexes.map((hex) => axialKey(hex.coord) === key ? update(hex) : hex) }
+  const index = board.hexes.findIndex((hex) => sameCoord(hex.coord, coord))
+  if (index < 0) return board
+  const hex = board.hexes[index]
+  // update() runs first either way: it is also where the desert/token conflict
+  // throws, and that rejection must not depend on the outcome being a change.
+  const next = update(hex)
+  // Every field of Hex, coord included: a partial comparison would silently
+  // drop an edit that only touched what it left out.
+  if (next.tile === hex.tile && next.numberToken === hex.numberToken && sameCoord(next.coord, hex.coord)) return board
+  const hexes = [...board.hexes]
+  hexes[index] = next
+  return { ...board, hexes }
 }
+
+const defaultPorts = (layout: LayoutId): Board['ports'] =>
+  defaultPortEdges(layout).map((edgeId) => ({ edgeId, resource: null, rate: 3 }))
 
 export function createBoard(layout: LayoutId): Board {
   return {
@@ -35,7 +58,7 @@ export function createBoard(layout: LayoutId): Board {
       tile: null,
       numberToken: null,
     })),
-    ports: defaultPortEdges(layout).map((edgeId) => ({ edgeId, resource: null, rate: 3 })),
+    ports: defaultPorts(layout),
     robber: null,
     roads: [],
     buildings: [],
@@ -161,24 +184,26 @@ export function setNumberToken(board: Board, coord: AxialCoord, numberToken: num
 
 export function setRobber(board: Board, coord: AxialCoord | null): Board {
   if (coord && !boardGrid(board.layout).landKeys.has(axialKey(coord))) throw new RangeError('Robber is off-board')
+  if (sameCoord(board.robber, coord)) return board
   return { ...board, robber: coord ? { ...coord } : null }
 }
 
 export function upsertPort(board: Board, edgeId: EdgeId, resource: Resource | null, rate: number): Board {
   if (!Number.isInteger(rate) || rate < 2) throw new RangeError('Port rates must be integers of at least 2')
   if (!boardGrid(board.layout).coastalEdgeIds.includes(edgeId)) throw new RangeError('Ports must be coastal')
+  const found = board.ports.find((candidate) => candidate.edgeId === edgeId)
+  if (found && found.resource === resource && found.rate === rate) return board
   const port = { edgeId, resource, rate }
-  const found = board.ports.some((candidate) => candidate.edgeId === edgeId)
   return {
     ...board,
     ports: found ? board.ports.map((candidate) => candidate.edgeId === edgeId ? port : candidate) : [...board.ports, port],
   }
 }
 
-export const removePort = (board: Board, edgeId: EdgeId): Board => ({
-  ...board,
-  ports: board.ports.filter((port) => port.edgeId !== edgeId),
-})
+export const removePort = (board: Board, edgeId: EdgeId): Board =>
+  board.ports.some((port) => port.edgeId === edgeId)
+    ? { ...board, ports: board.ports.filter((port) => port.edgeId !== edgeId) }
+    : board
 
 function ensurePlayer(board: Board, playerId: string): void {
   if (!board.players.some((player) => player.id === playerId)) throw new RangeError(`Unknown player ${playerId}`)
@@ -187,16 +212,17 @@ function ensurePlayer(board: Board, playerId: string): void {
 export function placeRoad(board: Board, edgeId: EdgeId, playerId: string): Board {
   ensurePlayer(board, playerId)
   if (!boardGrid(board.layout).edgeIds.includes(edgeId)) throw new RangeError(`Unknown edge ${edgeId}`)
+  if (board.roads.some((road) => road.edgeId === edgeId && road.playerId === playerId)) return board
   return {
     ...board,
     roads: [...board.roads.filter((road) => road.edgeId !== edgeId), { edgeId, playerId }],
   }
 }
 
-export const removeRoad = (board: Board, edgeId: EdgeId): Board => ({
-  ...board,
-  roads: board.roads.filter((road) => road.edgeId !== edgeId),
-})
+export const removeRoad = (board: Board, edgeId: EdgeId): Board =>
+  board.roads.some((road) => road.edgeId === edgeId)
+    ? { ...board, roads: board.roads.filter((road) => road.edgeId !== edgeId) }
+    : board
 
 export function placeBuilding(
   board: Board,
@@ -212,6 +238,7 @@ export function placeBuilding(
   // player's k-th building to their k-th pick. Taking over another player's
   // vertex is a first placement for the new owner, so it appends instead.
   if (occupied !== -1 && board.buildings[occupied].playerId === playerId) {
+    if (board.buildings[occupied].tier === tier) return board
     const buildings = [...board.buildings]
     buildings[occupied] = next
     return { ...board, buildings }
@@ -222,10 +249,10 @@ export function placeBuilding(
   }
 }
 
-export const removeBuilding = (board: Board, vertexId: VertexId): Board => ({
-  ...board,
-  buildings: board.buildings.filter((building) => building.vertexId !== vertexId),
-})
+export const removeBuilding = (board: Board, vertexId: VertexId): Board =>
+  board.buildings.some((building) => building.vertexId === vertexId)
+    ? { ...board, buildings: board.buildings.filter((building) => building.vertexId !== vertexId) }
+    : board
 
 export function addPlayer(board: Board, input: Omit<Player, 'id'> & { id?: string }): Board {
   if (board.players.length >= 6) return board
@@ -234,17 +261,21 @@ export function addPlayer(board: Board, input: Omit<Player, 'id'> & { id?: strin
   return { ...board, players: [...board.players, { id, name: input.name, color: input.color }] }
 }
 
-export const renamePlayer = (board: Board, playerId: string, name: string): Board => ({
-  ...board,
-  players: board.players.map((player) => player.id === playerId ? { ...player, name } : player),
-})
+export const renamePlayer = (board: Board, playerId: string, name: string): Board =>
+  board.players.some((player) => player.id === playerId && player.name !== name)
+    ? { ...board, players: board.players.map((player) => player.id === playerId ? { ...player, name } : player) }
+    : board
 
 export function movePlayer(board: Board, playerId: string, index: number): Board {
   const current = board.players.findIndex((player) => player.id === playerId)
   if (current < 0) return board
+  // Clamped against the roster with the dragged player lifted out, so a drop
+  // past either end lands back on the slot they already hold.
+  const target = Math.max(0, Math.min(index, board.players.length - 1))
+  if (target === current) return board
   const players = [...board.players]
   const [player] = players.splice(current, 1)
-  players.splice(Math.max(0, Math.min(index, players.length)), 0, player)
+  players.splice(target, 0, player)
   return { ...board, players }
 }
 
@@ -261,6 +292,7 @@ export function removePlayer(board: Board, playerId: string): Board {
 
 export function setMe(board: Board, playerId: string | null): Board {
   if (playerId !== null) ensurePlayer(board, playerId)
+  if (board.mePlayerId === playerId) return board
   return { ...board, mePlayerId: playerId }
 }
 
@@ -269,9 +301,24 @@ export function setLayout(board: Board, layout: LayoutId): Board {
   return { ...fresh, players: board.players.map((player) => ({ ...player })), mePlayerId: board.mePlayerId }
 }
 
+// Nothing on the board but its layout and roster. Ports outlive a clear, so
+// blank means the ports are still the layout's defaults — in any order, since
+// deleting one and drawing it back leaves the same set rearranged.
+export const isBlank = (board: Board): boolean => {
+  if (board.robber !== null || board.roads.length > 0 || board.buildings.length > 0) return false
+  if (board.hexes.some((hex) => hex.tile !== null || hex.numberToken !== null)) return false
+  const defaults = defaultPorts(board.layout)
+  return board.ports.length === defaults.length &&
+    defaults.every((port) => board.ports.some((candidate) =>
+      candidate.edgeId === port.edgeId && candidate.resource === port.resource && candidate.rate === port.rate))
+}
+
 // Wipe tiles, tokens, pieces, and the robber back to a fresh board, keeping the
-// current layout and roster.
-export const clearBoard = (board: Board): Board => setLayout(board, board.layout)
+// current layout and roster. Clearing an already-blank board is a no-op, and
+// has to be caught here: setLayout cannot short-circuit on a matching layout,
+// because re-running it is exactly what does the clearing.
+export const clearBoard = (board: Board): Board =>
+  isBlank(board) ? board : setLayout(board, board.layout)
 
 export function draftOrder(board: Board, rounds = 2): string[] {
   return Array.from({ length: Math.max(0, rounds) }, (_, round) =>

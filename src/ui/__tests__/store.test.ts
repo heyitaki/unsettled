@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { addPlayer, createBoard, removePlayer } from '../../model/board'
+import { addPlayer, createBoard, removePlayer, setTile } from '../../model/board'
 import { adjustHand, newGame, type Game } from '../../model/game'
 import { activeTab, reducer, type StoreState, type TabState } from '../store'
 import { NOTHING_UNFLUSHED, type UnflushedWork } from '../workspaceSync'
@@ -92,6 +92,17 @@ describe('editor history', () => {
     const shrunk = removePlayer(grown, 'b')
     const removed = reducer(added, { type: 'commit', board: shrunk })
     expect(Object.keys(activeTab(removed).game.stats)).toEqual(['aki'])
+  })
+
+  it('commit keeps an edit that changes nothing off the undo stack', () => {
+    const painted = newGame(setTile(createBoard('standard4'), { q: 0, r: 0 }, 'wheat', 6))
+    const start = state([tab('t1', painted)])
+
+    const repaint = reducer(start, { type: 'commit', board: setTile(painted.board, { q: 0, r: 0 }, 'wheat', 6) })
+    expect(repaint).toBe(start)
+
+    const real = reducer(start, { type: 'commit', board: setTile(painted.board, { q: 0, r: 0 }, 'ore', 6) })
+    expect(activeTab(real).past).toEqual([painted])
   })
 
   it('commit-game records stat edits on the undo stack', () => {

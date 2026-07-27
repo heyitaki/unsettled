@@ -9,6 +9,7 @@ import {
 } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import {
+  isBlank,
   placeBuilding,
   placeRoad,
   removeBuilding,
@@ -213,13 +214,9 @@ export function BoardCanvas() {
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
   const choose = (layout: LayoutId) => {
     if (layout === board.layout) return
-    const hasContent = board.hexes.some((hex) => hex.tile || hex.numberToken !== null) ||
-      board.roads.length > 0 ||
-      board.buildings.length > 0 ||
-      board.ports.length > 0 ||
-      Boolean(board.robber)
-    if (hasContent) setPendingLayout(layout)
-    else commit(setLayout(board, layout))
+    // Only confirm when the switch would destroy something.
+    if (isBlank(board)) commit(setLayout(board, layout))
+    else setPendingLayout(layout)
   }
   const onHex = (coord: AxialCoord) => {
     const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))

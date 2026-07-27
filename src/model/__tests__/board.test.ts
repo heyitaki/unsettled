@@ -1,15 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
   addPlayer,
+  clearBoard,
   createBoard,
   draftOrder,
+  isBlank,
+  movePlayer,
   pips,
   placeBuilding,
   placeRoad,
   randomizeBoard,
+  removeBuilding,
   removePlayer,
+  removePort,
+  removeRoad,
+  renamePlayer,
+  setHexTile,
   setLayout,
+  setMe,
+  setNumberToken,
+  setRobber,
   setTile,
+  upsertPort,
   validateBoard,
   vertexProduction,
 } from '../board'
@@ -82,6 +94,117 @@ describe('board operations', () => {
       ports: [...board.ports, board.ports[0]],
     } as never
     expect(validateBoard(broken).filter((issue) => issue.severity === 'error')).not.toHaveLength(0)
+  })
+})
+
+describe('no-op edits keep the board identity', () => {
+  // The store keys its undo stack on board identity, so a mutator that hands
+  // back its input is what keeps a stray click off the stack.
+  const grid = boardGrid('standard4')
+  const edge = grid.edgeIds[0]
+  const coastal = grid.coastalEdgeIds[0]
+  const vertex = grid.vertexIds[0]
+  const coord = { q: 0, r: 0 }
+
+  it('repaints a tile and a token with their current value', () => {
+    const board = setTile(createBoard('standard4'), coord, 'wheat', 6)
+    expect(setHexTile(board, coord, 'wheat')).toBe(board)
+    expect(setNumberToken(board, coord, 6)).toBe(board)
+    expect(setHexTile(board, coord, 'ore')).not.toBe(board)
+    expect(setNumberToken(board, coord, 8)).not.toBe(board)
+  })
+
+  it('erases a hex that has no tile, and clears a desert token exactly once', () => {
+    const blank = createBoard('standard4')
+    expect(setHexTile(blank, coord, null)).toBe(blank)
+
+    // Painting desert over a numbered hex drops the token, so it is a real edit
+    // even though the tile lands on the value it would have had.
+    const numbered = setTile(blank, coord, 'wheat', 6)
+    const desert = setHexTile(numbered, coord, 'desert')
+    expect(desert).not.toBe(numbered)
+    expect(setHexTile(desert, coord, 'desert')).toBe(desert)
+  })
+
+  it('drops the robber on the hex it already occupies', () => {
+    const board = setRobber(createBoard('standard4'), coord)
+    expect(setRobber(board, coord)).toBe(board)
+    expect(setRobber(board, { q: 1, r: 0 })).not.toBe(board)
+    const lifted = setRobber(board, null)
+    expect(lifted).not.toBe(board)
+    expect(setRobber(lifted, null)).toBe(lifted)
+  })
+
+  it('re-saves a port with its current resource and rate', () => {
+    const board = upsertPort(createBoard('standard4'), coastal, 'ore', 2)
+    expect(upsertPort(board, coastal, 'ore', 2)).toBe(board)
+    expect(upsertPort(board, coastal, 'ore', 3)).not.toBe(board)
+    expect(upsertPort(board, coastal, null, 2)).not.toBe(board)
+  })
+
+  it('erases an edge and a vertex that hold nothing', () => {
+    const board = createBoard('standard4')
+    // The eraser hits both in one commit, so both must preserve identity for a
+    // sweep across open water to stay off the undo stack.
+    expect(removePort(removeRoad(board, coastal), coastal)).toBe(board)
+    expect(removeBuilding(board, vertex)).toBe(board)
+  })
+
+  it('re-places a road and a building that are already yours', () => {
+    let board = placeRoad(createBoard('standard4'), edge, 'aki')
+    board = placeBuilding(board, vertex, 'aki', 'settlement')
+    expect(placeRoad(board, edge, 'aki')).toBe(board)
+    expect(placeBuilding(board, vertex, 'aki', 'settlement')).toBe(board)
+    expect(placeBuilding(board, vertex, 'aki', 'city')).not.toBe(board)
+
+    const opponent = addPlayer(board, { id: 'b', name: 'Bee', color: '#3063ba' })
+    expect(placeRoad(opponent, edge, 'b')).not.toBe(opponent)
+    expect(placeBuilding(opponent, vertex, 'b', 'settlement')).not.toBe(opponent)
+  })
+
+  it('treats a fresh board as blank despite its seeded ports', () => {
+    // The layout switcher confirms before wiping a board with content on it.
+    // createBoard seeds the layout's default ports, so counting any port as
+    // content would make every board look non-blank.
+    for (const layout of ['standard4', 'extension6'] as LayoutId[]) {
+      expect(createBoard(layout).ports.length).toBeGreaterThan(0)
+      expect(isBlank(createBoard(layout))).toBe(true)
+    }
+    expect(isBlank(setHexTile(createBoard('standard4'), coord, 'wheat'))).toBe(false)
+  })
+
+  it('clears a board that is already blank', () => {
+    const blank = createBoard('standard4')
+    expect(clearBoard(blank)).toBe(blank)
+
+    // A default port deleted and redrawn is still blank, reordered or not.
+    const rebuilt = upsertPort(removePort(blank, blank.ports[0].edgeId), blank.ports[0].edgeId, null, 3)
+    expect(rebuilt.ports.map((port) => port.edgeId)).not.toEqual(blank.ports.map((port) => port.edgeId))
+    expect(clearBoard(rebuilt)).toBe(rebuilt)
+
+    for (const dirty of [
+      setHexTile(blank, coord, 'wheat'),
+      setNumberToken(blank, coord, 6),
+      setRobber(blank, coord),
+      placeRoad(blank, edge, 'aki'),
+      placeBuilding(blank, vertex, 'aki', 'settlement'),
+      removePort(blank, blank.ports[0].edgeId),
+      upsertPort(blank, blank.ports[0].edgeId, 'ore', 2),
+    ]) {
+      expect(clearBoard(dirty)).not.toBe(dirty)
+    }
+  })
+
+  it('renames a player to their current name and drags one onto its own slot', () => {
+    const board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
+    expect(renamePlayer(board, 'b', 'Bee')).toBe(board)
+    expect(renamePlayer(board, 'b', 'Cee')).not.toBe(board)
+    expect(movePlayer(board, 'b', 1)).toBe(board)
+    expect(movePlayer(board, 'b', 9)).toBe(board)
+    expect(movePlayer(board, 'b', 0)).not.toBe(board)
+    const claimed = setMe(board, 'b')
+    expect(claimed).not.toBe(board)
+    expect(setMe(claimed, 'b')).toBe(claimed)
   })
 })
 
