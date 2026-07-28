@@ -57,6 +57,10 @@ const PORT_HALF_W = 25
 const PORT_HALF_H = 13
 // Sea margin kept around the outermost drawn content on every side.
 const BOARD_MARGIN = 18
+// Rounding on the sea's corners, in unscaled board units. The clip frame that
+// carries it while zoomed divides it by the scale, so the on-screen radius is
+// the same at 6x as it is at fit.
+const SEA_RADIUS = 32
 // Shared outline width for every piece (buildings + roads), in unscaled board
 // units. Matches the settlement's original border (2.5 stroke × 0.8 scale).
 const PIECE_STROKE = 2
@@ -774,55 +778,71 @@ export function BoardCanvas() {
           <filter id="piece-highlight" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow dx="0" dy="2" stdDeviation="4.4" floodColor={INK_COLOR} floodOpacity="0.95" />
           </filter>
+          {/* The sea rect below rounds the board's own corners, but a zoomed
+              window sits inside that rect and would meet the element's square
+              edges instead. This frames whatever is currently visible, so the
+              rounding survives the zoom rather than scrolling off with the
+              sea. rx follows the scale to hold a constant on-screen radius. */}
+          <clipPath id="board-frame">
+            <rect
+              x={renderedViewBox.x}
+              y={renderedViewBox.y}
+              width={renderedViewBox.width}
+              height={renderedViewBox.height}
+              rx={SEA_RADIUS / transform.scale}
+            />
+          </clipPath>
         </defs>
-        <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} rx="32" fill={SEA_COLOR} />
-        {hexLayer}
-        {tokenLayer}
-        {robberLayer}
-        {robberTokenLayer}
-        {portLayer}
-        {roadLayer}
-        {buildingLayer}
-        {markLayer}
-        <g className="hit-layers">
-          {(hexActive || eraseActive) && board.hexes.map((hex) => (
-            <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />
-          ))}
-          {(eraseActive || portActive) && grid.edgeIds.map((edgeId) => {
-            const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
-            return <line key={`hit:${edgeId}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(edgeId)} />
-          })}
-          {eraseActive && grid.vertexIds.map((vertexId) => {
-            const point = vertexPoint(vertexId)
-            return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r={coarse ? 17 : 9} onClick={() => onVertex(vertexId)} />
-          })}
-        </g>
-        {/* Placement affordances: visible, normal-cursor dots at every rule-legal
-            vertex/edge for the active building or road tool. */}
-        <g className="placement-layer">
-          {buildActive && placeableVertices.map((vertexId) => {
-            const point = vertexPoint(vertexId)
-            return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onVertex(vertexId)} />
-          })}
-          {roadActive && placeableEdges.map((edgeId) => {
-            const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
-            return <circle key={`slot:${edgeId}`} className="placement-slot" cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onEdge(edgeId)} />
-          })}
-          {/* Invisible targets over the active player's own same-tier pieces so
-              clicking one with the same tool still toggles it off (onVertex /
-              onEdge route to remove); no visible dot, just a normal-cursor hit. */}
-          {buildTier && board.buildings
-            .filter((piece) => piece.playerId === tab.activePlayerId && piece.tier === buildTier)
-            .map((piece) => {
-              const point = vertexPoint(piece.vertexId)
-              return <circle key={`rm:${piece.vertexId}`} className="placement-remove" cx={point.x} cy={point.y} r={coarse ? 18 : 12} onClick={() => onVertex(piece.vertexId)} />
+        <g clipPath="url(#board-frame)">
+          <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} rx={SEA_RADIUS} fill={SEA_COLOR} />
+          {hexLayer}
+          {tokenLayer}
+          {robberLayer}
+          {robberTokenLayer}
+          {portLayer}
+          {roadLayer}
+          {buildingLayer}
+          {markLayer}
+          <g className="hit-layers">
+            {(hexActive || eraseActive) && board.hexes.map((hex) => (
+              <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />
+            ))}
+            {(eraseActive || portActive) && grid.edgeIds.map((edgeId) => {
+              const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
+              return <line key={`hit:${edgeId}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(edgeId)} />
             })}
-          {roadActive && board.roads
-            .filter((road) => road.playerId === tab.activePlayerId)
-            .map((road) => {
-              const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
-              return <line key={`rm:${road.edgeId}`} className="placement-remove" x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(road.edgeId)} />
+            {eraseActive && grid.vertexIds.map((vertexId) => {
+              const point = vertexPoint(vertexId)
+              return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r={coarse ? 17 : 9} onClick={() => onVertex(vertexId)} />
             })}
+          </g>
+          {/* Placement affordances: visible, normal-cursor dots at every rule-legal
+              vertex/edge for the active building or road tool. */}
+          <g className="placement-layer">
+            {buildActive && placeableVertices.map((vertexId) => {
+              const point = vertexPoint(vertexId)
+              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onVertex(vertexId)} />
+            })}
+            {roadActive && placeableEdges.map((edgeId) => {
+              const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
+              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onEdge(edgeId)} />
+            })}
+            {/* Invisible targets over the active player's own same-tier pieces so
+                clicking one with the same tool still toggles it off (onVertex /
+                onEdge route to remove); no visible dot, just a normal-cursor hit. */}
+            {buildTier && board.buildings
+              .filter((piece) => piece.playerId === tab.activePlayerId && piece.tier === buildTier)
+              .map((piece) => {
+                const point = vertexPoint(piece.vertexId)
+                return <circle key={`rm:${piece.vertexId}`} className="placement-remove" cx={point.x} cy={point.y} r={coarse ? 18 : 12} onClick={() => onVertex(piece.vertexId)} />
+              })}
+            {roadActive && board.roads
+              .filter((road) => road.playerId === tab.activePlayerId)
+              .map((road) => {
+                const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
+                return <line key={`rm:${road.edgeId}`} className="placement-remove" x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(road.edgeId)} />
+              })}
+          </g>
         </g>
       </svg>
       {editingPort && (
