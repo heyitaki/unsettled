@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The maskable variant of icon.svg: same square, mark shrunk to 52% so its
+       corners stay inside the 80%-diameter safe circle Android crops to.
+       Regenerate with:
+         rsvg-convert -w 512 -h 512 public/icon-maskable.svg -o public/icon-maskable-512.png -->
+  <defs>
+    <!-- See icon.svg: the ramp has to outrun the corners or it bands there. -->
+    <radialGradient id="paper" cx="50%" cy="30%" r="105%">
+      <stop offset="0" stop-color="#faf4e7"/>
+      <stop offset="55%" stop-color="#e2d7bd"/>
+      <stop offset="1" stop-color="#c6b696"/>
+    </radialGradient>
+    <filter id="lift" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#3a2f1e" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#paper)"/>
+  <!-- 50x48 mark scaled to 266 wide; its 369px diagonal clears the 410px safe circle. -->
+  <g transform="translate(123 128) scale(5.32)" filter="url(#lift)">
+    <polygon points="14,0 28,8 28,24 14,32 0,24 0,8" fill="#3d7cb7"/>
+    <polygon points="36,0 50,8 50,24 36,32 22,24 22,8" fill="#c55a3c"/>
+    <polygon points="25,16 39,24 39,40 25,48 11,40 11,24" fill="#d2a13d"/>
+  </g>
+</svg>

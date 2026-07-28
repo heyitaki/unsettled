@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Installed-app icon: the .brand-mark hexes (see favicon.svg) on an opaque
+       page-gradient square. Opaque because iOS composites apple-touch-icon over
+       black, and the transparent favicon would come out as three floating hexes.
+       Regenerate the PNGs beside it with:
+         rsvg-convert -w 512 -h 512 public/icon.svg -o public/icon-512.png
+         rsvg-convert -w 192 -h 192 public/icon.svg -o public/icon-192.png
+         rsvg-convert -w 180 -h 180 public/icon.svg -o public/apple-touch-icon.png -->
+  <defs>
+    <!-- r reaches past the far corner (440px from the centre); a shorter radius
+         ends the ramp inside the square and leaves a visible arc in the corners. -->
+    <radialGradient id="paper" cx="50%" cy="30%" r="105%">
+      <stop offset="0" stop-color="#faf4e7"/>
+      <stop offset="55%" stop-color="#e2d7bd"/>
+      <stop offset="1" stop-color="#c6b696"/>
+    </radialGradient>
+    <filter id="lift" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#3a2f1e" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#paper)"/>
+  <!-- 50x48 mark scaled to 338 wide (66% of the canvas) and centred. -->
+  <g transform="translate(87 94) scale(6.76)" filter="url(#lift)">
+    <polygon points="14,0 28,8 28,24 14,32 0,24 0,8" fill="#3d7cb7"/>
+    <polygon points="36,0 50,8 50,24 36,32 22,24 22,8" fill="#c55a3c"/>
+    <polygon points="25,16 39,24 39,40 25,48 11,40 11,24" fill="#d2a13d"/>
+  </g>
+</svg>

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dev-dist/
 # .claude is partly tracked: .claude/specs/ holds checked-in specs. Ignore rules
 # here must stay per-subdirectory — a blanket `.claude/` rule cannot be undone by
 # `!.claude/specs/`, because git does not descend into an excluded directory.
@@ -30,6 +31,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.claude/pairs/
 
 # Playwright run artifacts
 test-results/
