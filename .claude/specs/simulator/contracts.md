@@ -1,0 +1,172 @@
+# Contracts
+
+Class **C**: things that must be true of the code. A violation is a bug. See [spec.md](spec.md) for the class rules and the ownership rule.
+
+## Scope
+
+`unsettled-sim` is a seeded Rust simulator for complete base-Catan games. It supports the 19-hex `standard4` and 30-hex `extension6` layouts, app-exported Board JSON, generated legal boards, and weights-file-parameterized app-formula arms.
+
+The authoritative rosters of placement heuristics and policies are below, under [Rosters](#rosters).
+
+## Crate boundaries
+
+The engine crate has no threading, CLI, or filesystem dependency. The CLI owns board generation, rayon scheduling, aggregation, and output.
+
+## Module roster
+
+Within the engine:
+
+| Module | Role |
+| --- | --- |
+| `belief.rs` | Maintains a public-information opponent belief with exact hand totals and per-resource `[lo, hi]` intervals, updated only from public events in `game.rs`. `invariants_hold` includes a gated soundness clause, while the random-game fuzz test checks the same property ungated. |
+| `etw.rs` | The pinned closed-form expected-turns-to-win reference implementation, with its fixed constants at the top of the module. Those constants are never swept. |
+| `threat.rs` | The first consumer of both modules. Consumes the pinned ETW directly rather than adding a second ETW. |
+| `devcards.rs` | The second consumer. Values dev-card plays in the observer's own ETW terms. |
+| `trading.rs` | The third consumer. Supplies the shared opponent-value model for trade proposal, acceptance, and counterparty selection. |
+
+## Schedule and evaluation units
+
+The schedule is `boards × reps × heuristic-count rotations`. Rotation `j` assigns seat `s` to heuristic `(s + j) mod k`, so every heuristic visits every seat even when the number of heuristics differs from the seat count.
+
+An evaluation unit is one `(board, rep, hero seat)` triple. The schedule fully crosses every generated board, repetition, and seat, then plays every labelled arm on every unit while every non-hero seat uses `--field`.
+
+Arm values split on the first `=`, so labels form their own namespace and a spec path may contain `=`. Labels must be unique, while specs may repeat. `--arm-policy label=policy` overrides the hero seat's policy for that arm only; the field keeps `--policy`, and each override label must name a declared arm. Game seeds are arm-independent, so policy-overridden paired arms retain common random numbers.
+
+`--reference` is required for two or more arms and optional for a single-arm marginal run.
+
+## Argument domains and the seat envelope
+
+Board and repetition counts must be positive. The threshold must be non-negative and alpha must be strictly between zero and one.
+
+Official simulation-ready combinations are three or four seats on `standard4` and five or six seats on `extension6`. `--allow-unofficial` permits two through six seats on either layout.
+
+## Seed domains and seed derivation
+
+The three seed domains are the committed tuning (`0x7a11_1e5e_ed20_2607`), held-out evaluation (`0xe7a1_5eed_2026_0724`), and adoption-gate (`0x6a7e_5eed_2026_0725`) domains. `policy_strength.rs` asserts all three are pairwise disjoint in both their seed streams and their generated boards.
+
+The domain seed drives both board generation and each game's dice, deck, chance, and policy streams. On a given unit, the game seed depends only on `(domain seed, board, rep, hero seat)`, never the arm, so paired arms use common random numbers.
+
+## Paired statistics
+
+For an arm and its reference, `b` counts units won only by the arm and `c` counts units won only by the reference. The paired estimate is `(b-c)/n`. The artifact reports both a McNemar Wald interval for the correlated per-unit differences and an interval clustered by generated board. It always selects the wider interval, choosing the clustered interval on an exact width tie. With only one board, between-board variance is unknowable, so the clustered interval is `[-1, 1]`, `clusteredDegenerate` is true, and the verdict is necessarily `inconclusive`.
+
+For selected interval `[lo, hi]` and threshold `t`, the pre-registered verdict is `better` when `lo > t`, `worse` when `hi < -t`, `equivalent` when `lo > -t` and `hi < t`, and `inconclusive` otherwise. The chosen `alpha`, threshold, and normal quantile are recorded in the artifact. Prefer increasing `--boards` over increasing `--reps`: clustered precision comes from the number of boards, and the normal-quantile interval can still understate uncertainty when there are few clusters.
+
+## Rosters
+
+Available built-in placement names:
+
+```
+random
+max_pips
+pip_diversity
+pip_scarcity
+port_synergy
+city_focus
+```
+
+Available policies:
+
+```
+random-legal
+greedy-no-trade
+priority-trader
+heuristic-v1
+heuristic-v1-noports
+heuristic-v1-threat
+heuristic-v1-devcards
+heuristic-v1-threat-devcards
+heuristic-v1-trader
+heuristic-v1-trader-threat
+heuristic-v1-trader-devcards
+heuristic-v1-trader-threat-devcards
+heuristic-v1-trader-aware
+heuristic-v1-trader-aware-threat
+heuristic-v1-trader-aware-devcards
+heuristic-v1-trader-aware-threat-devcards
+```
+
+Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, and `-aware` enables G3 threat-aware trading; the suffixes compose independently.
+
+## Weights files
+
+A weights file must carry **every** field the formula takes and no others — a missing or unknown key is a load error, not a defaulted value, so adding a weight means updating every arm file rather than letting stale ones score against a silently different formula.
+
+`simulator/placement/default-weights.json` mirrors the app's `DEFAULT_WEIGHTS` and is the field to compare candidates against; a vitest case fails if the two drift, because nothing else detects it.
+
+## Player trading
+
+Ungated trader policies select the acceptor with the lowest hidden-VP-aware estimate from the proposer's view, breaking equal estimates by rotation-relative rank. `-aware` policies instead use `trading.rs::counterparty_score`, the same offer-sensitive scalar used by acceptance and proposal scoring, and retain the first seat on an exact score tie.
+
+The mechanism supports only offers giving one or two units of one resource for exactly one unit of another. Multi-resource baskets, bundles, counteroffers, and bank-trade changes are outside its scope.
+
+Exact ties resolve to the first candidate in the fixed `give × get × count` enumeration.
+
+## Output stability
+
+Deterministic result artifacts include a `playerTrading` config block only when the mechanism is enabled. `evaluation.json` likewise carries an `armPolicies` block only when at least one `--arm-policy` was given, so default-off output remains byte-identical.
+
+`--allow-unofficial` is echoed in `results.json`.
+
+What each artifact contains:
+
+- `results.json`: deterministic config, per-heuristic games, wins, Wilson interval, mean VP, mean turns, per-seat totals, draws, head-to-head wins, and illegal-action count.
+- `results.csv`: the same per-heuristic aggregates in tabular form.
+- `meta.json`: elapsed time, throughput, worker count, and version data.
+- Optional JSONL: ordered per-game schedule coordinates, seat placements, and result.
+- `evaluation.json`: the run configuration, label-keyed arm marginals, ordered paired comparisons, and the total illegal-action count.
+
+## Determinism
+
+`results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, player trading, and each seat policy use independent xoshiro256** streams. Player-trade response softening uses only the trade stream; acceptor selection is deterministic from the proposer's view. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
+
+## Game termination
+
+Games that reach the configured 500-round cap are recorded as draws. Illegal policy actions are counted and must remain zero.
+
+## Board ingestion and topology
+
+Board ingestion first checks exact object key sets, including the presence of nullable fields, and then deserializes into a lossless wire DTO. Simulation conversion separately rejects incomplete tiles or tokens, resolves a null robber to the first desert, enforces the official seat envelope, and saturates integral port rates above `u32::MAX` without changing their effective behavior.
+
+Regeneration must leave `simulator/topology/standard4.json` and `simulator/topology/extension6.json` byte-identical unless app geometry changed. Rust treats canonical vertex and edge IDs as opaque ingestion keys and uses compact integer indices in the hot loop.
+
+## Extension seams
+
+Policy-level gates use a `PolicyKind` variant together with an `Option<...>` parameter block in shared heuristic parameters when the behavior must reach every call site of a shared entry point: the inner calls see `HeuristicParams`, not the kind, while the kind makes the arm selectable. Policy code receives `DecisionView`, not `GameState`; app-facing recommendation code should use the `recommend` adapter while simulation code scores into the `ActionBuf` its `PolicyScratch` already owns. Incremental derived state that lasts for one game belongs on `GameState` and resets in `GameArena::prepare`; anything derived per decision and read board-wide belongs in the `DecisionView` cache next to production pips; anything fixed by the board or layout belongs on `SimBoard` or `Topology` at load.
+
+## Belief state and ETW
+
+The belief state carries per-seat resource counts derived from public events, plus a bounded uncertainty pool from robber steals. Production, bank and port trades, player trades, purchases, discards, monopoly and year-of-plenty are all public; only the robber steal and dev-card identity are hidden, and a steal moves exactly one card, so bounds stay tight. Pure derived state with no RNG and no behaviour change until a policy reads it, so it is corpus-safe and independently testable. It never reads private state, and its updates are O(1) because this runs on every action of every game.
+
+Expected turns to win is closed-form over the belief state. Never a mini-rollout. VP alone is a lagging indicator: six VP with two cities queued and strong production beats eight VP built out.
+
+Remaining dev-deck composition is derivable in exactly the shape `belief.rs` already uses — the initial counts come from `RuleConfig`, every knight and progress card played is public, and the residue is a bounded unknown pool — with victory-point cards the one term needing a genuine estimate, since they are never played and so are only bounded by the deck total and the per-seat dev counts.
+
+## Threat-aware consumers
+
+G3 unified proposal scoring, acceptance, and counterparty selection around `trading.rs::counterparty_score`; its standing term is `threat.rs::danger_from_etw` applied to `etw.rs::expected_turns_to_win`, the same danger expression used by the robber arm. The robber arm holds knight play/hold fixed by scoring the knight action from the self-regarding robber choice while using the threat-selected placement. The dev-card arm deliberately changes whether the turn's single dev play is spent pre-roll, so action-phase knight availability moves with it.
+
+Decay across multiple ports needs no new parameter: the term already compares against `view.trade_rate`, which includes ports you hold, so a second port for the same resource scores zero by construction.
+
+## Performance-critical structures
+
+The trail search behind Longest Road dominates everything else, so most of the speed is in `RoadNetwork` (`longest_road.rs`) and these four properties are load-bearing:
+
+- **Adjacency, not an edge list.** The search follows the two or three segments at a vertex instead of rescanning every edge on the board at every step of every branch.
+- **Build once, probe per candidate.** Scoring a seat's roads costs one full search plus one small search per candidate. `best_road` builds the network and hands the same one to `best_goal`.
+- **Component scope.** A probe searches only the component its segments touch; a trail never leaves its component, and the rest was already measured into the base length.
+- **Pruned starts.** A maximum trail ends at odd-degree or blocked vertices, and a component with neither is Eulerian and needs no search at all. This is an argument about trails rather than an obvious property, so `pruned_search_matches_exhaustive_reference` checks it against a brute-force reference over thousands of random graphs. Change the search and that test is the thing to trust.
+
+One tempting mitigation is deliberately absent: the search is *not* gated on `current_length + 1`, because a single road can bridge two components into `a + b + 1` and every seat leaves setup with two disconnected stubs -- that bound is false and silently declines game-winning roads. The guard bounds by segments owned instead, which is sound but fires far more often.
+
+Elsewhere, `DecisionView` memoises what it derives from the borrowed `GameState` -- production pips, legal settlements and roads as bitsets -- because the scoring passes ask for those board-wide within a single decision. Board and topology constants (resource pips, port incidence, edge neighbours) are computed at load. Policies score into a buffer owned by `PolicyScratch` rather than a fresh one per decision.
+
+The allocator test warms 50 games and then observes zero allocations across 200 games through the buffer-based scoring path.
+
+## Benchmark reporting
+
+Ignore the `parallel efficiency` figure the bench prints. It divides by the logical core count, which assumes 18 interchangeable cores; this machine has two kinds.
+
+## Ablation semantics
+
+The no-ports ablation is applied at the rules level, so a no-ports seat genuinely trades at the base bank rate rather than merely discounting ports when scoring locations.
