@@ -158,4 +158,41 @@ Class key: **C** contract · **D** decision · **G** gap · **M** measurement ·
 1. **Line 210** (`Two rules hold across all of it.`) was mapped to class G with the `206-211` range, but it is a connector introducing the class-D notes at 212/214/216 and carries no gap claim. It was not carried into `gaps.md`; `programme.md`'s § Design notes heading serves the same function. Recorded here rather than filed as a gap.
 2. **Line 177 is blank** but does not appear in the plan's list of uncovered blank lines. No claim was lost; noted for accuracy of the coverage count.
 3. **The solve-artifact citation** at source line 230 — a throughput log under an untracked `.claude` solve-artifact directory — is rendered in M-10 as prose rather than as a backticked path, and is deliberately unbackticked here too. The directory is untracked, so a backticked path would resolve in the authoring checkout and fail in a fresh clone, making acceptance criterion 4 environment-dependent.
-4. **Commit, date and command fields in `measurements.md` are `unknown`** wherever the README did not carry them, including cases recoverable from `git log`. Run 1 forbids new claims. Because the file is append-only, a later entry may supply the mapping; an edit may not.
+4. **Commit, date and command fields in `measurements.md` are `unknown`** wherever the README did not carry them, including cases recoverable from `git log`. Run 1 forbids new claims. Because the file is append-only, a later entry may supply the mapping; an edit may not. **Discharged by M-15**, appended during SIM-SPEC-F2.
+
+## Post-extraction additions — SIM-SPEC-F2
+
+The extraction covered `simulator/README.md` and nothing else. SIM-SPEC-F2 reduced the `opponent-modelling-programme` project memory to the process learnings and undecided questions that `spec.md`'s ownership rule leaves it, which meant first moving the claims it held that no file in this tree owned. Those claims came from session records, not from the README, so they are recorded here rather than in the claims table above.
+
+| Claim | Destination | Class |
+| --- | --- | --- |
+| Why phases E through G exist: the shift from own-VP-rate to win-probability, and denial paying only through win probability | programme.md § Why E through G exist | D |
+| The wasm-portable engine as a second payoff — mid-game recommendations need an opponent model | programme.md § Why E through G exist | D |
+| `handValue` may be double-counted once placement is scored through ETW; settle at H by A/B | programme.md § Open question H must settle | D |
+| The three built consumers are each inconclusive with a declining estimate, and why that is the expected shape | programme.md § How to read the A/B results so far | D |
+| A lone ETW term is degenerate for selection because `route_etw` caps at `cards_per_vp` | contracts.md § Belief state and ETW | C |
+| The default threat term ordering reverses below a danger crossover | contracts.md § Threat-aware consumers | C |
+| `assert_params` guards a sweep domain because an out-of-domain value degrades silently | contracts.md § Threat-aware consumers | C |
+| Provenance for M-01 through M-10 | measurements.md M-15 | M |
+| How often counterparty selection is uncontested, and how often the contested cases tie | measurements.md M-16 | M |
+| G2 Hold firing rates | measurements.md M-17 | M |
+
+The `simulator-known-gaps` memory was reduced in the same pass, for the same reason and under the same rule:
+
+| Claim | Destination | Class |
+| --- | --- | --- |
+| `eligible_victim` cannot name an empty-handed opponent, so a steal cannot be declined | gaps.md `SIM-GAP-22` | G |
+| `setup()` leaves `longest_road_len` stale until the first road build | gaps.md `SIM-GAP-23` | G |
+| `dev_card_score` outranks expansion roads from turn one | gaps.md `SIM-GAP-24` | G |
+| Never run a `tournament` with more arms than seats; prefer `evaluate` for comparing arms | contracts.md § Schedule and evaluation units | C |
+| Acceptance runs both cargo profiles, and diffs against a corpus captured beforehand | contracts.md § Acceptance for any engine change | C |
+| Why serde-defaulting a new weight to zero breaks the single-parameter property | contracts.md § Weights files | C |
+| The collected `spread_*` and `gpf_*` results are superseded by the `handValue` field change | programme.md § Seed-domain discipline | D |
+| Never bound achievable road length by `current_length + 1` | already owned by contracts.md § Performance-critical structures; the memory copy was a duplicate and was deleted | C |
+| The policy never defends Longest Road once holding it | already owned by `SIM-GAP-07`; the memory copy was a duplicate and was deleted | G |
+
+Claims deliberately **not** moved, because they are not about the simulator or cannot live in the repo:
+
+- The solve-pipeline scope-control finding and the forwarded-argument test-design rule are process learnings about how this repo's runs are driven, and `spec.md` assigns those to memory.
+- The rules-audit corpus and its reproductions are in `.claude/pairs/sim-rules-audit/`, which is ignored. Memory keeps a pointer and the warning that it exists in no fresh clone. Whether to track it is open.
+- Measurement conditions specific to this host — a known background CPU floor, and that `uptime`'s user count is not a contention signal — describe the machine rather than the simulator.

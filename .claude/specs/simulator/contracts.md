@@ -34,6 +34,10 @@ Arm values split on the first `=`, so labels form their own namespace and a spec
 
 `--reference` is required for two or more arms and optional for a single-arm marginal run.
 
+**Never run a `tournament` with more arms than seats.** Because rotation `j` gives seat `s` heuristic `(s + j) mod k`, a run with `k` greater than the seat count puts only a *window* of arms in each game: index-adjacent arms co-play far more than distant ones, every arm faces a different opponent mix, and the win rates become an artifact of command-line order. Permuting the order of a six-arm, four-seat run moved win rates by ±1.35pp and swung one arm's head-to-head share from 56% to 44%. Keep arms at or below the seat count so every game holds the full field, and fill a spare slot with a duplicate of the baseline under a second file stem, which both calibrates the noise floor and should land at 50.0% ±0.1pp. Note that at arms equal to seats, each head-to-head cell degenerates into the row arm's total wins, so `headToHead` is a renormalization of the win counts rather than independent evidence.
+
+For comparing arms, prefer `evaluate` over `tournament` outright: it fixes the field, rotates a single hero seat, and pairs on common random numbers, so none of the above applies. `tournament` is the right tool only for ranking a whole field at once.
+
 ## Argument domains and the seat envelope
 
 Board and repetition counts must be positive. The threshold must be non-negative and alpha must be strictly between zero and one.
@@ -92,6 +96,8 @@ Within the trader family, `-threat` enables G1 robber placement, `-devcards` ena
 
 A weights file must carry **every** field the formula takes and no others — a missing or unknown key is a load error, not a defaulted value, so adding a weight means updating every arm file rather than letting stale ones score against a silently different formula.
 
+Serde-defaulting a new weight to zero is the actively harmful alternative, and it is worth being explicit about why, because it looks like the considerate option. The arm files in `placement/arms/` are *single-parameter* perturbations of the field. If a new weight defaulted to zero in the arms while the field carried its real value, every arm would differ from the field in two parameters at once, so `gpf_0` would quietly stop isolating `genericPortFactor` and the single-parameter property would go false with nothing failing.
+
 `simulator/placement/default-weights.json` mirrors the app's `DEFAULT_WEIGHTS` and is the field to compare candidates against; a vitest case fails if the two drift, because nothing else detects it.
 
 ## Player trading
@@ -120,6 +126,12 @@ What each artifact contains:
 
 `results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, player trading, and each seat policy use independent xoshiro256** streams. Player-trade response softening uses only the trade stream; acceptor selection is deterministic from the proposer's view. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
 
+## Acceptance for any engine change
+
+**Both cargo profiles, every time.** `--release` compiles out `debug_assert!(invariants_hold)`, which is the only detector for a class of piece and VP accounting bugs, so a release-only run has "passed" a board that panics in debug. Neither profile substitutes for the other.
+
+**Diff against a byte-exact corpus captured before the change.** Capture `results.json` plus `--jsonl` across several policies and both layouts *first*, then touch the code. Tie-breaking reads the action buffer in push order and reservoir-samples it, so reordering two loops, or merging them, silently changes which game gets played — with no test failing and no output looking wrong. That corpus is what proved the 2026-07-25 rewrite behaviour-preserving, and what localised the one change that was not.
+
 ## Game termination
 
 Games that reach the configured 500-round cap are recorded as draws. Illegal policy actions are counted and must remain zero.
@@ -140,6 +152,8 @@ The belief state carries per-seat resource counts derived from public events, pl
 
 Expected turns to win is closed-form over the belief state. Never a mini-rollout. VP alone is a lagging indicator: six VP with two cities queued and strong production beats eight VP built out.
 
+**A lone ETW term is degenerate for selection and must never be one.** `etw.rs::route_etw` caps credit at `cards_per_vp`, so roughly half of realistic mid-game hands score bit-identically across every candidate; a ranking on ETW alone therefore collapses to the order candidates were pushed in — a lexicographic ladder wearing a float costume, which is the shape this programme rejects everywhere else. Any consumer that selects among candidates has to break the plateau with a second bounded, monotone term. `devcards.rs` does it with a tempo term, and `trading.rs::counterparty_score` is offer-sensitive, which is why the plateau does not recur there.
+
 Remaining dev-deck composition is derivable in exactly the shape `belief.rs` already uses — the initial counts come from `RuleConfig`, every knight and progress card played is public, and the residue is a bounded unknown pool — with victory-point cards the one term needing a genuine estimate, since they are never played and so are only bounded by the deck total and the per-seat dev counts.
 
 ## Threat-aware consumers
@@ -147,6 +161,10 @@ Remaining dev-deck composition is derivable in exactly the shape `belief.rs` alr
 G3 unified proposal scoring, acceptance, and counterparty selection around `trading.rs::counterparty_score`; its standing term is `threat.rs::danger_from_etw` applied to `etw.rs::expected_turns_to_win`, the same danger expression used by the robber arm. The robber arm holds knight play/hold fixed by scoring the knight action from the self-regarding robber choice while using the threat-selected placement. The dev-card arm deliberately changes whether the turn's single dev play is spent pre-roll, so action-phase knight availability moves with it.
 
 Decay across multiple ports needs no new parameter: the term already compares against `view.trade_rate`, which includes ports you hold, so a second port for the same resource scores zero by construction.
+
+**The default ordering of the threat terms is regime-dependent, not fixed.** At the shipped defaults the terms rank delay, need, block, steal, but that holds only above danger roughly `0.108157` and `0.104855`; below those crossovers the ordering reverses to block over delay and steal over need. Reading the weights off `threat.rs` gives the high-danger ordering only, so a sweep that assumes a fixed ranking is reasoning about one regime of two.
+
+**`assert_params` guards a domain, not a type.** `ThreatParams`, `DevCardParams` and `TradeParams` are `pub` and `Deserialize` and are themselves the Phase-H sweep targets, so swept values reach them directly with no intermediate validation. The guard exists because an out-of-domain value degrades silently rather than loudly: `danger_floor = 0.0` yields a NaN danger and a robber choice that is still returned and still legal, not a panic. Widening a sweep range means widening the guard deliberately, never removing it.
 
 ## Performance-critical structures
 
