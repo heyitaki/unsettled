@@ -43,7 +43,7 @@ export function PortPopover({ edgeId, port, onCancel, onDelete, onSave }: Props)
         </label>
         <label>
           Rate
-          <input type="number" min="2" max="20" value={rate} onChange={(event) => setRate(Number(event.target.value))} />
+          <input inputMode="numeric" type="number" min="2" max="20" value={rate} onChange={(event) => setRate(Number(event.target.value))} />
         </label>
         {error && <p className="notice warning" role="alert">{error}</p>}
         <div className="popover-actions">

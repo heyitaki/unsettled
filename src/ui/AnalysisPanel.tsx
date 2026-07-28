@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
 import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore, type HighlightMark } from './store'
+import { useCoarsePointer } from './useMediaQuery'
 
 const RESOURCE_LABELS: Record<Resource, string> = {
   wood: 'Wood',
@@ -70,13 +71,18 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
 
 export function AnalysisPanel() {
   const { state, dispatch } = useStore()
+  const coarse = useCoarsePointer()
   const board = activeTab(state).game.board
   const analysis = analyzeBoardCached(board)
   const recommendations = analysis.recommendations.slice(0, 5)
+  const [selectedPick, setSelectedPick] = useState<VertexId | null>(null)
+  const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
 
   // Clear any hovered board marks whenever the board changes — after a click
   // places settlements, the previous window's circles are stale.
   useEffect(() => {
+    setSelectedPick(null)
+    setSelectedLikelyGone(false)
     dispatch({ type: 'highlight', marks: null })
     return () => dispatch({ type: 'highlight', marks: null })
   }, [board, dispatch])
@@ -118,23 +124,29 @@ export function AnalysisPanel() {
       if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
     }
     if (next !== board) dispatch({ type: 'commit', board: next })
+    setSelectedLikelyGone(false)
+    clearHighlight()
   }
   const placeRecommendation = (recommendation: Recommendation) => {
     if (board.mePlayerId === null) return
-    // Only place on my actual turn. While opponents still pick before me, my
-    // settlement would land at the wrong point in the draft — skipping those
-    // opponents and tripping the snake-inconsistent path. Guide the user to play
-    // the pre-window out first; the row stays hoverable so the 1/2 preview works.
-    if (likelyGone.length > 0) {
-      dispatch({
-        type: 'notice',
-        message: 'Play out the picks before your turn first: click "Likely gone before your turn".',
-      })
-      return
+    let next = board
+    for (const { vertexId, playerId } of likelyGone) {
+      if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
     }
     dispatch({
       type: 'commit',
-      board: placeBuilding(board, recommendation.firstPick, board.mePlayerId, 'settlement'),
+      board: placeBuilding(next, recommendation.firstPick, board.mePlayerId, 'settlement'),
+    })
+    setSelectedPick(null)
+    clearHighlight()
+  }
+  const selectRecommendation = (recommendation: Recommendation) => {
+    const next = selectedPick === recommendation.firstPick ? null : recommendation.firstPick
+    setSelectedPick(next)
+    setSelectedLikelyGone(false)
+    dispatch({
+      type: 'highlight',
+      marks: next === null ? null : recommendationMarks(recommendation, myColor),
     })
   }
 
@@ -188,34 +200,61 @@ export function AnalysisPanel() {
       ) : (
         <>
           {likelyGone.length > 0 && (
-            <button
-              type="button"
-              className="analysis-likely-gone"
-              onMouseEnter={() => dispatch({ type: 'highlight', marks: likelyGoneMarks })}
-              onMouseLeave={clearHighlight}
-              onClick={placeLikelyGone}
-            >
-              <span>Likely gone before your turn (click to play out)</span>
-              {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
-                const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
-                return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
-              }).join(' · ')}
-            </button>
-          )}
-          <div className="analysis-list" onMouseLeave={clearHighlight}>
-            {recommendations.map((recommendation, index) => {
-              const factors = displayedFactors(recommendation)
-              return (
+            coarse ? (
+              <div className={`analysis-likely-gone ${selectedLikelyGone ? 'selected' : ''}`}>
                 <button
                   type="button"
-                  key={recommendation.firstPick}
-                  className="analysis-row"
-                  onMouseEnter={() => dispatch({
-                    type: 'highlight',
-                    marks: recommendationMarks(recommendation, myColor),
-                  })}
-                  onClick={() => placeRecommendation(recommendation)}
+                  className="analysis-touch-select"
+                  onClick={() => {
+                    const next = !selectedLikelyGone
+                    setSelectedLikelyGone(next)
+                    setSelectedPick(null)
+                    dispatch({ type: 'highlight', marks: next ? likelyGoneMarks : null })
+                  }}
                 >
+                  <span>Likely gone before your turn</span>
+                  {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+                    const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+                    return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
+                  }).join(' · ')}
+                </button>
+                {selectedLikelyGone && (
+                  <div className="analysis-touch-actions">
+                    <button type="button" className="primary" onClick={placeLikelyGone}>Play these out</button>
+                    <button
+                      type="button"
+                      className="analysis-clear"
+                      onClick={() => {
+                        setSelectedLikelyGone(false)
+                        clearHighlight()
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="analysis-likely-gone"
+                onMouseEnter={() => dispatch({ type: 'highlight', marks: likelyGoneMarks })}
+                onMouseLeave={clearHighlight}
+                onClick={placeLikelyGone}
+              >
+                <span>Likely gone before your turn (click to play out)</span>
+                {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+                  const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+                  return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
+                }).join(' · ')}
+              </button>
+            )
+          )}
+          <div className="analysis-list" onMouseLeave={coarse ? undefined : clearHighlight}>
+            {recommendations.map((recommendation, index) => {
+              const factors = displayedFactors(recommendation)
+              const content = (
+                <>
                   <span className="analysis-rank">{index + 1}</span>
                   <span className="analysis-row-body">
                     <span className="analysis-pick-line">
@@ -240,6 +279,58 @@ export function AnalysisPanel() {
                       ))}
                     </span>
                   </span>
+                </>
+              )
+              if (coarse) {
+                const selected = selectedPick === recommendation.firstPick
+                return (
+                  <div
+                    key={recommendation.firstPick}
+                    className={`analysis-row ${selected ? 'selected' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="analysis-row-select"
+                      onClick={() => selectRecommendation(recommendation)}
+                    >
+                      {content}
+                    </button>
+                    {selected && (
+                      <div className="analysis-touch-actions">
+                        <button
+                          type="button"
+                          className="primary"
+                          onClick={() => placeRecommendation(recommendation)}
+                        >
+                          Place settlement
+                        </button>
+                        <button
+                          type="button"
+                          className="analysis-clear"
+                          onClick={() => {
+                            setSelectedPick(null)
+                            clearHighlight()
+                          }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <button
+                  type="button"
+                  key={recommendation.firstPick}
+                  className="analysis-row"
+                  onMouseEnter={() => dispatch({
+                    type: 'highlight',
+                    marks: recommendationMarks(recommendation, myColor),
+                  })}
+                  onClick={() => placeRecommendation(recommendation)}
+                >
+                  {content}
                 </button>
               )
             })}

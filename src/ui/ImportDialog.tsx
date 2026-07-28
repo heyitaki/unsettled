@@ -7,6 +7,7 @@ import {
 import { listMaps } from '../persistence/localStorage'
 import { fileTitle, firstFreeName } from './boardFiles'
 import { useStore } from './store'
+import { useCoarsePointer } from './useMediaQuery'
 
 async function decodeImage(file: File): Promise<RgbaImage> {
   let bitmap: ImageBitmap
@@ -33,6 +34,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useStore()
   const [issues, setIssues] = useState<ParseIssue[]>([])
   const [busy, setBusy] = useState(false)
+  const coarse = useCoarsePointer()
   const notice = (message: string) => dispatch({ type: 'notice', message })
   return (
     <div className="popover-backdrop" onClick={onClose}>
@@ -98,8 +100,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               }
             }}
           />
-          <strong>{busy ? 'Analyzing board…' : 'Drop screenshot here'}</strong>
-          <span>PNG from Settled app, or click to choose</span>
+          <strong>{busy ? 'Analyzing board…' : coarse ? 'Tap to choose a screenshot' : 'Drop screenshot here'}</strong>
+          <span>{coarse ? 'From your photo library, or a PNG file' : 'PNG from Settled app, or click to choose'}</span>
         </label>
         {issues.length > 0 && (
           <div className="issue-list">

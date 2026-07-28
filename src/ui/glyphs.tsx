@@ -1,5 +1,6 @@
 import type { Resource } from '../model/types'
 import { TILE_COLORS } from './colors'
+import type { PaneId } from './mobilePanes'
 
 // Shared inline icons. Two families, deliberately different in style:
 //
@@ -258,6 +259,47 @@ export function CounterGlyph({ shape, color = GLYPH_MUTED }: { shape: CounterSha
       return (
         <svg {...shell}>
           <path d="M10 2.6 12.3 7.4l5.3.7-3.8 3.7 1 5.2-4.8-2.6-4.8 2.6 1-5.2-3.8-3.7 5.3-.7Z" />
+        </svg>
+      )
+  }
+}
+
+export function NavigationGlyph({ pane }: { pane: PaneId }) {
+  const common = {
+    className: 'nav-icon',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.6,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  }
+  switch (pane) {
+    case 'board':
+      return <svg {...common}><path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z" /></svg>
+    case 'players':
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3.8 19v-1.6A5.2 5.2 0 0 1 9 12.2a5.2 5.2 0 0 1 5.2 5.2V19Z" />
+          <circle cx="16.7" cy="9.2" r="2.4" />
+          <path d="M15.2 13.6a4.2 4.2 0 0 1 5 4.1V19h-3.4" />
+        </svg>
+      )
+    case 'picks':
+      return (
+        <svg {...common}>
+          <path d="M11.2 3.2 18 7.1v7.8l-6.8 3.9-6.8-3.9V7.1Z" />
+          <circle cx="16.7" cy="7.3" r="3.1" />
+          <circle cx="16.7" cy="7.3" r=".8" />
+        </svg>
+      )
+    case 'library':
+      return (
+        <svg {...common}>
+          <rect x="5.2" y="4" width="13.6" height="15" rx="2" />
+          <path d="M3 7.2v10.4A3.4 3.4 0 0 0 6.4 21H16M8.2 8h7.6M8.2 11.5h5.2" />
         </svg>
       )
   }

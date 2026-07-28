@@ -566,4 +566,12 @@ describe('highlight', () => {
     })
     expect(reducer(start, { type: 'highlight', marks: null }).highlight).toBeNull()
   })
+
+  it('returns the same state when clearing an already empty highlight', () => {
+    // Identity is the whole point: sweeping the draft strip clears nothing once
+    // per slot, and a fresh state object would re-render every store consumer.
+    const start = state([tab('t1')])
+    expect(reducer(start, { type: 'highlight', marks: null })).toBe(start)
+  })
+
 })

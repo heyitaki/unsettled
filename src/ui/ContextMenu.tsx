@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { clampToViewport } from './overlayPosition'
 
 export interface ContextMenuItem {
   label: string
@@ -57,9 +58,11 @@ export function ContextMenu({ ariaLabel, x, y, items, onClose }: {
     // clientWidth, not innerWidth: the latter counts a classic scrollbar as
     // usable, which parks the menu underneath it.
     const { clientWidth, clientHeight } = document.documentElement
-    const left = Math.max(4, Math.min(x, clientWidth - width - 4))
-    const top = Math.max(4, Math.min(y, clientHeight - height - 4))
-    setAt((prev) => (prev.left === left && prev.top === top ? prev : { left, top }))
+    const next = clampToViewport(x, y, { width, height }, {
+      width: clientWidth,
+      height: clientHeight,
+    })
+    setAt((prev) => (prev.left === next.left && prev.top === next.top ? prev : next))
   }, [x, y])
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

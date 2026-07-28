@@ -4,8 +4,10 @@ html {
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }

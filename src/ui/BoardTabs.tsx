@@ -11,7 +11,9 @@ import {
   shortcutLabel,
   type Shortcut,
 } from './shortcuts'
+import { overlayOpen } from './overlayPosition'
 import { activeTab, type TabState, useStore } from './store'
+import { useCoarsePointer } from './useMediaQuery'
 
 /**
  * Is the keystroke going into a field? Board shortcuts stay out of the way of
@@ -21,19 +23,6 @@ const isTextEntry = (element: Element | null): boolean =>
   element instanceof HTMLInputElement ||
   element instanceof HTMLTextAreaElement ||
   (element instanceof HTMLElement && element.isContentEditable)
-
-/**
- * Is anything open over the board? A dialog or a menu owns the keyboard until
- * it is answered, and a chord fired behind one closes a board the user cannot
- * see. Asked of the DOM because there is no app-level overlay state: the port
- * editor, the import dialog and every dropdown belong to components the tab
- * strip knows nothing about. Both backdrop classes, because both kinds block —
- * `.popover-backdrop` dims (ConfirmDialog, ImportDialog, PortPopover) and
- * `.menu-backdrop` is invisible but still swallows every click (MenuSelect,
- * ContextMenu). Called only once a chord has matched, never per keystroke.
- */
-const overlayOpen = (): boolean =>
-  document.querySelector('.popover-backdrop, .menu-backdrop') !== null
 
 /**
  * Where to open the menu for a contextmenu event. Shift+F10 and the menu key
@@ -64,6 +53,7 @@ interface ClosePrompt {
 
 export function BoardTabs() {
   const { state, dispatch } = useStore()
+  const coarse = useCoarsePointer()
   // ⌘ or Ctrl, and how the menu prints its chords. Read once: a document does
   // not change platforms.
   const [apple] = useState(applePlatform)
@@ -71,6 +61,17 @@ export function BoardTabs() {
   const [draft, setDraft] = useState('')
   const [closing, setClosing] = useState<ClosePrompt | null>(null)
   const [menu, setMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
+  const longPress = useRef<{
+    timer: number
+    x: number
+    y: number
+  } | null>(null)
+  const suppressClick = useRef(false)
+  const cancelLongPress = () => {
+    if (longPress.current !== null) window.clearTimeout(longPress.current.timer)
+    longPress.current = null
+  }
+  useEffect(() => cancelLongPress, [])
   // Fade whichever end of the tab strip hides cut-off tabs. Tabs shrink to a
   // CSS min-width floor first; only once they can't fit does the strip scroll,
   // at which point these flags drive the edge masks.
@@ -344,6 +345,31 @@ export function BoardTabs() {
           <div
             className={`board-tab ${tab.id === state.activeTabId ? 'active' : ''}`}
             key={tab.id}
+            onPointerDown={(event) => {
+              if (!coarse || event.target instanceof HTMLInputElement) return
+              cancelLongPress()
+              suppressClick.current = false
+              const { clientX: x, clientY: y } = event
+              const timer = window.setTimeout(() => {
+                longPress.current = null
+                suppressClick.current = true
+                setMenu({ tabId: tab.id, x, y })
+              }, 500)
+              longPress.current = { timer, x, y }
+            }}
+            onPointerMove={(event) => {
+              const press = longPress.current
+              if (press === null || Math.hypot(event.clientX - press.x, event.clientY - press.y) <= 10) return
+              cancelLongPress()
+            }}
+            onPointerUp={cancelLongPress}
+            onPointerCancel={cancelLongPress}
+            onClickCapture={(event) => {
+              if (!suppressClick.current) return
+              event.preventDefault()
+              event.stopPropagation()
+              suppressClick.current = false
+            }}
             // The menu acts on the board that was right-clicked, which need not
             // be the active one — "close others" from a background tab is the
             // whole point of having it.
@@ -366,6 +392,10 @@ export function BoardTabs() {
                 size={Math.max(draft.length, 1)}
                 value={draft}
                 aria-label={`Rename ${tab.title}`}
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="done"
                 onChange={(event) => setDraft(event.target.value)}
                 onBlur={commitEdit}
                 onKeyDown={(event) => {

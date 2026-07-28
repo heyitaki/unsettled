@@ -13,6 +13,7 @@ import {
 } from '../persistence/localStorage'
 import { inPlaceTarget, loadedNotice, nextCopyName } from './boardFiles'
 import { ConfirmDialog } from './ConfirmDialog'
+import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 
 type SortKey = 'name' | 'modifiedAt' | 'createdAt' | 'openedAt'
@@ -22,6 +23,19 @@ const SORT_LABEL: Record<Exclude<SortKey, 'name'>, string> = {
   createdAt: 'Created',
   openedAt: 'Opened',
 }
+
+// The menu's own labels, keyed by every SortKey so adding a key is a compile
+// error rather than a blank sort trigger at runtime. Declaration order is menu
+// order.
+const SORT_MENU_LABEL: Record<SortKey, string> = {
+  modifiedAt: 'Last modified',
+  createdAt: 'Created',
+  openedAt: 'Last opened',
+  name: 'Name',
+}
+
+const SORT_OPTIONS: readonly { value: SortKey; label: string }[] =
+  (Object.keys(SORT_MENU_LABEL) as SortKey[]).map((value) => ({ value, label: SORT_MENU_LABEL[value] }))
 
 // Compact "3m ago" / "2d ago" so a row's timestamp fits the narrow rail.
 function relativeTime(ts: number): string {
@@ -208,21 +222,30 @@ export function MapsPanel() {
           onKeyDown={(event) => { if (event.key === 'Enter') submitSave() }}
           placeholder="Map name"
           aria-label="Map name"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="done"
         />
         <button type="button" className="primary" onClick={submitSave}>Save to library</button>
       </div>
       {listed.warning && <p className="notice warning">{listed.warning}</p>}
       <div className="library-list-head">
         <span>{listed.maps.length} {listed.maps.length === 1 ? 'map' : 'maps'}</span>
-        <label className="map-sort">
+        {/* MenuSelect rather than a native select: iOS zooms the page when a
+            form control under 16px takes focus, which forced the sort control
+            to a size out of scale with the rest of the panel. */}
+        <span className="map-sort">
           <span>Sort</span>
-          <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
-            <option value="modifiedAt">Last modified</option>
-            <option value="createdAt">Created</option>
-            <option value="openedAt">Last opened</option>
-            <option value="name">Name</option>
-          </select>
-        </label>
+          <MenuSelect
+            ariaLabel="Sort saved maps"
+            value={sortKey}
+            options={SORT_OPTIONS}
+            onSelect={setSortKey}
+          >
+            <strong>{SORT_MENU_LABEL[sortKey]}</strong>
+          </MenuSelect>
+        </span>
       </div>
       <div
         ref={scrollerRef}

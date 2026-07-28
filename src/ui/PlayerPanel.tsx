@@ -1,4 +1,13 @@
-import { useState, type DragEvent, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { analyzeBoardCached } from '../engine/analyze'
 import { draftIsComplete } from '../engine/draft'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
@@ -13,7 +22,14 @@ import { PLAYER_PALETTE, RESOURCES, type Board, type Resource, type VertexId } f
 import { readableInk } from './colors'
 import { CounterGlyph, GLYPH_MUTED, ResourceGlyph, StructureGlyph } from './glyphs'
 import { MenuSelect } from './MenuSelect'
+import { dropIndexFor, edgeScrollStep } from './rowDrag'
 import { activeTab, useStore } from './store'
+import { useCoarsePointer } from './useMediaQuery'
+
+/** How long a finger must rest on a row before it becomes a drag. */
+const HOLD_MS = 380
+/** Movement before the hold completes that means "this was a scroll". */
+const HOLD_SLOP = 8
 
 const RESOURCE_LABELS: Record<Resource, string> = {
   wood: 'Wood',
@@ -23,11 +39,6 @@ const RESOURCE_LABELS: Record<Resource, string> = {
   ore: 'Ore',
 }
 
-// The tally reads as a table: icons hoisted into one header row, every player
-// row just numbers under them. Header and rows iterate this one list, so a
-// column can never drift out of alignment with its heading. Heading glyphs are
-// uniform-height and bottom-aligned (see .tally-header), so the strip scans as
-// one row of labels rather than a skyline.
 const TALLY_PX = 13
 
 interface TallyColumn {
@@ -43,11 +54,21 @@ interface TallyColumn {
 
 type TallyView = 'pieces' | 'resources'
 
+/**
+ * What a row drag is currently aimed at: a destination row, or the trash. One
+ * value rather than a pair, since aiming at a row and at the trash are mutually
+ * exclusive and every writer would otherwise have to remember to clear the
+ * other.
+ */
+type DropTarget = { kind: 'row'; index: number } | { kind: 'trash' }
+
 const VIEW_OPTIONS: readonly { value: TallyView; label: string }[] = [
   { value: 'pieces', label: 'Pieces' },
   { value: 'resources', label: 'Resources' },
 ]
 
+// Header and rows iterate this one list, so a column cannot drift out of
+// alignment with its heading.
 const TALLY_COLUMNS: TallyColumn[] = [
   {
     key: 'settlements',
@@ -142,6 +163,7 @@ function StatChip({ label, icon, count, adjust }: {
 
 export function PlayerPanel() {
   const { state, dispatch } = useStore()
+  const coarse = useCoarsePointer()
   const tab = activeTab(state)
   const { game } = tab
   const { board } = game
@@ -152,6 +174,11 @@ export function PlayerPanel() {
   // never has them, so the column would be noise.
   const showSuperCities = standings.some((standing) => standing.superCities > 0)
   const [view, setView] = useState<TallyView>('pieces')
+  const [caption, setCaption] = useState<{ key: string; text: string } | null>(null)
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
+  useEffect(() => {
+    setSelectedSlot(null)
+  }, [board])
   const columns = view === 'resources'
     ? RESOURCE_COLUMNS
     : TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
@@ -206,16 +233,147 @@ export function PlayerPanel() {
   // Dropping on the trash row (which only exists mid-drag) removes the player.
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
-  const [overIndex, setOverIndex] = useState<number | null>(null)
-  const [overTrash, setOverTrash] = useState(false)
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const endDrag = () => {
     setDragId(null)
-    setOverIndex(null)
-    setOverTrash(false)
+    setDropTarget(null)
   }
   const dropOn = (event: DragEvent, index: number) => {
     event.preventDefault()
     if (dragId !== null) commit(movePlayer(board, dragId, index))
+    endDrag()
+  }
+  // HTML5 drag never fires on touch, so the same reorder runs off pointer events.
+  const listRef = useRef<HTMLDivElement>(null)
+  const press = useRef<
+    { pointerId: number; playerId: string; startX: number; startY: number; held: boolean; timer: number } | null
+  >(null)
+  const pointerY = useRef(0)
+  const draggedRef = useRef(false)
+  const endPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer)
+    press.current = null
+  }
+  // The hold timer outlives the row if it unmounts inside the 380ms window, and
+  // would then capture a pointer on a detached node.
+  useEffect(() => endPress, [])
+  const aimDrag = useCallback((y: number) => {
+    const list = listRef.current
+    if (!list) return
+    const trash = list.querySelector('.player-trash')?.getBoundingClientRect()
+    // Bounded both ways: everything below the trash row — the draft strip, the
+    // nav, off-screen — must not read as "remove".
+    if (trash && y >= trash.top && y <= trash.bottom) {
+      setDropTarget({ kind: 'trash' })
+      return
+    }
+    setDropTarget({
+      kind: 'row',
+      index: dropIndexFor(
+        [...list.querySelectorAll('.player-card')].map((card) => card.getBoundingClientRect()),
+        y,
+      ),
+    })
+  }, [])
+  // A held row must not also pan the page. touch-action is fixed for the life of
+  // a gesture, so the only way to take panning back mid-hold is a non-passive
+  // listener; React's own touch handlers are passive and cannot do it.
+  useEffect(() => {
+    if (!coarse || dragId === null) return
+    const swallow = (event: TouchEvent) => event.preventDefault()
+    document.addEventListener('touchmove', swallow, { passive: false })
+    return () => document.removeEventListener('touchmove', swallow)
+  }, [coarse, dragId])
+  // With panning suppressed, the drag itself has to reach anything off screen.
+  useEffect(() => {
+    if (!coarse || dragId === null) return
+    let frame = 0
+    const tick = () => {
+      const step = edgeScrollStep(pointerY.current, window.innerHeight)
+      if (step !== 0) {
+        const was = window.scrollY
+        window.scrollBy(0, step)
+        // Portrait scrolls the document; landscape gives the pane its own
+        // scroller, and then the window has nowhere to go.
+        if (window.scrollY === was) listRef.current?.closest('.mobile-pane')?.scrollBy(0, step)
+        aimDrag(pointerY.current)
+      }
+      frame = window.requestAnimationFrame(tick)
+    }
+    frame = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(frame)
+  }, [coarse, dragId, aimDrag])
+  // Last resort: a release the row never sees would strand dragId, and with it
+  // both the scroll-swallowing listener and the loop above. Bubble phase, so
+  // the row's own handler has already committed the drop by the time this runs.
+  useEffect(() => {
+    if (dragId === null) return
+    const rescue = (event: PointerEvent) => {
+      if (press.current && press.current.pointerId !== event.pointerId) return
+      endPress()
+      endDrag()
+    }
+    window.addEventListener('pointerup', rescue)
+    window.addEventListener('pointercancel', rescue)
+    return () => {
+      window.removeEventListener('pointerup', rescue)
+      window.removeEventListener('pointercancel', rescue)
+    }
+  }, [dragId])
+  const onRowPointerDown = (event: ReactPointerEvent<HTMLDivElement>, playerId: string) => {
+    if (!coarse || renamingId === playerId || board.players.length < 2) return
+    // Re-armed here rather than on a timer: a click that never arrives would
+    // otherwise leave the flag set and swallow the next tap.
+    draggedRef.current = false
+    // A second finger must not hijack a live press: the first one's pointerup
+    // would then no longer match, and the drag could never be ended.
+    if (press.current || dragId !== null) return
+    const row = event.currentTarget
+    const { pointerId, clientX, clientY } = event
+    press.current = {
+      pointerId,
+      playerId,
+      startX: clientX,
+      startY: clientY,
+      held: false,
+      timer: window.setTimeout(() => {
+        if (!press.current) return
+        press.current.held = true
+        draggedRef.current = true
+        row.setPointerCapture(pointerId)
+        setDragId(playerId)
+        // Aimed at the row's own slot, so a hold that never moves cannot pass
+        // the "moved somewhere else" guard on release.
+        setDropTarget({ kind: 'row', index: board.players.findIndex((player) => player.id === playerId) })
+      }, HOLD_MS),
+    }
+    pointerY.current = clientY
+  }
+  const onRowPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const current = press.current
+    if (!current || current.pointerId !== event.pointerId) return
+    pointerY.current = event.clientY
+    // Movement before the hold lands is a scroll or a swipe, and gives the row
+    // up — measured in both axes, since a sideways swipe is no less a gesture.
+    if (!current.held) {
+      if (Math.hypot(event.clientX - current.startX, event.clientY - current.startY) > HOLD_SLOP) endPress()
+      return
+    }
+    aimDrag(event.clientY)
+  }
+  const endRowPress = (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const current = press.current
+    if (!current || current.pointerId !== event.pointerId) return
+    if (current.held && !cancelled) {
+      const from = board.players.findIndex((player) => player.id === current.playerId)
+      if (dropTarget?.kind === 'trash') commit(removePlayer(board, current.playerId))
+      // A row released where it started is a cancelled drag, not an edit worth
+      // an undo entry.
+      else if (dropTarget?.kind === 'row' && dropTarget.index !== from) {
+        commit(movePlayer(board, current.playerId, dropTarget.index))
+      }
+    }
+    endPress()
     endDrag()
   }
 
@@ -240,7 +398,7 @@ export function PlayerPanel() {
           }}
         >+</button>
       </div>
-      <div className="player-list">
+      <div className="player-list" ref={listRef}>
         {/* Column headings, with the view switch on their left. Each player's
             numbers carry their own aria-label, so the icon strip is decorative
             for assistive tech. The label rides in data-label: a CSS tooltip
@@ -254,13 +412,37 @@ export function PlayerPanel() {
           >
             <strong>{VIEW_OPTIONS.find((option) => option.value === view)?.label}</strong>
           </MenuSelect>
-          <div className="tally-header" aria-hidden="true">
+          <div className="tally-header" aria-hidden={coarse ? undefined : true}>
             {columns.map((column) => (
-              <span key={column.key} data-label={column.label}>{column.icon}</span>
+              coarse ? (
+                <button
+                  type="button"
+                  key={column.key}
+                  className={caption?.key === column.key ? 'active' : undefined}
+                  aria-label={column.label}
+                  onClick={() => setCaption((current) =>
+                    current?.key === column.key ? null : { key: column.key, text: column.label })}
+                >
+                  {column.icon}
+                </button>
+              ) : <span key={column.key} data-label={column.label}>{column.icon}</span>
             ))}
-            <span className="vp-head" data-label="Victory points">VP</span>
+            {coarse ? (
+              <button
+                type="button"
+                className={`vp-head ${caption?.key === 'vp' ? 'active' : ''}`}
+                aria-label="Victory points"
+                onClick={() => setCaption((current) =>
+                  current?.key === 'vp' ? null : { key: 'vp', text: 'Victory points' })}
+              >
+                VP
+              </button>
+            ) : <span className="vp-head" data-label="Victory points">VP</span>}
           </div>
         </div>
+        {coarse && caption && (
+          <p className="tally-caption">{caption.text}</p>
+        )}
         {board.players.map((player, index) => {
           const standing = standings[index]
           const stats = game.stats[player.id]
@@ -272,10 +454,10 @@ export function PlayerPanel() {
                 'player-card',
                 active ? 'active' : '',
                 dragId === player.id ? 'dragging' : '',
-                dragId !== null && overIndex === index ? 'drag-over' : '',
+                dragId !== null && dropTarget?.kind === 'row' && dropTarget.index === index ? 'drag-over' : '',
               ].join(' ')}
               key={player.id}
-              draggable={renamingId !== player.id}
+              draggable={!coarse && renamingId !== player.id}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = 'move'
                 setDragId(player.id)
@@ -284,13 +466,34 @@ export function PlayerPanel() {
               onDragOver={(event) => {
                 if (dragId === null) return
                 event.preventDefault()
-                setOverIndex(index)
+                setDropTarget({ kind: 'row', index })
               }}
               onDrop={(event) => dropOn(event, index)}
+              onPointerDown={(event) => onRowPointerDown(event, player.id)}
+              onPointerMove={onRowPointerMove}
+              onPointerUp={(event) => endRowPress(event, false)}
+              onPointerCancel={(event) => endRowPress(event, true)}
+              // The spec's signal that a capture vanished without an end event
+              // (row unmounted, the OS took the gesture). Fires after pointerup,
+              // so a committed drop is unaffected.
+              onLostPointerCapture={(event) => endRowPress(event, true)}
+              // A drag's release can still synthesise a click. Swallowed in the
+              // capture phase so it reaches neither the card (re-selecting the
+              // row just moved) nor a child that stops propagation of its own —
+              // the name would open its rename input, a stat chip would commit a
+              // resource change on top of the reorder.
+              onClickCapture={(event) => {
+                if (!draggedRef.current) return
+                // Consumed here, so the flag never outlives the click it exists
+                // to swallow.
+                draggedRef.current = false
+                event.stopPropagation()
+                event.preventDefault()
+              }}
               onClick={() => dispatch({ type: 'active-player', playerId: player.id })}
             >
               <div className="player-row">
-                <span className="drag-handle" title="Drag to reorder, or onto the trash to remove" aria-hidden="true">⠿</span>
+                <span className="drag-handle" title="Hold to reorder, or drag onto the trash to remove" aria-hidden="true">⠿</span>
                 <button
                   className="player-dot"
                   type="button"
@@ -312,6 +515,10 @@ export function PlayerPanel() {
                     className="player-name-input"
                     autoFocus
                     aria-label={`Name for player ${index + 1}`}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="done"
                     value={player.name}
                     onChange={(event) => commit(renamePlayer(board, player.id, event.target.value))}
                     onBlur={() => setRenamingId(null)}
@@ -361,15 +568,29 @@ export function PlayerPanel() {
                       </span>
                     )
                   })}
-                  {/* VP rides in the same grid as the last column, so it lines
-                      up under its heading like every other number. */}
-                  <span
-                    className="player-vp"
-                    title={`Victory points: ${vpBreakdown(standing, stats.vpCards)}`}
-                    aria-label={`Victory points: ${standing.victoryPoints}`}
-                  >
-                    {standing.victoryPoints}
-                  </span>
+                  {coarse ? (
+                    <button
+                      type="button"
+                      className="player-vp"
+                      aria-label={`Victory points: ${standing.victoryPoints}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        const text = vpBreakdown(standing, stats.vpCards)
+                        setCaption((current) =>
+                          current?.key === `vp:${player.id}` ? null : { key: `vp:${player.id}`, text })
+                      }}
+                    >
+                      {standing.victoryPoints}
+                    </button>
+                  ) : (
+                    <span
+                      className="player-vp"
+                      title={`Victory points: ${vpBreakdown(standing, stats.vpCards)}`}
+                      aria-label={`Victory points: ${standing.victoryPoints}`}
+                    >
+                      {standing.victoryPoints}
+                    </span>
+                  )}
                 </div>
               </div>
               {active && (
@@ -415,13 +636,12 @@ export function PlayerPanel() {
             not deserve permanent UI, and the drag is already in the hand. */}
         {dragId !== null && board.players.length > 1 && (
           <div
-            className={`player-trash ${overTrash ? 'over' : ''}`}
+            className={`player-trash ${dropTarget?.kind === 'trash' ? 'over' : ''}`}
             onDragOver={(event) => {
               event.preventDefault()
-              setOverIndex(null)
-              setOverTrash(true)
+              setDropTarget({ kind: 'trash' })
             }}
-            onDragLeave={() => setOverTrash(false)}
+            onDragLeave={() => setDropTarget(null)}
             onDrop={(event) => {
               event.preventDefault()
               commit(removePlayer(board, dragId))
@@ -433,7 +653,13 @@ export function PlayerPanel() {
           </div>
         )}
       </div>
-      <div className="draft-strip" aria-label="Snake draft order" onMouseLeave={clearHighlight}>
+      <div
+        className="draft-strip"
+        aria-label="Snake draft order"
+        // One column per player, so the two snake rounds read as two rows.
+        style={{ '--draft-cols': board.players.length } as CSSProperties}
+        onMouseLeave={coarse ? undefined : clearHighlight}
+      >
         {draft.sequence.map((playerId, slot) => {
           const player = board.players.find((candidate) => candidate.id === playerId)
           if (!player) return null
@@ -443,12 +669,24 @@ export function PlayerPanel() {
             <button
               type="button"
               key={`${playerId}:${slot}`}
-              className={`draft-slot ${pending ? 'pending' : ''}`}
+              className={`draft-slot ${pending ? 'pending' : ''} ${selectedSlot === slot ? 'selected' : ''}`}
               title={`Pick ${slot + 1}: ${player.name}${
                 pending ? (vertex ? ' — predicted spot' : ' — not placed yet') : ''
               }`}
               onMouseEnter={() => {
+                if (coarse) return
                 if (vertex) {
+                  dispatch({
+                    type: 'highlight',
+                    marks: [{ ref: vertex, color: player.color, label: String(slot + 1) }],
+                  })
+                } else clearHighlight()
+              }}
+              onClick={() => {
+                if (!coarse) return
+                const next = selectedSlot === slot ? null : slot
+                setSelectedSlot(next)
+                if (next !== null && vertex) {
                   dispatch({
                     type: 'highlight',
                     marks: [{ ref: vertex, color: player.color, label: String(slot + 1) }],
