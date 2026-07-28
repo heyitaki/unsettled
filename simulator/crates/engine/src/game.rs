@@ -533,9 +533,9 @@ impl GameArena {
         }
         // Belief soundness is gated because tests may poke hands without producing public events.
         // A test that pokes a hand should keep its total distinct or use the public test seams.
-        if (0..seats).all(|seat| {
-            self.state.belief.total(seat) == self.state.players[seat].hand_total()
-        }) {
+        if (0..seats)
+            .all(|seat| self.state.belief.total(seat) == self.state.players[seat].hand_total())
+        {
             for seat in 0..seats {
                 if !self
                     .state
@@ -790,9 +790,8 @@ impl GameArena {
                 .map(|hex| hex as u8)
                 .find(|hex| *hex != self.state.robber)
                 .expect("board has another hex");
-            let fallback_victim = (0..board.seats()).find(|candidate| {
-                self.eligible_victim(topology, seat, fallback, *candidate as u8)
-            });
+            let fallback_victim = (0..board.seats())
+                .find(|candidate| self.eligible_victim(topology, seat, fallback, *candidate as u8));
             self.move_robber_and_steal(topology, seat, fallback, fallback_victim);
         } else {
             self.move_robber_and_steal(topology, seat, destination, victim.map(usize::from));
@@ -889,9 +888,11 @@ impl GameArena {
             self.offers_remaining(proposer),
             DecisionPhase::TradeResponse,
         );
+        let delta = policy::trading::responder_delta(offer);
         let selected = policy::select_counterparty(
             config.policies[proposer],
             &selection_view,
+            &delta,
             &acceptors[..acceptor_count],
         );
         let (proposer_hand, responder_hand) = if proposer < selected {
@@ -1181,12 +1182,14 @@ impl GameArena {
         }
         match victim {
             Some(victim) => {
-                usize::from(victim) < seats && self.eligible_victim(topology, seat, destination, victim)
+                usize::from(victim) < seats
+                    && self.eligible_victim(topology, seat, destination, victim)
             }
             // Stealing is mandatory when the destination touches anyone worth robbing; declining
             // is legal only when no eligible victim exists.
-            None => !(0..seats)
-                .any(|candidate| self.eligible_victim(topology, seat, destination, candidate as u8)),
+            None => !(0..seats).any(|candidate| {
+                self.eligible_victim(topology, seat, destination, candidate as u8)
+            }),
         }
     }
 

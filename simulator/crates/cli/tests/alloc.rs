@@ -6,7 +6,7 @@ use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::placement::app_formula::EngineWeights;
 use unsettled_engine::placement::{prepare_app_formula_boards, register_app_formula};
 use unsettled_engine::policy::PolicyKind;
-use unsettled_engine::rules::RuleConfig;
+use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout as BoardLayout, Topology};
 use unsettled_engine::view::DecisionPhase;
 use unsettled_sim::boardgen::generate_board;
@@ -145,4 +145,46 @@ fn devcards_hot_loop_has_zero_steady_state_allocations() {
     }
     COUNTING.store(false, Ordering::SeqCst);
     assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn trading_hot_loop_has_zero_steady_state_allocations() {
+    let topology = Topology::load(BoardLayout::Standard4).unwrap();
+    let board = generate_board(BoardLayout::Standard4, 4, 31).unwrap();
+    let mut rules = RuleConfig::base(BoardLayout::Standard4);
+    rules.player_trading = Some(TradeConfig::default());
+    let mut arena = GameArena::default();
+    let mut config = GameConfig {
+        policies: [PolicyKind::HeuristicV1TraderAware; 6],
+        ..GameConfig::default()
+    };
+    for seed in 0..50 {
+        config.seed = seed;
+        arena.play(&board, &topology, &rules, &config);
+    }
+    let mut aware_checksum = 0_u64;
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::SeqCst);
+    for seed in 50..250 {
+        config.seed = seed;
+        let result = arena.play(&board, &topology, &rules, &config);
+        aware_checksum = aware_checksum
+            .wrapping_mul(257)
+            .wrapping_add(u64::from(result.turns))
+            .wrapping_add(result.vp.into_iter().map(u64::from).sum::<u64>());
+    }
+    COUNTING.store(false, Ordering::SeqCst);
+    assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+
+    let disabled = RuleConfig::base(BoardLayout::Standard4);
+    let mut disabled_checksum = 0_u64;
+    for seed in 50..250 {
+        config.seed = seed;
+        let result = arena.play(&board, &topology, &disabled, &config);
+        disabled_checksum = disabled_checksum
+            .wrapping_mul(257)
+            .wrapping_add(u64::from(result.turns))
+            .wrapping_add(result.vp.into_iter().map(u64::from).sum::<u64>());
+    }
+    assert_ne!(aware_checksum, disabled_checksum);
 }

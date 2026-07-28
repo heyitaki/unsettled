@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::policy::PolicyScratch;
 use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::threat::{self, ThreatParams};
+use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
 use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction, can_pay, pips};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HeuristicParams {
     pub production_weight: f32,
@@ -22,6 +23,9 @@ pub struct HeuristicParams {
     /// `None` keeps the fixed pre-roll ladder and production-share Monopoly proxy. `Some`
     /// selects the belief-and-ETW comparison in `policy::devcards`.
     pub dev_cards: Option<DevCardParams>,
+    /// `None` keeps the offer-independent VP-ratio acceptance rule and the lexicographic
+    /// counterparty ladder. `Some` selects the shared opponent-value model in `policy::trading`.
+    pub trading: Option<TradeParams>,
 }
 
 impl Default for HeuristicParams {
@@ -35,6 +39,7 @@ impl Default for HeuristicParams {
             robber_block_threshold: 4,
             threat: None,
             dev_cards: None,
+            trading: None,
         }
     }
 }

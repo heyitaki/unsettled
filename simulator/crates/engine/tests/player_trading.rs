@@ -2,10 +2,16 @@ use std::fs;
 use std::path::PathBuf;
 
 use unsettled_engine::board::{ConversionOptions, SimBoard};
+use unsettled_engine::etw;
 use unsettled_engine::game::{GameArena, GameConfig, trade_players};
 use unsettled_engine::longest_road::RoadCard;
+#[cfg(debug_assertions)]
+use unsettled_engine::policy::heuristic_v1::HeuristicParams;
+#[cfg(debug_assertions)]
+use unsettled_engine::policy::heuristic_v1_trader;
+use unsettled_engine::policy::trading::{self, TradeParams};
 use unsettled_engine::policy::{self, PolicyKind, PolicyScratch, random_legal};
-use unsettled_engine::rng::Xoshiro256StarStar;
+use unsettled_engine::rng::{Xoshiro256StarStar, mix64};
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig, TradeConfig};
 use unsettled_engine::state::EMPTY;
 use unsettled_engine::topology::{Edge, Layout, Topology};
@@ -15,6 +21,11 @@ use unsettled_engine::trade::{
 };
 use unsettled_engine::view::{Action, ActionBuf, DecisionPhase, DevPlay};
 use unsettled_engine::wire::WireBoard;
+
+#[path = "../../cli/src/boardgen.rs"]
+mod boardgen;
+
+const TUNING_SEED: u64 = 0x7a11_1e5e_ed20_2607;
 
 fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
     let topology = Topology::load(Layout::Extension6).unwrap();
@@ -30,8 +41,57 @@ fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
     (topology, board, rules, config, arena)
 }
 
+fn truncated_game(
+    game: u64,
+    turn_cap: u16,
+    trade_config: TradeConfig,
+) -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
+    let topology = Topology::load(Layout::Extension6).unwrap();
+    let board = boardgen::generate_board(
+        Layout::Extension6,
+        6,
+        mix64(TUNING_SEED ^ game ^ (u64::from(turn_cap) << 40)),
+    )
+    .unwrap();
+    let mut rules = RuleConfig::base(Layout::Extension6);
+    rules.player_trading = Some(trade_config);
+    rules.turn_cap = turn_cap;
+    let config = GameConfig {
+        policies: [PolicyKind::HeuristicV1Trader; 6],
+        seed: TUNING_SEED ^ game ^ (u64::from(turn_cap) << 20),
+        ..GameConfig::default()
+    };
+    let mut arena = GameArena::default();
+    arena.play(&board, &topology, &rules, &config);
+    (topology, board, rules, config, arena)
+}
+
+fn deterministic_truncated_game(
+    game: u64,
+) -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
+    truncated_game(
+        game,
+        8,
+        TradeConfig {
+            acceptance_temperature: 0.0,
+            ..TradeConfig::default()
+        },
+    )
+}
+
 fn enable_trading(rules: &mut RuleConfig) {
     rules.player_trading = Some(TradeConfig::default());
+}
+
+#[cfg(debug_assertions)]
+fn invalid_trading_params() -> HeuristicParams {
+    HeuristicParams {
+        trading: Some(TradeParams {
+            danger_floor: 0.0,
+            ..TradeParams::default()
+        }),
+        ..HeuristicParams::default()
+    }
 }
 
 fn move_from_bank(arena: &mut GameArena, seat: usize, resource: Resource, count: u16) {
@@ -444,9 +504,6 @@ fn responder_decision_does_not_leak_an_opponents_face_down_dev_identity() {
     };
     let first_view = first.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
     let second_view = second.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
-    let mut first_rng = Xoshiro256StarStar::from_seed(7);
-    let mut second_rng = Xoshiro256StarStar::from_seed(7);
-
     assert_eq!(first_view.dev_count(0), second_view.dev_count(0));
     assert_eq!(
         conservative_hidden_vp_for(&first_view, 0, 0.9),
@@ -456,20 +513,17 @@ fn responder_decision_does_not_leak_an_opponents_face_down_dev_identity() {
         vp_estimate(&first_view, 0, 0.9),
         vp_estimate(&second_view, 0, 0.9)
     );
-    assert_eq!(
-        policy::respond_trade(
-            PolicyKind::HeuristicV1Trader,
-            &first_view,
-            offer,
-            &mut first_rng,
-        ),
-        policy::respond_trade(
-            PolicyKind::HeuristicV1Trader,
-            &second_view,
-            offer,
-            &mut second_rng,
-        )
-    );
+    for kind in [
+        PolicyKind::HeuristicV1Trader,
+        PolicyKind::HeuristicV1TraderAware,
+    ] {
+        let mut first_rng = Xoshiro256StarStar::from_seed(7);
+        let mut second_rng = Xoshiro256StarStar::from_seed(7);
+        assert_eq!(
+            policy::respond_trade(kind, &first_view, offer, &mut first_rng),
+            policy::respond_trade(kind, &second_view, offer, &mut second_rng)
+        );
+    }
 }
 
 #[test]
@@ -598,10 +652,7 @@ fn acceptor_selection_chooses_the_lowest_vp_estimate() {
         },
         DecisionPhase::Action,
     ));
-    assert_eq!(
-        arena.state.players[2].resources[Resource::Wood.index()],
-        1
-    );
+    assert_eq!(arena.state.players[2].resources[Resource::Wood.index()], 1);
 }
 
 #[test]
@@ -640,19 +691,22 @@ fn acceptor_selection_breaks_estimate_ties_by_rotation_relative_rank() {
         },
         DecisionPhase::Action,
     ));
-    assert_eq!(
-        arena.state.players[1].resources[Resource::Wood.index()],
-        1
-    );
+    assert_eq!(arena.state.players[1].resources[Resource::Wood.index()], 1);
 }
 
 #[test]
-fn every_policy_kind_selects_the_same_farthest_counterparty() {
+fn every_ungated_policy_kind_selects_the_same_farthest_counterparty() {
     let (topology, board, mut rules, config, mut arena) = fixture();
     enable_trading(&mut rules);
     arena.prepare(&board, &topology, &rules, &config);
     let proposer = 3;
     let view = arena.decision_view(&board, &topology, proposer, DecisionPhase::TradeResponse);
+    let delta = policy::trading::responder_delta(TradeOffer {
+        proposer,
+        give: Resource::Wood,
+        get: Resource::Ore,
+        count: 1,
+    });
 
     for kind in [
         PolicyKind::RandomLegal,
@@ -662,7 +716,7 @@ fn every_policy_kind_selects_the_same_farthest_counterparty() {
         PolicyKind::HeuristicV1Noports,
         PolicyKind::HeuristicV1Trader,
     ] {
-        assert_eq!(policy::select_counterparty(kind, &view, &[0, 2]), 2);
+        assert_eq!(policy::select_counterparty(kind, &view, &delta, &[0, 2]), 2);
     }
 }
 
@@ -704,10 +758,7 @@ fn acceptor_selection_uses_hidden_vp_estimates_not_public_vp() {
         },
         DecisionPhase::Action,
     ));
-    assert_eq!(
-        arena.state.players[2].resources[Resource::Wood.index()],
-        1
-    );
+    assert_eq!(arena.state.players[2].resources[Resource::Wood.index()], 1);
 }
 
 #[test]
@@ -791,41 +842,125 @@ fn responder_embargo_does_not_depend_on_the_proposers_hidden_vp() {
         offer,
         DecisionPhase::Action,
     ));
-    assert_eq!(
-        first.state.players[1].resources[Resource::Wood.index()],
-        0
-    );
-    assert_eq!(
-        second.state.players[1].resources[Resource::Wood.index()],
-        0
-    );
+    assert_eq!(first.state.players[1].resources[Resource::Wood.index()], 0);
+    assert_eq!(second.state.players[1].resources[Resource::Wood.index()], 0);
 }
 
 #[test]
 fn trading_results_are_byte_identical_between_serial_and_parallel_schedules() {
     let (topology, board, mut rules, mut config, _) = fixture();
     enable_trading(&mut rules);
-    config.policies = [PolicyKind::HeuristicV1Trader; 6];
     rules.turn_cap = 20;
-    let run = |seed| {
-        let mut game_config = config.clone();
-        game_config.seed = seed;
-        GameArena::default().play(&board, &topology, &rules, &game_config)
-    };
-    let serial: Vec<_> = (0..12).map(run).collect();
-    let parallel: Vec<_> = std::thread::scope(|scope| {
-        (0..12)
-            .map(|seed| scope.spawn(move || run(seed)))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|handle| handle.join().unwrap())
-            .collect()
-    });
+    for kind in [
+        PolicyKind::HeuristicV1Trader,
+        PolicyKind::HeuristicV1TraderAware,
+    ] {
+        config.policies = [kind; 6];
+        let run = |seed| {
+            let mut game_config = config.clone();
+            game_config.seed = seed;
+            GameArena::default().play(&board, &topology, &rules, &game_config)
+        };
+        let serial: Vec<_> = (0..12).map(run).collect();
+        let parallel: Vec<_> = std::thread::scope(|scope| {
+            (0..12)
+                .map(|seed| scope.spawn(move || run(seed)))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect()
+        });
 
-    assert_eq!(
-        serde_json::to_vec(&serial).unwrap(),
-        serde_json::to_vec(&parallel).unwrap()
-    );
+        assert_eq!(
+            serde_json::to_vec(&serial).unwrap(),
+            serde_json::to_vec(&parallel).unwrap(),
+            "{kind:?}"
+        );
+    }
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic]
+fn invalid_trade_params_panic_before_response_without_trade_config() {
+    let (topology, board, _rules, _config, arena) = fixture();
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    let offer = TradeOffer {
+        proposer: 0,
+        give: Resource::Wood,
+        get: Resource::Ore,
+        count: 1,
+    };
+    let mut rng = Xoshiro256StarStar::from_seed(1);
+    heuristic_v1_trader::respond_trade(&view, offer, &invalid_trading_params(), &mut rng);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic]
+fn invalid_trade_params_panic_before_response_in_the_wrong_phase() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    enable_trading(&mut rules);
+    arena.prepare(&board, &topology, &rules, &config);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::Action);
+    let offer = TradeOffer {
+        proposer: 0,
+        give: Resource::Wood,
+        get: Resource::Ore,
+        count: 1,
+    };
+    let mut rng = Xoshiro256StarStar::from_seed(1);
+    heuristic_v1_trader::respond_trade(&view, offer, &invalid_trading_params(), &mut rng);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic]
+fn invalid_trade_params_panic_before_response_with_no_requested_resource() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    enable_trading(&mut rules);
+    arena.prepare(&board, &topology, &rules, &config);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    let offer = TradeOffer {
+        proposer: 0,
+        give: Resource::Wood,
+        get: Resource::Ore,
+        count: 1,
+    };
+    let mut rng = Xoshiro256StarStar::from_seed(1);
+    heuristic_v1_trader::respond_trade(&view, offer, &invalid_trading_params(), &mut rng);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic]
+fn invalid_trade_params_panic_before_response_with_no_goal() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    enable_trading(&mut rules);
+    arena.prepare(&board, &topology, &rules, &config);
+    move_from_bank(&mut arena, 1, Resource::Ore, 1);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    let offer = TradeOffer {
+        proposer: 0,
+        give: Resource::Wood,
+        get: Resource::Ore,
+        count: 1,
+    };
+    let mut rng = Xoshiro256StarStar::from_seed(1);
+    heuristic_v1_trader::respond_trade(&view, offer, &invalid_trading_params(), &mut rng);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic]
+fn invalid_trade_params_panic_before_action_with_no_legal_offer() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    enable_trading(&mut rules);
+    arena.prepare(&board, &topology, &rules, &config);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let mut scratch = PolicyScratch::default();
+    let mut rng = Xoshiro256StarStar::from_seed(1);
+    heuristic_v1_trader::action(&view, &mut scratch, &invalid_trading_params(), &mut rng);
 }
 
 #[test]
@@ -911,4 +1046,764 @@ fn every_preexisting_policy_declines_player_trade_responses() {
         let mut rng = Xoshiro256StarStar::from_seed(11);
         assert!(!policy::respond_trade(kind, &view, offer, &mut rng));
     }
+}
+
+#[test]
+fn trader_gate_policy_names_round_trip() {
+    for (name, kind) in [
+        (
+            "heuristic-v1-trader-threat",
+            PolicyKind::HeuristicV1TraderThreat,
+        ),
+        (
+            "heuristic-v1-trader-devcards",
+            PolicyKind::HeuristicV1TraderDevcards,
+        ),
+        (
+            "heuristic-v1-trader-threat-devcards",
+            PolicyKind::HeuristicV1TraderThreatDevcards,
+        ),
+        (
+            "heuristic-v1-trader-aware",
+            PolicyKind::HeuristicV1TraderAware,
+        ),
+        (
+            "heuristic-v1-trader-aware-threat",
+            PolicyKind::HeuristicV1TraderAwareThreat,
+        ),
+        (
+            "heuristic-v1-trader-aware-devcards",
+            PolicyKind::HeuristicV1TraderAwareDevcards,
+        ),
+        (
+            "heuristic-v1-trader-aware-threat-devcards",
+            PolicyKind::HeuristicV1TraderAwareThreatDevcards,
+        ),
+    ] {
+        assert_eq!(PolicyKind::parse(name), Some(kind), "{name}");
+    }
+}
+
+#[test]
+fn aware_response_receives_the_policy_trade_params() {
+    let (topology, board, rules, _config, arena) = deterministic_truncated_game(0);
+    let offer = TradeOffer {
+        proposer: 1,
+        give: Resource::Wood,
+        get: Resource::Brick,
+        count: 2,
+    };
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let margin = trading::acceptance_margin(
+        &view,
+        &TradeParams::default(),
+        rules.player_trading.as_ref().unwrap(),
+        offer,
+    );
+    assert!((margin - 0.355_142_517).abs() <= 1e-6, "margin={margin}");
+    let mut aware_rng = Xoshiro256StarStar::from_seed(1);
+    let mut baseline_rng = Xoshiro256StarStar::from_seed(1);
+    assert!(policy::respond_trade(
+        PolicyKind::HeuristicV1TraderAware,
+        &view,
+        offer,
+        &mut aware_rng
+    ));
+    assert!(!policy::respond_trade(
+        PolicyKind::HeuristicV1Trader,
+        &view,
+        offer,
+        &mut baseline_rng
+    ));
+}
+
+#[test]
+fn acceptance_uses_the_proposers_inputs_and_offer_delta() {
+    let (topology, board, rules, _config, arena) = deterministic_truncated_game(0);
+    let params = TradeParams::default();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let one = TradeOffer {
+        proposer: 1,
+        give: Resource::Wood,
+        get: Resource::Brick,
+        count: 1,
+    };
+    let two = TradeOffer { count: 2, ..one };
+    let one_margin =
+        trading::acceptance_margin(&view, &params, rules.player_trading.as_ref().unwrap(), one);
+    let two_margin =
+        trading::acceptance_margin(&view, &params, rules.player_trading.as_ref().unwrap(), two);
+    assert!((one_margin - -0.254_424_413).abs() <= 1e-6);
+    assert!((two_margin - 0.355_142_517).abs() <= 1e-6);
+    assert_ne!(one_margin, two_margin);
+
+    let proposer = etw::inputs_for_seat(&view, one.proposer);
+    let theirs_one = trading::counterparty_score(&proposer, &params, &trading::proposer_delta(one));
+    let theirs_two = trading::counterparty_score(&proposer, &params, &trading::proposer_delta(two));
+    assert_ne!(theirs_one, theirs_two);
+}
+
+#[test]
+fn acceptance_uses_the_proposers_trade_rates_and_production() {
+    let (topology, board, rules, _config, arena) = deterministic_truncated_game(0);
+    let params = TradeParams::default();
+    let offer = TradeOffer {
+        proposer: 1,
+        give: Resource::Wheat,
+        get: Resource::Sheep,
+        count: 1,
+    };
+    let view = arena.decision_view(&board, &topology, 2, DecisionPhase::TradeResponse);
+    assert_eq!(
+        Resource::ALL.map(|resource| view.trade_rate_for(1, resource)),
+        [4, 2, 4, 4, 4]
+    );
+    assert_eq!(
+        Resource::ALL.map(|resource| view.trade_rate_for(2, resource)),
+        [4, 4, 4, 4, 4]
+    );
+    let margin = trading::acceptance_margin(
+        &view,
+        &params,
+        rules.player_trading.as_ref().unwrap(),
+        offer,
+    );
+    assert!((margin - -0.065_614_267).abs() <= 1e-6, "margin={margin}");
+
+    let offer = TradeOffer {
+        proposer: 1,
+        give: Resource::Wood,
+        get: Resource::Brick,
+        count: 1,
+    };
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let margin = trading::acceptance_margin(
+        &view,
+        &params,
+        rules.player_trading.as_ref().unwrap(),
+        offer,
+    );
+    assert!((margin - -0.254_424_413).abs() <= 1e-6, "margin={margin}");
+}
+
+#[test]
+fn own_inputs_replace_uncertain_belief_with_the_exact_hand() {
+    let (topology, board, rules, _config, arena) = deterministic_truncated_game(0);
+    let offer = TradeOffer {
+        proposer: 2,
+        give: Resource::Ore,
+        get: Resource::Brick,
+        count: 1,
+    };
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    assert_eq!(view.belief().expected(1), [2.0, 0.0, 0.5, 2.0, 2.5]);
+    assert_eq!(*view.own_hand(), [2, 0, 1, 2, 2]);
+    assert_eq!(
+        trading::own_inputs(&view).belief_expected,
+        [2.0, 0.0, 1.0, 2.0, 2.0]
+    );
+    let margin = trading::acceptance_margin(
+        &view,
+        &TradeParams::default(),
+        rules.player_trading.as_ref().unwrap(),
+        offer,
+    );
+    assert!((margin - 0.064_774_743).abs() <= 1e-6, "margin={margin}");
+}
+
+#[test]
+fn acceptance_forwards_opponent_weight_and_margin_scale() {
+    let offer = TradeOffer {
+        proposer: 1,
+        give: Resource::Wood,
+        get: Resource::Brick,
+        count: 1,
+    };
+    let (topology, board, rules, _config, arena) = deterministic_truncated_game(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let weighted = trading::acceptance_margin(
+        &view,
+        &TradeParams::default(),
+        rules.player_trading.as_ref().unwrap(),
+        offer,
+    );
+    let unweighted_config = TradeConfig {
+        opponent_gain_weight: 0.0,
+        ..*rules.player_trading.as_ref().unwrap()
+    };
+    let unweighted =
+        trading::acceptance_margin(&view, &TradeParams::default(), &unweighted_config, offer);
+    assert!((weighted - -0.254_424_413).abs() <= 1e-6);
+    assert!((unweighted - 0.238_586_156).abs() <= 1e-6);
+
+    let (topology, board, mut rules, config, arena) = deterministic_truncated_game(0);
+    let state = arena.state.clone();
+    rules.player_trading = Some(TradeConfig::default());
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    arena.state = state;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let margin = trading::acceptance_margin(
+        &view,
+        &TradeParams::default(),
+        rules.player_trading.as_ref().unwrap(),
+        offer,
+    );
+    let probability = acceptance_probability(margin, 0.5);
+    assert!((margin - -0.254_424_413).abs() <= 1e-6, "margin={margin}");
+    assert!((probability - 0.375_463_396).abs() <= 1e-6);
+    let mut rng = Xoshiro256StarStar::from_seed(23);
+    assert!(!policy::respond_trade(
+        PolicyKind::HeuristicV1TraderAware,
+        &view,
+        offer,
+        &mut rng
+    ));
+}
+
+#[test]
+fn aware_counterparty_selection_uses_the_shared_score() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
+    let proposer = 1;
+    let offer = TradeOffer {
+        proposer,
+        give: Resource::Wheat,
+        get: Resource::Wood,
+        count: 1,
+    };
+    let view = arena.decision_view(&board, &topology, proposer, DecisionPhase::TradeResponse);
+    assert_eq!(vp_estimate(&view, 0, 0.9), vp_estimate(&view, 2, 0.9));
+    let delta = trading::responder_delta(offer);
+    let scores = [0, 2].map(|seat| {
+        trading::counterparty_score(
+            &etw::inputs_for_seat(&view, seat),
+            &TradeParams::default(),
+            &delta,
+        )
+    });
+    assert!((scores[0] - 0.079_147_714).abs() <= 1e-9);
+    assert!((scores[1] - 0.074_113_867).abs() <= 1e-9);
+    assert_eq!(
+        policy::select_counterparty(PolicyKind::HeuristicV1TraderAware, &view, &delta, &[0, 2]),
+        2
+    );
+    assert_eq!(
+        policy::select_counterparty(PolicyKind::HeuristicV1Trader, &view, &delta, &[0, 2]),
+        0
+    );
+}
+
+#[test]
+fn responder_delta_and_offer_count_reach_counterparty_selection() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
+    let offer = TradeOffer {
+        proposer: 1,
+        give: Resource::Wood,
+        get: Resource::Brick,
+        count: 1,
+    };
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    let delta = trading::responder_delta(offer);
+    let scores = [3, 4].map(|seat| {
+        trading::counterparty_score(
+            &etw::inputs_for_seat(&view, seat),
+            &TradeParams::default(),
+            &delta,
+        )
+    });
+    assert!((scores[0] - 0.034_568_079).abs() <= 1e-9);
+    assert!((scores[1] - 0.069_507_228).abs() <= 1e-9);
+    assert_eq!(
+        policy::select_counterparty(PolicyKind::HeuristicV1TraderAware, &view, &delta, &[3, 4]),
+        3
+    );
+
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(17);
+    let offer = TradeOffer {
+        proposer: 0,
+        give: Resource::Sheep,
+        get: Resource::Ore,
+        count: 2,
+    };
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let delta = trading::responder_delta(offer);
+    assert_eq!(
+        policy::select_counterparty(PolicyKind::HeuristicV1TraderAware, &view, &delta, &[3, 4]),
+        4
+    );
+}
+
+#[test]
+fn applied_aware_trade_mutates_the_selected_recipients_hand() {
+    let (topology, board, rules, mut config, mut arena) = deterministic_truncated_game(0);
+    config.policies[1] = PolicyKind::HeuristicV1TraderAware;
+    let seat_three_before = arena.state.players[3].resources[Resource::Wood.index()];
+    let seat_four_before = arena.state.players[4].resources[Resource::Wood.index()];
+    assert!(arena.apply_action_for_test(
+        &board,
+        &topology,
+        &rules,
+        &config,
+        1,
+        Action::OfferTrade {
+            give: Resource::Wood,
+            get: Resource::Brick,
+            count: 1,
+        },
+        DecisionPhase::Action,
+    ));
+    assert_eq!(
+        arena.state.players[3].resources[Resource::Wood.index()],
+        seat_three_before + 1
+    );
+    assert_eq!(
+        arena.state.players[4].resources[Resource::Wood.index()],
+        seat_four_before
+    );
+}
+
+#[test]
+fn applied_aware_trade_forwards_the_offer_count_to_selection() {
+    let (topology, board, rules, mut config, mut arena) = deterministic_truncated_game(17);
+    config.policies[0] = PolicyKind::HeuristicV1TraderAware;
+    arena.begin_turn_for_test(&board, &topology, &rules, &config, 0);
+    let seat_three_before = arena.state.players[3].resources[Resource::Sheep.index()];
+    let seat_four_before = arena.state.players[4].resources[Resource::Sheep.index()];
+    let action = Action::OfferTrade {
+        give: Resource::Sheep,
+        get: Resource::Ore,
+        count: 2,
+    };
+    assert!(
+        arena.validate_action(&board, &topology, 0, action, DecisionPhase::Action),
+        "hand={:?}",
+        arena.state.players[0].resources
+    );
+    assert!(arena.apply_action_for_test(
+        &board,
+        &topology,
+        &rules,
+        &config,
+        0,
+        action,
+        DecisionPhase::Action,
+    ));
+    assert_eq!(
+        arena.state.players[3].resources[Resource::Sheep.index()],
+        seat_three_before
+    );
+    assert_eq!(
+        arena.state.players[4].resources[Resource::Sheep.index()],
+        seat_four_before + 2
+    );
+}
+
+#[test]
+fn applied_aware_trade_forwards_a_nonzero_delta_to_selection() {
+    let (topology, board, rules, mut config, mut arena) = deterministic_truncated_game(0);
+    config.policies = [PolicyKind::HeuristicV1TraderAware; 6];
+    move_from_bank(&mut arena, 0, Resource::Wood, 1);
+    let seat_three_before = arena.state.players[3].resources[Resource::Sheep.index()];
+    let seat_five_before = arena.state.players[5].resources[Resource::Sheep.index()];
+    let action = Action::OfferTrade {
+        give: Resource::Wood,
+        get: Resource::Sheep,
+        count: 2,
+    };
+    assert!(arena.apply_action_for_test(
+        &board,
+        &topology,
+        &rules,
+        &config,
+        0,
+        action,
+        DecisionPhase::Action,
+    ));
+    assert_eq!(
+        arena.state.players[3].resources[Resource::Sheep.index()],
+        seat_three_before
+    );
+    assert_eq!(
+        arena.state.players[5].resources[Resource::Sheep.index()],
+        seat_five_before - 1
+    );
+}
+
+#[test]
+fn exact_counterparty_ties_keep_the_first_acceptor() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    enable_trading(&mut rules);
+    arena.prepare(&board, &topology, &rules, &config);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    assert_eq!(
+        trading::select_counterparty(
+            &view,
+            &TradeParams::default(),
+            &[0.0; RESOURCE_COUNT],
+            &[0, 2]
+        ),
+        0
+    );
+}
+
+#[test]
+fn aware_action_receives_the_policy_trade_params() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let run = |kind| {
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48);
+        policy::action(kind, &view, &mut scratch, &mut rng)
+    };
+    assert_eq!(
+        run(PolicyKind::HeuristicV1TraderAware),
+        Action::OfferTrade {
+            give: Resource::Brick,
+            get: Resource::Wheat,
+            count: 1,
+        }
+    );
+    assert_ne!(
+        run(PolicyKind::HeuristicV1Trader),
+        run(PolicyKind::HeuristicV1TraderAware)
+    );
+}
+
+#[test]
+fn aware_action_checks_every_eligible_recipient() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let mut scratch = PolicyScratch::default();
+    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48);
+    assert_eq!(
+        policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng
+        ),
+        Action::OfferTrade {
+            give: Resource::Brick,
+            get: Resource::Wheat,
+            count: 1,
+        }
+    );
+}
+
+#[test]
+fn aware_action_uses_the_minimum_recipient_score() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::Action);
+    let mut scratch = PolicyScratch::default();
+    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 1);
+    assert_eq!(
+        policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng
+        ),
+        Action::OfferTrade {
+            give: Resource::Brick,
+            get: Resource::Sheep,
+            count: 1,
+        }
+    );
+}
+
+#[test]
+fn aware_threat_params_reach_base_action_scoring() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(7);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let seed = 8_u64 << 48 ^ 7 << 8;
+    let run = |kind| {
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(seed);
+        policy::action(kind, &view, &mut scratch, &mut rng)
+    };
+    assert_eq!(
+        run(PolicyKind::HeuristicV1TraderAwareThreat),
+        Action::PlayDev(DevPlay::Knight {
+            destination: 10,
+            victim: Some(4),
+        })
+    );
+    assert_eq!(
+        run(PolicyKind::HeuristicV1TraderAware),
+        Action::PlayDev(DevPlay::Knight {
+            destination: 5,
+            victim: Some(4),
+        })
+    );
+}
+
+#[test]
+fn aware_pre_roll_receives_threat_and_devcards_params() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(16);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::PreRoll);
+    let seed = 8_u64 << 48 ^ 16 << 8 ^ 1;
+    let run = |kind| {
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(seed);
+        policy::pre_roll(kind, &view, &mut scratch, &mut rng)
+    };
+    assert_eq!(
+        run(PolicyKind::HeuristicV1TraderAwareDevcards),
+        Some(DevPlay::Monopoly {
+            resource: Resource::Sheep,
+        })
+    );
+    assert_eq!(
+        run(PolicyKind::HeuristicV1Trader),
+        Some(DevPlay::Monopoly {
+            resource: Resource::Ore,
+        })
+    );
+
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(1);
+    let view = arena.decision_view(&board, &topology, 2, DecisionPhase::PreRoll);
+    let seed = 8_u64 << 48 ^ 1 << 8 ^ 2;
+    let run = |kind| {
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(seed);
+        policy::pre_roll(kind, &view, &mut scratch, &mut rng)
+    };
+    assert_eq!(
+        run(PolicyKind::HeuristicV1TraderAwareThreat),
+        Some(DevPlay::Knight {
+            destination: 18,
+            victim: Some(3),
+        })
+    );
+    assert_eq!(
+        run(PolicyKind::HeuristicV1Trader),
+        Some(DevPlay::Knight {
+            destination: 21,
+            victim: Some(1),
+        })
+    );
+}
+
+#[test]
+fn flat_proposal_group_keeps_the_first_enumerated_offer() {
+    let expected = Action::OfferTrade {
+        give: Resource::Wood,
+        get: Resource::Sheep,
+        count: 1,
+    };
+    let run = |rng_seed| {
+        let (topology, board, _rules, _config, arena) = truncated_game(
+            5,
+            24,
+            TradeConfig {
+                acceptance_temperature: 0.0,
+                ..TradeConfig::default()
+            },
+        );
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(rng_seed);
+        policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng,
+        )
+    };
+    for repeat in 0..8 {
+        assert_eq!(run(24_u64 << 48 ^ 5 << 8 ^ repeat), expected);
+    }
+    let parallel = std::thread::scope(|scope| {
+        [
+            scope.spawn(|| run(24_u64 << 48 ^ 5 << 8)),
+            scope.spawn(|| run(24_u64 << 48 ^ 5 << 8)),
+        ]
+        .map(|handle| handle.join().unwrap())
+    });
+    assert_eq!(parallel, [expected; 2]);
+}
+
+#[test]
+fn proposal_recipient_filter_uses_expected_holdings() {
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(16);
+    let view = arena.decision_view(&board, &topology, 3, DecisionPhase::Action);
+    assert!((0..view.seats()).any(|seat| {
+        seat != view.observer()
+            && !embargoed(&view, seat)
+            && view.belief().expected(seat)[Resource::Brick.index()] >= 1.0
+            && view.belief().lo(seat)[Resource::Brick.index()] == 0
+    }));
+    let mut scratch = PolicyScratch::default();
+    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 16 << 8 ^ 3);
+    assert_eq!(
+        policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng
+        ),
+        Action::OfferTrade {
+            give: Resource::Wheat,
+            get: Resource::Brick,
+            count: 1,
+        }
+    );
+}
+
+#[test]
+fn proposal_recipient_filter_excludes_embargoed_seats() {
+    let (topology, board, _rules, _config, arena) = truncated_game(
+        6,
+        12,
+        TradeConfig {
+            acceptance_temperature: 0.0,
+            ..TradeConfig::default()
+        },
+    );
+    let view = arena.decision_view(&board, &topology, 5, DecisionPhase::Action);
+    assert!((0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat)));
+    assert!((0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat)));
+    let mut scratch = PolicyScratch::default();
+    let mut rng = Xoshiro256StarStar::from_seed(12_u64 << 48 ^ 6 << 8 ^ 5);
+    assert_eq!(
+        policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng
+        ),
+        Action::OfferTrade {
+            give: Resource::Sheep,
+            get: Resource::Wheat,
+            count: 1,
+        }
+    );
+}
+
+#[test]
+#[ignore = "searches the forwarding fixture space; run deliberately after implementation"]
+fn find_forwarding_fixtures() {
+    let mut found_w3 = false;
+    let mut found_w13 = false;
+    let mut found_w15_devcards = false;
+    let mut found_w15_threat = false;
+    for turn_cap in [8, 10, 12, 14, 16, 20, 24] {
+        for game in 0..60_u64 {
+            let (topology, board, _rules, _config, arena) = truncated_game(
+                game,
+                turn_cap,
+                TradeConfig {
+                    acceptance_temperature: 0.0,
+                    ..TradeConfig::default()
+                },
+            );
+            for seat in 0..board.seats() {
+                let seed = u64::from(turn_cap) << 48 ^ game << 8 ^ seat as u64;
+                let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
+                let run_action = |kind| {
+                    let mut scratch = PolicyScratch::default();
+                    let mut rng = Xoshiro256StarStar::from_seed(seed);
+                    policy::action(kind, &view, &mut scratch, &mut rng)
+                };
+                let aware = run_action(PolicyKind::HeuristicV1TraderAware);
+                let baseline = run_action(PolicyKind::HeuristicV1Trader);
+                let aware_threat = run_action(PolicyKind::HeuristicV1TraderAwareThreat);
+                if !found_w3 && aware != baseline {
+                    eprintln!(
+                        "W3 turn_cap={turn_cap} game={game} seat={seat} aware={aware:?} baseline={baseline:?}"
+                    );
+                    found_w3 = true;
+                }
+                if !found_w13 && aware_threat != aware {
+                    eprintln!(
+                        "W13 turn_cap={turn_cap} game={game} seat={seat} correct={aware_threat:?} mutant={aware:?}"
+                    );
+                    found_w13 = true;
+                }
+                if matches!(aware, Action::OfferTrade { .. }) {
+                    eprintln!(
+                        "W12_SCAN turn_cap={turn_cap} game={game} seat={seat} action={aware:?}"
+                    );
+                }
+
+                let view = arena.decision_view(&board, &topology, seat, DecisionPhase::PreRoll);
+                let run_pre_roll = |kind| {
+                    let mut scratch = PolicyScratch::default();
+                    let mut rng = Xoshiro256StarStar::from_seed(seed);
+                    policy::pre_roll(kind, &view, &mut scratch, &mut rng)
+                };
+                let devcards = run_pre_roll(PolicyKind::HeuristicV1TraderAwareDevcards);
+                let default = run_pre_roll(PolicyKind::HeuristicV1Trader);
+                let threat = run_pre_roll(PolicyKind::HeuristicV1TraderAwareThreat);
+                if !found_w15_devcards && devcards != default {
+                    eprintln!(
+                        "W15_DEVCARDS turn_cap={turn_cap} game={game} seat={seat} correct={devcards:?} mutant={default:?}"
+                    );
+                    found_w15_devcards = true;
+                }
+                if !found_w15_threat && threat != default {
+                    eprintln!(
+                        "W15_THREAT turn_cap={turn_cap} game={game} seat={seat} correct={threat:?} mutant={default:?}"
+                    );
+                    found_w15_threat = true;
+                }
+            }
+            if found_w3 && found_w13 && found_w15_devcards && found_w15_threat {
+                return;
+            }
+        }
+    }
+    assert!(found_w3, "W3 fixture not found");
+    assert!(found_w13, "W13 fixture not found");
+    assert!(found_w15_devcards, "W15 dev-cards fixture not found");
+    assert!(found_w15_threat, "W15 threat fixture not found");
+}
+
+#[test]
+fn non_finite_counterparty_scores_use_the_first_acceptor_fallback() {
+    let (topology, board, _rules, _config, arena) = truncated_game(
+        43,
+        10,
+        TradeConfig {
+            acceptance_temperature: 0.0,
+            ..TradeConfig::default()
+        },
+    );
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    let mut nan_delta = [0.0; RESOURCE_COUNT];
+    nan_delta[1] = -10.0;
+    let nan_params = TradeParams {
+        etw_weight: f64::MAX,
+        benefit_weight: 0.0,
+        tempo_weight: 0.0,
+        ..TradeParams::default()
+    };
+    let nan_score =
+        trading::counterparty_score(&etw::inputs_for_seat(&view, 4), &nan_params, &nan_delta);
+    assert!(nan_score.is_nan(), "score={nan_score}");
+    assert_eq!(
+        trading::select_counterparty(&view, &nan_params, &nan_delta, &[4, 3]),
+        3
+    );
+
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
+    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+    let delta = [-1.0, 1.0, 0.0, 0.0, 0.0];
+    let mixed_params = TradeParams {
+        tempo_weight: f64::MAX,
+        benefit_weight: f64::MAX,
+        ..TradeParams::default()
+    };
+    assert_eq!(
+        [0, 3].map(|seat| trading::counterparty_score(
+            &etw::inputs_for_seat(&view, seat),
+            &mixed_params,
+            &delta,
+        )),
+        [f64::INFINITY, f64::NEG_INFINITY]
+    );
+    assert_eq!(
+        trading::select_counterparty(&view, &mixed_params, &delta, &[0, 3]),
+        0
+    );
 }

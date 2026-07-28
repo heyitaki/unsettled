@@ -5,6 +5,7 @@ pub mod heuristic_v1_trader;
 pub mod priority_trader;
 pub mod random_legal;
 pub mod threat;
+pub mod trading;
 
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +26,13 @@ pub enum PolicyKind {
     HeuristicV1Devcards,
     HeuristicV1ThreatDevcards,
     HeuristicV1Trader,
+    HeuristicV1TraderThreat,
+    HeuristicV1TraderDevcards,
+    HeuristicV1TraderThreatDevcards,
+    HeuristicV1TraderAware,
+    HeuristicV1TraderAwareThreat,
+    HeuristicV1TraderAwareDevcards,
+    HeuristicV1TraderAwareThreatDevcards,
 }
 
 /// Disables every owned port, so the seat trades at the base bank rate.
@@ -50,7 +58,14 @@ impl PolicyKind {
             | Self::HeuristicV1Threat
             | Self::HeuristicV1Devcards
             | Self::HeuristicV1ThreatDevcards
-            | Self::HeuristicV1Trader => &[],
+            | Self::HeuristicV1Trader
+            | Self::HeuristicV1TraderThreat
+            | Self::HeuristicV1TraderDevcards
+            | Self::HeuristicV1TraderThreatDevcards
+            | Self::HeuristicV1TraderAware
+            | Self::HeuristicV1TraderAwareThreat
+            | Self::HeuristicV1TraderAwareDevcards
+            | Self::HeuristicV1TraderAwareThreatDevcards => &[],
         }
     }
 
@@ -65,6 +80,15 @@ impl PolicyKind {
             "heuristic-v1-devcards" => Some(Self::HeuristicV1Devcards),
             "heuristic-v1-threat-devcards" => Some(Self::HeuristicV1ThreatDevcards),
             "heuristic-v1-trader" => Some(Self::HeuristicV1Trader),
+            "heuristic-v1-trader-threat" => Some(Self::HeuristicV1TraderThreat),
+            "heuristic-v1-trader-devcards" => Some(Self::HeuristicV1TraderDevcards),
+            "heuristic-v1-trader-threat-devcards" => Some(Self::HeuristicV1TraderThreatDevcards),
+            "heuristic-v1-trader-aware" => Some(Self::HeuristicV1TraderAware),
+            "heuristic-v1-trader-aware-threat" => Some(Self::HeuristicV1TraderAwareThreat),
+            "heuristic-v1-trader-aware-devcards" => Some(Self::HeuristicV1TraderAwareDevcards),
+            "heuristic-v1-trader-aware-threat-devcards" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcards)
+            }
             _ => None,
         }
     }
@@ -106,8 +130,15 @@ pub fn pre_roll(
         | PolicyKind::HeuristicV1ThreatDevcards => {
             heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind))
         }
-        PolicyKind::HeuristicV1Trader => {
-            heuristic_v1::pre_roll(view, scratch, &heuristic_v1::HeuristicParams::default())
+        PolicyKind::HeuristicV1Trader
+        | PolicyKind::HeuristicV1TraderThreat
+        | PolicyKind::HeuristicV1TraderDevcards
+        | PolicyKind::HeuristicV1TraderThreatDevcards
+        | PolicyKind::HeuristicV1TraderAware
+        | PolicyKind::HeuristicV1TraderAwareThreat
+        | PolicyKind::HeuristicV1TraderAwareDevcards
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
+            heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind))
         }
         PolicyKind::HeuristicV1Noports => {
             heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind))
@@ -131,7 +162,16 @@ pub fn action(
         | PolicyKind::HeuristicV1ThreatDevcards => {
             heuristic_v1::action(view, scratch, &heuristic_params(kind), rng)
         }
-        PolicyKind::HeuristicV1Trader => heuristic_v1_trader::action(view, scratch, rng),
+        PolicyKind::HeuristicV1Trader
+        | PolicyKind::HeuristicV1TraderThreat
+        | PolicyKind::HeuristicV1TraderDevcards
+        | PolicyKind::HeuristicV1TraderThreatDevcards
+        | PolicyKind::HeuristicV1TraderAware
+        | PolicyKind::HeuristicV1TraderAwareThreat
+        | PolicyKind::HeuristicV1TraderAwareDevcards
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
+            heuristic_v1_trader::action(view, scratch, &heuristic_params(kind), rng)
+        }
         PolicyKind::HeuristicV1Noports => {
             heuristic_v1::action(view, scratch, &heuristic_params(kind), rng)
         }
@@ -154,7 +194,16 @@ pub fn discard(
         | PolicyKind::HeuristicV1Threat
         | PolicyKind::HeuristicV1Devcards
         | PolicyKind::HeuristicV1ThreatDevcards
-        | PolicyKind::HeuristicV1Trader => heuristic_v1::discard(view, count, scratch),
+        | PolicyKind::HeuristicV1Trader
+        | PolicyKind::HeuristicV1TraderThreat
+        | PolicyKind::HeuristicV1TraderDevcards
+        | PolicyKind::HeuristicV1TraderThreatDevcards
+        | PolicyKind::HeuristicV1TraderAware
+        | PolicyKind::HeuristicV1TraderAwareThreat
+        | PolicyKind::HeuristicV1TraderAwareDevcards
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
+            heuristic_v1::discard(view, count, scratch)
+        }
     }
 }
 
@@ -172,7 +221,16 @@ pub fn robber(
         | PolicyKind::HeuristicV1Threat
         | PolicyKind::HeuristicV1Devcards
         | PolicyKind::HeuristicV1ThreatDevcards
-        | PolicyKind::HeuristicV1Trader => heuristic_v1::robber(view, &heuristic_params(kind)),
+        | PolicyKind::HeuristicV1Trader
+        | PolicyKind::HeuristicV1TraderThreat
+        | PolicyKind::HeuristicV1TraderDevcards
+        | PolicyKind::HeuristicV1TraderThreatDevcards
+        | PolicyKind::HeuristicV1TraderAware
+        | PolicyKind::HeuristicV1TraderAwareThreat
+        | PolicyKind::HeuristicV1TraderAwareDevcards
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
+            heuristic_v1::robber(view, &heuristic_params(kind))
+        }
     }
 }
 
@@ -183,7 +241,16 @@ pub fn respond_trade(
     rng: &mut Xoshiro256StarStar,
 ) -> bool {
     match kind {
-        PolicyKind::HeuristicV1Trader => heuristic_v1_trader::respond_trade(view, offer, rng),
+        PolicyKind::HeuristicV1Trader
+        | PolicyKind::HeuristicV1TraderThreat
+        | PolicyKind::HeuristicV1TraderDevcards
+        | PolicyKind::HeuristicV1TraderThreatDevcards
+        | PolicyKind::HeuristicV1TraderAware
+        | PolicyKind::HeuristicV1TraderAwareThreat
+        | PolicyKind::HeuristicV1TraderAwareDevcards
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
+            heuristic_v1_trader::respond_trade(view, offer, &heuristic_params(kind), rng)
+        }
         PolicyKind::RandomLegal
         | PolicyKind::GreedyNoTrade
         | PolicyKind::PriorityTrader
@@ -198,22 +265,16 @@ pub fn respond_trade(
 pub fn select_counterparty(
     kind: PolicyKind,
     view: &DecisionView<'_>,
+    delta: &[f64; crate::rules::RESOURCE_COUNT],
     acceptors: &[usize],
 ) -> usize {
-    match kind {
-        PolicyKind::RandomLegal
-        | PolicyKind::GreedyNoTrade
-        | PolicyKind::PriorityTrader
-        | PolicyKind::HeuristicV1
-        | PolicyKind::HeuristicV1Noports
-        | PolicyKind::HeuristicV1Threat
-        | PolicyKind::HeuristicV1Devcards
-        | PolicyKind::HeuristicV1ThreatDevcards
-        | PolicyKind::HeuristicV1Trader => farthest_from_winning(view, acceptors),
+    match heuristic_params(kind).trading {
+        None => farthest_from_winning(view, acceptors),
+        Some(params) => trading::select_counterparty(view, &params, delta, acceptors),
     }
 }
 
-/// Per-kind heuristic parameters. Non-heuristic kinds return before this helper is called.
+/// Per-kind heuristic parameters. Non-heuristic kinds receive defaults with every gate disabled.
 fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
     match kind {
         PolicyKind::HeuristicV1Noports => heuristic_v1::HeuristicParams {
@@ -231,6 +292,39 @@ fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
         PolicyKind::HeuristicV1ThreatDevcards => heuristic_v1::HeuristicParams {
             threat: Some(threat::ThreatParams::default()),
             dev_cards: Some(devcards::DevCardParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderThreat => heuristic_v1::HeuristicParams {
+            threat: Some(threat::ThreatParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderDevcards => heuristic_v1::HeuristicParams {
+            dev_cards: Some(devcards::DevCardParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderThreatDevcards => heuristic_v1::HeuristicParams {
+            threat: Some(threat::ThreatParams::default()),
+            dev_cards: Some(devcards::DevCardParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderAware => heuristic_v1::HeuristicParams {
+            trading: Some(trading::TradeParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderAwareThreat => heuristic_v1::HeuristicParams {
+            threat: Some(threat::ThreatParams::default()),
+            trading: Some(trading::TradeParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderAwareDevcards => heuristic_v1::HeuristicParams {
+            dev_cards: Some(devcards::DevCardParams::default()),
+            trading: Some(trading::TradeParams::default()),
+            ..heuristic_v1::HeuristicParams::default()
+        },
+        PolicyKind::HeuristicV1TraderAwareThreatDevcards => heuristic_v1::HeuristicParams {
+            threat: Some(threat::ThreatParams::default()),
+            dev_cards: Some(devcards::DevCardParams::default()),
+            trading: Some(trading::TradeParams::default()),
             ..heuristic_v1::HeuristicParams::default()
         },
         PolicyKind::RandomLegal
@@ -261,21 +355,141 @@ mod gate_tests {
     use super::{PolicyKind, heuristic_params};
 
     #[test]
-    fn heuristic_params_maps_every_variant_to_the_intended_gate_pair() {
-        for (kind, threat, dev_cards) in [
-            (PolicyKind::RandomLegal, false, false),
-            (PolicyKind::GreedyNoTrade, false, false),
-            (PolicyKind::PriorityTrader, false, false),
-            (PolicyKind::HeuristicV1, false, false),
-            (PolicyKind::HeuristicV1Noports, false, false),
-            (PolicyKind::HeuristicV1Threat, true, false),
-            (PolicyKind::HeuristicV1Devcards, false, true),
-            (PolicyKind::HeuristicV1ThreatDevcards, true, true),
-            (PolicyKind::HeuristicV1Trader, false, false),
-        ] {
+    fn heuristic_params_maps_every_variant_to_the_intended_gate_triplet() {
+        for (kind, threat, dev_cards, trading) in gate_table() {
             let params = heuristic_params(kind);
             assert_eq!(params.threat.is_some(), threat, "{kind:?}");
             assert_eq!(params.dev_cards.is_some(), dev_cards, "{kind:?}");
+            assert_eq!(params.trading.is_some(), trading, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn each_gate_is_enabled_by_exactly_its_intended_variants() {
+        let actual = |index: usize| {
+            gate_table()
+                .into_iter()
+                .filter_map(|(kind, threat, dev_cards, trading)| {
+                    match index {
+                        1 => threat,
+                        2 => dev_cards,
+                        3 => trading,
+                        _ => unreachable!(),
+                    }
+                    .then_some(kind)
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            actual(1),
+            vec![
+                PolicyKind::HeuristicV1Threat,
+                PolicyKind::HeuristicV1ThreatDevcards,
+                PolicyKind::HeuristicV1TraderThreat,
+                PolicyKind::HeuristicV1TraderThreatDevcards,
+                PolicyKind::HeuristicV1TraderAwareThreat,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcards,
+            ]
+        );
+        assert_eq!(
+            actual(2),
+            vec![
+                PolicyKind::HeuristicV1Devcards,
+                PolicyKind::HeuristicV1ThreatDevcards,
+                PolicyKind::HeuristicV1TraderDevcards,
+                PolicyKind::HeuristicV1TraderThreatDevcards,
+                PolicyKind::HeuristicV1TraderAwareDevcards,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcards,
+            ]
+        );
+        assert_eq!(
+            actual(3),
+            vec![
+                PolicyKind::HeuristicV1TraderAware,
+                PolicyKind::HeuristicV1TraderAwareThreat,
+                PolicyKind::HeuristicV1TraderAwareDevcards,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcards,
+            ]
+        );
+    }
+
+    #[test]
+    fn gate_table_contains_every_policy_kind_exactly_once() {
+        let table = gate_table();
+        assert_eq!(table.len(), POLICY_KIND_COUNT);
+        let mut seen = [false; POLICY_KIND_COUNT];
+        for (kind, _, _, _) in table {
+            let index = kind_index(kind);
+            assert!(!seen[index], "duplicate {kind:?}");
+            seen[index] = true;
+        }
+        assert!(seen.into_iter().all(|present| present));
+    }
+
+    #[test]
+    fn ungated_trader_uses_the_exact_default_params() {
+        assert_eq!(
+            heuristic_params(PolicyKind::HeuristicV1Trader),
+            super::heuristic_v1::HeuristicParams::default()
+        );
+    }
+
+    fn gate_table() -> [(PolicyKind, bool, bool, bool); 16] {
+        [
+            (PolicyKind::RandomLegal, false, false, false),
+            (PolicyKind::GreedyNoTrade, false, false, false),
+            (PolicyKind::PriorityTrader, false, false, false),
+            (PolicyKind::HeuristicV1, false, false, false),
+            (PolicyKind::HeuristicV1Noports, false, false, false),
+            (PolicyKind::HeuristicV1Threat, true, false, false),
+            (PolicyKind::HeuristicV1Devcards, false, true, false),
+            (PolicyKind::HeuristicV1ThreatDevcards, true, true, false),
+            (PolicyKind::HeuristicV1Trader, false, false, false),
+            (PolicyKind::HeuristicV1TraderThreat, true, false, false),
+            (PolicyKind::HeuristicV1TraderDevcards, false, true, false),
+            (
+                PolicyKind::HeuristicV1TraderThreatDevcards,
+                true,
+                true,
+                false,
+            ),
+            (PolicyKind::HeuristicV1TraderAware, false, false, true),
+            (PolicyKind::HeuristicV1TraderAwareThreat, true, false, true),
+            (
+                PolicyKind::HeuristicV1TraderAwareDevcards,
+                false,
+                true,
+                true,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcards,
+                true,
+                true,
+                true,
+            ),
+        ]
+    }
+
+    const POLICY_KIND_COUNT: usize = 16;
+
+    const fn kind_index(kind: PolicyKind) -> usize {
+        match kind {
+            PolicyKind::RandomLegal => 0,
+            PolicyKind::GreedyNoTrade => 1,
+            PolicyKind::PriorityTrader => 2,
+            PolicyKind::HeuristicV1 => 3,
+            PolicyKind::HeuristicV1Noports => 4,
+            PolicyKind::HeuristicV1Threat => 5,
+            PolicyKind::HeuristicV1Devcards => 6,
+            PolicyKind::HeuristicV1ThreatDevcards => 7,
+            PolicyKind::HeuristicV1Trader => 8,
+            PolicyKind::HeuristicV1TraderThreat => 9,
+            PolicyKind::HeuristicV1TraderDevcards => 10,
+            PolicyKind::HeuristicV1TraderThreatDevcards => 11,
+            PolicyKind::HeuristicV1TraderAware => 12,
+            PolicyKind::HeuristicV1TraderAwareThreat => 13,
+            PolicyKind::HeuristicV1TraderAwareDevcards => 14,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcards => 15,
         }
     }
 }

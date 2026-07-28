@@ -156,7 +156,7 @@ pub fn context(view: &DecisionView<'_>, params: &ThreatParams) -> ThreatContext 
         let free_pips = robber_free_production_pips(view, seat);
         inputs.production_pips = free_pips;
         let etw_free = etw::expected_turns_to_win(&inputs);
-        raw[seat] = raw_danger(etw_free, params);
+        raw[seat] = danger_from_etw(etw_free, params.danger_floor);
         maximum = maximum.max(raw[seat]);
         result.need[seat] = need_share(&inputs);
         result.free_pips[seat] = free_pips;
@@ -240,8 +240,12 @@ pub fn hypothetical_production_pips(
     production
 }
 
-fn raw_danger(etw_free: f64, params: &ThreatParams) -> f64 {
-    params.danger_floor / (etw_free + params.danger_floor)
+/// Standing danger of a seat, from its expected turns to win. This is the single
+/// opponent-threat function used by robber and trading policy decisions.
+///
+/// `danger_floor` must be positive and finite. Both callers guard that domain.
+pub fn danger_from_etw(etw: f64, danger_floor: f64) -> f64 {
+    danger_floor / (etw + danger_floor)
 }
 
 fn assert_params(params: &ThreatParams) {

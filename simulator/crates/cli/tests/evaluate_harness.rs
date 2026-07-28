@@ -22,6 +22,15 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::HeuristicV1Devcards => "heuristic-v1-devcards",
         PolicyKind::HeuristicV1ThreatDevcards => "heuristic-v1-threat-devcards",
         PolicyKind::HeuristicV1Trader => "heuristic-v1-trader",
+        PolicyKind::HeuristicV1TraderThreat => "heuristic-v1-trader-threat",
+        PolicyKind::HeuristicV1TraderDevcards => "heuristic-v1-trader-devcards",
+        PolicyKind::HeuristicV1TraderThreatDevcards => "heuristic-v1-trader-threat-devcards",
+        PolicyKind::HeuristicV1TraderAware => "heuristic-v1-trader-aware",
+        PolicyKind::HeuristicV1TraderAwareThreat => "heuristic-v1-trader-aware-threat",
+        PolicyKind::HeuristicV1TraderAwareDevcards => "heuristic-v1-trader-aware-devcards",
+        PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
+            "heuristic-v1-trader-aware-threat-devcards"
+        }
     }
 }
 
