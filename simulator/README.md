@@ -164,8 +164,46 @@ Why: a full-power sweep of the `resourceValue` spread found the optimum is polic
 - **E — built.** Opponent belief state with per-seat resource counts derived from public events, plus a bounded uncertainty pool from robber steals. Production, bank and port trades, player trades, purchases, discards, monopoly and year-of-plenty are all public; only the robber steal and dev-card identity are hidden, and a steal moves exactly one card, so bounds stay tight. Pure derived state with no RNG and no behaviour change until a policy reads it, so it is corpus-safe and independently testable. It never reads private state, and its updates are O(1) because this runs on every action of every game.
 - **F — built.** Expected turns to win, closed-form over the belief state. Never a mini-rollout. VP alone is a lagging indicator: six VP with two cities queued and strong production beats eight VP built out.
 - **G — threat-aware decisions, measured one at a time.** Robber placement, belief-driven monopoly and dev-card timing, and threat-aware trading are built. G3 unified proposal scoring, acceptance, and counterparty selection around `trading::counterparty_score`; its standing term is `threat::danger_from_etw` applied to `etw::expected_turns_to_win`, the same danger expression used by the robber arm. The rules-level `trade::embargoed` VP threshold is deliberately unchanged because it controls eligibility rather than ranking; moving it onto ETW belongs to G4 with goal switching and denial. The robber arm holds knight play/hold fixed by scoring the knight action from the self-regarding robber choice while using the threat-selected placement; rejoining timing and placement belongs to the knight-timing phase. The dev-card arm deliberately changes whether the turn's single dev play is spent pre-roll, so action-phase knight availability moves with it; that coupling is the subject of the measurement, not a confound. `ThreatParams`, `DevCardParams`, and `TradeParams` weights are unswept Phase-H placeholders.
-- **H — re-tune weights** across the resulting grid, including the structural formula terms that were the old Phase F.
+- **H — re-tune weights** across the resulting grid, including the structural formula terms that were the old Phase F. Fix the scoring defects listed below first: sweeping a weight that multiplies a miscomputed term measures the defect, not the weight.
 - **I — adopt** against the untouched `gate` domain.
+- **J — build-target scoring.** Which settlement to upgrade, and where to put the next one, currently ignore what the current goal consumes, resource scarcity relative to that goal rather than to the board, and game stage. Also the card-play scope limits below. Not scheduled against a date; it is the largest block of genuinely new design left.
+- **Knight timing — named but unscheduled.** Rejoining knight play timing with robber placement, deliberately deferred by G1 so its A/B stayed placement-only.
+
+## Unmodelled scoring surfaces
+
+An audit of the policy layer against the four consumers G built. Everything here is either absent or measurably wrong today; none of it is covered by G4, H or I unless stated. Grouped by what kind of work it is, because the groups have different urgency: the defects corrupt measurements that H depends on, while the gaps merely leave value on the table.
+
+**Defects — wrong, not merely absent. Fix before H.**
+
+- `vertex_score`'s `port_synergy` weights a port only against production at that same vertex's three hexes, so it ignores the resource you produce everywhere else on the board. It undervalues a port sited away from your engine and overvalues one sited on top of it. `port_weight` is on H's sweep list and the sweep is not meaningful until this is fixed. Note that decay across multiple ports needs no new parameter: the term already compares against `view.trade_rate`, which includes ports you hold, so a second port for the same resource scores zero by construction.
+- Two spellings of "best settlement" disagree. The action scorer ranks on the full `vertex_score`; the goal chooser calls `view.best_legal_settlement()`, which ranks on `vertex_pips` alone — no scarcity, diversity, port or expansion. Same divergence class as the `vp_estimate` spellings G3 unified.
+- Two of `vertex_score`'s five terms are dead on a city upgrade. `diversity` counts resources where the observer produces none, but you already produce that vertex's resources; `expansion` counts unowned neighbours, which an upgrade does not use. City ranking silently reduces to pips, scarcity and port synergy.
+- City-over-settlement is a hard constant ladder (`10_000.0` against `500.0`), so an affordable city outranks every settlement regardless of relative value. This is the lexicographic-ladder anti-pattern the programme rejects for opponent ranking, still present in the main action scorer.
+
+**Denial and threat — G4-shaped. `threat::danger_from_etw` exists and none of these consult it.**
+
+- `contested_card_score`'s denial term is a flat constant, so taking Longest Road from a seat at nine VP scores identically to taking it from a seat at four.
+- `win_proximity` is own VP over win VP. Every contested-card term scales by *your* progress and never by the opponent's, which is backwards for a denial play.
+- No defensive extension of a card you already hold: `longest_road_value` returns nothing once you are the holder, and `dev_card_score` returns a flat score once you hold Largest Army. Neither notices an opponent closing in.
+- No blocking and no racing, anywhere. `best_road_building_pair` scores your own vertices plus a longest-road bonus; nothing values cutting an opponent's only route or claiming a contested vertex before they do. The Phase-D note that positional competition belongs as a multiplier on threat rather than its own criterion was never built.
+- `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
+
+**Card-play scope — the scorer cannot consider an offer the construction never makes.**
+
+- Year of Plenty is offered only when the hand is exactly two cards short of a goal cost. Never for tempo, never to bank a scarce resource, never one-short-plus-spare. G2 gave the card a proper scalar, but the gate is upstream in `plenty_for_goal`.
+- Year of Plenty's two resources are picked in index order among those missing.
+- `monopoly_for_goal` considers only the first cost variant of the goal.
+- Road Building targeting carries no denial term at all, so it cannot be aimed at an opponent.
+- Hand-size risk is unmodelled and documented as a non-goal: pre-roll play resolves before the dice and a seven's discard, so a discard-aware model would defer Monopoly more often than this one does.
+
+**Untouched decision surfaces — no scoring work has been done on these at all.**
+
+- Discard at seven is greedy against the current goal cost only. No scarcity, no port awareness (a resource you hold a 2:1 for is cheaper to shed), no belief about an opponent's pending monopoly, no preservation of hand shape.
+- Bank and port trades fire only when the trade completes a cost or strictly reduces missing units. Never speculative, never to dump a surplus ahead of a seven, never rate-aware beyond legality.
+- Dev-card buying scales a contest bonus by own win proximity. Deck composition is consulted only for whether the deck is empty; nothing models remaining VP-card density, which is the main reason to buy when close to winning.
+- `DecisionPhase::SpecialBuild` reaches `ask_action` with no distinct scoring and is treated as an ordinary action phase. Whether that is correct is unmeasured.
+
+**Initial placement.** The placement heuristics read `vertex_owner` for legality only — occupied, or adjacent to occupied. There is no draft-order awareness, no denial, and no model of what an opponent takes next, so the threat machinery G1 through G3 built is unavailable at setup. That is the placement tuning programme's subject rather than this one's, but it is worth stating plainly: setup is the one phase of the game the opponent model does not reach.
 
 Two rules hold across all of it.
 
