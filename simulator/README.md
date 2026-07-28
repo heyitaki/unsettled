@@ -4,7 +4,7 @@
 >
 > **The specification lives in [`.claude/specs/simulator/`](../.claude/specs/simulator/spec.md)** — invariants and guarantees in `contracts.md`, phase order and decisions in `programme.md`, unmodelled scoring surfaces in `gaps.md`, and the append-only measurement log in `measurements.md`. If a claim here and a claim there disagree, the spec wins.
 
-`unsettled-sim` supports six built-in starting-placement heuristics, and post-placement policies including optional player-to-player trading, threat-aware robber placement, and threat-aware trading.
+The authoritative rosters of placement heuristics and policies are in [`contracts.md`](../.claude/specs/simulator/contracts.md).
 
 ## Build and test
 
@@ -13,8 +13,6 @@ RUSTFLAGS="-D warnings" cargo build --release
 cargo test --workspace
 cargo test --release -p unsettled-sim --test alloc
 ```
-
-This repository's offline solve environment requires `CARGO_HOME` to point at the staged Cargo home described by the task harness before running Cargo.
 
 ## CLI
 

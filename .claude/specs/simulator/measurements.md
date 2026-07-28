@@ -8,7 +8,9 @@ Every entry carries date, commit, domain, exact command, load before and after, 
 
 ## Machine
 
-Measured on the acceptance machine with Rust 1.94.0, 18 logical cores (6 performance, 12 efficiency), release mode, standard4. Reported as the median of consecutive runs, because this benchmark is noisy: any sample taken while another job holds a core is meaningless and reads 20-30% low.
+Measured on the acceptance machine with Rust 1.94.0, 18 logical cores (6 performance, 12 efficiency), release mode, standard4.
+
+**The median-of-consecutive-runs rule applies to the throughput entries only** (M-05 through M-12). Throughput is noisy: any sample taken while another job holds a core is meaningless and reads 20-30% low, so those entries report the median of consecutive runs. The paired A/B entries (M-01 through M-03) report a single evaluation over a fixed unit schedule and are not medians; their sensitivity to machine load is a question of wall-clock, not of the estimate.
 
 ---
 
