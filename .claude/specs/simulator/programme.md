@@ -34,6 +34,14 @@ The placement formula's `handValue` term prices the second settlement's immediat
 
 Two things keep this a real question rather than a formality. Dropping the term reverts a *rules*-correctness fix at the formula level, so the null result and the correct result look alike unless the A/B is set up to tell them apart. And `handValue` prices cards through `resourceValue` with no scarcity scaling, which is defensible for a one-off setup draw and wrong for a general hand — so ETW subsuming it may be the better model rather than merely a redundant one.
 
+## Open question H must settle: is an all-seat throughput gate measuring the right thing?
+
+The G3 plan registered a throughput floor for the configuration that enables the gate on every seat, and that floor was missed. The diagnosis is `SIM-GAP-21` and it found that most of the cost is not in the gated code: the arm plays longer games that leave fuller boards, and the existing Longest Road search grows superlinearly in roads placed.
+
+That makes the gate ambiguous rather than merely failed. A throughput floor that a longer game can breach is measuring game length as much as code efficiency, and a threat-aware arm is *expected* to change game length — the programme predicts it. Optimizing the gated code cannot reach the floor, because only a bounded share of the slowdown is there to recover.
+
+Two dispositions are open, and H should not start without picking one. Either the floor is respecified per decision rather than per game, so it measures what it was meant to measure, or it stays per game and is accepted as a statement about affordability rather than efficiency. The second is defensible — the grid has to actually run — but it should be chosen rather than inherited. What is no longer defensible is treating the miss as an unfixed performance defect.
+
 ## How to read the A/B results so far
 
 Each of the three built G consumers was measured alone against a field of today's policies, and each came back `inconclusive` with a positive point estimate; the estimates decline across the three in merge order. The entries are M-01 through M-03 in [measurements.md](measurements.md).

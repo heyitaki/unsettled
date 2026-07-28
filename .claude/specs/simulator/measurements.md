@@ -160,3 +160,55 @@ This bounds the prize on selection sophistication and was known before G3 was de
 - **Load** `unknown`
 
 The Hold option introduced by G2's scalar pre-roll comparison fired on `0.117` and `0.038` of playable opportunities across the two measured configurations. Recorded because the arm's A/B was inconclusive (M-02) and the rates establish that the arm did not simply stop playing dev cards, which is the failure mode an inconclusive result would otherwise be consistent with. Carried here from project memory during SIM-SPEC-F2.
+
+## M-18 — Where the all-seat `-aware` slowdown actually goes
+
+- **Date** 2026-07-28 · **Commit** `46a7c00` · **Domain** not applicable · **Admissible** **yes** for the ratio and the call counts, **indicative** for the profile shares
+- **Command** `simulate --board ../src/parser/__tests__/expected/board-draft-empty.json --games 1500 --heuristics pip_diversity --policy <policy> --player-trading --seed 7 --threads 1`, with `<policy>` `heuristic-v1-trader` and `heuristic-v1-trader-aware`. Profiles taken with `/usr/bin/sample` over an 8-second window, 2 seconds into a 20,000-game run of each.
+- **Load** before `2.35`, after `2.66`
+
+Single-threaded and therefore far less load-sensitive than the M-05 through M-10 readings; three consecutive runs of each arm spread under 1%. This entry **does not supersede M-05**, which measured a different board at `--threads 0`; it diagnoses the effect M-05 recorded.
+
+**Wall clock.** Baseline median `1.94s`, all-seat `-aware` median `3.45s`, a ratio of `1.778`. Adding atomic instrumentation counters changed the `-aware` median by `0.01s`, so the counts below were taken without distorting the timing.
+
+**Call counts**, 400 games, `-aware`, single-threaded. The baseline arm makes **zero** calls to any of these, so the whole of this volume is introduced by the gate:
+
+| Counter | Calls |
+| --- | ---: |
+| `expected_turns_to_win` | 3,159,429 |
+| `cheapest_route_shortfall` | 1,947,691 |
+| `counterparty_score` | 866,094 |
+| proposal decisions entered | 234,827 |
+| recipient inputs prepared | 897,219 |
+| proposal inner scorings | 714,599 |
+| candidate offers scored (`mine`) | 970,780 |
+| `acceptance_margin` | 110,817 |
+| `select_counterparty` | 30,045 |
+
+The accounting closes exactly with no residue, which is what makes the attribution trustworthy: `cheapest_route_shortfall` equals `mine` plus `counterparty_score` plus `acceptance_margin`, and `expected_turns_to_win` equals that total plus `counterparty_score` plus `acceptance_margin` plus one own-base call per decision.
+
+**Profile shares of worker time**, base against `-aware`, self time grouped by module:
+
+| Group | Base | `-aware` |
+| --- | ---: | ---: |
+| Longest Road | 46.1% | 41.6% |
+| `DecisionView` | 24.4% | 20.0% |
+| Placement and heuristic scoring | 23.7% | 16.7% |
+| ETW, threat and trading | 0.0% | 13.7% |
+| Other | 5.8% | 8.0% |
+
+**Attribution of the slowdown**, normalizing base total time to 1.0 and `-aware` to 1.778:
+
+| Group | Added | Share of the slowdown |
+| --- | ---: | ---: |
+| Longest Road | 0.279 | 35.8% |
+| ETW, threat and trading | 0.244 | 31.3% |
+| `DecisionView` | 0.112 | 14.3% |
+| Other | 0.084 | 10.8% |
+| Placement and heuristic scoring | 0.060 | 7.7% |
+
+So under a third of the added cost is the new code. Mean turns rise from `66.62` to `71.69`, `+7.6%`, and mean final VP *falls* from `7.0004` to `6.8203`, so `-aware` games run longer and end lower — they leave fuller boards, and the Longest Road trail search grows superlinearly in roads placed. Turn count alone accounts for only a small part of the Longest Road increase; the rest is per-decision cost on a fuller board.
+
+**Microbenchmark.** `expected_turns_to_win` costs about `14ns` per call on hot cache over 5,000,000 calls across 64 varied inputs. At the call volume above that is a small fraction of the gap, which is what first ruled the ETW arithmetic out as the cause.
+
+**Ablations, all refuting a candidate cause.** Stubbing `cheapest_route_shortfall` to return zeroes moved the `-aware` median by about `0.05s` of a `1.51s` gap. Replacing the O(vertex-count) `settlements_on_board` scan in `inputs_for_seat` with a constant produced no measurable change. Both ablations change behaviour and so diverge from the real game; they are reported as order-of-magnitude bounds on a cause, never as timings of the real configuration.
