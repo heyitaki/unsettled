@@ -1,5 +1,6 @@
 use crate::etw::{self, EtwInputs};
 use crate::policy::PolicyScratch;
+use crate::policy::denial;
 use crate::policy::heuristic_v1::{self, HeuristicParams, missing_units};
 use crate::policy::trading;
 use crate::rng::Xoshiro256StarStar;
@@ -136,7 +137,12 @@ pub fn respond_trade(
     {
         return false;
     }
-    let Some(goal) = heuristic_v1::best_goal(view, params) else {
+    let denial_context = params
+        .denial
+        .as_ref()
+        .map(|denial_params| denial::context(view, denial_params));
+    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    let Some(goal) = heuristic_v1::best_goal(view, params, gated) else {
         return false;
     };
     let margin = match &params.trading {

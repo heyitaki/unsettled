@@ -16,15 +16,15 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-04.** City-over-settlement is a hard constant ladder (`10_000.0` against `500.0`), so an affordable city outranks every settlement regardless of relative value. This is the lexicographic-ladder anti-pattern the programme rejects for opponent ranking, still present in the main action scorer.
 
-## Denial and threat — G4-shaped. `threat.rs::danger_from_etw` exists and none of these consult it.
+## Denial and threat
 
-**SIM-GAP-05.** `contested_card_score`'s denial term is a flat constant, so taking Longest Road from a seat at nine VP scores identically to taking it from a seat at four.
+**SIM-GAP-05.** The frozen knight path still passes a literal pressure of `1.0` into `contested_card_score`, so its contested-card value does not vary with opponent danger. Longest Road now does; the remaining knight limitation is coupled to `SIM-GAP-09`.
 
-**SIM-GAP-06.** `win_proximity` is own VP over win VP. Every contested-card term scales by *your* progress and never by the opponent's, which is backwards for a denial play.
+**SIM-GAP-06.** The frozen knight path still scales only through the observer's progress and never through the opponent's danger. Longest Road and dev buying now use denial pressure; the remaining knight limitation is coupled to `SIM-GAP-09`.
 
-**SIM-GAP-07.** No defensive extension of a card you already hold: `longest_road_value` returns nothing once you are the holder, and `dev_card_score` returns a flat score once you hold Largest Army. Neither notices an opponent closing in.
+**SIM-GAP-07.** Longest Road defence has a bounded-check blind spot. `denial.rs::MAX_RACE_CHECKS` limits exact checks to the first two dangerous prefilter survivors, so in a six-seat game a third rival can be one road from taking the card without being noticed.
 
-**SIM-GAP-08.** No blocking and no racing, anywhere. `best_road_building_pair` scores your own vertices plus a longest-road bonus; nothing values cutting an opponent's only route or claiming a contested vertex before they do. The Phase-D note that positional competition belongs as a multiplier on threat rather than its own criterion was never built.
+**SIM-GAP-08.** Shared-target racing is priced, but blocking is not. The denial contest term is keyed on a vertex an opponent can reach after one legal road; it values claiming that site first without determining whether the observer's candidate edge cuts the rival's actual approach.
 
 **SIM-GAP-09.** `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
 
@@ -35,8 +35,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 **SIM-GAP-11.** Year of Plenty's two resources are picked in index order among those missing.
 
 **SIM-GAP-12.** `monopoly_for_goal` considers only the first cost variant of the goal.
-
-**SIM-GAP-13.** Road Building targeting carries no denial term at all, so it cannot be aimed at an opponent.
 
 **SIM-GAP-14.** Hand-size risk is unmodelled and documented as a non-goal: pre-roll play resolves before the dice and a seven's discard, so a discard-aware model would defer Monopoly more often than this one does.
 
@@ -63,6 +61,12 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 **SIM-GAP-23.** `setup()` never calls `recompute_all_roads` on the generated-placement path, so every seat's `longest_road_len` reads `0` until somebody's first road build refreshes all seats, and policies consult opponents' lengths over that window. Confirmed harmless for awards — setup leaves two disconnected stubs, so the true longest is 1 against a minimum of 5 and no card or VP can differ — but it is why `build_road` still recomputes every seat rather than just the builder, which is otherwise sound, since a road cannot shorten anyone else's trail. Fixing it shifts results, so it is deliberately not bundled with a performance change.
 
 **SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one, at roughly 65 against 55 early and roughly 269 as Largest Army closes. Roads into settlements are the VP engine this simulator exists to measure, so this may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic.
+
+**SIM-GAP-25.** Goal selection has no plan persistence, hysteresis, sunk-tempo cost, or commitment state. `PolicyScratch.goal` is overwritten at each decision, so there is no durable plan for a threat-aware policy to abandon.
+
+**SIM-GAP-26.** `heuristic_v1.rs::discard` falls back to `HeuristicParams::default()` when `PolicyScratch.goal` is absent. That silently drops every policy gate, including denial, on the fallback path.
+
+**SIM-GAP-27.** `trade.rs::embargoed` still uses a VP-estimate threshold rather than the shared ETW danger model. It controls trade eligibility rather than ranking and remains deliberately ungated.
 
 ## Performance
 

@@ -148,6 +148,30 @@ fn devcards_hot_loop_has_zero_steady_state_allocations() {
 }
 
 #[test]
+fn denial_hot_loop_has_zero_steady_state_allocations() {
+    let topology = Topology::load(BoardLayout::Standard4).unwrap();
+    let board = generate_board(BoardLayout::Standard4, 4, 37).unwrap();
+    let rules = RuleConfig::base(BoardLayout::Standard4);
+    let mut arena = GameArena::default();
+    let mut config = GameConfig {
+        policies: [PolicyKind::HeuristicV1Denial; 6],
+        ..GameConfig::default()
+    };
+    for seed in 0..50 {
+        config.seed = seed;
+        arena.play(&board, &topology, &rules, &config);
+    }
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::SeqCst);
+    for seed in 50..250 {
+        config.seed = seed;
+        arena.play(&board, &topology, &rules, &config);
+    }
+    COUNTING.store(false, Ordering::SeqCst);
+    assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+}
+
+#[test]
 fn trading_hot_loop_has_zero_steady_state_allocations() {
     let topology = Topology::load(BoardLayout::Standard4).unwrap();
     let board = generate_board(BoardLayout::Standard4, 4, 31).unwrap();

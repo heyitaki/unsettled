@@ -22,7 +22,7 @@ There is a second payoff beyond sharpening the measuring instrument. `crates/eng
 - **D — built.** Player-to-player trading with the endgame embargo and farthest-from-winning counterparty selection.
 - **E — built.** Opponent belief state. What it derives and guarantees is a contract; see [contracts.md](contracts.md).
 - **F — built.** Expected turns to win, closed-form over the belief state. What it guarantees is a contract; see [contracts.md](contracts.md).
-- **G — threat-aware decisions, measured one at a time.** Robber placement, belief-driven monopoly and dev-card timing, and threat-aware trading are built. What G3 unified, and the couplings the robber and dev-card arms carry, are contracts; see [contracts.md](contracts.md).
+- **G — built, threat-aware decisions measured one at a time.** G1 robber placement, G2 belief-driven monopoly and dev-card timing, G3 threat-aware trading, and G4 threat-aware action selection and denial are built. G4 delivers contested-card pressure, bounded Longest Road and Largest Army defence, shared-target road racing, and denial-aware Road Building and goal inputs. It deliberately does not deliver plan persistence, route-cut blocking, ETW trade eligibility, or changes to the hardcoded building-action bands. The couplings and gate boundaries are contracts; see [contracts.md](contracts.md).
 - **H — re-tune weights** across the resulting grid, including the structural formula terms that were the old Phase F. Fix the scoring defects in [gaps.md](gaps.md) first: sweeping a weight that multiplies a miscomputed term measures the defect, not the weight. H also settles the open `handValue` question below.
 - **I — adopt** against the untouched `gate` domain.
 - **J — build-target scoring.** Which settlement to upgrade, and where to put the next one, currently ignore what the current goal consumes, resource scarcity relative to that goal rather than to the board, and game stage. Also the card-play scope limits in [gaps.md](gaps.md). Not scheduled against a date; it is the largest block of genuinely new design left.
@@ -34,13 +34,13 @@ The placement formula's `handValue` term prices the second settlement's immediat
 
 Two things keep this a real question rather than a formality. Dropping the term reverts a *rules*-correctness fix at the formula level, so the null result and the correct result look alike unless the A/B is set up to tell them apart. And `handValue` prices cards through `resourceValue` with no scarcity scaling, which is defensible for a one-off setup draw and wrong for a general hand — so ETW subsuming it may be the better model rather than merely a redundant one.
 
-## Open question H must settle: is an all-seat throughput gate measuring the right thing?
+## Throughput disposition for G4, and the question H still owns
 
-The G3 plan registered a throughput floor for the configuration that enables the gate on every seat, and that floor was missed. The diagnosis is `SIM-GAP-21` and it found that most of the cost is not in the gated code: the arm plays longer games that leave fuller boards, and the existing Longest Road search grows superlinearly in roads placed.
+The G3 all-seat throughput floor mixed code efficiency with game length. `SIM-GAP-21` diagnosed the miss: the arm plays longer games that leave fuller boards, and the existing Longest Road search grows superlinearly in roads placed.
 
-That makes the gate ambiguous rather than merely failed. A throughput floor that a longer game can breach is measuring game length as much as code efficiency, and a threat-aware arm is *expected* to change game length — the programme predicts it. Optimizing the gated code cannot reach the floor, because only a bounded share of the slowdown is there to recover.
+G4 therefore registers no all-seat games-per-second floor. M-20 observes a fixed number of policy decisions on the same state, gate off against gate on, and reports rather than gates the cost. It separately counts Longest Road network construction per decision so a hotter trail-search path is visible without confusing it with changed game length.
 
-Two dispositions are open, and H should not start without picking one. Either the floor is respecified per decision rather than per game, so it measures what it was meant to measure, or it stays per game and is accepted as a statement about affordability rather than efficiency. The second is defensible — the grid has to actually run — but it should be chosen rather than inherited. What is no longer defensible is treating the miss as an unfixed performance defect.
+That answers the gate question for G4 only. H still has to decide whether the full tuning grid needs a per-decision efficiency floor, an all-seat affordability floor, both, or neither. What is no longer defensible is treating a per-game miss as an unqualified code-efficiency defect.
 
 ## How to read the A/B results so far
 
@@ -48,7 +48,7 @@ Each of the three built G consumers was measured alone against a field of today'
 
 That is the expected shape, not a surprise: this programme's own premise is that results measured against a self-regarding field will not survive the field becoming threat-aware, which is exactly why tuning was moved to the end. Watch the trend rather than filing it, though, because at this sample size "each consumer is individually inconclusive" and "the programme is not paying" produce the same readings. G4 is the first consumer whose value does not depend on the field staying naive, so it is the first honest test. Neither held-out domain has been spent on any of it.
 
-The rules-level `trade::embargoed` VP threshold is deliberately unchanged because it controls eligibility rather than ranking; moving it onto ETW belongs to G4 with goal switching and denial. `ThreatParams`, `DevCardParams`, and `TradeParams` weights are unswept Phase-H placeholders. The `TradeConfig` defaults are likewise placeholders for a later parameter sweep, not tuned values.
+The rules-level `trade::embargoed` VP threshold remains deliberately unchanged because it controls eligibility rather than ranking and moving it would change every trader arm outside the G4 gate; `SIM-GAP-27` records the remaining work. `ThreatParams`, `DevCardParams`, `TradeParams`, and `DenialParams` weights are unswept Phase-H placeholders. The `TradeConfig` defaults are likewise placeholders for a later parameter sweep, not tuned values.
 
 ## Seed-domain discipline
 
@@ -62,7 +62,7 @@ Default heuristic parameters were tuned only on the named TUNING seed domain. Th
 
 ## How to read the gap inventory
 
-[gaps.md](gaps.md) is an audit of the policy layer against the four consumers G built. Everything there is either absent or measurably wrong today; none of it is covered by G4, H or I unless stated. It is grouped by what kind of work it is, because the groups have different urgency: the defects corrupt measurements that H depends on, while the gaps merely leave value on the table.
+[gaps.md](gaps.md) is an audit of the policy layer after the four G consumers. G4 closed `SIM-GAP-13`, narrowed the contested-card, defence, and racing entries to what remains, and added the plan-persistence, discard-fallback, and embargo-threshold gaps found while threading the gate. The inventory is grouped by what kind of work it is, because defects corrupt measurements that H depends on while gaps merely leave value on the table.
 
 ## Design notes that outlive their phase
 

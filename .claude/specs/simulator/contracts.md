@@ -23,6 +23,7 @@ Within the engine:
 | `threat.rs` | The first consumer of both modules. Consumes the pinned ETW directly rather than adding a second ETW. |
 | `devcards.rs` | The second consumer. Values dev-card plays in the observer's own ETW terms. |
 | `trading.rs` | The third consumer. Supplies the shared opponent-value model for trade proposal, acceptance, and counterparty selection. |
+| `denial.rs` | The fourth consumer. Prices contested cards, award defence, and legality-aware shared-target racing through the shared ETW danger function. |
 
 ## Schedule and evaluation units
 
@@ -77,20 +78,32 @@ greedy-no-trade
 priority-trader
 heuristic-v1
 heuristic-v1-noports
+heuristic-v1-denial
 heuristic-v1-threat
+heuristic-v1-threat-denial
 heuristic-v1-devcards
+heuristic-v1-devcards-denial
 heuristic-v1-threat-devcards
+heuristic-v1-threat-devcards-denial
 heuristic-v1-trader
+heuristic-v1-trader-denial
 heuristic-v1-trader-threat
+heuristic-v1-trader-threat-denial
 heuristic-v1-trader-devcards
+heuristic-v1-trader-devcards-denial
 heuristic-v1-trader-threat-devcards
+heuristic-v1-trader-threat-devcards-denial
 heuristic-v1-trader-aware
+heuristic-v1-trader-aware-denial
 heuristic-v1-trader-aware-threat
+heuristic-v1-trader-aware-threat-denial
 heuristic-v1-trader-aware-devcards
+heuristic-v1-trader-aware-devcards-denial
 heuristic-v1-trader-aware-threat-devcards
+heuristic-v1-trader-aware-threat-devcards-denial
 ```
 
-Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, and `-aware` enables G3 threat-aware trading; the suffixes compose independently.
+Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. `heuristic-v1-noports` remains a rules-level ablation and is not crossed with the four gates.
 
 ## Weights files
 
@@ -107,6 +120,18 @@ Ungated trader policies select the acceptor with the lowest hidden-VP-aware esti
 The mechanism supports only offers giving one or two units of one resource for exactly one unit of another. Multi-resource baskets, bundles, counteroffers, and bank-trade changes are outside its scope.
 
 Exact ties resolve to the first candidate in the fixed `give × get × count` enumeration.
+
+## Denial and positional competition
+
+`DenialParams` is independently gated through `HeuristicParams::denial`. `None` is the byte-stable self-regarding path; `Some` enables G4. The defaults are Phase-H sweep targets, not tuned values.
+
+The non-winning `contested_card_score` expression is multiplied by denial pressure derived from the holder's absolute ETW danger, or the most dangerous opponent when nobody holds the card. A confirmed non-holder Longest Road racer multiplies that pressure. The win-now short circuit is never modulated. The knight call site always forwards the literal `1.0`, preserving G1's frozen knight play/hold comparison.
+
+Exactly one `DenialContext` is built per gated policy decision and threaded through every consumer. It memoizes per-seat one-road reach and one Longest Road challenger resolution without adding fields to `ViewCache`. Exact `road_takes_longest_road` checks are ranked by danger, guarded by the sound necessary condition `road_count + 1 >= required`, and capped at `denial.rs::MAX_RACE_CHECKS` per decision. The prefilter has no false negatives relative to the codebase's exact checker; the cap can leave later rivals unchecked, as recorded by `SIM-GAP-07`.
+
+Positional competition is threat multiplied by legal one-road reach, site openness, and settlement-piece availability. It prices racing to a shared target, not general route cutting. Every production consumer reads one-road reach through the context memo.
+
+`PolicyKind::parse` ends in a wildcard and is not compiler-enforced. The complete 28-policy roster is guarded by an enum-to-name-to-parse round-trip test in addition to exhaustive production matches.
 
 ## Output stability
 

@@ -455,6 +455,33 @@ impl<'a> DecisionView<'a> {
         self.own_roads().count
     }
 
+    pub fn compute_one_step(&self, seat: usize) -> u128 {
+        let mut vertices = 0_u128;
+        for edge in 0..self.topology.edge_count() {
+            let edge = edge as Edge;
+            if can_build_road(
+                self.topology,
+                &self.state.vertex_owner,
+                &self.state.edge_owner,
+                seat as u8,
+                edge,
+                self.pieces(seat, Buildable::Road),
+            ) {
+                for vertex in self.topology.edge_endpoints(edge) {
+                    vertices |= 1 << vertex;
+                }
+            }
+        }
+        vertices
+    }
+
+    pub fn compute_road_count(&self, seat: usize) -> u8 {
+        self.state.edge_owner[..self.topology.edge_count()]
+            .iter()
+            .filter(|owner| **owner == seat as u8)
+            .count() as u8
+    }
+
     /// The observer's road graph, ready to be probed with prospective segments. Scoring passes that
     /// weigh many candidate roads build this once and call [`Self::road_length_on`] per candidate.
     pub fn road_network(&self) -> RoadNetwork {
@@ -462,6 +489,8 @@ impl<'a> DecisionView<'a> {
     }
 
     pub fn road_network_for(&self, seat: usize) -> RoadNetwork {
+        #[cfg(test)]
+        crate::policy::denial::record_road_network_build();
         RoadNetwork::for_seat(
             self.topology,
             &self.state.vertex_owner,

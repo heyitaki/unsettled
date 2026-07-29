@@ -18,18 +18,36 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::PriorityTrader => "priority-trader",
         PolicyKind::HeuristicV1 => "heuristic-v1",
         PolicyKind::HeuristicV1Noports => "heuristic-v1-noports",
+        PolicyKind::HeuristicV1Denial => "heuristic-v1-denial",
         PolicyKind::HeuristicV1Threat => "heuristic-v1-threat",
+        PolicyKind::HeuristicV1ThreatDenial => "heuristic-v1-threat-denial",
         PolicyKind::HeuristicV1Devcards => "heuristic-v1-devcards",
+        PolicyKind::HeuristicV1DevcardsDenial => "heuristic-v1-devcards-denial",
         PolicyKind::HeuristicV1ThreatDevcards => "heuristic-v1-threat-devcards",
+        PolicyKind::HeuristicV1ThreatDevcardsDenial => "heuristic-v1-threat-devcards-denial",
         PolicyKind::HeuristicV1Trader => "heuristic-v1-trader",
+        PolicyKind::HeuristicV1TraderDenial => "heuristic-v1-trader-denial",
         PolicyKind::HeuristicV1TraderThreat => "heuristic-v1-trader-threat",
+        PolicyKind::HeuristicV1TraderThreatDenial => "heuristic-v1-trader-threat-denial",
         PolicyKind::HeuristicV1TraderDevcards => "heuristic-v1-trader-devcards",
+        PolicyKind::HeuristicV1TraderDevcardsDenial => "heuristic-v1-trader-devcards-denial",
         PolicyKind::HeuristicV1TraderThreatDevcards => "heuristic-v1-trader-threat-devcards",
+        PolicyKind::HeuristicV1TraderThreatDevcardsDenial => {
+            "heuristic-v1-trader-threat-devcards-denial"
+        }
         PolicyKind::HeuristicV1TraderAware => "heuristic-v1-trader-aware",
+        PolicyKind::HeuristicV1TraderAwareDenial => "heuristic-v1-trader-aware-denial",
         PolicyKind::HeuristicV1TraderAwareThreat => "heuristic-v1-trader-aware-threat",
+        PolicyKind::HeuristicV1TraderAwareThreatDenial => "heuristic-v1-trader-aware-threat-denial",
         PolicyKind::HeuristicV1TraderAwareDevcards => "heuristic-v1-trader-aware-devcards",
+        PolicyKind::HeuristicV1TraderAwareDevcardsDenial => {
+            "heuristic-v1-trader-aware-devcards-denial"
+        }
         PolicyKind::HeuristicV1TraderAwareThreatDevcards => {
             "heuristic-v1-trader-aware-threat-devcards"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
+            "heuristic-v1-trader-aware-threat-devcards-denial"
         }
     }
 }

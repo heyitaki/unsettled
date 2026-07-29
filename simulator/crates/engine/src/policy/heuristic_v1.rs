@@ -1,12 +1,23 @@
 use serde::{Deserialize, Serialize};
 
 use crate::policy::PolicyScratch;
+use crate::policy::denial::{self, DenialContext, DenialParams};
 use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::threat::{self, ThreatParams};
 use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
 use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction, can_pay, pips};
+
+pub(crate) type Gated<'a> = Option<(&'a DenialContext, &'a DenialParams)>;
+
+#[cfg(test)]
+std::thread_local! {
+    static HOLDER_DEFEND_OBSERVATION: std::cell::Cell<Option<bool>> =
+        const { std::cell::Cell::new(None) };
+    static PAIR_CONTEST: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+    static PAIR_ROAD_BONUS: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -26,6 +37,10 @@ pub struct HeuristicParams {
     /// `None` keeps the offer-independent VP-ratio acceptance rule and the lexicographic
     /// counterparty ladder. `Some` selects the shared opponent-value model in `policy::trading`.
     pub trading: Option<TradeParams>,
+    /// `None` keeps self-regarding contested-card and expansion scoring. `Some` selects the
+    /// denial and positional-competition model in `policy::denial`; these weights are Phase-H
+    /// sweep targets, not tuned values.
+    pub denial: Option<DenialParams>,
 }
 
 impl Default for HeuristicParams {
@@ -40,6 +55,7 @@ impl Default for HeuristicParams {
             threat: None,
             dev_cards: None,
             trading: None,
+            denial: None,
         }
     }
 }
@@ -59,9 +75,14 @@ pub(crate) fn action_with_goal(
     params: &HeuristicParams,
     rng: &mut Xoshiro256StarStar,
 ) -> (Action, Option<Goal>) {
-    let road = best_road(view, params);
+    let denial_context = params
+        .denial
+        .as_ref()
+        .map(|denial_params| denial::context(view, denial_params));
+    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    let road = best_road(view, params, gated);
     let PolicyScratch { goal, actions } = scratch;
-    score_actions_with(view, params, actions, road);
+    score_actions_with(view, params, actions, road, gated);
     let selected_goal = best_goal_with(view, params, road);
     *goal = selected_goal.map(|goal| goal.kind);
     let best_score = actions
@@ -85,7 +106,12 @@ pub(crate) fn action_with_goal(
 }
 
 pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mut ActionBuf) {
-    score_actions_with(view, params, out, best_road(view, params));
+    let denial_context = params
+        .denial
+        .as_ref()
+        .map(|denial_params| denial::context(view, denial_params));
+    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    score_actions_with(view, params, out, best_road(view, params, gated), gated);
 }
 
 fn score_actions_with(
@@ -93,6 +119,7 @@ fn score_actions_with(
     params: &HeuristicParams,
     out: &mut ActionBuf,
     road: Option<RoadGoal>,
+    gated: Gated<'_>,
 ) {
     out.clear();
     if view.can_afford(Buildable::City) {
@@ -139,7 +166,7 @@ fn score_actions_with(
             });
         }
     }
-    let dev_score = dev_card_score(view);
+    let dev_score = dev_card_score(view, gated);
     if view.dev_deck_remaining() > 0 && !view.can_buy_dev() {
         for give in Resource::ALL {
             for get in Resource::ALL {
@@ -209,6 +236,11 @@ pub fn pre_roll(
     scratch: &mut PolicyScratch,
     params: &HeuristicParams,
 ) -> Option<DevPlay> {
+    let denial_context = params
+        .denial
+        .as_ref()
+        .map(|denial_params| denial::context(view, denial_params));
+    let gated = denial_context.as_ref().zip(params.denial.as_ref());
     let blocked_pips = if view.hex_touches_seat(view.robber(), view.observer()) {
         view.board().tokens()[usize::from(view.robber())].map_or(0, pips)
     } else {
@@ -223,11 +255,11 @@ pub fn pre_roll(
             victim,
         });
     }
-    let goal = best_goal(view, params);
+    let goal = best_goal(view, params, gated);
     scratch.goal = goal.map(|value| value.kind);
     match params.dev_cards.as_ref() {
-        None => ladder_pre_roll(view, params, goal),
-        Some(cards) => devcards_pre_roll(view, params, cards, goal),
+        None => ladder_pre_roll(view, params, goal, gated),
+        Some(cards) => devcards_pre_roll(view, params, cards, goal, gated),
     }
 }
 
@@ -235,6 +267,7 @@ fn ladder_pre_roll(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     goal: Option<Goal>,
+    gated: Gated<'_>,
 ) -> Option<DevPlay> {
     if view.can_play_dev(3)
         && let Some((first, second)) = goal.and_then(|value| plenty_for_goal(view, value.kind))
@@ -247,7 +280,7 @@ fn ladder_pre_roll(
         return Some(DevPlay::Monopoly { resource });
     }
     if view.can_play_dev(2) {
-        let (first, second) = best_road_building_pair(view, params);
+        let (first, second) = best_road_building_pair(view, params, gated);
         if first.is_some() {
             return Some(DevPlay::RoadBuilding { first, second });
         }
@@ -260,6 +293,7 @@ fn devcards_pre_roll(
     params: &HeuristicParams,
     cards: &DevCardParams,
     goal: Option<Goal>,
+    gated: Gated<'_>,
 ) -> Option<DevPlay> {
     let offers = devcards::DevOffers {
         plenty: view
@@ -269,7 +303,7 @@ fn devcards_pre_roll(
         monopoly: view.can_play_dev(4),
         road: view
             .can_play_dev(2)
-            .then(|| best_road_building_pair(view, params))
+            .then(|| best_road_building_pair(view, params, gated))
             .filter(|pair| pair.0.is_some()),
     };
     let goal_cost = goal.and_then(|value| view.costs(value.kind).first().copied());
@@ -371,7 +405,7 @@ pub fn discard(
 ) -> [u8; RESOURCE_COUNT] {
     let goal = scratch
         .goal
-        .or_else(|| best_goal(view, &HeuristicParams::default()).map(|value| value.kind));
+        .or_else(|| best_goal(view, &HeuristicParams::default(), None).map(|value| value.kind));
     let cost = goal
         .and_then(|kind| view.costs(kind).first())
         .copied()
@@ -516,8 +550,12 @@ struct RoadGoal {
     goal_score: f32,
 }
 
-pub(crate) fn best_goal(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<Goal> {
-    best_goal_with(view, params, best_road(view, params))
+pub(crate) fn best_goal(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    gated: Gated<'_>,
+) -> Option<Goal> {
+    best_goal_with(view, params, best_road(view, params, gated))
 }
 
 /// `best_road` scans every legal edge and, when the Longest Road card is in reach, runs an
@@ -560,12 +598,16 @@ fn best_goal_with(
     best
 }
 
-fn best_road(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<RoadGoal> {
+fn best_road(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    gated: Gated<'_>,
+) -> Option<RoadGoal> {
     let mut best = None;
     // The trail search is the dominant cost of a decision, so the graph it walks is built once
     // here and probed per candidate -- and not at all when the card is out of reach.
-    let mut network = longest_road_reachable(view, 1).then(|| view.road_network());
-    let cap = road_length_cap(view);
+    let mut network = longest_road_reachable(view, 1, gated).then(|| view.road_network());
+    let cap = road_length_cap(view, gated);
     for edge in 0..view.topology().edge_count() {
         let edge = edge as u8;
         if !view.legal_road(edge) {
@@ -575,14 +617,20 @@ fn best_road(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<RoadGo
         let new_length = network
             .as_mut()
             .map_or(0, |network| view.road_length_on(network, edge, None, cap));
-        let Some((action_bonus, goal_bonus)) = longest_road_value(view, new_length) else {
+        let contest = gated.map_or(0.0, |(ctx, denial_params)| {
+            denial::contest_term(view, ctx, denial_params, edge)
+        });
+        let contest_goal = gated.map_or(0.0, |(_, denial_params)| {
+            denial_params.contest_goal_share * contest / denial_params.contest_cap.max(f32::EPSILON)
+        });
+        let Some((action_bonus, goal_bonus)) = longest_road_value(view, new_length, gated) else {
             if expansion_score.is_none() {
                 continue;
             }
             let candidate = RoadGoal {
                 edge,
-                action_score: 40.0 + expansion_score.unwrap_or_default(),
-                goal_score: 0.35,
+                action_score: 40.0 + expansion_score.unwrap_or_default() + contest,
+                goal_score: 0.35 + contest_goal,
             };
             if best.is_none_or(|current: RoadGoal| candidate.action_score > current.action_score) {
                 best = Some(candidate);
@@ -591,8 +639,8 @@ fn best_road(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<RoadGo
         };
         let candidate = RoadGoal {
             edge,
-            action_score: action_bonus + expansion_score.unwrap_or_default(),
-            goal_score: 0.35 + goal_bonus,
+            action_score: action_bonus + expansion_score.unwrap_or_default() + contest,
+            goal_score: 0.35 + goal_bonus + contest_goal,
         };
         if best.is_none_or(|current: RoadGoal| candidate.action_score > current.action_score) {
             best = Some(candidate);
@@ -643,9 +691,9 @@ fn expansion_road_score(
 /// components into `a + b + 1`, and every seat starts setup with two separate road stubs, so that
 /// tighter-looking bound is false and would skip roads that win the card outright. The slack of 2
 /// keeps the near-miss progress branch of `longest_road_value` reachable.
-fn longest_road_reachable(view: &DecisionView<'_>, added: u8) -> bool {
+fn longest_road_reachable(view: &DecisionView<'_>, added: u8, gated: Gated<'_>) -> bool {
     if view.longest_road_holder() == Some(view.observer()) {
-        return false;
+        return gated.is_some_and(|(ctx, _)| denial::should_defend(ctx).is_some());
     }
     let target = longest_road_target(view);
     view.own_road_count().saturating_add(added) >= target.saturating_sub(PROGRESS_SLACK)
@@ -667,17 +715,36 @@ fn longest_road_target(view: &DecisionView<'_>) -> u8 {
 /// seat's current length, and it wins the card at or above the target. Every length beyond the
 /// target scores the same, so the search may stop there -- which is precisely where a long
 /// late-game network gets expensive to walk.
-fn road_length_cap(view: &DecisionView<'_>) -> u8 {
-    longest_road_target(view).max(view.longest_road_len(view.observer()).saturating_add(1))
+fn road_length_cap(view: &DecisionView<'_>, gated: Gated<'_>) -> u8 {
+    let current = view.longest_road_len(view.observer());
+    let base = longest_road_target(view).max(current.saturating_add(1));
+    match gated {
+        Some((_, params)) if view.longest_road_holder() == Some(view.observer()) => {
+            base.max(denial::defend_probe_cap(current, params))
+        }
+        _ => base,
+    }
 }
 
 /// How far below the card's threshold `longest_road_value` still pays a progress bonus.
 const PROGRESS_SLACK: u8 = 2;
 
-fn longest_road_value(view: &DecisionView<'_>, new_length: u8) -> Option<(f32, f32)> {
+fn longest_road_value(
+    view: &DecisionView<'_>,
+    new_length: u8,
+    gated: Gated<'_>,
+) -> Option<(f32, f32)> {
     let observer = view.observer();
     if view.longest_road_holder() == Some(observer) {
-        return None;
+        let (ctx, params) = gated?;
+        let defender = denial::should_defend(ctx);
+        #[cfg(test)]
+        HOLDER_DEFEND_OBSERVATION.with(|observed| observed.set(Some(defender.is_some())));
+        let _ = defender?;
+        if new_length <= view.longest_road_len(observer) {
+            return None;
+        }
+        return denial::defend_term(view, ctx, params, new_length);
     }
     let target = longest_road_target(view);
     let current = view.longest_road_len(observer);
@@ -685,13 +752,17 @@ fn longest_road_value(view: &DecisionView<'_>, new_length: u8) -> Option<(f32, f
         return None;
     }
     if new_length >= target {
+        let pressure = gated.map_or(1.0, |(ctx, params)| {
+            denial::pressure(ctx, params, view.longest_road_holder())
+        });
         return Some((
             contested_card_score(
                 view,
                 view.longest_road_vp(),
                 view.longest_road_holder().is_some(),
+                pressure,
             ),
-            30.0 + 10.0 * win_proximity(view),
+            (30.0 + 10.0 * win_proximity(view)) * pressure,
         ));
     }
     let before = target.saturating_sub(current);
@@ -707,22 +778,30 @@ fn longest_road_value(view: &DecisionView<'_>, new_length: u8) -> Option<(f32, f
     ))
 }
 
-fn contested_card_score(view: &DecisionView<'_>, vp: u8, denies_holder: bool) -> f32 {
+fn contested_card_score(
+    view: &DecisionView<'_>,
+    vp: u8,
+    denies_holder: bool,
+    pressure: f32,
+) -> f32 {
     if view.own_total_vp().saturating_add(vp) >= view.win_vp() {
         return 100_000.0 + f32::from(vp) * 100.0;
     }
     // Scale with the VP the card actually carries rather than sitting on a flat floor above the
     // city band: a variant that makes a bonus card worth 1 VP must not outrank a 2-VP city. At the
     // base-rules value of 2 this is the same 11_000 as before.
-    5_500.0 * f32::from(vp)
+    (5_500.0 * f32::from(vp)
         + f32::from(vp) * 250.0
         + win_proximity(view) * 2_000.0
-        + if denies_holder { 250.0 } else { 0.0 }
+        + if denies_holder { 250.0 } else { 0.0 })
+        * pressure
 }
 
-fn dev_card_score(view: &DecisionView<'_>) -> f32 {
+fn dev_card_score(view: &DecisionView<'_>, gated: Gated<'_>) -> f32 {
     if view.largest_army_holder() == Some(view.observer()) {
-        return 45.0;
+        return gated
+            .and_then(|(ctx, params)| denial::army_defend_term(ctx, params))
+            .map_or(45.0, |term| 45.0 + term);
     }
     let holder_count = view
         .largest_army_holder()
@@ -737,7 +816,10 @@ fn dev_card_score(view: &DecisionView<'_>) -> f32 {
         3 => 25.0,
         _ => 0.0,
     };
-    45.0 + contest_bonus * (0.5 + win_proximity(view))
+    let pressure = gated.map_or(1.0, |(ctx, params)| {
+        denial::pressure(ctx, params, view.largest_army_holder())
+    });
+    45.0 + contest_bonus * (0.5 + win_proximity(view)) * pressure
 }
 
 fn knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<u8>) -> f32 {
@@ -746,6 +828,7 @@ fn knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<
             view,
             view.largest_army_vp(),
             view.largest_army_holder().is_some(),
+            1.0,
         );
     }
     let next = view
@@ -772,19 +855,22 @@ fn knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<
         }
 }
 
-fn win_proximity(view: &DecisionView<'_>) -> f32 {
+pub(crate) fn win_proximity(view: &DecisionView<'_>) -> f32 {
     f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1))
 }
 
 fn best_road_building_pair(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
+    gated: Gated<'_>,
 ) -> (Option<u8>, Option<u8>) {
     let mut best = (None, None);
     let mut best_score = f32::NEG_INFINITY;
     // Road building lays two segments, so the card is reachable from two further out.
-    let mut network = longest_road_reachable(view, 2).then(|| view.road_network());
-    let cap = road_length_cap(view);
+    let mut network = longest_road_reachable(view, 2, gated).then(|| view.road_network());
+    let cap = road_length_cap(view, gated);
+    #[cfg(test)]
+    PAIR_PROBE_CAP.with(|recorded| recorded.set(Some(cap)));
     for first in 0..view.topology().edge_count() {
         let first = first as u8;
         if !view.legal_road(first) {
@@ -805,9 +891,22 @@ fn best_road_building_pair(
                 .fold(f32::NEG_INFINITY, f32::max);
             let road_bonus = network.as_mut().map_or(0.0, |network| {
                 let length = view.road_length_on(network, first, Some(second), cap);
-                longest_road_value(view, length).map_or(0.0, |(action_score, _)| action_score)
+                longest_road_value(view, length, gated)
+                    .map_or(0.0, |(action_score, _)| action_score)
             });
-            let score = expansion_score + road_bonus;
+            #[cfg(test)]
+            PAIR_ROAD_BONUS.with(|recorded| recorded.set(recorded.get().max(road_bonus)));
+            let contest = gated.map_or(0.0, |(ctx, denial_params)| {
+                denial::contest_term(view, ctx, denial_params, first).max(denial::contest_term(
+                    view,
+                    ctx,
+                    denial_params,
+                    second,
+                ))
+            });
+            #[cfg(test)]
+            PAIR_CONTEST.with(|recorded| recorded.set(recorded.get().max(contest)));
+            let score = expansion_score + road_bonus + contest;
             if score > best_score {
                 best = (Some(first), Some(second));
                 best_score = score;
@@ -818,6 +917,51 @@ fn best_road_building_pair(
         }
     }
     best
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static PAIR_PROBE_CAP: std::cell::Cell<Option<u8>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) fn reset_pair_probe_cap() {
+    PAIR_PROBE_CAP.with(|recorded| recorded.set(None));
+}
+
+#[cfg(test)]
+pub(crate) fn pair_probe_cap() -> Option<u8> {
+    PAIR_PROBE_CAP.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_holder_defend_observation() {
+    HOLDER_DEFEND_OBSERVATION.with(|observed| observed.set(None));
+}
+
+#[cfg(test)]
+pub(crate) fn holder_defend_observation() -> Option<bool> {
+    HOLDER_DEFEND_OBSERVATION.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_pair_road_bonus() {
+    PAIR_ROAD_BONUS.with(|recorded| recorded.set(0.0));
+}
+
+#[cfg(test)]
+pub(crate) fn pair_road_bonus() -> f32 {
+    PAIR_ROAD_BONUS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_pair_contest() {
+    PAIR_CONTEST.with(|recorded| recorded.set(0.0));
+}
+
+#[cfg(test)]
+pub(crate) fn pair_contest() -> f32 {
+    PAIR_CONTEST.with(std::cell::Cell::get)
 }
 
 fn turns_for_cost(view: &DecisionView<'_>, cost: &[u8; RESOURCE_COUNT]) -> f32 {

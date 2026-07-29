@@ -7,10 +7,10 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::game::{GameArena, GameConfig};
-use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams};
 use unsettled_engine::policy::threat::ThreatParams;
-use unsettled_engine::rng::mix64;
+use unsettled_engine::policy::{self, PolicyKind};
+use unsettled_engine::rng::{Xoshiro256StarStar, mix64};
 use unsettled_engine::rules::{Buildable, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::view::{Action, ActionBuf, DecisionPhase, DevPlay, pips};
@@ -196,6 +196,18 @@ fn threat_arm_scores_the_knight_action_identically_to_heuristic_v1() {
     let (on_pair, on_score) = knight(&on);
     assert_eq!(off_score.to_bits(), on_score.to_bits());
     assert_ne!(off_pair, on_pair);
+
+    for kind in [
+        PolicyKind::HeuristicV1ThreatDenial,
+        PolicyKind::HeuristicV1ThreatDevcardsDenial,
+        PolicyKind::HeuristicV1TraderThreatDenial,
+        PolicyKind::HeuristicV1TraderThreatDevcardsDenial,
+        PolicyKind::HeuristicV1TraderAwareThreatDenial,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial,
+    ] {
+        let mut rng = Xoshiro256StarStar::from_seed(7);
+        assert_eq!(policy::robber(kind, &view, &mut rng), on_pair, "{kind:?}");
+    }
 }
 
 fn play_window(

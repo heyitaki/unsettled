@@ -1102,6 +1102,7 @@ fn aware_response_receives_the_policy_trade_params() {
     );
     assert!((margin - 0.355_142_517).abs() <= 1e-6, "margin={margin}");
     let mut aware_rng = Xoshiro256StarStar::from_seed(1);
+    let mut denial_rng = Xoshiro256StarStar::from_seed(1);
     let mut baseline_rng = Xoshiro256StarStar::from_seed(1);
     assert!(policy::respond_trade(
         PolicyKind::HeuristicV1TraderAware,
@@ -1114,6 +1115,12 @@ fn aware_response_receives_the_policy_trade_params() {
         &view,
         offer,
         &mut baseline_rng
+    ));
+    assert!(policy::respond_trade(
+        PolicyKind::HeuristicV1TraderAwareDenial,
+        &view,
+        offer,
+        &mut denial_rng
     ));
 }
 
