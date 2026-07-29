@@ -51,6 +51,8 @@ The three seed domains are the committed tuning (`0x7a11_1e5e_ed20_2607`), held-
 
 The domain seed drives both board generation and each game's dice, deck, chance, and policy streams. On a given unit, the game seed depends only on `(domain seed, board, rep, hero seat)`, never the arm, so paired arms use common random numbers.
 
+Board `i` derives from `mix64(domain seed ^ i)` and so depends on its own index alone. Two consequences worth relying on: raising `--boards` extends the board set rather than resampling it, so a longer run's boards are a strict superset of a shorter one's; and adding arms to a run cannot perturb any other arm or the reference, so an earlier run's paired result is reproducible exactly by a later run that merely carries more arms. M-21 used both to prove its invocation identical to the runs it refines.
+
 ## Paired statistics
 
 For an arm and its reference, `b` counts units won only by the arm and `c` counts units won only by the reference. The paired estimate is `(b-c)/n`. The artifact reports both a McNemar Wald interval for the correlated per-unit differences and an interval clustered by generated board. It always selects the wider interval, choosing the clustered interval on an exact width tie. With only one board, between-board variance is unknowable, so the clustered interval is `[-1, 1]`, `clusteredDegenerate` is true, and the verdict is necessarily `inconclusive`.

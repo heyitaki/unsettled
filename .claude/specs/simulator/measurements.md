@@ -234,3 +234,57 @@ The timing fixture first produced one deterministic truncated real game, then ca
 The separate in-crate hook count ran 200 complete games per arm. Gate off built `67,740` road networks over `88,035` approximate turn-seat decisions (`0.769467` per decision); gate on built `69,777` over `86,830` (`0.803605` per decision), `+4.4%`. The gated arm therefore did make the Longest Road trail-search substrate hotter. This is a new G4 observation, not a re-test of the three causes already refuted by M-18.
 
 No all-seat games-per-second floor is registered for G4: that would mix changed game length with code efficiency. Phase H still owns the affordability-gate decision for the full tuning grid.
+
+## M-21 — Composite arm: do the four G consumers compound?
+
+- **Date** 2026-07-29 · **Commit** `5398f61`, tree clean, no simulator code change · **Domain** `tuning` · **Admissible** **yes as a tuning-domain result; no as an adoption decision**
+- **Command** `cargo run --release --manifest-path simulator/Cargo.toml -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm <label>=pip_diversity ... --arm-policy <label>=<policy> ... --reference <label> --boards 400 --reps 10 --policy <field> --threads 0 --out <dir>`, with `<field>` `heuristic-v1` for the plain runs and `heuristic-v1-trader --player-trading` for the trader runs. The built binary was invoked directly after one `cargo build --release`; the form above is the reproducible equivalent. Raw artifacts sit under the ignored solves directory in a working checkout, named `sim-composite-arm`, alongside the preregistration written before the scaled runs.
+- **Load** plain run before `4.02 3.42 3.06`, after `4.02 3.42 3.06`; trader run before `3.87 3.42 3.07`, after `5.56 3.78 3.20`. Paired estimates over a fixed schedule, so load bears on wall clock and not on the estimate.
+
+Answers the question `programme.md` posed after the fourth `inconclusive` single: whether four small positive estimates mean the consumers are individually under-powered or that the programme is not paying against this field. **It is the first.** Every run below is 400 boards x 10 reps x 4 hero seats — 16,000 paired units, 400 clusters, ten times the schedule M-01 through M-19 used — with zero illegal actions throughout.
+
+**Harness identity, established before anything was scaled.** At the earlier entries' own 40-board schedule this invocation reproduces every recorded single exactly: `threat` b 172 c 147, `devcards` b 68 c 46, `trader-aware` b 249 c 236, `denial` b 46 c 36, and both reference win rates. So M-21 refines those entries by precision and contradicts none of them. Boards derive from `mix64(domain_seed ^ board_index)`, so the 400-board set is a strict superset of the 40-board set rather than a different sample.
+
+**Trader field** (`heuristic-v1-trader`, the field M-03 used, and the only one on which all four gates can be on at once). Reference win rate `0.247812`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| all four gates | **`+0.068000`** | 3081 | 1993 | clustered `[+0.058189, +0.077811]` | **better** |
+| `threat` `devcards` `denial`, no trade gate | `+0.022750` | 1986 | 1622 | clustered `[+0.015031, +0.030469]` | better |
+| `aware` alone | `+0.024625` | 2565 | 2171 | clustered `[+0.015539, +0.033711]` | better |
+| `devcards` alone | `+0.013938` | 576 | 353 | clustered `[+0.010184, +0.017691]` | better |
+| `threat` alone | `+0.009562` | 1747 | 1594 | clustered `[+0.002027, +0.017098]` | inconclusive |
+| `denial` alone | `+0.001437` | 553 | 530 | McNemar `[-0.002594, +0.005469]` | **equivalent** |
+
+The composite reaches a `0.315812` hero win rate against a four-seat field whose reference seat wins `0.247812`. Paired directly against each other, the three non-trade gates and the trade gate alone are indistinguishable: `+0.001875`, clustered `[-0.007329, +0.011079]`, `inconclusive`. One gate is worth as much as the other three combined.
+
+**The compounding is super-additive, and measured as paired increments rather than inferred by subtraction.** Summing the four standalone estimates gives `0.049562`, which lies below the composite's interval. Two paired increment runs confirm it directly: adding the trade gate on top of the other three is worth `+0.045250`, clustered `[+0.035698, +0.054802]`, against `+0.024625` standalone; adding the other three on top of the trade gate is worth `+0.043375`, clustered `[+0.035239, +0.051511]`, against `+0.022750` standalone. Both pairs of 95% intervals fail to overlap. These are correlated paired estimates over shared units rather than independent samples, so non-overlap is read as strong but not as a formal test.
+
+**Leave-one-out on the trader field, exploratory and outside the preregistered design.** Each row is the paired value of adding one gate to the other three.
+
+| Gate added to the other three | Marginal | Selected interval | Verdict | Standalone |
+| --- | ---: | --- | --- | ---: |
+| `aware` (G3) | `+0.045250` | clustered `[+0.035698, +0.054802]` | better | `+0.024625` |
+| `threat` (G1) | `+0.021937` | clustered `[+0.013616, +0.030259]` | better | `+0.009562` |
+| `devcards` (G2) | `+0.019813` | McNemar `[+0.015121, +0.024504]` | better | `+0.013938` |
+| `denial` (G4) | `+0.003312` | McNemar `[-0.001748, +0.008373]` | **equivalent** | `+0.001437` |
+
+Three of the four gates roughly double in value inside the composite. The fourth does not move.
+
+**Plain field** (`heuristic-v1`, the field M-01, M-02 and M-19 used), full 2^3 factorial over the three gates that field admits. Reference win rate `0.252250`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| `threat` + `devcards` + `denial` | `+0.026687` | 1945 | 1518 | McNemar `[+0.019491, +0.033884]` | better |
+| `threat` + `devcards` | `+0.024250` | 1891 | 1503 | McNemar `[+0.017123, +0.031377]` | better |
+| `devcards` + `denial` | `+0.017750` | 887 | 603 | clustered `[+0.013012, +0.022488]` | better |
+| `threat` + `denial` | `+0.012688` | 1735 | 1532 | McNemar `[+0.005689, +0.019686]` | inconclusive |
+| `devcards` | `+0.011312` | 562 | 381 | clustered `[+0.007378, +0.015247]` | inconclusive |
+| `threat` | `+0.009875` | 1666 | 1508 | McNemar `[+0.002975, +0.016775]` | inconclusive |
+| `denial` | `+0.002750` | 404 | 360 | clustered `[-0.000665, +0.006165]` | **equivalent** |
+
+Here the three gates are close to additive — the standalone estimates sum to `0.023937` against a composite of `0.026687` — so the super-additivity above is specific to the field in which trading exists. Denial's paired increment on top of `threat` + `devcards` is `+0.002437`, clustered `[-0.001174, +0.006049]`, `equivalent`: indistinguishable from its standalone value, so it does not compound on this field either.
+
+**The denial result is a finding, not a null.** `equivalent` is a positive statement that the effect is confidently smaller than the `0.01` threshold, which `inconclusive` at 1,600 units was not. Three independent reads agree: standalone on the trader field, standalone on the plain field, and marginal inside the full composite. M-19 stands as recorded; at ten times the units the same arm resolves from `inconclusive` to `equivalent` and its point estimate falls.
+
+**Estimates at 16,000 units run below their 1,600-unit counterparts** for `threat`, `devcards` and `denial`, and above for `aware`. The earlier entries are single evaluations over a 40-board schedule and were never medians; the movement is precision, not disagreement.

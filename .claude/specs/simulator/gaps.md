@@ -12,6 +12,8 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-02.** Two spellings of "best settlement" disagree. The action scorer ranks on the full `vertex_score`; the goal chooser calls `view.best_legal_settlement()`, which ranks on `vertex_pips` alone — no scarcity, diversity, port or expansion. Same divergence class as the `vp_estimate` spellings G3 unified.
 
+> This is now the highest-value entry in the file. M-21 measured the G4 denial consumer that sits on top of this chooser as `equivalent` — below the practical threshold — on three independent reads, while the other three gates gained markedly from being composed. Fix this before denial is measured again or swept.
+
 **SIM-GAP-03.** Two of `vertex_score`'s five terms are dead on a city upgrade. `diversity` counts resources where the observer produces none, but you already produce that vertex's resources; `expansion` counts unowned neighbours, which an upgrade does not use. City ranking silently reduces to pips, scarcity and port synergy.
 
 **SIM-GAP-04.** City-over-settlement is a hard constant ladder (`10_000.0` against `500.0`), so an affordable city outranks every settlement regardless of relative value. This is the lexicographic-ladder anti-pattern the programme rejects for opponent ranking, still present in the main action scorer.
