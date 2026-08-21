@@ -32,15 +32,22 @@ interface Dot {
   anchor: Rgb
 }
 
-const canonicalColor: Record<PlayerSeed, string> = {
-  red: PLAYER_PALETTE.red,
-  blue: PLAYER_PALETTE.blue,
-  orange: PLAYER_PALETTE.orange,
-  white: PLAYER_PALETTE.white,
-  green: PLAYER_PALETTE.green,
+// A row of cards draws one dot size, so this rejects blobs that merely sit in
+// line with each other.
+const DOT_RADIUS_AGREEMENT = 0.25
+
+function medianRadius(dots: Dot[]): number {
+  const radii = dots.map((dot) => dot.radius).sort((a, b) => a - b)
+  return radii[Math.floor((radii.length - 1) / 2)]
 }
 
-export function labelRectFor(dot: Pick<Dot, 'x' | 'y' | 'radius'>): Rect {
+function radiiAgree(dots: Dot[]): boolean {
+  const radii = dots.map((dot) => dot.radius)
+  const largest = Math.max(...radii)
+  return largest - Math.min(...radii) <= DOT_RADIUS_AGREEMENT * largest
+}
+
+function labelRectFor(dot: Pick<Dot, 'x' | 'y' | 'radius'>): Rect {
   return {
     x: Math.round(dot.x + 1.8 * dot.radius),
     y: Math.round(dot.y - 1.8 * dot.radius),
@@ -177,42 +184,73 @@ export function detectRoster(
       row.y = row.dots.reduce((sum, item) => sum + item.y, 0) / row.dots.length
     } else rows.push({ y: dot.y, dots: [dot] })
   }
-  const chipRow = rows.filter((row) => row.dots.length >= 3).sort((a, b) => b.dots.length - a.dots.length)[0]
+  // Two players is a legal roster, so the dot count can no longer separate cards
+  // from header decoration. Three facts about cards replace it.
+  // One card per player, so a colour cannot repeat: the dot nearest the row's
+  // median size wins, which drops a stray badge whichever side of the real dot
+  // its size falls.
+  const oneDotPerSeed = rows.map((row) => {
+    const middle = medianRadius(row.dots)
+    const bySeed = new Map<PlayerSeed, Dot>()
+    for (const dot of row.dots) {
+      const held = bySeed.get(dot.seed)
+      if (!held || Math.abs(dot.radius - middle) < Math.abs(held.radius - middle)) bySeed.set(dot.seed, dot)
+    }
+    return { y: row.y, dots: [...bySeed.values()] }
+  })
+  // Every card draws the same dot, so radii that disagree mean decoration.
+  const cardRows = oneDotPerSeed.filter((row) => row.dots.length >= 2 && radiiAgree(row.dots))
+  // The roster sits directly above the board, so the lowest surviving row is it.
+  const chipRow = cardRows.sort((a, b) => b.y - a.y)[0]
   if (!chipRow) return { players: [], mePlayerId: null, templateScore: 0 }
   const sortedDots = chipRow.dots.sort((a, b) => a.x - b.x)
 
-  // These multipliers were measured from dot centers to the fixture card bounds.
-  const dotRects = sortedDots.map((dot) => ({
+  // Cards tile the row, so the pitch sets their width; a fixed multiple of the
+  // radius clips the rightmost counter on every roster wider than the one it was
+  // measured on. Minimum gap, not median or mean: a seat whose colour the palette
+  // does not know merges two pitches into one, and that is the only distortion
+  // this row can carry once a colour cannot repeat, so the short gaps are the
+  // honest ones. Erring narrow also fails loudly, since a truncated card reports
+  // "could not read", where erring wide fails silently with a card reading its
+  // neighbour's counters as its own.
+  const pitch = Math.min(...sortedDots.slice(1).map((dot, index) => dot.x - sortedDots[index].x))
+  // Cards narrower than the dots they carry are not cards. Reporting no roster
+  // hands the caller its synthesized-from-pieces path, which warns, rather than
+  // fabricating slits that read every counter as zero in silence.
+  if (pitch <= Math.max(...sortedDots.map((dot) => dot.radius))) {
+    return { players: [], mePlayerId: null, templateScore: 0 }
+  }
+
+  // Multipliers measured from dot centers to the fixture card bounds. Clamped at
+  // the left edge because chipInk indexes the row arithmetically, so a negative
+  // x would wrap onto the previous scanline.
+  const cards = sortedDots.map((dot) => ({
     dot,
-    x: Math.round(dot.x - 3.4 * dot.radius),
+    x: Math.max(0, Math.round(dot.x - 3.4 * dot.radius)),
     y: Math.round(dot.y - 3.4 * dot.radius),
-    width: Math.round(19.6 * dot.radius),
+    // The gutter between cards is one radius.
+    width: Math.round(pitch - dot.radius),
     height: Math.max(1, Math.round(registration.bandTop - dot.y + 1.6 * dot.radius)),
   }))
 
-  // Overlapping dot-derived bounds share their midpoint so ink cannot cross cards.
-  const players = dotRects.map((entry, index): DetectedPlayer => {
+  // A card stops at the next card's left edge, and at the image edge when it is
+  // the last, so ink cannot cross cards even where the pitch is overestimated.
+  const players = cards.map((entry, index): DetectedPlayer => {
     const { dot } = entry
-    const previous = dotRects[index - 1]
-    const next = dotRects[index + 1]
-    const left = previous
-      ? Math.max(entry.x, Math.round((previous.x + previous.width + entry.x) / 2))
-      : entry.x
-    const right = next
-      ? Math.min(entry.x + entry.width, Math.round((entry.x + entry.width + next.x) / 2))
-      : entry.x + entry.width
+    const next = cards[index + 1]
+    const right = Math.min(next ? next.x : image.width, entry.x + entry.width)
     const id = `p${index + 1}`
     return {
-      player: { id, name: `P${index + 1}`, color: canonicalColor[dot.seed] },
+      player: { id, name: `P${index + 1}`, color: PLAYER_PALETTE[dot.seed] },
       anchor: dot.anchor,
       x: dot.x,
       y: dot.y,
       radius: dot.radius,
       labelRect: labelRectFor(dot),
       chipRect: {
-        x: left,
+        x: entry.x,
         y: entry.y,
-        width: Math.max(1, right - left),
+        width: Math.max(1, right - entry.x),
         height: entry.height,
       },
     }

@@ -9,6 +9,7 @@ import { createNodeTextReader } from '../textReader'
 
 import expectedDraft from './expected/board-draft-empty.json'
 import expectedEndgame from './expected/board-endgame-pieces.json'
+import expectedThreePlayer from './expected/board-draft-3player.json'
 
 function image(path: string) {
   const png = PNG.sync.read(readFileSync(fileURLToPath(new URL(path, import.meta.url))))
@@ -30,6 +31,9 @@ describe('screenshot parser', () => {
     ['endgame', '../../../fixtures/board-endgame-pieces.png', expectedEndgame],
     ['draft sRGB', './derived/board-draft-empty.srgb.png', expectedDraft],
     ['endgame sRGB', './derived/board-endgame-pieces.srgb.png', expectedEndgame],
+    // No sRGB twin: the conversion that produced the two derived fixtures is
+    // not recorded in the repo, so this one is pinned raw only.
+    ['three player', '../../../fixtures/board-draft-3player.png', expectedThreePlayer],
   ])('parses the %s fixture into the pinned board', (_name, path, expected) => {
     const result = parseBoardImage(image(path))
     expect(result.ok).toBe(true)

@@ -309,7 +309,18 @@ function bindNumber(icon: IconMask, numbers: NumberMask[], glyphHeight: number):
   })[0] ?? null
 }
 
-function statIssue(playerId: string, field: keyof Pick<PlayerStats, 'handUnknown' | 'devCards' | 'knights' | 'vpCards'>, message: string): ParseIssue {
+type CounterField = keyof Pick<PlayerStats, 'handUnknown' | 'devCards' | 'knights' | 'vpCards'>
+
+// ImportDialog shows these verbatim to the person importing a screenshot, so
+// they name the counter in prose rather than by its stats record key.
+const FIELD_LABEL: Record<CounterField, string> = {
+  handUnknown: 'hand cards',
+  devCards: 'dev cards',
+  knights: 'knights',
+  vpCards: 'VP cards',
+}
+
+function statIssue(playerId: string, field: CounterField, message: string): ParseIssue {
   return {
     stage: 'stats',
     severity: 'unreadable',
@@ -367,7 +378,7 @@ function parseChip(
   const numbers = groupDigits(digits, glyphHeight)
   const icons = classifyIcons(ink, components, glyphHeight, iconThreshold)
 
-  const fields: [CounterIcon, keyof Pick<PlayerStats, 'handUnknown' | 'devCards' | 'knights'>][] = [
+  const fields: [CounterIcon, Exclude<CounterField, 'vpCards'>][] = [
     ['bag', 'handUnknown'],
     ['scroll', 'devCards'],
     ['sword', 'knights'],
@@ -378,7 +389,7 @@ function parseChip(
     if (!icon) continue
     const number = bindNumber(icon, numbers, glyphHeight)
     if (!number) {
-      issues.push(statIssue(entry.player.id, field, `Could not read ${field} for ${entry.player.name}`))
+      issues.push(statIssue(entry.player.id, field, `Could not read ${FIELD_LABEL[field]} for ${entry.player.name}`))
       continue
     }
     stats[field] = number.value
@@ -432,7 +443,7 @@ function parseChip(
         )
       : 0
     if (!trophyNumber || !parenthesized || rightParenScore < digitThreshold) {
-      issues.push(statIssue(entry.player.id, 'vpCards', `Could not read VP cards for ${entry.player.name}`))
+      issues.push(statIssue(entry.player.id, 'vpCards', `Could not read ${FIELD_LABEL.vpCards} for ${entry.player.name}`))
     } else {
       const hidden = parenthesized.value - trophyNumber.value
       if (hidden < 0 || hidden > stats.devCards) {
@@ -444,9 +455,9 @@ function parseChip(
   }
 
   if (degraded) {
-    for (const field of ['handUnknown', 'devCards', 'knights', 'vpCards'] as const) {
+    for (const field of Object.keys(FIELD_LABEL) as CounterField[]) {
       if (stats[field] !== 0 || issues.some((issue) => issue.ref === `${entry.player.id}.${field}`)) continue
-      issues.push(statIssue(entry.player.id, field, `Could not confirm ${field} on degraded input`))
+      issues.push(statIssue(entry.player.id, field, `Could not confirm ${FIELD_LABEL[field]} on degraded input`))
     }
   }
   return { stats, issues }

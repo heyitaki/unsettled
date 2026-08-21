@@ -5,13 +5,14 @@ import { describe, expect, it } from 'vitest'
 import { parseBoard } from '../../model/serialization'
 import { parseEdgeId } from '../../model/coords'
 import { boardGrid, defaultPortEdges } from '../../model/layouts'
-import type { Board } from '../../model/types'
+import { PLAYER_PALETTE, type Board } from '../../model/types'
 import {
   parseBoardImage,
   type ParseBoardImageResult,
   type RgbaImage,
 } from '../index'
-import { nearColor, pixel } from '../image'
+import { nearColor, pixel, type Rgb } from '../image'
+import type { ParserPalette } from '../palette'
 import { registerBoard } from '../registration'
 import { choosePalette } from '../sources/settled/palette'
 import expectedDraft from './expected/board-draft-empty.json'
@@ -123,8 +124,7 @@ function assertStatsNeverGuess(result: Extract<ParseBoardImageResult, { ok: true
 }
 
 function withSecondRobberCandidate(image: RgbaImage): RgbaImage {
-  const palette = choosePalette(image)
-  if (!palette) throw new Error('fixture palette not found')
+  const palette = fixturePalette(image)
   const registration = registerBoard(image, palette)
   if (!registration) throw new Error('fixture registration not found')
   const [centerX, centerY] = registration.center({ q: 0, r: -3 })
@@ -144,8 +144,7 @@ function withSecondRobberCandidate(image: RgbaImage): RgbaImage {
 }
 
 function withAmbiguousPill(image: RgbaImage): RgbaImage {
-  const palette = choosePalette(image)
-  if (!palette) throw new Error('fixture palette not found')
+  const palette = fixturePalette(image)
   const registration = registerBoard(image, palette)
   if (!registration) throw new Error('fixture registration not found')
   const used = new Set(defaultPortEdges(registration.layout))
@@ -217,6 +216,78 @@ function withDuplicateEdgePill(image: RgbaImage): RgbaImage {
   return result
 }
 
+// Erases roster slots by tiling the clear column beside each across it, so a
+// slot carries the screenshot's own background rather than a colour picked here.
+function withoutSlots(
+  image: RgbaImage,
+  { top, bottom }: { top: number; bottom: number },
+  slots: { gutterX: number; fromX: number; toX: number }[],
+): RgbaImage {
+  const result = { ...image, data: new Uint8ClampedArray(image.data) }
+  for (const { gutterX, fromX, toX } of slots) {
+    for (let y = top; y < bottom; y += 1) {
+      const source = (y * image.width + gutterX) * 4
+      for (let x = fromX; x < Math.min(toX, image.width); x += 1) {
+        result.data.set(image.data.subarray(source, source + 4), (y * image.width + x) * 4)
+      }
+    }
+  }
+  return result
+}
+
+// Paints flat discs of a player colour, the shape both a header badge and a
+// stray blob inside the roster row present to the dot detector.
+function withStampedDots(
+  image: RgbaImage,
+  dots: { x: number; y: number; radius: number; color: Rgb }[],
+): RgbaImage {
+  const result = { ...image, data: new Uint8ClampedArray(image.data) }
+  for (const dot of dots) {
+    for (let y = Math.floor(dot.y - dot.radius); y <= Math.ceil(dot.y + dot.radius); y += 1) {
+      for (let x = Math.floor(dot.x - dot.radius); x <= Math.ceil(dot.x + dot.radius); x += 1) {
+        if (Math.hypot(x - dot.x, y - dot.y) > dot.radius) continue
+        const index = (y * image.width + x) * 4
+        result.data[index] = dot.color[0]
+        result.data[index + 1] = dot.color[1]
+        result.data[index + 2] = dot.color[2]
+        result.data[index + 3] = 255
+      }
+    }
+  }
+  return result
+}
+
+function fixturePalette(image: RgbaImage): ParserPalette {
+  const palette = choosePalette(image)
+  if (!palette) throw new Error('fixture palette not found')
+  return palette
+}
+
+const THREE_PLAYER = '../../../fixtures/board-draft-3player.png'
+const ENDGAME = '../../../fixtures/board-endgame-pieces.png'
+// Both fixtures draw the roster on one row of 12px dots. The bands run from the
+// cards' top edge down to the board background, which starts lower in the
+// endgame screenshot; the gutter columns are clear of the cards' border strokes.
+const ROSTER_ROW_Y = 406.5
+const ROSTER_DOT_RADIUS = 12
+const THREE_PLAYER_BAND = { top: 340, bottom: 552 }
+const ENDGAME_BAND = { top: 340, bottom: 764 }
+const ENDGAME_GUTTER = 289
+
+const statsIssues = (result: Extract<ParseBoardImageResult, { ok: true }>) =>
+  result.issues.filter((issue) => issue.stage === 'stats')
+const rosterMessages = (result: Extract<ParseBoardImageResult, { ok: true }>) =>
+  result.issues.filter((issue) => issue.stage === 'roster').map((issue) => issue.message)
+const counterRows = (result: Extract<ParseBoardImageResult, { ok: true }>) =>
+  Object.entries(result.game.stats).map(([id, stats]) =>
+    [id, stats.handUnknown, stats.devCards, stats.knights, stats.vpCards])
+// Reads a surviving chip's expected counters off the pinned five-player stats,
+// so an assertion shows which seat it belonged to before the roster renumbered.
+const seatCounters = (seat: keyof typeof expectedEndgameStats) => {
+  const { handUnknown, devCards, knights, vpCards } = expectedEndgameStats[seat]
+  return [handUnknown, devCards, knights, vpCards]
+}
+
 describe('hostile parser inputs', () => {
   it('rejects solid color and header-only inputs without throwing', () => {
     const solid = { width: 200, height: 200, data: new Uint8ClampedArray(200 * 200 * 4).fill(255) }
@@ -251,6 +322,129 @@ describe('hostile parser inputs', () => {
     })
     if (!expectSchemaValid(result)) return
     expect(result.game.board.players.length).toBeGreaterThan(0)
+  })
+
+  it('reads a two-card roster rather than falling back to synthesis', () => {
+    const threePlayer = load(THREE_PLAYER)
+    // Settled widens the cards of a short roster, which erasing one cannot
+    // reproduce, so this pins the count rather than the geometry.
+    const result = parseBoardImage(withoutSlots(threePlayer, THREE_PLAYER_BAND, [
+      { gutterX: 452, fromX: 860, toX: threePlayer.width },
+    ]))
+    if (!expectSchemaValid(result)) return
+    expect(result.game.board.players.map((player) => player.id)).toEqual(['p1', 'p2'])
+    expect(result.game.board.players.map((player) => player.color))
+      .toEqual([PLAYER_PALETTE.red, PLAYER_PALETTE.blue])
+    // The erased card was this screenshot's own, so losing the You marker with
+    // it is correct; nothing else about the shorter roster may be flagged.
+    expect(rosterMessages(result)).toEqual(['Could not identify the You chip'])
+    expect(statsIssues(result)).toEqual([])
+    for (const stats of Object.values(result.game.stats)) {
+      expect(stats).toEqual({
+        hand: { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 },
+        handUnknown: 0,
+        devCards: 0,
+        knights: 0,
+        vpCards: 0,
+      })
+    }
+  })
+
+  // The shape a seat whose colour the palette does not know leaves behind, which
+  // today means a sixth (brown) player: both hole tests simulate that gap and can
+  // retire once the palette learns the colour. The cards either side keep their
+  // normal width, so the derived width has to survive a doubled gap.
+  it('keeps the surviving counters readable when a middle card is missing', () => {
+    const result = parseBoardImage(withoutSlots(load(ENDGAME), ENDGAME_BAND, [
+      { gutterX: ENDGAME_GUTTER, fromX: 542, toX: 790 },
+    ]))
+    if (!expectSchemaValid(result)) return
+    // Ids are positional, so the fourth and fifth seats shift down a slot. The
+    // erased seat comes back last, from its pieces, with no chip to read.
+    expect(result.game.board.players.map((player) => player.color)).toEqual([
+      PLAYER_PALETTE.red, PLAYER_PALETTE.blue, PLAYER_PALETTE.white, PLAYER_PALETTE.green,
+      PLAYER_PALETTE.orange,
+    ])
+    expect(rosterMessages(result)).toEqual(['Synthesized a player for an unmatched orange piece'])
+    expect(statsIssues(result)).toEqual([])
+    expect(counterRows(result)).toEqual([
+      ['p1', ...seatCounters('p1')],
+      ['p2', ...seatCounters('p2')],
+      ['p3', ...seatCounters('p4')],
+      ['p4', ...seatCounters('p5')],
+      ['s-orange', 0, 0, 0, 0],
+    ])
+  })
+
+  // Two such seats leave two gaps, [247, 495], and an even count has no single
+  // middle: a median that rounds up returns the merged gap and sizes every card
+  // at twice its slot. Only the dots go here, so the cards they belonged to still
+  // hold counters for an oversized neighbour to read as its own.
+  it('sizes cards from the narrowest gap when the holes leave an even gap count', () => {
+    // Tiled from a blank column of each seat's own card, so the dot's slot keeps
+    // the chip cream around it rather than the page behind the row.
+    const result = parseBoardImage(withoutSlots(load(ENDGAME), { top: 389, bottom: 424 }, [
+      { gutterX: 552, fromX: 566, toX: 602 },
+      { gutterX: 1047, fromX: 1060, toX: 1096 },
+    ]))
+    if (!expectSchemaValid(result)) return
+    // Both erased seats still own pieces, so they return synthesized and last.
+    expect(result.game.board.players.map((player) => player.color)).toEqual([
+      PLAYER_PALETTE.red, PLAYER_PALETTE.blue, PLAYER_PALETTE.white,
+      PLAYER_PALETTE.orange, PLAYER_PALETTE.green,
+    ])
+    expect(rosterMessages(result)).toEqual([
+      'Synthesized a player for an unmatched orange piece',
+      'Synthesized a player for an unmatched green piece',
+    ])
+    expect(statsIssues(result)).toEqual([])
+    expect(counterRows(result)).toEqual([
+      ['p1', ...seatCounters('p1')],
+      ['p2', ...seatCounters('p2')],
+      ['p3', ...seatCounters('p4')],
+      ['s-orange', 0, 0, 0, 0],
+      ['s-green', 0, 0, 0, 0],
+    ])
+  })
+
+  // Header furniture can outnumber the cards, so the row with the most dots is
+  // not the roster; the row nearest the board is.
+  it('ignores a decoy row above the roster that carries more dots', () => {
+    const threePlayer = load(THREE_PLAYER)
+    const player = fixturePalette(threePlayer).player
+    const decoys = [player.red, player.blue, player.orange, player.white]
+    const result = parseBoardImage(withStampedDots(threePlayer, decoys.map((color, index) => ({
+      x: 200 + 200 * index,
+      y: 200,
+      radius: ROSTER_DOT_RADIUS,
+      color,
+    }))))
+    if (!expectSchemaValid(result)) return
+    expect(result.game.board.players.map((entry) => entry.id)).toEqual(['p1', 'p2', 'p3'])
+    expect(result.game.board.players.map((entry) => entry.color))
+      .toEqual([PLAYER_PALETTE.red, PLAYER_PALETTE.blue, PLAYER_PALETTE.orange])
+    expect(statsIssues(result)).toEqual([])
+  })
+
+  // A colour cannot repeat across cards, so a second blob of one is not a fourth
+  // seat: counted, it would shrink the pitch and clip every card.
+  it('ignores a duplicate-colour blob sitting inside the roster row', () => {
+    const threePlayer = load(THREE_PLAYER)
+    const result = parseBoardImage(withStampedDots(threePlayer, [
+      // Within the row's radius agreement, so the row still reads as cards and
+      // the blob has to be dropped on colour rather than on size.
+      {
+        x: 300,
+        y: ROSTER_ROW_Y,
+        radius: ROSTER_DOT_RADIUS - 2,
+        color: fixturePalette(threePlayer).player.red,
+      },
+    ]))
+    if (!expectSchemaValid(result)) return
+    expect(result.game.board.players.map((entry) => entry.id)).toEqual(['p1', 'p2', 'p3'])
+    expect(result.game.board.players.map((entry) => entry.color))
+      .toEqual([PLAYER_PALETTE.red, PLAYER_PALETTE.blue, PLAYER_PALETTE.orange])
+    expect(statsIssues(result)).toEqual([])
   })
 
   it('retains all endgame pieces after nearest-neighbor downscaling', () => {

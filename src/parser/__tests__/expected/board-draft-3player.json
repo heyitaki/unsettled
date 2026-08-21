@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "layout": "standard4",
+  "hexes": [
+    { "coord": { "q": 0, "r": -2 }, "tile": "brick", "numberToken": 3 },
+    { "coord": { "q": 1, "r": -2 }, "tile": "sheep", "numberToken": 6 },
+    { "coord": { "q": 2, "r": -2 }, "tile": "wheat", "numberToken": 2 },
+    { "coord": { "q": -1, "r": -1 }, "tile": "ore", "numberToken": 8 },
+    { "coord": { "q": 0, "r": -1 }, "tile": "wheat", "numberToken": 5 },
+    { "coord": { "q": 1, "r": -1 }, "tile": "brick", "numberToken": 9 },
+    { "coord": { "q": 2, "r": -1 }, "tile": "wheat", "numberToken": 5 },
+    { "coord": { "q": -2, "r": 0 }, "tile": "wood", "numberToken": 10 },
+    { "coord": { "q": -1, "r": 0 }, "tile": "wood", "numberToken": 6 },
+    { "coord": { "q": 0, "r": 0 }, "tile": "wheat", "numberToken": 4 },
+    { "coord": { "q": 1, "r": 0 }, "tile": "wood", "numberToken": 11 },
+    { "coord": { "q": 2, "r": 0 }, "tile": "sheep", "numberToken": 10 },
+    { "coord": { "q": -2, "r": 1 }, "tile": "brick", "numberToken": 9 },
+    { "coord": { "q": -1, "r": 1 }, "tile": "wood", "numberToken": 3 },
+    { "coord": { "q": 0, "r": 1 }, "tile": "desert", "numberToken": null },
+    { "coord": { "q": 1, "r": 1 }, "tile": "sheep", "numberToken": 8 },
+    { "coord": { "q": -2, "r": 2 }, "tile": "ore", "numberToken": 12 },
+    { "coord": { "q": -1, "r": 2 }, "tile": "sheep", "numberToken": 11 },
+    { "coord": { "q": 0, "r": 2 }, "tile": "ore", "numberToken": 4 }
+  ],
+  "ports": [
+    { "edgeId": "e:0,-2;1,-3", "resource": "wheat", "rate": 2 },
+    { "edgeId": "e:2,-3;2,-2", "resource": null, "rate": 3 },
+    { "edgeId": "e:-1,-2;-1,-1", "resource": "brick", "rate": 2 },
+    { "edgeId": "e:2,-1;3,-1", "resource": "sheep", "rate": 2 },
+    { "edgeId": "e:-3,1;-2,0", "resource": null, "rate": 3 },
+    { "edgeId": "e:2,0;2,1", "resource": null, "rate": 3 },
+    { "edgeId": "e:-3,2;-2,2", "resource": "ore", "rate": 2 },
+    { "edgeId": "e:0,2;1,2", "resource": "wood", "rate": 2 },
+    { "edgeId": "e:-2,3;-1,2", "resource": null, "rate": 3 }
+  ],
+  "robber": { "q": 0, "r": 1 },
+  "roads": [],
+  "buildings": [],
+  "players": [
+    { "id": "p1", "name": "P1", "color": "#c23f38" },
+    { "id": "p2", "name": "P2", "color": "#3063ba" },
+    { "id": "p3", "name": "P3", "color": "#e58331" }
+  ],
+  "mePlayerId": "p3"
+}

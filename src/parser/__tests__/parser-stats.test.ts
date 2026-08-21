@@ -101,4 +101,25 @@ describe('Settled chip counters', () => {
       issue.stage === 'stats' && issue.severity === 'unreadable',
     )).toEqual([])
   })
+
+  // A three-player roster spreads the same cards over the full row, so its
+  // counters sit further from the colour dot than the five-player fixtures'.
+  it('reads the wider cards of a three-player roster', () => {
+    const result = parse('../../../fixtures/board-draft-3player.png')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(Object.keys(result.game.stats)).toEqual(['p1', 'p2', 'p3'])
+    for (const stats of Object.values(result.game.stats)) {
+      expect(stats).toEqual({
+        hand: { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 },
+        handUnknown: 0,
+        devCards: 0,
+        knights: 0,
+        vpCards: 0,
+      })
+    }
+    expect(result.issues.filter((issue) =>
+      issue.stage === 'stats' && issue.severity === 'unreadable',
+    )).toEqual([])
+  })
 })
