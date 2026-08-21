@@ -288,3 +288,79 @@ Here the three gates are close to additive — the standalone estimates sum to `
 **The denial result is a finding, not a null.** `equivalent` is a positive statement that the effect is confidently smaller than the `0.01` threshold, which `inconclusive` at 1,600 units was not. Three independent reads agree: standalone on the trader field, standalone on the plain field, and marginal inside the full composite. M-19 stands as recorded; at ten times the units the same arm resolves from `inconclusive` to `equivalent` and its point estimate falls.
 
 **Estimates at 16,000 units run below their 1,600-unit counterparts** for `threat`, `devcards` and `denial`, and above for `aware`. The earlier entries are single evaluations over a 40-board schedule and were never medians; the movement is precision, not disagreement.
+
+## M-22 — SIM-BATCH1 marginal vertex valuation
+
+- **Date** 2026-07-30 · **Commit** uncommitted SIM-BATCH1 working tree based on `35a1738e`, with the captured unrelated parser and UI baseline still present · **Domain** `tuning` · **Admissible** **yes as a tuning-domain attribution and fixed-state timing observation; no as an adoption decision**
+- **Preregistration** `.claude/solve-artifacts/preregistration.md`, written before every scaled run. The Stage 0 identity preflight preceded the behavioural edit and reproduced M-21's 40-board discordant pairs exactly: `threat` b 172 c 147, `devcards` b 68 c 46, `trader-aware` b 249 c 236, and `denial` b 46 c 36, with both recorded reference win rates and zero illegal actions.
+- **Stage 0 identity loads** plain before `6.23 4.29 3.52`, after `6.23 4.29 3.52`; trader before `5.21 4.16 3.49`, after `4.87 4.11 3.47`.
+
+The attribution command was:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm fixed=pip_diversity --arm legacyall=pip_diversity --arm legacyport=pip_diversity --arm legacychooser=pip_diversity --arm legacycityterms=pip_diversity --arm legacyband=pip_diversity --arm legacycitygoal=pip_diversity --arm-policy fixed=heuristic-v1-trader-aware-threat-devcards-denial --arm-policy legacyall=heuristic-v1-trader-aware-threat-devcards-denial-legacyall --arm-policy legacyport=heuristic-v1-trader-aware-threat-devcards-denial-legacyport --arm-policy legacychooser=heuristic-v1-trader-aware-threat-devcards-denial-legacychooser --arm-policy legacycityterms=heuristic-v1-trader-aware-threat-devcards-denial-legacycityterms --arm-policy legacyband=heuristic-v1-trader-aware-threat-devcards-denial-legacyband --arm-policy legacycitygoal=heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal --reference fixed --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out ../.claude/solve-artifacts/measurement-attribution
+```
+
+Load before `2.57 3.75 3.71`, after `7.63 4.77 4.07`. The run completed 112,000 games, 16,000 paired units per arm and 400 clusters, with zero illegal actions. The table orients every estimate as **fixed minus named legacy arm**, the value of applying the correction; the harness artifact stores the reverse orientation because `fixed` is its reference.
+
+| Correction restored from legacy | Fixed-minus-legacy estimate | b/c in harness orientation | Selected interval | Verdict |
+| --- | ---: | ---: | --- | --- |
+| all five changes | `+0.0047500` | 575 / 651 | McNemar `[+0.0004615, +0.0090385]` | equivalent |
+| prospective board-wide port production | `+0.0001875` | 94 / 97 | McNemar `[-0.0015055, +0.0018805]` | equivalent |
+| scored settlement chooser | `-0.0000625` | 1 / 0 | clustered `[-0.0001850, +0.0000600]` | equivalent |
+| build-kind-correct city terms | `+0.0006250` | 39 / 49 | clustered `[-0.0005370, +0.0017870]` | equivalent |
+| one building band | `+0.0025625` | 106 / 147 | clustered `[+0.0005293, +0.0045957]` | equivalent |
+| vertex-dependent city goal | `+0.0026250` | 444 / 486 | McNemar `[-0.0011105, +0.0063605]` | equivalent |
+
+These are leave-one-out marginals at the fixed full-composite corner, not an additive decomposition. The bundle is statistically positive on this schedule but remains below the preregistered practical threshold.
+
+**M-21 re-measurement, moved-field caveat.** Both original schedules were re-run, but the default valuation now moves in the field and every default hero policy. These are measurements against a new field, not paired comparisons with M-21.
+
+Trader command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm aware=pip_diversity --arm threat=pip_diversity --arm devcards=pip_diversity --arm denial=pip_diversity --arm other3=pip_diversity --arm all4=pip_diversity --arm-policy aware=heuristic-v1-trader-aware --arm-policy threat=heuristic-v1-trader-threat --arm-policy devcards=heuristic-v1-trader-devcards --arm-policy denial=heuristic-v1-trader-denial --arm-policy other3=heuristic-v1-trader-threat-devcards-denial --arm-policy all4=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out ../.claude/solve-artifacts/measurement-m21-trader
+```
+
+Load before `5.36 4.52 4.01`, after `6.61 4.80 4.11`; zero illegal actions, reference win rate `0.2513125`.
+
+| Trader arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| all four gates | `+0.0711250` | 3153 | 2015 | clustered `[+0.0622632, +0.0799868]` | better |
+| `threat` `devcards` `denial` | `+0.0308750` | 2140 | 1646 | McNemar `[+0.0233529, +0.0383971]` | better |
+| `aware` | `+0.0266875` | 2655 | 2228 | clustered `[+0.0174445, +0.0359305]` | better |
+| `devcards` | `+0.0160625` | 615 | 358 | clustered `[+0.0122192, +0.0199058]` | better |
+| `threat` | `+0.0086250` | 1764 | 1626 | clustered `[+0.0013602, +0.0158898]` | inconclusive |
+| `denial` | `+0.0081875` | 751 | 620 | McNemar `[+0.0036535, +0.0127215]` | inconclusive |
+
+Plain command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm threat=pip_diversity --arm devcards=pip_diversity --arm denial=pip_diversity --arm threat-devcards=pip_diversity --arm threat-denial=pip_diversity --arm devcards-denial=pip_diversity --arm all3=pip_diversity --arm-policy threat=heuristic-v1-threat --arm-policy devcards=heuristic-v1-devcards --arm-policy denial=heuristic-v1-denial --arm-policy threat-devcards=heuristic-v1-threat-devcards --arm-policy threat-denial=heuristic-v1-threat-denial --arm-policy devcards-denial=heuristic-v1-devcards-denial --arm-policy all3=heuristic-v1-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1 --threads 0 --out ../.claude/solve-artifacts/measurement-m21-plain
+```
+
+Load before `5.72 4.69 4.08`, after `7.03 4.98 4.19`; zero illegal actions, reference win rate `0.2525625`.
+
+| Plain arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| `threat` `devcards` `denial` | `+0.0335625` | 2037 | 1500 | McNemar `[+0.0262958, +0.0408292]` | better |
+| `devcards` `denial` | `+0.0240000` | 1050 | 666 | McNemar `[+0.0189392, +0.0290608]` | better |
+| `threat` `denial` | `+0.0213750` | 1868 | 1526 | McNemar `[+0.0142462, +0.0285038]` | better |
+| `threat` `devcards` | `+0.0211875` | 1872 | 1533 | McNemar `[+0.0140470, +0.0283280]` | better |
+| `devcards` | `+0.0120000` | 561 | 369 | McNemar `[+0.0082690, +0.0157310]` | inconclusive |
+| `denial` | `+0.0100625` | 597 | 436 | McNemar `[+0.0061285, +0.0139965]` | inconclusive |
+| `threat` | `+0.0076875` | 1669 | 1546 | McNemar `[+0.0007428, +0.0146322]` | inconclusive |
+
+The decision that changes is denial: M-21's old fields resolved it `equivalent`; after the chooser and valuation move it is `inconclusive` on both re-measured fields. This does not establish that denial is better, but it removes the prior positive claim that its effect is below the practical threshold.
+
+**Crossing census and trace.** The Stage 1 behaviour-identical census was reproduced through the all-flags legacy instrument after Stage 2 had landed. Loads before `1.73 2.38 2.63`, after `2.98 2.61 2.71`. It emitted 245 crossings: below the building band, 80 roads and 6 bank trades, with no directly affordable dev card or aware-offer crossing. The Stage 2 post-state observation emitted 289 rows; loads before `2.88 2.64 2.71`, after `2.76 2.63 2.71`. The paired trace supplies first-divergence evidence; the terminal corpus alone cannot. The planned assertion that all five dynamic crossing subtypes would occur in this fixed schedule was false, while the targeted tests prove each subtype independently.
+
+**Fixed-state throughput.** Command:
+
+```text
+cargo test --release -p unsettled-engine --lib policy::heuristic_v1::devcards_rate_tests::vertex_valuation_per_decision_cost_is_reported -- --exact --ignored --nocapture
+```
+
+Load before `5.06 5.16 4.70`, after `5.06 5.16 4.70`. On one deterministic 20-turn state, five consecutive runs of 50,000 calls measured the goal chooser at `83.308`, `82.862`, `83.160`, `83.494`, and `81.600` ns per decision, median **`83.160ns`**. The legal-road `expansion_road_score` calls plus one `best_road_building_pair` call measured `5937.741`, `5936.546`, `6128.373`, `5910.971`, and `5928.569` ns, median **`5936.546ns`**. This is reported, not gated, and does not re-test the three causes refuted by `SIM-GAP-21`.
+
+The chooser figure is taken against `best_goal_uncounted`, the body split out from `best_goal_with`. The `#[cfg(test)]` call counter that pins the once-per-decision dedup lives in the wrapper, and an earlier reading of this fixture timed the wrapper: 50,000 thread-local read-modify-writes inside the timed loop put the median at `172.509ns` across a `129.927`–`219.546` spread. Removing scaffolding that does not exist in release more than halves the figure and collapses the spread below 2.4%, so the wrapper reading is superseded and should not be quoted. The road-consumer path never called the wrapper and is unchanged within noise.

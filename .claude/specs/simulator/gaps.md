@@ -4,20 +4,6 @@ Class **G**: statements that the code does not do something, or does it wrong. F
 
 Ids are stable and assigned in source order. A closed gap's id is retired, not reused.
 
-## Defects — wrong, not merely absent. Fix before H.
-
-**SIM-GAP-01.** `vertex_score`'s `port_synergy` weights a port only against production at that same vertex's three hexes, so it ignores the resource you produce everywhere else on the board. It undervalues a port sited away from your engine and overvalues one sited on top of it. `port_weight` is on H's sweep list and the sweep is not meaningful until this is fixed.
-
-> Naming note: `port_weight` is ambiguous between `heuristic_v1.rs::HeuristicParams::port_weight` (default `0.1`) and `app_formula.rs::EngineWeights::port_weight` (`0.55`). The source claim does not say which it means; this entry records the ambiguity rather than resolving it.
-
-**SIM-GAP-02.** Two spellings of "best settlement" disagree. The action scorer ranks on the full `vertex_score`; the goal chooser calls `view.best_legal_settlement()`, which ranks on `vertex_pips` alone — no scarcity, diversity, port or expansion. Same divergence class as the `vp_estimate` spellings G3 unified.
-
-> This is now the highest-value entry in the file. M-21 measured the G4 denial consumer that sits on top of this chooser as `equivalent` — below the practical threshold — on three independent reads, while the other three gates gained markedly from being composed. Fix this before denial is measured again or swept.
-
-**SIM-GAP-03.** Two of `vertex_score`'s five terms are dead on a city upgrade. `diversity` counts resources where the observer produces none, but you already produce that vertex's resources; `expansion` counts unowned neighbours, which an upgrade does not use. City ranking silently reduces to pips, scarcity and port synergy.
-
-**SIM-GAP-04.** City-over-settlement is a hard constant ladder (`10_000.0` against `500.0`), so an affordable city outranks every settlement regardless of relative value. This is the lexicographic-ladder anti-pattern the programme rejects for opponent ranking, still present in the main action scorer.
-
 ## Denial and threat
 
 **SIM-GAP-05.** The frozen knight path still passes a literal pressure of `1.0` into `contested_card_score`, so its contested-card value does not vary with opponent danger. Longest Road now does; the remaining knight limitation is coupled to `SIM-GAP-09`.
@@ -69,6 +55,18 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 **SIM-GAP-26.** `heuristic_v1.rs::discard` falls back to `HeuristicParams::default()` when `PolicyScratch.goal` is absent. That silently drops every policy gate, including denial, on the fallback path.
 
 **SIM-GAP-27.** `trade.rs::embargoed` still uses a VP-estimate threshold rather than the shared ETW danger model. It controls trade eligibility rather than ranking and remains deliberately ungated.
+
+## Build valuation follow-up
+
+**SIM-GAP-28.** `heuristic_v1.rs::vertex_score`'s expansion term is degree-valued for settlements: `DecisionView::legal_settlement` and `DecisionView::is_expansion_target` both require every neighbour to be unowned, so the count is always the vertex's topological degree. This is a crude expansion-room proxy rather than a measure of frontier actually opened. Phase J owns the replacement.
+
+**SIM-GAP-29.** The build-kind comparison prices marginal production, scarcity, ports, diversity, frontier, and the one VP each building buys, but not piece economy or cost pressure. A city returns a settlement to supply and does not consume one of five settlement slots; it also spends ore and wheat that are otherwise often idle. Phase J's build-target scoring owns both omissions.
+
+**SIM-GAP-30.** Building-band headroom below the contested-card band holds only under base rules and the shipped default `HeuristicParams`. `vertex_score` is linear in public, unbounded weights, so a swept vector can lift a building above that band and silently re-rank denial; `production_weight = 1000.0` on a raw-production-two vertex already reaches `12_000`. Phase H must either bound candidate weights or re-check headroom for every candidate vector.
+
+**SIM-GAP-31.** `player_trading.rs` historically built trading scenarios by replaying a fixed number of turns under the default policy. Changing default policy valuation silently changed the state those fixtures reached, so trading assertions failed through unrelated preconditions or lost legal offers. The tests now establish their trading state explicitly, but other policy-replay fixtures can carry the same coupling. Fixture construction should make the state under test explicit or loudly assert every replay-derived precondition before the subject assertion.
+
+**SIM-GAP-32.** `heuristic_v1.rs::best_road_building_pair` credits expansion from `edge_endpoints(second)` without gating on `DecisionView::is_expansion_target`, so it prices vertices nobody can settle — including ones permanently blocked by the distance rule — and it folds only the second edge's endpoints, never the first's. Its sibling `expansion_road_score` applies both gates. SIM-BATCH1 threaded `BuildKind` through this expression without repairing it, deliberately: adding the filter is a behaviour change that moves the corpus, breaks seven replay-derived `player_trading.rs` fixtures, and would bundle an unmeasured sixth change into M-22's five-row attribution. A verified reproduction exists — filter on `is_expansion_target`, then fold through `Option` with `unwrap_or(0.0)`, the last part required so a pair laid purely for Longest Road is not poisoned to `NEG_INFINITY`. Whoever fixes it owns re-running M-22 and regenerating the gate baselines.
 
 ## Performance
 

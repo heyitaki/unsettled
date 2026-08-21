@@ -14,8 +14,12 @@ use unsettled_engine::wire::WireBoard;
 fn fixture() -> (Topology, SimBoard, RuleConfig) {
     let topology = Topology::load(Layout::Extension6).unwrap();
     let rules = RuleConfig::base(Layout::Extension6);
+    let relative = PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
     let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
     let board =
         SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();

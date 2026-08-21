@@ -46,6 +46,12 @@ pub enum PolicyKind {
     HeuristicV1TraderAwareDevcardsDenial,
     HeuristicV1TraderAwareThreatDevcards,
     HeuristicV1TraderAwareThreatDevcardsDenial,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
 }
 
 /// Disables every owned port, so the seat trades at the base bank rate.
@@ -90,7 +96,13 @@ impl PolicyKind {
             | Self::HeuristicV1TraderAwareDevcards
             | Self::HeuristicV1TraderAwareDevcardsDenial
             | Self::HeuristicV1TraderAwareThreatDevcards
-            | Self::HeuristicV1TraderAwareThreatDevcardsDenial => &[],
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenial
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => &[],
         }
     }
 
@@ -133,6 +145,24 @@ impl PolicyKind {
             }
             "heuristic-v1-trader-aware-threat-devcards-denial" => {
                 Some(Self::HeuristicV1TraderAwareThreatDevcardsDenial)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyall" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyport" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacychooser" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacycityterms" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyband" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal)
             }
             _ => None,
         }
@@ -194,7 +224,13 @@ pub fn pre_roll(
         | PolicyKind::HeuristicV1TraderAwareDevcards
         | PolicyKind::HeuristicV1TraderAwareDevcardsDenial
         | PolicyKind::HeuristicV1TraderAwareThreatDevcards
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
             heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind))
         }
         PolicyKind::HeuristicV1Noports => {
@@ -238,7 +274,13 @@ pub fn action(
         | PolicyKind::HeuristicV1TraderAwareDevcards
         | PolicyKind::HeuristicV1TraderAwareDevcardsDenial
         | PolicyKind::HeuristicV1TraderAwareThreatDevcards
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
             heuristic_v1_trader::action(view, scratch, &heuristic_params(kind), rng)
         }
         PolicyKind::HeuristicV1Noports => {
@@ -282,7 +324,13 @@ pub fn discard(
         | PolicyKind::HeuristicV1TraderAwareDevcards
         | PolicyKind::HeuristicV1TraderAwareDevcardsDenial
         | PolicyKind::HeuristicV1TraderAwareThreatDevcards
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
             heuristic_v1::discard(view, count, scratch)
         }
     }
@@ -321,7 +369,13 @@ pub fn robber(
         | PolicyKind::HeuristicV1TraderAwareDevcards
         | PolicyKind::HeuristicV1TraderAwareDevcardsDenial
         | PolicyKind::HeuristicV1TraderAwareThreatDevcards
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
             heuristic_v1::robber(view, &heuristic_params(kind))
         }
     }
@@ -349,7 +403,13 @@ pub fn respond_trade(
         | PolicyKind::HeuristicV1TraderAwareDevcards
         | PolicyKind::HeuristicV1TraderAwareDevcardsDenial
         | PolicyKind::HeuristicV1TraderAwareThreatDevcards
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
             heuristic_v1_trader::respond_trade(view, offer, &heuristic_params(kind), rng)
         }
         PolicyKind::RandomLegal
@@ -381,7 +441,7 @@ pub fn select_counterparty(
 
 /// Per-kind heuristic parameters. Non-heuristic kinds receive defaults with every gate disabled.
 fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
-    match kind {
+    let params = match kind {
         PolicyKind::HeuristicV1Noports => heuristic_v1::HeuristicParams {
             port_weight: 0.0,
             ..heuristic_v1::HeuristicParams::default()
@@ -476,18 +536,110 @@ fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
             trading: Some(trading::TradeParams::default()),
             ..heuristic_v1::HeuristicParams::default()
         },
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => heuristic_v1::HeuristicParams {
-            threat: Some(threat::ThreatParams::default()),
-            dev_cards: Some(devcards::DevCardParams::default()),
-            trading: Some(trading::TradeParams::default()),
-            denial: Some(denial::DenialParams::default()),
-            ..heuristic_v1::HeuristicParams::default()
-        },
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => composite_params(None),
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                local_port_production: true,
+                pip_settlement_goal: true,
+                flat_city_goal: true,
+                settlement_shaped_city_terms: true,
+                band_ladder: true,
+            }))
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                local_port_production: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                pip_settlement_goal: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                settlement_shaped_city_terms: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                band_ladder: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                flat_city_goal: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
         PolicyKind::RandomLegal
         | PolicyKind::GreedyNoTrade
         | PolicyKind::PriorityTrader
         | PolicyKind::HeuristicV1
         | PolicyKind::HeuristicV1Trader => heuristic_v1::HeuristicParams::default(),
+    };
+    #[cfg(test)]
+    let mut params = params;
+    #[cfg(test)]
+    CENSUS_LEGACY_OVERRIDE.with(|enabled| {
+        if enabled.get() {
+            params.legacy_valuation = Some(heuristic_v1::LegacyValuation {
+                local_port_production: true,
+                pip_settlement_goal: true,
+                flat_city_goal: true,
+                settlement_shaped_city_terms: true,
+                band_ladder: true,
+            });
+        }
+    });
+    params
+}
+
+#[cfg(test)]
+std::thread_local! {
+    static CENSUS_LEGACY_OVERRIDE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn set_census_legacy_override(enabled: bool) {
+    CENSUS_LEGACY_OVERRIDE.with(|value| value.set(enabled));
+}
+
+/// Clears the override on unwind as well as on normal exit: with
+/// `--test-threads=1` libtest reuses the calling thread, so a leaked flag would
+/// silently switch every later test in the binary to the legacy valuation.
+#[cfg(test)]
+struct CensusLegacyOverrideGuard;
+
+#[cfg(test)]
+impl CensusLegacyOverrideGuard {
+    fn set(enabled: bool) -> Self {
+        set_census_legacy_override(enabled);
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for CensusLegacyOverrideGuard {
+    fn drop(&mut self) {
+        set_census_legacy_override(false);
+    }
+}
+
+fn composite_params(
+    legacy_valuation: Option<heuristic_v1::LegacyValuation>,
+) -> heuristic_v1::HeuristicParams {
+    heuristic_v1::HeuristicParams {
+        threat: Some(threat::ThreatParams::default()),
+        dev_cards: Some(devcards::DevCardParams::default()),
+        trading: Some(trading::TradeParams::default()),
+        denial: Some(denial::DenialParams::default()),
+        legacy_valuation,
+        ..heuristic_v1::HeuristicParams::default()
     }
 }
 
@@ -508,7 +660,271 @@ fn farthest_from_winning(view: &DecisionView<'_>, acceptors: &[usize]) -> usize 
 
 #[cfg(test)]
 mod gate_tests {
-    use super::{PolicyKind, heuristic_params};
+    use std::fs::File;
+    use std::io::{BufWriter, Write};
+
+    use crate::board::{ConversionOptions, SimBoard};
+    use crate::game::{GameArena, GameConfig};
+    use crate::placement::PlacementKind;
+    use crate::policy::heuristic_v1::{self, BUILD_BAND, BuildKind, LegacyValuation};
+    use crate::policy::heuristic_v1_trader;
+    use crate::rng::{derive_game_seed, mix64};
+    use crate::rules::{Buildable, Resource, RuleConfig, TradeConfig};
+    use crate::topology::{Layout, Topology};
+    use crate::view::{Action, DecisionPhase, ScoredAction, pips};
+    use crate::wire::{Coord, TileKind, WireBoard, WireHex, WirePlayer, WirePort};
+
+    use super::{CensusLegacyOverrideGuard, PolicyKind, heuristic_params};
+
+    mod corpus_boardgen {
+        use crate as unsettled_engine;
+
+        include!("../../../cli/src/boardgen.rs");
+    }
+
+    fn wire_board(topology: &Topology) -> WireBoard {
+        let mut tiles = vec![
+            TileKind::Wood,
+            TileKind::Wood,
+            TileKind::Wood,
+            TileKind::Wood,
+            TileKind::Sheep,
+            TileKind::Sheep,
+            TileKind::Sheep,
+            TileKind::Sheep,
+            TileKind::Wheat,
+            TileKind::Wheat,
+            TileKind::Wheat,
+            TileKind::Wheat,
+            TileKind::Brick,
+            TileKind::Brick,
+            TileKind::Brick,
+            TileKind::Ore,
+            TileKind::Ore,
+            TileKind::Ore,
+            TileKind::Desert,
+        ];
+        let mut tokens =
+            vec![5, 2, 6, 3, 8, 10, 9, 12, 11, 4, 8, 10, 9, 4, 5, 6, 3, 11].into_iter();
+        let hexes = (0..topology.hex_count())
+            .map(|hex| {
+                let key = topology.hex_key(hex as u8);
+                let (q, r) = key.split_once(',').unwrap();
+                let tile = tiles.remove(0);
+                WireHex {
+                    coord: Coord {
+                        q: q.parse().unwrap(),
+                        r: r.parse().unwrap(),
+                    },
+                    number_token: (tile != TileKind::Desert)
+                        .then(|| f64::from(tokens.next().unwrap())),
+                    tile: Some(tile),
+                }
+            })
+            .collect();
+        WireBoard {
+            schema_version: 1,
+            layout: Layout::Standard4,
+            hexes,
+            ports: Vec::new(),
+            robber: None,
+            roads: Vec::new(),
+            buildings: Vec::new(),
+            players: (0..4)
+                .map(|seat| WirePlayer {
+                    id: format!("p{seat}"),
+                    name: format!("P{seat}"),
+                    color: "red".into(),
+                })
+                .collect(),
+            me_player_id: None,
+        }
+    }
+
+    fn valuation_fixture() -> (Topology, SimBoard, GameArena) {
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let rules = RuleConfig::base(Layout::Standard4);
+        let board = SimBoard::try_from_wire(
+            wire_board(&topology),
+            &topology,
+            &rules,
+            ConversionOptions::default(),
+        )
+        .unwrap();
+        let mut arena = GameArena::default();
+        arena.prepare(&board, &topology, &rules, &GameConfig::default());
+        (topology, board, arena)
+    }
+
+    fn local_production(board: &SimBoard, topology: &Topology, vertex: u8) -> [u16; 5] {
+        let mut production = [0; 5];
+        for hex in topology.vertex_hexes(vertex) {
+            if let (Some(resource), Some(token)) = (
+                board.tiles()[usize::from(*hex)],
+                board.tokens()[usize::from(*hex)],
+            ) {
+                production[resource.index()] += u16::from(pips(token));
+            }
+        }
+        production
+    }
+
+    fn port_fixture() -> (Topology, SimBoard, GameArena, u8, u8, Resource, u16) {
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let rules = RuleConfig::base(Layout::Standard4);
+        let wire = wire_board(&topology);
+        let base = SimBoard::try_from_wire(
+            wire.clone(),
+            &topology,
+            &rules,
+            ConversionOptions::default(),
+        )
+        .unwrap();
+        let (edge, target, resource, local) = topology
+            .coastal_edges()
+            .iter()
+            .find_map(|edge| {
+                topology
+                    .edge_endpoints(*edge)
+                    .into_iter()
+                    .find_map(|vertex| {
+                        Resource::ALL.into_iter().find_map(|resource| {
+                            let local =
+                                local_production(&base, &topology, vertex)[resource.index()];
+                            (local > 0).then_some((*edge, vertex, resource, local))
+                        })
+                    })
+            })
+            .unwrap();
+        let mut wire = wire;
+        wire.ports.push(WirePort {
+            edge_id: topology.edge_id(edge).to_string(),
+            resource: Some(resource),
+            rate: 2.0,
+        });
+        let board =
+            SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
+        let owned = (0..topology.vertex_count())
+            .map(|vertex| vertex as u8)
+            .find(|vertex| {
+                *vertex != target
+                    && !topology.vertex_adjacent(target).contains(vertex)
+                    && local_production(&board, &topology, *vertex)[resource.index()] > 0
+            })
+            .unwrap();
+        let mut arena = GameArena::default();
+        arena.prepare(&board, &topology, &rules, &GameConfig::default());
+        (topology, board, arena, target, owned, resource, local)
+    }
+
+    fn score_for(actions: &[ScoredAction], predicate: impl Fn(Action) -> bool) -> f32 {
+        actions
+            .iter()
+            .find(|candidate| predicate(candidate.action))
+            .map(|candidate| candidate.score)
+            .unwrap()
+    }
+
+    #[test]
+    fn capture_census_and_trace_when_requested() {
+        let Ok(prefix) = std::env::var("SIM_BATCH1_CAPTURE_PREFIX") else {
+            return;
+        };
+        let stage = std::env::var("SIM_BATCH1_CAPTURE_STAGE").unwrap();
+        assert!(matches!(stage.as_str(), "stage1" | "stage2"));
+        let _census_legacy = CensusLegacyOverrideGuard::set(stage == "stage1");
+        let mut census = BufWriter::new(File::create(format!("{prefix}-census.txt")).unwrap());
+        let mut trace = BufWriter::new(File::create(format!("{prefix}-trace.txt")).unwrap());
+        let mut games = BufWriter::new(File::create(format!("{prefix}-games.txt")).unwrap());
+        let placements = [
+            PlacementKind::MaxPips,
+            PlacementKind::PipDiversity,
+            PlacementKind::PipScarcity,
+            PlacementKind::PortSynergy,
+        ];
+        let policies = [
+            (PolicyKind::HeuristicV1, false),
+            (PolicyKind::HeuristicV1Threat, false),
+            (PolicyKind::HeuristicV1Devcards, false),
+            (PolicyKind::HeuristicV1Trader, true),
+            (PolicyKind::HeuristicV1TraderAwareThreatDevcards, false),
+            (PolicyKind::PriorityTrader, false),
+            (PolicyKind::HeuristicV1Denial, true),
+            (PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial, true),
+        ];
+        for (layout, seats) in [(Layout::Standard4, 4), (Layout::Extension6, 6)] {
+            let topology = Topology::load(layout).unwrap();
+            let boards = (0..6)
+                .map(|board| {
+                    corpus_boardgen::generate_board(layout, seats, mix64(20_260_728 ^ board as u64))
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            for (policy, player_trading) in policies {
+                let mut rules = RuleConfig::base(layout);
+                rules.player_trading = player_trading.then(TradeConfig::default);
+                for (board_index, board) in boards.iter().enumerate() {
+                    for rep in 0..2 {
+                        for rotation in 0..placements.len() {
+                            heuristic_v1::reset_crossing_census();
+                            heuristic_v1::reset_decision_trace();
+                            heuristic_v1_trader::reset_aware_offer_probe();
+                            let mut config = GameConfig::default();
+                            for seat in 0..seats {
+                                config.placements[seat] =
+                                    placements[(seat + rotation) % placements.len()];
+                                config.policies[seat] = policy;
+                            }
+                            config.seed =
+                                derive_game_seed(20_260_728, board_index as u64, rep as u64);
+                            let mut arena = GameArena::default();
+                            let result = arena.play(board, &topology, &rules, &config);
+                            writeln!(
+                                games,
+                                "stage={stage} layout={layout:?} policy={policy:?} board={board_index} rep={rep} rotation={rotation} result={result:?}"
+                            )
+                            .unwrap();
+                            for crossing in heuristic_v1::crossing_census() {
+                                writeln!(
+                                    census,
+                                    "stage={stage} layout={layout:?} policy={policy:?} board={board_index} rep={rep} rotation={rotation} variant=base action={:?} score={} old_settlement_score={}",
+                                    crossing.action,
+                                    crossing.action_score,
+                                    crossing.old_settlement_score
+                                )
+                                .unwrap();
+                            }
+                            for observation in heuristic_v1_trader::aware_offer_probe() {
+                                if observation.score > observation.old_settlement_score {
+                                    writeln!(
+                                        census,
+                                        "stage={stage} layout={layout:?} policy={policy:?} board={board_index} rep={rep} rotation={rotation} variant=aware_offer score={} old_settlement_score={}",
+                                        observation.score,
+                                        observation.old_settlement_score
+                                    )
+                                    .unwrap();
+                                }
+                            }
+                            if board_index == 0 && rep == 0 && rotation == 0 {
+                                for (decision, observation) in
+                                    heuristic_v1::decision_trace().into_iter().enumerate()
+                                {
+                                    writeln!(
+                                        trace,
+                                        "stage={stage} layout={layout:?} policy={policy:?} board={board_index} rep={rep} rotation={rotation} decision={decision} seat={} selected={:?} candidates={:?}",
+                                        observation.observer,
+                                        observation.selected,
+                                        observation.candidates
+                                    )
+                                    .unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn heuristic_params_maps_every_variant_to_the_intended_gate_quadruple() {
@@ -519,6 +935,242 @@ mod gate_tests {
             assert_eq!(params.trading.is_some(), trading, "{kind:?}");
             assert_eq!(params.denial.is_some(), denial, "{kind:?}");
         }
+    }
+
+    #[test]
+    fn legacy_valuation_maps_every_ablation_kind() {
+        let all = LegacyValuation {
+            local_port_production: true,
+            pip_settlement_goal: true,
+            flat_city_goal: true,
+            settlement_shaped_city_terms: true,
+            band_ladder: true,
+        };
+        for (kind, expected) in [
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                all,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                LegacyValuation {
+                    local_port_production: true,
+                    ..LegacyValuation::default()
+                },
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                LegacyValuation {
+                    pip_settlement_goal: true,
+                    ..LegacyValuation::default()
+                },
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                LegacyValuation {
+                    settlement_shaped_city_terms: true,
+                    ..LegacyValuation::default()
+                },
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                LegacyValuation {
+                    band_ladder: true,
+                    ..LegacyValuation::default()
+                },
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                LegacyValuation {
+                    flat_city_goal: true,
+                    ..LegacyValuation::default()
+                },
+            ),
+        ] {
+            assert_eq!(
+                heuristic_params(kind).legacy_valuation,
+                Some(expected),
+                "{kind:?}"
+            );
+        }
+
+        for (kind, _) in policy_names() {
+            if !matches!(
+                kind,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+            ) {
+                assert_eq!(
+                    heuristic_params(kind).legacy_valuation,
+                    None,
+                    "{kind:?} must use the shipped valuation"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_valuation_reaches_the_production_scorers() {
+        let (topology, board, mut arena, target, owned, resource, local) = port_fixture();
+        arena.state.vertex_owner[usize::from(owned)] = 0;
+        arena.state.vertex_tier[usize::from(owned)] = 1;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        for kind in [
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+        ] {
+            let mut params = heuristic_params(kind);
+            params.production_weight = 0.0;
+            params.scarcity_weight = 0.0;
+            params.diversity_bonus = 0.0;
+            params.port_weight = 7.0;
+            params.expansion_weight = 0.0;
+            let actual = heuristic_v1::vertex_score(&view, target, &params, BuildKind::Settlement);
+            let expected = f32::from(local) * (1.0 / 2.0 - 1.0 / 4.0) * params.port_weight;
+            assert_eq!(actual.to_bits(), expected.to_bits(), "{kind:?}");
+            assert!(view.production_pips(0)[resource.index()] > 0);
+        }
+
+        let (topology, board, mut arena) = valuation_fixture();
+        let mut vertices = (0..topology.vertex_count())
+            .map(|vertex| vertex as u8)
+            .collect::<Vec<_>>();
+        vertices.sort_by_key(|vertex| {
+            local_production(&board, &topology, *vertex)
+                .iter()
+                .sum::<u16>()
+        });
+        let score_max = vertices[0];
+        let pips_max = *vertices.last().unwrap();
+        arena.state.edge_owner[usize::from(topology.vertex_edges(score_max)[0])] = 0;
+        arena.state.edge_owner[usize::from(topology.vertex_edges(pips_max)[0])] = 0;
+        arena.state.players[0].pieces[Buildable::Road.index()] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let settlement_cost = view.costs(Buildable::Settlement)[0];
+        let get = Resource::ALL
+            .into_iter()
+            .find(|resource| settlement_cost[resource.index()] > 0)
+            .unwrap();
+        let give = Resource::ALL
+            .into_iter()
+            .find(|resource| *resource != get)
+            .unwrap();
+        arena.state.players[0].resources = settlement_cost.map(i16::from);
+        arena.state.players[0].resources[get.index()] -= 1;
+        arena.state.players[0].resources[give.index()] += 4;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut chooser =
+            heuristic_params(PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser);
+        chooser.production_weight = -10.0;
+        chooser.scarcity_weight = 0.0;
+        chooser.diversity_bonus = 0.0;
+        chooser.port_weight = 0.0;
+        chooser.expansion_weight = 0.0;
+        let chosen = heuristic_v1::vertex_score(&view, pips_max, &chooser, BuildKind::Settlement);
+        let expected = 400.0
+            + (1.0 + chosen / 20.0)
+                / heuristic_v1::turns_to_afford(&view, Buildable::Settlement).max(0.25);
+        let actual = score_for(&heuristic_v1::recommend(&view, &chooser), |action| {
+            action
+                == Action::TradeBank {
+                    give,
+                    get,
+                    count: 1,
+                }
+        });
+        assert_eq!(actual.to_bits(), expected.to_bits());
+
+        let (topology, board, mut arena) = valuation_fixture();
+        let low = vertices[0];
+        let high = *vertices
+            .iter()
+            .rev()
+            .find(|vertex| !topology.vertex_adjacent(low).contains(vertex))
+            .unwrap();
+        for vertex in [low, high] {
+            arena.state.vertex_owner[usize::from(vertex)] = 0;
+            arena.state.vertex_tier[usize::from(vertex)] = 1;
+        }
+        arena.state.players[0].pieces[Buildable::Settlement.index()] = 0;
+        for edge in &mut arena.state.edge_owner {
+            *edge = 1;
+        }
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let city_cost = view.costs(Buildable::City)[0];
+        let get = Resource::ALL
+            .into_iter()
+            .find(|resource| city_cost[resource.index()] > 0)
+            .unwrap();
+        let give = Resource::ALL
+            .into_iter()
+            .find(|resource| *resource != get)
+            .unwrap();
+        arena.state.players[0].resources = city_cost.map(i16::from);
+        arena.state.players[0].resources[get.index()] -= 1;
+        arena.state.players[0].resources[give.index()] += 4;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut city_goal =
+            heuristic_params(PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal);
+        city_goal.production_weight = 10.0;
+        city_goal.scarcity_weight = 0.0;
+        city_goal.diversity_bonus = 0.0;
+        city_goal.port_weight = 0.0;
+        city_goal.expansion_weight = 0.0;
+        let expected =
+            400.0 + 2.0 / heuristic_v1::turns_to_afford(&view, Buildable::City).max(0.25);
+        let actual = score_for(&heuristic_v1::recommend(&view, &city_goal), |action| {
+            action
+                == Action::TradeBank {
+                    give,
+                    get,
+                    count: 1,
+                }
+        });
+        assert_eq!(actual.to_bits(), expected.to_bits());
+
+        let (topology, board, mut arena) = valuation_fixture();
+        let city = (0..topology.vertex_count())
+            .map(|vertex| vertex as u8)
+            .find(|vertex| topology.vertex_adjacent(*vertex).len() == 3)
+            .unwrap();
+        arena.state.vertex_owner[usize::from(city)] = 0;
+        arena.state.vertex_tier[usize::from(city)] = 1;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        arena.state.players[0].resources = view.costs(Buildable::City)[0].map(i16::from);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut city_terms =
+            heuristic_params(PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms);
+        city_terms.production_weight = 0.0;
+        city_terms.scarcity_weight = 0.0;
+        city_terms.diversity_bonus = 0.0;
+        city_terms.port_weight = 0.0;
+        city_terms.expansion_weight = 100.0;
+        let actual = score_for(&heuristic_v1::recommend(&view, &city_terms), |action| {
+            action == Action::UpgradeCity(city)
+        });
+        assert_eq!(actual.to_bits(), (BUILD_BAND + 300.0).to_bits());
+
+        let (topology, board, mut arena) = valuation_fixture();
+        let target = 0_u8;
+        arena.state.edge_owner[usize::from(topology.vertex_edges(target)[0])] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        arena.state.players[0].resources = view.costs(Buildable::Settlement)[0].map(i16::from);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut band =
+            heuristic_params(PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband);
+        band.production_weight = 0.0;
+        band.scarcity_weight = 0.0;
+        band.diversity_bonus = 0.0;
+        band.port_weight = 0.0;
+        band.expansion_weight = 0.0;
+        let actual = score_for(&heuristic_v1::recommend(&view, &band), |action| {
+            action == Action::BuildSettlement(target)
+        });
+        assert_eq!(actual.to_bits(), 500.0_f32.to_bits());
     }
 
     #[test]
@@ -553,6 +1205,12 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDenial,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcards,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
             ]
         );
         assert_eq!(
@@ -570,6 +1228,12 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareDevcardsDenial,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcards,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
             ]
         );
         assert_eq!(
@@ -583,6 +1247,12 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareDevcardsDenial,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcards,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
             ]
         );
         assert_eq!(
@@ -600,6 +1270,12 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDenial,
                 PolicyKind::HeuristicV1TraderAwareDevcardsDenial,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
             ]
         );
     }
@@ -632,7 +1308,7 @@ mod gate_tests {
         }
     }
 
-    fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 28] {
+    fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 34] {
         [
             (PolicyKind::RandomLegal, false, false, false, false),
             (PolicyKind::GreedyNoTrade, false, false, false, false),
@@ -776,6 +1452,48 @@ mod gate_tests {
                 true,
                 true,
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                true,
+                true,
+                true,
+                true,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                true,
+                true,
+                true,
+                true,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                true,
+                true,
+                true,
+                true,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                true,
+                true,
+                true,
+                true,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                true,
+                true,
+                true,
+                true,
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                true,
+                true,
+                true,
+                true,
+            ),
         ]
     }
 
@@ -866,10 +1584,34 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial,
                 "heuristic-v1-trader-aware-threat-devcards-denial",
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacyall",
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacyport",
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacychooser",
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacycityterms",
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacyband",
+            ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal",
+            ),
         ]
     }
 
-    const POLICY_KIND_COUNT: usize = 28;
+    const POLICY_KIND_COUNT: usize = 34;
 
     const fn kind_index(kind: PolicyKind) -> usize {
         match kind {
@@ -901,6 +1643,12 @@ mod gate_tests {
             PolicyKind::HeuristicV1TraderAwareDevcardsDenial => 25,
             PolicyKind::HeuristicV1TraderAwareThreatDevcards => 26,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => 27,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall => 28,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport => 29,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser => 30,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms => 31,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband => 32,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => 33,
         }
     }
 }

@@ -14,8 +14,12 @@ use unsettled_engine::wire::WireBoard;
 fn fixture() -> (Topology, SimBoard, GameArena) {
     let topology = Topology::load(Layout::Extension6).unwrap();
     let rules = unsettled_engine::rules::RuleConfig::base(Layout::Extension6);
+    let relative = PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
     let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
     let board =
         SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
@@ -57,13 +61,7 @@ fn find_path(topology: &Topology, length: usize) -> (u8, Vec<u8>) {
 
     for start in 0..topology.vertex_count() {
         let mut path = Vec::with_capacity(length);
-        if visit(
-            topology,
-            start as u8,
-            length,
-            1_u128 << start,
-            &mut path,
-        ) {
+        if visit(topology, start as u8, length, 1_u128 << start, &mut path) {
             return (start as u8, path);
         }
     }
@@ -91,8 +89,7 @@ fn longest_road_win_beats_an_affordable_city() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let mut scratch = PolicyScratch::default();
     let mut rng = Xoshiro256StarStar::from_seed(17);
-    let action =
-        heuristic_v1::action(&view, &mut scratch, &HeuristicParams::default(), &mut rng);
+    let action = heuristic_v1::action(&view, &mut scratch, &HeuristicParams::default(), &mut rng);
     let Action::BuildRoad(chosen) = action else {
         panic!("the two-point Longest Road win must beat the one-point city, chose {action:?}");
     };

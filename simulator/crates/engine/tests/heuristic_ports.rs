@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::game::{GameArena, GameConfig};
-use unsettled_engine::policy::heuristic_v1::{HeuristicParams, vertex_score};
+use unsettled_engine::policy::heuristic_v1::{BuildKind, HeuristicParams, vertex_score};
 use unsettled_engine::rules::{
     PlayerModifiers, PortAction, PortRule, PortSelector, Resource, RuleConfig,
 };
@@ -14,8 +14,12 @@ use unsettled_engine::wire::WireBoard;
 fn fixture() -> (Topology, RuleConfig, WireBoard) {
     let topology = Topology::load(Layout::Extension6).unwrap();
     let rules = RuleConfig::base(Layout::Extension6);
+    let relative = PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
     let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
     (topology, rules, wire)
 }
@@ -49,7 +53,12 @@ fn score(
     let mut arena = GameArena::default();
     arena.prepare(board, topology, rules, &config);
     let view = arena.decision_view(board, topology, 0, DecisionPhase::Action);
-    vertex_score(&view, vertex, &HeuristicParams::default())
+    vertex_score(
+        &view,
+        vertex,
+        &HeuristicParams::default(),
+        BuildKind::Settlement,
+    )
 }
 
 #[test]

@@ -16,8 +16,12 @@ use unsettled_engine::view::{Action, DecisionPhase, DevPlay};
 use unsettled_engine::wire::{WireBoard, WirePort};
 
 fn fixture_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../src/parser/__tests__/expected/")
-        .join(name)
+    let relative = PathBuf::from("src/parser/__tests__/expected").join(name);
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root")
 }
 
 fn empty_board() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {

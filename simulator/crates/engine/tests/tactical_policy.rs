@@ -15,8 +15,12 @@ use unsettled_engine::wire::WireBoard;
 fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
     let topology = Topology::load(Layout::Extension6).unwrap();
     let rules = RuleConfig::base(Layout::Extension6);
+    let relative = PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
     let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
     let board =
         SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
@@ -35,28 +39,6 @@ fn own_settlement(arena: &mut GameArena, topology: &Topology) -> u8 {
     let edge = topology.vertex_edges(vertex)[0];
     arena.state.edge_owner[usize::from(edge)] = 0;
     vertex
-}
-
-#[test]
-fn affordable_city_is_preferred_over_an_affordable_settlement() {
-    let (topology, board, _rules, _config, mut arena) = fixture();
-    let city_vertex = own_settlement(&mut arena, &topology);
-    let settlement_vertex = (0..topology.vertex_count())
-        .map(|vertex| vertex as u8)
-        .find(|vertex| {
-            *vertex != city_vertex && !topology.vertex_adjacent(city_vertex).contains(vertex)
-        })
-        .unwrap();
-    arena.state.edge_owner[usize::from(topology.vertex_edges(settlement_vertex)[0])] = 0;
-    arena.state.players[0].resources = [1, 1, 3, 1, 3];
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    assert!(view.affordable_settlement().is_some());
-    let mut scratch = PolicyScratch::default();
-    let mut rng = Xoshiro256StarStar::from_seed(1);
-    assert_eq!(
-        heuristic_v1::action(&view, &mut scratch, &HeuristicParams::default(), &mut rng,),
-        Action::UpgradeCity(city_vertex)
-    );
 }
 
 #[test]

@@ -12,8 +12,12 @@ use unsettled_engine::wire::WireBoard;
 fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig) {
     let topology = Topology::load(Layout::Extension6).unwrap();
     let rules = RuleConfig::base(Layout::Extension6);
+    let relative = PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
     let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
     let board =
         SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
@@ -78,6 +82,7 @@ fn heuristic_parameters_change_live_scores() {
         &view,
         vertex,
         &HeuristicParams::default(),
+        unsettled_engine::policy::heuristic_v1::BuildKind::Settlement,
     );
     let without_ports = unsettled_engine::policy::heuristic_v1::vertex_score(
         &view,
@@ -86,6 +91,7 @@ fn heuristic_parameters_change_live_scores() {
             port_weight: 0.0,
             ..HeuristicParams::default()
         },
+        unsettled_engine::policy::heuristic_v1::BuildKind::Settlement,
     );
     assert_ne!(with_ports, without_ports);
 }

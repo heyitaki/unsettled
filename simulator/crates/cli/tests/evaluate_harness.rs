@@ -49,6 +49,24 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial => {
             "heuristic-v1-trader-aware-threat-devcards-denial"
         }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyall"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyport"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacychooser"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacycityterms"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyband"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal"
+        }
     }
 }
 

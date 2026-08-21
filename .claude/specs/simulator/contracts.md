@@ -51,7 +51,7 @@ The three seed domains are the committed tuning (`0x7a11_1e5e_ed20_2607`), held-
 
 The domain seed drives both board generation and each game's dice, deck, chance, and policy streams. On a given unit, the game seed depends only on `(domain seed, board, rep, hero seat)`, never the arm, so paired arms use common random numbers.
 
-Board `i` derives from `mix64(domain seed ^ i)` and so depends on its own index alone. Two consequences worth relying on: raising `--boards` extends the board set rather than resampling it, so a longer run's boards are a strict superset of a shorter one's; and adding arms to a run cannot perturb any other arm or the reference, so an earlier run's paired result is reproducible exactly by a later run that merely carries more arms. M-21 used both to prove its invocation identical to the runs it refines.
+Board `i` derives from `mix64(domain seed ^ i)`, so within one layout, seat count and domain it depends on its own index alone — the generator also consumes layout and seats, and a run that changes either gets a different board set at the same indices. Two consequences worth relying on: raising `--boards` extends the board set rather than resampling it, so a longer run's boards are a strict superset of a shorter one's; and adding arms to a run cannot perturb any other arm or the reference, so an earlier run's paired result is reproducible exactly by a later run that merely carries more arms. M-21 used both to prove its invocation identical to the runs it refines.
 
 ## Paired statistics
 
@@ -103,9 +103,15 @@ heuristic-v1-trader-aware-devcards
 heuristic-v1-trader-aware-devcards-denial
 heuristic-v1-trader-aware-threat-devcards
 heuristic-v1-trader-aware-threat-devcards-denial
+heuristic-v1-trader-aware-threat-devcards-denial-legacyall
+heuristic-v1-trader-aware-threat-devcards-denial-legacyport
+heuristic-v1-trader-aware-threat-devcards-denial-legacychooser
+heuristic-v1-trader-aware-threat-devcards-denial-legacycityterms
+heuristic-v1-trader-aware-threat-devcards-denial-legacyband
+heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal
 ```
 
-Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. `heuristic-v1-noports` remains a rules-level ablation and is not crossed with the four gates.
+Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. The six `-legacy*` spellings are measurement-only valuation ablations and are not default-reachable policies. `heuristic-v1-noports` remains a rules-level ablation and is not crossed with the four gates.
 
 ## Weights files
 
@@ -133,7 +139,7 @@ Exactly one `DenialContext` is built per gated policy decision and threaded thro
 
 Positional competition is threat multiplied by legal one-road reach, site openness, and settlement-piece availability. It prices racing to a shared target, not general route cutting. Every production consumer reads one-road reach through the context memo.
 
-`PolicyKind::parse` ends in a wildcard and is not compiler-enforced. The complete 28-policy roster is guarded by an enum-to-name-to-parse round-trip test in addition to exhaustive production matches.
+`PolicyKind::parse` ends in a wildcard and is not compiler-enforced. The complete 34-policy roster is guarded by an enum-to-name-to-parse round-trip test in addition to exhaustive production matches.
 
 ## Output stability
 
@@ -149,6 +155,8 @@ What each artifact contains:
 - Optional JSONL: ordered per-game schedule coordinates, seat placements, and result.
 - `evaluation.json`: the run configuration, label-keyed arm marginals, ordered paired comparisons, and the total illegal-action count.
 
+The optional corpus JSONL carries identifiers, placements, and a terminal `GameResult` only. It records no candidate scores, chosen action, or per-turn state. A byte-exact corpus can identify which games changed and prove a mechanical stage stable, but it cannot by itself supply per-decision evidence; a behavioural explanation needs a paired decision trace read at each game's first divergence.
+
 ## Determinism
 
 `results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, player trading, and each seat policy use independent xoshiro256** streams. Player-trade response softening uses only the trade stream; acceptor selection is deterministic from the proposer's view. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
@@ -158,6 +166,8 @@ What each artifact contains:
 **Both cargo profiles, every time.** `--release` compiles out `debug_assert!(invariants_hold)`, which is the only detector for a class of piece and VP accounting bugs, so a release-only run has "passed" a board that panics in debug. Neither profile substitutes for the other.
 
 **Diff against a byte-exact corpus captured before the change.** Capture `results.json` plus `--jsonl` across several policies and both layouts *first*, then touch the code. Tie-breaking reads the action buffer in push order and reservoir-samples it, so reordering two loops, or merging them, silently changes which game gets played — with no test failing and no output looking wrong. That corpus is what proved the 2026-07-25 rewrite behaviour-preserving, and what localised the one change that was not.
+
+**Policy tests must own the state they assert.** Replaying turns under a default policy is not stable fixture construction for a test of another subsystem: any default-policy change can silently move the replay to a state where the subject precondition no longer holds. Prefer explicit state setup. Where replay is essential, assert every derived precondition before the subject assertion so a policy change fails as fixture drift rather than quietly re-scoping the test.
 
 ## Game termination
 
@@ -215,3 +225,15 @@ Ignore the `parallel efficiency` figure the bench prints. It divides by the logi
 ## Ablation semantics
 
 The no-ports ablation is applied at the rules level, so a no-ports seat genuinely trades at the base bank rate rather than merely discounting ports when scoring locations.
+
+`HeuristicParams::legacy_valuation` is different: it is a measurement-only instrument inside the single shipped valuation implementation, not a rules-level ablation. `None` is the only default-reachable value. The six named `legacy*` policy kinds restore the complete pre-SIM-BATCH1 valuation or exactly one of its five separable expressions so paired attribution can hold the field fixed; no unnamed or default policy reaches them.
+
+Two preconditions on reading that attribution. The restoration is exact only where `vertex_score` is finite: the city goal's presence gate moved from "a legal city exists" to "a legal city scores finitely" and no flag restores the old form, so a params vector making every city score non-finite drops the city goal under `legacyall` as well as under the fixed scorer. Every shipped rate is clamped at two or more, so no default-reachable policy can get there, but `HeuristicParams` is `pub` and `Deserialize` and is a Phase-H sweep target. And the five flags are marginal against the fixed corner rather than isolating: the port term is not build-kind dispatched, so `legacycityterms` alone does not reconstitute a pre-batch *city* score — only `legacyall` does.
+
+## Build valuation
+
+`heuristic_v1.rs::vertex_score` is marginal and build-kind-aware. Its port term prices prospective board-wide own production, the observer's current production plus the candidate build's marginal contribution, matching the shape of `app_formula.rs::port_delta`. A settlement may add diversity and frontier; a city upgrade adds neither. Only the frontier half was ever a live term: `legal_city` requires the observer to already own the vertex and `production_pips` sums owned vertices with the same robber skip, so a city's diversity count was structurally zero before this batch too, and no legacy flag restores it. `SIM-GAP-03` named two dead terms and one of the two was genuinely dead.
+
+`heuristic_v1.rs::best_goal_with` and `heuristic_v1.rs::score_actions_with` consume that one vertex value. The building saved toward and the building built are therefore ranked by the same marginal quantity.
+
+City and settlement actions share `heuristic_v1.rs::BUILD_BAND` and are ordered inside it by marginal value rather than kind. Under base rules and the shipped default `HeuristicParams`, every building stays below the non-winning contested-card band at pressure one. This headroom guarantee is deliberately not quantified over arbitrary public weights; `SIM-GAP-30` records Phase H's obligation to bound or re-check swept vectors.

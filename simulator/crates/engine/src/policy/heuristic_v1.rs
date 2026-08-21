@@ -15,8 +15,41 @@ pub(crate) type Gated<'a> = Option<(&'a DenialContext, &'a DenialParams)>;
 std::thread_local! {
     static HOLDER_DEFEND_OBSERVATION: std::cell::Cell<Option<bool>> =
         const { std::cell::Cell::new(None) };
+    static BEST_GOAL_CALLS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     static PAIR_CONTEST: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
     static PAIR_ROAD_BONUS: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+    static CROSSING_CENSUS: std::cell::RefCell<Vec<CensusCrossing>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+    static DECISION_TRACE: std::cell::RefCell<Vec<DecisionTrace>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct CensusCrossing {
+    pub action: Action,
+    pub action_score: f32,
+    pub old_settlement_score: f32,
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct DecisionTrace {
+    pub observer: usize,
+    pub selected: Action,
+    pub candidates: Vec<ScoredAction>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LegacyValuation {
+    pub local_port_production: bool,
+    pub pip_settlement_goal: bool,
+    pub flat_city_goal: bool,
+    pub settlement_shaped_city_terms: bool,
+    pub band_ladder: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -41,6 +74,9 @@ pub struct HeuristicParams {
     /// denial and positional-competition model in `policy::denial`; these weights are Phase-H
     /// sweep targets, not tuned values.
     pub denial: Option<DenialParams>,
+    /// Measurement-only restoration of one or more pre-SIM-BATCH1 valuation expressions.
+    /// Default policies never set this field.
+    pub legacy_valuation: Option<LegacyValuation>,
 }
 
 impl Default for HeuristicParams {
@@ -56,9 +92,18 @@ impl Default for HeuristicParams {
             dev_cards: None,
             trading: None,
             denial: None,
+            legacy_valuation: None,
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuildKind {
+    Settlement,
+    City,
+}
+
+pub const BUILD_BAND: f32 = 10_000.0;
 
 pub fn action(
     view: &DecisionView<'_>,
@@ -81,9 +126,9 @@ pub(crate) fn action_with_goal(
         .map(|denial_params| denial::context(view, denial_params));
     let gated = denial_context.as_ref().zip(params.denial.as_ref());
     let road = best_road(view, params, gated);
-    let PolicyScratch { goal, actions } = scratch;
-    score_actions_with(view, params, actions, road, gated);
     let selected_goal = best_goal_with(view, params, road);
+    let PolicyScratch { goal, actions } = scratch;
+    score_actions_with(view, params, actions, road, selected_goal, gated);
     *goal = selected_goal.map(|goal| goal.kind);
     let best_score = actions
         .as_slice()
@@ -102,6 +147,14 @@ pub(crate) fn action_with_goal(
             selected = candidate.action;
         }
     }
+    #[cfg(test)]
+    DECISION_TRACE.with(|trace| {
+        trace.borrow_mut().push(DecisionTrace {
+            observer: view.observer(),
+            selected,
+            candidates: actions.as_slice().to_vec(),
+        });
+    });
     (selected, selected_goal)
 }
 
@@ -111,7 +164,9 @@ pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mu
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
     let gated = denial_context.as_ref().zip(params.denial.as_ref());
-    score_actions_with(view, params, out, best_road(view, params, gated), gated);
+    let road = best_road(view, params, gated);
+    let goal = best_goal_with(view, params, road);
+    score_actions_with(view, params, out, road, goal, gated);
 }
 
 fn score_actions_with(
@@ -119,6 +174,7 @@ fn score_actions_with(
     params: &HeuristicParams,
     out: &mut ActionBuf,
     road: Option<RoadGoal>,
+    goal: Option<Goal>,
     gated: Gated<'_>,
 ) {
     out.clear();
@@ -128,7 +184,7 @@ fn score_actions_with(
             if view.legal_city(vertex) {
                 out.push(ScoredAction {
                     action: Action::UpgradeCity(vertex),
-                    score: 10_000.0 + vertex_score(view, vertex, params),
+                    score: BUILD_BAND + vertex_score(view, vertex, params, BuildKind::City),
                 });
             }
         }
@@ -139,7 +195,14 @@ fn score_actions_with(
             if view.legal_settlement(vertex) {
                 out.push(ScoredAction {
                     action: Action::BuildSettlement(vertex),
-                    score: 500.0 + vertex_score(view, vertex, params),
+                    score: if params
+                        .legacy_valuation
+                        .is_some_and(|legacy| legacy.band_ladder)
+                    {
+                        500.0
+                    } else {
+                        BUILD_BAND
+                    } + vertex_score(view, vertex, params, BuildKind::Settlement),
                 });
             }
         }
@@ -152,7 +215,7 @@ fn score_actions_with(
             score: road.action_score,
         });
     }
-    if let Some(goal) = best_goal_with(view, params, road)
+    if let Some(goal) = goal
         && !view.can_afford(goal.kind)
     {
         for trade in completing_or_improving_trades(view, goal.kind) {
@@ -219,6 +282,51 @@ fn score_actions_with(
     out.push(ScoredAction {
         action: Action::Pass,
         score: 0.0,
+    });
+    #[cfg(test)]
+    record_crossings(view, params, out);
+}
+
+#[cfg(test)]
+pub(crate) fn old_band_settlement_score(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    actions: &ActionBuf,
+) -> Option<f32> {
+    actions
+        .as_slice()
+        .iter()
+        .filter_map(|candidate| match candidate.action {
+            Action::BuildSettlement(vertex) => {
+                Some(500.0 + vertex_score(view, vertex, params, BuildKind::Settlement))
+            }
+            _ => None,
+        })
+        .fold(None, |best: Option<f32>, score| {
+            Some(best.map_or(score, |current| current.max(score)))
+        })
+}
+
+#[cfg(test)]
+fn record_crossings(view: &DecisionView<'_>, params: &HeuristicParams, actions: &ActionBuf) {
+    let Some(old_settlement_score) = old_band_settlement_score(view, params, actions) else {
+        return;
+    };
+    CROSSING_CENSUS.with(|crossings| {
+        let mut crossings = crossings.borrow_mut();
+        for candidate in actions.as_slice() {
+            if !matches!(
+                candidate.action,
+                Action::UpgradeCity(_) | Action::BuildSettlement(_)
+            ) && candidate.score > old_settlement_score
+            {
+                crossings.push(CensusCrossing {
+                    action: candidate.action,
+                    action_score: candidate.score,
+                    old_settlement_score,
+                });
+            }
+        }
     });
 }
 
@@ -479,7 +587,12 @@ pub fn turns_to_afford(view: &DecisionView<'_>, buildable: Buildable) -> f32 {
         .fold(f32::INFINITY, f32::min)
 }
 
-pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParams) -> f32 {
+pub fn vertex_score(
+    view: &DecisionView<'_>,
+    vertex: u8,
+    params: &HeuristicParams,
+    kind: BuildKind,
+) -> f32 {
     let board_totals = view.board_resource_pips();
     let own = view.production_pips(view.observer());
     let mut production = [0_u16; RESOURCE_COUNT];
@@ -500,11 +613,24 @@ pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParam
         .enumerate()
         .map(|(resource, value)| f32::from(*value) / f32::from(board_totals[resource].max(1)))
         .sum::<f32>();
-    let diversity = production
-        .iter()
-        .enumerate()
-        .filter(|(resource, value)| **value > 0 && own[*resource] == 0)
-        .count() as f32;
+    let settlement_shaped_city_terms = params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.settlement_shaped_city_terms);
+    // No legacy flag restores a city diversity term because there was never one to restore:
+    // `legal_city` requires the observer to already own the vertex, and `production_pips` sums
+    // owned vertices with the same robber skip, so `production[r] > 0` implies `own[r] > 0` and
+    // the filter is unsatisfiable. Only the expansion half of `SIM-GAP-03` was a live term.
+    let diversity = match kind {
+        BuildKind::Settlement => production
+            .iter()
+            .enumerate()
+            .filter(|(resource, value)| **value > 0 && own[*resource] == 0)
+            .count() as f32,
+        BuildKind::City => 0.0,
+    };
+    let local_port_production = params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.local_port_production);
     let port_synergy = view
         .board()
         .ports_at(vertex)
@@ -515,8 +641,12 @@ pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParam
                     let current = view.trade_rate(*resource);
                     let prospective = view.prospective_trade_rate(*port, *resource);
                     if prospective < current {
-                        f32::from(production[resource.index()])
-                            * (1.0 / prospective as f32 - 1.0 / current as f32)
+                        let production = if local_port_production {
+                            production[resource.index()]
+                        } else {
+                            own[resource.index()].saturating_add(production[resource.index()])
+                        };
+                        f32::from(production) * (1.0 / prospective as f32 - 1.0 / current as f32)
                     } else {
                         0.0
                     }
@@ -524,12 +654,18 @@ pub fn vertex_score(view: &DecisionView<'_>, vertex: u8, params: &HeuristicParam
                 .sum::<f32>()
         })
         .sum::<f32>();
-    let expansion = view
-        .topology()
-        .vertex_adjacent(vertex)
-        .iter()
-        .filter(|adjacent| view.vertex_owner(**adjacent).is_none())
-        .count() as f32;
+    let settlement_expansion = || {
+        view.topology()
+            .vertex_adjacent(vertex)
+            .iter()
+            .filter(|adjacent| view.vertex_owner(**adjacent).is_none())
+            .count() as f32
+    };
+    let expansion = match kind {
+        BuildKind::Settlement => settlement_expansion(),
+        BuildKind::City if settlement_shaped_city_terms => settlement_expansion(),
+        BuildKind::City => 0.0,
+    };
     f32::from(raw) * params.production_weight
         + scarcity * params.scarcity_weight * 10.0
         + diversity * params.diversity_bonus
@@ -566,21 +702,52 @@ fn best_goal_with(
     params: &HeuristicParams,
     road: Option<RoadGoal>,
 ) -> Option<Goal> {
+    #[cfg(test)]
+    BEST_GOAL_CALLS.with(|calls| calls.set(calls.get() + 1));
+
+    best_goal_uncounted(view, params, road)
+}
+
+/// The body, split out so the timing fixture can measure it without the call counter above. That
+/// counter is test-only scaffolding pinning the once-per-decision dedup; a thread-local write
+/// inside a timed loop would bias a figure whose whole purpose is to describe release cost.
+fn best_goal_uncounted(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    road: Option<RoadGoal>,
+) -> Option<Goal> {
     let mut best = None;
-    if (0..view.topology().vertex_count())
-        .map(|vertex| vertex as u8)
-        .any(|vertex| view.legal_city(vertex))
-    {
+    if let Some((_, vertex_term)) = best_scored_vertex(view, params, BuildKind::City) {
+        let numerator = if params
+            .legacy_valuation
+            .is_some_and(|legacy| legacy.flat_city_goal)
+        {
+            2.0
+        } else {
+            goal_value(vertex_term)
+        };
         best = Some(Goal {
             kind: Buildable::City,
-            score: 2.0 / turns_to_afford(view, Buildable::City).max(0.25),
+            score: numerator / turns_to_afford(view, Buildable::City).max(0.25),
         });
     }
-    if let Some(vertex) = view.best_legal_settlement() {
+    let settlement = if params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.pip_settlement_goal)
+    {
+        view.best_legal_settlement().map(|vertex| {
+            (
+                vertex,
+                vertex_score(view, vertex, params, BuildKind::Settlement),
+            )
+        })
+    } else {
+        best_scored_vertex(view, params, BuildKind::Settlement)
+    };
+    if let Some((_, vertex_term)) = settlement {
         let candidate = Goal {
             kind: Buildable::Settlement,
-            score: (1.0 + vertex_score(view, vertex, params) / 20.0)
-                / turns_to_afford(view, Buildable::Settlement).max(0.25),
+            score: goal_value(vertex_term) / turns_to_afford(view, Buildable::Settlement).max(0.25),
         };
         if best.is_none_or(|current| candidate.score > current.score) {
             best = Some(candidate);
@@ -596,6 +763,32 @@ fn best_goal_with(
         }
     }
     best
+}
+
+fn best_scored_vertex(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    kind: BuildKind,
+) -> Option<(u8, f32)> {
+    let mut best = None;
+    for vertex in (0..view.topology().vertex_count()).map(|vertex| vertex as u8) {
+        let legal = match kind {
+            BuildKind::Settlement => view.legal_settlement(vertex),
+            BuildKind::City => view.legal_city(vertex),
+        };
+        if !legal {
+            continue;
+        }
+        let score = vertex_score(view, vertex, params, kind);
+        if score.is_finite() && best.is_none_or(|(_, current)| score > current) {
+            best = Some((vertex, score));
+        }
+    }
+    best
+}
+
+fn goal_value(vertex_term: f32) -> f32 {
+    1.0 + vertex_term / 20.0
 }
 
 fn best_road(
@@ -657,7 +850,7 @@ fn expansion_road_score(
     let mut best_score = None;
     for target in view.topology().edge_endpoints(first) {
         if view.is_expansion_target(target) {
-            let score = vertex_score(view, target, params) + 0.25;
+            let score = vertex_score(view, target, params, BuildKind::Settlement) + 0.25;
             if best_score.is_none_or(|best| score > best) {
                 best_score = Some(score);
             }
@@ -670,7 +863,7 @@ fn expansion_road_score(
         }
         for target in view.topology().edge_endpoints(second) {
             if view.is_expansion_target(target) {
-                let score = vertex_score(view, target, params);
+                let score = vertex_score(view, target, params, BuildKind::Settlement);
                 if best_score.is_none_or(|best| score > best) {
                     best_score = Some(score);
                 }
@@ -883,11 +1076,14 @@ fn best_road_building_pair(
                 continue;
             }
             found_second = true;
+            // Unlike `expansion_road_score` this does not gate on `is_expansion_target`, so it
+            // credits vertices nobody can settle. `SIM-GAP-32` records why the fix is not bundled
+            // here.
             let expansion_score = view
                 .topology()
                 .edge_endpoints(second)
                 .iter()
-                .map(|vertex| vertex_score(view, *vertex, params))
+                .map(|vertex| vertex_score(view, *vertex, params, BuildKind::Settlement))
                 .fold(f32::NEG_INFINITY, f32::max);
             let road_bonus = network.as_mut().map_or(0.0, |network| {
                 let length = view.road_length_on(network, first, Some(second), cap);
@@ -962,6 +1158,49 @@ pub(crate) fn reset_pair_contest() {
 #[cfg(test)]
 pub(crate) fn pair_contest() -> f32 {
     PAIR_CONTEST.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(crate) fn reset_best_goal_calls() {
+    BEST_GOAL_CALLS.with(|calls| calls.set(0));
+}
+
+#[cfg(test)]
+pub(crate) fn best_goal_calls() -> u32 {
+    BEST_GOAL_CALLS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) fn reset_crossing_census() {
+    CROSSING_CENSUS.with(|crossings| crossings.borrow_mut().clear());
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) fn crossing_census() -> Vec<CensusCrossing> {
+    CROSSING_CENSUS.with(|crossings| crossings.borrow().clone())
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) fn reset_decision_trace() {
+    DECISION_TRACE.with(|trace| trace.borrow_mut().clear());
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) fn decision_trace() -> Vec<DecisionTrace> {
+    DECISION_TRACE.with(|trace| trace.borrow().clone())
+}
+
+#[cfg(test)]
+pub(crate) fn replace_last_trace_selected(selected: Action) {
+    DECISION_TRACE.with(|trace| {
+        if let Some(last) = trace.borrow_mut().last_mut() {
+            last.selected = selected;
+        }
+    });
 }
 
 fn turns_for_cost(view: &DecisionView<'_>, cost: &[u8; RESOURCE_COUNT]) -> f32 {
@@ -1105,9 +1344,11 @@ mod devcards_rate_tests {
 
     use crate::board::{ConversionOptions, SimBoard};
     use crate::game::{GameArena, GameConfig};
-    use crate::policy::PolicyKind;
-    use crate::rules::RuleConfig;
+    use crate::policy::{PolicyKind, PolicyScratch};
+    use crate::rng::Xoshiro256StarStar;
+    use crate::rules::{Buildable, Resource, RuleConfig};
     use crate::topology::{Layout, Topology};
+    use crate::view::{Action, DecisionPhase};
     use crate::wire::{Coord, TileKind, WireBoard, WireHex, WirePlayer};
 
     fn standard_board(topology: &Topology, rules: &RuleConfig) -> SimBoard {
@@ -1170,6 +1411,332 @@ mod devcards_rate_tests {
         SimBoard::try_from_wire(wire, topology, rules, ConversionOptions::default()).unwrap()
     }
 
+    fn valuation_fixture() -> (Topology, SimBoard, GameArena) {
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let rules = RuleConfig::base(Layout::Standard4);
+        let board = standard_board(&topology, &rules);
+        let mut arena = GameArena::default();
+        arena.prepare(&board, &topology, &rules, &GameConfig::default());
+        (topology, board, arena)
+    }
+
+    #[test]
+    fn old_band_settlement_maximum_uses_direct_vertex_score() {
+        let (topology, board, mut arena) = valuation_fixture();
+        let target = 0_u8;
+        arena.state.edge_owner[usize::from(topology.vertex_edges(target)[0])] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        arena.state.players[0].resources = view.costs(Buildable::Settlement)[0].map(i16::from);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let params = super::HeuristicParams::default();
+        let mut actions = crate::view::ActionBuf::new();
+        super::score_actions(&view, &params, &mut actions);
+
+        let direct = actions
+            .as_slice()
+            .iter()
+            .filter_map(|candidate| match candidate.action {
+                Action::BuildSettlement(vertex) => Some(
+                    500.0
+                        + super::vertex_score(&view, vertex, &params, super::BuildKind::Settlement),
+                ),
+                _ => None,
+            })
+            .fold(f32::NEG_INFINITY, f32::max);
+        let rebased = actions
+            .as_slice()
+            .iter()
+            .filter(|candidate| matches!(candidate.action, Action::BuildSettlement(_)))
+            .map(|candidate| candidate.score - super::BUILD_BAND + 500.0)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let actual = super::old_band_settlement_score(&view, &params, &actions).unwrap();
+
+        assert_ne!(
+            direct.to_bits(),
+            rebased.to_bits(),
+            "fixture must expose the lossy building-band rebase"
+        );
+        assert_eq!(actual.to_bits(), direct.to_bits());
+    }
+
+    #[test]
+    fn action_with_goal_uses_the_hoisted_goal() {
+        let (topology, board, mut arena) = valuation_fixture();
+        let target = 0_u8;
+        arena.state.edge_owner[usize::from(topology.vertex_edges(target)[0])] = 0;
+        arena.state.players[0].pieces[Buildable::Road.index()] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let cost = view.costs(Buildable::Settlement)[0];
+        let get = Resource::ALL
+            .into_iter()
+            .find(|resource| cost[resource.index()] > 0)
+            .unwrap();
+        let give = Resource::ALL
+            .into_iter()
+            .find(|resource| *resource != get)
+            .unwrap();
+        arena.state.players[0].resources = cost.map(i16::from);
+        arena.state.players[0].resources[get.index()] -= 1;
+        arena.state.players[0].resources[give.index()] += 4;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(3);
+        let (action, goal) = super::action_with_goal(
+            &view,
+            &mut scratch,
+            &super::HeuristicParams::default(),
+            &mut rng,
+        );
+        assert_eq!(goal.map(|goal| goal.kind), Some(Buildable::Settlement));
+        assert_eq!(
+            action,
+            Action::TradeBank {
+                give,
+                get,
+                count: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn the_chooser_returns_none_when_every_candidate_is_non_finite() {
+        let (topology, board, mut arena) = valuation_fixture();
+        arena.state.edge_owner[usize::from(topology.vertex_edges(0)[0])] = 0;
+        arena.state.players[0].pieces[Buildable::Road.index()] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let params = super::HeuristicParams {
+            production_weight: f32::INFINITY,
+            scarcity_weight: f32::INFINITY,
+            diversity_bonus: f32::INFINITY,
+            port_weight: f32::INFINITY,
+            expansion_weight: f32::INFINITY,
+            ..super::HeuristicParams::default()
+        };
+        assert_eq!(
+            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement,),
+            None
+        );
+    }
+
+    #[test]
+    fn the_goal_is_computed_once_per_action_decision() {
+        let (topology, board, arena) = valuation_fixture();
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(4);
+        super::reset_best_goal_calls();
+        super::action_with_goal(
+            &view,
+            &mut scratch,
+            &super::HeuristicParams::default(),
+            &mut rng,
+        );
+        assert_eq!(super::best_goal_calls(), 1);
+    }
+
+    #[test]
+    fn the_scored_chooser_breaks_ties_by_lowest_vertex_index() {
+        let (topology, board, mut arena) = valuation_fixture();
+        let first = 0_u8;
+        let second = (1..topology.vertex_count())
+            .map(|vertex| vertex as u8)
+            .find(|vertex| !topology.vertex_adjacent(first).contains(vertex))
+            .unwrap();
+        for vertex in [first, second] {
+            arena.state.edge_owner[usize::from(topology.vertex_edges(vertex)[0])] = 0;
+        }
+        arena.state.players[0].pieces[Buildable::Road.index()] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let params = super::HeuristicParams {
+            production_weight: 0.0,
+            scarcity_weight: 0.0,
+            diversity_bonus: 0.0,
+            port_weight: 0.0,
+            expansion_weight: 0.0,
+            ..super::HeuristicParams::default()
+        };
+        assert_eq!(
+            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement,)
+                .map(|(vertex, _)| vertex),
+            Some(first.min(second))
+        );
+    }
+
+    #[test]
+    fn building_scores_stay_below_the_contested_card_band_under_default_weights() {
+        let (topology, board, arena) = valuation_fixture();
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let params = super::HeuristicParams::default();
+        let building = (0..topology.vertex_count())
+            .map(|vertex| vertex as u8)
+            .map(|vertex| {
+                super::BUILD_BAND
+                    + super::vertex_score(&view, vertex, &params, super::BuildKind::Settlement)
+            })
+            .fold(f32::NEG_INFINITY, f32::max);
+        let contested = super::contested_card_score(&view, 2, false, 1.0);
+        assert!(
+            building < contested,
+            "{building} must stay below {contested}"
+        );
+    }
+
+    /// The headroom above only holds for a two-VP card. Merging the settlement rung into
+    /// `BUILD_BAND` lifted buildings past the one-VP contested value, which the old `500.0` rung
+    /// sat far below, so a rules variant worth one VP now loses to an affordable settlement. No
+    /// shipped config sets `longest_road_vp`/`largest_army_vp` to one; this pins the inversion so
+    /// a variant that does cannot introduce it silently.
+    #[test]
+    fn a_one_vp_contested_card_now_falls_inside_the_building_band() {
+        let (topology, board, arena) = valuation_fixture();
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        assert_eq!(view.longest_road_vp(), 2, "fixture must use base rules");
+        let one_vp = super::contested_card_score(&view, 1, false, 1.0);
+        let two_vp = super::contested_card_score(&view, 2, false, 1.0);
+        assert!(one_vp < super::BUILD_BAND, "{one_vp} is inside the band");
+        assert!(two_vp > super::BUILD_BAND, "{two_vp} must clear the band");
+    }
+
+    /// The settlement branch of the chooser is guarded by a negative-weight fixture elsewhere; the
+    /// city branch needs its own, because with positive weights pip order and score order agree and
+    /// a chooser ranking cities on `vertex_pips` would pass unnoticed.
+    #[test]
+    fn the_city_chooser_ranks_by_score_not_pips() {
+        let (topology, board, mut arena) = valuation_fixture();
+        let mut owned = Vec::new();
+        for vertex in (0..topology.vertex_count()).map(|vertex| vertex as u8) {
+            if owned.len() == 2 {
+                break;
+            }
+            if owned
+                .iter()
+                .any(|held| topology.vertex_adjacent(vertex).contains(held))
+            {
+                continue;
+            }
+            arena.state.vertex_owner[usize::from(vertex)] = 0;
+            arena.state.vertex_tier[usize::from(vertex)] = 1;
+            owned.push(vertex);
+        }
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let pips: Vec<u16> = owned
+            .iter()
+            .map(|vertex| view.vertex_pips(*vertex, true))
+            .collect();
+        assert_ne!(pips[0], pips[1], "fixture must break the pip tie");
+        // Negative production inverts the ranking, so score order is the reverse of pip order and
+        // the two choosers cannot agree by accident.
+        let params = super::HeuristicParams {
+            production_weight: -10.0,
+            scarcity_weight: 0.0,
+            diversity_bonus: 0.0,
+            port_weight: 0.0,
+            expansion_weight: 0.0,
+            ..super::HeuristicParams::default()
+        };
+        let pip_max = if pips[0] > pips[1] { owned[0] } else { owned[1] };
+        let score_max = if pips[0] > pips[1] { owned[1] } else { owned[0] };
+        assert_eq!(
+            super::best_scored_vertex(&view, &params, super::BuildKind::City)
+                .map(|(vertex, _)| vertex),
+            Some(score_max),
+            "the city chooser must not rank on pips ({pip_max} is the pip maximum)"
+        );
+    }
+
+    /// The attribution in M-22 rests on all five flags together reproducing the pre-batch
+    /// valuation. Nothing else asserts it, so this freezes the pre-batch expression as a closed
+    /// form and checks `legacyall` against it bit-for-bit on every vertex of the fixture.
+    #[test]
+    fn every_legacy_flag_set_reproduces_the_pre_batch_vertex_score() {
+        let (topology, board, mut arena) = valuation_fixture();
+        for vertex in (0..topology.vertex_count()).map(|vertex| vertex as u8).take(3) {
+            arena.state.vertex_owner[usize::from(vertex)] = 0;
+            arena.state.vertex_tier[usize::from(vertex)] = 1;
+        }
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let legacy = super::HeuristicParams {
+            legacy_valuation: Some(super::LegacyValuation {
+                local_port_production: true,
+                pip_settlement_goal: true,
+                flat_city_goal: true,
+                settlement_shaped_city_terms: true,
+                band_ladder: true,
+            }),
+            ..super::HeuristicParams::default()
+        };
+        let params = super::HeuristicParams::default();
+        for vertex in (0..topology.vertex_count()).map(|vertex| vertex as u8) {
+            // The pre-batch scorer had no build kind: one settlement-shaped expression, with the
+            // port term reading vertex-local production only.
+            let expected =
+                super::vertex_score(&view, vertex, &legacy, super::BuildKind::Settlement);
+            for kind in [super::BuildKind::Settlement, super::BuildKind::City] {
+                let actual = super::vertex_score(&view, vertex, &legacy, kind);
+                assert_eq!(
+                    actual.to_bits(),
+                    expected.to_bits(),
+                    "legacyall must be kind-independent at vertex {vertex}"
+                );
+            }
+            // And it must actually differ from the fixed scorer somewhere, or the check is vacuous.
+            let fixed = super::vertex_score(&view, vertex, &params, super::BuildKind::City);
+            if fixed.to_bits() != expected.to_bits() {
+                return;
+            }
+        }
+        panic!("fixture never separates the legacy and fixed scorers");
+    }
+
+    #[test]
+    #[ignore = "single-state timing observation; run deliberately"]
+    fn vertex_valuation_per_decision_cost_is_reported() {
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let mut rules = RuleConfig::base(Layout::Standard4);
+        rules.turn_cap = 20;
+        let board = standard_board(&topology, &rules);
+        let mut arena = GameArena::default();
+        arena.play(
+            &board,
+            &topology,
+            &rules,
+            &GameConfig {
+                policies: [PolicyKind::HeuristicV1; 6],
+                seed: 8795844940285355527,
+                ..GameConfig::default()
+            },
+        );
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let params = super::HeuristicParams::default();
+        const DECISIONS: u64 = 50_000;
+        for run in 1..=5 {
+            let started = std::time::Instant::now();
+            for _ in 0..DECISIONS {
+                std::hint::black_box(super::best_goal_uncounted(&view, &params, None));
+            }
+            eprintln!(
+                "path=best_goal_uncounted run={run} decisions={DECISIONS} nsPerDecision={:.3}",
+                started.elapsed().as_nanos() as f64 / DECISIONS as f64
+            );
+        }
+        for run in 1..=5 {
+            let started = std::time::Instant::now();
+            for _ in 0..DECISIONS {
+                for edge in 0..topology.edge_count() {
+                    let edge = edge as u8;
+                    if view.legal_road(edge) {
+                        std::hint::black_box(super::expansion_road_score(&view, edge, &params));
+                    }
+                }
+                std::hint::black_box(super::best_road_building_pair(&view, &params, None));
+            }
+            eprintln!(
+                "path=road_vertex_consumers run={run} decisions={DECISIONS} nsPerDecision={:.3}",
+                started.elapsed().as_nanos() as f64 / DECISIONS as f64
+            );
+        }
+    }
+
     #[test]
     fn devcards_arm_hold_and_decline_rates_are_reported() {
         use std::sync::atomic::Ordering;
@@ -1181,8 +1748,13 @@ mod devcards_rate_tests {
             let board = if layout == Layout::Standard4 {
                 standard_board(&topology, &rules)
             } else {
+                let relative =
+                    PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
                 let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../../src/parser/__tests__/expected/board-draft-empty.json");
+                    .ancestors()
+                    .map(|root| root.join(&relative))
+                    .find(|candidate| candidate.is_file())
+                    .expect("board fixture must be reachable from the worktree or sweep root");
                 let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
                 SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default())
                     .unwrap()

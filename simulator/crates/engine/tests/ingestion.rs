@@ -8,9 +8,12 @@ use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::wire::{BuildingTier, WireBoard, WireBuilding};
 
 fn fixture(name: &str) -> String {
+    let relative = PathBuf::from("src/parser/__tests__/expected").join(name);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../src/parser/__tests__/expected")
-        .join(name);
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
     fs::read_to_string(path).unwrap()
 }
 

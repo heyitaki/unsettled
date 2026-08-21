@@ -341,7 +341,12 @@ fn expansion_score(
     let mut best = None;
     for target in view.topology().edge_endpoints(first) {
         if view.is_expansion_target(target) {
-            let score = heuristic_v1::vertex_score(view, target, params) + 0.25;
+            let score = heuristic_v1::vertex_score(
+                view,
+                target,
+                params,
+                heuristic_v1::BuildKind::Settlement,
+            ) + 0.25;
             if best.is_none_or(|current| score > current) {
                 best = Some(score);
             }
@@ -353,7 +358,12 @@ fn expansion_score(
         }
         for target in view.topology().edge_endpoints(*second) {
             if view.is_expansion_target(target) {
-                let score = heuristic_v1::vertex_score(view, target, params);
+                let score = heuristic_v1::vertex_score(
+                    view,
+                    target,
+                    params,
+                    heuristic_v1::BuildKind::Settlement,
+                );
                 if best.is_none_or(|current| score > current) {
                     best = Some(score);
                 }
@@ -391,7 +401,14 @@ fn expected_contest_pair(
                 .topology()
                 .edge_endpoints(*second)
                 .iter()
-                .map(|vertex| heuristic_v1::vertex_score(view, *vertex, params))
+                .map(|vertex| {
+                    heuristic_v1::vertex_score(
+                        view,
+                        *vertex,
+                        params,
+                        heuristic_v1::BuildKind::Settlement,
+                    )
+                })
                 .fold(f32::NEG_INFINITY, f32::max);
             let contest = denial::contest_term(view, context, score_params, first)
                 .max(denial::contest_term(view, context, score_params, *second));
@@ -447,7 +464,7 @@ fn expected_monopoly_for_goal(
 }
 
 #[test]
-fn denial_pressure_falls_below_the_city_band_when_no_opponent_is_close() {
+fn denial_pressure_falls_below_the_building_band_when_no_opponent_is_close() {
     let (topology, board, arena) = road_city_fixture(false, 5);
     assert!(matches!(
         action_with_params(&topology, &board, &arena, &HeuristicParams::default()),
@@ -476,7 +493,7 @@ fn denial_pressure_falls_below_the_city_band_when_no_opponent_is_close() {
 }
 
 #[test]
-fn denial_pressure_beats_the_city_band_when_the_holder_is_close() {
+fn denial_pressure_beats_the_building_band_when_the_holder_is_close() {
     let (topology, board, arena) = road_city_fixture(true, 5);
     let params = HeuristicParams {
         denial: Some(DenialParams::default()),
@@ -807,7 +824,14 @@ fn road_building_is_aimed_by_the_denial_terms() {
             let expansion = topology
                 .edge_endpoints(*second)
                 .iter()
-                .map(|vertex| heuristic_v1::vertex_score(&view, *vertex, &params))
+                .map(|vertex| {
+                    heuristic_v1::vertex_score(
+                        &view,
+                        *vertex,
+                        &params,
+                        heuristic_v1::BuildKind::Settlement,
+                    )
+                })
                 .fold(f32::NEG_INFINITY, f32::max);
             let length = view.road_length_on(&mut network, first, Some(*second), cap);
             let road_bonus = denial::defend_term(&view, &context, &denial_params, length)
