@@ -1,6 +1,7 @@
 :root {
   --paper: #f1ead9;
   --paper-deep: #e4d8bf;
+  --paper-board: #e9dfca;
   /* The rails' fill, laid over the page gradient at 93%. Anything floating over
      the board takes it opaque. */
   --paper-light: #f8f3e8;
@@ -94,7 +95,7 @@ button.selected.danger { color: #fff; }
 .board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
 .board-tab-add, .player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
 
-.board-stage { position: static; overflow: hidden; padding: 12px; background: #e9dfca; }
+.board-stage { position: static; overflow: hidden; padding: 12px; background: var(--paper-board); }
 /* min-height reserves the zoom chip's row: it only exists above 1x, and without
    the reservation appearing and disappearing shifts the board. */
 .board-status { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 28px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
@@ -280,8 +281,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .global-notice-close { flex: none; margin-top: -1px; padding: 0 3px; border: 0; border-radius: 6px; background: transparent; color: rgba(255,255,255,.65); font-size: 15px; line-height: 1.3; }
 footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content: space-between; color: rgba(45,41,36,.65); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 
-.mobile-pane, .board-deck { display: contents; }
-.mobile-nav, .pane-grabber { display: none; }
+.mobile-pane { display: contents; }
+.mobile-nav { display: none; }
 .board-zoom { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 3px 4px 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(248,243,232,.9); color: var(--ink); font-variant-numeric: tabular-nums; }
 .board-zoom button { padding: 3px 7px; border-radius: 999px; font-size: 10px; }
 .analysis-row.selected, .analysis-likely-gone.selected { border-color: #d8bc77; background: #fff9e9; }
@@ -423,8 +424,9 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
      its content width once the workspace becomes a flex column. */
   .workspace { flex: none; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
   .left-rail, .right-rail { display: contents; }
-  .board-deck { order: -1; display: flex; flex-direction: column; }
-  .center-column { position: static; flex: none; width: 100%; gap: 5px; }
+  /* Not sticky: at full width the board is most of the viewport, so pinning it
+     leaves the pane a strip too short to read. */
+  .center-column { order: -1; position: static; flex: none; width: 100%; gap: 5px; }
   .board-stage { width: 100%; padding: 8px; }
   .mobile-pane { display: none; }
   .app-shell[data-pane="board"] .mobile-pane[data-pane="board"],
@@ -452,8 +454,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .player-card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .player-card.dragging { opacity: .5; }
   .board-status { gap: 10px; padding: 0 4px 6px; font-size: 10px; flex-wrap: wrap; }
-  /* Clears the grab handle, which at maximum board height sits flush on the
-     nav and would otherwise take the toast's touches. */
+  /* Clear of the fixed bottom nav, which the toast must not cover or take touches from. */
   .global-notice { top: auto; bottom: calc(96px + env(safe-area-inset-bottom)); left: 12px; right: 12px; max-width: none; }
   .mobile-nav {
     position: fixed;
@@ -479,37 +480,22 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   footer { display: none; }
 }
 
-/* The deck is deliberately not sticky: at the default board height it is most of
-   the viewport, so pinning it leaves the pane a strip too short to read. Gated
-   on orientation because the landscape arm below wants the opposite. */
 @media (max-width: 760px) and (orientation: portrait) {
-  .app-shell { padding-inline: 0; overflow-x: clip; }
+  /* On the root, not body: the overscroll canvas only takes body's background if the root's is transparent. */
+  :root { background: var(--paper-board); }
+  .app-shell { padding-inline: 0; overflow-x: clip; background: var(--paper-board); }
   .site-header { padding-inline: var(--gutter); }
-  .board-deck { background: #e9dfca; box-shadow: 0 10px 22px rgba(62, 45, 21, .18); }
-  .center-column { gap: 0; display: flex; flex-direction: column; }
+  .center-column { margin-top: 10px; gap: 0; display: flex; flex-direction: column; }
   /* overflow: visible because the status line moves below the board, so its
      dropdown now opens downward and the stage's clip would eat it. */
   .board-stage { display: flex; flex-direction: column; padding: 0 var(--gutter); border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
   .board-status { order: 1; padding: 0; }
-  /* height: auto is the board's own aspect ratio at full width; a drag pins
-     --board-h. --board-max is the cap, measured from this chrome and published
-     by App.tsx, which owns it alone. The literal is only what the first paint
-     uses before that measurement lands, never a second authority. */
-  .board-canvas { width: 100%; height: var(--board-h, auto); max-height: var(--board-max, max(120px, calc(100dvh - 166px))); }
-  .pane-grabber {
-    flex: none;
-    width: 100%;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    touch-action: none;
-    cursor: ns-resize;
-  }
-  .pane-grabber span { width: 44px; height: 4px; border-radius: 999px; background: rgba(55, 45, 32, .3); }
-  .pane-grabber:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+  /* The cap has to go, not just grow: the SVG scales to fit, so any height
+     limit shrinks the board away from the gutters it should meet. */
+  .board-canvas { width: 100%; height: auto; max-height: none; }
   .mobile-pane { padding: 12px var(--gutter) 0; }
 
-  /* Nothing below the deck keeps its own scroller: a thumb cannot tell a nested
+  /* Nothing below the board keeps its own scroller: a thumb cannot tell a nested
      one apart from the page. Panels extend the document instead. */
   .saved-maps { flex: none; max-height: none; overflow: visible; }
   .saved-maps.fade-top, .saved-maps.fade-bottom { -webkit-mask-image: none; mask-image: none; }
@@ -555,7 +541,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .site-header { height: 32px; }
   .site-header > div:last-child { display: none; }
   .workspace { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 52fr) minmax(0, 48fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
-  .board-deck { grid-column: 1; grid-row: 1; min-height: 0; align-self: start; }
+  .center-column { grid-column: 1; grid-row: 1; min-height: 0; align-self: start; }
   /* Room for everything stacked above the canvas in this arm: the shell's own
      padding twice over, the shrunken header, the column gap, and the status
      line. A viewport-height fraction instead would overflow the column. */
