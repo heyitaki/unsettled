@@ -51,7 +51,7 @@ Cite code as `file.rs::symbol`, never `file.rs:line`. Line numbers rot silently;
 
 ## One operational note about this directory
 
-`.claude/` is only partly tracked. `.claude/specs/` is checked in; `.claude/solves/`, `.claude/worktrees/` and `.claude/pairs/` are ignored. Two consequences:
+`.claude/` is only partly tracked. `.claude/specs/` is checked in; `.claude/pairs/`, `.claude/solve-artifacts/`, `.claude/solves/` and `.claude/worktrees/` are ignored. Two consequences:
 
-- `git clean -xdf` at the repo root deletes the three ignored siblings and leaves `.claude/specs/` alone. Pre-existing behaviour, but it surprises once `.claude/` holds tracked files.
+- `git clean -xdf` at the repo root deletes the ignored siblings and leaves `.claude/specs/` alone. Pre-existing behaviour, but it surprises once `.claude/` holds tracked files.
 - The ignore rules in `.gitignore` must stay **per-subdirectory**. A blanket `.claude/` rule cannot be undone by `!.claude/specs/`, because git does not descend into an excluded directory. `.gitignore` carries a comment saying so.

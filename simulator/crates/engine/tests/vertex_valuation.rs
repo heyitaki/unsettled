@@ -376,12 +376,10 @@ fn city_score_excludes_the_expansion_frontier() {
     );
 }
 
-/// A regression guard, not evidence for the fix. This assertion held identically *before* this
-/// batch: `legal_city` requires the observer to own the vertex, so `production[r] > 0` implies
-/// `own[r] > 0` and the diversity filter is unsatisfiable for any city candidate. So it cannot
-/// distinguish the fixed scorer from the pre-batch one, and only the expansion half of
-/// `SIM-GAP-03` was ever a live term. What it does do is kill `MD-6-prime`, which reintroduces a
-/// nonzero city diversity count — which is why the legacy flag has no diversity arm to restore.
+/// A regression guard, not evidence for the fix: the assertion held identically before this batch,
+/// for the reason `heuristic_v1.rs::vertex_score` records, so it cannot distinguish the fixed
+/// scorer from the pre-batch one. What it does do is fail any change that reintroduces a nonzero
+/// city diversity count, which is why the legacy flag has no diversity arm to restore.
 #[test]
 fn city_score_excludes_diversity() {
     let (topology, board, arena, city, _, _) = building_fixture(true);
