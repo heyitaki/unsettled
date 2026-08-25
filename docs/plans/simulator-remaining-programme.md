@@ -152,8 +152,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 17: J4 — goal hysteresis (SIM-GAP-25)
 
-- [ ] Incumbent goal on `GameState` (reset in `GameArena::prepare`); switch only on a swept margin, zero-default
-- [ ] A/B; delete SIM-GAP-25
+- [x] Incumbent goal on `GameState` (reset in `GameArena::prepare`); switch only on a swept margin, zero-default — `PlayerState::incumbent_goal`, written by the engine after every pre-roll and action decision (`ask_action` / `run_pre_roll`), read through `DecisionView::incumbent_goal` so every chooser call site sees the one record; the chooser boosts the incumbent's candidate by `goal_hysteresis_margin` in its comparisons only (true scores everywhere else; an incumbent with no legal candidate boosts nothing); zero-default, trial margins 0.25/1.0 behind `-hystlo`/`-hysthi`; corpus recapture byte-identical (0/4000 moved); forwarded-argument table + five closed-form tests in `tests/hysteresis.rs` (margin observed on both sides of a computed score gap), label test in `policy/mod.rs`
+- [x] A/B; delete SIM-GAP-25 — M-35: the first decisive J verdict, and it is `worse` at both margins, monotone (hystlo -2.34pp, McNemar `[-2.98pp, -1.70pp]`, 2754/16000 discordant; hysthi -7.29pp, `[-8.01pp, -6.56pp]`, 3604/16000): goal stickiness forgoes real value at this corner, so the margin ships at zero per the prereg rule and H2 gets a likely-zero-optimal reading (probe below 0.25 if at all); entry deleted, programme inventory line brought current, contracts roster extended
 
 ### Task 18: J5 — frontier replacement (SIM-GAP-28) and dev-band exposure (SIM-GAP-24)
 

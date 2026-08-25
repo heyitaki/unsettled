@@ -146,6 +146,14 @@ pub struct HeuristicParams {
     /// shared goal-need model's outstanding need for the decision's selected goal
     /// (`goal_need::GoalNeed::cost_term`). Zero-default, same trial labels.
     pub cost_pressure_weight: f32,
+    /// The J4 goal-hysteresis margin (SIM-GAP-25): a challenger goal must beat the seat's
+    /// incumbent goal (`DecisionView::incumbent_goal`, the goal committed at the previous
+    /// decision) by this much in the chooser's comparisons, implemented as a selection-only
+    /// boost on the incumbent's candidate — the chosen goal always keeps its true score.
+    /// Zero (the default) never reads the incumbent and restores the pre-J4 selection
+    /// bit-for-bit; the `-hystlo`/`-hysthi` trial values are Phase-H sweep candidates, not
+    /// tuned values.
+    pub goal_hysteresis_margin: f32,
     /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
     /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
     pub threat: Option<ThreatParams>,
@@ -182,6 +190,7 @@ impl Default for HeuristicParams {
             stage_urgency_weight: 0.0,
             slot_return_weight: 0.0,
             cost_pressure_weight: 0.0,
+            goal_hysteresis_margin: 0.0,
             threat: None,
             dev_cards: None,
             trading: None,
@@ -248,6 +257,14 @@ pub const ECON_TRIAL_HI: EconTrial = EconTrial {
     slot_return: 8.0,
     cost_pressure: 2.0,
 };
+
+/// Trial values behind the J4 measurement labels (`-hystlo`/`-hysthi`). Goal scores are
+/// value per turn: an affordable goal floors at 0.25 turns (a settlement-shaped vertex
+/// prices around `(1 + score/20) * 4`, the road base at 1.4), so 0.25 absorbs sub-road-base
+/// score wobble while 1.0 spans the typical gap between an affordable goal and a mid-horizon
+/// challenger. Phase-H sweep candidates only; the shipped default margin stays zero.
+pub const HYSTERESIS_TRIAL_LO: f32 = 0.25;
+pub const HYSTERESIS_TRIAL_HI: f32 = 1.0;
 
 pub fn action(
     view: &DecisionView<'_>,
@@ -1248,6 +1265,20 @@ fn best_goal_uncounted(
     stage: Option<&Stage>,
     slot: Option<&SlotReturn>,
 ) -> Option<Goal> {
+    // The J4 hysteresis margin: the incumbent's candidate is boosted in the comparisons
+    // below, so a challenger must beat it by the margin, while every stored and returned
+    // score stays the true one. Zero (the default) never reads the incumbent, and an
+    // incumbent with no legal candidate boosts nothing, so it dies on its own.
+    let incumbent = (params.goal_hysteresis_margin != 0.0)
+        .then(|| view.incumbent_goal())
+        .flatten();
+    let boost = |kind: Buildable| {
+        if incumbent == Some(kind) {
+            params.goal_hysteresis_margin
+        } else {
+            0.0
+        }
+    };
     let mut best = None;
     if let Some((_, vertex_term)) = best_scored_vertex(view, params, BuildKind::City, stage, slot) {
         let numerator = if params
@@ -1281,7 +1312,9 @@ fn best_goal_uncounted(
             kind: Buildable::Settlement,
             score: goal_value(vertex_term) / turns_to_afford(view, Buildable::Settlement).max(0.25),
         };
-        if best.is_none_or(|current| candidate.score > current.score) {
+        if best.is_none_or(|current: Goal| {
+            candidate.score + boost(candidate.kind) > current.score + boost(current.kind)
+        }) {
             best = Some(candidate);
         }
     }
@@ -1290,7 +1323,9 @@ fn best_goal_uncounted(
             kind: Buildable::Road,
             score: road.goal_score / turns_to_afford(view, Buildable::Road).max(0.25),
         };
-        if best.is_none_or(|current| candidate.score > current.score) {
+        if best.is_none_or(|current: Goal| {
+            candidate.score + boost(candidate.kind) > current.score + boost(current.kind)
+        }) {
             best = Some(candidate);
         }
     }

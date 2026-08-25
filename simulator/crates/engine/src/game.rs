@@ -366,6 +366,18 @@ impl GameArena {
     }
 
     #[doc(hidden)]
+    pub fn ask_action_for_test(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        config: &GameConfig,
+        seat: usize,
+        phase: DecisionPhase,
+    ) -> Action {
+        self.ask_action(board, topology, config, seat, phase)
+    }
+
+    #[doc(hidden)]
     pub fn begin_turn_for_test(
         &mut self,
         board: &SimBoard,
@@ -649,12 +661,15 @@ impl GameArena {
             self.offers_remaining(seat),
             phase,
         );
-        policy::action(
+        let selected = policy::action(
             config.policies[seat],
             &view,
             &mut self.scratch[seat],
             &mut self.streams.policy[seat],
-        )
+        );
+        // Persist the decision's goal as the seat's incumbent (see `PlayerState::incumbent_goal`).
+        self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
+        selected
     }
 
     fn begin_turn(
@@ -715,6 +730,8 @@ impl GameArena {
                 &mut self.streams.policy[seat],
             )
         };
+        // Persist the decision's goal as the seat's incumbent (see `PlayerState::incumbent_goal`).
+        self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
         if let Some(play) = play {
             self.apply_action_internal(
                 board,

@@ -1,6 +1,6 @@
 use crate::belief::BeliefState;
 use crate::longest_road::RoadCard;
-use crate::rules::RESOURCE_COUNT;
+use crate::rules::{Buildable, RESOURCE_COUNT};
 use crate::topology::Hex;
 
 pub const MAX_HEXES: usize = 30;
@@ -51,6 +51,10 @@ pub struct PlayerState {
     pub vp_public: u8,
     pub vp_dev: u8,
     pub longest_road_len: u8,
+    /// The goal the seat's policy committed to at its last pre-roll or action decision,
+    /// recorded by the engine (SIM-GAP-25). Read back through `DecisionView::incumbent_goal`
+    /// by the J4 hysteresis margin; `None` until the seat's first decision of the game.
+    pub incumbent_goal: Option<Buildable>,
 }
 
 impl Default for PlayerState {
@@ -66,6 +70,7 @@ impl Default for PlayerState {
             vp_public: 0,
             vp_dev: 0,
             longest_road_len: 0,
+            incumbent_goal: None,
         }
     }
 }

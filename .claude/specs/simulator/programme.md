@@ -72,7 +72,7 @@ Default heuristic parameters were tuned only on the named TUNING seed domain. Th
 
 ## How to read the gap inventory
 
-[gaps.md](gaps.md) began as an audit of the policy layer after the four G consumers; SIM-BATCH1 closed the valuation defects it named, and the gap-closing batch after that closed every remaining entry it was scoped to, so what is left is setup-phase placement (`SIM-GAP-20`), goal and action selection (`SIM-GAP-24`, `SIM-GAP-25`), the build-valuation items Phases J and H own (`SIM-GAP-28`, `SIM-GAP-30`), and `SIM-GAP-21`, kept as a diagnosis record rather than as work. The inventory stays grouped by what kind of work an entry is.
+[gaps.md](gaps.md) began as an audit of the policy layer after the four G consumers; SIM-BATCH1 closed the valuation defects it named, and the gap-closing batch after that closed every remaining entry it was scoped to, so what is left is setup-phase placement (`SIM-GAP-20`), goal and action selection (`SIM-GAP-24`), the build-valuation items Phases J and H own (`SIM-GAP-28`, `SIM-GAP-30`), and `SIM-GAP-21`, kept as a diagnosis record rather than as work. The inventory stays grouped by what kind of work an entry is.
 
 ## Design notes that outlive their phase
 
