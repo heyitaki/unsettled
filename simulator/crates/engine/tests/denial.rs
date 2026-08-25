@@ -1546,7 +1546,7 @@ fn the_action_path_goal_reaches_the_next_discard() {
         &HeuristicParams::default(),
         &mut off_rng,
     );
-    let off = heuristic_v1::discard(&view, 3, &mut off_scratch);
+    let off = heuristic_v1::discard(&view, 3, &mut off_scratch, &HeuristicParams::default());
     let params = HeuristicParams {
         denial: Some(DenialParams {
             pressure_floor: 0.0,
@@ -1558,8 +1558,44 @@ fn the_action_path_goal_reaches_the_next_discard() {
     let mut on_scratch = PolicyScratch::default();
     let mut on_rng = Xoshiro256StarStar::from_seed(19);
     heuristic_v1::action(&view, &mut on_scratch, &params, &mut on_rng);
-    let on = heuristic_v1::discard(&view, 3, &mut on_scratch);
+    let on = heuristic_v1::discard(&view, 3, &mut on_scratch, &params);
     assert_ne!(off, on);
+}
+
+// Forwarded arguments of `heuristic_v1::discard`, one observing test each:
+// - `view` (hand contents): discard_preserves_the_active_city_cost (tactical_policy.rs)
+// - `count`: discard_preserves_the_active_city_cost asserts the discarded sum
+// - `scratch` (carried goal): the_action_path_goal_reaches_the_next_discard
+// - `params` (fallback path, scratch goal absent): the_gated_params_reach_the_discard_fallback
+#[test]
+fn the_gated_params_reach_the_discard_fallback() {
+    let (topology, board, mut arena) = road_city_fixture(false, 5);
+    arena.state.players[0].resources = [2, 1, 1, 1, 2];
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    // No prior action() call: scratch.goal is None, so discard recomputes the goal itself. The
+    // ungated and gated params reach different goals on this fixture (the action-path test above
+    // establishes that), and each goal's cost fixes the greedy discard vector in closed form:
+    // hand [2,1,1,1,2], count 3, discard = argmax(remaining - cost), ties to the highest index.
+    let off = heuristic_v1::discard(
+        &view,
+        3,
+        &mut PolicyScratch::default(),
+        &HeuristicParams::default(),
+    );
+    let params = HeuristicParams {
+        denial: Some(DenialParams {
+            pressure_floor: 0.0,
+            pressure_span: 0.0,
+            ..DenialParams::default()
+        }),
+        ..HeuristicParams::default()
+    };
+    let on = heuristic_v1::discard(&view, 3, &mut PolicyScratch::default(), &params);
+    // Ungated goal: road, cost [1,0,0,1,0] -> shed ore, ore (tie with wood, highest index wins),
+    // then wheat.
+    assert_eq!(off, [0, 0, 1, 0, 2]);
+    // Gated goal: settlement, cost [1,1,1,1,0] -> shed ore, ore, then wood.
+    assert_eq!(on, [1, 0, 0, 0, 2]);
 }
 
 macro_rules! denial_param_guard {

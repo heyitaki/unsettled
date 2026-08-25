@@ -331,7 +331,7 @@ pub fn discard(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
-            heuristic_v1::discard(view, count, scratch)
+            heuristic_v1::discard(view, count, scratch, &heuristic_params(kind))
         }
     }
 }

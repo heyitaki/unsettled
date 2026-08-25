@@ -510,10 +510,18 @@ pub fn discard(
     view: &DecisionView<'_>,
     count: u8,
     scratch: &mut PolicyScratch,
+    params: &HeuristicParams,
 ) -> [u8; RESOURCE_COUNT] {
-    let goal = scratch
-        .goal
-        .or_else(|| best_goal(view, &HeuristicParams::default(), None).map(|value| value.kind));
+    // The fallback recomputes the goal with the caller's params, denial gate included, so a gated
+    // arm keeps its gates when discarding before its first action of the game (SIM-GAP-26).
+    let goal = scratch.goal.or_else(|| {
+        let denial_context = params
+            .denial
+            .as_ref()
+            .map(|denial_params| denial::context(view, denial_params));
+        let gated = denial_context.as_ref().zip(params.denial.as_ref());
+        best_goal(view, params, gated).map(|value| value.kind)
+    });
     let cost = goal
         .and_then(|kind| view.costs(kind).first())
         .copied()

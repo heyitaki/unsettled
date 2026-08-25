@@ -70,9 +70,9 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 2: SIM-GAP-26 — discard fallback drops policy gates
 
-- [ ] Make `heuristic_v1.rs::discard`'s fallback use the caller's actual `HeuristicParams` instead of `HeuristicParams::default()`
-- [ ] Forwarded-argument test observing that gated params reach the fallback path
-- [ ] Corpus diff: document movement; delete the gap entry
+- [x] Make `heuristic_v1.rs::discard`'s fallback use the caller's actual `HeuristicParams` instead of `HeuristicParams::default()` — fallback now rebuilds the denial context from the caller's params and passes both to `best_goal`; dispatcher forwards `heuristic_params(kind)`
+- [x] Forwarded-argument test observing that gated params reach the fallback path — `the_gated_params_reach_the_discard_fallback` in `denial.rs`, closed-form discard vectors (ungated road goal vs gated settlement goal), plus a forwarded-argument table naming the observer of each `discard` argument
+- [x] Corpus diff: document movement; delete the gap entry — 0 / 4000 games moved (fallback needs an 8+ hand before the game's first action sets a goal, which the corpus never produces); entry deleted
 
 ### Task 3: SIM-GAP-31 — replay-derived fixture audit
 

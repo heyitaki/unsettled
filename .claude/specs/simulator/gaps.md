@@ -52,8 +52,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-25.** Goal selection has no plan persistence, hysteresis, sunk-tempo cost, or commitment state. `PolicyScratch.goal` is overwritten at each decision, so there is no durable plan for a threat-aware policy to abandon.
 
-**SIM-GAP-26.** `heuristic_v1.rs::discard` falls back to `HeuristicParams::default()` when `PolicyScratch.goal` is absent. That silently drops every policy gate, including denial, on the fallback path.
-
 **SIM-GAP-27.** `trade.rs::embargoed` still uses a VP-estimate threshold rather than the shared ETW danger model. It controls trade eligibility rather than ranking and remains deliberately ungated.
 
 ## Build valuation follow-up
