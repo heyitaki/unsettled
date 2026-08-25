@@ -137,8 +137,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 14: J1 — goal-need machinery and scarcity term
 
-- [ ] Build the single goal-need computation (outstanding goal cost minus hand and expected production); add the second `vertex_score` term per Context, zero-default
-- [ ] Paired A/B (new term at swept trial values vs zero) against the full composite; forwarded-argument table
+- [x] Build the single goal-need computation (outstanding goal cost minus hand and expected production); add the second `vertex_score` term per Context, zero-default — `policy/goal_need.rs` (`GoalNeed::derive`: closest-variant missing minus `seats` rolls of `pips/36` expected production, clamped at zero, sharing `closest_variant_missing` with the payment path); term applied to settlement and city build candidates via `vertex_score_with_need`; the goal chooser structurally passes no need (fixed-point avoidance, documented at the seam); `goal_need_weight` zero-default, trial values 0.5/2.0 behind `-goalneedlo`/`-goalneedhi`; corpus recapture byte-identical (0/4000 moved)
+- [x] Paired A/B (new term at swept trial values vs zero) against the full composite; forwarded-argument table — M-32: both arms `equivalent`; the discordance counts are the finding (lo 0/16000 games moved, hi 1/16000): an affordable goal has zero need by construction and builds are scored only when affordable, so the vertex term's live surface is nearly empty at this corner — recorded for H2 (flat axis) and J3 (cost pressure is the live-surface reuse); table + closed-form tests in `tests/goal_need.rs`, label test in `policy/mod.rs`
 
 ### Task 15: J2 — stage signal
 

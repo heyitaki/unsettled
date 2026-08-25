@@ -4,6 +4,7 @@ use crate::policy::PolicyScratch;
 use crate::policy::denial::{self, DenialContext, DenialParams};
 use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::exposure;
+use crate::policy::goal_need::GoalNeed;
 use crate::policy::threat::{self, ThreatParams};
 use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
@@ -112,6 +113,12 @@ pub struct HeuristicParams {
     /// seven minus cards paid with certainty) into an action score. Zero disables the shed
     /// candidate entirely; an unswept Phase-H placeholder.
     pub shed_weight: f32,
+    /// Weight of the J1 goal-need vertex term: a build candidate's production pips weighted
+    /// by the shared `goal_need` model's outstanding need for the decision's selected goal.
+    /// Zero (the default) never constructs the model and restores the pre-J1 expression
+    /// bit-for-bit; the `-goalneedlo`/`-goalneedhi` trial values are Phase-H sweep
+    /// candidates, not tuned values.
+    pub goal_need_weight: f32,
     /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
     /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
     pub threat: Option<ThreatParams>,
@@ -142,6 +149,7 @@ impl Default for HeuristicParams {
             expansion_weight: 0.15,
             robber_block_threshold: 4,
             shed_weight: 10.0,
+            goal_need_weight: 0.0,
             threat: None,
             dev_cards: None,
             trading: None,
@@ -159,6 +167,12 @@ pub enum BuildKind {
 }
 
 pub const BUILD_BAND: f32 = 10_000.0;
+
+/// Trial values behind the J1 measurement labels (`-goalneedlo`/`-goalneedhi`): a term
+/// comparable to the raw-production term, and one that dominates it. Phase-H sweep
+/// candidates only; the shipped default weight stays zero.
+pub const GOAL_NEED_TRIAL_LO: f32 = 0.5;
+pub const GOAL_NEED_TRIAL_HI: f32 = 2.0;
 
 pub fn action(
     view: &DecisionView<'_>,
@@ -256,13 +270,26 @@ fn score_actions_with(
         });
         return;
     }
+    // The J1 goal-need term prices build candidates against the decision's already-selected
+    // goal; a zero weight (the default) skips the derivation entirely so the pre-J1 scores
+    // stay bit-identical.
+    let goal_need = (params.goal_need_weight != 0.0)
+        .then(|| goal.map(|goal| GoalNeed::derive(view, goal.kind)))
+        .flatten();
     if view.can_afford(Buildable::City) {
         for vertex in 0..view.topology().vertex_count() {
             let vertex = vertex as u8;
             if view.legal_city(vertex) {
                 out.push(ScoredAction {
                     action: Action::UpgradeCity(vertex),
-                    score: BUILD_BAND + vertex_score(view, vertex, params, BuildKind::City),
+                    score: BUILD_BAND
+                        + vertex_score_with_need(
+                            view,
+                            vertex,
+                            params,
+                            BuildKind::City,
+                            goal_need.as_ref(),
+                        ),
                 });
             }
         }
@@ -280,7 +307,13 @@ fn score_actions_with(
                         500.0
                     } else {
                         BUILD_BAND
-                    } + vertex_score(view, vertex, params, BuildKind::Settlement),
+                    } + vertex_score_with_need(
+                        view,
+                        vertex,
+                        params,
+                        BuildKind::Settlement,
+                        goal_need.as_ref(),
+                    ),
                 });
             }
         }
@@ -898,6 +931,22 @@ pub fn vertex_score(
     params: &HeuristicParams,
     kind: BuildKind,
 ) -> f32 {
+    vertex_score_with_need(view, vertex, params, kind, None)
+}
+
+/// `vertex_score` plus the J1 goal-need term. The goal chooser prices vertices without the
+/// term (this is the `vertex_score` entry, passing `None`): the goal is what is being chosen
+/// there, so feeding a candidate goal's own need back into the scores that pick it would be a
+/// fixed point, and roads are scored before any goal exists. Only the decision's
+/// already-selected goal reaches the build candidates in `score_actions_with`. `None` leaves
+/// the expression bit-identical to the pre-J1 scorer.
+pub fn vertex_score_with_need(
+    view: &DecisionView<'_>,
+    vertex: u8,
+    params: &HeuristicParams,
+    kind: BuildKind,
+    need: Option<&GoalNeed>,
+) -> f32 {
     let board_totals = view.board_resource_pips();
     let own = view.production_pips(view.observer());
     let mut production = [0_u16; RESOURCE_COUNT];
@@ -971,11 +1020,17 @@ pub fn vertex_score(
         BuildKind::City if settlement_shaped_city_terms => settlement_expansion(),
         BuildKind::City => 0.0,
     };
-    f32::from(raw) * params.production_weight
+    let base = f32::from(raw) * params.production_weight
         + scarcity * params.scarcity_weight * 10.0
         + diversity * params.diversity_bonus
         + port_synergy * params.port_weight
-        + expansion * params.expansion_weight
+        + expansion * params.expansion_weight;
+    // Added as a branch rather than an unconditional `+ 0.0`, which would rewrite a
+    // negative-zero base and break the bit-identity the zero-default guarantees.
+    match need {
+        None => base,
+        Some(need) => base + params.goal_need_weight * need.production_term(&production),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1802,8 +1857,13 @@ pub fn plenty_offer(
 
 /// The missing-resource vector of the goal's closest cost variant, or all zeros when the goal
 /// is already affordable (the card owes it nothing). Ties between equally close variants keep
-/// the earlier variant, matching the payment path's variant order.
-fn closest_variant_missing(view: &DecisionView<'_>, goal: Buildable) -> [u8; RESOURCE_COUNT] {
+/// the earlier variant, matching the payment path's variant order. Shared with the J1
+/// goal-need model (`goal_need::GoalNeed::derive`) so "what the goal is short of" has one
+/// spelling.
+pub(crate) fn closest_variant_missing(
+    view: &DecisionView<'_>,
+    goal: Buildable,
+) -> [u8; RESOURCE_COUNT] {
     if view.can_afford(goal) {
         return [0; RESOURCE_COUNT];
     }
