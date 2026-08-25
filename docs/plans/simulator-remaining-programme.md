@@ -76,8 +76,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 3: SIM-GAP-31 — replay-derived fixture audit
 
-- [ ] Sweep `simulator/crates/*/tests` for fixtures that replay turns under a default policy; add explicit precondition assertions before each subject assertion, or convert to explicit state setup
-- [ ] Delete or trim the gap entry to what remains, per the staleness contract
+- [x] Sweep `simulator/crates/*/tests` for fixtures that replay turns under a default policy; add explicit precondition assertions before each subject assertion, or convert to explicit state setup — the coupling was confined to `player_trading.rs`'s `truncated_game` consumers; eight tests gained labelled "replay precondition" assertions (offer legality, eligible recipients, acceptor sets, score orderings, knight/monopoly holdings, pinned victims); `belief.rs`, `live_game.rs`, `critique_fixes.rs`, and the cli gate tests were already loud (existence asserts, whole-game invariants, or deliberate baselines)
+- [x] Delete or trim the gap entry to what remains, per the staleness contract — nothing remains; entry deleted
 
 ### Task 4: SIM-GAP-10/11/12 — card-play scope
 

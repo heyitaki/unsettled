@@ -19,7 +19,7 @@ use unsettled_engine::trade::{
     TradeOffer, acceptance_probability, conservative_hidden_vp, conservative_hidden_vp_for,
     embargoed, expected_hidden_vp, softened_accept, vp_estimate,
 };
-use unsettled_engine::view::{Action, ActionBuf, DecisionPhase, DevPlay};
+use unsettled_engine::view::{Action, ActionBuf, DecisionPhase, DecisionView, DevPlay};
 use unsettled_engine::wire::WireBoard;
 
 #[path = "../../cli/src/boardgen.rs"]
@@ -45,6 +45,11 @@ fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
     (topology, board, rules, config, arena)
 }
 
+/// Replay-derived fixture: the state is whatever `turn_cap` turns of the default policy produce,
+/// so any default-policy change silently moves it. Every consumer must loudly assert the
+/// replay-derived preconditions its subject depends on (hands, dev cards, eligible recipients,
+/// score orderings) before the subject assertion, so a policy change fails at a named
+/// precondition instead of an unrelated subject (SIM-GAP-31).
 fn truncated_game(
     game: u64,
     turn_cap: u16,
@@ -101,6 +106,46 @@ fn invalid_trading_params() -> HeuristicParams {
 fn move_from_bank(arena: &mut GameArena, seat: usize, resource: Resource, count: u16) {
     arena.state.bank[resource.index()] -= count;
     arena.state.players[seat].resources[resource.index()] += count as i16;
+}
+
+// Replay-derived precondition helpers (SIM-GAP-31): name the truncated-game state properties a
+// subject assertion silently depends on, so a moved replay fails here with the reason.
+fn assert_can_offer(view: &DecisionView<'_>, give: Resource, get: Resource, count: u8) {
+    assert!(
+        view.legal_offer_trade(give, get, count),
+        "replay precondition: seat {} can no longer offer {count} {give:?} for {get:?}; hand={:?}",
+        view.observer(),
+        view.own_hand(),
+    );
+}
+
+fn assert_pinned_knight_plays(view: &DecisionView<'_>, plays: &[(u8, usize)]) {
+    assert!(
+        view.can_play_dev(0),
+        "replay precondition: seat {} no longer holds a playable knight",
+        view.observer()
+    );
+    for (destination, victim) in plays {
+        assert_ne!(
+            view.robber(),
+            *destination,
+            "replay precondition: robber already sits on hex {destination}"
+        );
+        assert!(
+            view.stealable_on_hex(*destination, *victim),
+            "replay precondition: seat {victim} is not a stealable victim on hex {destination}"
+        );
+    }
+}
+
+fn eligible_recipients(view: &DecisionView<'_>, get: Resource) -> Vec<usize> {
+    (0..view.seats())
+        .filter(|seat| {
+            *seat != view.observer()
+                && !embargoed(view, *seat)
+                && view.belief().expected(*seat)[get.index()] >= 1.0
+        })
+        .collect()
 }
 
 fn explicit_trading_state() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
@@ -1504,6 +1549,17 @@ fn responder_delta_and_offer_count_reach_counterparty_selection() {
     };
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
     let delta = trading::responder_delta(offer);
+    let scores = [3, 4].map(|seat| {
+        trading::counterparty_score(
+            &etw::inputs_for_seat(&view, seat),
+            &TradeParams::default(),
+            &delta,
+        )
+    });
+    assert!(
+        scores[1] < scores[0],
+        "replay precondition: seat 4 must be the cheaper counterparty (scores={scores:?})"
+    );
     assert_eq!(
         policy::select_counterparty(PolicyKind::HeuristicV1TraderAware, &view, &delta, &[3, 4]),
         4
@@ -1555,6 +1611,57 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
         arena.validate_action(&board, &topology, 0, action, DecisionPhase::Action),
         "hand={:?}",
         arena.state.players[0].resources
+    );
+    // Replay preconditions (SIM-GAP-31): the subject observes count-forwarding only if the two
+    // pinned seats both accept and seat 4 strictly minimises the counterparty score over the
+    // whole acceptor set under the count-2 delta.
+    let offer = TradeOffer {
+        proposer: 0,
+        give: Resource::Sheep,
+        get: Resource::Ore,
+        count: 2,
+    };
+    let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+    assert!(
+        !embargoed(&proposer_view, 0),
+        "replay precondition: proposer embargoed"
+    );
+    let mut acceptors = Vec::new();
+    for seat in 1..board.seats() {
+        if arena.state.players[seat].resources[Resource::Ore.index()] < 1 {
+            continue;
+        }
+        let view = arena.decision_view(&board, &topology, seat, DecisionPhase::TradeResponse);
+        if embargoed(&view, seat) {
+            continue;
+        }
+        // Acceptance is deterministic at acceptance_temperature 0.0, so any seed works.
+        let mut rng = Xoshiro256StarStar::from_seed(seat as u64);
+        if policy::respond_trade(PolicyKind::HeuristicV1Trader, &view, offer, &mut rng) {
+            acceptors.push(seat);
+        }
+    }
+    assert!(
+        acceptors.contains(&3) && acceptors.contains(&4),
+        "replay precondition: seats 3 and 4 must both accept (acceptors={acceptors:?})"
+    );
+    let delta = trading::responder_delta(offer);
+    let score = |seat: usize| {
+        trading::counterparty_score(
+            &etw::inputs_for_seat(&proposer_view, seat),
+            &TradeParams::default(),
+            &delta,
+        )
+    };
+    assert!(
+        acceptors
+            .iter()
+            .all(|seat| *seat == 4 || score(4) < score(*seat)),
+        "replay precondition: seat 4 must be the strict cheapest acceptor (scores={:?})",
+        acceptors
+            .iter()
+            .map(|seat| (*seat, score(*seat)))
+            .collect::<Vec<_>>()
     );
     assert!(arena.apply_action_for_test(
         &board,
@@ -1627,6 +1734,11 @@ fn exact_counterparty_ties_keep_the_first_acceptor() {
 fn aware_action_receives_the_policy_trade_params() {
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(6);
     let view = arena.decision_view(&board, &topology, 4, DecisionPhase::Action);
+    assert_can_offer(&view, Resource::Brick, Resource::Wheat, 1);
+    assert!(
+        !eligible_recipients(&view, Resource::Wheat).is_empty(),
+        "replay precondition: no eligible wheat recipient remains"
+    );
     let run = |kind| {
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 6 << 8 ^ 4);
@@ -1650,6 +1762,12 @@ fn aware_action_receives_the_policy_trade_params() {
 fn aware_action_checks_every_eligible_recipient() {
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(6);
     let view = arena.decision_view(&board, &topology, 4, DecisionPhase::Action);
+    assert_can_offer(&view, Resource::Brick, Resource::Wheat, 1);
+    let recipients = eligible_recipients(&view, Resource::Wheat);
+    assert!(
+        recipients.len() >= 2,
+        "replay precondition: checking every recipient needs at least two, got {recipients:?}"
+    );
     let mut scratch = PolicyScratch::default();
     let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 6 << 8 ^ 4);
     assert_eq!(
@@ -1671,6 +1789,32 @@ fn aware_action_checks_every_eligible_recipient() {
 fn aware_action_uses_the_minimum_recipient_score() {
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(39);
     let view = arena.decision_view(&board, &topology, 2, DecisionPhase::Action);
+    assert_can_offer(&view, Resource::Brick, Resource::Sheep, 1);
+    let recipients = eligible_recipients(&view, Resource::Sheep);
+    assert!(
+        recipients.len() >= 2,
+        "replay precondition: the minimum needs at least two recipients, got {recipients:?}"
+    );
+    let delta = trading::responder_delta(TradeOffer {
+        proposer: 2,
+        give: Resource::Brick,
+        get: Resource::Sheep,
+        count: 1,
+    });
+    let scores: Vec<f64> = recipients
+        .iter()
+        .map(|seat| {
+            trading::counterparty_score(
+                &etw::inputs_for_seat(&view, *seat),
+                &TradeParams::default(),
+                &delta,
+            )
+        })
+        .collect();
+    assert!(
+        scores.iter().any(|score| (score - scores[0]).abs() > 1e-12),
+        "replay precondition: flat recipient scores never exercise the minimum (scores={scores:?})"
+    );
     let mut scratch = PolicyScratch::default();
     let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 39 << 8 ^ 2);
     assert_eq!(
@@ -1692,6 +1836,7 @@ fn aware_action_uses_the_minimum_recipient_score() {
 fn aware_threat_params_reach_base_action_scoring() {
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(3);
     let view = arena.decision_view(&board, &topology, 4, DecisionPhase::Action);
+    assert_pinned_knight_plays(&view, &[(5, 5), (21, 2)]);
     let seed = 8_u64 << 48 ^ 3 << 8 ^ 4;
     let run = |kind| {
         let mut scratch = PolicyScratch::default();
@@ -1718,6 +1863,10 @@ fn aware_threat_params_reach_base_action_scoring() {
 fn aware_pre_roll_receives_threat_and_devcards_params() {
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(219);
     let view = arena.decision_view(&board, &topology, 3, DecisionPhase::PreRoll);
+    assert!(
+        view.can_play_dev(4),
+        "replay precondition: seat 3 no longer holds a playable monopoly"
+    );
     let seed = 8_u64 << 48 ^ 219 << 8 ^ 3;
     let run = |kind| {
         let mut scratch = PolicyScratch::default();
@@ -1739,6 +1888,7 @@ fn aware_pre_roll_receives_threat_and_devcards_params() {
 
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(3);
     let view = arena.decision_view(&board, &topology, 4, DecisionPhase::PreRoll);
+    assert_pinned_knight_plays(&view, &[(5, 5), (21, 2)]);
     let seed = 8_u64 << 48 ^ 3 << 8 ^ 4;
     let run = |kind| {
         let mut scratch = PolicyScratch::default();
@@ -1768,6 +1918,15 @@ fn flat_proposal_group_keeps_the_first_enumerated_offer() {
         get: Resource::Sheep,
         count: 1,
     };
+    {
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(39);
+        let view = arena.decision_view(&board, &topology, 3, DecisionPhase::Action);
+        assert_can_offer(&view, Resource::Wood, Resource::Sheep, 1);
+        assert!(
+            !eligible_recipients(&view, Resource::Sheep).is_empty(),
+            "replay precondition: no eligible sheep recipient remains"
+        );
+    }
     let run = |rng_seed| {
         let (topology, board, _rules, _config, arena) = truncated_game(
             39,
