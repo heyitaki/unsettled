@@ -115,9 +115,11 @@ heuristic-v1-trader-aware-threat-devcards-denial-legacyexposure
 heuristic-v1-trader-aware-threat-devcards-denial-legacyrace
 heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo
 heuristic-v1-trader-aware-threat-devcards-denial-legacypair
+heuristic-v1-trader-aware-threat-devcards-denial-sbmute
+heuristic-v1-trader-aware-threat-devcards-denial-sbhold
 ```
 
-Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. The `-legacy*` spellings are measurement-only ablations restoring one pre-fix behavior each (or, for `-legacyall`, the whole pre-SIM-BATCH1 valuation) and are not default-reachable policies. `heuristic-v1-noports` remains a rules-level ablation and is not crossed with the four gates.
+Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. The `-legacy*` spellings are measurement-only ablations restoring one pre-fix behavior each (or, for `-legacyall`, the whole pre-SIM-BATCH1 valuation) and are not default-reachable policies. `heuristic-v1-noports` remains a rules-level ablation and is not crossed with the four gates. The `-sbmute` and `-sbhold` spellings are measurement-only SpecialBuild treatments (`HeuristicParams::special_build`): `-sbmute` passes every special-build decision, `-sbhold` drops special-build spends whose every payable cost variant increases the current goal's closest-variant shortfall, and the shipped default is the uniform treatment, in which special-build decisions run the ordinary action scorer under the phase's narrower legality.
 
 ## Weights files
 

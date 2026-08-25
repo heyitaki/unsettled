@@ -109,6 +109,19 @@ impl ActionBuf {
     pub fn as_slice(&self) -> &[ScoredAction] {
         &self.values[..self.len]
     }
+
+    /// Drops candidates in place, preserving order, so a phase-scoped filter can prune an
+    /// already-scored buffer without rescoring anything.
+    pub fn retain(&mut self, mut keep: impl FnMut(&ScoredAction) -> bool) {
+        let mut kept = 0;
+        for index in 0..self.len {
+            if keep(&self.values[index]) {
+                self.values[kept] = self.values[index];
+                kept += 1;
+            }
+        }
+        self.len = kept;
+    }
 }
 
 impl Default for ActionBuf {

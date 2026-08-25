@@ -9,7 +9,9 @@ use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
 use crate::state::{DEV_KNIGHT, DEV_MONOPOLY, DEV_ROAD_BUILDING, DEV_VP, DEV_YEAR_OF_PLENTY};
-use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction, can_pay, pips};
+use crate::view::{
+    Action, ActionBuf, DecisionPhase, DecisionView, DevPlay, ScoredAction, can_pay, pips,
+};
 
 pub(crate) type Gated<'a> = Option<(&'a DenialContext, &'a DenialParams)>;
 
@@ -74,6 +76,25 @@ pub struct LegacyValuation {
     pub ungated_pair: bool,
 }
 
+/// How the special building phase is scored (the SIM-GAP-19 measurement seam). `Uniform` is
+/// the shipped behavior: SpecialBuild decisions run the ordinary action scorer, with the
+/// phase's narrower legality (no trades, no dev plays) doing all the differentiating. The
+/// other variants exist only as composite measurement labels for the M-30 A/B and are never
+/// a default.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SpecialBuildScoring {
+    #[default]
+    Uniform,
+    /// Pass every SpecialBuild decision. Ablates the surface entirely, bounding how much
+    /// outcome weight any SpecialBuild rescoring could carry.
+    Mute,
+    /// Refuse any SpecialBuild spend that moves the current goal further away: a candidate
+    /// survives only if some payable cost variant leaves the goal's closest-variant shortfall
+    /// unchanged. With no goal, or an affordable one, this is identical to `Uniform`.
+    HoldGoal,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HeuristicParams {
@@ -103,6 +124,8 @@ pub struct HeuristicParams {
     /// Measurement-only restoration of one or more pre-SIM-BATCH1 valuation expressions.
     /// Default policies never set this field.
     pub legacy_valuation: Option<LegacyValuation>,
+    /// Measurement-only SpecialBuild treatment. Default policies keep `Uniform`.
+    pub special_build: SpecialBuildScoring,
 }
 
 impl Default for HeuristicParams {
@@ -120,6 +143,7 @@ impl Default for HeuristicParams {
             trading: None,
             denial: None,
             legacy_valuation: None,
+            special_build: SpecialBuildScoring::Uniform,
         }
     }
 }
@@ -220,6 +244,14 @@ fn score_actions_with(
     gated: Gated<'_>,
 ) {
     out.clear();
+    let special_build = view.phase() == DecisionPhase::SpecialBuild;
+    if special_build && params.special_build == SpecialBuildScoring::Mute {
+        out.push(ScoredAction {
+            action: Action::Pass,
+            score: 0.0,
+        });
+        return;
+    }
     if view.can_afford(Buildable::City) {
         for vertex in 0..view.topology().vertex_count() {
             let vertex = vertex as u8;
@@ -328,8 +360,56 @@ fn score_actions_with(
         action: Action::Pass,
         score: 0.0,
     });
+    if special_build && params.special_build == SpecialBuildScoring::HoldGoal {
+        hold_goal_filter(view, out, goal);
+    }
     #[cfg(test)]
     record_crossings(view, params, out);
+}
+
+/// The `SpecialBuildScoring::HoldGoal` prune: drops already-scored SpecialBuild candidates
+/// whose every payable cost variant increases the goal's closest-variant shortfall. Scores are
+/// never touched, so a surviving candidate is bit-identical to its `Uniform` spelling.
+fn hold_goal_filter(view: &DecisionView<'_>, out: &mut ActionBuf, goal: Option<Goal>) {
+    let Some(goal) = goal else {
+        return;
+    };
+    let hand = *view.own_hand();
+    let missing_now = goal_shortfall(view, goal.kind, &hand);
+    if missing_now == 0 {
+        return;
+    }
+    out.retain(|candidate| {
+        let variants: &[[u8; RESOURCE_COUNT]] = match candidate.action {
+            Action::BuildRoad(_) => view.costs(Buildable::Road),
+            Action::BuildSettlement(_) => view.costs(Buildable::Settlement),
+            Action::UpgradeCity(_) => view.costs(Buildable::City),
+            Action::BuyDev => std::slice::from_ref(view.dev_cost()),
+            // Pass spends nothing; trades and dev plays are illegal in SpecialBuild and
+            // never reach the buffer there.
+            _ => return true,
+        };
+        variants.iter().any(|cost| {
+            if !can_pay(&hand, cost) {
+                return false;
+            }
+            let mut after = hand;
+            for resource in 0..RESOURCE_COUNT {
+                after[resource] -= i16::from(cost[resource]);
+            }
+            goal_shortfall(view, goal.kind, &after) == missing_now
+        })
+    });
+}
+
+/// Units missing for the goal's closest cost variant from the given hand: the same
+/// closest-variant rule `closest_variant_missing` applies, evaluated on hypothetical hands.
+fn goal_shortfall(view: &DecisionView<'_>, goal: Buildable, hand: &[i16; RESOURCE_COUNT]) -> u16 {
+    view.costs(goal)
+        .iter()
+        .map(|cost| missing_units(hand, cost))
+        .min()
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -2399,4 +2479,234 @@ mod devcards_rate_tests {
     /// A seed whose game reaches the M-21 review state and flips there; re-found by scan
     /// (`M21_FLIP_SEED_SCAN`) whenever a behavior change moves the trajectories.
     const SEED: u64 = 200;
+
+    // Forwarded-argument table for the SpecialBuild scoring seam (`score_actions_with`'s phase
+    // gate, `hold_goal_filter`, and its `goal_shortfall` helper):
+    //
+    // | argument                          | observed by                                         |
+    // | --------------------------------- | --------------------------------------------------- |
+    // | `view.phase()`                    | `mute_passes_only_the_special_build_phase`,         |
+    // |                                   | `hold_goal_drops_goal_conflicting_spends` (the      |
+    // |                                   | Action-phase contrast in each)                      |
+    // | `params.special_build`            | `mute_passes_only_the_special_build_phase`,         |
+    // |                                   | `hold_goal_drops_goal_conflicting_spends` (Mute /   |
+    // |                                   | HoldGoal vs Uniform on the same view)               |
+    // | `goal`                            | `hold_goal_drops_goal_conflicting_spends` (chooser  |
+    // |                                   | goal), `hold_goal_keeps_disjoint_spends` (direct)   |
+    // | `view.own_hand()` / cost variants | `hold_goal_keeps_disjoint_spends`,                  |
+    // |                                   | `hold_goal_is_uniform_once_the_goal_is_affordable`  |
+    //
+    // The label dispatch (`PolicyKind` reaching `params.special_build`) is pinned by
+    // `the_special_build_labels_select_their_scoring` in `policy/mod.rs`.
+
+    fn action_bits(buf: &crate::view::ActionBuf) -> Vec<(Action, u32)> {
+        buf.as_slice()
+            .iter()
+            .map(|candidate| (candidate.action, candidate.score.to_bits()))
+            .collect()
+    }
+
+    #[test]
+    fn mute_passes_only_the_special_build_phase() {
+        let (topology, board, mut arena) = valuation_fixture();
+        let target = 0_u8;
+        arena.state.edge_owner[usize::from(topology.vertex_edges(target)[0])] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        arena.state.players[0].resources = view.costs(Buildable::Settlement)[0].map(i16::from);
+        let mute = super::HeuristicParams {
+            production_weight: 3.0,
+            special_build: super::SpecialBuildScoring::Mute,
+            ..super::HeuristicParams::default()
+        };
+        let special = arena.decision_view(&board, &topology, 0, DecisionPhase::SpecialBuild);
+        let mut actions = crate::view::ActionBuf::new();
+        super::score_actions(&special, &mute, &mut actions);
+        assert_eq!(action_bits(&actions), vec![(Action::Pass, 0.0_f32.to_bits())]);
+        // The same params still build on the seat's own turn ...
+        let ordinary = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        super::score_actions(&ordinary, &mute, &mut actions);
+        assert!(
+            actions
+                .as_slice()
+                .iter()
+                .any(|candidate| candidate.action == Action::BuildSettlement(target))
+        );
+        // ... and Uniform still builds in the special building phase.
+        let uniform = super::HeuristicParams {
+            special_build: super::SpecialBuildScoring::Uniform,
+            ..mute.clone()
+        };
+        super::score_actions(&special, &uniform, &mut actions);
+        assert!(
+            actions
+                .as_slice()
+                .iter()
+                .any(|candidate| candidate.action == Action::BuildSettlement(target))
+        );
+    }
+
+    #[test]
+    fn hold_goal_drops_goal_conflicting_spends() {
+        let (topology, board, mut arena) = valuation_fixture();
+        // One owned settlement and no road pieces: upgrading it is the only goal the chooser
+        // can select, so the prune's goal argument is controlled exactly.
+        arena.state.vertex_owner[0] = 0;
+        arena.state.vertex_tier[0] = 1;
+        arena.state.players[0].pieces[Buildable::Road.index()] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let city_cost = view.costs(Buildable::City)[0];
+        let dev_cost = *view.dev_cost();
+        // The city cost short one unit of its heaviest resource, plus the dev-cost resources
+        // the city does not need: the dev buy is affordable but spends into the shortfall.
+        let mut hand = city_cost.map(i16::from);
+        let heavy = (0..crate::rules::RESOURCE_COUNT)
+            .max_by_key(|index| city_cost[*index])
+            .unwrap();
+        hand[heavy] -= 1;
+        for index in 0..crate::rules::RESOURCE_COUNT {
+            if dev_cost[index] > 0 && city_cost[index] == 0 {
+                hand[index] += i16::from(dev_cost[index]);
+            }
+        }
+        arena.state.players[0].resources = hand;
+        let hold = super::HeuristicParams {
+            production_weight: 3.0,
+            special_build: super::SpecialBuildScoring::HoldGoal,
+            ..super::HeuristicParams::default()
+        };
+        let special = arena.decision_view(&board, &topology, 0, DecisionPhase::SpecialBuild);
+        assert_eq!(
+            super::best_goal(&special, &hold, None).map(|goal| goal.kind),
+            Some(Buildable::City),
+            "fixture precondition: the chooser goal must be the city upgrade"
+        );
+        assert_eq!(
+            super::goal_shortfall(&special, Buildable::City, &hand),
+            1,
+            "fixture precondition: the city must be exactly one unit short"
+        );
+        assert!(
+            special.can_buy_dev(),
+            "fixture precondition: the conflicting dev buy must be affordable"
+        );
+        let mut actions = crate::view::ActionBuf::new();
+        super::score_actions(&special, &hold, &mut actions);
+        assert_eq!(action_bits(&actions), vec![(Action::Pass, 0.0_f32.to_bits())]);
+        // The ordinary action phase is untouched: bit-identical to Uniform, dev buy kept.
+        let uniform = super::HeuristicParams {
+            special_build: super::SpecialBuildScoring::Uniform,
+            ..hold.clone()
+        };
+        let ordinary = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mut held = crate::view::ActionBuf::new();
+        let mut plain = crate::view::ActionBuf::new();
+        super::score_actions(&ordinary, &hold, &mut held);
+        super::score_actions(&ordinary, &uniform, &mut plain);
+        assert_eq!(action_bits(&held), action_bits(&plain));
+        assert!(
+            plain
+                .as_slice()
+                .iter()
+                .any(|candidate| candidate.action == Action::BuyDev)
+        );
+        // And Uniform keeps the buy in the special building phase itself.
+        super::score_actions(&special, &uniform, &mut plain);
+        assert!(
+            plain
+                .as_slice()
+                .iter()
+                .any(|candidate| candidate.action == Action::BuyDev)
+        );
+    }
+
+    #[test]
+    fn hold_goal_keeps_disjoint_spends() {
+        let (topology, board, mut arena) = valuation_fixture();
+        arena.state.vertex_owner[0] = 0;
+        arena.state.vertex_tier[0] = 1;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let city_cost = view.costs(Buildable::City)[0];
+        let road_cost = view.costs(Buildable::Road)[0];
+        let dev_cost = *view.dev_cost();
+        // City cost short one unit of its heaviest resource, plus a full road cost and the
+        // dev-cost resources the city does not need: the road spend leaves the city shortfall
+        // unchanged, the dev spend raises it.
+        let mut hand = city_cost.map(i16::from);
+        let heavy = (0..crate::rules::RESOURCE_COUNT)
+            .max_by_key(|index| city_cost[*index])
+            .unwrap();
+        hand[heavy] -= 1;
+        for index in 0..crate::rules::RESOURCE_COUNT {
+            hand[index] += i16::from(road_cost[index]);
+            if dev_cost[index] > 0 && city_cost[index] == 0 {
+                hand[index] += i16::from(dev_cost[index]);
+            }
+        }
+        arena.state.players[0].resources = hand;
+        let params = super::HeuristicParams {
+            production_weight: 3.0,
+            ..super::HeuristicParams::default()
+        };
+        let special = arena.decision_view(&board, &topology, 0, DecisionPhase::SpecialBuild);
+        let mut actions = crate::view::ActionBuf::new();
+        super::score_actions(&special, &params, &mut actions);
+        let before = action_bits(&actions);
+        assert!(
+            before
+                .iter()
+                .any(|(action, _)| matches!(action, Action::BuildRoad(_))),
+            "fixture precondition: a road candidate must be affordable"
+        );
+        assert!(before.iter().any(|(action, _)| *action == Action::BuyDev));
+        super::hold_goal_filter(
+            &special,
+            &mut actions,
+            Some(super::Goal {
+                kind: Buildable::City,
+                score: 1.0,
+            }),
+        );
+        // Exactly the conflicting dev buy is dropped; survivors keep order and score bits.
+        let expected: Vec<(Action, u32)> = before
+            .into_iter()
+            .filter(|(action, _)| *action != Action::BuyDev)
+            .collect();
+        assert_eq!(action_bits(&actions), expected);
+    }
+
+    #[test]
+    fn hold_goal_is_uniform_once_the_goal_is_affordable() {
+        let (topology, board, mut arena) = valuation_fixture();
+        arena.state.vertex_owner[0] = 0;
+        arena.state.vertex_tier[0] = 1;
+        arena.state.players[0].pieces[Buildable::Road.index()] = 0;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        arena.state.players[0].resources = view.costs(Buildable::City)[0].map(i16::from);
+        let hold = super::HeuristicParams {
+            production_weight: 3.0,
+            special_build: super::SpecialBuildScoring::HoldGoal,
+            ..super::HeuristicParams::default()
+        };
+        let special = arena.decision_view(&board, &topology, 0, DecisionPhase::SpecialBuild);
+        assert_eq!(
+            super::goal_shortfall(&special, Buildable::City, special.own_hand()),
+            0,
+            "fixture precondition: the city goal must be affordable"
+        );
+        let uniform = super::HeuristicParams {
+            special_build: super::SpecialBuildScoring::Uniform,
+            ..hold.clone()
+        };
+        let mut held = crate::view::ActionBuf::new();
+        let mut plain = crate::view::ActionBuf::new();
+        super::score_actions(&special, &hold, &mut held);
+        super::score_actions(&special, &uniform, &mut plain);
+        assert_eq!(action_bits(&held), action_bits(&plain));
+        assert!(
+            plain
+                .as_slice()
+                .iter()
+                .any(|candidate| candidate.action == Action::UpgradeCity(0))
+        );
+    }
 }
