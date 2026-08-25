@@ -178,6 +178,12 @@ struct TradeArgs {
     max_offers_per_turn: Option<u8>,
     #[arg(long, requires = "player_trading")]
     hidden_vp_confidence: Option<f64>,
+    #[arg(long, requires = "player_trading")]
+    embargo_danger_floor: Option<f64>,
+    #[arg(long, requires = "player_trading")]
+    embargo_danger: Option<f64>,
+    #[arg(long, requires = "player_trading")]
+    embargo_takeover_danger: Option<f64>,
 }
 
 impl TradeArgs {
@@ -197,6 +203,13 @@ impl TradeArgs {
                 hidden_vp_confidence: self
                     .hidden_vp_confidence
                     .unwrap_or(defaults.hidden_vp_confidence),
+                embargo_danger_floor: self
+                    .embargo_danger_floor
+                    .unwrap_or(defaults.embargo_danger_floor),
+                embargo_danger: self.embargo_danger.unwrap_or(defaults.embargo_danger),
+                embargo_takeover_danger: self
+                    .embargo_takeover_danger
+                    .unwrap_or(defaults.embargo_takeover_danger),
             }
         })
     }

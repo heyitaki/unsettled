@@ -65,6 +65,10 @@ pub struct LegacyValuation {
     /// Restores the bounded race scope: exact Longest Road race checks capped at two rivals
     /// and the blocking-blind contest term.
     pub bounded_race: bool,
+    /// Restores the VP-estimate embargo thresholds: trades refused at one
+    /// conservatively-estimated point below the win threshold, or two with an imminent
+    /// award swing, instead of the shared ETW danger model.
+    pub vp_embargo: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

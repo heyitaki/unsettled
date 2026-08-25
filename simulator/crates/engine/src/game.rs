@@ -831,7 +831,7 @@ impl GameArena {
                 self.offers_remaining(seat),
                 DecisionPhase::TradeResponse,
             );
-            *value = embargoed(&view, seat);
+            *value = embargoed(&view, seat, policy::vp_embargo(config.policies[seat]));
         }
         if embargoes[proposer] {
             return;

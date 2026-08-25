@@ -58,7 +58,7 @@ Three consequences bind what comes next.
 
 **The interaction is trading.** On the plain field the three gates that field admits are close to additive; the super-additivity appears only once player trading exists. Whatever H sweeps, it must sweep with the trade gate on, or it will be tuning at a corner the value does not live in.
 
-The rules-level `trade::embargoed` VP threshold remains deliberately unchanged because it controls eligibility rather than ranking and moving it would change every trader arm outside the G4 gate; `SIM-GAP-27` records the remaining work. `ThreatParams`, `DevCardParams`, `TradeParams`, and `DenialParams` weights are unswept Phase-H placeholders. The `TradeConfig` defaults are likewise placeholders for a later parameter sweep, not tuned values.
+The rules-level `trade::embargoed` eligibility check runs on the shared ETW danger model (closing `SIM-GAP-27`, measured in M-27): a hard `TradeConfig::embargo_danger` threshold plus a softer `embargo_takeover_danger` that fires only under an imminent Largest Army or Longest Road swing, which the ETW closed form deliberately excludes. The legacy VP-estimate thresholds survive behind `LegacyValuation::vp_embargo` as the `-legacyembargo` reference arm. `ThreatParams`, `DevCardParams`, `TradeParams`, and `DenialParams` weights are unswept Phase-H placeholders. The `TradeConfig` defaults, including all three embargo fields, are likewise placeholders for a later parameter sweep, not tuned values.
 
 ## Seed-domain discipline
 

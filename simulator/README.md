@@ -78,7 +78,7 @@ cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
 
 Player trading is disabled by default. Set `RuleConfig::player_trading` to `Some(TradeConfig)` and use a trader-family policy to exercise it. `TradeConfig` exposes `opponent_gain_weight`, `acceptance_temperature`, `max_offers_per_turn`, and `hidden_vp_confidence`.
 
-The `tournament`, `evaluate`, and `simulate` commands enable the mechanism with `--player-trading`. Their optional `--opponent-gain-weight`, `--acceptance-temperature`, `--max-offers-per-turn`, and `--hidden-vp-confidence` flags override the corresponding defaults and require `--player-trading`.
+The `tournament`, `evaluate`, and `simulate` commands enable the mechanism with `--player-trading`. Their optional `--opponent-gain-weight`, `--acceptance-temperature`, `--max-offers-per-turn`, `--hidden-vp-confidence`, `--embargo-danger-floor`, `--embargo-danger`, and `--embargo-takeover-danger` flags override the corresponding defaults and require `--player-trading`.
 
 `--allow-unofficial` permits non-official seat counts.
 

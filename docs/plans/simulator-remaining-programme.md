@@ -106,8 +106,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 8: SIM-GAP-27 — embargo threshold onto the shared danger model
 
-- [ ] Replace `trade.rs::embargoed`'s VP-estimate threshold with the shared ETW danger model; this changes every trader arm, so it is corpus-moving by design
-- [ ] A/B on the composite; corpus recapture; delete the entry
+- [x] Replace `trade.rs::embargoed`'s VP-estimate threshold with the shared ETW danger model; this changes every trader arm, so it is corpus-moving by design — `embargoed` now thresholds `threat::danger_from_etw` on `TradeConfig::embargo_danger` (0.125) with a softer `embargo_takeover_danger` (0.0625) under an imminent LA/LR swing; self-check prices the real hand via `trading::own_inputs`, rivals stand on belief; thresholds are H2 placeholders exposed as CLI flags; old behavior preserved behind `LegacyValuation::vp_embargo` (`...-legacyembargo` label), engine forwards each seat's flag via `policy::vp_embargo(kind)`; forwarded-argument table + closed-form threshold tests (capped-ETW boundary, floor forwarding, takeover clause both ways, self-vs-belief straddle, engine flag dispatch via the trade RNG stream) in `player_trading.rs`
+- [x] A/B on the composite; corpus recapture; delete the entry — M-27: `equivalent`, estimate +0.34pp, McNemar `[-0.05pp, +0.73pp]`, 1009/16000 discordant, fix kept per prereg rule; corpus recaptured (1423/4000 moved — every trader arm both layouts; heuristic-v1 and no-trading priority-trader byte-identical); trading-gate baseline regenerated via its deliberate generator; two replay fixtures re-found by the committed scan; the explicit trading state and the free-dev-card belief script park thresholds out of range (free dev cards legitimately collapse ETW to zero); entry deleted, programme.md embargo paragraph rewritten
 
 ### Task 9: SIM-GAP-22 — empty-hand robber victim
 

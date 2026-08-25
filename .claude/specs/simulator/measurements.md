@@ -436,3 +436,21 @@ Load before `4.54 4.65 3.88`, after `6.02 4.95 3.99`; zero illegal actions; admi
 | race cap + blocking | `+0.00025` | 95 | 91 | McNemar `[-0.0014206, +0.0019206]` | equivalent |
 
 The preregistered rule keeps the fix on anything but `worse`; only 186 of 16,000 paired units were discordant, so the change fires rarely on four-seat standard boards, and the interval sits far inside the ±1pp threshold. `race_check_cap` and `contest_block_bonus` are unswept Phase-H placeholders; H2 owns both axes. The corpus moved 415/4000 games, all in the denial-gated composite (330/600 on extension6, where six seats make the raised cap bind, and 85/400 on standard4); every ungated policy was byte-identical, and no gate baseline or replay-derived fixture moved.
+
+## M-27 — Embargo threshold onto the shared danger model (SIM-GAP-27)
+
+2026-08-25, commit `e662d166` (prereg; implementation in the Task 8 commit), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m27-embargo-danger.md` (committed before the run). The change: `trade.rs::embargoed` thresholds the shared ETW danger model (`threat::danger_from_etw`) instead of a conservative hidden-VP estimate. A seat is refused all player trades at `TradeConfig::embargo_danger` (0.125, roughly ETW <= 7 turns at the shared floor 1.0) and at `embargo_takeover_danger` (0.0625, roughly ETW <= 15) only while holding an imminent Largest Army or Longest Road swing, which the ETW closed form deliberately excludes; the seat's own eligibility prices its real hand while a rival's estimate stands on belief, mirroring `trading::own_inputs`. All three thresholds are unswept Phase-H placeholders (H2 owns them). Reference is the pre-change composite behind `LegacyValuation::vp_embargo` (`heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo`); the test arm is the post-change composite. The engine forwards each seat's own policy flag, so the field ran the danger model in both arms and the contrast isolates the arm seat's embargo model.
+
+Command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm embargo=pip_diversity --arm-policy base=heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo --arm-policy embargo=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out runs/m27-embargo
+```
+
+Load before `4.27 4.34 3.62`, after `4.27 4.34 3.62` (2.3s run); zero illegal actions; admissible (deterministic outcomes, load affects timing only). Reference win rate `0.317`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| danger-model embargo | `+0.0034375` | 532 | 477 | McNemar `[-0.0004532, +0.0073282]` | equivalent |
+
+The preregistered rule keeps the fix on anything but `worse`; 1,009 of 16,000 paired units were discordant — the embargo fires far more often than the race-cap change did — and the interval leans positive while sitting well inside the ±1pp threshold. The corpus moved 1423/4000 games, every trader arm on both layouts (extension6: 432/600 trader, 454/600 composite; standard4: 251/400 trader, 286/400 composite), by design for a rules-level eligibility change; `heuristic-v1` and the no-trading `priority-trader` capture were byte-identical. The trading-gate baseline fixture was regenerated through its deliberate generator; two replay-derived `player_trading.rs` fixtures were re-found via the committed scan, and the hand-authored explicit trading state plus the free-dev-card belief script disable the embargo explicitly because free dev cards legitimately collapse ETW to zero.

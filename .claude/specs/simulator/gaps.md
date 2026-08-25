@@ -30,8 +30,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-25.** Goal selection has no plan persistence, hysteresis, sunk-tempo cost, or commitment state. `PolicyScratch.goal` is overwritten at each decision, so there is no durable plan for a threat-aware policy to abandon.
 
-**SIM-GAP-27.** `trade.rs::embargoed` still uses a VP-estimate threshold rather than the shared ETW danger model. It controls trade eligibility rather than ranking and remains deliberately ungated.
-
 ## Build valuation follow-up
 
 **SIM-GAP-28.** `heuristic_v1.rs::vertex_score`'s expansion term is degree-valued for settlements: `DecisionView::legal_settlement` and `DecisionView::is_expansion_target` both require every neighbour to be unowned, so the count is always the vertex's topological degree. This is a crude expansion-room proxy rather than a measure of frontier actually opened. Phase J owns the replacement.

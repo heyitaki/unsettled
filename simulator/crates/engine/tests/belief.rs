@@ -86,10 +86,15 @@ fn first_productive_hex(board: &SimBoard, topology: &Topology, robber: Hex) -> (
 #[test]
 fn steal_free_scripted_game_reconstructs_every_hand_exactly() {
     let (topology, board, mut rules, mut config, mut arena) = fixture();
+    // Free dev cards collapse every seat's ETW to zero, so the danger embargo would
+    // refuse all trades; this script never exercised the embargo, so park the
+    // thresholds above the danger range.
     rules.player_trading = Some(TradeConfig {
         opponent_gain_weight: 0.0,
         acceptance_temperature: 0.0,
         max_offers_per_turn: 8,
+        embargo_danger: 2.0,
+        embargo_takeover_danger: 2.0,
         ..TradeConfig::default()
     });
     rules.dev_cost = [0; RESOURCE_COUNT];
