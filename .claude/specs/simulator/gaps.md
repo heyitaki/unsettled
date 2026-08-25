@@ -12,10 +12,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-09.** `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
 
-## Untouched decision surfaces — no scoring work has been done on these at all.
-
-**SIM-GAP-19.** `DecisionPhase::SpecialBuild` reaches `ask_action` with no distinct scoring and is treated as an ordinary action phase. Whether that is correct is unmeasured.
-
 ## Initial placement
 
 **SIM-GAP-20.** The placement heuristics read `vertex_owner` for legality only — occupied, or adjacent to occupied. There is no draft-order awareness, no denial, and no model of what an opponent takes next, so the threat machinery G1 through G3 built is unavailable at setup. That is the placement tuning programme's subject rather than this one's, but it is worth stating plainly: setup is the one phase of the game the opponent model does not reach.

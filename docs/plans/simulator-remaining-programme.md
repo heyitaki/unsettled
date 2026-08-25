@@ -127,7 +127,7 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 12: SIM-GAP-19 — SpecialBuild measurement
 
-- [ ] Preregister and run an extension6 5-6 seat A/B asking whether distinct SpecialBuild scoring changes outcomes; implement distinct scoring only if the measurement shows a gap, else record the reading and delete the entry with the evidence
+- [x] Preregister and run an extension6 5-6 seat A/B asking whether distinct SpecialBuild scoring changes outcomes; implement distinct scoring only if the measurement shows a gap, else record the reading and delete the entry with the evidence — M-30: two measurement-only labels (`-sbmute` surface ablation, `-sbhold` goal-shortfall prune) behind the new zero-default `HeuristicParams::special_build` seam (corpus byte-identical); no arm reached `better` (sbmute `worse` -9.18pp/-7.40pp at 6/5 seats — the surface is live and greedy uniform is right; sbhold `equivalent` -0.33pp at 6, `inconclusive` +0.74pp at 5), so uniform stands per the prereg rule, no implementation; entry deleted, labels stay in the roster
 
 ### Task 13: Knight timing — SIM-GAP-05/06/09
 
