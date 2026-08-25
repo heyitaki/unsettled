@@ -9,6 +9,15 @@ pub const MAX_EDGES: usize = 109;
 pub const MAX_SEATS: usize = 6;
 pub const EMPTY: u8 = u8::MAX;
 
+/// Indices into the per-kind development-card arrays (`playable_dev`, `bought_dev`,
+/// `dev_plays_revealed`) and every composition vector derived from them.
+pub const DEV_KNIGHT: usize = 0;
+pub const DEV_VP: usize = 1;
+pub const DEV_ROAD_BUILDING: usize = 2;
+pub const DEV_YEAR_OF_PLENTY: usize = 3;
+pub const DEV_MONOPOLY: usize = 4;
+pub const DEV_KIND_COUNT: usize = 5;
+
 impl PlayerState {
     /// Cards in hand. Clamps per resource so a negative count (which `invariants_hold` forbids)
     /// can never be cancelled out by another resource into a false "has cards" answer.

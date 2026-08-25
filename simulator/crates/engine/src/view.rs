@@ -2,12 +2,14 @@ use std::cell::Cell;
 
 use serde::{Deserialize, Serialize};
 
-use crate::belief::BeliefState;
+use crate::belief::{BeliefState, DeckBelief};
 use crate::board::{SimBoard, SimPort};
 use crate::game::can_build_road;
 use crate::longest_road::RoadNetwork;
 use crate::rules::{Buildable, FlattenedRules, OwnedPort, RESOURCE_COUNT, Resource, TradeConfig};
-use crate::state::{EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES};
+use crate::state::{
+    DEV_KIND_COUNT, DEV_VP, EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES,
+};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 
 pub const MAX_ACTIONS: usize = 4096;
@@ -305,6 +307,34 @@ impl<'a> DecisionView<'a> {
         &self.state.players[seat].dev_plays_revealed
     }
 
+    /// Bounds on what the undrawn deck can still contain, derived from public plays, public card
+    /// counts, and the observer's own held cards. See [`DeckBelief`].
+    pub fn deck_belief(&self) -> DeckBelief {
+        let mut revealed = [0_u8; DEV_KIND_COUNT];
+        for seat in 0..self.seats {
+            for kind in 0..DEV_KIND_COUNT {
+                revealed[kind] = revealed[kind]
+                    .saturating_add(self.state.players[seat].dev_plays_revealed[kind]);
+            }
+        }
+        let own = &self.state.players[self.observer];
+        let mut own_held: [u8; DEV_KIND_COUNT] = std::array::from_fn(|kind| {
+            own.playable_dev[kind].saturating_add(own.bought_dev[kind])
+        });
+        own_held[DEV_VP] = own_held[DEV_VP].saturating_add(own.vp_dev);
+        let opponent_hidden = (0..self.seats)
+            .filter(|seat| *seat != self.observer)
+            .map(|seat| u16::from(self.dev_count(seat)))
+            .sum();
+        DeckBelief::derive(
+            self.rules.dev_deck_initial(),
+            &revealed,
+            &own_held,
+            opponent_hidden,
+            self.dev_deck_remaining,
+        )
+    }
+
     pub const fn knights_played(&self, seat: usize) -> u8 {
         self.state.players[seat].knights_played
     }
@@ -375,6 +405,10 @@ impl<'a> DecisionView<'a> {
 
     pub const fn dev_deck_remaining(&self) -> u8 {
         self.dev_deck_remaining
+    }
+
+    pub const fn dev_deck_initial(&self) -> &[u8; DEV_KIND_COUNT] {
+        self.rules.dev_deck_initial()
     }
 
     pub const fn largest_army_holder(&self) -> Option<usize> {

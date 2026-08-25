@@ -1331,6 +1331,7 @@ fn every_ablation_kind_dispatches_trade_responses_through_the_trader_path() {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck,
     ] {
         let mut rng = Xoshiro256StarStar::from_seed(1);
         assert!(
@@ -1598,14 +1599,14 @@ fn applied_aware_trade_mutates_the_selected_recipients_hand() {
 
 #[test]
 fn applied_aware_trade_forwards_the_offer_count_to_selection() {
-    let (topology, board, rules, mut config, mut arena) = deterministic_truncated_game(0);
+    let (topology, board, rules, mut config, mut arena) = deterministic_truncated_game(3);
     config.policies[0] = PolicyKind::HeuristicV1TraderAware;
     arena.begin_turn_for_test(&board, &topology, &rules, &config, 0);
     let seat_one_before = arena.state.players[1].resources[Resource::Wheat.index()];
-    let seat_four_before = arena.state.players[4].resources[Resource::Wheat.index()];
+    let seat_two_before = arena.state.players[2].resources[Resource::Wheat.index()];
     let action = Action::OfferTrade {
         give: Resource::Wheat,
-        get: Resource::Brick,
+        get: Resource::Wood,
         count: 2,
     };
     assert!(
@@ -1619,7 +1620,7 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
     let offer = TradeOffer {
         proposer: 0,
         give: Resource::Wheat,
-        get: Resource::Brick,
+        get: Resource::Wood,
         count: 2,
     };
     let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
@@ -1629,7 +1630,7 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
     );
     let mut acceptors = Vec::new();
     for seat in 1..board.seats() {
-        if arena.state.players[seat].resources[Resource::Brick.index()] < 1 {
+        if arena.state.players[seat].resources[Resource::Wood.index()] < 1 {
             continue;
         }
         let view = arena.decision_view(&board, &topology, seat, DecisionPhase::TradeResponse);
@@ -1643,8 +1644,8 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
         }
     }
     assert!(
-        acceptors.contains(&1) && acceptors.contains(&4),
-        "replay precondition: seats 1 and 4 must both accept (acceptors={acceptors:?})"
+        acceptors.contains(&1) && acceptors.contains(&2),
+        "replay precondition: seats 1 and 2 must both accept (acceptors={acceptors:?})"
     );
     let delta = trading::responder_delta(offer);
     let score = |seat: usize| {
@@ -1657,8 +1658,8 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
     assert!(
         acceptors
             .iter()
-            .all(|seat| *seat == 4 || score(4) < score(*seat)),
-        "replay precondition: seat 4 must be the strict cheapest acceptor (scores={:?})",
+            .all(|seat| *seat == 2 || score(2) < score(*seat)),
+        "replay precondition: seat 2 must be the strict cheapest acceptor (scores={:?})",
         acceptors
             .iter()
             .map(|seat| (*seat, score(*seat)))
@@ -1678,8 +1679,8 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
         seat_one_before
     );
     assert_eq!(
-        arena.state.players[4].resources[Resource::Wheat.index()],
-        seat_four_before + 2
+        arena.state.players[2].resources[Resource::Wheat.index()],
+        seat_two_before + 2
     );
 }
 
@@ -1963,8 +1964,8 @@ fn flat_proposal_group_keeps_the_first_enumerated_offer() {
 #[test]
 fn proposal_recipient_filter_uses_expected_holdings() {
     let (topology, board, _rules, _config, arena) = truncated_game(
-        9,
-        12,
+        105,
+        8,
         TradeConfig {
             acceptance_temperature: 0.0,
             ..TradeConfig::default()
@@ -1974,11 +1975,11 @@ fn proposal_recipient_filter_uses_expected_holdings() {
     assert!((0..view.seats()).any(|seat| {
         seat != view.observer()
             && !embargoed(&view, seat)
-            && view.belief().expected(seat)[Resource::Ore.index()] >= 1.0
-            && view.belief().lo(seat)[Resource::Ore.index()] == 0
+            && view.belief().expected(seat)[Resource::Sheep.index()] >= 1.0
+            && view.belief().lo(seat)[Resource::Sheep.index()] == 0
     }));
     let mut scratch = PolicyScratch::default();
-    let mut rng = Xoshiro256StarStar::from_seed(12_u64 << 48 ^ 9 << 8 ^ 0);
+    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 105 << 8 ^ 0);
     assert_eq!(
         policy::action(
             PolicyKind::HeuristicV1TraderAware,
@@ -1987,8 +1988,8 @@ fn proposal_recipient_filter_uses_expected_holdings() {
             &mut rng
         ),
         Action::OfferTrade {
-            give: Resource::Wheat,
-            get: Resource::Ore,
+            give: Resource::Brick,
+            get: Resource::Sheep,
             count: 1,
         }
     );
@@ -2106,8 +2107,8 @@ fn find_forwarding_fixtures() {
 #[test]
 fn non_finite_counterparty_scores_use_the_first_acceptor_fallback() {
     let (topology, board, _rules, _config, arena) = truncated_game(
-        243,
-        12,
+        109,
+        10,
         TradeConfig {
             acceptance_temperature: 0.0,
             ..TradeConfig::default()
@@ -2123,11 +2124,11 @@ fn non_finite_counterparty_scores_use_the_first_acceptor_fallback() {
         ..TradeParams::default()
     };
     let nan_score =
-        trading::counterparty_score(&etw::inputs_for_seat(&view, 5), &nan_params, &nan_delta);
+        trading::counterparty_score(&etw::inputs_for_seat(&view, 4), &nan_params, &nan_delta);
     assert!(nan_score.is_nan(), "score={nan_score}");
     assert_eq!(
-        trading::select_counterparty(&view, &nan_params, &nan_delta, &[5, 3]),
-        3
+        trading::select_counterparty(&view, &nan_params, &nan_delta, &[4, 1]),
+        1
     );
 
     let (topology, board, _rules, _config, arena) = deterministic_truncated_game(0);
@@ -2139,7 +2140,7 @@ fn non_finite_counterparty_scores_use_the_first_acceptor_fallback() {
         ..TradeParams::default()
     };
     assert_eq!(
-        [0, 3].map(|seat| trading::counterparty_score(
+        [0, 4].map(|seat| trading::counterparty_score(
             &etw::inputs_for_seat(&view, seat),
             &mixed_params,
             &delta,
@@ -2147,7 +2148,7 @@ fn non_finite_counterparty_scores_use_the_first_acceptor_fallback() {
         [f64::INFINITY, f64::NEG_INFINITY]
     );
     assert_eq!(
-        trading::select_counterparty(&view, &mixed_params, &delta, &[0, 3]),
+        trading::select_counterparty(&view, &mixed_params, &delta, &[0, 4]),
         0
     );
 }

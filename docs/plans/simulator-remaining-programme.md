@@ -87,9 +87,9 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 5: SIM-GAP-17 — deck-composition-aware dev buying
 
-- [ ] Derive remaining deck composition in the shape `belief.rs` uses (contracts state it is derivable; VP cards bounded, not known); scale the buy score by the probability the deck still holds something wanted
-- [ ] Both directions tested: VP-rich small deck near win boosts, exhausted-value deck suppresses
-- [ ] A/B; corpus recapture; delete the entry
+- [x] Derive remaining deck composition in the shape `belief.rs` uses (contracts state it is derivable; VP cards bounded, not known); scale the buy score by the probability the deck still holds something wanted — `DeckBelief` in `belief.rs` (lo/hi + total, same apportioning as the resource belief; VP only ever bounded), assembled by `DecisionView::deck_belief` from public plays, own held cards, opponent counts, and the new `FlattenedRules::dev_deck_initial`; `dev_card_score` splits the flat base across VP/progress/knight shares relative to the configured mix, adds a VP chase term near the win, and scales contest/defend by knight enrichment; old behavior preserved behind `LegacyValuation::deck_blind_buying` (`...-legacydeck` label)
+- [x] Both directions tested: VP-rich small deck near win boosts, exhausted-value deck suppresses — closed-form tests in `devcards.rs` (tests) plus a `DeckBelief::derive` forwarded-argument table in `belief.rs` (tests)
+- [x] A/B; corpus recapture; delete the entry — M-24: `inconclusive`, estimate -1.32pp, McNemar `[-1.80pp, -0.84pp]` (straddles the threshold; not `worse`, fix kept per prereg rule with the negative-leaning reading recorded; H2 owns sweeping the placeholder weights); corpus recaptured (2275/4000 moved, priority-trader 0); gate baselines regenerated; three replay-derived `player_trading.rs` fixtures re-found by scan; entry deleted
 
 ### Task 6: Shared hand-size exposure term — SIM-GAP-14/15/16/18
 

@@ -26,8 +26,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-16.** Bank and port trades fire only when the trade completes a cost or strictly reduces missing units. Never speculative, never rate-aware beyond legality, and never used to shed hand size ahead of a seven. That last one is a real play and it prices out: a 2:1 trade to go from eight cards to seven costs one card with certainty, against an expected loss of roughly two cards from the sevens other seats roll before your next turn.
 
-**SIM-GAP-17.** Dev-card buying scales a contest bonus by own win proximity. Deck composition is consulted only for whether the deck is non-empty, so the policy will happily buy into a deck that can no longer contain anything it wants. Both directions matter: with three VP cards live in a five-card deck at eight VP, buying is the strongest action on the board, and with none live and Largest Army already held, it is close to worthless. That the remaining composition is derivable is a contract; see [contracts.md](contracts.md).
-
 **SIM-GAP-18.** Hand-size risk is one concept with at least three consumers, and none of them have it. The discard choice above, the pre-emptive shedding trade above, and the pre-roll dev-card timing that `devcards.rs` already documents as a non-goal are the same question — what a seven costs this hand — asked at three sites.
 
 **SIM-GAP-19.** `DecisionPhase::SpecialBuild` reaches `ask_action` with no distinct scoring and is treated as an ordinary action phase. Whether that is correct is unmeasured.

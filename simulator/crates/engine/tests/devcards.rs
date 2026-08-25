@@ -6,6 +6,7 @@ use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::etw::{self, EtwInputs};
 use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::PolicyScratch;
+use unsettled_engine::policy::denial::{self, DenialParams};
 use unsettled_engine::policy::devcards::{
     self, DevCardContext, DevCardParams, DevOffers, ScoredDevPlay,
 };
@@ -1509,5 +1510,133 @@ fn both_pre_roll_paths_receive_the_widened_offer() {
     assert_eq!(
         heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
         None
+    );
+}
+
+// Deck-composition-aware dev buying (SIM-GAP-17). `heuristic_v1::dev_buy_score` prices a buy by
+// what the remaining deck can still contain, via `DecisionView::deck_belief`.
+//
+// Forwarded arguments of `heuristic_v1::dev_buy_score`, one observing test each:
+// - `view` (deck composition: revealed plays, own held cards, undrawn count):
+//   vp_rich_small_deck_near_win_boosts_the_buy,
+//   knight_only_deck_with_largest_army_held_is_near_worthless
+// - `view` (largest-army state: holder, knights played, contest gap):
+//   knight_only_deck_with_largest_army_held_is_near_worthless
+// - `params` (`legacy_valuation.deck_blind_buying` restores the flat base):
+//   deck_blind_legacy_restores_the_composition_blind_score
+// - `params` (`denial` gates the contest pressure, non-default `pressure_floor`):
+//   the_gated_denial_pressure_reaches_the_buy_score
+//
+// The derivation itself (bounds, apportioning, the `DeckBelief::derive` argument table) is
+// pinned in tests/belief.rs.
+
+/// 29 of extension6's 34 cards accounted for, leaving [2 knights, 3 VP, 0, 0, 0] exactly:
+/// 18 knights and all 9 progress cards revealed as plays, 2 VP held by the observer.
+/// The observer sits at 8 of 10 VP.
+fn vp_rich_near_win_state() -> (Topology, SimBoard, GameArena) {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    arena.state.players[1].dev_plays_revealed[0] = 18;
+    arena.state.players[1].dev_plays_revealed[2] = 3;
+    arena.state.players[1].dev_plays_revealed[3] = 3;
+    arena.state.players[1].dev_plays_revealed[4] = 3;
+    arena.state.players[0].vp_dev = 2;
+    arena.state.players[0].vp_public = 6;
+    arena.drain_dev_deck_for_test(29);
+    (topology, board, arena)
+}
+
+#[test]
+fn vp_rich_small_deck_near_win_boosts_the_buy() {
+    let (topology, board, arena) = vp_rich_near_win_state();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let score = heuristic_v1::dev_buy_score(&view, &HeuristicParams::default());
+    // Closed form: exact composition [2, 3, 0, 0, 0] of 5 remaining, initial mix 20/5/9 of 34.
+    let share_vp = 3.0_f32 / 5.0;
+    let share_knight = 2.0_f32 / 5.0;
+    let vp_rel = share_vp / (5.0_f32 / 34.0);
+    let knight_rel = share_knight / (20.0_f32 / 34.0);
+    let progress_rel = 0.0_f32;
+    let base = 45.0 * (0.55 * vp_rel + 0.35 * progress_rel + 0.10 * knight_rel);
+    let proximity = 8.0_f32 / 10.0;
+    let vp_chase = share_vp * 300.0 * proximity;
+    // No holder: the contest gap is the full largest-army minimum of 3, ungated pressure 1.
+    let contest = 25.0 * (0.5 + proximity) * 1.0 * knight_rel;
+    assert_eq!(score, base + vp_chase + contest);
+    // The composition-blind score for the same state, for direction: the fix must boost.
+    assert!(score > 45.0 + 25.0 * (0.5 + proximity) * 1.0);
+}
+
+#[test]
+fn knight_only_deck_with_largest_army_held_is_near_worthless() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    // 29 cards accounted, leaving 5 knights exactly: 15 knights revealed (3 by the observer,
+    // who holds Largest Army), all 9 progress cards revealed, all 5 VP drawn by the observer.
+    arena.state.players[0].dev_plays_revealed[0] = 3;
+    arena.state.players[0].knights_played = 3;
+    arena.state.players[1].dev_plays_revealed[0] = 12;
+    arena.state.players[1].dev_plays_revealed[2] = 3;
+    arena.state.players[1].dev_plays_revealed[3] = 3;
+    arena.state.players[1].dev_plays_revealed[4] = 3;
+    arena.state.players[0].vp_dev = 5;
+    arena.state.largest_army = Some(0);
+    arena.drain_dev_deck_for_test(29);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let score = heuristic_v1::dev_buy_score(&view, &HeuristicParams::default());
+    // Only the thin knight slice of the base survives; ungated, the defend term is absent.
+    let knight_rel = (5.0_f32 / 5.0) / (20.0_f32 / 34.0);
+    let base = 45.0 * (0.55 * 0.0 + 0.35 * 0.0 + 0.10 * knight_rel);
+    let vp_chase = 0.0_f32 * 300.0 * (5.0_f32 / 10.0);
+    assert_eq!(score, base + vp_chase);
+    // Direction: far below the composition-blind holder score of 45.
+    assert!(score < 45.0 / 4.0);
+}
+
+#[test]
+fn deck_blind_legacy_restores_the_composition_blind_score() {
+    let (topology, board, arena) = vp_rich_near_win_state();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let legacy = HeuristicParams {
+        legacy_valuation: Some(LegacyValuation {
+            deck_blind_buying: true,
+            ..LegacyValuation::default()
+        }),
+        ..HeuristicParams::default()
+    };
+    let proximity = 8.0_f32 / 10.0;
+    assert_eq!(
+        heuristic_v1::dev_buy_score(&view, &legacy),
+        45.0 + 25.0 * (0.5 + proximity) * 1.0
+    );
+}
+
+#[test]
+fn the_gated_denial_pressure_reaches_the_buy_score() {
+    let (topology, board, arena) = vp_rich_near_win_state();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let denial_params = DenialParams {
+        pressure_floor: 2.0,
+        ..DenialParams::default()
+    };
+    let gated = HeuristicParams {
+        denial: Some(denial_params),
+        ..HeuristicParams::default()
+    };
+    let score = heuristic_v1::dev_buy_score(&view, &gated);
+    let pressure = denial::pressure(
+        &denial::context(&view, &denial_params),
+        &denial_params,
+        None,
+    );
+    assert!(pressure >= 2.0);
+    let share_vp = 3.0_f32 / 5.0;
+    let share_knight = 2.0_f32 / 5.0;
+    let vp_rel = share_vp / (5.0_f32 / 34.0);
+    let knight_rel = share_knight / (20.0_f32 / 34.0);
+    let base = 45.0 * (0.55 * vp_rel + 0.35 * 0.0 + 0.10 * knight_rel);
+    let proximity = 8.0_f32 / 10.0;
+    let vp_chase = share_vp * 300.0 * proximity;
+    assert_eq!(
+        score,
+        base + vp_chase + 25.0 * (0.5 + proximity) * pressure * knight_rel
     );
 }

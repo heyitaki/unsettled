@@ -242,6 +242,9 @@ pub struct FlattenedRules {
     largest_army_min: u8,
     largest_army_vp: u8,
     dev_victory_points: u8,
+    /// Initial dev-deck composition in `state::DEV_*` index order, so a policy can derive the
+    /// remaining deck's bounds from public plays and card counts.
+    dev_deck_initial: [u8; 5],
     player_trading: Option<TradeConfig>,
 }
 
@@ -350,6 +353,13 @@ impl RuleConfig {
             largest_army_min: self.largest_army_min,
             largest_army_vp: self.largest_army_vp,
             dev_victory_points: self.dev_deck.victory_point,
+            dev_deck_initial: [
+                self.dev_deck.knight,
+                self.dev_deck.victory_point,
+                self.dev_deck.road_building,
+                self.dev_deck.year_of_plenty,
+                self.dev_deck.monopoly,
+            ],
             player_trading: self.player_trading,
             ..FlattenedRules::default()
         };
@@ -430,6 +440,10 @@ impl FlattenedRules {
 
     pub const fn dev_victory_points(&self) -> u8 {
         self.dev_victory_points
+    }
+
+    pub const fn dev_deck_initial(&self) -> &[u8; 5] {
+        &self.dev_deck_initial
     }
 
     pub const fn win_vp(&self) -> u8 {

@@ -752,6 +752,7 @@ fn ablation_kinds_dispatch_through_trader_paths() {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck,
     ] {
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(11);

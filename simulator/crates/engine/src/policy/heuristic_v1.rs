@@ -7,6 +7,7 @@ use crate::policy::threat::{self, ThreatParams};
 use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
+use crate::state::{DEV_KNIGHT, DEV_MONOPOLY, DEV_ROAD_BUILDING, DEV_VP, DEV_YEAR_OF_PLENTY};
 use crate::view::{Action, ActionBuf, DecisionView, DevPlay, ScoredAction, can_pay, pips};
 
 pub(crate) type Gated<'a> = Option<(&'a DenialContext, &'a DenialParams)>;
@@ -54,6 +55,9 @@ pub struct LegacyValuation {
     /// exactly two short of the goal, picked in index order, and Monopoly reading only the
     /// goal's first cost variant.
     pub narrow_card_plays: bool,
+    /// Restores the composition-blind development-card buy score: a flat base plus the
+    /// Largest Army contest bonus, regardless of what the remaining deck can still contain.
+    pub deck_blind_buying: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -233,7 +237,7 @@ fn score_actions_with(
             });
         }
     }
-    let dev_score = dev_card_score(view, gated);
+    let dev_score = dev_card_score(view, params, gated);
     if view.dev_deck_remaining() > 0 && !view.can_buy_dev() {
         for give in Resource::ALL {
             for get in Resource::ALL {
@@ -1003,7 +1007,93 @@ fn contested_card_score(
         * pressure
 }
 
-fn dev_card_score(view: &DecisionView<'_>, gated: Gated<'_>) -> f32 {
+/// Test-facing entry to the development-card buy score, deriving the gated denial context the
+/// same way `score_actions` does.
+pub fn dev_buy_score(view: &DecisionView<'_>, params: &HeuristicParams) -> f32 {
+    let denial_context = params
+        .denial
+        .as_ref()
+        .map(|denial_params| denial::context(view, denial_params));
+    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    dev_card_score(view, params, gated)
+}
+
+fn dev_card_score(view: &DecisionView<'_>, params: &HeuristicParams, gated: Gated<'_>) -> f32 {
+    if params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.deck_blind_buying)
+    {
+        return deck_blind_dev_card_score(view, gated);
+    }
+    let deck = view.deck_belief();
+    let remaining = f32::from(deck.total());
+    if remaining <= 0.0 {
+        // Every consumer already gates on a non-empty deck; guard the divisions anyway.
+        return 0.0;
+    }
+    let initial = view.dev_deck_initial();
+    let initial_total = initial.iter().map(|count| f32::from(*count)).sum::<f32>();
+    if initial_total <= 0.0 {
+        return 0.0;
+    }
+    // Shares of the remaining deck, taken relative to the configured mix: an untouched deck
+    // scores exactly like the old flat base, and a kind's factor rises above 1 only when draws
+    // have enriched what is left.
+    let expected = deck.expected();
+    let share = |kind: usize| expected[kind] as f32 / remaining;
+    let relative = |kinds: &[usize]| {
+        let configured = kinds
+            .iter()
+            .map(|kind| f32::from(initial[*kind]))
+            .sum::<f32>()
+            / initial_total;
+        if configured <= 0.0 {
+            0.0
+        } else {
+            kinds.iter().map(|kind| share(*kind)).sum::<f32>() / configured
+        }
+    };
+    let vp_rel = relative(&[DEV_VP]);
+    let knight_rel = relative(&[DEV_KNIGHT]);
+    let progress_rel = relative(&[DEV_ROAD_BUILDING, DEV_YEAR_OF_PLENTY, DEV_MONOPOLY]);
+    // The old flat 45 base splits across what a blind draw can actually be: the certain point of
+    // a victory-point card carries most of it, progress tempo the rest, and a thin knight slice
+    // keeps a knight-only deck from pricing robber relief at zero. The chase term prices the
+    // hidden points a draw still offers, growing as the observer closes on the win.
+    let base = 45.0 * (0.55 * vp_rel + 0.35 * progress_rel + 0.10 * knight_rel);
+    let vp_chase = share(DEV_VP) * 300.0 * win_proximity(view);
+    if view.largest_army_holder() == Some(view.observer()) {
+        // Defending Largest Army needs an actual knight draw, so the defend term scales with
+        // knight enrichment.
+        return base
+            + vp_chase
+            + gated
+                .and_then(|(ctx, denial_params)| denial::army_defend_term(ctx, denial_params))
+                .map_or(0.0, |term| term * knight_rel);
+    }
+    let holder_count = view
+        .largest_army_holder()
+        .map_or(0, |holder| view.knights_played(holder));
+    let target = view
+        .largest_army_min()
+        .max(holder_count.saturating_add(u8::from(view.largest_army_holder().is_some())));
+    let gap = target.saturating_sub(view.knights_played(view.observer()));
+    let contest_bonus = match gap {
+        0 | 1 => 160.0,
+        2 => 80.0,
+        3 => 25.0,
+        _ => 0.0,
+    };
+    let pressure = gated.map_or(1.0, |(ctx, denial_params)| {
+        denial::pressure(ctx, denial_params, view.largest_army_holder())
+    });
+    // Only a knight draw can advance the contest, so the bonus scales with knight enrichment.
+    base + vp_chase + contest_bonus * (0.5 + win_proximity(view)) * pressure * knight_rel
+}
+
+/// The pre-SIM-GAP-17 composition-blind score, preserved bit-for-bit as the measurement
+/// reference behind `LegacyValuation::deck_blind_buying`.
+fn deck_blind_dev_card_score(view: &DecisionView<'_>, gated: Gated<'_>) -> f32 {
     if view.largest_army_holder() == Some(view.observer()) {
         return gated
             .and_then(|(ctx, params)| denial::army_defend_term(ctx, params))

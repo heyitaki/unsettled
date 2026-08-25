@@ -382,3 +382,21 @@ Load before `2.73 3.70 3.69`, after `4.11 3.97 3.78`; zero illegal actions; admi
 | widened card plays | `-0.0036250` | 671 | 729 | McNemar `[-0.0082081, +0.0009581]` | equivalent |
 
 The preregistered rule keeps the fix on anything but `worse`; `equivalent` with the interval strictly inside +-1pp is the recorded outcome. The corpus moved 2585/4000 games (heuristic-v1 family only; `priority-trader` 0/1000, its dev-card logic is unrelated), so the fix changes play frequently without changing composite strength measurably at this power.
+
+## M-24 — Deck-composition-aware dev buying (SIM-GAP-17)
+
+2026-08-25, commit `cc4c34a6` (prereg; implementation in the Task 5 commit), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m24-deck-aware-dev-buying.md` (committed before the run). The change: the dev-buy score derives the remaining deck's composition (`DeckBelief`, the resource belief's lo/hi shape) and prices the buy by what a draw can still be — the flat base splits across victory-point/progress/knight shares relative to the configured mix, a chase term prices expected hidden points near the win, and the contest and defend terms scale with knight enrichment. Reference is the pre-change composite behind `LegacyValuation::deck_blind_buying` (`heuristic-v1-trader-aware-threat-devcards-denial-legacydeck`); the test arm is the post-change composite.
+
+Command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm deck=pip_diversity --arm-policy base=heuristic-v1-trader-aware-threat-devcards-denial-legacydeck --arm-policy deck=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out runs/m24-deck
+```
+
+Load before `5.66 4.89 3.95`, after `5.45 4.86 3.94`; zero illegal actions; admissible. Reference win rate `0.3325000`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| deck-aware buying | `-0.0131875` | 662 | 873 | McNemar `[-0.0179825, -0.0083925]` | inconclusive |
+
+The preregistered rule keeps the fix on anything but `worse`; the interval straddles the -1pp threshold (upper end -0.84pp), so the verdict is `inconclusive`, not `worse`, and the fix ships with this reading on record. The reading leans negative: the whole interval sits below zero, so the composite is measurably weaker against the `heuristic-v1-trader` field at this power, just not clearly past the practical threshold. The composition weights (the 0.55/0.35/0.10 base split, the 300-point chase scale) are unswept Phase-H placeholders; H2 owns re-asking this axis with swept values. The corpus moved 2275/4000 games (heuristic-v1 family only; `priority-trader` 0/1000, its dev-card logic is unrelated).

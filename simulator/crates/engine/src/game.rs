@@ -9,16 +9,14 @@ use crate::rules::{
     Buildable, Effect, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource,
     RuleConfig,
 };
-use crate::state::{EMPTY, GameState, MAX_SEATS};
+use crate::state::{
+    DEV_KNIGHT, DEV_MONOPOLY, DEV_ROAD_BUILDING, DEV_VP, DEV_YEAR_OF_PLENTY, EMPTY, GameState,
+    MAX_SEATS,
+};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 use crate::trade::{TradeOffer, embargoed};
 use crate::view::{Action, DecisionPhase, DecisionView, DevPlay, can_pay};
 
-const DEV_KNIGHT: usize = 0;
-const DEV_VP: usize = 1;
-const DEV_ROAD_BUILDING: usize = 2;
-const DEV_YEAR_OF_PLENTY: usize = 3;
-const DEV_MONOPOLY: usize = 4;
 /// One slot per resource-specific port plus one for the generic (3:1) port. A seat can touch any
 /// number of ports, but only the best rate in each slot is ever consulted.
 const MAX_PORTS: usize = RESOURCE_COUNT + 1;
@@ -428,6 +426,14 @@ impl GameArena {
         seats: usize,
     ) {
         self.produce(board, topology, config, roll, seats);
+    }
+
+    /// Advances the deck cursor as if `count` cards had been drawn, without crediting them to a
+    /// seat. Callers building deck-composition states must place the drawn cards themselves
+    /// (`dev_plays_revealed`, `playable_dev`, `vp_dev`, ...) to keep the state consistent.
+    #[doc(hidden)]
+    pub fn drain_dev_deck_for_test(&mut self, count: usize) {
+        self.dev_cursor = (self.dev_cursor + count).min(self.dev_len);
     }
 
     #[doc(hidden)]
