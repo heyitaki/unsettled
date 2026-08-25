@@ -81,9 +81,9 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 4: SIM-GAP-10/11/12 — card-play scope
 
-- [ ] Year of Plenty offered beyond the exactly-two-short case (one-short-plus-spare, tempo/banking per the gap text); resource pick by value, not index order; `monopoly_for_goal` considers all cost variants of the goal
-- [ ] Forwarded-argument tables; closed-form assertions with non-default params
-- [ ] Preregistered A/B vs composite reference; corpus recapture; delete the three entries
+- [x] Year of Plenty offered beyond the exactly-two-short case (one-short-plus-spare, tempo/banking per the gap text); resource pick by value, not index order; `monopoly_for_goal` considers all cost variants of the goal — `plenty_offer` ranks picks by goal need, then fewest own pips, then scarcest bank, then index; bank-blocked needs degrade to spares; old behavior preserved behind `LegacyValuation::narrow_card_plays` (`...-legacycards` composite label) as the A/B reference
+- [x] Forwarded-argument tables; closed-form assertions with non-default params — tables for `plenty_offer` and `monopoly_for_goal` in `devcards.rs` (tests), nine closed-form tests including cost-variant fixtures via `extra_cost_alternatives`
+- [x] Preregistered A/B vs composite reference; corpus recapture; delete the three entries — M-23: `equivalent`, estimate -0.36pp, McNemar `[-0.82pp, +0.10pp]`, fix kept per prereg rule; corpus recaptured (2585/4000 games moved, priority-trader 0); gate baselines regenerated via their deliberate generators; eight replay-derived `player_trading.rs` fixtures re-found by scan (Task 3 preconditions localized every break); entries deleted
 
 ### Task 5: SIM-GAP-17 — deck-composition-aware dev buying
 

@@ -16,13 +16,7 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-09.** `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
 
-## Card-play scope — the scorer cannot consider an offer the construction never makes.
-
-**SIM-GAP-10.** Year of Plenty is offered only when the hand is exactly two cards short of a goal cost. Never for tempo, never to bank a scarce resource, never one-short-plus-spare. G2 gave the card a proper scalar, but the gate is upstream in `plenty_for_goal`.
-
-**SIM-GAP-11.** Year of Plenty's two resources are picked in index order among those missing.
-
-**SIM-GAP-12.** `monopoly_for_goal` considers only the first cost variant of the goal.
+## Card-play scope
 
 **SIM-GAP-14.** Hand-size risk is unmodelled and documented as a non-goal: pre-roll play resolves before the dice and a seven's discard, so a discard-aware model would defer Monopoly more often than this one does.
 

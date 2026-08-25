@@ -364,3 +364,21 @@ cargo test --release -p unsettled-engine --lib policy::heuristic_v1::devcards_ra
 Load before `5.06 5.16 4.70`, after `5.06 5.16 4.70`. On one deterministic 20-turn state, five consecutive runs of 50,000 calls measured the goal chooser at `83.308`, `82.862`, `83.160`, `83.494`, and `81.600` ns per decision, median **`83.160ns`**. The legal-road `expansion_road_score` calls plus one `best_road_building_pair` call measured `5937.741`, `5936.546`, `6128.373`, `5910.971`, and `5928.569` ns, median **`5936.546ns`**. This is reported, not gated, and does not re-test the three causes refuted by `SIM-GAP-21`.
 
 The chooser figure is taken against `best_goal_uncounted`, the body split out from `best_goal_with`. The `#[cfg(test)]` call counter that pins the once-per-decision dedup lives in the wrapper, and an earlier reading of this fixture timed the wrapper: 50,000 thread-local read-modify-writes inside the timed loop put the median at `172.509ns` across a `129.927`–`219.546` spread. Removing scaffolding that does not exist in release more than halves the figure and collapses the spread below 2.4%, so the wrapper reading is superseded and should not be quoted. The road-consumer path never called the wrapper and is unchanged within noise.
+
+## M-23 — Card-play scope widening (SIM-GAP-10/11/12)
+
+2026-08-25, commit `74496095`, domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m23-card-play-scope.md` (committed with the implementation, before the run). The change: Year of Plenty offered beyond the exactly-two-short case with value-ranked picks, and `monopoly_for_goal` reading every cost variant. Reference is the pre-change composite behind `LegacyValuation::narrow_card_plays` (`heuristic-v1-trader-aware-threat-devcards-denial-legacycards`); the test arm is the post-change composite.
+
+Command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm cards=pip_diversity --arm-policy base=heuristic-v1-trader-aware-threat-devcards-denial-legacycards --arm-policy cards=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out runs/m23-cards
+```
+
+Load before `2.73 3.70 3.69`, after `4.11 3.97 3.78`; zero illegal actions; admissible. Reference win rate `0.3227500`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| widened card plays | `-0.0036250` | 671 | 729 | McNemar `[-0.0082081, +0.0009581]` | equivalent |
+
+The preregistered rule keeps the fix on anything but `worse`; `equivalent` with the interval strictly inside +-1pp is the recorded outcome. The corpus moved 2585/4000 games (heuristic-v1 family only; `priority-trader` 0/1000, its dev-card logic is unrelated), so the fix changes play frequently without changing composite strength measurably at this power.
