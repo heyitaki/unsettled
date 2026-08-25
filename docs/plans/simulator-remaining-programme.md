@@ -63,10 +63,10 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 1: Preflight, corpus baseline, spec link repair
 
-- [ ] Run both cargo profiles and the alloc test green at the branch point; record commit and `uptime`
-- [ ] Capture the byte-exact corpus (`results.json` + `--jsonl`, >=4 policies including the full composite, both layouts) into `simulator/runs/corpus-pre/`
-- [ ] Create `docs/plans/preregs/` with a README line saying what lives there
-- [ ] Repair the dangling M-22 preregistration link per Context; `link-check.py` exits clean
+- [x] Run both cargo profiles and the alloc test green at the branch point; record commit and `uptime` — all green at `6b481d71`, load 2.23 before / 3.07 after (2026-08-25 11:22)
+- [x] Capture the byte-exact corpus (`results.json` + `--jsonl`, >=4 policies including the full composite, both layouts) into `simulator/runs/corpus-pre/` — via the new committed `simulator/tools/capture-corpus.sh` (4 policies x 2 layouts, seed 42, 25 boards x 4 reps, 4000 games, zero illegal actions); byte-exactness proven by a second capture diffing identical on everything but `meta.json` timing
+- [x] Create `docs/plans/preregs/` with a README line saying what lives there
+- [x] Repair the dangling M-22 preregistration link per Context; `link-check.py` exits clean — pointer replaced with prose naming the deleted file; 0 bad references
 
 ### Task 2: SIM-GAP-26 — discard fallback drops policy gates
 
