@@ -62,6 +62,9 @@ pub struct LegacyValuation {
     /// Restores exposure-blind hand handling: the goal-cost-only greedy discard ranking, no
     /// pre-emptive shedding trade, and no pre-roll seven-exposure penalty on card plays.
     pub exposure_blind: bool,
+    /// Restores the bounded race scope: exact Longest Road race checks capped at two rivals
+    /// and the blocking-blind contest term.
+    pub bounded_race: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -131,17 +134,32 @@ pub fn action(
     action_with_goal(view, scratch, params, rng).0
 }
 
+/// The denial params a decision actually runs with. `bounded_race` restores the pre-SIM-GAP-07/08
+/// scope purely through param values (a two-rival race-check budget and no blocking bonus), so
+/// `denial.rs` never reads the legacy flag itself.
+fn effective_denial(params: &HeuristicParams) -> Option<DenialParams> {
+    let mut denial = params.denial?;
+    if params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.bounded_race)
+    {
+        denial.race_check_cap = 2;
+        denial.contest_block_bonus = 0.0;
+    }
+    Some(denial)
+}
+
 pub(crate) fn action_with_goal(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
     params: &HeuristicParams,
     rng: &mut Xoshiro256StarStar,
 ) -> (Action, Option<Goal>) {
-    let denial_context = params
-        .denial
+    let denial_params = effective_denial(params);
+    let denial_context = denial_params
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
-    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    let gated = denial_context.as_ref().zip(denial_params.as_ref());
     let road = best_road(view, params, gated);
     let selected_goal = best_goal_with(view, params, road);
     let PolicyScratch { goal, actions } = scratch;
@@ -176,11 +194,11 @@ pub(crate) fn action_with_goal(
 }
 
 pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mut ActionBuf) {
-    let denial_context = params
-        .denial
+    let denial_params = effective_denial(params);
+    let denial_context = denial_params
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
-    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    let gated = denial_context.as_ref().zip(denial_params.as_ref());
     let road = best_road(view, params, gated);
     let goal = best_goal_with(view, params, road);
     score_actions_with(view, params, out, road, goal, gated);
@@ -364,11 +382,11 @@ pub fn pre_roll(
     scratch: &mut PolicyScratch,
     params: &HeuristicParams,
 ) -> Option<DevPlay> {
-    let denial_context = params
-        .denial
+    let denial_params = effective_denial(params);
+    let denial_context = denial_params
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
-    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    let gated = denial_context.as_ref().zip(denial_params.as_ref());
     let blocked_pips = if view.hex_touches_seat(view.robber(), view.observer()) {
         view.board().tokens()[usize::from(view.robber())].map_or(0, pips)
     } else {
@@ -551,11 +569,11 @@ pub fn discard(
     // The fallback recomputes the goal with the caller's params, denial gate included, so a gated
     // arm keeps its gates when discarding before its first action of the game (SIM-GAP-26).
     let goal = scratch.goal.or_else(|| {
-        let denial_context = params
-            .denial
+        let denial_params = effective_denial(params);
+        let denial_context = denial_params
             .as_ref()
             .map(|denial_params| denial::context(view, denial_params));
-        let gated = denial_context.as_ref().zip(params.denial.as_ref());
+        let gated = denial_context.as_ref().zip(denial_params.as_ref());
         best_goal(view, params, gated).map(|value| value.kind)
     });
     let cost = goal
@@ -1161,11 +1179,11 @@ fn contested_card_score(
 /// Test-facing entry to the development-card buy score, deriving the gated denial context the
 /// same way `score_actions` does.
 pub fn dev_buy_score(view: &DecisionView<'_>, params: &HeuristicParams) -> f32 {
-    let denial_context = params
-        .denial
+    let denial_params = effective_denial(params);
+    let denial_context = denial_params
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
-    let gated = denial_context.as_ref().zip(params.denial.as_ref());
+    let gated = denial_context.as_ref().zip(denial_params.as_ref());
     dev_card_score(view, params, gated)
 }
 

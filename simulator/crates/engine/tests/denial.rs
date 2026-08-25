@@ -1602,6 +1602,174 @@ fn the_gated_params_reach_the_discard_fallback() {
     assert_eq!(on, [1, 0, 0, 0, 2]);
 }
 
+/// A state where one edge is simultaneously the observer's legal road and the rival's only
+/// remaining one-road approach to a contested vertex: `target -- e0 -- s0`, with the observer
+/// extending from `s0` through `a`, the rival through `b`, and every other edge the rival could
+/// build from occupied by seat 2 (whose settlement pieces are zeroed so it contests nothing).
+fn blocking_fixture() -> (Topology, SimBoard, GameArena, Edge) {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    for target in 0..topology.vertex_count() {
+        let target = target as Vertex;
+        for e0 in topology.vertex_edges(target).to_vec() {
+            let s0 = topology
+                .edge_endpoints(e0)
+                .into_iter()
+                .find(|vertex| *vertex != target)
+                .unwrap();
+            let side = topology
+                .vertex_edges(s0)
+                .iter()
+                .copied()
+                .filter(|edge| *edge != e0)
+                .collect::<Vec<_>>();
+            if side.len() < 2 {
+                continue;
+            }
+            let (a, b) = (side[0], side[1]);
+            arena.state.edge_owner[usize::from(a)] = 0;
+            arena.state.edge_owner[usize::from(b)] = 1;
+            for extra in side.iter().skip(2) {
+                arena.state.edge_owner[usize::from(*extra)] = 2;
+            }
+            let t_b = topology
+                .edge_endpoints(b)
+                .into_iter()
+                .find(|vertex| *vertex != s0)
+                .unwrap();
+            for extra in topology.vertex_edges(t_b).to_vec() {
+                if extra != b {
+                    arena.state.edge_owner[usize::from(extra)] = 2;
+                }
+            }
+            arena.state.players[1].vp_public = 9;
+            arena.state.players[2].pieces[Buildable::Settlement.index()] = 0;
+            arena.state.players[0].resources = [1, 0, 0, 1, 0];
+            return (topology, board, arena, e0);
+        }
+    }
+    panic!("fixture needs a shared approach edge");
+}
+
+// Forwarded arguments of the SIM-GAP-07/08 denial scope, one observing test each:
+// - `DenialParams::race_check_cap` (non-default value binds where the default spends all three
+//   checks): the_cheap_race_prefilter_is_sound_memoized_and_actually_fires (policy/denial.rs)
+// - `DenialParams::race_check_cap` (default reaches the third-ranked live challenger):
+//   the_default_budget_finds_the_third_ranked_challenger (policy/denial.rs)
+// - `DenialParams::contest_block_bonus` (non-default value, closed form both scaled and
+//   unscaled): the_block_bonus_prices_the_rivals_only_approach
+// - `LegacyValuation::bounded_race` (race half through `score_actions`):
+//   the_default_budget_finds_the_third_ranked_challenger (policy/denial.rs)
+// - `LegacyValuation::bounded_race` (blocking half through `recommend`):
+//   the_legacy_race_flag_restores_blocking_blind_contesting
+#[test]
+fn the_block_bonus_prices_the_rivals_only_approach() {
+    let (topology, board, arena, candidate) = blocking_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    // Preconditions: the candidate is legal for both sides and every other approach to the
+    // contested vertex is closed to the rival.
+    assert!(view.legal_road(candidate));
+    assert!(view.legal_road_for(1, candidate));
+    for target in view.topology().edge_endpoints(candidate) {
+        assert!(view.is_expansion_target(target));
+        for approach in view.topology().vertex_edges(target) {
+            assert!(*approach == candidate || !view.legal_road_for(1, *approach));
+        }
+    }
+    let context = denial::context(&view, &params);
+    let danger = context.danger(1);
+    assert!(danger > 0.0);
+    let blocked = denial::contest_term(&view, &context, &params, candidate);
+    let expected_blocked =
+        params.contest_weight * ((danger * (1.0 + f64::from(params.contest_block_bonus))) as f32);
+    assert_eq!(blocked.to_bits(), expected_blocked.to_bits());
+    // Zero restores blocking-blind contesting bit-for-bit.
+    let blind_params = DenialParams {
+        contest_block_bonus: 0.0,
+        ..params
+    };
+    let blind_context = denial::context(&view, &blind_params);
+    let blind = denial::contest_term(&view, &blind_context, &blind_params, candidate);
+    assert_eq!(
+        blind.to_bits(),
+        (params.contest_weight * (danger as f32)).to_bits()
+    );
+    assert!(blocked > blind);
+}
+
+#[test]
+fn an_open_second_approach_earns_no_block_bonus() {
+    let (topology, board, arena, candidate, opponent_edge) = contest_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    // The rival's own approach stays open, so the observer's approach contests at raw danger.
+    assert!(view.legal_road_for(1, opponent_edge));
+    let context = denial::context(&view, &params);
+    let danger = context.danger(1);
+    assert!(danger > 0.0);
+    assert_eq!(
+        denial::contest_term(&view, &context, &params, candidate).to_bits(),
+        (params.contest_weight * (danger as f32)).to_bits()
+    );
+}
+
+#[test]
+fn the_legacy_race_flag_restores_blocking_blind_contesting() {
+    let (topology, board, arena, candidate) = blocking_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let denial_params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    let fixed = HeuristicParams {
+        denial: Some(denial_params),
+        ..HeuristicParams::default()
+    };
+    let legacy = HeuristicParams {
+        legacy_valuation: Some(heuristic_v1::LegacyValuation {
+            bounded_race: true,
+            ..heuristic_v1::LegacyValuation::default()
+        }),
+        ..fixed.clone()
+    };
+    let road_score = |params: &HeuristicParams| {
+        score_for(&heuristic_v1::recommend(&view, params), |action| {
+            action == Action::BuildRoad(candidate)
+        })
+    };
+    // The candidate's contest dominates every other road, so it is the recommended road under
+    // both param sets; the legacy flag strips exactly the block bonus from its score.
+    let context = denial::context(&view, &denial_params);
+    let blocked = denial::contest_term(&view, &context, &denial_params, candidate);
+    let blind_params = DenialParams {
+        contest_block_bonus: 0.0,
+        ..denial_params
+    };
+    let blind_context = denial::context(&view, &blind_params);
+    let blind = denial::contest_term(&view, &blind_context, &blind_params, candidate);
+    let expansion = expansion_score(&view, candidate, &fixed).unwrap_or_default();
+    assert_eq!(
+        road_score(&fixed).to_bits(),
+        (40.0 + expansion + blocked).to_bits()
+    );
+    assert_eq!(
+        road_score(&legacy).to_bits(),
+        (40.0 + expansion + blind).to_bits()
+    );
+}
+
 macro_rules! denial_param_guard {
     ($name:ident, $field:ident, $value:expr) => {
         #[test]
@@ -1672,4 +1840,19 @@ denial_param_guard!(
     denial_assert_params_rejects_army_gap_half,
     army_gap_half,
     0.0
+);
+denial_param_guard!(
+    denial_assert_params_rejects_race_check_cap_zero,
+    race_check_cap,
+    0
+);
+denial_param_guard!(
+    denial_assert_params_rejects_race_check_cap_above_the_rival_bound,
+    race_check_cap,
+    6
+);
+denial_param_guard!(
+    denial_assert_params_rejects_contest_block_bonus,
+    contest_block_bonus,
+    -1.0
 );

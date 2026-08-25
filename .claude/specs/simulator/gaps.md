@@ -10,10 +10,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-06.** The frozen knight path still scales only through the observer's progress and never through the opponent's danger. Longest Road and dev buying now use denial pressure; the remaining knight limitation is coupled to `SIM-GAP-09`.
 
-**SIM-GAP-07.** Longest Road defence has a bounded-check blind spot. `denial.rs::MAX_RACE_CHECKS` limits exact checks to the first two dangerous prefilter survivors, so in a six-seat game a third rival can be one road from taking the card without being noticed.
-
-**SIM-GAP-08.** Shared-target racing is priced, but blocking is not. The denial contest term is keyed on a vertex an opponent can reach after one legal road; it values claiming that site first without determining whether the observer's candidate edge cuts the rival's actual approach.
-
 **SIM-GAP-09.** `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
 
 ## Untouched decision surfaces — no scoring work has been done on these at all.

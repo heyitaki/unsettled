@@ -135,11 +135,11 @@ Exact ties resolve to the first candidate in the fixed `give × get × count` en
 
 The non-winning `contested_card_score` expression is multiplied by denial pressure derived from the holder's absolute ETW danger, or the most dangerous opponent when nobody holds the card. A confirmed non-holder Longest Road racer multiplies that pressure. The win-now short circuit is never modulated. The knight call site always forwards the literal `1.0`, preserving G1's frozen knight play/hold comparison.
 
-Exactly one `DenialContext` is built per gated policy decision and threaded through every consumer. It memoizes per-seat one-road reach and one Longest Road challenger resolution without adding fields to `ViewCache`. Exact `road_takes_longest_road` checks are ranked by danger, guarded by the sound necessary condition `road_count + 1 >= required`, and capped at `denial.rs::MAX_RACE_CHECKS` per decision. The prefilter has no false negatives relative to the codebase's exact checker; the cap can leave later rivals unchecked, as recorded by `SIM-GAP-07`.
+Exactly one `DenialContext` is built per gated policy decision and threaded through every consumer. It memoizes per-seat one-road reach and one Longest Road challenger resolution without adding fields to `ViewCache`. Exact `road_takes_longest_road` checks are ranked by danger, guarded by the sound necessary condition `road_count + 1 >= required`, and capped at `DenialParams::race_check_cap` per decision, whose default (`denial.rs::MAX_RACE_CHECKS`, every rival in the largest layout) leaves no prefilter survivor unchecked. The prefilter has no false negatives relative to the codebase's exact checker.
 
-Positional competition is threat multiplied by legal one-road reach, site openness, and settlement-piece availability. It prices racing to a shared target, not general route cutting. Every production consumer reads one-road reach through the context memo.
+Positional competition is threat multiplied by legal one-road reach, site openness, and settlement-piece availability. It prices racing to a shared target, and additionally the block itself when the candidate edge is a rival's only remaining one-road approach to the contested vertex (`contest_block_bonus`, zero restoring blocking-blind contesting); the cut check is bounded to the vertex's incident edges and every production consumer reads one-road reach through the context memo. General route cutting away from contested vertices is still not priced.
 
-`PolicyKind::parse` ends in a wildcard and is not compiler-enforced. The complete 34-policy roster is guarded by an enum-to-name-to-parse round-trip test in addition to exhaustive production matches.
+`PolicyKind::parse` ends in a wildcard and is not compiler-enforced. The complete policy roster is guarded by an enum-to-name-to-parse round-trip test in addition to exhaustive production matches.
 
 ## Output stability
 

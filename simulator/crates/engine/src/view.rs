@@ -497,20 +497,25 @@ impl<'a> DecisionView<'a> {
         let mut vertices = 0_u128;
         for edge in 0..self.topology.edge_count() {
             let edge = edge as Edge;
-            if can_build_road(
-                self.topology,
-                &self.state.vertex_owner,
-                &self.state.edge_owner,
-                seat as u8,
-                edge,
-                self.pieces(seat, Buildable::Road),
-            ) {
+            if self.legal_road_for(seat, edge) {
                 for vertex in self.topology.edge_endpoints(edge) {
                     vertices |= 1 << vertex;
                 }
             }
         }
         vertices
+    }
+
+    /// As [`Self::legal_road`], for an arbitrary seat and without the observer's bitmask cache.
+    pub fn legal_road_for(&self, seat: usize, edge: Edge) -> bool {
+        can_build_road(
+            self.topology,
+            &self.state.vertex_owner,
+            &self.state.edge_owner,
+            seat as u8,
+            edge,
+            self.pieces(seat, Buildable::Road),
+        )
     }
 
     pub fn compute_road_count(&self, seat: usize) -> u8 {

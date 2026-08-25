@@ -418,3 +418,21 @@ Load before `7.01 4.97 3.94`, after `8.21 5.25 4.04`; zero illegal actions; admi
 | exposure term | `-0.003125` | 463 | 513 | clustered `[-0.0071178, +0.0008678]` | equivalent |
 
 The preregistered rule keeps the fix on anything but `worse`; the interval sits well inside the ±1pp threshold, so the fix ships as `equivalent`. `shed_weight` (10.0) and `DevCardParams::exposure_weight` (0.05) are unswept Phase-H placeholders; H2 owns both axes. The corpus moved 989/4000 games (`priority-trader` 0/1000, its discard path is separate).
+
+## M-26 — Race-check cap and approach blocking (SIM-GAP-07/08)
+
+2026-08-25, commit `6c0a5639` (prereg; implementation in the Task 7 commit), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m26-race-cap-blocking.md` (committed before the run). The change: the exact Longest Road race-check budget moved from the fixed two-rival `MAX_RACE_CHECKS` onto `DenialParams::race_check_cap`, defaulting to every rival in the largest layout (5), closing the six-seat third-challenger blind spot; checks still spend in danger order behind the sound `road_count + 1 >= required` prefilter. The contest term now prices blocking: a rival's danger contribution scales by `1 + contest_block_bonus` (0.5, an unswept Phase-H placeholder) when the candidate edge is that rival's only remaining one-road approach to the contested vertex, bounded to the vertex's incident edges and reusing the one-road-reach memo. Fixed-state per-decision cost of the raised budget (M-22's form, worst-case state with three prefilter survivors and a succeeding third check, load `6.35 4.96 3.96`): ~180 ns at cap 2 vs ~330 ns at cap 5. Reference is the pre-change composite behind `LegacyValuation::bounded_race` (`heuristic-v1-trader-aware-threat-devcards-denial-legacyrace`); the test arm is the post-change composite.
+
+Command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm race=pip_diversity --arm-policy base=heuristic-v1-trader-aware-threat-devcards-denial-legacyrace --arm-policy race=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out runs/m26-race
+```
+
+Load before `4.54 4.65 3.88`, after `6.02 4.95 3.99`; zero illegal actions; admissible (deterministic outcomes, load affects timing only). Reference win rate `0.3171875`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| race cap + blocking | `+0.00025` | 95 | 91 | McNemar `[-0.0014206, +0.0019206]` | equivalent |
+
+The preregistered rule keeps the fix on anything but `worse`; only 186 of 16,000 paired units were discordant, so the change fires rarely on four-seat standard boards, and the interval sits far inside the ±1pp threshold. `race_check_cap` and `contest_block_bonus` are unswept Phase-H placeholders; H2 owns both axes. The corpus moved 415/4000 games, all in the denial-gated composite (330/600 on extension6, where six seats make the raised cap bind, and 85/400 on standard4); every ungated policy was byte-identical, and no gate baseline or replay-derived fixture moved.

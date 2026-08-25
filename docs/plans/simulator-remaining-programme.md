@@ -100,9 +100,9 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 7: SIM-GAP-07/08 — race-check cap and approach blocking
 
-- [ ] Rank exact `road_takes_longest_road` checks by danger across all rivals or raise `MAX_RACE_CHECKS` with measured per-decision cost (M-22 fixed-state form), closing the six-seat blind spot
-- [ ] Price blocking: does the candidate edge cut the rival's actual approach to the contested vertex (bounded, reusing the one-road-reach memo)
-- [ ] A/B; corpus recapture; delete or trim the entries
+- [x] Rank exact `road_takes_longest_road` checks by danger across all rivals or raise `MAX_RACE_CHECKS` with measured per-decision cost (M-22 fixed-state form), closing the six-seat blind spot — ranking already existed; the budget moved onto `DenialParams::race_check_cap` defaulting to every rival (`MAX_RACE_CHECKS` = 5), old cap restorable via `LegacyValuation::bounded_race` (`...-legacyrace` label); measured cost ~180 ns → ~330 ns per decision on the worst-case three-survivor state (ignored `race_check_budget_per_decision_cost_is_reported`); blind-spot closure pinned by `the_default_budget_finds_the_third_ranked_challenger`
+- [x] Price blocking: does the candidate edge cut the rival's actual approach to the contested vertex (bounded, reusing the one-road-reach memo) — `contest_term` scales a rival's danger by `1 + contest_block_bonus` (0.5 placeholder, H2 sweeps) when every other incident edge of the contested vertex is illegal for that rival; closed-form tests via a hand-built shared-approach fixture; forwarded-argument table in `tests/denial.rs`
+- [x] A/B; corpus recapture; delete or trim the entries — M-26: `equivalent`, estimate +0.03pp, McNemar `[-0.14pp, +0.19pp]`, 186/16000 discordant, fix kept per prereg rule; corpus recaptured (415/4000 moved, all in the denial-gated composite, 330/600 on extension6); no gate baseline or replay fixture moved; both entries deleted, contracts.md denial paragraphs updated
 
 ### Task 8: SIM-GAP-27 — embargo threshold onto the shared danger model
 
