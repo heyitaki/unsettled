@@ -38,10 +38,12 @@
 //! `0.040000000`, so Road Building is played. The plateau ends when the affordable build is
 //! taken.
 //!
-//! Hand-size risk is not modelled. Pre-roll play resolves before the dice and a seven's discard,
-//! while `expected_turns_to_win` never reads `EtwInputs::hand_total`. This omission is
-//! asymmetric against the arm because Monopoly generally adds far more cards than Year of
-//! Plenty, so a discard-aware model would defer Monopoly more often.
+//! Hand-size risk is priced through the shared exposure model (`policy::exposure`): a play
+//! resolves before the dice, so every card it adds faces the observer's own imminent roll. Each
+//! candidate is charged `exposure_weight` times the growth in expected seven loss over that one
+//! roll — Monopoly generally adds far more cards than Year of Plenty, so it is deferred more
+//! often, which is the asymmetry the exposure-blind model conceded. Hold and Road Building add
+//! no cards and carry no charge.
 //!
 //! The soundness split is: the belief estimate ranks, the belief lower bound gates.
 //! `belief.expected` apportions the unknown pool, while only `belief.lo` is guaranteed. A
@@ -60,7 +62,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::etw::{self, EtwInputs};
-use crate::policy::threat;
+use crate::policy::{exposure, threat};
 use crate::rules::{RESOURCE_COUNT, Resource};
 use crate::view::{DecisionView, DevPlay, can_pay};
 
@@ -87,6 +89,9 @@ pub struct DevCardParams {
     pub tempo_weight: f64,
     /// Positive, finite useful-card value at which tempo reaches half its maximum.
     pub tempo_half: f64,
+    /// Non-negative, finite charge per expected card the observer's own imminent roll would
+    /// take from the hand a play leaves behind. Zero restores the exposure-blind comparison.
+    pub exposure_weight: f64,
 }
 
 impl Default for DevCardParams {
@@ -101,6 +106,7 @@ impl Default for DevCardParams {
             monopoly_sound_floor: 1.0,
             tempo_weight: 0.20,
             tempo_half: 4.0,
+            exposure_weight: 0.05,
         }
     }
 }
@@ -265,6 +271,18 @@ pub fn score_candidates(
     let context = context(view, params);
     let mut scored = [const { None }; 4];
 
+    // Cards a play adds face the observer's own imminent roll before they can be spent, so
+    // each candidate is charged the growth in expected seven loss over that single roll. The
+    // charge uses the estimated Monopoly haul because it ranks rather than gates.
+    let hand_total = view.hand_total(view.observer());
+    let threshold = view.discard_threshold();
+    let exposure_now = exposure::expected_seven_loss(hand_total, threshold, 1);
+    let seven_charge = |added: u32| {
+        params.exposure_weight
+            * (exposure::expected_seven_loss(hand_total.saturating_add(added), threshold, 1)
+                - exposure_now)
+    };
+
     let monopoly = offers.monopoly.then(|| {
         monopoly_resource(
             &context,
@@ -278,9 +296,13 @@ pub fn score_candidates(
             guaranteed[resource.index()] = context.haul_sound[resource.index()]
                 .floor()
                 .clamp(0.0, f64::from(u8::MAX)) as u8;
+            let added = context.haul_expected[resource.index()]
+                .floor()
+                .clamp(0.0, f64::from(u16::MAX)) as u32;
             ScoredDevPlay {
                 play: Some(DevPlay::Monopoly { resource }),
-                score: base_score + completion(view, params, goal_cost, &guaranteed),
+                score: base_score + completion(view, params, goal_cost, &guaranteed)
+                    - seven_charge(added),
             }
         })
     });
@@ -325,7 +347,8 @@ pub fn score_candidates(
             score: params.etw_weight
                 * gain(&context, params, &context.own, context.etw_now, &delta)
                 + params.tempo_weight * tempo(&context, params, &context.own, &delta)
-                + completion(view, params, goal_cost, &delta_int),
+                + completion(view, params, goal_cost, &delta_int)
+                - seven_charge(2),
         });
     }
 
@@ -401,4 +424,5 @@ fn assert_params(params: &DevCardParams) {
     debug_assert!(params.monopoly_sound_floor.is_finite() && params.monopoly_sound_floor >= 0.0);
     debug_assert!(params.tempo_weight.is_finite());
     debug_assert!(params.tempo_half.is_finite() && params.tempo_half > 0.0);
+    debug_assert!(params.exposure_weight.is_finite() && params.exposure_weight >= 0.0);
 }

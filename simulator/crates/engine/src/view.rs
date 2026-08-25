@@ -411,6 +411,10 @@ impl<'a> DecisionView<'a> {
         self.rules.dev_deck_initial()
     }
 
+    pub const fn discard_threshold(&self) -> u8 {
+        self.rules.discard_threshold()
+    }
+
     pub const fn largest_army_holder(&self) -> Option<usize> {
         self.state.largest_army
     }

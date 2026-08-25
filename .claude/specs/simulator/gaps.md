@@ -16,17 +16,7 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-09.** `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
 
-## Card-play scope
-
-**SIM-GAP-14.** Hand-size risk is unmodelled and documented as a non-goal: pre-roll play resolves before the dice and a seven's discard, so a discard-aware model would defer Monopoly more often than this one does.
-
 ## Untouched decision surfaces — no scoring work has been done on these at all.
-
-**SIM-GAP-15.** Discard at seven is greedy against the current goal cost only. No scarcity, no belief about an opponent's pending monopoly, no preservation of hand shape, and — most concretely — no port awareness. The design note on what a discard actually costs is in [programme.md](programme.md).
-
-**SIM-GAP-16.** Bank and port trades fire only when the trade completes a cost or strictly reduces missing units. Never speculative, never rate-aware beyond legality, and never used to shed hand size ahead of a seven. That last one is a real play and it prices out: a 2:1 trade to go from eight cards to seven costs one card with certainty, against an expected loss of roughly two cards from the sevens other seats roll before your next turn.
-
-**SIM-GAP-18.** Hand-size risk is one concept with at least three consumers, and none of them have it. The discard choice above, the pre-emptive shedding trade above, and the pre-roll dev-card timing that `devcards.rs` already documents as a non-goal are the same question — what a seven costs this hand — asked at three sites.
 
 **SIM-GAP-19.** `DecisionPhase::SpecialBuild` reaches `ask_action` with no distinct scoring and is treated as an ordinary action phase. Whether that is correct is unmeasured.
 

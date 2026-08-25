@@ -400,3 +400,21 @@ Load before `5.66 4.89 3.95`, after `5.45 4.86 3.94`; zero illegal actions; admi
 | deck-aware buying | `-0.0131875` | 662 | 873 | McNemar `[-0.0179825, -0.0083925]` | inconclusive |
 
 The preregistered rule keeps the fix on anything but `worse`; the interval straddles the -1pp threshold (upper end -0.84pp), so the verdict is `inconclusive`, not `worse`, and the fix ships with this reading on record. The reading leans negative: the whole interval sits below zero, so the composite is measurably weaker against the `heuristic-v1-trader` field at this power, just not clearly past the practical threshold. The composition weights (the 0.55/0.35/0.10 base split, the 300-point chase scale) are unswept Phase-H placeholders; H2 owns re-asking this axis with swept values. The corpus moved 2275/4000 games (heuristic-v1 family only; `priority-trader` 0/1000, its dev-card logic is unrelated).
+
+## M-25 — Shared hand-size exposure term (SIM-GAP-14/15/16/18)
+
+2026-08-25, commit `706fb27c` (prereg; implementation in the Task 6 commit), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m25-hand-exposure.md` (committed before the run). The change: one shared exposure model (`policy::exposure`) feeds three consumers — the forced discard ranks goal-surplus cards by port-aware discrete marginal conversion value (bundle protection only at rates strictly better than the observer's base rate; a bank-rate variant tripped the `policy_strength` heuristic-v1-vs-priority-trader gate during development, Wilson lower 0.2980 vs the required 0.30, and was narrowed to ports before this run), the action phase gains a pre-emptive shedding bank/port trade pricing the certain `rate - 1` cards against the expected loss to the next seven, and the gated pre-roll dev-card comparison charges candidates for the cards they add ahead of the observer's own roll. Reference is the pre-change composite behind `LegacyValuation::exposure_blind` (`heuristic-v1-trader-aware-threat-devcards-denial-legacyexposure`); the test arm is the post-change composite.
+
+Command:
+
+```text
+cargo run --release -p unsettled-sim -- evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm exposure=pip_diversity --arm-policy base=heuristic-v1-trader-aware-threat-devcards-denial-legacyexposure --arm-policy exposure=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 400 --reps 10 --policy heuristic-v1-trader --threads 0 --player-trading --out runs/m25-exposure
+```
+
+Load before `7.01 4.97 3.94`, after `8.21 5.25 4.04`; zero illegal actions; admissible (deterministic outcomes, load affects timing only). Reference win rate `0.3203125`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| exposure term | `-0.003125` | 463 | 513 | clustered `[-0.0071178, +0.0008678]` | equivalent |
+
+The preregistered rule keeps the fix on anything but `worse`; the interval sits well inside the ±1pp threshold, so the fix ships as `equivalent`. `shed_weight` (10.0) and `DevCardParams::exposure_weight` (0.05) are unswept Phase-H placeholders; H2 owns both axes. The corpus moved 989/4000 games (`priority-trader` 0/1000, its discard path is separate).

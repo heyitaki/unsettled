@@ -1564,9 +1564,13 @@ fn the_action_path_goal_reaches_the_next_discard() {
 
 // Forwarded arguments of `heuristic_v1::discard`, one observing test each:
 // - `view` (hand contents): discard_preserves_the_active_city_cost (tactical_policy.rs)
+// - `view` (trade rates, conversion ranking): the_discard_sheds_the_cheapest_conversion_first
+//   (exposure.rs)
 // - `count`: discard_preserves_the_active_city_cost asserts the discarded sum
 // - `scratch` (carried goal): the_action_path_goal_reaches_the_next_discard
 // - `params` (fallback path, scratch goal absent): the_gated_params_reach_the_discard_fallback
+// - `params` (legacy_valuation.exposure_blind): the_legacy_flag_restores_the_greedy_discard
+//   (exposure.rs)
 #[test]
 fn the_gated_params_reach_the_discard_fallback() {
     let (topology, board, mut arena) = road_city_fixture(false, 5);

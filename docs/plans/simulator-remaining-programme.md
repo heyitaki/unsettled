@@ -93,10 +93,10 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 6: Shared hand-size exposure term — SIM-GAP-14/15/16/18
 
-- [ ] One exposure model (what a seven costs this hand) built once, consumed by: discard choice, pre-emptive shedding bank/port trades, pre-roll dev-card timing
-- [ ] Discard cost = conversion rate (port-aware, discrete marginal per the design note; goal need dominates on disagreement)
-- [ ] Shedding trade at 8+ cards prices certainty-of-one against expected sevens loss
-- [ ] Forwarded-argument tables; A/B; corpus recapture; delete or trim the four entries
+- [x] One exposure model (what a seven costs this hand) built once, consumed by: discard choice, pre-emptive shedding bank/port trades, pre-roll dev-card timing — `policy/exposure.rs` (`expected_seven_loss`, `marginal_conversion_scaled`); consumers: `heuristic_v1::discard`, new `shed_trade` action candidate, `devcards::score_candidates` seven charge on card-adding plays; old pipeline preserved behind `LegacyValuation::exposure_blind` (`...-legacyexposure` label)
+- [x] Discard cost = conversion rate (port-aware, discrete marginal per the design note; goal need dominates on disagreement) — with one measured narrowing: bundle protection only at rates strictly better than the base rate, because the bank-rate spelling dropped heuristic-v1 below the predeclared `policy_strength` gate vs priority-trader (Wilson lower 0.2980 < 0.30); the port-only spelling restored the gate
+- [x] Shedding trade at 8+ cards prices certainty-of-one against expected sevens loss — fires only when `(1-(5/6)^seats) * discard_count` saved exceeds the certain `rate-1` cards paid; never sheds into the goal's cost; `shed_weight` zero disables (Phase-H placeholder, as is `DevCardParams::exposure_weight`)
+- [x] Forwarded-argument tables; A/B; corpus recapture; delete or trim the four entries — tables in `exposure.rs` (tests) and the extended `discard` table in `denial.rs`; M-25: `equivalent`, estimate -0.31pp, clustered `[-0.71pp, +0.09pp]`, fix kept; corpus recaptured (989/4000 moved, priority-trader 0); gate baselines regenerated; six replay-derived `player_trading.rs` fixtures re-found via the new committed `refind_replay_fixtures` scan; four entries deleted
 
 ### Task 7: SIM-GAP-07/08 — race-check cap and approach blocking
 

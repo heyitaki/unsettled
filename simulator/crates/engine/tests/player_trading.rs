@@ -1332,6 +1332,7 @@ fn every_ablation_kind_dispatches_trade_responses_through_the_trader_path() {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
     ] {
         let mut rng = Xoshiro256StarStar::from_seed(1);
         assert!(
@@ -1762,7 +1763,7 @@ fn aware_action_receives_the_policy_trade_params() {
 
 #[test]
 fn aware_action_checks_every_eligible_recipient() {
-    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(53);
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(6);
     let view = arena.decision_view(&board, &topology, 4, DecisionPhase::Action);
     assert_can_offer(&view, Resource::Brick, Resource::Wheat, 1);
     let recipients = eligible_recipients(&view, Resource::Wheat);
@@ -1771,7 +1772,7 @@ fn aware_action_checks_every_eligible_recipient() {
         "replay precondition: checking every recipient needs at least two, got {recipients:?}"
     );
     let mut scratch = PolicyScratch::default();
-    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 53 << 8 ^ 4);
+    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 6 << 8 ^ 4);
     assert_eq!(
         policy::action(
             PolicyKind::HeuristicV1TraderAware,
@@ -1863,13 +1864,13 @@ fn aware_threat_params_reach_base_action_scoring() {
 
 #[test]
 fn aware_pre_roll_receives_threat_and_devcards_params() {
-    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(219);
-    let view = arena.decision_view(&board, &topology, 3, DecisionPhase::PreRoll);
+    let (topology, board, _rules, _config, arena) = deterministic_truncated_game(163);
+    let view = arena.decision_view(&board, &topology, 4, DecisionPhase::PreRoll);
     assert!(
         view.can_play_dev(4),
-        "replay precondition: seat 3 no longer holds a playable monopoly"
+        "replay precondition: seat 4 no longer holds a playable monopoly"
     );
-    let seed = 8_u64 << 48 ^ 219 << 8 ^ 3;
+    let seed = 8_u64 << 48 ^ 163 << 8 ^ 4;
     let run = |kind| {
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(seed);
@@ -1878,7 +1879,7 @@ fn aware_pre_roll_receives_threat_and_devcards_params() {
     assert_eq!(
         run(PolicyKind::HeuristicV1TraderAwareDevcards),
         Some(DevPlay::Monopoly {
-            resource: Resource::Sheep,
+            resource: Resource::Wheat,
         })
     );
     assert_eq!(
@@ -1917,28 +1918,28 @@ fn aware_pre_roll_receives_threat_and_devcards_params() {
 fn flat_proposal_group_keeps_the_first_enumerated_offer() {
     let expected = Action::OfferTrade {
         give: Resource::Wood,
-        get: Resource::Sheep,
+        get: Resource::Wheat,
         count: 1,
     };
     {
-        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(54);
-        let view = arena.decision_view(&board, &topology, 3, DecisionPhase::Action);
-        assert_can_offer(&view, Resource::Wood, Resource::Sheep, 1);
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(5);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        assert_can_offer(&view, Resource::Wood, Resource::Wheat, 1);
         assert!(
-            !eligible_recipients(&view, Resource::Sheep).is_empty(),
-            "replay precondition: no eligible sheep recipient remains"
+            !eligible_recipients(&view, Resource::Wheat).is_empty(),
+            "replay precondition: no eligible wheat recipient remains"
         );
     }
     let run = |rng_seed| {
         let (topology, board, _rules, _config, arena) = truncated_game(
-            54,
+            5,
             8,
             TradeConfig {
                 acceptance_temperature: 0.0,
                 ..TradeConfig::default()
             },
         );
-        let view = arena.decision_view(&board, &topology, 3, DecisionPhase::Action);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(rng_seed);
         policy::action(
@@ -1949,12 +1950,12 @@ fn flat_proposal_group_keeps_the_first_enumerated_offer() {
         )
     };
     for repeat in 0..8 {
-        assert_eq!(run(8_u64 << 48 ^ 54 << 8 ^ 3 ^ repeat), expected);
+        assert_eq!(run(8_u64 << 48 ^ 5 << 8 ^ 0 ^ repeat), expected);
     }
     let parallel = std::thread::scope(|scope| {
         [
-            scope.spawn(|| run(8_u64 << 48 ^ 54 << 8 ^ 3)),
-            scope.spawn(|| run(8_u64 << 48 ^ 54 << 8 ^ 3)),
+            scope.spawn(|| run(8_u64 << 48 ^ 5 << 8 ^ 0)),
+            scope.spawn(|| run(8_u64 << 48 ^ 5 << 8 ^ 0)),
         ]
         .map(|handle| handle.join().unwrap())
     });
@@ -1998,7 +1999,7 @@ fn proposal_recipient_filter_uses_expected_holdings() {
 #[test]
 fn proposal_recipient_filter_excludes_embargoed_seats() {
     let (topology, board, _rules, _config, arena) = truncated_game(
-        54,
+        168,
         8,
         TradeConfig {
             acceptance_temperature: 0.0,
@@ -2009,7 +2010,7 @@ fn proposal_recipient_filter_excludes_embargoed_seats() {
     assert!((0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat)));
     assert!((0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat)));
     let mut scratch = PolicyScratch::default();
-    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 54 << 8 ^ 0);
+    let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 168 << 8 ^ 0);
     assert_eq!(
         policy::action(
             PolicyKind::HeuristicV1TraderAware,
@@ -2019,7 +2020,7 @@ fn proposal_recipient_filter_excludes_embargoed_seats() {
         ),
         Action::OfferTrade {
             give: Resource::Wood,
-            get: Resource::Wheat,
+            get: Resource::Ore,
             count: 1,
         }
     );
@@ -2151,4 +2152,300 @@ fn non_finite_counterparty_scores_use_the_first_acceptor_fallback() {
         trading::select_counterparty(&view, &mixed_params, &delta, &[0, 4]),
         0
     );
+}
+
+/// Re-finds every replay-derived fixture in this module after a behavior change moves the
+/// truncated games. Each block mirrors one test's preconditions and prints the concrete
+/// values (game, seat, offer, scores) to pin; run with `--ignored --nocapture` and update
+/// the constants in the corresponding test.
+#[test]
+#[ignore = "searches the replay fixture space; run deliberately after a behavior change"]
+fn refind_replay_fixtures() {
+    let temp_zero = || TradeConfig {
+        acceptance_temperature: 0.0,
+        ..TradeConfig::default()
+    };
+
+    // aware_action_checks_every_eligible_recipient / aware_action_uses_the_minimum_recipient_score
+    // / flat_proposal_group_keeps_the_first_enumerated_offer: an aware offer with enough
+    // recipients; MIN needs non-flat scores, FLAT needs the same offer across eight rng streams.
+    let mut found_offer = 0;
+    for game in 0..300_u64 {
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(game);
+        for seat in 0..board.seats() {
+            let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
+            let mut scratch = PolicyScratch::default();
+            let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ game << 8 ^ seat as u64);
+            let action = policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng);
+            let Action::OfferTrade { give, get, count: 1 } = action else {
+                continue;
+            };
+            if !view.legal_offer_trade(give, get, 1) {
+                continue;
+            }
+            let recipients = eligible_recipients(&view, get);
+            if recipients.len() < 2 {
+                continue;
+            }
+            let delta = trading::responder_delta(TradeOffer {
+                proposer: seat,
+                give,
+                get,
+                count: 1,
+            });
+            let scores: Vec<f64> = recipients
+                .iter()
+                .map(|other| {
+                    trading::counterparty_score(
+                        &etw::inputs_for_seat(&view, *other),
+                        &TradeParams::default(),
+                        &delta,
+                    )
+                })
+                .collect();
+            let nonflat = scores.iter().any(|score| (score - scores[0]).abs() > 1e-12);
+            let stable = (0..8).all(|repeat| {
+                let mut scratch = PolicyScratch::default();
+                let mut rng = Xoshiro256StarStar::from_seed(
+                    8_u64 << 48 ^ game << 8 ^ seat as u64 ^ repeat,
+                );
+                policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng)
+                    == action
+            });
+            eprintln!(
+                "OFFER game={game} seat={seat} give={give:?} get={get:?} recipients={recipients:?} nonflat={nonflat} stable={stable}"
+            );
+            found_offer += 1;
+        }
+        if found_offer >= 12 {
+            break;
+        }
+    }
+
+    // aware_threat_params_reach_base_action_scoring (and the knight half of
+    // aware_pre_roll_receives_threat_and_devcards_params): threat and aware arms both play a
+    // knight but disagree on placement, at action and pre-roll phases.
+    'knight: for game in 0..300_u64 {
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(game);
+        for seat in 0..board.seats() {
+            let seed = 8_u64 << 48 ^ game << 8 ^ seat as u64;
+            let both = [DecisionPhase::Action, DecisionPhase::PreRoll].map(|phase| {
+                let view = arena.decision_view(&board, &topology, seat, phase);
+                let run = |kind| {
+                    let mut scratch = PolicyScratch::default();
+                    let mut rng = Xoshiro256StarStar::from_seed(seed);
+                    match phase {
+                        DecisionPhase::Action => match policy::action(kind, &view, &mut scratch, &mut rng) {
+                            Action::PlayDev(play) => Some(play),
+                            _ => None,
+                        },
+                        _ => policy::pre_roll(kind, &view, &mut scratch, &mut rng),
+                    }
+                };
+                (run(PolicyKind::HeuristicV1TraderAwareThreat), run(PolicyKind::HeuristicV1TraderAware))
+            });
+            let [(action_threat, action_aware), (pre_threat, pre_aware)] = both;
+            let (Some(DevPlay::Knight { destination: td, victim: tv }), Some(DevPlay::Knight { destination: ad, victim: av })) =
+                (action_threat, action_aware)
+            else {
+                continue;
+            };
+            if (td, tv) == (ad, av) {
+                continue;
+            }
+            if pre_threat != action_threat || pre_aware != action_aware {
+                continue;
+            }
+            eprintln!(
+                "KNIGHT game={game} seat={seat} threat=({td},{tv:?}) aware=({ad},{av:?})"
+            );
+            break 'knight;
+        }
+    }
+
+    // aware_pre_roll_receives_threat_and_devcards_params (monopoly half): devcards and default
+    // arms both pick a monopoly pre-roll but disagree on the resource.
+    'monopoly: for game in 0..600_u64 {
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(game);
+        for seat in 0..board.seats() {
+            let view = arena.decision_view(&board, &topology, seat, DecisionPhase::PreRoll);
+            if !view.can_play_dev(4) {
+                continue;
+            }
+            let seed = 8_u64 << 48 ^ game << 8 ^ seat as u64;
+            let run = |kind| {
+                let mut scratch = PolicyScratch::default();
+                let mut rng = Xoshiro256StarStar::from_seed(seed);
+                policy::pre_roll(kind, &view, &mut scratch, &mut rng)
+            };
+            let devcards = run(PolicyKind::HeuristicV1TraderAwareDevcards);
+            let default = run(PolicyKind::HeuristicV1Trader);
+            let (Some(DevPlay::Monopoly { resource: dev }), Some(DevPlay::Monopoly { resource: base })) =
+                (devcards, default)
+            else {
+                continue;
+            };
+            if dev == base {
+                continue;
+            }
+            eprintln!("MONOPOLY game={game} seat={seat} devcards={dev:?} default={base:?}");
+            break 'monopoly;
+        }
+    }
+
+    // responder_delta_and_offer_count_reach_counterparty_selection (live half): seat 4 strictly
+    // cheaper than seat 3 for the Sheep -> Ore count-2 responder delta.
+    for game in 0..40_u64 {
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(game);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+        let delta = trading::responder_delta(TradeOffer {
+            proposer: 0,
+            give: Resource::Sheep,
+            get: Resource::Ore,
+            count: 2,
+        });
+        let scores = [3, 4].map(|seat| {
+            trading::counterparty_score(
+                &etw::inputs_for_seat(&view, seat),
+                &TradeParams::default(),
+                &delta,
+            )
+        });
+        if scores[1] < scores[0] {
+            eprintln!("RESPONDER_DELTA game={game} scores={scores:?}");
+            break;
+        }
+    }
+
+    // applied_aware_trade_forwards_the_offer_count_to_selection: after seat 0 begins its turn,
+    // a count-2 offer with at least two acceptors and a strict cheapest among them.
+    'count2: for game in 0..80_u64 {
+        let (topology, board, rules, mut config, mut arena) = deterministic_truncated_game(game);
+        config.policies[0] = PolicyKind::HeuristicV1TraderAware;
+        arena.begin_turn_for_test(&board, &topology, &rules, &config, 0);
+        let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+        if embargoed(&proposer_view, 0) {
+            continue;
+        }
+        for give in Resource::ALL {
+            for get in Resource::ALL {
+                if give == get
+                    || arena.state.players[0].resources[give.index()] < 2
+                {
+                    continue;
+                }
+                let offer = TradeOffer {
+                    proposer: 0,
+                    give,
+                    get,
+                    count: 2,
+                };
+                let mut acceptors = Vec::new();
+                for seat in 1..board.seats() {
+                    if arena.state.players[seat].resources[get.index()] < 1 {
+                        continue;
+                    }
+                    let view = arena.decision_view(&board, &topology, seat, DecisionPhase::TradeResponse);
+                    if embargoed(&view, seat) {
+                        continue;
+                    }
+                    let mut rng = Xoshiro256StarStar::from_seed(seat as u64);
+                    if policy::respond_trade(PolicyKind::HeuristicV1Trader, &view, offer, &mut rng) {
+                        acceptors.push(seat);
+                    }
+                }
+                if acceptors.len() < 2 {
+                    continue;
+                }
+                let delta = trading::responder_delta(offer);
+                let score = |seat: usize| {
+                    trading::counterparty_score(
+                        &etw::inputs_for_seat(&proposer_view, seat),
+                        &TradeParams::default(),
+                        &delta,
+                    )
+                };
+                let cheapest = acceptors
+                    .iter()
+                    .copied()
+                    .min_by(|a, b| score(*a).partial_cmp(&score(*b)).unwrap())
+                    .unwrap();
+                if acceptors
+                    .iter()
+                    .all(|seat| *seat == cheapest || score(cheapest) < score(*seat))
+                {
+                    eprintln!(
+                        "COUNT2 game={game} give={give:?} get={get:?} acceptors={acceptors:?} cheapest={cheapest}"
+                    );
+                    break 'count2;
+                }
+            }
+        }
+    }
+
+    // proposal_recipient_filter_excludes_embargoed_seats: mixed embargo state at seat 0 whose
+    // aware action is still an offer (turn-cap-8 truncation, temperature zero).
+    for game in 0..300_u64 {
+        let (topology, board, _rules, _config, arena) = truncated_game(game, 8, temp_zero());
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let mixed = (0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat))
+            && (0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat));
+        if !mixed {
+            continue;
+        }
+        let mut scratch = PolicyScratch::default();
+        let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ game << 8);
+        let action = policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng);
+        if matches!(action, Action::OfferTrade { .. }) {
+            eprintln!("EMBARGO game={game} action={action:?}");
+            break;
+        }
+    }
+
+    // non_finite_counterparty_scores_use_the_first_acceptor_fallback: a NaN score for seat 4
+    // under the overflow params (turn-cap-10 truncation), and an [inf, -inf] pair at seats
+    // [0, 4] from seat 1's response view (turn-cap-8 truncation).
+    'nan: for turn_cap in [10, 12, 14, 16, 20, 24] {
+        for game in 0..600_u64 {
+            let (topology, board, _rules, _config, arena) =
+                truncated_game(game, turn_cap, temp_zero());
+            let view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+            let mut nan_delta = [0.0; RESOURCE_COUNT];
+            nan_delta[1] = -10.0;
+            let nan_params = TradeParams {
+                etw_weight: f64::MAX,
+                benefit_weight: 0.0,
+                tempo_weight: 0.0,
+                ..TradeParams::default()
+            };
+            for target in 1..board.seats() {
+                let score = trading::counterparty_score(
+                    &etw::inputs_for_seat(&view, target),
+                    &nan_params,
+                    &nan_delta,
+                );
+                if score.is_nan() {
+                    eprintln!("NAN turn_cap={turn_cap} game={game} target={target}");
+                    break 'nan;
+                }
+            }
+        }
+    }
+    for game in 0..300_u64 {
+        let (topology, board, _rules, _config, arena) = deterministic_truncated_game(game);
+        let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+        let delta = [-1.0, 1.0, 0.0, 0.0, 0.0];
+        let mixed_params = TradeParams {
+            tempo_weight: f64::MAX,
+            benefit_weight: f64::MAX,
+            ..TradeParams::default()
+        };
+        let scores = [0, 4].map(|seat| {
+            trading::counterparty_score(&etw::inputs_for_seat(&view, seat), &mixed_params, &delta)
+        });
+        if scores == [f64::INFINITY, f64::NEG_INFINITY] {
+            eprintln!("INF_PAIR game={game}");
+            break;
+        }
+    }
 }

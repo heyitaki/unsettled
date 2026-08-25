@@ -161,9 +161,20 @@ fn score_for_live_view(
     topology: &Topology,
     offers: DevOffers,
     goal_cost: Option<[u8; RESOURCE_COUNT]>,
+    params: &DevCardParams,
 ) -> unsettled_engine::policy::devcards::DevCandidates {
     let view = arena.decision_view(board, topology, 0, DecisionPhase::PreRoll);
-    devcards::score_candidates(&view, &DevCardParams::default(), offers, goal_cost)
+    devcards::score_candidates(&view, params, offers, goal_cost)
+}
+
+/// The seven-exposure charge zeroed, for tests whose subject (candidate ordering, belief
+/// choice, cost-variant scope) is orthogonal to hand-size risk; the charge itself is pinned
+/// in exposure.rs.
+fn exposure_free() -> DevCardParams {
+    DevCardParams {
+        exposure_weight: 0.0,
+        ..DevCardParams::default()
+    }
 }
 
 fn monopoly(play: Option<DevPlay>) -> Option<Resource> {
@@ -176,6 +187,13 @@ fn monopoly(play: Option<DevPlay>) -> Option<Resource> {
 fn heuristic_choices(
     view: &unsettled_engine::view::DecisionView<'_>,
 ) -> (Option<DevPlay>, Option<DevPlay>) {
+    heuristic_choices_with(view, DevCardParams::default())
+}
+
+fn heuristic_choices_with(
+    view: &unsettled_engine::view::DecisionView<'_>,
+    cards: DevCardParams,
+) -> (Option<DevPlay>, Option<DevPlay>) {
     let mut baseline_scratch = PolicyScratch::default();
     let baseline = heuristic_v1::pre_roll(view, &mut baseline_scratch, &HeuristicParams::default());
     let mut devcards_scratch = PolicyScratch::default();
@@ -183,7 +201,7 @@ fn heuristic_choices(
         view,
         &mut devcards_scratch,
         &HeuristicParams {
-            dev_cards: Some(DevCardParams::default()),
+            dev_cards: Some(cards),
             ..HeuristicParams::default()
         },
     );
@@ -199,7 +217,7 @@ fn monopoly_prefers_the_belief_holding_over_the_production_proxy() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
     let choice = devcards::pre_roll_choice(
         &view,
-        &DevCardParams::default(),
+        &exposure_free(),
         DevOffers {
             monopoly: true,
             ..DevOffers::default()
@@ -207,7 +225,7 @@ fn monopoly_prefers_the_belief_holding_over_the_production_proxy() {
         None,
     );
     assert_eq!(monopoly(choice), Some(Resource::Wheat));
-    let (baseline, arm) = heuristic_choices(&view);
+    let (baseline, arm) = heuristic_choices_with(&view, exposure_free());
     assert!(
         baseline.is_none()
             || matches!(
@@ -875,7 +893,7 @@ fn monopoly_considers_resources_outside_the_current_goal() {
     set_belief_and_hand(&mut arena, 1, [0, 0, 0, 9, 0]);
     arena.state.players[0].playable_dev[4] = 1;
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
-    let (baseline, arm) = heuristic_choices(&view);
+    let (baseline, arm) = heuristic_choices_with(&view, exposure_free());
     assert!(!matches!(baseline, Some(DevPlay::Monopoly { .. })));
     assert_eq!(monopoly(arm), Some(Resource::Brick));
 }
@@ -929,6 +947,7 @@ fn plateau_states_are_still_ranked_by_the_tempo_term() {
                 road: Some((Some(0), Some(1))),
             },
             None,
+            &exposure_free(),
         );
         let context = &candidates.context;
         let params = DevCardParams::default();
@@ -1109,7 +1128,8 @@ fn the_hold_option_is_reachable_in_a_plateau_state() {
         monopoly: true,
         ..DevOffers::default()
     };
-    let candidates = score_for_live_view(&arena, &board, &topology, offers, None);
+    let candidates =
+        score_for_live_view(&arena, &board, &topology, offers, None, &DevCardParams::default());
     assert!(candidates.scored[2].is_some());
     assert!(candidates.scored[0].unwrap().score > candidates.scored[2].unwrap().score);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);

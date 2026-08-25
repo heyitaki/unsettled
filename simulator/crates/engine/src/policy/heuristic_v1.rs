@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::policy::PolicyScratch;
 use crate::policy::denial::{self, DenialContext, DenialParams};
 use crate::policy::devcards::{self, DevCardParams};
+use crate::policy::exposure;
 use crate::policy::threat::{self, ThreatParams};
 use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
@@ -58,6 +59,9 @@ pub struct LegacyValuation {
     /// Restores the composition-blind development-card buy score: a flat base plus the
     /// Largest Army contest bonus, regardless of what the remaining deck can still contain.
     pub deck_blind_buying: bool,
+    /// Restores exposure-blind hand handling: the goal-cost-only greedy discard ranking, no
+    /// pre-emptive shedding trade, and no pre-roll seven-exposure penalty on card plays.
+    pub exposure_blind: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -69,6 +73,10 @@ pub struct HeuristicParams {
     pub port_weight: f32,
     pub expansion_weight: f32,
     pub robber_block_threshold: u8,
+    /// Multiplier turning a shedding trade's net value (expected cards saved from the next
+    /// seven minus cards paid with certainty) into an action score. Zero disables the shed
+    /// candidate entirely; an unswept Phase-H placeholder.
+    pub shed_weight: f32,
     /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
     /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
     pub threat: Option<ThreatParams>,
@@ -96,6 +104,7 @@ impl Default for HeuristicParams {
             port_weight: 0.1,
             expansion_weight: 0.15,
             robber_block_threshold: 4,
+            shed_weight: 10.0,
             threat: None,
             dev_cards: None,
             trading: None,
@@ -236,6 +245,9 @@ fn score_actions_with(
                 },
             });
         }
+    }
+    if let Some(shed) = shed_trade(view, params, goal) {
+        out.push(shed);
     }
     let dev_score = dev_card_score(view, params, gated);
     if view.dev_deck_remaining() > 0 && !view.can_buy_dev() {
@@ -412,6 +424,21 @@ fn devcards_pre_roll(
     goal: Option<Goal>,
     gated: Gated<'_>,
 ) -> Option<DevPlay> {
+    // Zeroing the weight restores the exposure-blind comparison exactly: the penalty is a
+    // weighted product subtracted from each candidate, and `x - 0.0` is `x` in IEEE arithmetic.
+    let exposure_blind_cards;
+    let cards = if params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.exposure_blind)
+    {
+        exposure_blind_cards = DevCardParams {
+            exposure_weight: 0.0,
+            ..*cards
+        };
+        &exposure_blind_cards
+    } else {
+        cards
+    };
     let offers = devcards::DevOffers {
         plenty: view
             .can_play_dev(3)
@@ -535,12 +562,44 @@ pub fn discard(
         .and_then(|kind| view.costs(kind).first())
         .copied()
         .unwrap_or([0; RESOURCE_COUNT]);
+    let exposure_blind = params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.exposure_blind);
+    let base_rate = Resource::ALL
+        .iter()
+        .map(|resource| view.trade_rate(*resource))
+        .max()
+        .unwrap_or(4);
     let mut remaining = *view.own_hand();
     let mut discarded = [0; RESOURCE_COUNT];
     for _ in 0..count {
-        let resource = (0..RESOURCE_COUNT)
-            .max_by_key(|index| remaining[*index] - i16::from(cost[*index]))
-            .unwrap_or(0);
+        // A discard costs conversion value, not just goal distance (SIM-GAP-15): among cards
+        // the goal does not need, shed the one whose discrete port-aware marginal is lowest
+        // (dead spares before bundle-breakers, unported spares before ported ones). Goal need
+        // still dominates on disagreement — a needed card is never taken while any surplus
+        // exists — and an all-needed hand keeps the original greedy least-damage rule.
+        let scored = (!exposure_blind)
+            .then(|| {
+                (0..RESOURCE_COUNT)
+                    .filter(|index| remaining[*index] > i16::from(cost[*index]))
+                    .max_by_key(|index| {
+                        (
+                            std::cmp::Reverse(exposure::marginal_conversion_scaled(
+                                remaining[*index],
+                                view.trade_rate(Resource::ALL[*index]),
+                                base_rate,
+                            )),
+                            remaining[*index] - i16::from(cost[*index]),
+                            *index,
+                        )
+                    })
+            })
+            .flatten();
+        let resource = scored.unwrap_or_else(|| {
+            (0..RESOURCE_COUNT)
+                .max_by_key(|index| remaining[*index] - i16::from(cost[*index]))
+                .unwrap_or(0)
+        });
         if remaining[resource] == 0 {
             break;
         }
@@ -548,6 +607,98 @@ pub fn discard(
         discarded[resource] += 1;
     }
     discarded
+}
+
+/// A pre-emptive hand-shedding bank/port trade (SIM-GAP-16): once the hand is exposed to a
+/// seven, a trade that pays `rate` cards for one prices its certain loss of `rate - 1` cards
+/// against the expected cards the next seven no longer takes. Offered only when that nets
+/// positive — a 2:1 trade from eight cards to seven pays one card against roughly two expected
+/// — and never out of the goal's own cost. The received resource is the most goal-needed one,
+/// then the hardest to produce, then the scarcest in the bank.
+fn shed_trade(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    goal: Option<Goal>,
+) -> Option<ScoredAction> {
+    if params.shed_weight <= 0.0
+        || params
+            .legacy_valuation
+            .is_some_and(|legacy| legacy.exposure_blind)
+    {
+        return None;
+    }
+    let hand_total = view.hand_total(view.observer());
+    let threshold = view.discard_threshold();
+    let rolls = view.seats() as u32;
+    let now = exposure::expected_seven_loss(hand_total, threshold, rolls);
+    if now <= 0.0 {
+        return None;
+    }
+    let cost = goal
+        .and_then(|goal| view.costs(goal.kind).first())
+        .copied()
+        .unwrap_or([0; RESOURCE_COUNT]);
+    let hand = view.own_hand();
+    let base_rate = Resource::ALL
+        .iter()
+        .map(|resource| view.trade_rate(*resource))
+        .max()
+        .unwrap_or(4);
+    // Ties on value keep the earlier candidate, so equal-rate gives resolve to the one whose
+    // marginal conversion loss is lowest, then the lowest index.
+    let mut best: Option<(f64, u32, Resource)> = None;
+    for give in Resource::ALL {
+        let rate = view.trade_rate(give);
+        if rate < 2 {
+            continue;
+        }
+        let surplus = i64::from(hand[give.index()]) - i64::from(cost[give.index()]);
+        if surplus < i64::from(rate) {
+            continue;
+        }
+        let paid = rate - 1;
+        let after = exposure::expected_seven_loss(
+            hand_total.saturating_sub(paid),
+            threshold,
+            rolls,
+        );
+        let value = (now - after) - f64::from(paid);
+        if value <= 0.0 {
+            continue;
+        }
+        let marginal = exposure::marginal_conversion_scaled(hand[give.index()], rate, base_rate);
+        let better = match best {
+            None => true,
+            Some((best_value, best_marginal, _)) => {
+                value > best_value || (value == best_value && marginal < best_marginal)
+            }
+        };
+        if better {
+            best = Some((value, marginal, give));
+        }
+    }
+    let (value, _, give) = best?;
+    let own_pips = view.production_pips(view.observer());
+    let get = Resource::ALL
+        .into_iter()
+        .filter(|get| view.legal_trade(give, *get, 1))
+        .max_by_key(|get| {
+            let index = get.index();
+            (
+                (i16::from(cost[index]) - hand[index]).max(0),
+                std::cmp::Reverse(own_pips[index]),
+                std::cmp::Reverse(view.bank(*get)),
+                index,
+            )
+        })?;
+    Some(ScoredAction {
+        action: Action::TradeBank {
+            give,
+            get,
+            count: 1,
+        },
+        score: params.shed_weight * value as f32,
+    })
 }
 
 pub fn robber(view: &DecisionView<'_>, params: &HeuristicParams) -> (u8, Option<u8>) {
@@ -2002,20 +2153,28 @@ mod devcards_rate_tests {
         super::M21_LIVE_FLIPS.with(|count| count.set(0));
         super::M21_REVIEW_STATE_FLIPS.with(|count| count.set(0));
         let mut arena = GameArena::default();
+        let seed = std::env::var("M21_FLIP_SEED_SCAN")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(SEED);
         arena.play(
             &board,
             &topology,
             &rules,
             &GameConfig {
                 policies: [PolicyKind::HeuristicV1Devcards; 6],
-                seed: 182,
+                seed,
                 ..GameConfig::default()
             },
         );
         let flips = super::M21_LIVE_FLIPS.with(std::cell::Cell::get);
         let review_state_flips = super::M21_REVIEW_STATE_FLIPS.with(std::cell::Cell::get);
-        eprintln!("legal M21 flip seed=182 flips={flips} reviewStateFlips={review_state_flips}");
+        eprintln!("legal M21 flip seed={seed} flips={flips} reviewStateFlips={review_state_flips}");
         assert!(flips > 0);
         assert!(review_state_flips > 0);
     }
+
+    /// A seed whose game reaches the M-21 review state and flips there; re-found by scan
+    /// (`M21_FLIP_SEED_SCAN`) whenever a behavior change moves the trajectories.
+    const SEED: u64 = 200;
 }

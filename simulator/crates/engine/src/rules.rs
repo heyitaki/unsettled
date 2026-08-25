@@ -245,6 +245,8 @@ pub struct FlattenedRules {
     /// Initial dev-deck composition in `state::DEV_*` index order, so a policy can derive the
     /// remaining deck's bounds from public plays and card counts.
     dev_deck_initial: [u8; 5],
+    /// Hand size above which a seven forces a discard, so a policy can price hand exposure.
+    discard_threshold: u8,
     player_trading: Option<TradeConfig>,
 }
 
@@ -360,6 +362,7 @@ impl RuleConfig {
                 self.dev_deck.year_of_plenty,
                 self.dev_deck.monopoly,
             ],
+            discard_threshold: self.discard_threshold,
             player_trading: self.player_trading,
             ..FlattenedRules::default()
         };
@@ -444,6 +447,10 @@ impl FlattenedRules {
 
     pub const fn dev_deck_initial(&self) -> &[u8; 5] {
         &self.dev_deck_initial
+    }
+
+    pub const fn discard_threshold(&self) -> u8 {
+        self.discard_threshold
     }
 
     pub const fn win_vp(&self) -> u8 {
