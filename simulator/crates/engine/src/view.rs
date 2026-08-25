@@ -519,6 +519,11 @@ impl<'a> DecisionView<'a> {
         self.own_roads().count
     }
 
+    /// Whether the observer's road network already reaches a vertex.
+    pub fn road_reaches(&self, vertex: Vertex) -> bool {
+        self.own_roads().vertices & (1 << vertex) != 0
+    }
+
     pub fn compute_one_step(&self, seat: usize) -> u128 {
         let mut vertices = 0_u128;
         for edge in 0..self.topology.edge_count() {

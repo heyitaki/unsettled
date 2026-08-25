@@ -10,11 +10,9 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 ## Goal and action selection
 
-**SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one, at roughly 65 against 55 early and roughly 269 as Largest Army closes. Those figures predate `SIM-GAP-17`'s deck-aware rewrite and now describe an untouched deck only: the score scales with what the remaining deck can still contain, and a victory-point chase term raises it further as the observer closes on the win. Roads into settlements are the VP engine this simulator exists to measure, so this may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic.
+**SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one (roughly 65 against 55 on an untouched deck, and a victory-point chase term raises it as the observer closes on the win), which may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic. What remains of this entry is a sweep, not a build: the band's overall magnitude is exposed as `HeuristicParams::dev_buy_scale` (default 1.0 is bit-identical; it wraps the deck-aware and legacy deck-blind spellings alike), and the Phase-H policy-block screen owns the answer — a `better` verdict at a lower scale confirms the bias, anything else refutes it, and either way the sweep result closes this entry.
 
 ## Build valuation follow-up
-
-**SIM-GAP-28.** `heuristic_v1.rs::vertex_score`'s expansion term is degree-valued for settlements: `DecisionView::legal_settlement` and `DecisionView::is_expansion_target` both require every neighbour to be unowned, so the count is always the vertex's topological degree. This is a crude expansion-room proxy rather than a measure of frontier actually opened. Phase J owns the replacement.
 
 **SIM-GAP-30.** Building-band headroom below the contested-card band holds only under base rules and the shipped default `HeuristicParams`. `vertex_score` is linear in public, unbounded weights, so a swept vector can lift a building above that band and silently re-rank denial; `production_weight = 1000.0` on a raw-production-two vertex already reaches `12_000`. Phase H must either bound candidate weights or re-check headroom for every candidate vector.
 

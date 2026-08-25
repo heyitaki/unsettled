@@ -187,6 +187,15 @@ impl Topology {
         self.edge_endpoints[usize::from(edge)]
     }
 
+    /// The edge connecting two adjacent vertices, `None` when they are not adjacent. At most
+    /// three incident edges per vertex, so this is a constant-time scan.
+    pub fn edge_between(&self, a: Vertex, b: Vertex) -> Option<Edge> {
+        self.vertex_edges(a)
+            .iter()
+            .copied()
+            .find(|edge| self.edge_endpoints(*edge).contains(&b))
+    }
+
     /// Edges sharing an endpoint with `edge`, ascending. Iterating these is equivalent to scanning
     /// every edge and keeping the ones that touch `edge`, and preserves that scan's order.
     pub fn edge_neighbors(&self, edge: Edge) -> &[Edge] {

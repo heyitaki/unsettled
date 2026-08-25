@@ -157,8 +157,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 18: J5 — frontier replacement (SIM-GAP-28) and dev-band exposure (SIM-GAP-24)
 
-- [ ] Replace the degree-valued expansion count with frontier actually opened, gated; expose `dev_card_score`'s scale as a swept parameter so H can answer SIM-GAP-24
-- [ ] A/B; delete SIM-GAP-28; re-scope SIM-GAP-24 to its H sweep or delete it if the sweep answers it
+- [x] Replace the degree-valued expansion count with frontier actually opened, gated; expose `dev_card_score`'s scale as a swept parameter so H can answer SIM-GAP-24 — `policy/frontier.rs` (`opened`: adjacent unowned vertices the road network does not already reach through an unowned edge, plus distance-rule-open sites one further unowned edge beyond; girth six, no double counting), blended as `degree + frontier_mix * (frontier - degree)` inside `vertex_score`'s expansion closure so builds, the goal chooser, and the road/pair credits all price it through one expression; `frontier_mix` zero-default (never computes the frontier), trial mixes 0.5/1.0 behind `-frontierlo`/`-frontierhi`; `dev_buy_scale` (default 1.0, bit-identical) wraps both buy-score spellings for H2; corpus recapture byte-identical (0/4000 moved); forwarded-argument table + four closed-form tests in `tests/frontier.rs`, label test in `policy/mod.rs`
+- [x] A/B; delete SIM-GAP-28; re-scope SIM-GAP-24 to its H sweep or delete it if the sweep answers it — M-36: both mixes `equivalent` (frontierlo -0.075pp, 190/16000 discordant; frontierhi -0.27pp leaning negative, clustered `[-0.51pp, -0.03pp]`, 353/16000), mix ships at zero, H2 reads the axis flat-to-slightly-negative; the live surface is smaller than the empty-board fan suggests because mid-game candidates sit at similar network distance; SIM-GAP-28 deleted, SIM-GAP-24 re-scoped to the H2 `dev_buy_scale` sweep, programme inventory line brought current, contracts roster extended
 
 ### Task 19: J composite — measure, record, consolidate
 

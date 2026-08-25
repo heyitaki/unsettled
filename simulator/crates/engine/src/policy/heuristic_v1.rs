@@ -4,6 +4,7 @@ use crate::policy::PolicyScratch;
 use crate::policy::denial::{self, DenialContext, DenialParams};
 use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::exposure;
+use crate::policy::frontier;
 use crate::policy::goal_need::GoalNeed;
 use crate::policy::piece_economy::SlotReturn;
 use crate::policy::stage::Stage;
@@ -146,6 +147,22 @@ pub struct HeuristicParams {
     /// shared goal-need model's outstanding need for the decision's selected goal
     /// (`goal_need::GoalNeed::cost_term`). Zero-default, same trial labels.
     pub cost_pressure_weight: f32,
+    /// The J5 frontier blend (SIM-GAP-28): the settlement expansion count becomes
+    /// `degree + mix * (frontier - degree)`, where the frontier
+    /// (`policy::frontier::opened`) counts the vertices a settlement here newly opens —
+    /// road-reachable unowned neighbours plus the distance-rule-open sites one unowned
+    /// edge beyond them — instead of the degree-valued adjacent-unowned count. Zero (the
+    /// default) never computes the frontier and keeps the degree count bit-for-bit; one
+    /// replaces it entirely (both counts are small integers, so the endpoint is exact).
+    /// The `-frontierlo`/`-frontierhi` trial values are Phase-H sweep candidates, not
+    /// tuned values.
+    pub frontier_mix: f32,
+    /// Overall scale of the development-card buy score (`dev_card_score`), the SIM-GAP-24
+    /// exposure: the buy band's hardcoded magnitudes outrank expansion roads from turn
+    /// one, and whether that biases outcomes is answered by sweeping this scale in
+    /// Phase H rather than by argument. One (the default) leaves the shipped expression
+    /// untouched.
+    pub dev_buy_scale: f32,
     /// The J4 goal-hysteresis margin (SIM-GAP-25): a challenger goal must beat the seat's
     /// incumbent goal (`DecisionView::incumbent_goal`, the goal committed at the previous
     /// decision) by this much in the chooser's comparisons, implemented as a selection-only
@@ -190,6 +207,8 @@ impl Default for HeuristicParams {
             stage_urgency_weight: 0.0,
             slot_return_weight: 0.0,
             cost_pressure_weight: 0.0,
+            frontier_mix: 0.0,
+            dev_buy_scale: 1.0,
             goal_hysteresis_margin: 0.0,
             threat: None,
             dev_cards: None,
@@ -257,6 +276,13 @@ pub const ECON_TRIAL_HI: EconTrial = EconTrial {
     slot_return: 8.0,
     cost_pressure: 2.0,
 };
+
+/// Trial values behind the J5 measurement labels (`-frontierlo`/`-frontierhi`): an even
+/// blend of the degree count and the frontier measure, and the full replacement
+/// SIM-GAP-28 asks about. Phase-H sweep candidates only; the shipped default mix stays
+/// zero.
+pub const FRONTIER_TRIAL_LO: f32 = 0.5;
+pub const FRONTIER_TRIAL_HI: f32 = 1.0;
 
 /// Trial values behind the J4 measurement labels (`-hystlo`/`-hysthi`). Goal scores are
 /// value per turn: an affordable goal floors at 0.25 turns (a settlement-shaped vertex
@@ -1169,11 +1195,19 @@ pub fn vertex_score_with(
         })
         .sum::<f32>();
     let settlement_expansion = || {
-        view.topology()
+        let degree = view
+            .topology()
             .vertex_adjacent(vertex)
             .iter()
             .filter(|adjacent| view.vertex_owner(**adjacent).is_none())
-            .count() as f32
+            .count() as f32;
+        // The J5 frontier blend (SIM-GAP-28): zero never computes the frontier and keeps
+        // the degree count bit-for-bit; one replaces it with the frontier actually opened.
+        if params.frontier_mix == 0.0 {
+            degree
+        } else {
+            degree + params.frontier_mix * (frontier::opened(view, vertex) - degree)
+        }
     };
     let expansion = match kind {
         BuildKind::Settlement => settlement_expansion(),
@@ -1583,6 +1617,23 @@ pub fn dev_buy_score(view: &DecisionView<'_>, params: &HeuristicParams) -> f32 {
 }
 
 fn dev_card_score(view: &DecisionView<'_>, params: &HeuristicParams, gated: Gated<'_>) -> f32 {
+    let score = unscaled_dev_card_score(view, params, gated);
+    // The SIM-GAP-24 exposure: one overall scale on the buy score, swept by Phase H. A
+    // branch rather than unconditional arithmetic keeps the default arms' expression
+    // untouched, and the scale deliberately wraps the legacy deck-blind branch too so a
+    // sweep moves every spelling of the buy score.
+    if params.dev_buy_scale == 1.0 {
+        score
+    } else {
+        score * params.dev_buy_scale
+    }
+}
+
+fn unscaled_dev_card_score(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    gated: Gated<'_>,
+) -> f32 {
     if params
         .legacy_valuation
         .is_some_and(|legacy| legacy.deck_blind_buying)
