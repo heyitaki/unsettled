@@ -5,6 +5,7 @@ use crate::policy::denial::{self, DenialContext, DenialParams};
 use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::exposure;
 use crate::policy::goal_need::GoalNeed;
+use crate::policy::piece_economy::SlotReturn;
 use crate::policy::stage::Stage;
 use crate::policy::threat::{self, ThreatParams};
 use crate::policy::trading::TradeParams;
@@ -134,6 +135,17 @@ pub struct HeuristicParams {
     /// the denial gate supplies a context; setup and ungated paths carry no belief.
     /// Zero-default, same trial labels.
     pub stage_urgency_weight: f32,
+    /// Weight of the J3 settlement-slot return term on city value: upgrading frees one of
+    /// the capped settlement pieces, worth more near the settlement cap and with open sites
+    /// left to spend the freed piece on (`policy::piece_economy::SlotReturn`). Zero (the
+    /// default) never derives the model and restores the pre-J3 expression bit-for-bit; the
+    /// `-econlo`/`-econhi` trial values are Phase-H sweep candidates, not tuned values.
+    pub slot_return_weight: f32,
+    /// Weight of the J3 cost-pressure term: each build candidate's score is charged for the
+    /// overlap between its cost (at the variant the payment path would spend) and the
+    /// shared goal-need model's outstanding need for the decision's selected goal
+    /// (`goal_need::GoalNeed::cost_term`). Zero-default, same trial labels.
+    pub cost_pressure_weight: f32,
     /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
     /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
     pub threat: Option<ThreatParams>,
@@ -168,6 +180,8 @@ impl Default for HeuristicParams {
             stage_expansion_weight: 0.0,
             stage_city_weight: 0.0,
             stage_urgency_weight: 0.0,
+            slot_return_weight: 0.0,
+            cost_pressure_weight: 0.0,
             threat: None,
             dev_cards: None,
             trading: None,
@@ -215,6 +229,26 @@ pub const STAGE_TRIAL_HI: StageTrial = StageTrial {
     urgency: 1.0,
 };
 
+/// One trial setting of the two J3 piece-economy weights, behind a measurement label.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EconTrial {
+    pub slot_return: f32,
+    pub cost_pressure: f32,
+}
+
+/// Trial values behind the J3 measurement labels (`-econlo`/`-econhi`): a moderate setting
+/// (up to +2 on city value at the cap, half a card of score per card of need spent) and an
+/// aggressive one (up to +8, two per card — the slot term then rivals a strong vertex's
+/// production term). Phase-H sweep candidates only; the shipped default weights stay zero.
+pub const ECON_TRIAL_LO: EconTrial = EconTrial {
+    slot_return: 2.0,
+    cost_pressure: 0.5,
+};
+pub const ECON_TRIAL_HI: EconTrial = EconTrial {
+    slot_return: 8.0,
+    cost_pressure: 2.0,
+};
+
 pub fn action(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
@@ -253,6 +287,14 @@ fn stage_for(view: &DecisionView<'_>, params: &HeuristicParams, gated: Gated<'_>
     })
 }
 
+/// The J3 slot-return model a decision actually runs with: derived once per decision, `None`
+/// at the zero default so shipped arms never compute it (and the pre-J3 scores stay
+/// bit-identical). Like the J2 stage — and unlike the goal-need term — it is pure state, so
+/// it also reaches the goal chooser's city pricing.
+fn slot_return_for(view: &DecisionView<'_>, params: &HeuristicParams) -> Option<SlotReturn> {
+    (params.slot_return_weight != 0.0).then(|| SlotReturn::derive(view))
+}
+
 pub(crate) fn action_with_goal(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
@@ -266,10 +308,12 @@ pub(crate) fn action_with_goal(
     let gated = denial_context.as_ref().zip(denial_params.as_ref());
     let stage = stage_for(view, params, gated);
     let stage = stage.as_ref();
+    let slot = slot_return_for(view, params);
+    let slot = slot.as_ref();
     let road = best_road(view, params, gated, stage);
-    let selected_goal = best_goal_with(view, params, road, stage);
+    let selected_goal = best_goal_with(view, params, road, stage, slot);
     let PolicyScratch { goal, actions } = scratch;
-    score_actions_with(view, params, actions, road, selected_goal, gated, stage);
+    score_actions_with(view, params, actions, road, selected_goal, gated, stage, slot);
     *goal = selected_goal.map(|goal| goal.kind);
     let best_score = actions
         .as_slice()
@@ -307,9 +351,11 @@ pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mu
     let gated = denial_context.as_ref().zip(denial_params.as_ref());
     let stage = stage_for(view, params, gated);
     let stage = stage.as_ref();
+    let slot = slot_return_for(view, params);
+    let slot = slot.as_ref();
     let road = best_road(view, params, gated, stage);
-    let goal = best_goal_with(view, params, road, stage);
-    score_actions_with(view, params, out, road, goal, gated, stage);
+    let goal = best_goal_with(view, params, road, stage, slot);
+    score_actions_with(view, params, out, road, goal, gated, stage, slot);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -321,6 +367,7 @@ fn score_actions_with(
     goal: Option<Goal>,
     gated: Gated<'_>,
     stage: Option<&Stage>,
+    slot: Option<&SlotReturn>,
 ) {
     out.clear();
     let special_build = view.phase() == DecisionPhase::SpecialBuild;
@@ -332,51 +379,68 @@ fn score_actions_with(
         return;
     }
     // The J1 goal-need term prices build candidates against the decision's already-selected
-    // goal; a zero weight (the default) skips the derivation entirely so the pre-J1 scores
-    // stay bit-identical.
-    let goal_need = (params.goal_need_weight != 0.0)
+    // goal, and the J3 cost-pressure term charges their costs against the same need; both
+    // weights zero (the default) skips the derivation entirely so the pre-J1 scores stay
+    // bit-identical, and each consumer additionally gates on its own weight.
+    let goal_need = (params.goal_need_weight != 0.0 || params.cost_pressure_weight != 0.0)
         .then(|| goal.map(|goal| GoalNeed::derive(view, goal.kind)))
         .flatten();
+    let vertex_need = goal_need
+        .as_ref()
+        .filter(|_| params.goal_need_weight != 0.0);
+    // `None` rather than 0.0 when disabled keeps the subtraction out of the expression, so
+    // the zero-default arms never touch the pushed scores. An affordable goal has zero need
+    // by construction, so a build can never be charged for its own goal's cost.
+    let cost_pressure = |kind: Buildable| {
+        goal_need
+            .as_ref()
+            .filter(|_| params.cost_pressure_weight != 0.0)
+            .map(|need| params.cost_pressure_weight * need.cost_term(view, kind))
+    };
     if view.can_afford(Buildable::City) {
+        let pressure = cost_pressure(Buildable::City);
         for vertex in 0..view.topology().vertex_count() {
             let vertex = vertex as u8;
             if view.legal_city(vertex) {
+                let mut score = BUILD_BAND
+                    + vertex_score_with(view, vertex, params, BuildKind::City, vertex_need, stage, slot);
+                if let Some(pressure) = pressure {
+                    score -= pressure;
+                }
                 out.push(ScoredAction {
                     action: Action::UpgradeCity(vertex),
-                    score: BUILD_BAND
-                        + vertex_score_with(
-                            view,
-                            vertex,
-                            params,
-                            BuildKind::City,
-                            goal_need.as_ref(),
-                            stage,
-                        ),
+                    score,
                 });
             }
         }
     }
     if view.can_afford(Buildable::Settlement) {
+        let pressure = cost_pressure(Buildable::Settlement);
         for vertex in 0..view.topology().vertex_count() {
             let vertex = vertex as u8;
             if view.legal_settlement(vertex) {
+                let mut score = if params
+                    .legacy_valuation
+                    .is_some_and(|legacy| legacy.band_ladder)
+                {
+                    500.0
+                } else {
+                    BUILD_BAND
+                } + vertex_score_with(
+                    view,
+                    vertex,
+                    params,
+                    BuildKind::Settlement,
+                    vertex_need,
+                    stage,
+                    slot,
+                );
+                if let Some(pressure) = pressure {
+                    score -= pressure;
+                }
                 out.push(ScoredAction {
                     action: Action::BuildSettlement(vertex),
-                    score: if params
-                        .legacy_valuation
-                        .is_some_and(|legacy| legacy.band_ladder)
-                    {
-                        500.0
-                    } else {
-                        BUILD_BAND
-                    } + vertex_score_with(
-                        view,
-                        vertex,
-                        params,
-                        BuildKind::Settlement,
-                        goal_need.as_ref(),
-                        stage,
-                    ),
+                    score,
                 });
             }
         }
@@ -384,9 +448,13 @@ fn score_actions_with(
     if view.can_afford(Buildable::Road)
         && let Some(road) = road
     {
+        let mut score = road.action_score;
+        if let Some(pressure) = cost_pressure(Buildable::Road) {
+            score -= pressure;
+        }
         out.push(ScoredAction {
             action: Action::BuildRoad(road.edge),
-            score: road.action_score,
+            score,
         });
     }
     if let Some(goal) = goal
@@ -618,8 +686,10 @@ pub fn pre_roll(
     }
     let stage = stage_for(view, params, gated);
     let stage = stage.as_ref();
+    let slot = slot_return_for(view, params);
+    let slot = slot.as_ref();
     let road = best_road(view, params, gated, stage);
-    let goal = best_goal_with(view, params, road, stage);
+    let goal = best_goal_with(view, params, road, stage, slot);
     scratch.goal = goal.map(|value| value.kind);
     match params.dev_cards.as_ref() {
         None => ladder_pre_roll(view, params, goal, gated, stage),
@@ -999,16 +1069,18 @@ pub fn vertex_score(
     params: &HeuristicParams,
     kind: BuildKind,
 ) -> f32 {
-    vertex_score_with(view, vertex, params, kind, None, None)
+    vertex_score_with(view, vertex, params, kind, None, None, None)
 }
 
-/// `vertex_score` plus the optional J1 goal-need term and J2 stage adjustments. The goal
-/// chooser prices vertices without the need term (the goal is what is being chosen there, so
-/// feeding a candidate goal's own need back into the scores that pick it would be a fixed
-/// point, and roads are scored before any goal exists); only the decision's already-selected
-/// goal reaches the build candidates in `score_actions_with`. The stage, by contrast, is
-/// pure state and reaches the chooser and the road expansion paths too. `None` for both
-/// leaves the expression bit-identical to the pre-J1 scorer.
+/// `vertex_score` plus the optional J1 goal-need term, J2 stage adjustments, and J3
+/// slot-return term. The goal chooser prices vertices without the need term (the goal is
+/// what is being chosen there, so feeding a candidate goal's own need back into the scores
+/// that pick it would be a fixed point, and roads are scored before any goal exists); only
+/// the decision's already-selected goal reaches the build candidates in
+/// `score_actions_with`. The stage and the slot return, by contrast, are pure state and
+/// reach the chooser too (the slot return is City-only, so the settlement-kind road and
+/// pair credit paths pass `None` for it). `None` for all three leaves the expression
+/// bit-identical to the pre-J1 scorer.
 pub fn vertex_score_with(
     view: &DecisionView<'_>,
     vertex: u8,
@@ -1016,6 +1088,7 @@ pub fn vertex_score_with(
     kind: BuildKind,
     need: Option<&GoalNeed>,
     stage: Option<&Stage>,
+    slot: Option<&SlotReturn>,
 ) -> f32 {
     let board_totals = view.board_resource_pips();
     let own = view.production_pips(view.observer());
@@ -1111,6 +1184,13 @@ pub fn vertex_score_with(
             BuildKind::City => base * (1.0 + params.stage_city_weight * stage.lateness),
         },
     };
+    // The J3 slot return: a city upgrade frees one of the capped settlement pieces, and
+    // that return is worth more near the cap with open sites still available. Additive
+    // after the stage scaling so the two seams stay independently zero-restorable.
+    let base = match (kind, slot) {
+        (BuildKind::City, Some(slot)) => base + params.slot_return_weight * slot.value,
+        _ => base,
+    };
     match need {
         None => base,
         Some(need) => base + params.goal_need_weight * need.production_term(&production),
@@ -1137,7 +1217,9 @@ pub(crate) fn best_goal(
 ) -> Option<Goal> {
     let stage = stage_for(view, params, gated);
     let stage = stage.as_ref();
-    best_goal_with(view, params, best_road(view, params, gated, stage), stage)
+    let slot = slot_return_for(view, params);
+    let slot = slot.as_ref();
+    best_goal_with(view, params, best_road(view, params, gated, stage), stage, slot)
 }
 
 /// `best_road` scans every legal edge and, when the Longest Road card is in reach, runs an
@@ -1148,11 +1230,12 @@ fn best_goal_with(
     params: &HeuristicParams,
     road: Option<RoadGoal>,
     stage: Option<&Stage>,
+    slot: Option<&SlotReturn>,
 ) -> Option<Goal> {
     #[cfg(test)]
     BEST_GOAL_CALLS.with(|calls| calls.set(calls.get() + 1));
 
-    best_goal_uncounted(view, params, road, stage)
+    best_goal_uncounted(view, params, road, stage, slot)
 }
 
 /// The body, split out so the timing fixture can measure it without the call counter above. That
@@ -1163,9 +1246,10 @@ fn best_goal_uncounted(
     params: &HeuristicParams,
     road: Option<RoadGoal>,
     stage: Option<&Stage>,
+    slot: Option<&SlotReturn>,
 ) -> Option<Goal> {
     let mut best = None;
-    if let Some((_, vertex_term)) = best_scored_vertex(view, params, BuildKind::City, stage) {
+    if let Some((_, vertex_term)) = best_scored_vertex(view, params, BuildKind::City, stage, slot) {
         let numerator = if params
             .legacy_valuation
             .is_some_and(|legacy| legacy.flat_city_goal)
@@ -1186,11 +1270,11 @@ fn best_goal_uncounted(
         view.best_legal_settlement().map(|vertex| {
             (
                 vertex,
-                vertex_score_with(view, vertex, params, BuildKind::Settlement, None, stage),
+                vertex_score_with(view, vertex, params, BuildKind::Settlement, None, stage, None),
             )
         })
     } else {
-        best_scored_vertex(view, params, BuildKind::Settlement, stage)
+        best_scored_vertex(view, params, BuildKind::Settlement, stage, slot)
     };
     if let Some((_, vertex_term)) = settlement {
         let candidate = Goal {
@@ -1218,6 +1302,7 @@ fn best_scored_vertex(
     params: &HeuristicParams,
     kind: BuildKind,
     stage: Option<&Stage>,
+    slot: Option<&SlotReturn>,
 ) -> Option<(u8, f32)> {
     let mut best = None;
     for vertex in (0..view.topology().vertex_count()).map(|vertex| vertex as u8) {
@@ -1228,7 +1313,7 @@ fn best_scored_vertex(
         if !legal {
             continue;
         }
-        let score = vertex_score_with(view, vertex, params, kind, None, stage);
+        let score = vertex_score_with(view, vertex, params, kind, None, stage, slot);
         if score.is_finite() && best.is_none_or(|(_, current)| score > current) {
             best = Some((vertex, score));
         }
@@ -1302,7 +1387,8 @@ fn expansion_road_score(
     for target in view.topology().edge_endpoints(first) {
         if view.is_expansion_target(target) {
             let score =
-                vertex_score_with(view, target, params, BuildKind::Settlement, None, stage) + 0.25;
+                vertex_score_with(view, target, params, BuildKind::Settlement, None, stage, None)
+                    + 0.25;
             if best_score.is_none_or(|best| score > best) {
                 best_score = Some(score);
             }
@@ -1315,8 +1401,15 @@ fn expansion_road_score(
         }
         for target in view.topology().edge_endpoints(second) {
             if view.is_expansion_target(target) {
-                let score =
-                    vertex_score_with(view, target, params, BuildKind::Settlement, None, stage);
+                let score = vertex_score_with(
+                    view,
+                    target,
+                    params,
+                    BuildKind::Settlement,
+                    None,
+                    stage,
+                    None,
+                );
                 if best_score.is_none_or(|best| score > best) {
                     best_score = Some(score);
                 }
@@ -1685,7 +1778,15 @@ fn best_road_building_pair(
                     .edge_endpoints(second)
                     .iter()
                     .map(|vertex| {
-                        vertex_score_with(view, *vertex, params, BuildKind::Settlement, None, stage)
+                        vertex_score_with(
+                            view,
+                            *vertex,
+                            params,
+                            BuildKind::Settlement,
+                            None,
+                            stage,
+                            None,
+                        )
                     })
                     .fold(f32::NEG_INFINITY, f32::max)
             } else {
@@ -1697,7 +1798,15 @@ fn best_road_building_pair(
                     .flat_map(|edge| view.topology().edge_endpoints(edge))
                     .filter(|vertex| view.is_expansion_target(*vertex))
                     .map(|vertex| {
-                        vertex_score_with(view, vertex, params, BuildKind::Settlement, None, stage)
+                        vertex_score_with(
+                            view,
+                            vertex,
+                            params,
+                            BuildKind::Settlement,
+                            None,
+                            stage,
+                            None,
+                        )
                     })
                     .fold(None, |best: Option<f32>, score| {
                         Some(best.map_or(score, |best| best.max(score)))
@@ -2241,7 +2350,7 @@ mod devcards_rate_tests {
             ..super::HeuristicParams::default()
         };
         assert_eq!(
-            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement, None),
+            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement, None, None),
             None
         );
     }
@@ -2284,7 +2393,7 @@ mod devcards_rate_tests {
             ..super::HeuristicParams::default()
         };
         assert_eq!(
-            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement, None)
+            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement, None, None)
                 .map(|(vertex, _)| vertex),
             Some(first.min(second))
         );
@@ -2365,7 +2474,7 @@ mod devcards_rate_tests {
         let pip_max = if pips[0] > pips[1] { owned[0] } else { owned[1] };
         let score_max = if pips[0] > pips[1] { owned[1] } else { owned[0] };
         assert_eq!(
-            super::best_scored_vertex(&view, &params, super::BuildKind::City, None)
+            super::best_scored_vertex(&view, &params, super::BuildKind::City, None, None)
                 .map(|(vertex, _)| vertex),
             Some(score_max),
             "the city chooser must not rank on pips ({pip_max} is the pip maximum)"
@@ -2600,6 +2709,7 @@ mod devcards_rate_tests {
                                 super::BuildKind::Settlement,
                                 None,
                                 stage,
+                                None,
                             )
                         })
                         .fold(None, |best: Option<f32>, value| {
@@ -2720,7 +2830,7 @@ mod devcards_rate_tests {
         for run in 1..=5 {
             let started = std::time::Instant::now();
             for _ in 0..DECISIONS {
-                std::hint::black_box(super::best_goal_uncounted(&view, &params, None, None));
+                std::hint::black_box(super::best_goal_uncounted(&view, &params, None, None, None));
             }
             eprintln!(
                 "path=best_goal_uncounted run={run} decisions={DECISIONS} nsPerDecision={:.3}",

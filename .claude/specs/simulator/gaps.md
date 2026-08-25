@@ -18,8 +18,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-28.** `heuristic_v1.rs::vertex_score`'s expansion term is degree-valued for settlements: `DecisionView::legal_settlement` and `DecisionView::is_expansion_target` both require every neighbour to be unowned, so the count is always the vertex's topological degree. This is a crude expansion-room proxy rather than a measure of frontier actually opened. Phase J owns the replacement.
 
-**SIM-GAP-29.** The build-kind comparison prices marginal production, scarcity, ports, diversity, frontier, and the one VP each building buys, but not piece economy or cost pressure. A city returns a settlement to supply and does not consume one of five settlement slots; it also spends ore and wheat that are otherwise often idle. Phase J's build-target scoring owns both omissions.
-
 **SIM-GAP-30.** Building-band headroom below the contested-card band holds only under base rules and the shipped default `HeuristicParams`. `vertex_score` is linear in public, unbounded weights, so a swept vector can lift a building above that band and silently re-rank denial; `production_weight = 1000.0` on a raw-production-two vertex already reaches `12_000`. Phase H must either bound candidate weights or re-check headroom for every candidate vector.
 
 ## Performance

@@ -147,8 +147,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 16: J3 — piece economy (SIM-GAP-29)
 
-- [ ] Settlement-slot return term on city value; cost-pressure term reusing goal-need; both zero-default
-- [ ] A/B; delete SIM-GAP-29 when both halves land
+- [x] Settlement-slot return term on city value; cost-pressure term reusing goal-need; both zero-default — `policy/piece_economy.rs` (`SlotReturn::derive`, once per decision: proximity to the settlement cap times distance-rule-open sites over the supply, capped at 1), added to the city vertex score under `slot_return_weight` and — pure state, like the stage — reaching the goal chooser; cost pressure via `GoalNeed::cost_term` (first affordable cost variant, mirroring `pay_cost`, dotted with the selected goal's need) charged to every affordable build push under `cost_pressure_weight`; an affordable goal has zero need so self-charging is structurally impossible; both weights zero-default, trial pairs behind `-econlo` (2.0/0.5) / `-econhi` (8.0/2.0); corpus recapture byte-identical (0/4000 moved)
+- [x] A/B; delete SIM-GAP-29 when both halves land — M-34: both pairs `equivalent` (econlo +0.04pp, 114/16000 discordant; econhi -0.26pp leaning negative, 457/16000), recorded for H2 with the two structural findings (base-rules road charge nearly dead: a payable road never overlaps a settlement/city goal's need; affordable road goals floor at 0.25 turns and outrank unaffordable build goals at ordinary production); forwarded-argument table + ten closed-form tests in `tests/piece_economy.rs`, label test in `policy/mod.rs`; entry deleted, programme inventory line brought current, contracts roster extended
 
 ### Task 17: J4 — goal hysteresis (SIM-GAP-25)
 

@@ -2,15 +2,15 @@
 //! and expected production are counted.
 //!
 //! One computation serves every consumer, the same one-model rule the programme applies to
-//! opponent threat and hand exposure: today that is the `vertex_score` build-target term,
-//! and the Phase-J piece-economy cost pressure is slated to reuse it. The need vector is
+//! opponent threat and hand exposure: the `vertex_score` build-target term and the J3
+//! piece-economy cost pressure (`cost_term`). The need vector is
 //! the goal's closest cost variant's missing cards minus one full round of expected
 //! production (`seats` rolls at `pips / 36` cards per roll), clamped at zero: a resource
 //! the observer already produces enough of asks nothing from a new building.
 
 use crate::policy::heuristic_v1;
 use crate::rules::{Buildable, RESOURCE_COUNT};
-use crate::view::DecisionView;
+use crate::view::{DecisionView, can_pay};
 
 /// Per-resource outstanding need of a goal, in cards.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -39,5 +39,20 @@ impl GoalNeed {
         (0..RESOURCE_COUNT)
             .map(|resource| f32::from(production[resource]) * self.need[resource])
             .sum()
+    }
+
+    /// The J3 cost-pressure term: how many cards of the goal's outstanding need paying for
+    /// `buildable` would consume, priced at the variant the payment path would actually
+    /// spend (the first affordable one, mirroring the engine's `pay_cost`). Zero when no
+    /// variant is payable, which the build-candidate call sites already rule out.
+    pub fn cost_term(&self, view: &DecisionView<'_>, buildable: Buildable) -> f32 {
+        view.costs(buildable)
+            .iter()
+            .find(|cost| can_pay(view.own_hand(), cost))
+            .map_or(0.0, |cost| {
+                (0..RESOURCE_COUNT)
+                    .map(|resource| f32::from(cost[resource]) * self.need[resource])
+                    .sum()
+            })
     }
 }

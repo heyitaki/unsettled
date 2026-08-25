@@ -222,6 +222,7 @@ fn the_urgency_rides_the_denial_context_only() {
             BuildKind::City,
             None,
             Some(&Stage::derive(&view, 0.5, None)),
+            None,
         );
     assert_eq!(city_score(&ungated).to_bits(), expected_ungated.to_bits());
 
@@ -242,6 +243,7 @@ fn the_urgency_rides_the_denial_context_only() {
             BuildKind::City,
             None,
             Some(&Stage::derive(&view, 0.5, Some(ctx.top_danger()))),
+            None,
         );
     let actual_gated = city_score(&gated);
     assert_eq!(actual_gated.to_bits(), expected_gated.to_bits());
@@ -283,7 +285,7 @@ fn the_settlement_damping_and_city_boost_match_the_closed_form() {
     let scale = (1.0_f32 - 0.5 * 0.6).max(0.0);
     let expected = base + expansion * 0.4 * (scale - 1.0);
     let actual =
-        heuristic_v1::vertex_score_with(&view, vertex, &params, BuildKind::Settlement, None, Some(&stage));
+        heuristic_v1::vertex_score_with(&view, vertex, &params, BuildKind::Settlement, None, Some(&stage), None);
     assert_eq!(actual.to_bits(), expected.to_bits());
 
     // Overdamping floors the term at zero instead of going negative.
@@ -299,6 +301,7 @@ fn the_settlement_damping_and_city_boost_match_the_closed_form() {
         BuildKind::Settlement,
         None,
         Some(&stage),
+        None,
     );
     assert_eq!(actual.to_bits(), floored.to_bits());
 
@@ -307,7 +310,7 @@ fn the_settlement_damping_and_city_boost_match_the_closed_form() {
     let city_base = heuristic_v1::vertex_score(&view, vertex, &params, BuildKind::City);
     let expected = city_base * (1.0_f32 + 0.75 * 0.6);
     let actual =
-        heuristic_v1::vertex_score_with(&view, vertex, &params, BuildKind::City, None, Some(&stage));
+        heuristic_v1::vertex_score_with(&view, vertex, &params, BuildKind::City, None, Some(&stage), None);
     assert_eq!(actual.to_bits(), expected.to_bits());
     let city_overdamped = heuristic_v1::vertex_score_with(
         &view,
@@ -316,6 +319,7 @@ fn the_settlement_damping_and_city_boost_match_the_closed_form() {
         BuildKind::City,
         None,
         Some(&stage),
+        None,
     );
     assert_eq!(city_overdamped.to_bits(), actual.to_bits());
 }

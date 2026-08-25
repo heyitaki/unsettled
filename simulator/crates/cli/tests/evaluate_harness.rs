@@ -106,6 +106,12 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialStagehi => {
             "heuristic-v1-trader-aware-threat-devcards-denial-stagehi"
         }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialEconlo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-econlo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialEconhi => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-econhi"
+        }
     }
 }
 
