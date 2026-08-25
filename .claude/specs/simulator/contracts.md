@@ -24,6 +24,7 @@ Within the engine:
 | `devcards.rs` | The second consumer. Values dev-card plays in the observer's own ETW terms. |
 | `trading.rs` | The third consumer. Supplies the shared opponent-value model for trade proposal, acceptance, and counterparty selection. |
 | `denial.rs` | The fourth consumer. Prices contested cards, award defence, and legality-aware shared-target racing through the shared ETW danger function. |
+| `exposure.rs` | The single model of what the next seven costs this hand. The forced discard, the pre-emptive shedding trade, and the pre-roll dev-card timing all read it; no consumer carries its own spelling. |
 
 ## Schedule and evaluation units
 
@@ -234,7 +235,7 @@ Ignore the `parallel efficiency` figure the bench prints. It divides by the logi
 
 The no-ports ablation is applied at the rules level, so a no-ports seat genuinely trades at the base bank rate rather than merely discounting ports when scoring locations.
 
-`HeuristicParams::legacy_valuation` is different: it is a measurement-only instrument inside the single shipped valuation implementation, not a rules-level ablation. `None` is the only default-reachable value. The six named `legacy*` policy kinds restore the complete pre-SIM-BATCH1 valuation or exactly one of its five separable expressions so paired attribution can hold the field fixed; no unnamed or default policy reaches them.
+`HeuristicParams::legacy_valuation` is different: it is a measurement-only instrument inside the single shipped valuation implementation, not a rules-level ablation. `None` is the only default-reachable value. Six named `legacy*` policy kinds restore the complete pre-SIM-BATCH1 valuation or exactly one of its five separable expressions so paired attribution can hold the field fixed; each later gap fix adds one more kind restoring exactly that fix's pre-change behavior, on the same terms. No unnamed or default policy reaches any of them.
 
 Two preconditions on reading that attribution. The restoration is exact only where `vertex_score` is finite: the city goal's presence gate moved from "a legal city exists" to "a legal city scores finitely" and no flag restores the old form, so a params vector making every city score non-finite drops the city goal under `legacyall` as well as under the fixed scorer. Every shipped rate is clamped at two or more, so no default-reachable policy can get there, but `HeuristicParams` is `pub` and `Deserialize` and is a Phase-H sweep target. And the five flags are marginal against the fixed corner rather than isolating: the port term is not build-kind dispatched, so `legacycityterms` alone does not reconstitute a pre-batch *city* score — only `legacyall` does.
 

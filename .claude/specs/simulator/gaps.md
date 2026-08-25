@@ -16,9 +16,9 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-20.** The placement heuristics read `vertex_owner` for legality only — occupied, or adjacent to occupied. There is no draft-order awareness, no denial, and no model of what an opponent takes next, so the threat machinery G1 through G3 built is unavailable at setup. That is the placement tuning programme's subject rather than this one's, but it is worth stating plainly: setup is the one phase of the game the opponent model does not reach.
 
-## Rules deviations and stale derived state
+## Goal and action selection
 
-**SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one, at roughly 65 against 55 early and roughly 269 as Largest Army closes. Roads into settlements are the VP engine this simulator exists to measure, so this may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic.
+**SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one, at roughly 65 against 55 early and roughly 269 as Largest Army closes. Those figures predate `SIM-GAP-17`'s deck-aware rewrite and now describe an untouched deck only: the score scales with what the remaining deck can still contain, and a victory-point chase term raises it further as the observer closes on the win. Roads into settlements are the VP engine this simulator exists to measure, so this may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic.
 
 **SIM-GAP-25.** Goal selection has no plan persistence, hysteresis, sunk-tempo cost, or commitment state. `PolicyScratch.goal` is overwritten at each decision, so there is no durable plan for a threat-aware policy to abandon.
 
