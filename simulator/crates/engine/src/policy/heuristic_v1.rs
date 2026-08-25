@@ -74,6 +74,10 @@ pub struct LegacyValuation {
     /// Restores the pre-SIM-GAP-32 road-building pair credit: the second edge's endpoints
     /// only, ungated on `is_expansion_target`, so it prices vertices nobody can settle.
     pub ungated_pair: bool,
+    /// Restores the frozen knight action score G1 shipped: contested-card and progress terms
+    /// at a flat pressure of one, the raw capped-hand-size steal term, and play/hold priced at
+    /// the self-regarding robber choice even when the threat gate plays another destination.
+    pub frozen_knight: bool,
 }
 
 /// How the special building phase is scored (the SIM-GAP-19 measurement seam). `Uniform` is
@@ -342,19 +346,47 @@ fn score_actions_with(
             || view.hex_touches_seat(view.robber(), view.observer())
             || view.own_playable_dev()[0] >= 2)
     {
-        let (off_destination, off_victim) = self_regarding_robber(view);
-        let (destination, victim) = match params.threat.as_ref() {
-            Some(threat_params) => threat::robber(view, threat_params),
-            None => (off_destination, off_victim),
-        };
-        out.push(ScoredAction {
-            action: Action::PlayDev(DevPlay::Knight {
-                destination,
-                victim,
-            }),
-            // Keep play/hold on the baseline choice so this arm varies placement only.
-            score: knight_action_score(view, off_destination, off_victim),
-        });
+        if params
+            .legacy_valuation
+            .is_some_and(|legacy| legacy.frozen_knight)
+        {
+            let (off_destination, off_victim) = self_regarding_robber(view);
+            let (destination, victim) = match params.threat.as_ref() {
+                Some(threat_params) => threat::robber(view, threat_params),
+                None => (off_destination, off_victim),
+            };
+            out.push(ScoredAction {
+                action: Action::PlayDev(DevPlay::Knight {
+                    destination,
+                    victim,
+                }),
+                // The G1 freeze: play/hold priced at the baseline choice so the robber A/B
+                // stayed placement-only.
+                score: frozen_knight_action_score(view, off_destination, off_victim),
+            });
+        } else {
+            let choice = params
+                .threat
+                .as_ref()
+                .map(|threat_params| (threat_params, threat::robber_choice(view, threat_params)));
+            let (destination, victim) = match choice.as_ref() {
+                Some((_, choice)) => (choice.destination, choice.victim),
+                None => self_regarding_robber(view),
+            };
+            out.push(ScoredAction {
+                action: Action::PlayDev(DevPlay::Knight {
+                    destination,
+                    victim,
+                }),
+                score: knight_action_score(
+                    view,
+                    gated,
+                    destination,
+                    victim,
+                    choice.as_ref().map(|(params, choice)| (*params, choice)),
+                ),
+            });
+        }
     }
     out.push(ScoredAction {
         action: Action::Pass,
@@ -1374,7 +1406,68 @@ fn deck_blind_dev_card_score(view: &DecisionView<'_>, gated: Gated<'_>) -> f32 {
     45.0 + contest_bonus * (0.5 + win_proximity(view)) * pressure
 }
 
-fn knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<u8>) -> f32 {
+/// The knight's play/hold price. Contested-card and progress terms scale with denial pressure
+/// toward the Largest Army holder (SIM-GAP-05/06); under the threat gate the steal term prices
+/// the victim through belief and the shared danger model, and the placement term rejoins play
+/// timing to the robber placement value the chooser maximized (SIM-GAP-09). With every gate
+/// off this is bit-identical to `frozen_knight_action_score`: the pressure multiplier is
+/// exactly 1.0, the steal arm is the same expression, and the placement term is literal zero.
+fn knight_action_score(
+    view: &DecisionView<'_>,
+    gated: Gated<'_>,
+    destination: u8,
+    victim: Option<u8>,
+    threat: Option<(&ThreatParams, &threat::RobberChoice)>,
+) -> f32 {
+    let pressure = gated.map_or(1.0, |(ctx, denial_params)| {
+        denial::pressure(ctx, denial_params, view.largest_army_holder())
+    });
+    if view.knight_takes_largest_army() {
+        return contested_card_score(
+            view,
+            view.largest_army_vp(),
+            view.largest_army_holder().is_some(),
+            pressure,
+        );
+    }
+    let next = view
+        .knights_played(view.observer())
+        .saturating_add(1)
+        .min(view.largest_army_min());
+    let progress = f32::from(next) / f32::from(view.largest_army_min().max(1))
+        * (45.0 + 35.0 * win_proximity(view))
+        * pressure;
+    let blocked = if view.hex_touches_seat(view.robber(), view.observer()) {
+        f32::from(view.board().tokens()[usize::from(view.robber())].map_or(0, pips)) * 12.0
+    } else {
+        0.0
+    };
+    let (steal, placement) = match threat {
+        Some((threat_params, choice)) => (
+            (threat_params.knight_steal_weight * choice.steal_value) as f32,
+            (threat_params.knight_placement_weight * choice.placement_score) as f32,
+        ),
+        None => (
+            victim.map_or(0.0, |seat| {
+                f32::from(view.hand_size(usize::from(seat)).min(12)) * 2.0
+            }),
+            0.0,
+        ),
+    };
+    20.0 + progress
+        + blocked
+        + steal
+        + placement
+        + if destination != view.robber() {
+            1.0
+        } else {
+            0.0
+        }
+}
+
+/// The pre-SIM-GAP-05/06/09 knight score, preserved bit-for-bit as the measurement reference
+/// behind `LegacyValuation::frozen_knight`.
+fn frozen_knight_action_score(view: &DecisionView<'_>, destination: u8, victim: Option<u8>) -> f32 {
     if view.knight_takes_largest_army() {
         return contested_card_score(
             view,

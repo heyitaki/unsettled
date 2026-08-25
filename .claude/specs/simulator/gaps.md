@@ -4,14 +4,6 @@ Class **G**: statements that the code does not do something, or does it wrong. F
 
 Ids are stable and assigned in source order. A closed gap's id is retired, not reused.
 
-## Denial and threat
-
-**SIM-GAP-05.** The frozen knight path still passes a literal pressure of `1.0` into `contested_card_score`, so its contested-card value does not vary with opponent danger. Longest Road now does; the remaining knight limitation is coupled to `SIM-GAP-09`.
-
-**SIM-GAP-06.** The frozen knight path still scales only through the observer's progress and never through the opponent's danger. Longest Road and dev buying now use denial pressure; the remaining knight limitation is coupled to `SIM-GAP-09`.
-
-**SIM-GAP-09.** `knight_action_score`'s steal term is raw capped hand size, with no belief and no threat. G1 froze it deliberately so the robber A/B stayed placement-only; it is still frozen.
-
 ## Initial placement
 
 **SIM-GAP-20.** The placement heuristics read `vertex_owner` for legality only — occupied, or adjacent to occupied. There is no draft-order awareness, no denial, and no model of what an opponent takes next, so the threat machinery G1 through G3 built is unavailable at setup. That is the placement tuning programme's subject rather than this one's, but it is worth stating plainly: setup is the one phase of the game the opponent model does not reach.

@@ -1012,11 +1012,13 @@ fn the_denial_goal_change_reaches_pre_roll_dev_card_targeting() {
     );
 }
 
-#[test]
-fn knight_action_score_is_identical_under_the_denial_gate() {
+/// The old frozen-knight fixture: seat 1 holds one card on a non-robber hex, and the observer
+/// either takes Largest Army with the next knight (`knights_played` 2) or merely holds spares
+/// (`knights_played` 0, two playable knights).
+fn knight_fixture(knights_played: u8) -> (Topology, SimBoard, GameArena) {
     let (topology, board, _rules, _config, mut arena) = fixture();
-    arena.state.players[0].playable_dev[0] = 1;
-    arena.state.players[0].knights_played = 2;
+    arena.state.players[0].playable_dev[0] = if knights_played > 0 { 1 } else { 2 };
+    arena.state.players[0].knights_played = knights_played;
     arena.state.players[0].vp_public = 4;
     let victim_vertex = topology.hex_vertices(
         (0..topology.hex_count())
@@ -1027,20 +1029,176 @@ fn knight_action_score_is_identical_under_the_denial_gate() {
     arena.state.vertex_owner[usize::from(victim_vertex)] = 1;
     arena.state.vertex_tier[usize::from(victim_vertex)] = 1;
     arena.state.players[1].resources[Resource::Wood.index()] = 1;
+    arena.state.belief.gain(1, Resource::Wood.index(), 1);
+    (topology, board, arena)
+}
+
+fn knight_score(actions: &[ScoredAction]) -> f32 {
+    score_for(actions, |action| {
+        matches!(action, Action::PlayDev(DevPlay::Knight { .. }))
+    })
+}
+
+fn knight_play(actions: &[ScoredAction]) -> (u8, Option<u8>) {
+    actions
+        .iter()
+        .find_map(|candidate| match candidate.action {
+            Action::PlayDev(DevPlay::Knight {
+                destination,
+                victim,
+            }) => Some((destination, victim)),
+            _ => None,
+        })
+        .unwrap()
+}
+
+// Forwarded arguments of the SIM-GAP-05/06/09 knight rejoin, one observing test each:
+// - denial pressure into the contested-card term (non-default pressure params):
+//   the_denial_gate_scales_the_knight_contested_card
+// - denial pressure into the progress term (non-default pressure params):
+//   the_denial_gate_scales_the_knight_progress_term
+// - `ThreatParams::knight_steal_weight` / `knight_placement_weight` and the priced
+//   `RobberChoice`, played pair equal to the priced pair (closed form, non-default weights):
+//   the_threat_gate_prices_knight_steal_and_placement
+// - `RobberChoice::placement_score` / `steal_value` derivations, including belief sensitivity:
+//   robber_choice_* (tests/threat_robber.rs)
+// - `LegacyValuation::frozen_knight` (restores flat pressure and self-regarding pricing):
+//   the_frozen_knight_flag_restores_the_g1_score
+#[test]
+fn the_denial_gate_scales_the_knight_contested_card() {
+    let (topology, board, arena) = knight_fixture(2);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    assert!(view.knight_takes_largest_army());
     let off = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    assert_eq!(knight_score(&off).to_bits(), 12_300.0_f32.to_bits());
+
+    let denial_params = DenialParams {
+        pressure_floor: 0.25,
+        pressure_span: 2.0,
+        ..DenialParams::default()
+    };
     let params = HeuristicParams {
-        denial: Some(DenialParams::default()),
+        denial: Some(denial_params),
         ..HeuristicParams::default()
     };
     let on = heuristic_v1::recommend(&view, &params);
-    let knight = |actions: &[ScoredAction]| {
-        score_for(actions, |action| {
-            matches!(action, Action::PlayDev(DevPlay::Knight { .. }))
-        })
+    let ctx = denial::context(&view, &denial_params);
+    let pressure = denial::pressure(&ctx, &denial_params, view.largest_army_holder());
+    assert_ne!(pressure, 1.0);
+    assert_eq!(
+        knight_score(&on).to_bits(),
+        (knight_score(&off) * pressure).to_bits()
+    );
+}
+
+#[test]
+fn the_denial_gate_scales_the_knight_progress_term() {
+    let (topology, board, arena) = knight_fixture(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    assert!(!view.knight_takes_largest_army());
+
+    let denial_params = DenialParams {
+        pressure_floor: 0.25,
+        pressure_span: 2.0,
+        ..DenialParams::default()
     };
-    assert_eq!(knight(&off).to_bits(), knight(&on).to_bits());
-    assert_eq!(knight(&off).to_bits(), 12_300.0_f32.to_bits());
+    let params = HeuristicParams {
+        denial: Some(denial_params),
+        ..HeuristicParams::default()
+    };
+    let on = heuristic_v1::recommend(&view, &params);
+    let (destination, victim) = knight_play(&on);
+    assert_eq!(victim, Some(1));
+    let ctx = denial::context(&view, &denial_params);
+    let pressure = denial::pressure(&ctx, &denial_params, view.largest_army_holder());
+    assert_ne!(pressure, 1.0);
+    let proximity = f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1));
+    let progress_base =
+        f32::from(1_u8) / f32::from(view.largest_army_min().max(1)) * (45.0 + 35.0 * proximity);
+    let steal = f32::from(view.hand_size(1).min(12)) * 2.0;
+    let tiebreak = if destination != view.robber() { 1.0 } else { 0.0 };
+    let expected = 20.0 + progress_base * pressure + 0.0 + steal + tiebreak;
+    assert_eq!(knight_score(&on).to_bits(), expected.to_bits());
+
+    let off = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    let unscaled = 20.0 + progress_base + 0.0 + steal + tiebreak;
+    assert_eq!(
+        knight_score(&off).to_bits(),
+        unscaled.to_bits(),
+        "the ungated path must keep the flat progress term"
+    );
+}
+
+#[test]
+fn the_threat_gate_prices_knight_steal_and_placement() {
+    let (topology, board, arena) = knight_fixture(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let threat_params = ThreatParams {
+        knight_steal_weight: 7.0,
+        knight_placement_weight: 11.0,
+        ..ThreatParams::default()
+    };
+    let params = HeuristicParams {
+        threat: Some(threat_params),
+        ..HeuristicParams::default()
+    };
+    let on = heuristic_v1::recommend(&view, &params);
+    let choice = unsettled_engine::policy::threat::robber_choice(&view, &threat_params);
+    assert!(choice.placement_score > 0.0);
+    assert!(choice.steal_value > 0.0);
+    // The rejoin: the priced pair is the played pair, not the self-regarding baseline.
+    assert_eq!(knight_play(&on), (choice.destination, choice.victim));
+
+    let proximity = f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1));
+    let progress =
+        f32::from(1_u8) / f32::from(view.largest_army_min().max(1)) * (45.0 + 35.0 * proximity);
+    let steal = (threat_params.knight_steal_weight * choice.steal_value) as f32;
+    let placement = (threat_params.knight_placement_weight * choice.placement_score) as f32;
+    let expected = 20.0
+        + progress
+        + 0.0
+        + steal
+        + placement
+        + if choice.destination != view.robber() {
+            1.0
+        } else {
+            0.0
+        };
+    assert_eq!(knight_score(&on).to_bits(), expected.to_bits());
+}
+
+#[test]
+fn the_frozen_knight_flag_restores_the_g1_score() {
+    let (topology, board, arena) = knight_fixture(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let gated = HeuristicParams {
+        threat: Some(ThreatParams::default()),
+        denial: Some(DenialParams::default()),
+        ..HeuristicParams::default()
+    };
+    let frozen = HeuristicParams {
+        legacy_valuation: Some(heuristic_v1::LegacyValuation {
+            frozen_knight: true,
+            ..heuristic_v1::LegacyValuation::default()
+        }),
+        ..gated.clone()
+    };
+    let ungated = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    let rejoined = heuristic_v1::recommend(&view, &gated);
+    let restored = heuristic_v1::recommend(&view, &frozen);
+    // The freeze prices the self-regarding baseline at flat pressure, so its score is
+    // bit-identical to the fully ungated policy even though the threat gate still plays the
+    // threat-chosen destination.
+    assert_eq!(
+        knight_score(&restored).to_bits(),
+        knight_score(&ungated).to_bits()
+    );
+    assert_eq!(knight_play(&restored), knight_play(&rejoined));
+    assert_ne!(
+        knight_score(&rejoined).to_bits(),
+        knight_score(&restored).to_bits(),
+        "the rejoined score must actually move under the gates"
+    );
 }
 
 #[test]

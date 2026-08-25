@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::etw::{self, EtwInputs};
+use crate::policy::trading;
 use crate::rules::RESOURCE_COUNT;
 use crate::state::MAX_SEATS;
 use crate::view::{DecisionView, pips};
@@ -24,6 +25,14 @@ pub struct ThreatParams {
     pub delay_cap: f64,
     /// Positive, finite hand size at which the victim hand term saturates.
     pub hand_cap: f64,
+    /// Non-negative, finite scale turning `RobberChoice::steal_value` (the belief-derived
+    /// own-need hit plus the shared victim rank) into knight action-score points. An unswept
+    /// Phase-H placeholder, not a tuned value.
+    pub knight_steal_weight: f64,
+    /// Non-negative, finite scale turning `RobberChoice::placement_score` into knight
+    /// action-score points, rejoining knight play timing to the robber placement value the
+    /// chooser maximized. An unswept Phase-H placeholder, not a tuned value.
+    pub knight_placement_weight: f64,
 }
 
 impl Default for ThreatParams {
@@ -37,6 +46,8 @@ impl Default for ThreatParams {
             danger_floor: 1.0,
             delay_cap: 4.0,
             hand_cap: 8.0,
+            knight_steal_weight: 12.0,
+            knight_placement_weight: 30.0,
         }
     }
 }
@@ -70,6 +81,27 @@ impl ThreatTerms {
 }
 
 pub fn robber(view: &DecisionView<'_>, params: &ThreatParams) -> (u8, Option<u8>) {
+    let choice = robber_choice(view, params);
+    (choice.destination, choice.victim)
+}
+
+/// The robber decision plus the two quantities the knight action score consumes, so choosing
+/// and pricing the same move never recomputes the threat context.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RobberChoice {
+    pub destination: u8,
+    pub victim: Option<u8>,
+    /// The hex score `robber` maximized at `destination`: summed delay/need/block terms over
+    /// every rival plus the best available steal rank. Zero when the fallback hex was taken
+    /// because no candidate hex was scoreable.
+    pub placement_score: f64,
+    /// Value of stealing from `victim`: the belief-derived probability the stolen card fills
+    /// the observer's own cheapest-route shortfall, plus the victim's rank under the shared
+    /// danger model. Zero with no victim.
+    pub steal_value: f64,
+}
+
+pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberChoice {
     let context = context(view, params);
     let mut best = view.robber();
     let mut best_score = f64::NEG_INFINITY;
@@ -97,11 +129,13 @@ pub fn robber(view: &DecisionView<'_>, params: &ThreatParams) -> (u8, Option<u8>
             best_score = score;
         }
     }
+    let mut placement_score = best_score;
     if best == view.robber() {
         best = (0..view.topology().hex_count())
             .map(|hex| hex as u8)
             .find(|hex| *hex != view.robber())
             .expect("board has another hex");
+        placement_score = 0.0;
     }
 
     let mut victim = None;
@@ -116,7 +150,31 @@ pub fn robber(view: &DecisionView<'_>, params: &ThreatParams) -> (u8, Option<u8>
             best_rank = rank;
         }
     }
-    (best, victim)
+    RobberChoice {
+        destination: best,
+        victim,
+        placement_score,
+        steal_value: victim.map_or(0.0, |seat| {
+            let seat = usize::from(seat);
+            victim_rank(view, params, &context, seat) + own_need_hit(view, seat)
+        }),
+    }
+}
+
+/// Belief-derived probability that a uniformly random card from `victim`'s believed hand fills
+/// the observer's own cheapest-route shortfall. The observer's shortfall prices the real hand,
+/// mirroring `trading::own_inputs`; the victim's composition stands on belief.
+fn own_need_hit(view: &DecisionView<'_>, victim: usize) -> f64 {
+    let expected = view.belief().expected(victim);
+    let total = expected.iter().sum::<f64>();
+    if total <= 0.0 {
+        return 0.0;
+    }
+    let need = need_share(&trading::own_inputs(view));
+    (0..RESOURCE_COUNT)
+        .map(|resource| need[resource] * expected[resource])
+        .sum::<f64>()
+        / total
 }
 
 /// Tier-weighted production pips a seat earns from one unblocked hex.
@@ -257,6 +315,10 @@ fn assert_params(params: &ThreatParams) {
     debug_assert!(params.danger_floor.is_finite() && params.danger_floor > 0.0);
     debug_assert!(params.delay_cap.is_finite() && params.delay_cap >= 0.0);
     debug_assert!(params.hand_cap.is_finite() && params.hand_cap > 0.0);
+    debug_assert!(params.knight_steal_weight.is_finite() && params.knight_steal_weight >= 0.0);
+    debug_assert!(
+        params.knight_placement_weight.is_finite() && params.knight_placement_weight >= 0.0
+    );
 }
 
 fn need_share(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {

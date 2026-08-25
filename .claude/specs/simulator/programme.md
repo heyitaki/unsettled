@@ -26,7 +26,7 @@ There is a second payoff beyond sharpening the measuring instrument. `crates/eng
 - **H — re-tune weights** across the resulting grid, including the structural formula terms that were the old Phase F. This previously said to fix the scoring defects in [gaps.md](gaps.md) first; SIM-BATCH1 discharged the four named valuation defects. H now inherits `SIM-GAP-30`: bound candidate weights or re-check building-band headroom for each vector. Sweep with every G gate on, for the reason M-21 gives. H also settles the open `handValue` question below.
 - **I — adopt** against the untouched `gate` domain.
 - **J — build-target scoring.** Which settlement to upgrade, and where to put the next one, currently ignore what the current goal consumes, resource scarcity relative to that goal rather than to the board, and game stage. Not scheduled against a date; it is the largest block of genuinely new design left.
-- **Knight timing — named but unscheduled.** Rejoining knight play timing with robber placement, deliberately deferred by G1 so its A/B stayed placement-only.
+- **Knight timing — built and measured.** The deferral G1 chose so its A/B stayed placement-only is discharged: the knight's contested-card and progress terms take the shared denial pressure, its steal term prices the victim through belief and the shared danger model, and play timing is priced at the robber pair the knight actually plays, joined to the placement value the chooser maximized. Measured `equivalent` in M-31 and kept per the gap-fix rule; `ThreatParams::knight_steal_weight` and `knight_placement_weight` are unswept Phase-H placeholders, and the frozen score survives behind the `-legacyknight` label.
 
 ## Open question H must settle: does `handValue` survive ETW?
 

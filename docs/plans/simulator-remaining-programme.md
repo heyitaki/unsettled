@@ -131,9 +131,9 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 13: Knight timing — SIM-GAP-05/06/09
 
-- [ ] Unfreeze the knight path: steal term uses belief-derived victim value and the shared threat/danger model; contested-card and progress terms take real denial pressure instead of literal `1.0`; knight play timing rejoins robber placement value
-- [ ] Preserve the ungated self-regarding path byte-stable; forwarded-argument tables
-- [ ] A/B; corpus recapture; append M entry; delete the three entries; update the programme's "named but unscheduled" line
+- [x] Unfreeze the knight path: steal term uses belief-derived victim value and the shared threat/danger model; contested-card and progress terms take real denial pressure instead of literal `1.0`; knight play timing rejoins robber placement value — contested/progress scale by `denial::pressure` toward the LA holder; new `threat::robber_choice` seam returns the maximized `placement_score` plus a `steal_value` (belief own-need hit on the real hand via `trading::own_inputs`, plus the shared victim rank); the knight is priced at the pair it plays; `knight_steal_weight` (12.0) / `knight_placement_weight` (30.0) are H2 placeholders; old behavior behind `LegacyValuation::frozen_knight` (`...-legacyknight` label)
+- [x] Preserve the ungated self-regarding path byte-stable; forwarded-argument tables — bit-identity by construction (pressure multiplier exactly 1.0, same steal expression, literal-zero placement) verified by the corpus (all non-composite arms byte-identical) and closed-form tests; tables in `tests/denial.rs` (knight rejoin) and `tests/threat_robber.rs` (`robber_choice`), each argument named with its observer
+- [x] A/B; corpus recapture; append M entry; delete the three entries; update the programme's "named but unscheduled" line — M-31: `equivalent`, +0.0125pp, clustered `[-0.018pp, +0.043pp]`, 6/16000 discordant, fix kept per prereg rule; corpus recaptured (12/4000 moved, all in the composite arm; gate baselines and replay fixtures held, no regeneration); three entries deleted; programme line now records built+measured with the placeholders and legacy label
 
 ### Task 14: J1 — goal-need machinery and scarcity term
 

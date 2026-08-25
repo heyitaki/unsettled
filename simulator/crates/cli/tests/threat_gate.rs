@@ -154,7 +154,7 @@ fn threat_policy_games_are_legal_and_hold_invariants() {
 }
 
 #[test]
-fn threat_arm_scores_the_knight_action_identically_to_heuristic_v1() {
+fn threat_arm_rejoins_the_knight_score_and_legacyknight_restores_the_freeze() {
     let (topology, board, _rules, mut arena) = knight_fixture();
     let (leader_hex, dangerous_hex) = equal_brick_pair(&board, &topology);
     for (hex, seat) in [(leader_hex, 1), (dangerous_hex, 2)] {
@@ -198,8 +198,23 @@ fn threat_arm_scores_the_knight_action_identically_to_heuristic_v1() {
     };
     let (off_pair, off_score) = knight(&off);
     let (on_pair, on_score) = knight(&on);
-    assert_eq!(off_score.to_bits(), on_score.to_bits());
+    // SIM-GAP-09 closed: the threat arm prices the pair it actually plays instead of the
+    // frozen self-regarding baseline, so score and pair both move together.
+    assert_ne!(off_score.to_bits(), on_score.to_bits());
     assert_ne!(off_pair, on_pair);
+
+    let frozen_params = HeuristicParams {
+        legacy_valuation: Some(heuristic_v1::LegacyValuation {
+            frozen_knight: true,
+            ..heuristic_v1::LegacyValuation::default()
+        }),
+        ..params.clone()
+    };
+    let mut frozen = Box::new(ActionBuf::new());
+    heuristic_v1::score_actions(&view, &frozen_params, &mut frozen);
+    let (frozen_pair, frozen_score) = knight(&frozen);
+    assert_eq!(frozen_score.to_bits(), off_score.to_bits());
+    assert_eq!(frozen_pair, on_pair);
 
     for kind in [
         PolicyKind::HeuristicV1ThreatDenial,

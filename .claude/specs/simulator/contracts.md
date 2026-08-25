@@ -116,6 +116,7 @@ heuristic-v1-trader-aware-threat-devcards-denial-legacyexposure
 heuristic-v1-trader-aware-threat-devcards-denial-legacyrace
 heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo
 heuristic-v1-trader-aware-threat-devcards-denial-legacypair
+heuristic-v1-trader-aware-threat-devcards-denial-legacyknight
 heuristic-v1-trader-aware-threat-devcards-denial-sbmute
 heuristic-v1-trader-aware-threat-devcards-denial-sbhold
 ```
