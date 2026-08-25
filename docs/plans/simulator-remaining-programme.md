@@ -121,9 +121,9 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 11: SIM-GAP-32 — road-building pair gating, owns the M-22 re-run
 
-- [ ] Apply the verified reproduction: gate `best_road_building_pair`'s expansion credit on `is_expansion_target`, fold both edges' endpoints through `Option` with `unwrap_or(0.0)`
-- [ ] Repair the seven replay-derived `player_trading.rs` fixtures (Task 3's precondition assertions should localize the breaks)
-- [ ] Re-run the M-22 attribution schedule; regenerate gate baselines; append the M entry; corpus recapture; delete the entry
+- [x] Apply the verified reproduction: gate `best_road_building_pair`'s expansion credit on `is_expansion_target`, fold both edges' endpoints through `Option` with `unwrap_or(0.0)` — old credit preserved behind `LegacyValuation::ungated_pair` (`...-legacypair` label); closed-form pair-choice tests with a selection-loop mirror, a NEG_INFINITY poisoning guard, and a forwarded-argument table in `heuristic_v1.rs`
+- [x] Repair the seven replay-derived `player_trading.rs` fixtures (Task 3's precondition assertions should localize the breaks) — six broke, each localized by its precondition; re-pinned via the committed scan, which gained blocks for the two tests it did not yet cover and a wider embargo search range; separately, `ranking_stability.rs` failed on a one-win CityFocus/PortSynergy tie at ranks 2-3 under noports and its top-2/Spearman checks now compare win counts through a 25-win (~1 SE) noise margin with tie-aware midranks, keeping the winner and 0.7 floor sharp
+- [x] Re-run the M-22 attribution schedule; regenerate gate baselines; append the M entry; corpus recapture; delete the entry — M-29: pair gating is `better` at +2.16pp, clustered `[+1.74pp, +2.57pp]`, the first gap fix clearing the +-1pp threshold; the six re-measured SIM-BATCH1 rows stay consistent with M-22 (bundle +0.88pp `inconclusive`, chooser now 0/0 discordant); corpus recaptured (2160/4000 moved, every heuristic arm both layouts, both priority-trader arms byte-identical); all three gate baselines regenerated via the deliberate flow; entry deleted, contracts.md policy roster brought current with all eleven legacy labels
 
 ### Task 12: SIM-GAP-19 — SpecialBuild measurement
 

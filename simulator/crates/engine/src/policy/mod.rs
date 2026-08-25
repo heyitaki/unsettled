@@ -58,6 +58,7 @@ pub enum PolicyKind {
     HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
     HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace,
     HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
 }
 
 /// Disables every owned port, so the seat trades at the base bank rate.
@@ -113,7 +114,8 @@ impl PolicyKind {
             | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck
             | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
             | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
-            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => &[],
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => &[],
         }
     }
 
@@ -190,6 +192,9 @@ impl PolicyKind {
             "heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo" => {
                 Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo)
             }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacypair" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair)
+            }
             _ => None,
         }
     }
@@ -261,7 +266,8 @@ pub fn pre_roll(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
             heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind))
         }
         PolicyKind::HeuristicV1Noports => {
@@ -316,7 +322,8 @@ pub fn action(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
             heuristic_v1_trader::action(view, scratch, &heuristic_params(kind), rng)
         }
         PolicyKind::HeuristicV1Noports => {
@@ -371,7 +378,8 @@ pub fn discard(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
             heuristic_v1::discard(view, count, scratch, &heuristic_params(kind))
         }
     }
@@ -421,7 +429,8 @@ pub fn robber(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
             heuristic_v1::robber(view, &heuristic_params(kind))
         }
     }
@@ -460,7 +469,8 @@ pub fn respond_trade(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
             heuristic_v1_trader::respond_trade(view, offer, &heuristic_params(kind), rng)
         }
         PolicyKind::RandomLegal
@@ -663,6 +673,12 @@ fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
             composite_params(Some(heuristic_v1::LegacyValuation {
                 vp_embargo: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                ungated_pair: true,
                 ..heuristic_v1::LegacyValuation::default()
             }))
         }
@@ -1113,6 +1129,13 @@ mod gate_tests {
                     ..LegacyValuation::default()
                 },
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
+                LegacyValuation {
+                    ungated_pair: true,
+                    ..LegacyValuation::default()
+                },
+            ),
         ] {
             assert_eq!(
                 heuristic_params(kind).legacy_valuation,
@@ -1135,6 +1158,7 @@ mod gate_tests {
                     | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure
                     | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace
                     | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair
             ) {
                 assert_eq!(
                     heuristic_params(kind).legacy_valuation,
@@ -1348,6 +1372,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
             ]
         );
         assert_eq!(
@@ -1376,6 +1401,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
             ]
         );
         assert_eq!(
@@ -1400,6 +1426,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
             ]
         );
         assert_eq!(
@@ -1428,6 +1455,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
             ]
         );
     }
@@ -1460,7 +1488,7 @@ mod gate_tests {
         }
     }
 
-    fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 39] {
+    fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 40] {
         [
             (PolicyKind::RandomLegal, false, false, false, false),
             (PolicyKind::GreedyNoTrade, false, false, false, false),
@@ -1681,6 +1709,13 @@ mod gate_tests {
                 true,
                 true,
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
+                true,
+                true,
+                true,
+                true,
+            ),
         ]
     }
 
@@ -1815,10 +1850,14 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo,
                 "heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo",
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacypair",
+            ),
         ]
     }
 
-    const POLICY_KIND_COUNT: usize = 39;
+    const POLICY_KIND_COUNT: usize = 40;
 
     const fn kind_index(kind: PolicyKind) -> usize {
         match kind {
@@ -1861,6 +1900,7 @@ mod gate_tests {
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure => 36,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace => 37,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => 38,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => 39,
         }
     }
 }

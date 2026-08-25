@@ -533,18 +533,24 @@ fn road_building_pair_targets_are_scored_as_settlements() {
                         continue;
                     }
                     first_pair.get_or_insert((first, *second));
-                    let score = topology
-                        .edge_endpoints(*second)
-                        .iter()
+                    // The pair credit mirrors `expansion_road_score`: both laid edges' endpoints,
+                    // gated on `is_expansion_target`, zero when the pair opens no settleable site.
+                    let score = [first, *second]
+                        .into_iter()
+                        .flat_map(|edge| topology.edge_endpoints(edge))
+                        .filter(|vertex| view.is_expansion_target(*vertex))
                         .map(|vertex| {
-                            local_production(&board, &topology, *vertex)
+                            local_production(&board, &topology, vertex)
                                 .iter()
                                 .enumerate()
                                 .filter(|(resource, value)| **value > 0 && own[*resource] == 0)
                                 .count() as f32
                                 * 1_000.0
                         })
-                        .fold(f32::NEG_INFINITY, f32::max);
+                        .fold(None, |best: Option<f32>, score| {
+                            Some(best.map_or(score, |best| best.max(score)))
+                        })
+                        .unwrap_or(0.0);
                     if score > best_score {
                         best_score = score;
                         expected = Some((first, *second));

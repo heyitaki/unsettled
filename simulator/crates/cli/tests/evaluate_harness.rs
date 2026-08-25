@@ -82,6 +82,9 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
             "heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo"
         }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacypair"
+        }
     }
 }
 

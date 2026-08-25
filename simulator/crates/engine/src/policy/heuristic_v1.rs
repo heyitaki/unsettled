@@ -69,6 +69,9 @@ pub struct LegacyValuation {
     /// conservatively-estimated point below the win threshold, or two with an imminent
     /// award swing, instead of the shared ETW danger model.
     pub vp_embargo: bool,
+    /// Restores the pre-SIM-GAP-32 road-building pair credit: the second edge's endpoints
+    /// only, ungated on `is_expansion_target`, so it prices vertices nobody can settle.
+    pub ungated_pair: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -1338,6 +1341,9 @@ fn best_road_building_pair(
     // Road building lays two segments, so the card is reachable from two further out.
     let mut network = longest_road_reachable(view, 2, gated).then(|| view.road_network());
     let cap = road_length_cap(view, gated);
+    let ungated_pair = params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.ungated_pair);
     #[cfg(test)]
     PAIR_PROBE_CAP.with(|recorded| recorded.set(Some(cap)));
     for first in 0..view.topology().edge_count() {
@@ -1352,15 +1358,26 @@ fn best_road_building_pair(
                 continue;
             }
             found_second = true;
-            // Unlike `expansion_road_score` this does not gate on `is_expansion_target`, so it
-            // credits vertices nobody can settle. `SIM-GAP-32` records why the fix is not bundled
-            // here.
-            let expansion_score = view
-                .topology()
-                .edge_endpoints(second)
-                .iter()
-                .map(|vertex| vertex_score(view, *vertex, params, BuildKind::Settlement))
-                .fold(f32::NEG_INFINITY, f32::max);
+            let expansion_score = if ungated_pair {
+                view.topology()
+                    .edge_endpoints(second)
+                    .iter()
+                    .map(|vertex| vertex_score(view, *vertex, params, BuildKind::Settlement))
+                    .fold(f32::NEG_INFINITY, f32::max)
+            } else {
+                // Mirror `expansion_road_score`'s gate over both laid edges; the `Option` fold
+                // keeps a pair laid purely for Longest Road at zero credit instead of poisoning
+                // its whole score to `NEG_INFINITY`.
+                [first, second]
+                    .into_iter()
+                    .flat_map(|edge| view.topology().edge_endpoints(edge))
+                    .filter(|vertex| view.is_expansion_target(*vertex))
+                    .map(|vertex| vertex_score(view, vertex, params, BuildKind::Settlement))
+                    .fold(None, |best: Option<f32>, score| {
+                        Some(best.map_or(score, |best| best.max(score)))
+                    })
+                    .unwrap_or(0.0)
+            };
             let road_bonus = network.as_mut().map_or(0.0, |network| {
                 let length = view.road_length_on(network, first, Some(second), cap);
                 longest_road_value(view, length, gated)
@@ -2055,6 +2072,189 @@ mod devcards_rate_tests {
             }
         }
         panic!("fixture never separates the legacy and fixed scorers");
+    }
+
+    /// Mirrors `best_road_building_pair`'s selection loop so a test can pin the chosen pair
+    /// against a closed-form credit; iteration order and the strict `>` tie rule match exactly.
+    fn pair_choice(
+        view: &crate::view::DecisionView<'_>,
+        topology: &Topology,
+        credit: impl Fn(u8, u8) -> f32,
+    ) -> (Option<u8>, Option<u8>) {
+        let mut best = (None, None);
+        let mut best_score = f32::NEG_INFINITY;
+        for first in 0..topology.edge_count() {
+            let first = first as u8;
+            if !view.legal_road(first) {
+                continue;
+            }
+            let mut found_second = false;
+            for second in topology.edge_neighbors(first) {
+                if !view.legal_road_after(first, *second) {
+                    continue;
+                }
+                found_second = true;
+                let score = credit(first, *second);
+                if score > best_score {
+                    best = (Some(first), Some(*second));
+                    best_score = score;
+                }
+            }
+            if !found_second && best.0.is_none() {
+                best = (Some(first), None);
+            }
+        }
+        best
+    }
+
+    // Forwarded arguments of `best_road_building_pair`, one observing test each:
+    // - `view` (pair legality and the `is_expansion_target` gate):
+    //   the_pair_credit_is_gated_and_reads_both_edges
+    // - `params` (vertex-score weights and `legacy_valuation.ungated_pair`):
+    //   the_pair_credit_is_gated_and_reads_both_edges, both halves
+    // - `gated` (denial contest term and the race budget): road_building_is_aimed_by_the_denial_terms
+    //   and the_default_budget_finds_the_third_ranked_challenger in tests/denial.rs
+    #[test]
+    fn the_pair_credit_is_gated_and_reads_both_edges() {
+        let params = super::HeuristicParams {
+            production_weight: 2.5,
+            scarcity_weight: 0.6,
+            diversity_bonus: 0.0,
+            port_weight: 0.0,
+            expansion_weight: 0.0,
+            ..super::HeuristicParams::default()
+        };
+        let legacy = super::HeuristicParams {
+            legacy_valuation: Some(super::LegacyValuation {
+                ungated_pair: true,
+                ..super::LegacyValuation::default()
+            }),
+            ..params.clone()
+        };
+        let (topology, board, mut arena) = valuation_fixture();
+        // A distant rival trail parks the Longest Road race out of reach, so the pair choice
+        // reads the expansion credit alone and the closed forms below stay road-bonus-free.
+        arena.state.players[1].longest_road_len = 10;
+        // A settlement plus a two-road spur puts legal pairs both at the settlement (whose
+        // surroundings the distance rule blocks) and at the spur tip (whose far endpoints are
+        // settleable), so all three candidate credits can disagree.
+        (0..topology.vertex_count())
+            .find_map(|start| {
+                let start = start as u8;
+                let first_leg = topology.vertex_edges(start)[0];
+                let [near, far] = topology.edge_endpoints(first_leg);
+                let anchor = if near == start { far } else { near };
+                let second_leg = *topology
+                    .vertex_edges(anchor)
+                    .iter()
+                    .find(|edge| **edge != first_leg)?;
+                arena.state.vertex_owner[usize::from(start)] = 0;
+                arena.state.vertex_tier[usize::from(start)] = 1;
+                arena.state.edge_owner[usize::from(first_leg)] = 0;
+                arena.state.edge_owner[usize::from(second_leg)] = 0;
+                let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+                let score = |vertex: u8| {
+                    super::vertex_score(&view, vertex, &params, super::BuildKind::Settlement)
+                };
+                let gated_both = pair_choice(&view, &topology, |first, second| {
+                    [first, second]
+                        .into_iter()
+                        .flat_map(|edge| topology.edge_endpoints(edge))
+                        .filter(|vertex| view.is_expansion_target(*vertex))
+                        .map(score)
+                        .fold(None, |best: Option<f32>, value| {
+                            Some(best.map_or(value, |best| best.max(value)))
+                        })
+                        .unwrap_or(0.0)
+                });
+                let gated_second_only = pair_choice(&view, &topology, |_, second| {
+                    topology
+                        .edge_endpoints(second)
+                        .into_iter()
+                        .filter(|vertex| view.is_expansion_target(*vertex))
+                        .map(score)
+                        .fold(None, |best: Option<f32>, value| {
+                            Some(best.map_or(value, |best| best.max(value)))
+                        })
+                        .unwrap_or(0.0)
+                });
+                let ungated_second_only = pair_choice(&view, &topology, |_, second| {
+                    topology
+                        .edge_endpoints(second)
+                        .into_iter()
+                        .map(score)
+                        .fold(f32::NEG_INFINITY, f32::max)
+                });
+                let separated =
+                    gated_both != ungated_second_only && gated_both != gated_second_only;
+                if separated {
+                    assert_eq!(
+                        super::best_road_building_pair(&view, &params, None),
+                        gated_both,
+                        "the credit must gate on expansion targets and read the first edge too"
+                    );
+                    assert_eq!(
+                        super::best_road_building_pair(&view, &legacy, None),
+                        ungated_second_only,
+                        "the legacy flag must restore the ungated second-edge credit"
+                    );
+                }
+                arena.state.vertex_owner[usize::from(start)] = u8::MAX;
+                arena.state.vertex_tier[usize::from(start)] = 0;
+                arena.state.edge_owner[usize::from(first_leg)] = u8::MAX;
+                arena.state.edge_owner[usize::from(second_leg)] = u8::MAX;
+                separated.then_some(())
+            })
+            .expect("fixture must separate the gated both-edge credit from both alternatives");
+    }
+
+    #[test]
+    fn a_pair_opening_no_expansion_target_is_not_poisoned() {
+        let params = super::HeuristicParams {
+            production_weight: 4.0,
+            ..super::HeuristicParams::default()
+        };
+        let (topology, board, mut arena) = valuation_fixture();
+        let start = 0_u8;
+        arena.state.vertex_owner[usize::from(start)] = 0;
+        arena.state.vertex_tier[usize::from(start)] = 1;
+        // Rivals own every vertex two steps out, so no legal pair opens a settleable site: the
+        // distance rule blocks the ring around the settlement and ownership blocks the rest.
+        for adjacent in topology.vertex_adjacent(start) {
+            for vertex in topology.vertex_adjacent(*adjacent) {
+                if *vertex != start && !topology.vertex_adjacent(start).contains(vertex) {
+                    arena.state.vertex_owner[usize::from(*vertex)] = 1;
+                    arena.state.vertex_tier[usize::from(*vertex)] = 1;
+                }
+            }
+        }
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+        for first in 0..topology.edge_count() {
+            let first = first as u8;
+            if !view.legal_road(first) {
+                continue;
+            }
+            for second in topology.edge_neighbors(first) {
+                if view.legal_road_after(first, *second) {
+                    assert!(
+                        [first, *second]
+                            .into_iter()
+                            .flat_map(|edge| topology.edge_endpoints(edge))
+                            .all(|vertex| !view.is_expansion_target(vertex)),
+                        "fixture must leave no pair an expansion target"
+                    );
+                }
+            }
+        }
+        // Every credit is zero, so the selection must still yield a full pair (the first legal
+        // one) instead of collapsing to (None, None) through a NEG_INFINITY fold.
+        let expected = pair_choice(&view, &topology, |_, _| 0.0);
+        let actual = super::best_road_building_pair(&view, &params, None);
+        assert_eq!(actual, expected);
+        assert!(
+            actual.0.is_some() && actual.1.is_some(),
+            "a pair laid purely for Longest Road must survive the gate"
+        );
     }
 
     #[test]
