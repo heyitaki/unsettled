@@ -142,8 +142,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 15: J2 — stage signal
 
-- [ ] Piece-supply/legal-site stage input to expansion and city terms, zero-default; ETW urgency input under gated policies only
-- [ ] A/B as in J1
+- [x] Piece-supply/legal-site stage input to expansion and city terms, zero-default; ETW urgency input under gated policies only — `policy/stage.rs` (`Stage::derive`, once per decision: `lateness = 1 - min(piece_frac, site_frac)`, pieces over the 5+4 supply vs distance-rule-open sites over the settlement supply); consumers in `vertex_score_with`: settlement expansion term scaled by `(1 - stage_expansion_weight * lateness).max(0)`, city score scaled by `1 + stage_city_weight * lateness`; pure state, so the stage also reaches the goal chooser and the road/pair expansion credits (unlike the J1 need term); urgency = denial context's `top_danger` times `stage_urgency_weight`, structurally gated (ungated paths pass no danger); all three weights zero-default, corpus recapture byte-identical (0/4000 moved)
+- [x] A/B as in J1 — M-33: both trial triples (`-stagelo` 0.5/0.5/0.5, `-stagehi` 1.0/2.0/1.0) `equivalent` (-0.075pp and -0.11pp, intervals inside +-1pp); the live surface is real (316 and 926 of 16,000 paired games moved) but flat at this corner — recorded for H2 with no prior; forwarded-argument table + seven closed-form tests in `tests/stage.rs`, pair/road credit probe test in `heuristic_v1.rs`, label test in `policy/mod.rs`
 
 ### Task 16: J3 — piece economy (SIM-GAP-29)
 

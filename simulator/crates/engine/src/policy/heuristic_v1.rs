@@ -5,6 +5,7 @@ use crate::policy::denial::{self, DenialContext, DenialParams};
 use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::exposure;
 use crate::policy::goal_need::GoalNeed;
+use crate::policy::stage::Stage;
 use crate::policy::threat::{self, ThreatParams};
 use crate::policy::trading::TradeParams;
 use crate::rng::Xoshiro256StarStar;
@@ -23,6 +24,7 @@ std::thread_local! {
     static BEST_GOAL_CALLS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     static PAIR_CONTEST: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
     static PAIR_ROAD_BONUS: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+    static PAIR_EXPANSION: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NEG_INFINITY) };
     static CROSSING_CENSUS: std::cell::RefCell<Vec<CensusCrossing>> =
         const { std::cell::RefCell::new(Vec::new()) };
     static DECISION_TRACE: std::cell::RefCell<Vec<DecisionTrace>> =
@@ -119,6 +121,19 @@ pub struct HeuristicParams {
     /// bit-for-bit; the `-goalneedlo`/`-goalneedhi` trial values are Phase-H sweep
     /// candidates, not tuned values.
     pub goal_need_weight: f32,
+    /// Damping of the settlement expansion term by the J2 stage signal: the term is scaled
+    /// by `(1 - weight * lateness).max(0)`. Zero (the default) never derives the stage and
+    /// restores the pre-J2 expression bit-for-bit; the `-stagelo`/`-stagehi` trial values
+    /// are Phase-H sweep candidates, not tuned values.
+    pub stage_expansion_weight: f32,
+    /// Boost of the city vertex score by the J2 stage signal: the score is scaled by
+    /// `1 + weight * lateness`. Zero-default, same trial labels as above.
+    pub stage_city_weight: f32,
+    /// Weight of the gated ETW urgency input on the stage signal: the denial context's top
+    /// rival danger raises `lateness` by `weight * danger` (clamped to 1). Read only when
+    /// the denial gate supplies a context; setup and ungated paths carry no belief.
+    /// Zero-default, same trial labels.
+    pub stage_urgency_weight: f32,
     /// `None` keeps the self-regarding robber rule. `Some` selects the threat model in
     /// `policy::threat`; these weights are Phase-H sweep targets, not tuned values.
     pub threat: Option<ThreatParams>,
@@ -150,6 +165,9 @@ impl Default for HeuristicParams {
             robber_block_threshold: 4,
             shed_weight: 10.0,
             goal_need_weight: 0.0,
+            stage_expansion_weight: 0.0,
+            stage_city_weight: 0.0,
+            stage_urgency_weight: 0.0,
             threat: None,
             dev_cards: None,
             trading: None,
@@ -173,6 +191,29 @@ pub const BUILD_BAND: f32 = 10_000.0;
 /// candidates only; the shipped default weight stays zero.
 pub const GOAL_NEED_TRIAL_LO: f32 = 0.5;
 pub const GOAL_NEED_TRIAL_HI: f32 = 2.0;
+
+/// One trial setting of the three J2 stage weights, behind a measurement label.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StageTrial {
+    pub expansion: f32,
+    pub city: f32,
+    pub urgency: f32,
+}
+
+/// Trial values behind the J2 measurement labels (`-stagelo`/`-stagehi`): a moderate setting
+/// (halved expansion, +50% city value at full lateness) and an aggressive one (expansion
+/// eliminated, city value tripled at full lateness, danger weighted whole). Phase-H sweep
+/// candidates only; the shipped default weights stay zero.
+pub const STAGE_TRIAL_LO: StageTrial = StageTrial {
+    expansion: 0.5,
+    city: 0.5,
+    urgency: 0.5,
+};
+pub const STAGE_TRIAL_HI: StageTrial = StageTrial {
+    expansion: 1.0,
+    city: 2.0,
+    urgency: 1.0,
+};
 
 pub fn action(
     view: &DecisionView<'_>,
@@ -198,6 +239,20 @@ fn effective_denial(params: &HeuristicParams) -> Option<DenialParams> {
     Some(denial)
 }
 
+/// The J2 stage a decision actually runs with: derived once per decision, `None` whenever
+/// both consuming weights are zero so default arms never compute it (and the pre-J2 scores
+/// stay bit-identical). The ETW urgency input rides the denial context's shared danger
+/// model, so it exists only under gated policies.
+fn stage_for(view: &DecisionView<'_>, params: &HeuristicParams, gated: Gated<'_>) -> Option<Stage> {
+    (params.stage_expansion_weight != 0.0 || params.stage_city_weight != 0.0).then(|| {
+        Stage::derive(
+            view,
+            params.stage_urgency_weight,
+            gated.map(|(ctx, _)| ctx.top_danger()),
+        )
+    })
+}
+
 pub(crate) fn action_with_goal(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
@@ -209,10 +264,12 @@ pub(crate) fn action_with_goal(
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
     let gated = denial_context.as_ref().zip(denial_params.as_ref());
-    let road = best_road(view, params, gated);
-    let selected_goal = best_goal_with(view, params, road);
+    let stage = stage_for(view, params, gated);
+    let stage = stage.as_ref();
+    let road = best_road(view, params, gated, stage);
+    let selected_goal = best_goal_with(view, params, road, stage);
     let PolicyScratch { goal, actions } = scratch;
-    score_actions_with(view, params, actions, road, selected_goal, gated);
+    score_actions_with(view, params, actions, road, selected_goal, gated, stage);
     *goal = selected_goal.map(|goal| goal.kind);
     let best_score = actions
         .as_slice()
@@ -248,11 +305,14 @@ pub fn score_actions(view: &DecisionView<'_>, params: &HeuristicParams, out: &mu
         .as_ref()
         .map(|denial_params| denial::context(view, denial_params));
     let gated = denial_context.as_ref().zip(denial_params.as_ref());
-    let road = best_road(view, params, gated);
-    let goal = best_goal_with(view, params, road);
-    score_actions_with(view, params, out, road, goal, gated);
+    let stage = stage_for(view, params, gated);
+    let stage = stage.as_ref();
+    let road = best_road(view, params, gated, stage);
+    let goal = best_goal_with(view, params, road, stage);
+    score_actions_with(view, params, out, road, goal, gated, stage);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn score_actions_with(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
@@ -260,6 +320,7 @@ fn score_actions_with(
     road: Option<RoadGoal>,
     goal: Option<Goal>,
     gated: Gated<'_>,
+    stage: Option<&Stage>,
 ) {
     out.clear();
     let special_build = view.phase() == DecisionPhase::SpecialBuild;
@@ -283,12 +344,13 @@ fn score_actions_with(
                 out.push(ScoredAction {
                     action: Action::UpgradeCity(vertex),
                     score: BUILD_BAND
-                        + vertex_score_with_need(
+                        + vertex_score_with(
                             view,
                             vertex,
                             params,
                             BuildKind::City,
                             goal_need.as_ref(),
+                            stage,
                         ),
                 });
             }
@@ -307,12 +369,13 @@ fn score_actions_with(
                         500.0
                     } else {
                         BUILD_BAND
-                    } + vertex_score_with_need(
+                    } + vertex_score_with(
                         view,
                         vertex,
                         params,
                         BuildKind::Settlement,
                         goal_need.as_ref(),
+                        stage,
                     ),
                 });
             }
@@ -553,11 +616,14 @@ pub fn pre_roll(
             victim,
         });
     }
-    let goal = best_goal(view, params, gated);
+    let stage = stage_for(view, params, gated);
+    let stage = stage.as_ref();
+    let road = best_road(view, params, gated, stage);
+    let goal = best_goal_with(view, params, road, stage);
     scratch.goal = goal.map(|value| value.kind);
     match params.dev_cards.as_ref() {
-        None => ladder_pre_roll(view, params, goal, gated),
-        Some(cards) => devcards_pre_roll(view, params, cards, goal, gated),
+        None => ladder_pre_roll(view, params, goal, gated, stage),
+        Some(cards) => devcards_pre_roll(view, params, cards, goal, gated, stage),
     }
 }
 
@@ -566,6 +632,7 @@ fn ladder_pre_roll(
     params: &HeuristicParams,
     goal: Option<Goal>,
     gated: Gated<'_>,
+    stage: Option<&Stage>,
 ) -> Option<DevPlay> {
     if view.can_play_dev(3)
         && let Some((first, second)) = plenty_offer(view, goal.map(|value| value.kind), params)
@@ -579,7 +646,7 @@ fn ladder_pre_roll(
         return Some(DevPlay::Monopoly { resource });
     }
     if view.can_play_dev(2) {
-        let (first, second) = best_road_building_pair(view, params, gated);
+        let (first, second) = best_road_building_pair(view, params, gated, stage);
         if first.is_some() {
             return Some(DevPlay::RoadBuilding { first, second });
         }
@@ -593,6 +660,7 @@ fn devcards_pre_roll(
     cards: &DevCardParams,
     goal: Option<Goal>,
     gated: Gated<'_>,
+    stage: Option<&Stage>,
 ) -> Option<DevPlay> {
     // Zeroing the weight restores the exposure-blind comparison exactly: the penalty is a
     // weighted product subtracted from each candidate, and `x - 0.0` is `x` in IEEE arithmetic.
@@ -617,7 +685,7 @@ fn devcards_pre_roll(
         monopoly: view.can_play_dev(4),
         road: view
             .can_play_dev(2)
-            .then(|| best_road_building_pair(view, params, gated))
+            .then(|| best_road_building_pair(view, params, gated, stage))
             .filter(|pair| pair.0.is_some()),
     };
     let goal_cost = goal.and_then(|value| view.costs(value.kind).first().copied());
@@ -931,21 +999,23 @@ pub fn vertex_score(
     params: &HeuristicParams,
     kind: BuildKind,
 ) -> f32 {
-    vertex_score_with_need(view, vertex, params, kind, None)
+    vertex_score_with(view, vertex, params, kind, None, None)
 }
 
-/// `vertex_score` plus the J1 goal-need term. The goal chooser prices vertices without the
-/// term (this is the `vertex_score` entry, passing `None`): the goal is what is being chosen
-/// there, so feeding a candidate goal's own need back into the scores that pick it would be a
-/// fixed point, and roads are scored before any goal exists. Only the decision's
-/// already-selected goal reaches the build candidates in `score_actions_with`. `None` leaves
-/// the expression bit-identical to the pre-J1 scorer.
-pub fn vertex_score_with_need(
+/// `vertex_score` plus the optional J1 goal-need term and J2 stage adjustments. The goal
+/// chooser prices vertices without the need term (the goal is what is being chosen there, so
+/// feeding a candidate goal's own need back into the scores that pick it would be a fixed
+/// point, and roads are scored before any goal exists); only the decision's already-selected
+/// goal reaches the build candidates in `score_actions_with`. The stage, by contrast, is
+/// pure state and reaches the chooser and the road expansion paths too. `None` for both
+/// leaves the expression bit-identical to the pre-J1 scorer.
+pub fn vertex_score_with(
     view: &DecisionView<'_>,
     vertex: u8,
     params: &HeuristicParams,
     kind: BuildKind,
     need: Option<&GoalNeed>,
+    stage: Option<&Stage>,
 ) -> f32 {
     let board_totals = view.board_resource_pips();
     let own = view.production_pips(view.observer());
@@ -1025,8 +1095,22 @@ pub fn vertex_score_with_need(
         + diversity * params.diversity_bonus
         + port_synergy * params.port_weight
         + expansion * params.expansion_weight;
-    // Added as a branch rather than an unconditional `+ 0.0`, which would rewrite a
-    // negative-zero base and break the bit-identity the zero-default guarantees.
+    // Both adjustments below are branches rather than unconditional arithmetic (`+ 0.0`
+    // would rewrite a negative-zero base), so the zero-default arms keep the pre-J1/J2
+    // expression bit-for-bit.
+    let base = match stage {
+        None => base,
+        // The J2 stage: damp the settlement expansion term (there is less room and time to
+        // use the opened vertices) and boost the whole city value (immediate points matter
+        // more) as the game runs out of pieces and open sites.
+        Some(stage) => match kind {
+            BuildKind::Settlement => {
+                let scale = (1.0 - params.stage_expansion_weight * stage.lateness).max(0.0);
+                base + expansion * params.expansion_weight * (scale - 1.0)
+            }
+            BuildKind::City => base * (1.0 + params.stage_city_weight * stage.lateness),
+        },
+    };
     match need {
         None => base,
         Some(need) => base + params.goal_need_weight * need.production_term(&production),
@@ -1051,7 +1135,9 @@ pub(crate) fn best_goal(
     params: &HeuristicParams,
     gated: Gated<'_>,
 ) -> Option<Goal> {
-    best_goal_with(view, params, best_road(view, params, gated))
+    let stage = stage_for(view, params, gated);
+    let stage = stage.as_ref();
+    best_goal_with(view, params, best_road(view, params, gated, stage), stage)
 }
 
 /// `best_road` scans every legal edge and, when the Longest Road card is in reach, runs an
@@ -1061,11 +1147,12 @@ fn best_goal_with(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     road: Option<RoadGoal>,
+    stage: Option<&Stage>,
 ) -> Option<Goal> {
     #[cfg(test)]
     BEST_GOAL_CALLS.with(|calls| calls.set(calls.get() + 1));
 
-    best_goal_uncounted(view, params, road)
+    best_goal_uncounted(view, params, road, stage)
 }
 
 /// The body, split out so the timing fixture can measure it without the call counter above. That
@@ -1075,9 +1162,10 @@ fn best_goal_uncounted(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     road: Option<RoadGoal>,
+    stage: Option<&Stage>,
 ) -> Option<Goal> {
     let mut best = None;
-    if let Some((_, vertex_term)) = best_scored_vertex(view, params, BuildKind::City) {
+    if let Some((_, vertex_term)) = best_scored_vertex(view, params, BuildKind::City, stage) {
         let numerator = if params
             .legacy_valuation
             .is_some_and(|legacy| legacy.flat_city_goal)
@@ -1098,11 +1186,11 @@ fn best_goal_uncounted(
         view.best_legal_settlement().map(|vertex| {
             (
                 vertex,
-                vertex_score(view, vertex, params, BuildKind::Settlement),
+                vertex_score_with(view, vertex, params, BuildKind::Settlement, None, stage),
             )
         })
     } else {
-        best_scored_vertex(view, params, BuildKind::Settlement)
+        best_scored_vertex(view, params, BuildKind::Settlement, stage)
     };
     if let Some((_, vertex_term)) = settlement {
         let candidate = Goal {
@@ -1129,6 +1217,7 @@ fn best_scored_vertex(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     kind: BuildKind,
+    stage: Option<&Stage>,
 ) -> Option<(u8, f32)> {
     let mut best = None;
     for vertex in (0..view.topology().vertex_count()).map(|vertex| vertex as u8) {
@@ -1139,7 +1228,7 @@ fn best_scored_vertex(
         if !legal {
             continue;
         }
-        let score = vertex_score(view, vertex, params, kind);
+        let score = vertex_score_with(view, vertex, params, kind, None, stage);
         if score.is_finite() && best.is_none_or(|(_, current)| score > current) {
             best = Some((vertex, score));
         }
@@ -1155,6 +1244,7 @@ fn best_road(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     gated: Gated<'_>,
+    stage: Option<&Stage>,
 ) -> Option<RoadGoal> {
     let mut best = None;
     // The trail search is the dominant cost of a decision, so the graph it walks is built once
@@ -1166,7 +1256,7 @@ fn best_road(
         if !view.legal_road(edge) {
             continue;
         }
-        let expansion_score = expansion_road_score(view, edge, params);
+        let expansion_score = expansion_road_score(view, edge, params, stage);
         let new_length = network
             .as_mut()
             .map_or(0, |network| view.road_length_on(network, edge, None, cap));
@@ -1206,11 +1296,13 @@ fn expansion_road_score(
     view: &DecisionView<'_>,
     first: u8,
     params: &HeuristicParams,
+    stage: Option<&Stage>,
 ) -> Option<f32> {
     let mut best_score = None;
     for target in view.topology().edge_endpoints(first) {
         if view.is_expansion_target(target) {
-            let score = vertex_score(view, target, params, BuildKind::Settlement) + 0.25;
+            let score =
+                vertex_score_with(view, target, params, BuildKind::Settlement, None, stage) + 0.25;
             if best_score.is_none_or(|best| score > best) {
                 best_score = Some(score);
             }
@@ -1223,7 +1315,8 @@ fn expansion_road_score(
         }
         for target in view.topology().edge_endpoints(second) {
             if view.is_expansion_target(target) {
-                let score = vertex_score(view, target, params, BuildKind::Settlement);
+                let score =
+                    vertex_score_with(view, target, params, BuildKind::Settlement, None, stage);
                 if best_score.is_none_or(|best| score > best) {
                     best_score = Some(score);
                 }
@@ -1563,6 +1656,7 @@ fn best_road_building_pair(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     gated: Gated<'_>,
+    stage: Option<&Stage>,
 ) -> (Option<u8>, Option<u8>) {
     let mut best = (None, None);
     let mut best_score = f32::NEG_INFINITY;
@@ -1590,7 +1684,9 @@ fn best_road_building_pair(
                 view.topology()
                     .edge_endpoints(second)
                     .iter()
-                    .map(|vertex| vertex_score(view, *vertex, params, BuildKind::Settlement))
+                    .map(|vertex| {
+                        vertex_score_with(view, *vertex, params, BuildKind::Settlement, None, stage)
+                    })
                     .fold(f32::NEG_INFINITY, f32::max)
             } else {
                 // Mirror `expansion_road_score`'s gate over both laid edges; the `Option` fold
@@ -1600,12 +1696,16 @@ fn best_road_building_pair(
                     .into_iter()
                     .flat_map(|edge| view.topology().edge_endpoints(edge))
                     .filter(|vertex| view.is_expansion_target(*vertex))
-                    .map(|vertex| vertex_score(view, vertex, params, BuildKind::Settlement))
+                    .map(|vertex| {
+                        vertex_score_with(view, vertex, params, BuildKind::Settlement, None, stage)
+                    })
                     .fold(None, |best: Option<f32>, score| {
                         Some(best.map_or(score, |best| best.max(score)))
                     })
                     .unwrap_or(0.0)
             };
+            #[cfg(test)]
+            PAIR_EXPANSION.with(|recorded| recorded.set(recorded.get().max(expansion_score)));
             let road_bonus = network.as_mut().map_or(0.0, |network| {
                 let length = view.road_length_on(network, first, Some(second), cap);
                 longest_road_value(view, length, gated)
@@ -1664,6 +1764,16 @@ pub(crate) fn holder_defend_observation() -> Option<bool> {
 #[cfg(test)]
 pub(crate) fn reset_pair_road_bonus() {
     PAIR_ROAD_BONUS.with(|recorded| recorded.set(0.0));
+}
+
+#[cfg(test)]
+pub(crate) fn reset_pair_expansion() {
+    PAIR_EXPANSION.with(|recorded| recorded.set(f32::NEG_INFINITY));
+}
+
+#[cfg(test)]
+pub(crate) fn pair_expansion() -> f32 {
+    PAIR_EXPANSION.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]
@@ -2131,7 +2241,7 @@ mod devcards_rate_tests {
             ..super::HeuristicParams::default()
         };
         assert_eq!(
-            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement,),
+            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement, None),
             None
         );
     }
@@ -2174,7 +2284,7 @@ mod devcards_rate_tests {
             ..super::HeuristicParams::default()
         };
         assert_eq!(
-            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement,)
+            super::best_scored_vertex(&view, &params, super::BuildKind::Settlement, None)
                 .map(|(vertex, _)| vertex),
             Some(first.min(second))
         );
@@ -2255,7 +2365,7 @@ mod devcards_rate_tests {
         let pip_max = if pips[0] > pips[1] { owned[0] } else { owned[1] };
         let score_max = if pips[0] > pips[1] { owned[1] } else { owned[0] };
         assert_eq!(
-            super::best_scored_vertex(&view, &params, super::BuildKind::City)
+            super::best_scored_vertex(&view, &params, super::BuildKind::City, None)
                 .map(|(vertex, _)| vertex),
             Some(score_max),
             "the city chooser must not rank on pips ({pip_max} is the pip maximum)"
@@ -2347,6 +2457,8 @@ mod devcards_rate_tests {
     //   the_pair_credit_is_gated_and_reads_both_edges, both halves
     // - `gated` (denial contest term and the race budget): road_building_is_aimed_by_the_denial_terms
     //   and the_default_budget_finds_the_third_ranked_challenger in tests/denial.rs
+    // - `stage` (the J2 damping on target vertex scores):
+    //   the_road_and_pair_expansion_credits_price_targets_through_the_stage
     #[test]
     fn the_pair_credit_is_gated_and_reads_both_edges() {
         let params = super::HeuristicParams {
@@ -2422,12 +2534,12 @@ mod devcards_rate_tests {
                     gated_both != ungated_second_only && gated_both != gated_second_only;
                 if separated {
                     assert_eq!(
-                        super::best_road_building_pair(&view, &params, None),
+                        super::best_road_building_pair(&view, &params, None, None),
                         gated_both,
                         "the credit must gate on expansion targets and read the first edge too"
                     );
                     assert_eq!(
-                        super::best_road_building_pair(&view, &legacy, None),
+                        super::best_road_building_pair(&view, &legacy, None, None),
                         ungated_second_only,
                         "the legacy flag must restore the ungated second-edge credit"
                     );
@@ -2439,6 +2551,100 @@ mod devcards_rate_tests {
                 separated.then_some(())
             })
             .expect("fixture must separate the gated both-edge credit from both alternatives");
+    }
+
+    /// The J2 stage argument of the road expansion paths: the credit's target vertex scores
+    /// must run through `vertex_score_with` with the caller's stage, damping the expansion
+    /// term. The maximum pair credit is observed through the `PAIR_EXPANSION` probe and must
+    /// equal the staged closed-form mirror bit-for-bit while differing from the unstaged one;
+    /// the single-road credit is checked directly against both spellings.
+    #[test]
+    fn the_road_and_pair_expansion_credits_price_targets_through_the_stage() {
+        let params = super::HeuristicParams {
+            production_weight: 1.0,
+            scarcity_weight: 0.0,
+            diversity_bonus: 0.0,
+            port_weight: 0.0,
+            expansion_weight: 40.0,
+            stage_expansion_weight: 0.75,
+            ..super::HeuristicParams::default()
+        };
+        let stage = crate::policy::stage::Stage { lateness: 1.0 };
+        let (topology, board, mut arena) = valuation_fixture();
+        // Park the Longest Road race out of reach so both credits are expansion-only.
+        arena.state.players[1].longest_road_len = 10;
+        let start = 0_u8;
+        arena.state.vertex_owner[usize::from(start)] = 0;
+        arena.state.vertex_tier[usize::from(start)] = 1;
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+        let mirror_max = |stage: Option<&crate::policy::stage::Stage>| {
+            let mut best = f32::NEG_INFINITY;
+            for first in 0..topology.edge_count() {
+                let first = first as u8;
+                if !view.legal_road(first) {
+                    continue;
+                }
+                for second in topology.edge_neighbors(first) {
+                    if !view.legal_road_after(first, *second) {
+                        continue;
+                    }
+                    let credit = [first, *second]
+                        .into_iter()
+                        .flat_map(|edge| topology.edge_endpoints(edge))
+                        .filter(|vertex| view.is_expansion_target(*vertex))
+                        .map(|vertex| {
+                            super::vertex_score_with(
+                                &view,
+                                vertex,
+                                &params,
+                                super::BuildKind::Settlement,
+                                None,
+                                stage,
+                            )
+                        })
+                        .fold(None, |best: Option<f32>, value| {
+                            Some(best.map_or(value, |best| best.max(value)))
+                        })
+                        .unwrap_or(0.0);
+                    best = best.max(credit);
+                }
+            }
+            best
+        };
+        let staged_mirror = mirror_max(Some(&stage));
+        let unstaged_mirror = mirror_max(None);
+        assert_ne!(
+            staged_mirror.to_bits(),
+            unstaged_mirror.to_bits(),
+            "the damping must move some pair credit on this fixture"
+        );
+        super::reset_pair_expansion();
+        super::best_road_building_pair(&view, &params, None, Some(&stage));
+        assert_eq!(
+            super::pair_expansion().to_bits(),
+            staged_mirror.to_bits(),
+            "the pair credit must price its targets through the caller's stage"
+        );
+        super::reset_pair_expansion();
+        super::best_road_building_pair(&view, &params, None, None);
+        assert_eq!(super::pair_expansion().to_bits(), unstaged_mirror.to_bits());
+        // The single-road credit prices its targets through the same stage.
+        let moved = (0..topology.edge_count())
+            .map(|edge| edge as u8)
+            .filter(|edge| view.legal_road(*edge))
+            .filter(|edge| {
+                let staged = super::expansion_road_score(&view, *edge, &params, Some(&stage));
+                let unstaged = super::expansion_road_score(&view, *edge, &params, None);
+                match (staged, unstaged) {
+                    (Some(staged), Some(unstaged)) => staged.to_bits() != unstaged.to_bits(),
+                    _ => false,
+                }
+            })
+            .count();
+        assert!(
+            moved > 0,
+            "some legal road's expansion credit must move under the stage"
+        );
     }
 
     #[test]
@@ -2482,7 +2688,7 @@ mod devcards_rate_tests {
         // Every credit is zero, so the selection must still yield a full pair (the first legal
         // one) instead of collapsing to (None, None) through a NEG_INFINITY fold.
         let expected = pair_choice(&view, &topology, |_, _| 0.0);
-        let actual = super::best_road_building_pair(&view, &params, None);
+        let actual = super::best_road_building_pair(&view, &params, None, None);
         assert_eq!(actual, expected);
         assert!(
             actual.0.is_some() && actual.1.is_some(),
@@ -2514,7 +2720,7 @@ mod devcards_rate_tests {
         for run in 1..=5 {
             let started = std::time::Instant::now();
             for _ in 0..DECISIONS {
-                std::hint::black_box(super::best_goal_uncounted(&view, &params, None));
+                std::hint::black_box(super::best_goal_uncounted(&view, &params, None, None));
             }
             eprintln!(
                 "path=best_goal_uncounted run={run} decisions={DECISIONS} nsPerDecision={:.3}",
@@ -2527,10 +2733,10 @@ mod devcards_rate_tests {
                 for edge in 0..topology.edge_count() {
                     let edge = edge as u8;
                     if view.legal_road(edge) {
-                        std::hint::black_box(super::expansion_road_score(&view, edge, &params));
+                        std::hint::black_box(super::expansion_road_score(&view, edge, &params, None));
                     }
                 }
-                std::hint::black_box(super::best_road_building_pair(&view, &params, None));
+                std::hint::black_box(super::best_road_building_pair(&view, &params, None, None));
             }
             eprintln!(
                 "path=road_vertex_consumers run={run} decisions={DECISIONS} nsPerDecision={:.3}",

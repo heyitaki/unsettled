@@ -360,6 +360,12 @@ impl<'a> DecisionView<'a> {
         self.state.players[seat].pieces[buildable.index()]
     }
 
+    /// The observer's rule-set piece limit for `buildable`: the per-seat supply the remaining
+    /// `pieces` count depletes (widened when an imported board already carries more).
+    pub const fn piece_limit(&self, buildable: Buildable) -> u8 {
+        self.rules.limit(buildable)
+    }
+
     pub const fn trade_rate_for(&self, seat: usize, resource: Resource) -> u32 {
         self.state.players[seat].trade_rate[resource.index()]
     }
