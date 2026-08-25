@@ -682,6 +682,32 @@ fn setup_policy_consumption_does_not_shift_the_dice_stream() {
     );
 }
 
+#[test]
+fn setup_seeds_every_seats_longest_road_length() {
+    let (topology, board, rules) = fixture();
+    let mut config = GameConfig::default();
+    config.seed = 0x2323;
+    config.placements = [PlacementKind::Random; 6];
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    arena.setup_for_test(&board, &topology, &rules, &config);
+
+    // Stored lengths must already match a fresh recompute: two placed stubs give every seat a
+    // trail of 1 (or 2 when the stubs happen to share an endpoint), never the pre-fix 0 that
+    // policies would read until the game's first road build.
+    let after_setup: Vec<u8> = (0..board.seats())
+        .map(|seat| arena.state.players[seat].longest_road_len)
+        .collect();
+    arena.recompute_roads_for_test(&topology, &rules, board.seats());
+    let recomputed: Vec<u8> = (0..board.seats())
+        .map(|seat| arena.state.players[seat].longest_road_len)
+        .collect();
+    assert_eq!(after_setup, recomputed);
+    assert!(after_setup.iter().all(|length| (1..=2).contains(length)));
+    // Two setup roads cannot reach the five-road minimum, so no award moves.
+    assert_eq!(arena.state.longest_road.holder, None);
+}
+
 /// Seats a loaded victim and an empty-handed one on `destination` and readies seat 0's knight.
 fn steal_decline_fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena, u8) {
     let (topology, board, rules) = fixture();

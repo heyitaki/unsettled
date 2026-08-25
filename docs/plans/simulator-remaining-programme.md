@@ -116,8 +116,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 10: SIM-GAP-23 — setup longest-road recompute
 
-- [ ] `setup()` calls `recompute_all_roads` on the generated-placement path; nothing else bundled into this task
-- [ ] Corpus recapture; delete the entry (the rationale for `build_road`'s all-seat recompute moves to a comment or contract if still needed)
+- [x] `setup()` calls `recompute_all_roads` on the generated-placement path; nothing else bundled into this task — one call after the pick loops; two stubs cannot reach the award minimum so only lengths move, never the card; pinned by `setup_seeds_every_seats_longest_road_length` in `live_game.rs` (stored lengths match a fresh recompute, all in 1..=2, holder `None`), which failed `[0,0,0,0,0] != [1,1,1,1,1]` pre-fix
+- [x] Corpus recapture; delete the entry (the rationale for `build_road`'s all-seat recompute moves to a comment or contract if still needed) — 105/4000 games moved (std4 15/40/11 and ext6 6/28/5 across heuristic-v1 / trader / composite; both priority-trader arms byte-identical); all three gate baselines moved and were regenerated via their deliberate generators; no replay-derived `player_trading.rs` fixture moved; `build_road`'s now-unneeded all-seat recompute documented as a deliberate perf follow-up in a comment at the call; entry deleted
 
 ### Task 11: SIM-GAP-32 — road-building pair gating, owns the M-22 re-run
 

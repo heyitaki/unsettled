@@ -578,6 +578,10 @@ impl GameArena {
                 }
             }
         }
+        // Seed every seat's trail length from the placed stubs so policies never read a stale 0
+        // before the game's first road build. Two stubs cannot reach the award minimum, so this
+        // can only set lengths, never move the card.
+        self.recompute_all_roads(topology, rules, seats);
     }
 
     fn setup_pick(
@@ -1266,6 +1270,9 @@ impl GameArena {
     ) {
         self.state.edge_owner[usize::from(edge)] = seat as u8;
         self.state.players[seat].pieces[Buildable::Road.index()] -= 1;
+        // A road cannot shorten a rival's trail and setup() seeds every seat's length, so
+        // recomputing only the builder would be sound; narrowing this all-seat recompute is a
+        // pure performance change, deliberately not bundled with a behavior fix.
         self.recompute_all_roads(topology, rules, seats);
     }
 

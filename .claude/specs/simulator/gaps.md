@@ -22,8 +22,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 ## Rules deviations and stale derived state
 
-**SIM-GAP-23.** `setup()` never calls `recompute_all_roads` on the generated-placement path, so every seat's `longest_road_len` reads `0` until somebody's first road build refreshes all seats, and policies consult opponents' lengths over that window. Confirmed harmless for awards — setup leaves two disconnected stubs, so the true longest is 1 against a minimum of 5 and no card or VP can differ — but it is why `build_road` still recomputes every seat rather than just the builder, which is otherwise sound, since a road cannot shorten anyone else's trail. Fixing it shifts results, so it is deliberately not bundled with a performance change.
-
 **SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one, at roughly 65 against 55 early and roughly 269 as Largest Army closes. Roads into settlements are the VP engine this simulator exists to measure, so this may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic.
 
 **SIM-GAP-25.** Goal selection has no plan persistence, hysteresis, sunk-tempo cost, or commitment state. `PolicyScratch.goal` is overwritten at each decision, so there is no durable plan for a threat-aware policy to abandon.
