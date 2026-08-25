@@ -9,7 +9,7 @@ use unsettled_engine::policy::PolicyScratch;
 use unsettled_engine::policy::devcards::{
     self, DevCardContext, DevCardParams, DevOffers, ScoredDevPlay,
 };
-use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams};
+use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams, LegacyValuation};
 use unsettled_engine::policy::threat;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
@@ -1320,4 +1320,194 @@ fn outside_the_plateau_the_etw_term_leads() {
 #[allow(dead_code)]
 fn scored(play: Option<DevPlay>, score: f64) -> Option<ScoredDevPlay> {
     Some(ScoredDevPlay { play, score })
+}
+
+// Card-play scope: Year of Plenty offered beyond the exactly-two-short case with picks by
+// value, and Monopoly reading every cost variant of the goal.
+//
+// Forwarded arguments of `heuristic_v1::plenty_offer`, one observing test each:
+// - `view` (hand vs goal cost): plenty_prefers_the_goal_missing_resource_over_spares
+// - `view` (bank stock, ranking and feasibility): plenty_spare_pick_banks_the_scarce_resource,
+//   plenty_spare_picks_rank_by_own_production_then_bank
+// - `view` (own production pips): plenty_spare_picks_rank_by_own_production_then_bank
+// - `view` (cost variants): plenty_uses_the_closest_cost_variant
+// - `goal` (`None` still offers): plenty_spare_pick_banks_the_scarce_resource
+// - `params` (legacy narrow scope): plenty_legacy_scope_restores_the_two_short_gate
+//
+// Forwarded arguments of `heuristic_v1::monopoly_for_goal`, one observing test each:
+// - `view` (opponent holdings and production): monopoly_prefers_the_belief_holding_over_the_production_proxy
+// - `goal` (every cost variant): monopoly_reads_every_cost_variant_of_the_goal
+// - `params` (legacy first-variant scope): monopoly_reads_every_cost_variant_of_the_goal
+
+fn narrow_params() -> HeuristicParams {
+    HeuristicParams {
+        legacy_valuation: Some(LegacyValuation {
+            narrow_card_plays: true,
+            ..LegacyValuation::default()
+        }),
+        ..HeuristicParams::default()
+    }
+}
+
+#[test]
+fn plenty_prefers_the_goal_missing_resource_over_spares() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 2]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // City costs [0,0,2,0,3]: one ore short. The need pick takes the ore; the spare pick then
+    // ties on zero own pips and equal banks, and the index tie-break names ore again.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &HeuristicParams::default()),
+        Some((Resource::Ore, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_legacy_scope_restores_the_two_short_gate() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 2]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // One short of the city was never offered under the narrow scope.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &narrow_params()),
+        None
+    );
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 1]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Exactly two short still is, in index order.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &narrow_params()),
+        Some((Resource::Ore, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_spare_pick_banks_the_scarce_resource() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    arena.state.bank[Resource::Wood.index()] = 5;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // No goal at all: the card still banks two spares. With no own production the scarcest
+    // bank stock wins both picks; were bank stock ignored the index tie-break would name ore.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, None, &HeuristicParams::default()),
+        Some((Resource::Wood, Resource::Wood))
+    );
+    // The narrow scope had no goalless offer.
+    assert_eq!(heuristic_v1::plenty_offer(&view, None, &narrow_params()), None);
+}
+
+#[test]
+fn plenty_spare_picks_rank_by_own_production_then_bank() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    give_exact_production(&mut arena, &board, &topology, 0, [8, 5, 9, 6, 4]);
+    arena.state.bank[Resource::Ore.index()] = 1;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Ore has the fewest own pips (4) and one card left in the bank; the first pick takes it
+    // and exhausts the stock. The second pick falls to sheep (5 pips), not brick -- the index
+    // tie-break would name brick only if own production were ignored.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, None, &HeuristicParams::default()),
+        Some((Resource::Sheep, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_uses_the_closest_cost_variant() {
+    let (topology, board, rules, _config, _arena) = fixture();
+    let mut config = GameConfig::default();
+    config.modifiers[0]
+        .extra_cost_alternatives
+        .push((Buildable::Settlement, [0, 0, 0, 4, 0]));
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    set_belief_and_hand(&mut arena, 0, [0, 0, 0, 3, 0]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // The base settlement cost [1,1,1,1,0] is three short; the brick alternative [0,0,0,4,0]
+    // is one short and wins. The need pick takes the brick, the spare tie resolves to ore.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement), &HeuristicParams::default()),
+        Some((Resource::Brick, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_picks_missing_resources_by_value_not_index_order() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 0, 3, 0]);
+    arena.state.bank[Resource::Wheat.index()] = 2;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Three short of the base settlement cost: wood, sheep and wheat all carry need 1, so the
+    // scarcer wheat stock and then the index tie-break decide. Index-order picking would have
+    // named wood and sheep.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement), &HeuristicParams::default()),
+        Some((Resource::Sheep, Resource::Wheat))
+    );
+}
+
+#[test]
+fn plenty_degrades_a_bank_blocked_need_to_a_spare() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 0]);
+    arena.state.bank[Resource::Ore.index()] = 1;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Three ore short of the city with one ore banked: the first pick takes the last ore, and
+    // the still-unmet need degrades to a spare pick (index tie-break: brick) instead of
+    // cancelling the offer.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &HeuristicParams::default()),
+        Some((Resource::Brick, Resource::Ore))
+    );
+}
+
+#[test]
+fn monopoly_reads_every_cost_variant_of_the_goal() {
+    let (topology, board, rules, _config, _arena) = fixture();
+    let mut config = GameConfig::default();
+    config.modifiers[0]
+        .extra_cost_alternatives
+        .push((Buildable::Settlement, [0, 0, 0, 0, 4]));
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    set_belief_and_hand(&mut arena, 0, [1, 1, 1, 1, 0]);
+    set_belief_and_hand(&mut arena, 1, [0, 0, 0, 0, 6]);
+    give_resource_production(&mut arena, &board, &topology, 1, Resource::Ore, 12);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // The base settlement cost is fully covered, so the first variant alone finds no missing
+    // resource; the ore alternative is four short and the opponent's ore holding is takeable.
+    assert_eq!(
+        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement, &HeuristicParams::default()),
+        Some(Resource::Ore)
+    );
+    assert_eq!(
+        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement, &narrow_params()),
+        None
+    );
+}
+
+#[test]
+fn both_pre_roll_paths_receive_the_widened_offer() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    arena.state.players[0].playable_dev[3] = 1;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Empty board and empty hand: no goal exists, so the narrow scope never offered the card.
+    // Both paths now bank two spares (equal banks, no own production: index tie-break, ore).
+    let (baseline, arm) = heuristic_choices(&view);
+    let expected = Some(DevPlay::YearOfPlenty {
+        first: Resource::Ore,
+        second: Resource::Ore,
+    });
+    assert_eq!(baseline, expected);
+    assert_eq!(arm, expected);
+    // The legacy composite restores the pre-widening hold on both paths.
+    let mut narrow = narrow_params();
+    assert_eq!(
+        heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
+        None
+    );
+    narrow.dev_cards = Some(DevCardParams::default());
+    assert_eq!(
+        heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
+        None
+    );
 }

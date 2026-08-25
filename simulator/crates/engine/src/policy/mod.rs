@@ -52,6 +52,7 @@ pub enum PolicyKind {
     HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
     HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
     HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+    HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
 }
 
 /// Disables every owned port, so the seat trades at the base bank rate.
@@ -102,7 +103,8 @@ impl PolicyKind {
             | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
             | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
             | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
-            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => &[],
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+            | Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => &[],
         }
     }
 
@@ -163,6 +165,9 @@ impl PolicyKind {
             }
             "heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal" => {
                 Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal)
+            }
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacycards" => {
+                Some(Self::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards)
             }
             _ => None,
         }
@@ -230,7 +235,8 @@ pub fn pre_roll(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
             heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind))
         }
         PolicyKind::HeuristicV1Noports => {
@@ -280,7 +286,8 @@ pub fn action(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
             heuristic_v1_trader::action(view, scratch, &heuristic_params(kind), rng)
         }
         PolicyKind::HeuristicV1Noports => {
@@ -330,7 +337,8 @@ pub fn discard(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
             heuristic_v1::discard(view, count, scratch, &heuristic_params(kind))
         }
     }
@@ -375,7 +383,8 @@ pub fn robber(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
             heuristic_v1::robber(view, &heuristic_params(kind))
         }
     }
@@ -409,7 +418,8 @@ pub fn respond_trade(
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
         | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
-        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+        | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
             heuristic_v1_trader::respond_trade(view, offer, &heuristic_params(kind), rng)
         }
         PolicyKind::RandomLegal
@@ -544,6 +554,7 @@ fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
                 flat_city_goal: true,
                 settlement_shaped_city_terms: true,
                 band_ladder: true,
+                ..heuristic_v1::LegacyValuation::default()
             }))
         }
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport => {
@@ -576,6 +587,12 @@ fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
                 ..heuristic_v1::LegacyValuation::default()
             }))
         }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
+            composite_params(Some(heuristic_v1::LegacyValuation {
+                narrow_card_plays: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }))
+        }
         PolicyKind::RandomLegal
         | PolicyKind::GreedyNoTrade
         | PolicyKind::PriorityTrader
@@ -593,6 +610,7 @@ fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
                 flat_city_goal: true,
                 settlement_shaped_city_terms: true,
                 band_ladder: true,
+                ..heuristic_v1::LegacyValuation::default()
             });
         }
     });
@@ -945,6 +963,7 @@ mod gate_tests {
             flat_city_goal: true,
             settlement_shaped_city_terms: true,
             band_ladder: true,
+            ..LegacyValuation::default()
         };
         for (kind, expected) in [
             (
@@ -986,6 +1005,13 @@ mod gate_tests {
                     ..LegacyValuation::default()
                 },
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
+                LegacyValuation {
+                    narrow_card_plays: true,
+                    ..LegacyValuation::default()
+                },
+            ),
         ] {
             assert_eq!(
                 heuristic_params(kind).legacy_valuation,
@@ -1003,6 +1029,7 @@ mod gate_tests {
                     | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms
                     | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband
                     | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal
+                    | PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards
             ) {
                 assert_eq!(
                     heuristic_params(kind).legacy_valuation,
@@ -1211,6 +1238,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
             ]
         );
         assert_eq!(
@@ -1234,6 +1262,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
             ]
         );
         assert_eq!(
@@ -1253,6 +1282,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
             ]
         );
         assert_eq!(
@@ -1276,6 +1306,7 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
             ]
         );
     }
@@ -1308,7 +1339,7 @@ mod gate_tests {
         }
     }
 
-    fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 34] {
+    fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 35] {
         [
             (PolicyKind::RandomLegal, false, false, false, false),
             (PolicyKind::GreedyNoTrade, false, false, false, false),
@@ -1494,6 +1525,13 @@ mod gate_tests {
                 true,
                 true,
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
+                true,
+                true,
+                true,
+                true,
+            ),
         ]
     }
 
@@ -1608,10 +1646,14 @@ mod gate_tests {
                 PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
                 "heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal",
             ),
+            (
+                PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
+                "heuristic-v1-trader-aware-threat-devcards-denial-legacycards",
+            ),
         ]
     }
 
-    const POLICY_KIND_COUNT: usize = 34;
+    const POLICY_KIND_COUNT: usize = 35;
 
     const fn kind_index(kind: PolicyKind) -> usize {
         match kind {
@@ -1649,6 +1691,7 @@ mod gate_tests {
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms => 31,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband => 32,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => 33,
+            PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => 34,
         }
     }
 }

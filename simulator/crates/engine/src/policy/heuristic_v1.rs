@@ -50,6 +50,10 @@ pub struct LegacyValuation {
     pub flat_city_goal: bool,
     pub settlement_shaped_city_terms: bool,
     pub band_ladder: bool,
+    /// Restores the narrow card-play scope: Year of Plenty offered only when the hand is
+    /// exactly two short of the goal, picked in index order, and Monopoly reading only the
+    /// goal's first cost variant.
+    pub narrow_card_plays: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -378,12 +382,13 @@ fn ladder_pre_roll(
     gated: Gated<'_>,
 ) -> Option<DevPlay> {
     if view.can_play_dev(3)
-        && let Some((first, second)) = goal.and_then(|value| plenty_for_goal(view, value.kind))
+        && let Some((first, second)) = plenty_offer(view, goal.map(|value| value.kind), params)
     {
         return Some(DevPlay::YearOfPlenty { first, second });
     }
     if view.can_play_dev(4)
-        && let Some(resource) = goal.and_then(|value| monopoly_for_goal(view, value.kind))
+        && let Some(resource) =
+            goal.and_then(|value| monopoly_for_goal(view, value.kind, params))
     {
         return Some(DevPlay::Monopoly { resource });
     }
@@ -406,7 +411,7 @@ fn devcards_pre_roll(
     let offers = devcards::DevOffers {
         plenty: view
             .can_play_dev(3)
-            .then(|| goal.and_then(|value| plenty_for_goal(view, value.kind)))
+            .then(|| plenty_offer(view, goal.map(|value| value.kind), params))
             .flatten(),
         monopoly: view.can_play_dev(4),
         road: view
@@ -1293,7 +1298,81 @@ fn trade_completes_cost(
     can_pay(&hand, cost)
 }
 
-fn plenty_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<(Resource, Resource)> {
+/// Two Year of Plenty picks, chosen by value rather than index order.
+///
+/// Goal need dominates: the closest cost variant's missing resources are taken first, and a
+/// resource missing twice may be taken twice. Once need is exhausted the remaining picks are
+/// spares, ranked by how hard the resource is to obtain otherwise — fewest own production pips
+/// first, then scarcest bank stock, then the highest index (this module's `max_by_key` ties
+/// already resolve high). Every pick respects remaining bank stock, so a bank-blocked need
+/// degrades to a spare pick instead of cancelling the offer, and with no goal (or an already
+/// affordable one) the card still banks the two most valuable spares. The returned pair is in
+/// index order because the picks are interchangeable at apply time.
+pub fn plenty_offer(
+    view: &DecisionView<'_>,
+    goal: Option<Buildable>,
+    params: &HeuristicParams,
+) -> Option<(Resource, Resource)> {
+    if params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.narrow_card_plays)
+    {
+        return goal.and_then(|goal| narrow_plenty_for_goal(view, goal));
+    }
+    let missing = goal.map_or([0; RESOURCE_COUNT], |goal| {
+        closest_variant_missing(view, goal)
+    });
+    let own_pips = view.production_pips(view.observer());
+    let mut taken = [0_u16; RESOURCE_COUNT];
+    let mut pair = [Resource::Wood; 2];
+    for slot in &mut pair {
+        let choice = Resource::ALL
+            .into_iter()
+            .filter(|resource| view.bank(*resource) > taken[resource.index()])
+            .max_by_key(|resource| {
+                let index = resource.index();
+                (
+                    u16::from(missing[index]).saturating_sub(taken[index]),
+                    std::cmp::Reverse(own_pips[index]),
+                    std::cmp::Reverse(view.bank(*resource)),
+                    index,
+                )
+            })?;
+        taken[choice.index()] += 1;
+        *slot = choice;
+    }
+    if pair[1].index() < pair[0].index() {
+        pair.swap(0, 1);
+    }
+    Some((pair[0], pair[1]))
+}
+
+/// The missing-resource vector of the goal's closest cost variant, or all zeros when the goal
+/// is already affordable (the card owes it nothing). Ties between equally close variants keep
+/// the earlier variant, matching the payment path's variant order.
+fn closest_variant_missing(view: &DecisionView<'_>, goal: Buildable) -> [u8; RESOURCE_COUNT] {
+    if view.can_afford(goal) {
+        return [0; RESOURCE_COUNT];
+    }
+    let mut best: Option<(u16, [u8; RESOURCE_COUNT])> = None;
+    for cost in view.costs(goal) {
+        let mut missing = [0_u8; RESOURCE_COUNT];
+        let mut total = 0_u16;
+        for resource in 0..RESOURCE_COUNT {
+            missing[resource] =
+                u8::try_from((i16::from(cost[resource]) - view.own_hand()[resource]).max(0))
+                    .unwrap_or(u8::MAX);
+            total += u16::from(missing[resource]);
+        }
+        if best.is_none_or(|(least, _)| total < least) {
+            best = Some((total, missing));
+        }
+    }
+    best.map_or([0; RESOURCE_COUNT], |(_, missing)| missing)
+}
+
+/// The measurement-only pre-widening offer: exactly two short of the goal, index-order picks.
+fn narrow_plenty_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<(Resource, Resource)> {
     for cost in view.costs(goal) {
         let mut missing = [0_u8; RESOURCE_COUNT];
         let mut total = 0;
@@ -1320,11 +1399,29 @@ fn plenty_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<(Resource
     None
 }
 
-fn monopoly_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<Resource> {
-    let cost = view.costs(goal).first()?;
+/// The monopoly pick considers a resource missing under any cost variant of the goal, not just
+/// the first; ranking among candidates stays the expected-haul proxy.
+pub fn monopoly_for_goal(
+    view: &DecisionView<'_>,
+    goal: Buildable,
+    params: &HeuristicParams,
+) -> Option<Resource> {
+    let costs = view.costs(goal);
+    let costs = if params
+        .legacy_valuation
+        .is_some_and(|legacy| legacy.narrow_card_plays)
+    {
+        &costs[..costs.len().min(1)]
+    } else {
+        costs
+    };
     Resource::ALL
         .into_iter()
-        .filter(|resource| view.own_hand()[resource.index()] < i16::from(cost[resource.index()]))
+        .filter(|resource| {
+            costs
+                .iter()
+                .any(|cost| view.own_hand()[resource.index()] < i16::from(cost[resource.index()]))
+        })
         .max_by_key(|resource| expected_monopoly(view, *resource))
         .filter(|resource| expected_monopoly(view, *resource) > 0)
 }
@@ -1670,6 +1767,7 @@ mod devcards_rate_tests {
                 flat_city_goal: true,
                 settlement_shaped_city_terms: true,
                 band_ladder: true,
+                ..super::LegacyValuation::default()
             }),
             ..super::HeuristicParams::default()
         };
