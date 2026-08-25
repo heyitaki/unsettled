@@ -958,8 +958,12 @@ impl<'a> DecisionView<'a> {
             .any(|vertex| self.vertex_owner(*vertex) == Some(seat as u8))
     }
 
-    /// A victim worth naming: adjacent to the hex *and* holding at least one card. Stealing from
-    /// an empty hand moves nothing, so the rules treat only these seats as eligible.
+    /// A victim worth robbing: adjacent to the hex *and* holding at least one card. Any adjacent
+    /// seat may legally be named (`victim_on_hex` mirrors `game.rs::nameable_victim`; naming an
+    /// empty hand steals nothing and is the rules' decline mechanism), but declining outright
+    /// (`victim: None`) is legal only when no seat passes this predicate. Both predicates must
+    /// stay in lockstep with `game.rs::valid_robber` or a legal decision counts as an illegal
+    /// action.
     pub fn stealable_on_hex(&self, hex: Hex, seat: usize) -> bool {
         self.victim_on_hex(hex, seat) && self.hand_size(seat) > 0
     }

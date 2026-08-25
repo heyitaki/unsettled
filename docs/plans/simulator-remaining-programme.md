@@ -111,8 +111,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 9: SIM-GAP-22 — empty-hand robber victim
 
-- [ ] Allow naming an adjacent empty-handed opponent; move `view.rs::stealable_on_hex` in lockstep (contracts: otherwise legal decisions count as illegal)
-- [ ] Corpus regeneration (expected: ~20/48 games move per the gap text); zero illegal actions; M entry with provenance; delete the entry
+- [x] Allow naming an adjacent empty-handed opponent; move `view.rs::stealable_on_hex` in lockstep (contracts: otherwise legal decisions count as illegal) — `eligible_victim` renamed `nameable_victim`, hand check dropped from the naming clause; declining outright stays legal only when no adjacent seat holds a card; `victim_on_hex` mirrors naming, `stealable_on_hex` mirrors the mandatory-steal clause (lockstep documented at all three sites); `random_legal` enumerates the widened set (knight plays and the seven-roll robber); scoring policies unchanged (naming an empty hand is outcome-identical to declining); legality-matrix, decline-encoding, and enumeration tests in `live_game.rs`
+- [x] Corpus regeneration (expected: ~20/48 games move per the gap text); zero illegal actions; M entry with provenance; delete the entry — M-28: standing corpus byte-identical on all eight arms (0/4000 moved; no shipped policy's decisions change), so no A/B was run — corpus identity is stronger than a statistical `equivalent`; the predicted movement materializes only under `random-legal` (not a corpus arm), measured 78/400 standard4 and 241/600 extension6 on the same seed-42 schedule, zero illegal actions in every capture pre and post; entry deleted
 
 ### Task 10: SIM-GAP-23 — setup longest-road recompute
 

@@ -8,10 +8,11 @@ use unsettled_engine::placement::app_formula::{AppFormulaScorer, EngineWeights};
 use unsettled_engine::placement::{
     PlacementKind, prepare_app_formula_boards, register_app_formula,
 };
-use unsettled_engine::policy::PolicyKind;
+use unsettled_engine::policy::{PolicyKind, random_legal};
+use unsettled_engine::rng::Xoshiro256StarStar;
 use unsettled_engine::rules::{Buildable, PlayerModifiers, Resource, RuleConfig};
 use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
-use unsettled_engine::view::{Action, DecisionPhase, DevPlay, pips};
+use unsettled_engine::view::{Action, ActionBuf, DecisionPhase, DevPlay, pips};
 use unsettled_engine::wire::{TileKind, WireBoard};
 
 fn wire_fixture() -> WireBoard {
@@ -679,6 +680,92 @@ fn setup_policy_consumption_does_not_shift_the_dice_stream() {
         first.dice_trace_for_test::<128>(),
         second.dice_trace_for_test::<128>()
     );
+}
+
+/// Seats a loaded victim and an empty-handed one on `destination` and readies seat 0's knight.
+fn steal_decline_fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena, u8) {
+    let (topology, board, rules) = fixture();
+    let config = GameConfig::default();
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    let destination = other_hex(&topology, arena.state.robber);
+    let empty_vertex = topology.hex_vertices(destination)[0];
+    let loaded_vertex = topology.hex_vertices(destination)[3];
+    arena.state.vertex_owner[usize::from(empty_vertex)] = 1;
+    arena.state.vertex_tier[usize::from(empty_vertex)] = 1;
+    arena.state.vertex_owner[usize::from(loaded_vertex)] = 2;
+    arena.state.vertex_tier[usize::from(loaded_vertex)] = 1;
+    arena.state.players[2].resources[Resource::Wood.index()] = 1;
+    arena.state.bank[Resource::Wood.index()] -= 1;
+    arena.state.players[0].playable_dev[0] = 1;
+    (topology, board, rules, config, arena, destination)
+}
+
+#[test]
+fn naming_an_adjacent_empty_handed_victim_is_legal_and_steals_nothing() {
+    let (topology, board, rules, config, mut arena, destination) = steal_decline_fixture();
+    let knight = |victim| Action::PlayDev(DevPlay::Knight { destination, victim });
+
+    // The rules let seat 0 decline the steal by naming the empty-handed seat 1, or take it from
+    // the loaded seat 2; declining outright stays illegal while a loaded seat is adjacent, and a
+    // seat that is not on the hex stays unnameable.
+    assert!(arena.validate_action(&board, &topology, 0, knight(Some(1)), DecisionPhase::PreRoll));
+    assert!(arena.validate_action(&board, &topology, 0, knight(Some(2)), DecisionPhase::PreRoll));
+    assert!(!arena.validate_action(&board, &topology, 0, knight(None), DecisionPhase::PreRoll));
+    assert!(!arena.validate_action(&board, &topology, 0, knight(Some(3)), DecisionPhase::PreRoll));
+
+    assert!(arena.apply_action_for_test(
+        &board,
+        &topology,
+        &rules,
+        &config,
+        0,
+        knight(Some(1)),
+        DecisionPhase::PreRoll,
+    ));
+    assert_eq!(arena.state.robber, destination);
+    assert_eq!(arena.state.players[0].resources.iter().sum::<i16>(), 0);
+    assert_eq!(arena.state.players[1].resources.iter().sum::<i16>(), 0);
+    assert_eq!(
+        arena.state.players[2].resources.iter().sum::<i16>(),
+        1,
+        "the declined steal must not touch the loaded seat either"
+    );
+}
+
+#[test]
+fn declining_outright_is_legal_only_when_no_adjacent_seat_holds_cards() {
+    let (topology, board, _rules, _config, mut arena, destination) = steal_decline_fixture();
+    arena.state.players[2].resources[Resource::Wood.index()] = 0;
+    arena.state.bank[Resource::Wood.index()] += 1;
+    let knight = |victim| Action::PlayDev(DevPlay::Knight { destination, victim });
+
+    // With every adjacent hand empty there is nothing a steal could move, so both encodings of
+    // "steal nothing" are legal: declining outright and naming either empty-handed seat.
+    assert!(arena.validate_action(&board, &topology, 0, knight(None), DecisionPhase::PreRoll));
+    assert!(arena.validate_action(&board, &topology, 0, knight(Some(1)), DecisionPhase::PreRoll));
+    assert!(arena.validate_action(&board, &topology, 0, knight(Some(2)), DecisionPhase::PreRoll));
+}
+
+#[test]
+fn random_legal_enumerates_the_empty_handed_naming_and_only_legal_actions() {
+    let (topology, board, _rules, _config, arena, destination) = steal_decline_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let mut rng = Xoshiro256StarStar::from_seed(7);
+    let mut buf = ActionBuf::default();
+    random_legal::legal_actions(&view, &mut rng, &mut buf);
+    let actions: Vec<_> = buf.as_slice().iter().map(|scored| scored.action).collect();
+
+    let knight = |victim| Action::PlayDev(DevPlay::Knight { destination, victim });
+    assert!(actions.contains(&knight(Some(1))), "the legal decline must be offered");
+    assert!(actions.contains(&knight(Some(2))));
+    assert!(!actions.contains(&knight(None)), "declining outright is illegal here");
+    for action in actions {
+        assert!(
+            arena.validate_action(&board, &topology, 0, action, DecisionPhase::Action),
+            "random-legal enumerated an illegal action: {action:?}"
+        );
+    }
 }
 
 #[test]

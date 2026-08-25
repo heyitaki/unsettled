@@ -791,13 +791,14 @@ impl GameArena {
         if !self.valid_robber(topology, board.seats(), seat, destination, victim) {
             self.illegal_decision("illegal robber decision");
             // The recovery move must obey the same mandatory-steal rule it just enforced, so name
-            // an eligible victim on the fallback hex rather than declining the steal outright.
+            // some adjacent victim on the fallback hex (any adjacent seat is nameable) rather than
+            // declining the steal outright.
             let fallback = (0..topology.hex_count())
                 .map(|hex| hex as u8)
                 .find(|hex| *hex != self.state.robber)
                 .expect("board has another hex");
             let fallback_victim = (0..board.seats())
-                .find(|candidate| self.eligible_victim(topology, seat, fallback, *candidate as u8));
+                .find(|candidate| self.nameable_victim(topology, seat, fallback, *candidate as u8));
             self.move_robber_and_steal(topology, seat, fallback, fallback_victim);
         } else {
             self.move_robber_and_steal(topology, seat, destination, victim.map(usize::from));
@@ -1189,21 +1190,25 @@ impl GameArena {
         match victim {
             Some(victim) => {
                 usize::from(victim) < seats
-                    && self.eligible_victim(topology, seat, destination, victim)
+                    && self.nameable_victim(topology, seat, destination, victim)
             }
-            // Stealing is mandatory when the destination touches anyone worth robbing; declining
-            // is legal only when no eligible victim exists.
+            // Stealing is mandatory when the destination touches anyone holding a card; declining
+            // outright is legal only when nobody adjacent could yield one. Naming an adjacent
+            // empty-handed seat is always legal and steals nothing -- that is how the rules let a
+            // player decline a steal.
             None => !(0..seats).any(|candidate| {
-                self.eligible_victim(topology, seat, destination, candidate as u8)
+                self.nameable_victim(topology, seat, destination, candidate as u8)
+                    && self.state.players[candidate].hand_size() > 0
             }),
         }
     }
 
-    /// Whether `candidate` can be robbed at `destination`: a different seat, present on the hex,
-    /// and holding at least one card. This is the single definition of "worth robbing" -- the
-    /// policies' `DecisionView::stealable_on_hex` must agree with it or a legal decision becomes
-    /// an illegal action.
-    fn eligible_victim(
+    /// Whether `candidate` can be named as the robber victim at `destination`: a different seat,
+    /// present on the hex. Hand size is deliberately not checked -- naming an empty-handed seat is
+    /// the rules' decline mechanism. This is the single definition of "nameable"; the policies'
+    /// `DecisionView::victim_on_hex` must agree with it, and `DecisionView::stealable_on_hex` must
+    /// agree with the mandatory-steal clause above, or a legal decision becomes an illegal action.
+    fn nameable_victim(
         &self,
         topology: &Topology,
         seat: usize,
@@ -1211,7 +1216,6 @@ impl GameArena {
         candidate: u8,
     ) -> bool {
         usize::from(candidate) != seat
-            && self.state.players[usize::from(candidate)].hand_size() > 0
             && topology
                 .hex_vertices(destination)
                 .iter()
