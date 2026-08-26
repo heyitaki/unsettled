@@ -162,8 +162,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 19: J composite — measure, record, consolidate
 
-- [ ] Composite J A/B (all J terms at trial values vs all-zero) on tuning; corpus recapture; M entry
-- [ ] Record the J design decisions in `programme.md` (D-class) and new guarantees in `contracts.md`; J marked built
+- [x] Composite J A/B (all J terms at trial values vs all-zero) on tuning; corpus recapture; M entry — M-37, two arms on the composite: `-jall` (all five J terms at their lo trial values) `worse` at -2.05pp, McNemar `[-2.69pp, -1.41pp]`, and `-jnohyst` (hysteresis held at its shipped zero) `equivalent` at -0.16pp, clustered `[-0.48pp, +0.15pp]` — the response is near-additive (the composite penalty is M-35's hysteresis penalty and nothing more; the non-hysteresis composite is indistinguishable from the sum of the singles), so H2 may sweep the J axes independently; corpus recapture byte-identical (0/4000 moved); the prereg's -0.4pp singles-sum prediction was an arithmetic slip (correct sum -0.11pp), corrected in the M entry, both spellings called `equivalent`
+- [x] Record the J design decisions in `programme.md` (D-class) and new guarantees in `contracts.md`; J marked built — new "Phase J design decisions" section (one goal-need model, stage input split by visibility, both piece-economy halves, hysteresis on `GameState` and measured worse, frontier through the one expansion closure, the increment rule, and the J-before-H ordering deviation as a superseding decision); phase list marks J built and measured; contracts roster extended with `-jall`/`-jnohyst` and their exact vectors
 
 ### Task 20: H0 — params files, bounds, headroom (SIM-GAP-30)
 
