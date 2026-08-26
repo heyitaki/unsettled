@@ -589,3 +589,69 @@ Command: as preregistered (`--out runs/m37-jcomposite`). Load before `4.43 4.44 
 | jnohyst (hysteresis at zero) | `-0.001625` | 261 | 287 | clustered `[-0.0047527, +0.0015027]` | equivalent |
 
 The composite response is near-additive, which is the answer H2 needed. One correction to the prereg's prediction paragraph: it stated the non-hysteresis lo singles sum to roughly -0.4pp; the correct sum of the M-32/M-33/M-34/M-36 lo estimates is -0.11pp (an arithmetic slip in the prereg, recorded here rather than edited there). Both the stated and the corrected prediction called `jnohyst` `equivalent` near zero, and it measured -0.16pp with the interval inside +-0.5pp — indistinguishable from the singles sum, with 548 discordant games against roughly 620 summed across the four singles. `jall` measured -2.05pp against a predicted -2.45pp (hystlo's -2.34pp plus the flat terms); its interval overlaps M-35's hystlo interval almost exactly, so the composite penalty is the hysteresis penalty and nothing more. No J interaction is detectable at the lo corner in either direction: H2 may sweep the J axes independently rather than jointly, with the flat-to-slightly-negative per-axis priors recorded in M-32 through M-36 and the hysteresis axis treated as likely zero-optimal per M-35. Per the preregistered rule nothing shipped changes; every J weight remains zero-default.
+
+## M-38 — H1 placement-weight screens
+
+2026-08-25, commit `9384b07d` (prereg; no code change), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m38-h1-placement-screens.md` (committed before the runs, including every arm vector). Phase H1 screens every swept parameter of `simulator/placement/default-weights.json` — 18 parameters, one arm below and one above the default (generally half and double, clamped to `sweep-bounds.json`), as full weights files `placement/arms/h1_*.json`. Skipped: the `resourceValue` spread axis (eval-spent), `genericPortFactor` (settled at 0.5), the degenerate-bounds machinery parameters, and `handValueWeight`'s zero question (H3's own A/B; screened here as a magnitude axis only). Protocol per the H context: composite field — every seat, field and arms alike, runs `heuristic-v1-trader-aware-threat-devcards-denial` with player trading (unlike the J screens, whose field policy was plain `heuristic-v1-trader`) — 2000 boards x 2 reps, 16,000 paired units per arm over 2000 clusters, reference `base` = `simulator/placement/default-weights.json` loaded as an app-formula arm. Four invocations grouped by family. Loads before/after: h1a `2.63 2.72 2.75` / `7.14 3.74 3.12` (20s), h1b `6.64 3.70 3.11` / `11.55 5.09 3.62` (25s), h1c `10.71 5.02 3.61` / `13.34 5.99 3.99` (20s), h1d `12.27 5.89 3.96` / `14.97 7.04 4.43` (25s) — the rising averages are these back-to-back runs themselves; deterministic outcomes, load affects timing only. 144,000/176,000/144,000/176,000 games, zero illegal actions everywhere; admissible. Reference win rate `0.2331875` in all four (the default app formula gives up about 1.7pp to a `pip_diversity` seat at this corner).
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| hand_lo | 0.2 | `-0.00175` | 82 | 110 | clustered `[-0.0034724, -0.0000276]` | equivalent |
+| hand_hi | 0.8 | `+0.000625` | 166 | 156 | clustered `[-0.0016275, +0.0028775]` | equivalent |
+| scarcity_lo | 0.175 | `-0.003125` | 331 | 381 | clustered `[-0.0065879, +0.0003379]` | equivalent |
+| scarcity_hi | 0.7 | `-0.0008125` | 647 | 660 | clustered `[-0.0054247, +0.0037997]` | equivalent |
+| clampmin_lo | 0.25 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| clampmin_hi | 1.0 | `-0.001125` | 415 | 433 | clustered `[-0.0048893, +0.0026393]` | equivalent |
+| clampmax_lo | 1.0 | `-0.0034375` | 585 | 640 | clustered `[-0.0078374, +0.0009624]` | equivalent |
+| clampmax_hi | 4.0 | `+0.000125` | 16 | 14 | clustered `[-0.0007060, +0.0009560]` | equivalent |
+| diversity_lo | 0.8 | `-0.0115625` | 445 | 630 | clustered `[-0.0158139, -0.0073111]` | inconclusive |
+| diversity_hi | 3.2 | `+0.007` | 902 | 790 | clustered `[+0.0015071, +0.0124929]` | inconclusive |
+| divcap_lo | 2.0 | `-0.001375` | 1034 | 1056 | clustered `[-0.0072663, +0.0045163]` | equivalent |
+| divcap_hi | 8.0 | `-0.018375` | 1060 | 1354 | clustered `[-0.0246763, -0.0120737]` | worse |
+| coverage_lo | 1.0 | `-0.000375` | 457 | 463 | clustered `[-0.0043112, +0.0035612]` | equivalent |
+| coverage_hi | 2.25 | `-0.003375` | 414 | 468 | clustered `[-0.0071327, +0.0003827]` | equivalent |
+| covscarcity_lo | 0.25 | `-0.0009375` | 131 | 146 | clustered `[-0.0031255, +0.0012505]` | equivalent |
+| covscarcity_hi | 1.0 | `-0.0018125` | 229 | 258 | clustered `[-0.0045974, +0.0009724]` | equivalent |
+| dup_lo | 0.0 | `-0.0019375` | 163 | 194 | clustered `[-0.0043897, +0.0005147]` | equivalent |
+| dup_hi | 0.16 | `+0.00025` | 170 | 166 | McNemar `[-0.0019954, +0.0024954]` | equivalent |
+| road_lo | 0.75 | `-0.00225` | 197 | 233 | clustered `[-0.0048299, +0.0003299]` | equivalent |
+| road_hi | 3.0 | `+0.0043125` | 547 | 478 | clustered `[+0.0001707, +0.0084543]` | equivalent |
+| city_lo | 1.0 | `+0.0040625` | 315 | 250 | clustered `[+0.0010540, +0.0070710]` | equivalent |
+| city_hi | 4.0 | `-0.00475` | 347 | 423 | clustered `[-0.0083120, -0.0011880]` | equivalent |
+| settlement_lo | 0.5 | `-0.0008125` | 33 | 46 | McNemar `[-0.0019012, +0.0002762]` | equivalent |
+| settlement_hi | 2.0 | `+0.0011875` | 111 | 92 | clustered `[-0.0006084, +0.0029834]` | equivalent |
+| recipecap_lo | 2.0 | `+0.000875` | 784 | 770 | clustered `[-0.0041857, +0.0059357]` | equivalent |
+| recipecap_hi | 8.0 | `-0.0024375` | 589 | 628 | McNemar `[-0.0067107, +0.0018357]` | equivalent |
+| port_lo | 0.275 | `+0.0050625` | 369 | 288 | clustered `[+0.0018446, +0.0082804]` | equivalent |
+| port_hi | 1.1 | `-0.0145625` | 558 | 791 | clustered `[-0.0193581, -0.0097669]` | inconclusive |
+| portsurplus_lo | 1.0 | `+0.0005` | 464 | 456 | clustered `[-0.0033474, +0.0043474]` | equivalent |
+| portsurplus_hi | 5.0 | `+0.00175` | 423 | 395 | clustered `[-0.0019291, +0.0054291]` | equivalent |
+| portradius_lo | 1.0 | `-0.00175` | 388 | 416 | clustered `[-0.0053508, +0.0018508]` | equivalent |
+| portradius_hi | 3.0 | `-0.00125` | 167 | 187 | clustered `[-0.0036379, +0.0011379]` | equivalent |
+| portdecay_lo | 0.25 | `-0.0039375` | 256 | 319 | clustered `[-0.0069163, -0.0009587]` | equivalent |
+| portdecay_hi | 1.0 | `+0.00475` | 1088 | 1012 | clustered `[-0.0011887, +0.0106887]` | inconclusive |
+| robber_lo | 0.175 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| robber_hi | 0.7 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+
+No arm reached `better`, so per the preregistered rule the screen itself sends nothing to the H4 combine; every reading stands as an H prior. What the table establishes: (1) `diversityWeight` is the one axis with directional signal — monotone across the default, lowering it decisively negative-leaning, raising it positive with the interval crossing +1pp — resolved in M-39/M-40 below. (2) `diversityCap` raised to 8 is decisively `worse` (-1.84pp): the cap at 4 is doing real work containing the diversity term, which coheres with raising the weight helping while raising the cap hurts. (3) Two axes are structurally dead on this instrument, both with literally zero discordant games: `robberDiscount` (the robber starts on the desert, so the discount multiplies zero production on every starting board — the axis is invisible to self-play placement tuning and matters only for the app's mid-game boards) and `scarcityClampMin` lowered to 0.25 (no tuning-schedule board produces a scarcity ratio below the current 0.5 floor). Neither can be tuned by this harness; both should be left at defaults through H. (4) Sub-threshold directional leans worth carrying into H4's deliberation: `portWeight` prefers down (lo +0.51pp with interval entirely positive, hi -1.46pp inconclusive-worse), `recipeCityBonus` prefers down (lo +0.41pp entirely positive, hi negative), `recipeRoadBonus` leans up (+0.43pp, interval barely positive). Everything else is flat inside the threshold at this power.
+
+## M-39 — H1 diversity-weight axis extension
+
+2026-08-25, commit `699a68a2` (prereg; no code change), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m39-h1-diversity-extension.md` (committed before the run). Spends the remaining two arms of the H1 per-parameter budget on the one axis M-38 left directional: `diversityWeight` at 4.8 and 6.4 (bounds max 6.4), same protocol and reference. Load before `5.12 5.76 4.17`, after `5.89 5.91 4.24` (7s run); 48,000 games, 16,000 paired units per arm over 2000 clusters, zero illegal actions; admissible. Reference win rate `0.2331875`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| diversity_48 (4.8) | `+0.01075` | 1422 | 1250 | clustered `[+0.0039310, +0.0175690]` | inconclusive |
+| diversity_64 (6.4) | `+0.011` | 1692 | 1516 | clustered `[+0.0035908, +0.0184092]` | inconclusive |
+
+The axis rises from the default and plateaus: +0.70pp at 3.2, +1.08pp at 4.8, +1.10pp at 6.4, the last two statistically indistinguishable. Both intervals sit entirely above zero — the gain is real — but both straddle the +1pp practical threshold, so neither is `better` and the preregistered rule sends nothing to H4 from this run. The plateau locates the useful range at roughly 3x-4x the default with nothing further above; M-40 puts power on the 4.8 point to resolve the threshold question.
+
+## M-40 — H1 diversity-weight confirmation at power
+
+2026-08-25, commit `637ca475` (prereg; no code change), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m40-h1-diversity-confirmation.md` (committed before the run). One decision arm — `diversityWeight` 4.8, chosen over 6.4 as the smaller deviation at the same plateau estimate — at four times the screen power: 8000 boards x 2 reps, 64,000 paired units over 8000 clusters, same protocol and reference otherwise. The tuning domain's deterministic board schedule means the screen's 2000 boards recur inside this run's 8000, so this is a same-domain re-measurement at power, not an independent replication; `eval` stays unspent. Load before `3.37 5.24 4.10`, after `7.17 6.01 4.40` (20s run); 128,000 games, zero illegal actions; admissible. Reference win rate `0.2345`.
+
+| Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | --- | --- |
+| diversity_48 (4.8) | `+0.0128906` | 5794 | 4969 | clustered `[+0.0095231, +0.0162581]` | inconclusive |
+
+The interval's lower edge lands at +0.95pp against the +1pp threshold — `inconclusive` by half a tenth of a point. The preregistered rule was fixed exactly for this case: no winner, no further re-runs. H1 therefore closes with an **empty winners list**, and this reading is recorded as the strongest H1 prior: `diversityWeight` around 4.8 is worth roughly +1.3pp (interval `[+0.95pp, +1.63pp]`) against the composite field on the tuning schedule, real beyond doubt but not established above the practical threshold. H4's candidate deliberation may weigh it under Task 24's "best defensible candidate" clause; per the screen rule it does not enter the combine, and the H4 eval confirmation remains the only place an independent domain would price it.

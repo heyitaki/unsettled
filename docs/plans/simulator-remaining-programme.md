@@ -173,8 +173,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 21: H1 — placement-weight screens
 
-- [ ] Preregister; screen each `default-weights.json` parameter (2-4 arms, 2000 boards x 2 reps, tuning, composite field, trading on); skip the eval-spent `resourceValue` spread axis and the settled `genericPortFactor`
-- [ ] M entries; winners list committed into this plan file under this task
+- [x] Preregister; screen each `default-weights.json` parameter (2-4 arms, 2000 boards x 2 reps, tuning, composite field, trading on); skip the eval-spent `resourceValue` spread axis and the settled `genericPortFactor` — M-38 (36 arms over 18 parameters, four invocations, every seat on the full composite with trading, all vectors committed in the prereg and inside `sweep-bounds.json`), plus M-39 (diversity axis extension to 4.8/6.4) and M-40 (single-arm confirmation at 4x power), all preregistered before their runs; zero illegal actions throughout
+- [x] M entries; winners list committed into this plan file under this task — **Winners: none** (no arm reached `better`, so nothing enters the H4 combine from H1 per the screen rule). Priors recorded for H4: `diversityWeight` 4.8 is the strongest — +1.29pp at 64,000 units, clustered `[+0.95pp, +1.63pp]`, `inconclusive` by 0.05pp of interval edge, eligible only under Task 24's best-defensible-candidate clause; `diversityCap` 8 decisively `worse` (-1.84pp, cap stays); `portWeight` and `recipeCityBonus` lean down, `recipeRoadBonus` leans up, all sub-threshold; `robberDiscount` (robber starts on the desert) and `scarcityClampMin`-lowering are structurally dead on this instrument (0 discordant games) and stay at defaults through H
 
 ### Task 22: H2 — policy-block screens
 
