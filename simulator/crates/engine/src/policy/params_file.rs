@@ -543,10 +543,11 @@ mod tests {
         }
     }
 
-    /// Walks the committed H2 screen arms (`placement/arms/h2_*.json`): every file loads
-    /// through the full contract (exact keys, guards, headroom), differs from the
-    /// composite defaults in exactly one leaf, and that leaf sits inside its committed
-    /// sweep-bounds range. The count pins the preregistered 64-parameter x 2-arm set.
+    /// Walks the committed H2 screen arms (`placement/arms/h2_*.json` plus the `h2x_*`
+    /// extension arms): every file loads through the full contract (exact keys, guards,
+    /// headroom), differs from the composite defaults in exactly one leaf, and that leaf
+    /// sits inside its committed sweep-bounds range. The counts pin the preregistered
+    /// 64-parameter x 2-arm M-41 set and the 10-arm M-42 extension set.
     #[test]
     fn the_h2_arm_files_are_single_parameter_perturbations_inside_bounds() {
         let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
@@ -557,7 +558,8 @@ mod tests {
         let base = composite_value();
         let mut leaves = Vec::new();
         collect_leaf_paths(&base, "", &mut leaves);
-        let mut count = 0;
+        let mut screen_count = 0;
+        let mut extension_count = 0;
         for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
             let path = entry.expect("entry").path();
             let name = path
@@ -565,10 +567,16 @@ mod tests {
                 .and_then(|name| name.to_str())
                 .unwrap_or_default()
                 .to_string();
-            if !name.starts_with("h2_") || !name.ends_with(".json") {
+            if !name.ends_with(".json") {
                 continue;
             }
-            count += 1;
+            if name.starts_with("h2_") {
+                screen_count += 1;
+            } else if name.starts_with("h2x_") {
+                extension_count += 1;
+            } else {
+                continue;
+            }
             let source = std::fs::read_to_string(&path).expect("arm file");
             parse_params_file(&source)
                 .unwrap_or_else(|error| panic!("{name} must load: {error}"));
@@ -593,7 +601,8 @@ mod tests {
                 "{name}: {leaf} = {value} lies outside its bounds range"
             );
         }
-        assert_eq!(count, 128, "the H2 screen commits 64 parameters x 2 arms");
+        assert_eq!(screen_count, 128, "the H2 screen commits 64 parameters x 2 arms");
+        assert_eq!(extension_count, 10, "the M-42 extension commits 10 arms");
     }
 
     #[test]
