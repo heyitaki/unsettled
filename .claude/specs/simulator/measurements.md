@@ -655,3 +655,188 @@ The axis rises from the default and plateaus: +0.70pp at 3.2, +1.08pp at 4.8, +1
 | diversity_48 (4.8) | `+0.0128906` | 5794 | 4969 | clustered `[+0.0095231, +0.0162581]` | inconclusive |
 
 The interval's lower edge lands at +0.95pp against the +1pp threshold — `inconclusive` by half a tenth of a point. The preregistered rule was fixed exactly for this case: no winner, no further re-runs. H1 therefore closes with an **empty winners list**, and this reading is recorded as the strongest H1 prior: `diversityWeight` around 4.8 is worth roughly +1.3pp (interval `[+0.95pp, +1.63pp]`) against the composite field on the tuning schedule, real beyond doubt but not established above the practical threshold. H4's candidate deliberation may weigh it under Task 24's "best defensible candidate" clause; per the screen rule it does not enter the combine, and the H4 eval confirmation remains the only place an independent domain would price it.
+
+## M-41 — H2 policy-block screens
+
+2026-08-25, commit `5a066658` (prereg; the same commit adds the committed arm files and their pin test, no engine behavior change), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m41-h2-policy-screens.md` (committed before the runs, including every arm vector). Phase H2 screens every swept policy parameter — the `HeuristicParams` core, the J and knight axes, and the `ThreatParams`, `DevCardParams`, `TradeParams`, and `DenialParams` blocks — as single-parameter perturbation arms (generally half and double the default, clamped to `sweep-bounds.json`; 64 parameters, 128 arms as committed files `placement/arms/h2_*.json`, each pinned as a single-leaf perturbation inside bounds by `the_h2_arm_files_are_single_parameter_perturbations_inside_bounds`). Protocol per the H context: composite field with `--player-trading`, every arm placing via `pip_diversity` like the field so an arm differs from the field only in the one perturbed policy parameter, loaded through the H0 params-file mechanism (each `--arm-policy` names the composite base at the arm's committed `h2_` file); 2000 boards x 2 reps, 16,000 paired units per arm over 2000 clusters; reference `base` = the named composite at defaults, sitting at the symmetric corner (all four seats identical; reference win rate `0.241875` in all six invocations, the deficit to 0.25 being draws and seat effects). Six invocations grouped by block. Loads before/after: h2a `1.81 3.24 3.64` / `10.73 5.28 4.37` (33s), h2b `9.38 5.18 4.34` / `15.73 7.42 5.21` (43s), h2c `15.73 7.42 5.21` / `18.30 9.42 6.07` (49s), h2d `18.30 9.42 6.07` / `20.18 11.10 6.86` (47s), h2e `20.18 11.10 6.86` / `20.72 13.26 8.00` (66s), h2f `20.72 13.26 8.00` / `21.08 14.89 9.03` (68s) — the rising averages are these back-to-back runs themselves; deterministic outcomes, load affects timing only. 240,000 / 304,000 / 336,000 / 336,000 / 432,000 / 496,000 games, zero illegal actions everywhere; admissible.
+
+**TradeConfig disposition (no run, structural).** As preregistered: the screen's estimand — the paired win-rate difference under a hero-only change against an unchanged field — does not exist for `TradeConfig`, because the config is engine-global (one `RuleConfig::player_trading` for all seats), and with the base arm identical to the field the hero's rotated-seat win rate is pinned at the symmetric seat average regardless of the config value. No run can screen it; the axis group is structurally dead on this instrument, the M-38 sense extended from "zero discordant games" to "zero by construction". The `TradeConfig` defaults stay declared placeholders; a per-seat refusal-threshold seam would be the follow-up if per-seat tuning of these flags is ever wanted.
+
+`HeuristicParams` core (h2a):
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| production_lo | 0.5 | `+0.0014375` | 655 | 632 | McNemar `[-0.0029570, +0.0058320]` | equivalent |
+| production_hi | 2.0 | `+0.0029375` | 688 | 641 | McNemar `[-0.0015280, +0.0074030]` | equivalent |
+| scarcity_lo | 0.175 | `-0.001875` | 266 | 296 | McNemar `[-0.0047789, +0.0010289]` | equivalent |
+| scarcity_hi | 0.7 | `+0.001` | 430 | 414 | clustered `[-0.0026180, +0.0046180]` | equivalent |
+| divbonus_lo | 0.7 | `+0.0008125` | 124 | 111 | clustered `[-0.0010655, +0.0026905]` | equivalent |
+| divbonus_hi | 2.8 | `+0.0025` | 216 | 176 | clustered `[+0.0000275, +0.0049725]` | equivalent |
+| portw_lo | 0.05 | `-0.0001875` | 64 | 67 | McNemar `[-0.0015895, +0.0012145]` | equivalent |
+| portw_hi | 0.2 | `+0.00075` | 126 | 114 | clustered `[-0.0011637, +0.0026637]` | equivalent |
+| expansion_lo | 0.075 | `+0.00025` | 34 | 30 | McNemar `[-0.0007300, +0.0012300]` | equivalent |
+| expansion_hi | 0.3 | `-0.000625` | 45 | 55 | McNemar `[-0.0018499, +0.0005999]` | equivalent |
+| robthresh_lo | 2 | `-0.000125` | 161 | 163 | McNemar `[-0.0023300, +0.0020800]` | equivalent |
+| robthresh_hi | 7 | `-0.0044375` | 1624 | 1695 | McNemar `[-0.0114944, +0.0026194]` | inconclusive |
+| shed_lo | 5.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| shed_hi | 20.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+
+J axes (h2b):
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| goalneed_lo | 0.5 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| goalneed_hi | 2.0 | `-6.25e-05` | 1 | 2 | clustered `[-0.0002747, +0.0001497]` | equivalent |
+| stageexp_lo | 0.5 | `+6.25e-05` | 10 | 9 | clustered `[-0.0004716, +0.0005966]` | equivalent |
+| stageexp_hi | 1.0 | `+0.000375` | 22 | 16 | McNemar `[-0.0003801, +0.0011301]` | equivalent |
+| stagecity_lo | 0.5 | `+0.001125` | 154 | 136 | McNemar `[-0.0009610, +0.0032110]` | equivalent |
+| stagecity_hi | 2.0 | `+0.002375` | 456 | 418 | clustered `[-0.0012912, +0.0060412]` | equivalent |
+| stageurg_lo | 0.5 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| stageurg_hi | 1.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| slotret_lo | 2.0 | `+0.0008125` | 77 | 64 | clustered `[-0.0006625, +0.0022875]` | equivalent |
+| slotret_hi | 8.0 | `+0.001875` | 254 | 224 | clustered `[-0.0008082, +0.0045582]` | equivalent |
+| costpress_lo | 0.5 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| costpress_hi | 2.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| frontier_lo | 0.5 | `+0.0006875` | 118 | 107 | McNemar `[-0.0011499, +0.0025249]` | equivalent |
+| frontier_hi | 1.0 | `-0.0009375` | 221 | 236 | clustered `[-0.0035794, +0.0017044]` | equivalent |
+| devbuy_lo | 0.5 | `+0.024625` | 1413 | 1019 | McNemar `[+0.0185960, +0.0306540]` | **better** |
+| devbuy_hi | 2.0 | `+0.0074375` | 712 | 593 | McNemar `[+0.0030138, +0.0118612]` | inconclusive |
+| hyst_lo | 0.0625 | `+0.0003125` | 559 | 554 | McNemar `[-0.0037742, +0.0043992]` | equivalent |
+| hyst_hi | 0.125 | `-0.00175` | 910 | 938 | clustered `[-0.0071100, +0.0036100]` | equivalent |
+
+`ThreatParams` (h2c):
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| thrdelay_lo | 0.5 | `-0.000375` | 398 | 404 | clustered `[-0.0038794, +0.0031294]` | equivalent |
+| thrdelay_hi | 2.0 | `+0.00125` | 311 | 291 | McNemar `[-0.0017555, +0.0042555]` | equivalent |
+| thrneed_lo | 0.175 | `+0.0010625` | 274 | 257 | McNemar `[-0.0017602, +0.0038852]` | equivalent |
+| thrneed_hi | 0.7 | `-0.0004375` | 431 | 438 | McNemar `[-0.0040486, +0.0031736]` | equivalent |
+| thrblock_lo | 0.125 | `-0.00025` | 135 | 139 | clustered `[-0.0022856, +0.0017856]` | equivalent |
+| thrblock_hi | 0.5 | `+0.0008125` | 214 | 201 | clustered `[-0.0017132, +0.0033382]` | equivalent |
+| thrsteal_lo | 0.01 | `-0.0005` | 45 | 53 | McNemar `[-0.0017126, +0.0007126]` | equivalent |
+| thrsteal_hi | 0.04 | `-0.000125` | 93 | 95 | clustered `[-0.0018578, +0.0016078]` | equivalent |
+| thrvictim_lo | 0.075 | `+0.0014375` | 214 | 191 | clustered `[-0.0010336, +0.0039086]` | equivalent |
+| thrvictim_hi | 0.3 | `+0.0011875` | 324 | 305 | McNemar `[-0.0018847, +0.0042597]` | equivalent |
+| thrfloor_lo | 0.5 | `+0.0014375` | 101 | 78 | clustered `[-0.0002279, +0.0031029]` | equivalent |
+| thrfloor_hi | 2.0 | `+0.0013125` | 151 | 130 | McNemar `[-0.0007408, +0.0033658]` | equivalent |
+| thrdelaycap_lo | 2.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| thrdelaycap_hi | 8.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| thrhandcap_lo | 4.0 | `+0.0015` | 253 | 229 | McNemar `[-0.0011893, +0.0041893]` | equivalent |
+| thrhandcap_hi | 16.0 | `+0.0013125` | 212 | 191 | clustered `[-0.0011527, +0.0037777]` | equivalent |
+| knsteal_lo | 6.0 | `+6.25e-05` | 2 | 1 | clustered `[-0.0001497, +0.0002747]` | equivalent |
+| knsteal_hi | 24.0 | `+0.000125` | 5 | 3 | clustered `[-0.0002215, +0.0004715]` | equivalent |
+| knplace_lo | 15.0 | `-6.25e-05` | 2 | 3 | clustered `[-0.0003365, +0.0002115]` | equivalent |
+| knplace_hi | 60.0 | `+0.0001875` | 7 | 4 | clustered `[-0.0002188, +0.0005938]` | equivalent |
+
+`DevCardParams` (h2d):
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| dcetw_lo | 0.5 | `-0.001` | 238 | 254 | McNemar `[-0.0037171, +0.0017171]` | equivalent |
+| dcetw_hi | 2.0 | `+0.001` | 236 | 220 | McNemar `[-0.0016158, +0.0036158]` | equivalent |
+| dcetwfloor_lo | 0.5 | `+0.00025` | 7 | 3 | McNemar `[-0.0001374, +0.0006374]` | equivalent |
+| dcetwfloor_hi | 2.0 | `-0.000375` | 6 | 12 | McNemar `[-0.0008947, +0.0001447]` | equivalent |
+| dcgaincap_lo | 2.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dcgaincap_hi | 8.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dccompletion_lo | 0.175 | `+6.25e-05` | 1 | 0 | clustered `[-0.0000600, +0.0001850]` | equivalent |
+| dccompletion_hi | 0.7 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dchold_lo | 0.8 | `+0.0009375` | 230 | 215 | McNemar `[-0.0016466, +0.0035216]` | equivalent |
+| dchold_hi | 1.0 | `-0.000375` | 115 | 121 | McNemar `[-0.0022568, +0.0015068]` | equivalent |
+| dchaul_lo | 0.25 | `-0.000375` | 110 | 116 | McNemar `[-0.0022165, +0.0014665]` | equivalent |
+| dchaul_hi | 1.0 | `+0.00125` | 203 | 183 | McNemar `[-0.0011566, +0.0036566]` | equivalent |
+| dcmono_lo | 0.5 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dcmono_hi | 2.0 | `+0.0014375` | 114 | 91 | McNemar `[-0.0003163, +0.0031913]` | equivalent |
+| dctempo_lo | 0.1 | `-0.0005625` | 110 | 119 | McNemar `[-0.0024162, +0.0012912]` | equivalent |
+| dctempo_hi | 0.4 | `+0.000625` | 139 | 129 | clustered `[-0.0014251, +0.0026751]` | equivalent |
+| dctempohalf_lo | 2.0 | `-0.00075` | 49 | 61 | clustered `[-0.0020463, +0.0005463]` | equivalent |
+| dctempohalf_hi | 8.0 | `0.0` | 76 | 76 | McNemar `[-0.0015103, +0.0015103]` | equivalent |
+| dcexposure_lo | 0.025 | `+0.002625` | 179 | 137 | McNemar `[+0.0004478, +0.0048022]` | equivalent |
+| dcexposure_hi | 0.1 | `-0.0013125` | 172 | 193 | McNemar `[-0.0036527, +0.0010277]` | equivalent |
+
+`TradeParams` (h2e):
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| tretw_lo | 0.5 | `-0.023125` | 1853 | 2223 | McNemar `[-0.0309375, -0.0153125]` | worse |
+| tretw_hi | 2.0 | `+0.0424375` | 2684 | 2005 | clustered `[+0.0340602, +0.0508148]` | **better** |
+| tretwfloor_lo | 0.5 | `-0.0005` | 171 | 179 | McNemar `[-0.0027917, +0.0017917]` | equivalent |
+| tretwfloor_hi | 2.0 | `-0.0019375` | 297 | 328 | McNemar `[-0.0049998, +0.0011248]` | equivalent |
+| trgaincap_lo | 2.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| trgaincap_hi | 8.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| trtempo_lo | 0.1 | `-0.010375` | 2104 | 2270 | clustered `[-0.0185250, -0.0022250]` | inconclusive |
+| trtempo_hi | 0.4 | `+0.0366875` | 2678 | 2091 | McNemar `[+0.0282472, +0.0451278]` | **better** |
+| trtempohalf_lo | 2.0 | `+0.0169375` | 2371 | 2100 | McNemar `[+0.0087508, +0.0251242]` | inconclusive |
+| trtempohalf_hi | 8.0 | `-0.0065625` | 2093 | 2198 | clustered `[-0.0149048, +0.0017798]` | inconclusive |
+| trscarcity_lo | 0.125 | `+0.0039375` | 2260 | 2197 | McNemar `[-0.0042403, +0.0121153]` | inconclusive |
+| trscarcity_hi | 0.5 | `+0.010625` | 2340 | 2170 | McNemar `[+0.0024001, +0.0188499]` | inconclusive |
+| trfloor_lo | 0.5 | `-0.0050625` | 1089 | 1170 | clustered `[-0.0108922, +0.0007672]` | inconclusive |
+| trfloor_hi | 2.0 | `+0.014` | 1695 | 1471 | McNemar `[+0.0071108, +0.0208892]` | inconclusive |
+| trdangerw_lo | 0.25 | `-0.0054375` | 1097 | 1184 | McNemar `[-0.0112874, +0.0004124]` | inconclusive |
+| trdangerw_hi | 1.0 | `+0.014` | 1734 | 1510 | McNemar `[+0.0070264, +0.0209736]` | inconclusive |
+| trbenefit_lo | 0.25 | `-0.006625` | 2117 | 2223 | McNemar `[-0.0146943, +0.0014443]` | inconclusive |
+| trbenefit_hi | 1.0 | `+0.0283125` | 2547 | 2094 | McNemar `[+0.0199789, +0.0366461]` | **better** |
+| trmargin_lo | 3.0 | `-0.0443125` | 1634 | 2343 | McNemar `[-0.0520071, -0.0366179]` | worse |
+| trmargin_hi | 12.0 | `+0.07` | 2952 | 1832 | McNemar `[+0.0615970, +0.0784030]` | **better** |
+| troffergain_lo | 0.5 | `+0.00825` | 2044 | 1912 | clustered `[+0.0005421, +0.0159579]` | inconclusive |
+| troffergain_hi | 2.0 | `-0.0025` | 1994 | 2034 | clustered `[-0.0103276, +0.0053276]` | inconclusive |
+| trofferbase_lo | 175.0 | `-0.0133125` | 1163 | 1376 | clustered `[-0.0195172, -0.0071078]` | inconclusive |
+| trofferbase_hi | 700.0 | `+0.044` | 2145 | 1441 | McNemar `[+0.0366962, +0.0513038]` | **better** |
+| trofferspan_lo | 50.0 | `-6.25e-05` | 0 | 1 | clustered `[-0.0001850, +0.0000600]` | equivalent |
+| trofferspan_hi | 200.0 | `+0.003` | 161 | 113 | clustered `[+0.0009613, +0.0050387]` | equivalent |
+
+`DenialParams` (h2f):
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| dnfloor_lo | 0.5 | `-0.001125` | 114 | 132 | McNemar `[-0.0030462, +0.0007962]` | equivalent |
+| dnfloor_hi | 2.0 | `+0.003125` | 208 | 158 | clustered `[+0.0007657, +0.0054843]` | equivalent |
+| dnpressfloor_lo | 0.275 | `+0.0010625` | 131 | 114 | McNemar `[-0.0008548, +0.0029798]` | equivalent |
+| dnpressfloor_hi | 1.0 | `-0.002625` | 260 | 302 | clustered `[-0.0055378, +0.0002878]` | equivalent |
+| dnpressspan_lo | 0.425 | `+0.000125` | 5 | 3 | clustered `[-0.0002215, +0.0004715]` | equivalent |
+| dnpressspan_hi | 1.7 | `+0.000125` | 14 | 12 | clustered `[-0.0004998, +0.0007498]` | equivalent |
+| dnrace_lo | 0.25 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dnrace_hi | 1.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dnracemin_lo | 0.125 | `+0.00025` | 6 | 2 | McNemar `[-0.0000965, +0.0005965]` | equivalent |
+| dnracemin_hi | 0.5 | `+6.25e-05` | 1 | 0 | clustered `[-0.0000600, +0.0001850]` | equivalent |
+| dnracecap_lo | 1 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dnracecap_hi | 2 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dndefend_lo | 6000.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dndefend_hi | 24000.0 | `-6.25e-05` | 0 | 1 | clustered `[-0.0001850, +0.0000600]` | equivalent |
+| dnheadroom_lo | 0.5 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dnheadroom_hi | 2.0 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dnprobe_lo | 1 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dnprobe_hi | 4 | `0.0` | 0 | 0 | clustered `[0.0, 0.0]` | equivalent |
+| dncontest_lo | 30.0 | `-0.0014375` | 108 | 131 | McNemar `[-0.0033311, +0.0004561]` | equivalent |
+| dncontest_hi | 120.0 | `+0.0024375` | 199 | 160 | clustered `[+0.0001055, +0.0047695]` | equivalent |
+| dncontestcap_lo | 60.0 | `-0.000125` | 7 | 9 | clustered `[-0.0006151, +0.0003651]` | equivalent |
+| dncontestcap_hi | 240.0 | `+6.25e-05` | 3 | 2 | clustered `[-0.0002115, +0.0003365]` | equivalent |
+| dnblockbonus_lo | 0.25 | `-0.0006875` | 34 | 45 | McNemar `[-0.0017762, +0.0004012]` | equivalent |
+| dnblockbonus_hi | 1.0 | `+0.0011875` | 58 | 39 | clustered `[-0.0000305, +0.0024055]` | equivalent |
+| dngoalshare_lo | 0.25 | `+6.25e-05` | 3 | 2 | clustered `[-0.0002115, +0.0003365]` | equivalent |
+| dngoalshare_hi | 1.0 | `-0.000125` | 7 | 9 | clustered `[-0.0006151, +0.0003651]` | equivalent |
+| dnarmy_lo | 40.0 | `-0.000125` | 5 | 7 | clustered `[-0.0005494, +0.0002994]` | equivalent |
+| dnarmy_hi | 160.0 | `0.0` | 6 | 6 | clustered `[-0.0004245, +0.0004245]` | equivalent |
+| dnarmygap_lo | 0.5 | `-6.25e-05` | 5 | 6 | clustered `[-0.0004689, +0.0003439]` | equivalent |
+| dnarmygap_hi | 2.0 | `+0.000125` | 6 | 4 | clustered `[-0.0002624, +0.0005124]` | equivalent |
+
+Six arms reached `better` — the first `better` verdicts Phase H has produced, all on one surface. What the tables establish: (1) **The `TradeParams` block is the hot surface and it is monotone.** Five axes (`etwWeight`, `tempoWeight`, `benefitWeight`, `marginScale`, `offerBase`) are `worse` or negative-leaning at half and decisively `better` at double, with `marginScale` 12 worth +7.00pp; four more (`tempoHalf` down, `scarcityFloor`, `dangerFloor`, `dangerWeight` up) lean the same way with intervals crossing the threshold. All of these price the hero's trade acceptance and offers against three field seats whose own trade behavior is fixed, so the coherent reading is that the default trading weights leave large value on the table at this corner by trading too generously; whether that survives the combined vector and an independent domain is exactly what H4's coordinate pass and eval confirmation exist to answer. Resolved in M-42 below at the bounds endpoints. (2) `devBuyScale` 0.5 is `better` at +2.46pp, the SIM-GAP-24 answer (see M-42 for the 0.25 extension; the entry's own rule says a `better` at a lower scale confirms the dev-band bias, and it is confirmed — with the wrinkle that 2.0 is also mildly positive, so the default sits in a local dip rather than on a monotone slope). (3) Everything else is quiet: every core, threat, dev-card, and denial axis is `equivalent` or `inconclusive` inside the threshold at this power, consistent with the M-31/M-37 tiny-surface priors (the knight axes moved single-digit game counts; the J axes reproduce their plain-trader-field flatness at the composite corner, including hysteresis at sub-0.25 margins). Structurally dead at the symmetric corner with literally zero discordant games: `shedWeight` (both directions), `goalNeedWeight` lo, `stageUrgencyWeight`, `costPressureWeight`, `threat.delayCap`, `devCards.gainCap`, `devCards.monopolySoundFloor` lo, `trading.gainCap`, and seven `DenialParams` axes (`raceBonus`, `raceCheckCap`, `defendWeight` lo, `defendHeadroomHalf`, `defendProbeSlack`, and near-zero counts on the rest) — the denial machinery fires so rarely between identical composites that its weights cannot be tuned by this instrument. Per the preregistered rule the six `better` arms go to the H4 combine (as amended by M-42's extensions) and everything else stands as priors.
+
+## M-42 — H2 trading-axis extension
+
+2026-08-25, commit `2c371889` (prereg; the same commit adds the ten committed extension arms), domain `tuning`. Preregistered in `docs/plans/preregs/2026-08-25-m42-h2-trading-extension.md` (committed before the run). One further arm per hot M-41 axis, inside the preregistered 2-4 arm budget: the five trading winners at their sweep-bounds maxima (4x default), the four crossing axes at their unprobed endpoints, `devBuyScale` at the bounds minimum 0.25. Same protocol and reference; one invocation, 11 arms, 176,000 games. Load before `2.52 6.20 6.99`, after `13.49 8.39 7.75` (24s run); zero illegal actions; admissible. Reference win rate `0.241875`.
+
+| Arm | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| tretw_40 | 4.0 | `+0.0844375` | 3251 | 1900 | McNemar `[+0.0757437, +0.0931313]` | **better** |
+| trtempo_80 | 0.8 | `+0.069` | 3076 | 1972 | clustered `[+0.0603164, +0.0776836]` | **better** |
+| trbenefit_20 | 2.0 | `+0.05575` | 2925 | 2033 | McNemar `[+0.0471679, +0.0643321]` | **better** |
+| trmargin_24 | 24.0 | `+0.122313` | 3621 | 1664 | McNemar `[+0.1136112, +0.1310138]` | **better** |
+| trofferbase_1400 | 1400.0 | `+0.044` | 2145 | 1441 | McNemar `[+0.0366962, +0.0513038]` | **better** |
+| trtempohalf_10 | 1.0 | `+0.0225625` | 2568 | 2207 | clustered `[+0.0140878, +0.0310372]` | **better** |
+| trscarcity_10 | 1.0 | `-0.008` | 2187 | 2315 | clustered `[-0.0162739, +0.0002739]` | inconclusive |
+| trfloor_40 | 4.0 | `+0.027375` | 2333 | 1895 | McNemar `[+0.0194211, +0.0353289]` | **better** |
+| trdangerw_20 | 2.0 | `+0.031` | 2381 | 1885 | McNemar `[+0.0230135, +0.0389865]` | **better** |
+| devbuy_25 | 0.25 | `+0.0406875` | 1911 | 1260 | McNemar `[+0.0338183, +0.0475567]` | **better** |
+
+Four trading axes are **still rising at their committed bounds** — `etwWeight` (+8.44pp at 4.0 vs +4.24pp at 2.0), `tempoWeight` (+6.90 vs +3.67), `benefitWeight` (+5.58 vs +2.83), and `marginScale` (+12.23pp at 24, the largest estimate the programme has recorded) — and per the preregistered rule the bounds are not widened to chase them; the record is that the axis is unexhausted at its bound. `offerBase` is exactly saturated: 700 and 1400 produce identical discordance counts (2145/1441) and estimate, so past 700 the offer-pricing term stops changing any decision and 700 is the winner as the smaller deviation. `tempoHalf` 1.0 resolves its crossing to `better` (+2.26pp); `dangerFloor` 4.0 and `dangerWeight` 2.0 likewise (+2.74pp, +3.10pp). `scarcityFloor` turns non-monotone (-0.80pp at 1.0 after +1.06pp at 0.5) and stays a prior, not a winner. `devBuyScale` deepens to +4.07pp at 0.25: the SIM-GAP-24 bias is confirmed decisively — the cheaper the policy prices dev buying, the better it does at this corner, all the way to the bound — and the entry is deleted with this reading. **H4 combine list (largest `better` estimate per axis):** `trading.etwWeight` 4.0, `trading.tempoWeight` 0.8, `trading.benefitWeight` 2.0, `trading.marginScale` 24.0, `trading.offerBase` 700.0, `trading.tempoHalf` 1.0, `trading.dangerFloor` 4.0, `trading.dangerWeight` 2.0, `devBuyScale` 0.25. The standing caution for H4 and the eval confirmation: all nine winners shift the same trade-selection machinery against a field whose trade behavior is fixed, so their effects will interact and part of the gain may be exploitation of this particular field; the coordinate re-screen at the combined point and the single eval spend are the designed checks.
