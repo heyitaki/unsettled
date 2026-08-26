@@ -151,12 +151,12 @@ pub struct HeuristicParams {
     /// The J5 frontier blend (SIM-GAP-28): the settlement expansion count becomes
     /// `degree + mix * (frontier - degree)`, where the frontier
     /// (`policy::frontier::opened`) counts the vertices a settlement here newly opens —
-    /// road-reachable unowned neighbours plus the distance-rule-open sites one unowned
-    /// edge beyond them — instead of the degree-valued adjacent-unowned count. Zero (the
-    /// default) never computes the frontier and keeps the degree count bit-for-bit; one
-    /// replaces it entirely (both counts are small integers, so the endpoint is exact).
-    /// The `-frontierlo`/`-frontierhi` trial values are Phase-H sweep candidates, not
-    /// tuned values.
+    /// unowned neighbours the road network does not already reach, plus the
+    /// distance-rule-open sites one unowned edge beyond them — instead of the degree-valued
+    /// adjacent-unowned count. Zero (the default) never computes the frontier and keeps the
+    /// degree count bit-for-bit; one replaces it entirely (both counts are small integers,
+    /// so the endpoint is exact). The `-frontierlo`/`-frontierhi` trial values are Phase-H
+    /// sweep candidates, not tuned values.
     pub frontier_mix: f32,
     /// Overall scale of the development-card buy score (`dev_card_score`), the SIM-GAP-24
     /// exposure: the buy band's hardcoded magnitudes outrank expansion roads from turn
@@ -1374,8 +1374,8 @@ pub fn vertex_score_with(
         + diversity * params.diversity_bonus
         + port_synergy * params.port_weight
         + expansion * params.expansion_weight;
-    // Both adjustments below are branches rather than unconditional arithmetic (`+ 0.0`
-    // would rewrite a negative-zero base), so the zero-default arms keep the pre-J1/J2
+    // Each adjustment below is a branch rather than unconditional arithmetic (`+ 0.0`
+    // would rewrite a negative-zero base), so the zero-default arms keep the pre-J
     // expression bit-for-bit.
     let base = match stage {
         None => base,

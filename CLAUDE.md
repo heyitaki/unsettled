@@ -34,7 +34,7 @@ Data flows **`parser/` → `model/Board` → `engine/` + `ui/store` → `persist
 
 - Tesseract is self-hosted in `public/tesseract` + `public/tessdata` (offline). Don't switch to a CDN.
 - Simulator changes run `cargo test` in BOTH profiles from `simulator/`. Never let `HashMap` iteration or float accumulation order reach an output. Why, in [`contracts.md`](.claude/specs/simulator/contracts.md).
-- Simulator seed domains are spend-once: screen freely on `tuning`. `eval` is already spent (twice — ledger in programme.md); never re-run it. `gate` is untouched, reserved for the user's Phase-I adoption decision; never run a `gate`-domain command. Why, and the phase order, in [`programme.md`](.claude/specs/simulator/programme.md).
+- Simulator seed domains are spend-once: screen freely on `tuning`. `eval` is spent; never re-run it. `gate` is untouched, reserved for the user's Phase-I adoption decision; never run a `gate`-domain command. Why, the spend ledger, and the phase order, in [`programme.md`](.claude/specs/simulator/programme.md).
 - Parser correctness is guarded by fixture snapshots: `fixtures/*.png` → `src/parser/__tests__/expected/*.json`. Regenerating expected output means re-verifying it by hand.
 - Cross-window sync (`ui/workspaceSync.ts`) is timing-sensitive, so a test for it is worthless until it has been shown to fail against the code it was written for. Two paces matter: a close pace under the 500ms autosave debounce coalesces into one write and races nothing, and a second window that is merely open — rather than also being written in — never answers mid-sequence. Both make a green run meaningless.
 - `.claude/worktrees` holds full repo copies; `vite.config.ts` excludes it from vitest so tests don't double-run.

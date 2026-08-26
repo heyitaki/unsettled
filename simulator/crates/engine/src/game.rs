@@ -667,7 +667,6 @@ impl GameArena {
             &mut self.scratch[seat],
             &mut self.streams.policy[seat],
         );
-        // Persist the decision's goal as the seat's incumbent (see `PlayerState::incumbent_goal`).
         self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
         selected
     }
@@ -730,7 +729,6 @@ impl GameArena {
                 &mut self.streams.policy[seat],
             )
         };
-        // Persist the decision's goal as the seat's incumbent (see `PlayerState::incumbent_goal`).
         self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
         if let Some(play) = play {
             self.apply_action_internal(

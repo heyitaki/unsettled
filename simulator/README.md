@@ -84,7 +84,7 @@ cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
 
 `tools/capture-corpus.sh [out-dir]` captures the byte-exact behavior corpus that [`contracts.md`](../.claude/specs/simulator/contracts.md) requires before any engine change (four policies, both layouts, fixed seeds); diff a recapture against the pre-change capture to identify exactly which games moved.
 
-Player trading is disabled by default. Set `RuleConfig::player_trading` to `Some(TradeConfig)` and use a trader-family policy to exercise it. `TradeConfig` exposes `opponent_gain_weight`, `acceptance_temperature`, `max_offers_per_turn`, `hidden_vp_confidence`, and the three embargo fields `embargo_danger_floor`, `embargo_danger`, and `embargo_takeover_danger`.
+Player trading is disabled by default. Set `RuleConfig::player_trading` to `Some(TradeConfig)` and use a trader-family policy to exercise it.
 
 The `tournament`, `evaluate`, and `simulate` commands enable the mechanism with `--player-trading`. Their optional `--opponent-gain-weight`, `--acceptance-temperature`, `--max-offers-per-turn`, `--hidden-vp-confidence`, `--embargo-danger-floor`, `--embargo-danger`, and `--embargo-takeover-danger` flags override the corresponding defaults and require `--player-trading`.
 

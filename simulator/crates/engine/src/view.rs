@@ -990,7 +990,8 @@ impl<'a> DecisionView<'a> {
     }
 
     /// A victim worth robbing: adjacent to the hex *and* holding at least one card. Any adjacent
-    /// seat may legally be named (`victim_on_hex` mirrors `game.rs::nameable_victim`; naming an
+    /// seat may legally be named (`victim_on_hex` is the presence half of
+    /// `game.rs::nameable_victim`, whose different-seat check each caller applies; naming an
     /// empty hand steals nothing and is the rules' decline mechanism), but declining outright
     /// (`victim: None`) is legal only when no seat passes this predicate. Both predicates must
     /// stay in lockstep with `game.rs::valid_robber` or a legal decision counts as an illegal
