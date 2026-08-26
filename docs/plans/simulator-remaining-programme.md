@@ -198,11 +198,11 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 26: Verify acceptance criteria
 
-- [ ] Both cargo profiles and the alloc test green from `simulator/`; `RUSTFLAGS="-D warnings" cargo build --release` clean
-- [ ] `npm test`, `npm run typecheck`, `npm run lint` green (no app changes expected)
-- [ ] `grep -n 'SIM-GAP-' .claude/specs/simulator/gaps.md` lists only SIM-GAP-20 and SIM-GAP-21
-- [ ] Every scaled run has a prereg file in `docs/plans/preregs/` and an M entry with load fields; no command in the run's history used `--domain gate`
-- [ ] `phase-i-candidate` files exist and load; `simulator/placement/default-weights.json`, the Rust param defaults, and `src/engine/weights.ts` byte-identical to the branch point
+- [x] Both cargo profiles and the alloc test green from `simulator/`; `RUSTFLAGS="-D warnings" cargo build --release` clean — verified 2026-08-25 22:01, load 1.68 before the runs; debug + release + alloc all pass, warnings-clean release build
+- [x] `npm test`, `npm run typecheck`, `npm run lint` green (no app changes expected) — 362 vitest tests pass, tsc clean, oxlint exit 0 (one pre-existing advisory warning in `src/ui/glyphs.tsx`); `git diff 6b481d71 -- src/` is empty
+- [x] `grep -n 'SIM-GAP-' .claude/specs/simulator/gaps.md` lists only SIM-GAP-20 and SIM-GAP-21 — confirmed, exactly those two
+- [x] Every scaled run has a prereg file in `docs/plans/preregs/` and an M entry with load fields; no command in the run's history used `--domain gate` — 22 prereg files cover M-23 through M-45 (M-28 ran no A/B: corpus identity was the evidence); every M-23..M-45 entry carries a load field; the only `--domain gate` mentions anywhere in specs/plans are descriptive (this checkbox and the Post-Completion note), never a command
+- [x] `phase-i-candidate` files exist and load; `simulator/placement/default-weights.json`, the Rust param defaults, and `src/engine/weights.ts` byte-identical to the branch point — both files present, loaded by the passing pin test `the_phase_i_candidate_files_load_and_match_their_confirmed_vectors`; `default-weights.json` and `weights.ts` diff empty vs `6b481d71`; every pre-existing field value in the five policy `Default` impls unchanged (field-by-field comparison; the only additions are the zero-default J/H seams, and the removed lines are the Task-20 `debug_assert`-to-`validate` conversion)
 
 ## Post-Completion
 
