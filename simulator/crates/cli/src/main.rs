@@ -189,8 +189,11 @@ struct TradeArgs {
 
 impl TradeArgs {
     /// The embargo domains below mirror the `TradeConfig` field contracts (`rules.rs`),
-    /// which the engine only debug-asserts: a release-profile run would otherwise accept a
-    /// zero, negative, or non-finite threshold and silently disable or distort the embargo.
+    /// which the engine only debug-asserts. The domains differ deliberately: the floor is a
+    /// divisor in `danger_from_etw`, where zero or negative values yield NaN or unbounded
+    /// danger, so it must be positive; the two thresholds only compare against a danger that
+    /// always lands in (0, 1], so any finite value is well-defined: at or below zero is the
+    /// always-embargo endpoint, above one the never-embargo endpoint tests park arms at.
     fn config(self) -> Result<Option<TradeConfig>, String> {
         let defaults = TradeConfig::default();
         let embargo_danger_floor = self
