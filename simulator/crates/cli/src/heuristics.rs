@@ -21,5 +21,8 @@ pub fn parse_heuristic(name: &str) -> Result<PlacementKind, String> {
         .map_err(|error| format!("failed to read app formula weights {path:?}: {error}"))?;
     let weights: EngineWeights = serde_json::from_str(&source)
         .map_err(|error| format!("invalid app formula weights {path:?}: {error}"))?;
+    weights
+        .validate()
+        .map_err(|error| format!("invalid app formula weights {path:?}: {error}"))?;
     register_app_formula(format!("app_formula:{stem}"), weights)
 }

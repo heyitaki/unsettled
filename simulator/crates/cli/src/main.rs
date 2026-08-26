@@ -7,6 +7,7 @@ use serde::Deserialize;
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
+use unsettled_engine::policy::params_file::register_custom_policy;
 use unsettled_engine::rng::mix64;
 use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout, Topology};
@@ -379,10 +380,7 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         if arm_policies[arm_index].is_some() {
             return Err(format!("duplicate arm policy label {label}"));
         }
-        arm_policies[arm_index] = Some(
-            PolicyKind::parse(&policy_name)
-                .ok_or_else(|| format!("unknown policy {policy_name}"))?,
-        );
+        arm_policies[arm_index] = Some(parse_policy(&policy_name)?);
         arm_policy_names[arm_index] = Some(policy_name);
     }
     let policy = parse_policy(&args.policy)?;
@@ -529,6 +527,19 @@ fn parse_heuristics(value: &str) -> Result<Vec<PlacementKind>, String> {
     Ok(heuristics)
 }
 
+/// Parses a policy spec: a roster name, or `<base>@<params.json>` (the H0 params-file
+/// seam) loading a full `HeuristicParams` vector validated and headroom-checked at load.
 fn parse_policy(value: &str) -> Result<PolicyKind, String> {
-    PolicyKind::parse(value).ok_or_else(|| format!("unknown policy {value}"))
+    let Some((base_name, path)) = value.split_once('@') else {
+        return PolicyKind::parse(value).ok_or_else(|| format!("unknown policy {value}"));
+    };
+    let base =
+        PolicyKind::parse(base_name).ok_or_else(|| format!("unknown base policy {base_name}"))?;
+    if path.is_empty() {
+        return Err("policy params spec requires a params JSON path".into());
+    }
+    let source = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read policy params {path}: {error}"))?;
+    register_custom_policy(base, value.to_string(), &source)
+        .map_err(|error| format!("invalid policy params {path}: {error}"))
 }

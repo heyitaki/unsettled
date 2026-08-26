@@ -7,6 +7,7 @@ use std::cell::Cell;
 use serde::{Deserialize, Serialize};
 
 use crate::etw;
+use crate::policy::params_file::check;
 use crate::policy::threat;
 use crate::rules::Buildable;
 use crate::state::MAX_SEATS;
@@ -226,24 +227,73 @@ pub fn should_defend(ctx: &DenialContext) -> Option<(usize, f64)> {
     ctx.longest_road_challenger()
 }
 
+/// The `assert_params` domain, spelled as load-time errors (JSON field names) so the H0
+/// params-file loader rejects a bad vector instead of tripping a debug assert mid-run.
+pub(crate) fn validate(params: &DenialParams) -> Result<(), String> {
+    check(
+        "denial.dangerFloor is positive and finite",
+        params.danger_floor.is_finite() && params.danger_floor > 0.0,
+    )?;
+    check(
+        "denial.pressureFloor is non-negative and finite",
+        params.pressure_floor.is_finite() && params.pressure_floor >= 0.0,
+    )?;
+    check(
+        "denial.pressureSpan is non-negative and finite",
+        params.pressure_span.is_finite() && params.pressure_span >= 0.0,
+    )?;
+    check(
+        "denial.raceBonus is non-negative and finite",
+        params.race_bonus.is_finite() && params.race_bonus >= 0.0,
+    )?;
+    check(
+        "denial.raceDangerMin lies in [0, 1]",
+        params.race_danger_min.is_finite() && (0.0..=1.0).contains(&params.race_danger_min),
+    )?;
+    check(
+        "denial.raceCheckCap lies in 1..=5",
+        (1..=MAX_RACE_CHECKS).contains(&params.race_check_cap),
+    )?;
+    check(
+        "denial.defendWeight is non-negative and finite",
+        params.defend_weight.is_finite() && params.defend_weight >= 0.0,
+    )?;
+    check(
+        "denial.defendHeadroomHalf is positive and finite",
+        params.defend_headroom_half.is_finite() && params.defend_headroom_half > 0.0,
+    )?;
+    check(
+        "denial.defendProbeSlack lies in 1..=4",
+        (1..=4).contains(&params.defend_probe_slack),
+    )?;
+    check(
+        "denial.contestWeight is non-negative and finite",
+        params.contest_weight.is_finite() && params.contest_weight >= 0.0,
+    )?;
+    check(
+        "denial.contestCap is non-negative and finite",
+        params.contest_cap.is_finite() && params.contest_cap >= 0.0,
+    )?;
+    check(
+        "denial.contestBlockBonus is non-negative and finite",
+        params.contest_block_bonus.is_finite() && params.contest_block_bonus >= 0.0,
+    )?;
+    check(
+        "denial.contestGoalShare is non-negative and finite",
+        params.contest_goal_share.is_finite() && params.contest_goal_share >= 0.0,
+    )?;
+    check(
+        "denial.armyDefendWeight is non-negative and finite",
+        params.army_defend_weight.is_finite() && params.army_defend_weight >= 0.0,
+    )?;
+    check(
+        "denial.armyGapHalf is positive and finite",
+        params.army_gap_half.is_finite() && params.army_gap_half > 0.0,
+    )
+}
+
 pub fn assert_params(params: &DenialParams) {
-    debug_assert!(params.danger_floor.is_finite() && params.danger_floor > 0.0);
-    debug_assert!(params.pressure_floor.is_finite() && params.pressure_floor >= 0.0);
-    debug_assert!(params.pressure_span.is_finite() && params.pressure_span >= 0.0);
-    debug_assert!(params.race_bonus.is_finite() && params.race_bonus >= 0.0);
-    debug_assert!(
-        params.race_danger_min.is_finite() && (0.0..=1.0).contains(&params.race_danger_min)
-    );
-    debug_assert!((1..=MAX_RACE_CHECKS).contains(&params.race_check_cap));
-    debug_assert!(params.defend_weight.is_finite() && params.defend_weight >= 0.0);
-    debug_assert!(params.defend_headroom_half.is_finite() && params.defend_headroom_half > 0.0);
-    debug_assert!((1..=4).contains(&params.defend_probe_slack));
-    debug_assert!(params.contest_weight.is_finite() && params.contest_weight >= 0.0);
-    debug_assert!(params.contest_cap.is_finite() && params.contest_cap >= 0.0);
-    debug_assert!(params.contest_block_bonus.is_finite() && params.contest_block_bonus >= 0.0);
-    debug_assert!(params.contest_goal_share.is_finite() && params.contest_goal_share >= 0.0);
-    debug_assert!(params.army_defend_weight.is_finite() && params.army_defend_weight >= 0.0);
-    debug_assert!(params.army_gap_half.is_finite() && params.army_gap_half > 0.0);
+    debug_assert_eq!(validate(params), Ok(()));
 }
 
 fn largest_army_challenger(

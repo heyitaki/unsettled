@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::etw::{self, EtwInputs};
+use crate::policy::params_file::check;
 use crate::policy::trading;
 use crate::rules::RESOURCE_COUNT;
 use crate::state::MAX_SEATS;
@@ -306,19 +307,53 @@ pub fn danger_from_etw(etw: f64, danger_floor: f64) -> f64 {
     danger_floor / (etw + danger_floor)
 }
 
+/// The `assert_params` domain, spelled as load-time errors (JSON field names) so the H0
+/// params-file loader rejects a bad vector instead of tripping a debug assert mid-run.
+pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
+    check(
+        "threat.delayWeight is finite",
+        params.delay_weight.is_finite(),
+    )?;
+    check(
+        "threat.needWeight is finite",
+        params.need_weight.is_finite(),
+    )?;
+    check(
+        "threat.blockWeight is finite",
+        params.block_weight.is_finite(),
+    )?;
+    check(
+        "threat.stealWeight is finite",
+        params.steal_weight.is_finite(),
+    )?;
+    check(
+        "threat.victimHandWeight is finite",
+        params.victim_hand_weight.is_finite(),
+    )?;
+    check(
+        "threat.dangerFloor is positive and finite",
+        params.danger_floor.is_finite() && params.danger_floor > 0.0,
+    )?;
+    check(
+        "threat.delayCap is non-negative and finite",
+        params.delay_cap.is_finite() && params.delay_cap >= 0.0,
+    )?;
+    check(
+        "threat.handCap is positive and finite",
+        params.hand_cap.is_finite() && params.hand_cap > 0.0,
+    )?;
+    check(
+        "threat.knightStealWeight is non-negative and finite",
+        params.knight_steal_weight.is_finite() && params.knight_steal_weight >= 0.0,
+    )?;
+    check(
+        "threat.knightPlacementWeight is non-negative and finite",
+        params.knight_placement_weight.is_finite() && params.knight_placement_weight >= 0.0,
+    )
+}
+
 fn assert_params(params: &ThreatParams) {
-    debug_assert!(params.delay_weight.is_finite());
-    debug_assert!(params.need_weight.is_finite());
-    debug_assert!(params.block_weight.is_finite());
-    debug_assert!(params.steal_weight.is_finite());
-    debug_assert!(params.victim_hand_weight.is_finite());
-    debug_assert!(params.danger_floor.is_finite() && params.danger_floor > 0.0);
-    debug_assert!(params.delay_cap.is_finite() && params.delay_cap >= 0.0);
-    debug_assert!(params.hand_cap.is_finite() && params.hand_cap > 0.0);
-    debug_assert!(params.knight_steal_weight.is_finite() && params.knight_steal_weight >= 0.0);
-    debug_assert!(
-        params.knight_placement_weight.is_finite() && params.knight_placement_weight >= 0.0
-    );
+    debug_assert_eq!(validate(params), Ok(()));
 }
 
 fn need_share(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {

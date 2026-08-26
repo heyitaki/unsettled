@@ -58,6 +58,57 @@ pub struct EngineWeights {
     pub max_results: f64,
 }
 
+impl EngineWeights {
+    /// Load-time domain guard for weights files. Every field must be finite, and
+    /// `genericPortFactor` carries the placement programme's standing hard bound: the
+    /// factor discounts 3:1 ports relative to matching 2:1s, and a negative value turns
+    /// generic ports into penalties, which the programme has ruled out of the candidate
+    /// space (`genericPortFactor >= 0`).
+    pub fn validate(&self) -> Result<(), String> {
+        let scalars = [
+            ("resourceValue.wood", self.resource_value.wood),
+            ("resourceValue.sheep", self.resource_value.sheep),
+            ("resourceValue.wheat", self.resource_value.wheat),
+            ("resourceValue.brick", self.resource_value.brick),
+            ("resourceValue.ore", self.resource_value.ore),
+            ("handValueWeight", self.hand_value_weight),
+            ("scarcityWeight", self.scarcity_weight),
+            ("scarcityClampMin", self.scarcity_clamp_min),
+            ("scarcityClampMax", self.scarcity_clamp_max),
+            ("diversityWeight", self.diversity_weight),
+            ("diversityCap", self.diversity_cap),
+            ("coverageExponent", self.coverage_exponent),
+            ("coverageScarcityWeight", self.coverage_scarcity_weight),
+            ("duplicateNumberPenalty", self.duplicate_number_penalty),
+            ("recipeRoadBonus", self.recipe_road_bonus),
+            ("recipeCityBonus", self.recipe_city_bonus),
+            ("recipeSettlementBonus", self.recipe_settlement_bonus),
+            ("recipeCap", self.recipe_cap),
+            ("portWeight", self.port_weight),
+            ("genericPortFactor", self.generic_port_factor),
+            ("portSurplusThreshold", self.port_surplus_threshold),
+            ("nearPortRadius", self.near_port_radius),
+            ("nearPortDecay", self.near_port_decay),
+            ("robberDiscount", self.robber_discount),
+            ("opponentTopK", self.opponent_top_k),
+            ("softmaxTemperature", self.softmax_temperature),
+            ("rolloutBudget", self.rollout_budget),
+            ("rolloutsMin", self.rollouts_min),
+            ("rolloutsMax", self.rollouts_max),
+            ("maxResults", self.max_results),
+        ];
+        for (name, value) in scalars {
+            if !value.is_finite() {
+                return Err(format!("weights violate: {name} is finite"));
+            }
+        }
+        if self.generic_port_factor < 0.0 {
+            return Err("weights violate: genericPortFactor >= 0".into());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ScoreBreakdown {
     pub production: f64,

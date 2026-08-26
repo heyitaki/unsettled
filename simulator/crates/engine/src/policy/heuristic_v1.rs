@@ -6,6 +6,7 @@ use crate::policy::devcards::{self, DevCardParams};
 use crate::policy::exposure;
 use crate::policy::frontier;
 use crate::policy::goal_need::GoalNeed;
+use crate::policy::params_file::check;
 use crate::policy::piece_economy::SlotReturn;
 use crate::policy::stage::Stage;
 use crate::policy::threat::{self, ThreatParams};
@@ -292,6 +293,145 @@ pub const FRONTIER_TRIAL_HI: f32 = 1.0;
 pub const HYSTERESIS_TRIAL_LO: f32 = 0.25;
 pub const HYSTERESIS_TRIAL_HI: f32 = 1.0;
 
+/// Domain of the core `HeuristicParams` fields, spelled as load-time errors (JSON field
+/// names) for the H0 params-file loader. The J seams are one-sided by construction (each
+/// doc comment above says "weight" or "damping"; a negative value would invert the term's
+/// meaning and, for the stage damp, void the headroom bound), so they are held
+/// non-negative here; the five original vertex weights carry no sign convention (tests
+/// probe them negative) and are only required finite.
+pub fn validate_params(params: &HeuristicParams) -> Result<(), String> {
+    check(
+        "productionWeight is finite",
+        params.production_weight.is_finite(),
+    )?;
+    check(
+        "scarcityWeight is finite",
+        params.scarcity_weight.is_finite(),
+    )?;
+    check(
+        "diversityBonus is finite",
+        params.diversity_bonus.is_finite(),
+    )?;
+    check("portWeight is finite", params.port_weight.is_finite())?;
+    check(
+        "expansionWeight is finite",
+        params.expansion_weight.is_finite(),
+    )?;
+    check(
+        "shedWeight is non-negative and finite",
+        params.shed_weight.is_finite() && params.shed_weight >= 0.0,
+    )?;
+    check(
+        "goalNeedWeight is non-negative and finite",
+        params.goal_need_weight.is_finite() && params.goal_need_weight >= 0.0,
+    )?;
+    check(
+        "stageExpansionWeight is non-negative and finite",
+        params.stage_expansion_weight.is_finite() && params.stage_expansion_weight >= 0.0,
+    )?;
+    check(
+        "stageCityWeight is non-negative and finite",
+        params.stage_city_weight.is_finite() && params.stage_city_weight >= 0.0,
+    )?;
+    check(
+        "stageUrgencyWeight is non-negative and finite",
+        params.stage_urgency_weight.is_finite() && params.stage_urgency_weight >= 0.0,
+    )?;
+    check(
+        "slotReturnWeight is non-negative and finite",
+        params.slot_return_weight.is_finite() && params.slot_return_weight >= 0.0,
+    )?;
+    check(
+        "costPressureWeight is non-negative and finite",
+        params.cost_pressure_weight.is_finite() && params.cost_pressure_weight >= 0.0,
+    )?;
+    check(
+        "frontierMix lies in [0, 1]",
+        params.frontier_mix.is_finite() && (0.0..=1.0).contains(&params.frontier_mix),
+    )?;
+    check(
+        "devBuyScale is non-negative and finite",
+        params.dev_buy_scale.is_finite() && params.dev_buy_scale >= 0.0,
+    )?;
+    check(
+        "goalHysteresisMargin is non-negative and finite",
+        params.goal_hysteresis_margin.is_finite() && params.goal_hysteresis_margin >= 0.0,
+    )?;
+    if let Some(threat) = &params.threat {
+        threat::validate(threat)?;
+    }
+    if let Some(dev_cards) = &params.dev_cards {
+        devcards::validate(dev_cards)?;
+    }
+    if let Some(trading) = &params.trading {
+        crate::policy::trading::validate(trading)?;
+    }
+    if let Some(denial) = &params.denial {
+        denial::validate(denial)?;
+    }
+    Ok(())
+}
+
+/// The non-winning contested-card floor: `contested_card_score` at the base-rules card
+/// value of two, zero win proximity, no holder denial, and unit pressure. Pinned against
+/// the live expression by `the_contested_floor_matches_the_live_expression`.
+pub const NON_WINNING_CONTESTED_FLOOR: f32 = 11_500.0;
+
+/// The SIM-GAP-30 headroom check: `vertex_score` is linear in public, unbounded weights,
+/// so a swept vector can lift a building above the non-winning contested band and
+/// silently re-rank denial. This bounds the worst building score a params vector can
+/// produce, in closed form so it runs at params-file load time without a board, and
+/// rejects the vector unless the bound stays strictly below the band's floor.
+///
+/// Every constant is a documented over-count, so the bound is sound for both the modern
+/// and the legacy valuation spellings (the generous city shape below covers the
+/// settlement-shaped legacy city terms too):
+///
+/// - a vertex touches at most 3 hexes of at most 5 pips each (`MAX_VERTEX_PIPS` = 15);
+/// - each hex's scarcity ratio is at most 1, so the sum is at most 3 (`MAX_SCARCITY_SUM`),
+///   scaled by the expression's fixed 10.0;
+/// - diversity counts at most the 3 touched resources (`MAX_DIVERSITY`);
+/// - the official token sets sum to 58 (standard4) and 88 (extension6) pips
+///   (`MAX_BOARD_PIPS` = 88), the port term's production input is at most board plus
+///   vertex pips, and the summed rate gain per pip is at most 0.5 (a 2:1 port yields
+///   1/2 - 1/4 = 0.25; 0.5 covers the impossible two-ports-at-one-vertex corner);
+/// - the frontier fan is at most 3 counted neighbours plus 2 sites behind each
+///   (`MAX_FRONTIER` = 9, degree 3 at zero mix);
+/// - a goal's per-resource need is at most `MAX_COST_PER_RESOURCE` = 5 cards (base rules
+///   peak at the city's 3 ore), so the J1 term is at most vertex pips times 5;
+/// - the J2 city boost multiplies at lateness at most 1, and the J3 slot return is
+///   capped at 1; the J2 settlement damp only reduces (its weight is held non-negative
+///   by `validate_params`).
+pub fn building_band_headroom(params: &HeuristicParams) -> Result<(), String> {
+    const MAX_VERTEX_PIPS: f32 = 15.0;
+    const MAX_SCARCITY_SUM: f32 = 3.0;
+    const MAX_DIVERSITY: f32 = 3.0;
+    const MAX_BOARD_PIPS: f32 = 88.0;
+    const MAX_PORT_RATE_GAIN: f32 = 0.5;
+    const MAX_ADJACENT: f32 = 3.0;
+    const MAX_FRONTIER: f32 = 9.0;
+    const MAX_COST_PER_RESOURCE: f32 = 5.0;
+    let pos = |weight: f32| weight.max(0.0);
+    let expansion_count = MAX_ADJACENT + pos(params.frontier_mix) * (MAX_FRONTIER - MAX_ADJACENT);
+    let terms = pos(params.production_weight) * MAX_VERTEX_PIPS
+        + pos(params.scarcity_weight) * 10.0 * MAX_SCARCITY_SUM
+        + pos(params.diversity_bonus) * MAX_DIVERSITY
+        + pos(params.port_weight) * (MAX_BOARD_PIPS + MAX_VERTEX_PIPS) * MAX_PORT_RATE_GAIN
+        + pos(params.expansion_weight) * expansion_count;
+    let bound = BUILD_BAND
+        + terms * (1.0 + pos(params.stage_city_weight))
+        + pos(params.slot_return_weight)
+        + pos(params.goal_need_weight) * MAX_VERTEX_PIPS * MAX_COST_PER_RESOURCE;
+    if bound < NON_WINNING_CONTESTED_FLOOR {
+        Ok(())
+    } else {
+        Err(format!(
+            "params vector fails the SIM-GAP-30 headroom check: worst-case building score \
+             {bound} reaches the non-winning contested floor {NON_WINNING_CONTESTED_FLOOR}"
+        ))
+    }
+}
+
 pub fn action(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
@@ -356,7 +496,16 @@ pub(crate) fn action_with_goal(
     let road = best_road(view, params, gated, stage);
     let selected_goal = best_goal_with(view, params, road, stage, slot);
     let PolicyScratch { goal, actions } = scratch;
-    score_actions_with(view, params, actions, road, selected_goal, gated, stage, slot);
+    score_actions_with(
+        view,
+        params,
+        actions,
+        road,
+        selected_goal,
+        gated,
+        stage,
+        slot,
+    );
     *goal = selected_goal.map(|goal| goal.kind);
     let best_score = actions
         .as_slice()
@@ -446,7 +595,15 @@ fn score_actions_with(
             let vertex = vertex as u8;
             if view.legal_city(vertex) {
                 let mut score = BUILD_BAND
-                    + vertex_score_with(view, vertex, params, BuildKind::City, vertex_need, stage, slot);
+                    + vertex_score_with(
+                        view,
+                        vertex,
+                        params,
+                        BuildKind::City,
+                        vertex_need,
+                        stage,
+                        slot,
+                    );
                 if let Some(pressure) = pressure {
                     score -= pressure;
                 }
@@ -753,8 +910,7 @@ fn ladder_pre_roll(
         return Some(DevPlay::YearOfPlenty { first, second });
     }
     if view.can_play_dev(4)
-        && let Some(resource) =
-            goal.and_then(|value| monopoly_for_goal(view, value.kind, params))
+        && let Some(resource) = goal.and_then(|value| monopoly_for_goal(view, value.kind, params))
     {
         return Some(DevPlay::Monopoly { resource });
     }
@@ -1008,11 +1164,8 @@ fn shed_trade(
             continue;
         }
         let paid = rate - 1;
-        let after = exposure::expected_seven_loss(
-            hand_total.saturating_sub(paid),
-            threshold,
-            rolls,
-        );
+        let after =
+            exposure::expected_seven_loss(hand_total.saturating_sub(paid), threshold, rolls);
         let value = (now - after) - f64::from(paid);
         if value <= 0.0 {
             continue;
@@ -1270,7 +1423,13 @@ pub(crate) fn best_goal(
     let stage = stage.as_ref();
     let slot = slot_return_for(view, params);
     let slot = slot.as_ref();
-    best_goal_with(view, params, best_road(view, params, gated, stage), stage, slot)
+    best_goal_with(
+        view,
+        params,
+        best_road(view, params, gated, stage),
+        stage,
+        slot,
+    )
 }
 
 /// `best_road` scans every legal edge and, when the Longest Road card is in reach, runs an
@@ -1335,7 +1494,15 @@ fn best_goal_uncounted(
         view.best_legal_settlement().map(|vertex| {
             (
                 vertex,
-                vertex_score_with(view, vertex, params, BuildKind::Settlement, None, stage, None),
+                vertex_score_with(
+                    view,
+                    vertex,
+                    params,
+                    BuildKind::Settlement,
+                    None,
+                    stage,
+                    None,
+                ),
             )
         })
     } else {
@@ -1455,9 +1622,15 @@ fn expansion_road_score(
     let mut best_score = None;
     for target in view.topology().edge_endpoints(first) {
         if view.is_expansion_target(target) {
-            let score =
-                vertex_score_with(view, target, params, BuildKind::Settlement, None, stage, None)
-                    + 0.25;
+            let score = vertex_score_with(
+                view,
+                target,
+                params,
+                BuildKind::Settlement,
+                None,
+                stage,
+                None,
+            ) + 0.25;
             if best_score.is_none_or(|best| score > best) {
                 best_score = Some(score);
             }
@@ -2190,7 +2363,10 @@ pub(crate) fn closest_variant_missing(
 }
 
 /// The measurement-only pre-widening offer: exactly two short of the goal, index-order picks.
-fn narrow_plenty_for_goal(view: &DecisionView<'_>, goal: Buildable) -> Option<(Resource, Resource)> {
+fn narrow_plenty_for_goal(
+    view: &DecisionView<'_>,
+    goal: Buildable,
+) -> Option<(Resource, Resource)> {
     for cost in view.costs(goal) {
         let mut missing = [0_u8; RESOURCE_COUNT];
         let mut total = 0;
@@ -2504,6 +2680,17 @@ mod devcards_rate_tests {
         );
     }
 
+    /// Pins `NON_WINNING_CONTESTED_FLOOR` (the SIM-GAP-30 headroom target) to the live
+    /// contested expression: at the base-rules card value of two, no holder denial, and
+    /// unit pressure, the score is exactly the floor plus the win-proximity term.
+    #[test]
+    fn the_contested_floor_matches_the_live_expression() {
+        let (topology, board, arena) = valuation_fixture();
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let expected = super::NON_WINNING_CONTESTED_FLOOR + super::win_proximity(&view) * 2_000.0;
+        assert_eq!(super::contested_card_score(&view, 2, false, 1.0), expected);
+    }
+
     /// The headroom above only holds for a two-VP card. Merging the settlement rung into
     /// `BUILD_BAND` lifted buildings past the one-VP contested value, which the old `500.0` rung
     /// sat far below, so a rules variant worth one VP now loses to an affordable settlement. No
@@ -2557,8 +2744,16 @@ mod devcards_rate_tests {
             expansion_weight: 0.0,
             ..super::HeuristicParams::default()
         };
-        let pip_max = if pips[0] > pips[1] { owned[0] } else { owned[1] };
-        let score_max = if pips[0] > pips[1] { owned[1] } else { owned[0] };
+        let pip_max = if pips[0] > pips[1] {
+            owned[0]
+        } else {
+            owned[1]
+        };
+        let score_max = if pips[0] > pips[1] {
+            owned[1]
+        } else {
+            owned[0]
+        };
         assert_eq!(
             super::best_scored_vertex(&view, &params, super::BuildKind::City, None, None)
                 .map(|(vertex, _)| vertex),
@@ -2573,7 +2768,10 @@ mod devcards_rate_tests {
     #[test]
     fn every_legacy_flag_set_reproduces_the_pre_batch_vertex_score() {
         let (topology, board, mut arena) = valuation_fixture();
-        for vertex in (0..topology.vertex_count()).map(|vertex| vertex as u8).take(3) {
+        for vertex in (0..topology.vertex_count())
+            .map(|vertex| vertex as u8)
+            .take(3)
+        {
             arena.state.vertex_owner[usize::from(vertex)] = 0;
             arena.state.vertex_tier[usize::from(vertex)] = 1;
         }
@@ -2929,7 +3127,9 @@ mod devcards_rate_tests {
                 for edge in 0..topology.edge_count() {
                     let edge = edge as u8;
                     if view.legal_road(edge) {
-                        std::hint::black_box(super::expansion_road_score(&view, edge, &params, None));
+                        std::hint::black_box(super::expansion_road_score(
+                            &view, edge, &params, None,
+                        ));
                     }
                 }
                 std::hint::black_box(super::best_road_building_pair(&view, &params, None, None));
@@ -3076,7 +3276,10 @@ mod devcards_rate_tests {
         let special = arena.decision_view(&board, &topology, 0, DecisionPhase::SpecialBuild);
         let mut actions = crate::view::ActionBuf::new();
         super::score_actions(&special, &mute, &mut actions);
-        assert_eq!(action_bits(&actions), vec![(Action::Pass, 0.0_f32.to_bits())]);
+        assert_eq!(
+            action_bits(&actions),
+            vec![(Action::Pass, 0.0_f32.to_bits())]
+        );
         // The same params still build on the seat's own turn ...
         let ordinary = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
         super::score_actions(&ordinary, &mute, &mut actions);
@@ -3146,7 +3349,10 @@ mod devcards_rate_tests {
         );
         let mut actions = crate::view::ActionBuf::new();
         super::score_actions(&special, &hold, &mut actions);
-        assert_eq!(action_bits(&actions), vec![(Action::Pass, 0.0_f32.to_bits())]);
+        assert_eq!(
+            action_bits(&actions),
+            vec![(Action::Pass, 0.0_f32.to_bits())]
+        );
         // The ordinary action phase is untouched: bit-identical to Uniform, dev buy kept.
         let uniform = super::HeuristicParams {
             special_build: super::SpecialBuildScoring::Uniform,

@@ -528,7 +528,7 @@ fn threat_hex_score_uses_the_highest_ranked_steal_regardless_of_seat_order() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "params.hand_cap.is_finite() && params.hand_cap > 0.0")]
+#[should_panic(expected = "threat.handCap is positive and finite")]
 fn threat_seat_terms_rejects_invalid_params() {
     let (topology, board, _rules, _config, mut arena) = fixture();
     let target = dominant_hex_with_two_offsets(&board, &topology).0;
@@ -754,7 +754,7 @@ fn robber_choice_zeroes_placement_on_the_fallback_hex() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "params.knight_steal_weight.is_finite()")]
+#[should_panic(expected = "threat.knightStealWeight is non-negative and finite")]
 fn robber_choice_rejects_invalid_knight_params() {
     let (topology, board, _rules, _config, arena) = fixture();
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);

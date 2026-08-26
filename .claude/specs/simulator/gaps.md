@@ -12,10 +12,6 @@ Ids are stable and assigned in source order. A closed gap's id is retired, not r
 
 **SIM-GAP-24.** `heuristic_v1.rs::dev_card_score` outranks expansion roads from turn one (roughly 65 against 55 on an untouched deck, and a victory-point chase term raises it as the observer closes on the win), which may bias results against expansion-oriented placements. Against that reading: the rankings hold under `priority-trader`, which has unrelated dev-card logic. What remains of this entry is a sweep, not a build: the band's overall magnitude is exposed as `HeuristicParams::dev_buy_scale` (default 1.0 is bit-identical; it wraps the deck-aware and legacy deck-blind spellings alike), and the Phase-H policy-block screen owns the answer — a `better` verdict at a lower scale confirms the bias, anything else refutes it, and either way the sweep result closes this entry.
 
-## Build valuation follow-up
-
-**SIM-GAP-30.** Building-band headroom below the contested-card band holds only under base rules and the shipped default `HeuristicParams`. `vertex_score` is linear in public, unbounded weights, so a swept vector can lift a building above that band and silently re-rank denial; `production_weight = 1000.0` on a raw-production-two vertex already reaches `12_000`. Phase H must either bound candidate weights or re-check headroom for every candidate vector.
-
 ## Performance
 
 **SIM-GAP-21.** ~~Why the all-seat `-aware` configuration costs roughly 2x per seat is undiagnosed.~~ **Diagnosed; see M-18 in [measurements.md](measurements.md) for every number.** Most of the cost is not the new code. A sampling profile against a matched baseline attributes under a third of the slowdown to the whole ETW, threat and trading module group, and the rest to the existing engine — chiefly the Longest Road trail search, then `DecisionView`, then placement scoring — doing genuinely more work per game, because `-aware` seats play longer games and leave fuller boards, and the trail search grows superlinearly in roads on the board.

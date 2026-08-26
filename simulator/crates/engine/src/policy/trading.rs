@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::etw::{self, EtwInputs};
+use crate::policy::params_file::check;
 use crate::policy::threat;
 use crate::rules::{RESOURCE_COUNT, TradeConfig};
 use crate::trade::TradeOffer;
@@ -174,20 +175,56 @@ pub fn trade_benefit_with_base(
     params.etw_weight * gain + params.tempo_weight * tempo
 }
 
+/// The `assert_params` domain, spelled as load-time errors (JSON field names) so the H0
+/// params-file loader rejects a bad vector instead of tripping a debug assert mid-run.
+pub(crate) fn validate(params: &TradeParams) -> Result<(), String> {
+    check("trading.etwWeight is finite", params.etw_weight.is_finite())?;
+    check(
+        "trading.etwFloor is positive and finite",
+        params.etw_floor.is_finite() && params.etw_floor > 0.0,
+    )?;
+    check(
+        "trading.gainCap is non-negative and finite",
+        params.gain_cap.is_finite() && params.gain_cap >= 0.0,
+    )?;
+    check(
+        "trading.tempoWeight is finite",
+        params.tempo_weight.is_finite(),
+    )?;
+    check(
+        "trading.tempoHalf is positive and finite",
+        params.tempo_half.is_finite() && params.tempo_half > 0.0,
+    )?;
+    check(
+        "trading.scarcityFloor is positive and finite",
+        params.scarcity_floor.is_finite() && params.scarcity_floor > 0.0,
+    )?;
+    check(
+        "trading.dangerFloor is positive and finite",
+        params.danger_floor.is_finite() && params.danger_floor > 0.0,
+    )?;
+    check(
+        "trading.dangerWeight is finite",
+        params.danger_weight.is_finite(),
+    )?;
+    check(
+        "trading.benefitWeight is finite",
+        params.benefit_weight.is_finite(),
+    )?;
+    check(
+        "trading.marginScale is positive and finite",
+        params.margin_scale.is_finite() && params.margin_scale > 0.0,
+    )?;
+    check(
+        "trading.offerGainWeight is finite",
+        params.offer_gain_weight.is_finite(),
+    )?;
+    check("trading.offerBase is finite", params.offer_base.is_finite())?;
+    check("trading.offerSpan is finite", params.offer_span.is_finite())
+}
+
 pub(crate) fn assert_params(params: &TradeParams) {
-    debug_assert!(params.etw_weight.is_finite());
-    debug_assert!(params.etw_floor.is_finite() && params.etw_floor > 0.0);
-    debug_assert!(params.gain_cap.is_finite() && params.gain_cap >= 0.0);
-    debug_assert!(params.tempo_weight.is_finite());
-    debug_assert!(params.tempo_half.is_finite() && params.tempo_half > 0.0);
-    debug_assert!(params.scarcity_floor.is_finite() && params.scarcity_floor > 0.0);
-    debug_assert!(params.danger_floor.is_finite() && params.danger_floor > 0.0);
-    debug_assert!(params.danger_weight.is_finite());
-    debug_assert!(params.benefit_weight.is_finite());
-    debug_assert!(params.margin_scale.is_finite() && params.margin_scale > 0.0);
-    debug_assert!(params.offer_gain_weight.is_finite());
-    debug_assert!(params.offer_base.is_finite());
-    debug_assert!(params.offer_span.is_finite());
+    debug_assert_eq!(validate(params), Ok(()));
 }
 
 #[cfg(test)]

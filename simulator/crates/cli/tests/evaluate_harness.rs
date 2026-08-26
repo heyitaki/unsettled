@@ -13,6 +13,9 @@ use unsettled_sim::evaluate::{
 
 fn policy_name(policy: PolicyKind) -> &'static str {
     match policy {
+        // The harness sweeps the static roster; params-file policies register at runtime
+        // and carry their own spec string.
+        PolicyKind::Custom(_) => unreachable!("custom params policies are outside the roster"),
         PolicyKind::RandomLegal => "random-legal",
         PolicyKind::GreedyNoTrade => "greedy-no-trade",
         PolicyKind::PriorityTrader => "priority-trader",

@@ -6,6 +6,7 @@ pub mod goal_need;
 pub mod greedy_no_trade;
 pub mod heuristic_v1;
 pub mod heuristic_v1_trader;
+pub mod params_file;
 pub mod piece_economy;
 pub mod priority_trader;
 pub mod random_legal;
@@ -78,6 +79,12 @@ pub enum PolicyKind {
     HeuristicV1TraderAwareThreatDevcardsDenialFrontierhi,
     HeuristicV1TraderAwareThreatDevcardsDenialJall,
     HeuristicV1TraderAwareThreatDevcardsDenialJnohyst,
+    /// A params-file policy registered through `params_file::register_custom_policy` (the
+    /// H0 seam): every parameter comes from the file, and the base kind it was registered
+    /// against contributes only its dispatch family. Process-local handle, so it is
+    /// excluded from serde and from the static name roster.
+    #[serde(skip)]
+    Custom(u8),
 }
 
 /// Disables every owned port, so the seat trades at the base bank rate.
@@ -96,6 +103,9 @@ impl PolicyKind {
     pub const fn port_rules(self) -> &'static [PortRule] {
         match self {
             Self::HeuristicV1Noports => &NO_PORTS,
+            // A params file cannot carry port rules, and registration rejects the one base
+            // kind that has them.
+            Self::Custom(_) => &[],
             Self::RandomLegal
             | Self::GreedyNoTrade
             | Self::PriorityTrader
@@ -309,6 +319,7 @@ pub fn pre_roll(
         PolicyKind::RandomLegal => random_legal::pre_roll(view, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::pre_roll(view),
         PolicyKind::PriorityTrader => priority_trader::pre_roll(view, scratch),
+        PolicyKind::Custom(_) => heuristic_v1::pre_roll(view, scratch, &heuristic_params(kind)),
         PolicyKind::HeuristicV1
         | PolicyKind::HeuristicV1Denial
         | PolicyKind::HeuristicV1Threat
@@ -380,6 +391,13 @@ pub fn action(
         PolicyKind::RandomLegal => random_legal::action(view, scratch, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::action(view),
         PolicyKind::PriorityTrader => priority_trader::action(view, scratch),
+        PolicyKind::Custom(index) => {
+            if params_file::custom_trades(index) {
+                heuristic_v1_trader::action(view, scratch, &heuristic_params(kind), rng)
+            } else {
+                heuristic_v1::action(view, scratch, &heuristic_params(kind), rng)
+            }
+        }
         PolicyKind::HeuristicV1
         | PolicyKind::HeuristicV1Denial
         | PolicyKind::HeuristicV1Threat
@@ -452,6 +470,9 @@ pub fn discard(
         PolicyKind::RandomLegal => random_legal::discard(view, count, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::discard(view, count),
         PolicyKind::PriorityTrader => priority_trader::discard(view, count, scratch),
+        PolicyKind::Custom(_) => {
+            heuristic_v1::discard(view, count, scratch, &heuristic_params(kind))
+        }
         PolicyKind::HeuristicV1
         | PolicyKind::HeuristicV1Noports
         | PolicyKind::HeuristicV1Denial
@@ -518,6 +539,7 @@ pub fn robber(
         PolicyKind::RandomLegal => random_legal::robber(view, rng),
         PolicyKind::GreedyNoTrade => greedy_no_trade::robber(view),
         PolicyKind::PriorityTrader => priority_trader::robber(view),
+        PolicyKind::Custom(_) => heuristic_v1::robber(view, &heuristic_params(kind)),
         PolicyKind::HeuristicV1
         | PolicyKind::HeuristicV1Noports
         | PolicyKind::HeuristicV1Denial
@@ -582,6 +604,10 @@ pub fn respond_trade(
     rng: &mut Xoshiro256StarStar,
 ) -> bool {
     match kind {
+        PolicyKind::Custom(index) => {
+            params_file::custom_trades(index)
+                && heuristic_v1_trader::respond_trade(view, offer, &heuristic_params(kind), rng)
+        }
         PolicyKind::HeuristicV1Trader
         | PolicyKind::HeuristicV1TraderDenial
         | PolicyKind::HeuristicV1TraderThreat
@@ -665,6 +691,7 @@ pub fn select_counterparty(
 /// Per-kind heuristic parameters. Non-heuristic kinds receive defaults with every gate disabled.
 fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
     let params = match kind {
+        PolicyKind::Custom(index) => params_file::custom_params(index),
         PolicyKind::HeuristicV1Noports => heuristic_v1::HeuristicParams {
             port_weight: 0.0,
             ..heuristic_v1::HeuristicParams::default()
@@ -998,6 +1025,39 @@ fn j_composite_trial_params(hysteresis_margin: f32) -> heuristic_v1::HeuristicPa
         goal_hysteresis_margin: hysteresis_margin,
         frontier_mix: heuristic_v1::FRONTIER_TRIAL_LO,
         ..composite_params(None)
+    }
+}
+
+/// The dispatch family a params-file policy inherits from the base kind it registers
+/// against: `Ok(true)` for the trader family (the seat makes and answers player-trade
+/// offers), `Ok(false)` for the plain heuristic family. Everything else a base kind
+/// carries is params, which the file replaces wholesale. Non-heuristic kinds have no
+/// params to replace, and `heuristic-v1-noports` acts through a port *rule* a params file
+/// cannot carry. The wildcard arm covers the trader roster;
+/// `custom_base_family_matches_the_roster` cross-checks every kind against its name so a
+/// future non-trader variant cannot land there silently.
+pub(crate) fn custom_base_trades(base: PolicyKind) -> Result<bool, String> {
+    match base {
+        PolicyKind::RandomLegal | PolicyKind::GreedyNoTrade | PolicyKind::PriorityTrader => {
+            Err("policy params files require a heuristic-family base policy".into())
+        }
+        PolicyKind::Custom(_) => {
+            Err("a custom params policy cannot base another params file".into())
+        }
+        PolicyKind::HeuristicV1Noports => Err(
+            "heuristic-v1-noports cannot base a params file: its no-ports effect is a port \
+             rule, not a parameter"
+                .into(),
+        ),
+        PolicyKind::HeuristicV1
+        | PolicyKind::HeuristicV1Denial
+        | PolicyKind::HeuristicV1Threat
+        | PolicyKind::HeuristicV1ThreatDenial
+        | PolicyKind::HeuristicV1Devcards
+        | PolicyKind::HeuristicV1DevcardsDenial
+        | PolicyKind::HeuristicV1ThreatDevcards
+        | PolicyKind::HeuristicV1ThreatDevcardsDenial => Ok(false),
+        _ => Ok(true),
     }
 }
 
@@ -1966,6 +2026,28 @@ mod gate_tests {
         }
     }
 
+    /// Guards `custom_base_trades`'s wildcard arm: every roster kind's dispatch family
+    /// must match what its name says, so a future non-trader variant cannot silently
+    /// land in the trader family.
+    #[test]
+    fn custom_base_family_matches_the_roster() {
+        for (kind, name) in policy_names() {
+            let family = super::custom_base_trades(kind);
+            if matches!(
+                kind,
+                PolicyKind::RandomLegal | PolicyKind::GreedyNoTrade | PolicyKind::PriorityTrader
+            ) || name.ends_with("-noports")
+            {
+                assert!(family.is_err(), "{name} must be rejected as a base");
+            } else if name.contains("-trader") {
+                assert_eq!(family, Ok(true), "{name}");
+            } else {
+                assert_eq!(family, Ok(false), "{name}");
+            }
+        }
+        assert!(super::custom_base_trades(PolicyKind::Custom(255)).is_err());
+    }
+
     fn gate_table() -> [(PolicyKind, bool, bool, bool, bool); 55] {
         [
             (PolicyKind::RandomLegal, false, false, false, false),
@@ -2559,6 +2641,7 @@ mod gate_tests {
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialFrontierhi => 52,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialJall => 53,
             PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialJnohyst => 54,
+            PolicyKind::Custom(_) => panic!("custom params policies are outside the roster"),
         }
     }
 }

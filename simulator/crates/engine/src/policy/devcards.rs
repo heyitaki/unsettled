@@ -62,6 +62,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::etw::{self, EtwInputs};
+use crate::policy::params_file::check;
 use crate::policy::{exposure, threat};
 use crate::rules::{RESOURCE_COUNT, Resource};
 use crate::view::{DecisionView, DevPlay, can_pay};
@@ -414,15 +415,51 @@ fn completion(
     }
 }
 
+/// The `assert_params` domain, spelled as load-time errors (JSON field names) so the H0
+/// params-file loader rejects a bad vector instead of tripping a debug assert mid-run.
+pub(crate) fn validate(params: &DevCardParams) -> Result<(), String> {
+    check(
+        "devCards.etwWeight is finite",
+        params.etw_weight.is_finite(),
+    )?;
+    check(
+        "devCards.etwFloor is positive and finite",
+        params.etw_floor.is_finite() && params.etw_floor > 0.0,
+    )?;
+    check(
+        "devCards.gainCap is non-negative and finite",
+        params.gain_cap.is_finite() && params.gain_cap >= 0.0,
+    )?;
+    check(
+        "devCards.completionWeight is finite",
+        params.completion_weight.is_finite(),
+    )?;
+    check(
+        "devCards.holdDiscount is non-negative and finite",
+        params.hold_discount.is_finite() && params.hold_discount >= 0.0,
+    )?;
+    check(
+        "devCards.haulGrowth is non-negative and finite",
+        params.haul_growth.is_finite() && params.haul_growth >= 0.0,
+    )?;
+    check(
+        "devCards.monopolySoundFloor is non-negative and finite",
+        params.monopoly_sound_floor.is_finite() && params.monopoly_sound_floor >= 0.0,
+    )?;
+    check(
+        "devCards.tempoWeight is finite",
+        params.tempo_weight.is_finite(),
+    )?;
+    check(
+        "devCards.tempoHalf is positive and finite",
+        params.tempo_half.is_finite() && params.tempo_half > 0.0,
+    )?;
+    check(
+        "devCards.exposureWeight is non-negative and finite",
+        params.exposure_weight.is_finite() && params.exposure_weight >= 0.0,
+    )
+}
+
 fn assert_params(params: &DevCardParams) {
-    debug_assert!(params.etw_weight.is_finite());
-    debug_assert!(params.etw_floor.is_finite() && params.etw_floor > 0.0);
-    debug_assert!(params.gain_cap.is_finite() && params.gain_cap >= 0.0);
-    debug_assert!(params.completion_weight.is_finite());
-    debug_assert!(params.hold_discount.is_finite() && params.hold_discount >= 0.0);
-    debug_assert!(params.haul_growth.is_finite() && params.haul_growth >= 0.0);
-    debug_assert!(params.monopoly_sound_floor.is_finite() && params.monopoly_sound_floor >= 0.0);
-    debug_assert!(params.tempo_weight.is_finite());
-    debug_assert!(params.tempo_half.is_finite() && params.tempo_half > 0.0);
-    debug_assert!(params.exposure_weight.is_finite() && params.exposure_weight >= 0.0);
+    debug_assert_eq!(validate(params), Ok(()));
 }
