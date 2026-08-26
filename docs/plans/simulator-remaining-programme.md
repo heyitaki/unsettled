@@ -193,8 +193,8 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 25: Spec consolidation sweep
 
-- [ ] `gaps.md` holds only SIM-GAP-20 and the SIM-GAP-21 diagnosis; every closed entry deleted with its closing commit named; `programme.md` statuses current including the J-before-H deviation; `contracts.md` carries new guarantees; `simulator/README.md` operational sections updated (params-file syntax, new flags)
-- [ ] `link-check.py` and `spec-tracked-check.sh` clean; no hard-wrapped prose introduced
+- [x] `gaps.md` holds only SIM-GAP-20 and the SIM-GAP-21 diagnosis; every closed entry deleted with its closing commit named; `programme.md` statuses current including the J-before-H deviation; `contracts.md` carries new guarantees; `simulator/README.md` operational sections updated (params-file syntax, new flags) — the per-task commits had already left `gaps.md` (two entries), `programme.md`, and `contracts.md` current, so the sweep found three residues: SIM-GAP-21's closing line still called the throughput decision "owed" (now points at the settled H disposition, entry kept as the diagnosis record), and the README lacked the `<base>@<params.json>` policy spelling and the current `placement/` inventory (params-file contract pointer, the four root parameter files, the `h1_`/`h2_`/`h2x_`/`h3_`/`h4_` arm families, `capture-corpus.sh`); the embargo flags were already documented by Task 8
+- [x] `link-check.py` and `spec-tracked-check.sh` clean; no hard-wrapped prose introduced — 0 bad references in 7 files, tracked set exact, all new paragraphs single-line
 
 ### Task 26: Verify acceptance criteria
 

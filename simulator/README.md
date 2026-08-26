@@ -74,7 +74,15 @@ Measure throughput:
 cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
 ```
 
-`app_formula:<path/to/weights.json>` loads the app's settlement formula at run time and reports it as `app_formula:<file-stem>`, so multiple weights files with distinct stems can be arms in the same run. `placement/arms/` holds single-parameter perturbations of the default weights — `spread_*` scale the `resourceValue` spread, `gpf_*` vary `genericPortFactor`, `flat_swamp` is an external formula's resource ratios renormalized to the same mean.
+`app_formula:<path/to/weights.json>` loads the app's settlement formula at run time and reports it as `app_formula:<file-stem>`, so multiple weights files with distinct stems can be arms in the same run.
+
+`<base>@<path/to/params.json>` works anywhere a policy name is accepted — `--policy`, `--arm-policy`, config files — and runs the base policy's trader-family dispatch with a full `HeuristicParams` vector loaded from the file. The file must carry every key and no others; the loader applies the shared domain guards and the building-band headroom check, so an inadmissible vector fails at load rather than running. The base must be a heuristic-family kind (`heuristic-v1-noports` and non-heuristic kinds are rejected). The contract is in [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Policy params files".
+
+`placement/` holds the committed parameter files: `default-weights.json` (the app's `DEFAULT_WEIGHTS`, drift-pinned by vitest), `policy-default-params.json` (`HeuristicParams::default()`, drift-pinned by a Rust test), `sweep-bounds.json` (the declared candidate range of every swept parameter, walked for completeness and endpoint admissibility by test), and the `phase-i-candidate-params.json` / `phase-i-candidate-weights.json` pair recording the Phase-H output awaiting the user's Phase-I adoption decision.
+
+`placement/arms/` holds the committed measurement arms. Weights files (loaded via `app_formula:`): `spread_*` scale the `resourceValue` spread, `gpf_*` vary `genericPortFactor`, `flat_swamp` renormalizes an external formula's resource ratios to the same mean, and `h1_*` are the Phase-H placement-weight screen perturbations. Policy params files (loaded via `@`): `h2_*` and `h2x_*` are the policy-block screen arms, `h3_hand_zero` the `handValue` A/B arm, and `h4_*` the combine and coordinate-pass vectors, `h4_final.json` being the eval-confirmed candidate.
+
+`tools/capture-corpus.sh [out-dir]` captures the byte-exact behavior corpus that [`contracts.md`](../.claude/specs/simulator/contracts.md) requires before any engine change (four policies, both layouts, fixed seeds); diff a recapture against the pre-change capture to identify exactly which games moved.
 
 Player trading is disabled by default. Set `RuleConfig::player_trading` to `Some(TradeConfig)` and use a trader-family policy to exercise it. `TradeConfig` exposes `opponent_gain_weight`, `acceptance_temperature`, `max_offers_per_turn`, `hidden_vp_confidence`, and the three embargo fields `embargo_danger_floor`, `embargo_danger`, and `embargo_takeover_danger`.
 
