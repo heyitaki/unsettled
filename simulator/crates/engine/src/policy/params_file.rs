@@ -683,6 +683,39 @@ mod tests {
         assert_eq!(read("h4_final.json"), final_vector, "h4_final.json drifted");
     }
 
+    /// Pins the Phase-I candidate the M-45 eval confirmation recorded: the policy side
+    /// is byte-shape-identical to the confirmed `h4_final.json` vector and loads through
+    /// the full contract; the placement side is today's `default-weights.json` unchanged
+    /// (H1 produced no winner) and validates. Adoption is the user's Phase-I decision.
+    #[test]
+    fn the_phase_i_candidate_files_load_and_match_their_confirmed_vectors() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let params_source =
+            std::fs::read_to_string(format!("{placement_dir}/phase-i-candidate-params.json"))
+                .expect("committed candidate params");
+        parse_params_file(&params_source).expect("candidate params load");
+        let final_source = std::fs::read_to_string(format!("{placement_dir}/arms/h4_final.json"))
+            .expect("committed final vector");
+        assert_eq!(
+            serde_json::from_str::<Value>(&params_source).expect("valid JSON"),
+            serde_json::from_str::<Value>(&final_source).expect("valid JSON"),
+            "candidate params drifted from the confirmed h4_final.json vector"
+        );
+
+        let weights_source =
+            std::fs::read_to_string(format!("{placement_dir}/phase-i-candidate-weights.json"))
+                .expect("committed candidate weights");
+        let weights: EngineWeights =
+            serde_json::from_str(&weights_source).expect("weights shape");
+        weights.validate().expect("candidate weights validate");
+        let default_source = std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("defaults");
+        assert_eq!(
+            serde_json::from_str::<Value>(&weights_source).expect("valid JSON"),
+            serde_json::from_str::<Value>(&default_source).expect("valid JSON"),
+            "candidate weights drifted from default-weights.json (H1 had no winner)"
+        );
+    }
+
     #[test]
     fn a_negative_generic_port_factor_fails_placement_validation() {
         let mut weights: Value = serde_json::from_str(
