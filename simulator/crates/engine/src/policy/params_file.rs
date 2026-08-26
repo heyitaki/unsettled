@@ -605,6 +605,67 @@ mod tests {
         assert_eq!(extension_count, 10, "the M-42 extension commits 10 arms");
     }
 
+    /// The M-44 H4 combine winners: JSON pointer, slug of the committed revert arm, and
+    /// the winner value. Preregistered in the M-44 prereg; the values are the largest
+    /// `better` estimate per axis from M-41/M-42.
+    const H4_WINNERS: [(&str, &str, f64); 9] = [
+        ("/devBuyScale", "devbuy", 0.25),
+        ("/trading/etwWeight", "tretw", 4.0),
+        ("/trading/tempoWeight", "trtempo", 0.8),
+        ("/trading/benefitWeight", "trbenefit", 2.0),
+        ("/trading/marginScale", "trmargin", 24.0),
+        ("/trading/offerBase", "trofferbase", 700.0),
+        ("/trading/tempoHalf", "trtempohalf", 1.0),
+        ("/trading/dangerFloor", "trfloor", 4.0),
+        ("/trading/dangerWeight", "trdangerw", 2.0),
+    ];
+
+    /// Pins the committed H4 combine set: `h4_combined.json` is the composite defaults
+    /// with exactly the nine preregistered winner leaves moved, each `h4_no_<slug>.json`
+    /// is the combined vector with that one winner reverted to its default, and every
+    /// file loads through the full contract (exact keys, guards, headroom — the load is
+    /// H4's mechanical headroom re-check). Every winner value sits inside its committed
+    /// sweep-bounds range.
+    #[test]
+    fn the_h4_arm_files_are_the_committed_combine_vectors() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let defaults = composite_value();
+        let mut combined = defaults.clone();
+        for (leaf, _, winner) in H4_WINNERS {
+            let range = bounds["policy"]
+                .pointer(leaf)
+                .unwrap_or_else(|| panic!("no bounds range for {leaf}"));
+            assert!(
+                range["min"].as_f64().expect("number") <= winner
+                    && winner <= range["max"].as_f64().expect("number"),
+                "{leaf} winner {winner} lies outside its bounds range"
+            );
+            *combined.pointer_mut(leaf).expect("leaf") = Value::from(winner);
+        }
+
+        let read = |name: &str| -> Value {
+            let source =
+                std::fs::read_to_string(format!("{arms_dir}/{name}")).expect("committed arm");
+            parse_params_file(&source).unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            serde_json::from_str(&source).expect("valid JSON")
+        };
+        assert_eq!(read("h4_combined.json"), combined, "h4_combined.json drifted");
+        for (leaf, slug, _) in H4_WINNERS {
+            let mut revert = combined.clone();
+            *revert.pointer_mut(leaf).expect("leaf") =
+                defaults.pointer(leaf).expect("default").clone();
+            assert_eq!(
+                read(&format!("h4_no_{slug}.json")),
+                revert,
+                "h4_no_{slug}.json drifted"
+            );
+        }
+    }
+
     #[test]
     fn a_negative_generic_port_factor_fails_placement_validation() {
         let mut weights: Value = serde_json::from_str(
