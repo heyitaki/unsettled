@@ -664,6 +664,23 @@ mod tests {
                 "h4_no_{slug}.json drifted"
             );
         }
+
+        // The final vector after the M-44 coordinate pass: the preregistered rule kept
+        // four winners (removal `worse`-leaning or `inconclusive`) and reverted five
+        // (removal `better` or `equivalent`).
+        let kept = [
+            "/devBuyScale",
+            "/trading/etwWeight",
+            "/trading/dangerFloor",
+            "/trading/dangerWeight",
+        ];
+        let mut final_vector = defaults.clone();
+        for (leaf, _, winner) in H4_WINNERS {
+            if kept.contains(&leaf) {
+                *final_vector.pointer_mut(leaf).expect("leaf") = Value::from(winner);
+            }
+        }
+        assert_eq!(read("h4_final.json"), final_vector, "h4_final.json drifted");
     }
 
     #[test]
