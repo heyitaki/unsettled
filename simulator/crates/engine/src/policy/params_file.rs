@@ -432,8 +432,113 @@ mod tests {
             ..composite_defaults()
         })
         .expect("serialize");
-        let error = register_custom_policy(base, name, &changed).expect_err("conflict");
+        let error = register_custom_policy(base, name.clone(), &changed).expect_err("conflict");
         assert!(error.contains("different params"), "{error}");
+
+        // Same name and identical params under a different base family: the stored
+        // `trades` flag differs, so accepting it would let one arm label mean two
+        // dispatch families across runs.
+        let error =
+            register_custom_policy(PolicyKind::HeuristicV1, name, &source).expect_err("family");
+        assert!(error.contains("different params"), "{error}");
+    }
+
+    /// One known-bad value per domain-constrained leaf, complete in both directions
+    /// against the live composite shape: silently dropping any sign or range guard from
+    /// `validate_params` or a block `validate` fails here, and a new params field cannot
+    /// land without declaring whether it has a JSON-expressible bad value. `None` marks
+    /// fields whose only constraint is finiteness — JSON cannot spell a non-finite
+    /// number (serde_json rejects `1e999` and has no NaN literal), so those guards are
+    /// unreachable through the loader and only back the engine's debug asserts.
+    #[test]
+    fn every_domain_guard_rejects_its_bad_value() {
+        let float = |value: f64| Some(Value::from(value));
+        let int = |value: u8| Some(Value::from(value));
+        let bad_values: Vec<(&str, Option<Value>)> = vec![
+            ("/productionWeight", None),
+            ("/scarcityWeight", None),
+            ("/diversityBonus", None),
+            ("/portWeight", None),
+            ("/expansionWeight", None),
+            ("/robberBlockThreshold", None),
+            ("/shedWeight", float(-1.0)),
+            ("/goalNeedWeight", float(-1.0)),
+            ("/stageExpansionWeight", float(-1.0)),
+            ("/stageCityWeight", float(-1.0)),
+            ("/stageUrgencyWeight", float(-1.0)),
+            ("/slotReturnWeight", float(-1.0)),
+            ("/costPressureWeight", float(-1.0)),
+            ("/frontierMix", float(1.5)),
+            ("/devBuyScale", float(-1.0)),
+            ("/goalHysteresisMargin", float(-1.0)),
+            ("/threat/delayWeight", None),
+            ("/threat/needWeight", None),
+            ("/threat/blockWeight", None),
+            ("/threat/stealWeight", None),
+            ("/threat/victimHandWeight", None),
+            ("/threat/dangerFloor", float(0.0)),
+            ("/threat/delayCap", float(-1.0)),
+            ("/threat/handCap", float(0.0)),
+            ("/threat/knightStealWeight", float(-1.0)),
+            ("/threat/knightPlacementWeight", float(-1.0)),
+            ("/devCards/etwWeight", None),
+            ("/devCards/etwFloor", float(0.0)),
+            ("/devCards/gainCap", float(-1.0)),
+            ("/devCards/completionWeight", None),
+            ("/devCards/holdDiscount", float(-1.0)),
+            ("/devCards/haulGrowth", float(-1.0)),
+            ("/devCards/monopolySoundFloor", float(-1.0)),
+            ("/devCards/tempoWeight", None),
+            ("/devCards/tempoHalf", float(0.0)),
+            ("/devCards/exposureWeight", float(-1.0)),
+            ("/trading/etwWeight", None),
+            ("/trading/etwFloor", float(0.0)),
+            ("/trading/gainCap", float(-1.0)),
+            ("/trading/tempoWeight", None),
+            ("/trading/tempoHalf", float(0.0)),
+            ("/trading/scarcityFloor", float(0.0)),
+            ("/trading/dangerFloor", float(0.0)),
+            ("/trading/dangerWeight", None),
+            ("/trading/benefitWeight", None),
+            ("/trading/marginScale", float(0.0)),
+            ("/trading/offerGainWeight", None),
+            ("/trading/offerBase", None),
+            ("/trading/offerSpan", None),
+            ("/denial/dangerFloor", float(0.0)),
+            ("/denial/pressureFloor", float(-1.0)),
+            ("/denial/pressureSpan", float(-1.0)),
+            ("/denial/raceBonus", float(-1.0)),
+            ("/denial/raceDangerMin", float(1.5)),
+            ("/denial/raceCheckCap", int(0)),
+            ("/denial/defendWeight", float(-1.0)),
+            ("/denial/defendHeadroomHalf", float(0.0)),
+            ("/denial/defendProbeSlack", int(0)),
+            ("/denial/contestWeight", float(-1.0)),
+            ("/denial/contestCap", float(-1.0)),
+            ("/denial/contestBlockBonus", float(-1.0)),
+            ("/denial/contestGoalShare", float(-1.0)),
+            ("/denial/armyDefendWeight", float(-1.0)),
+            ("/denial/armyGapHalf", float(0.0)),
+        ];
+        let base = composite_value();
+        let mut leaves = Vec::new();
+        collect_leaf_paths(&base, "", &mut leaves);
+        leaves.retain(|path| path != "/legacyValuation" && path != "/specialBuild");
+        for leaf in &leaves {
+            assert!(
+                bad_values.iter().any(|(path, _)| path == leaf),
+                "{leaf} has no bad-value declaration"
+            );
+        }
+        for (path, bad) in bad_values {
+            assert!(leaves.contains(&path.to_string()), "{path} names no leaf");
+            let Some(bad) = bad else { continue };
+            let mut candidate = base.clone();
+            *candidate.pointer_mut(path).expect("path exists") = bad;
+            let error = parse_params_file(&candidate.to_string()).expect_err(path);
+            let field = path.rsplit('/').next().expect("segment");
+            assert!(error.contains(field), "{path}: {error}");
+        }
     }
 
     /// Walks the committed sweep-bounds file against the live shapes: every swept policy

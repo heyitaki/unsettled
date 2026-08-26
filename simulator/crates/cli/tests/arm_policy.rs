@@ -157,6 +157,46 @@ fn a_composite_defaults_params_file_matches_its_base_bit_for_bit() {
     fs::remove_dir_all(out).unwrap();
 }
 
+/// The non-trader dispatch family, end to end: a plain-base params file spelling out
+/// `heuristic-v1`'s defaults must be bit-identical to the named kind in a field of
+/// traders with player trading enabled. Any discordant game would mean the custom
+/// policy's stored family flag did not reach `policy::action`/`policy::respond_trade` —
+/// a hero that wrongly took the trader path would offer or accept trades the named
+/// non-trader never makes.
+#[test]
+fn a_plain_base_defaults_params_file_matches_heuristic_v1_bit_for_bit() {
+    let out = temporary_output("arm-policy-plain-family-identity");
+    if out.exists() {
+        fs::remove_dir_all(&out).unwrap();
+    }
+    let params_path = write_params_file("plain-family", &HeuristicParams::default());
+    let mut args = evaluate_cli_args(&out);
+    let field_policy = args.iter().position(|arg| arg == "--policy").unwrap() + 1;
+    args[field_policy] = "heuristic-v1-trader".into();
+    args.extend([
+        "--player-trading".into(),
+        "--arm-policy".into(),
+        "base=heuristic-v1".into(),
+        "--arm-policy".into(),
+        format!("candidate=heuristic-v1@{}", params_path.display()),
+    ]);
+    let output = Command::new(env!("CARGO_BIN_EXE_unsettled-sim"))
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let evaluation: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out.join("evaluation.json")).unwrap()).unwrap();
+    let pair = &evaluation["pairs"][0];
+    assert_eq!(pair["b"].as_u64().unwrap() + pair["c"].as_u64().unwrap(), 0);
+    fs::remove_file(params_path).unwrap();
+    fs::remove_dir_all(out).unwrap();
+}
+
 /// The converse observer: a params file that zeroes the production term must change
 /// decisions, proving the file's values (not the base kind's) are what play.
 #[test]

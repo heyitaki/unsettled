@@ -391,9 +391,11 @@ pub const NON_WINNING_CONTESTED_FLOOR: f32 = 11_500.0;
 /// - each hex's scarcity ratio is at most 1, so the sum is at most 3 (`MAX_SCARCITY_SUM`),
 ///   scaled by the expression's fixed 10.0;
 /// - diversity counts at most the 3 touched resources (`MAX_DIVERSITY`);
-/// - the official token sets sum to 58 (standard4) and 88 (extension6) pips
-///   (`MAX_BOARD_PIPS` = 88), the port term's production input is at most board plus
-///   vertex pips, and the summed rate gain per pip is at most 0.5 (a 2:1 port yields
+/// - the port term's production input is own plus vertex pips, where own production
+///   (`compute_production_pips`) is tier-doubled and counted per owned vertex, so the
+///   piece limits bound it independently of the token set (unofficial boards included):
+///   5 settlements at 15 plus 4 cities at 30 (`MAX_OWN_PIPS` = 195), plus the candidate
+///   vertex's 15; the summed rate gain per pip is at most 0.5 (a 2:1 port yields
 ///   1/2 - 1/4 = 0.25; 0.5 covers the impossible two-ports-at-one-vertex corner);
 /// - the frontier fan is at most 3 counted neighbours plus 2 sites behind each
 ///   (`MAX_FRONTIER` = 9, degree 3 at zero mix);
@@ -406,7 +408,7 @@ pub fn building_band_headroom(params: &HeuristicParams) -> Result<(), String> {
     const MAX_VERTEX_PIPS: f32 = 15.0;
     const MAX_SCARCITY_SUM: f32 = 3.0;
     const MAX_DIVERSITY: f32 = 3.0;
-    const MAX_BOARD_PIPS: f32 = 88.0;
+    const MAX_OWN_PIPS: f32 = 195.0;
     const MAX_PORT_RATE_GAIN: f32 = 0.5;
     const MAX_ADJACENT: f32 = 3.0;
     const MAX_FRONTIER: f32 = 9.0;
@@ -416,7 +418,7 @@ pub fn building_band_headroom(params: &HeuristicParams) -> Result<(), String> {
     let terms = pos(params.production_weight) * MAX_VERTEX_PIPS
         + pos(params.scarcity_weight) * 10.0 * MAX_SCARCITY_SUM
         + pos(params.diversity_bonus) * MAX_DIVERSITY
-        + pos(params.port_weight) * (MAX_BOARD_PIPS + MAX_VERTEX_PIPS) * MAX_PORT_RATE_GAIN
+        + pos(params.port_weight) * (MAX_OWN_PIPS + MAX_VERTEX_PIPS) * MAX_PORT_RATE_GAIN
         + pos(params.expansion_weight) * expansion_count;
     let bound = BUILD_BAND
         + terms * (1.0 + pos(params.stage_city_weight))

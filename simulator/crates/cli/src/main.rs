@@ -188,31 +188,44 @@ struct TradeArgs {
 }
 
 impl TradeArgs {
-    fn config(self) -> Option<TradeConfig> {
-        self.player_trading.then(|| {
-            let defaults = TradeConfig::default();
-            TradeConfig {
-                opponent_gain_weight: self
-                    .opponent_gain_weight
-                    .unwrap_or(defaults.opponent_gain_weight),
-                acceptance_temperature: self
-                    .acceptance_temperature
-                    .unwrap_or(defaults.acceptance_temperature),
-                max_offers_per_turn: self
-                    .max_offers_per_turn
-                    .unwrap_or(defaults.max_offers_per_turn),
-                hidden_vp_confidence: self
-                    .hidden_vp_confidence
-                    .unwrap_or(defaults.hidden_vp_confidence),
-                embargo_danger_floor: self
-                    .embargo_danger_floor
-                    .unwrap_or(defaults.embargo_danger_floor),
-                embargo_danger: self.embargo_danger.unwrap_or(defaults.embargo_danger),
-                embargo_takeover_danger: self
-                    .embargo_takeover_danger
-                    .unwrap_or(defaults.embargo_takeover_danger),
-            }
-        })
+    /// The embargo domains below mirror the `TradeConfig` field contracts (`rules.rs`),
+    /// which the engine only debug-asserts: a release-profile run would otherwise accept a
+    /// zero, negative, or non-finite threshold and silently disable or distort the embargo.
+    fn config(self) -> Result<Option<TradeConfig>, String> {
+        let defaults = TradeConfig::default();
+        let embargo_danger_floor = self
+            .embargo_danger_floor
+            .unwrap_or(defaults.embargo_danger_floor);
+        if !embargo_danger_floor.is_finite() || embargo_danger_floor <= 0.0 {
+            return Err("--embargo-danger-floor must be positive and finite".into());
+        }
+        let embargo_danger = self.embargo_danger.unwrap_or(defaults.embargo_danger);
+        if !embargo_danger.is_finite() {
+            return Err("--embargo-danger must be finite".into());
+        }
+        let embargo_takeover_danger = self
+            .embargo_takeover_danger
+            .unwrap_or(defaults.embargo_takeover_danger);
+        if !embargo_takeover_danger.is_finite() {
+            return Err("--embargo-takeover-danger must be finite".into());
+        }
+        Ok(self.player_trading.then(|| TradeConfig {
+            opponent_gain_weight: self
+                .opponent_gain_weight
+                .unwrap_or(defaults.opponent_gain_weight),
+            acceptance_temperature: self
+                .acceptance_temperature
+                .unwrap_or(defaults.acceptance_temperature),
+            max_offers_per_turn: self
+                .max_offers_per_turn
+                .unwrap_or(defaults.max_offers_per_turn),
+            hidden_vp_confidence: self
+                .hidden_vp_confidence
+                .unwrap_or(defaults.hidden_vp_confidence),
+            embargo_danger_floor,
+            embargo_danger,
+            embargo_takeover_danger,
+        }))
     }
 }
 
@@ -233,7 +246,7 @@ fn execute(cli: Cli) -> Result<(), String> {
 }
 
 fn tournament(args: TournamentArgs) -> Result<(), String> {
-    let player_trading = args.trade.config();
+    let player_trading = args.trade.config()?;
     let file_config = if let Some(path) = &args.config {
         serde_json::from_str::<TournamentFileConfig>(
             &fs::read_to_string(path).map_err(|error| error.to_string())?,
@@ -341,7 +354,7 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
 }
 
 fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
-    let player_trading = args.trade.config();
+    let player_trading = args.trade.config()?;
     let layout = parse_layout(&args.layout)?;
     let seats = args
         .seats
@@ -427,7 +440,7 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
 }
 
 fn simulate(args: SimulateArgs) -> Result<(), String> {
-    let player_trading = args.trade.config();
+    let player_trading = args.trade.config()?;
     let source = fs::read_to_string(&args.board).map_err(|error| error.to_string())?;
     let wire = WireBoard::parse_str(&source).map_err(|error| error.to_string())?;
     let topology = Topology::load(wire.layout)?;
@@ -542,4 +555,86 @@ fn parse_policy(value: &str) -> Result<PolicyKind, String> {
         .map_err(|error| format!("failed to read policy params {path}: {error}"))?;
     register_custom_policy(base, value.to_string(), &source)
         .map_err(|error| format!("invalid policy params {path}: {error}"))
+}
+
+// The forwarded-argument table for `TradeArgs::config`: the seven near-identical
+// `unwrap_or` lines make a swapped pair compile and pass every engine test, so the test
+// below drives each flag with a distinct value and asserts the exact field it lands in.
+#[cfg(test)]
+mod tests {
+    use super::TradeArgs;
+    use unsettled_engine::rules::TradeConfig;
+
+    #[test]
+    fn trade_args_forward_each_flag_to_its_own_config_field() {
+        let args = TradeArgs {
+            player_trading: true,
+            opponent_gain_weight: Some(0.11),
+            acceptance_temperature: Some(0.22),
+            max_offers_per_turn: Some(3),
+            hidden_vp_confidence: Some(0.44),
+            embargo_danger_floor: Some(0.55),
+            embargo_danger: Some(0.66),
+            embargo_takeover_danger: Some(0.77),
+        };
+        let config = args.config().expect("valid flags").expect("trading on");
+        assert_eq!(config.opponent_gain_weight, 0.11);
+        assert_eq!(config.acceptance_temperature, 0.22);
+        assert_eq!(config.max_offers_per_turn, 3);
+        assert_eq!(config.hidden_vp_confidence, 0.44);
+        assert_eq!(config.embargo_danger_floor, 0.55);
+        assert_eq!(config.embargo_danger, 0.66);
+        assert_eq!(config.embargo_takeover_danger, 0.77);
+    }
+
+    #[test]
+    fn trade_args_default_to_the_engine_config_and_off_to_none() {
+        let on = TradeArgs {
+            player_trading: true,
+            ..TradeArgs::default()
+        };
+        assert_eq!(on.config(), Ok(Some(TradeConfig::default())));
+        assert_eq!(TradeArgs::default().config(), Ok(None));
+    }
+
+    #[test]
+    fn trade_args_reject_out_of_domain_embargo_thresholds() {
+        for (args, expected) in [
+            (
+                TradeArgs {
+                    player_trading: true,
+                    embargo_danger_floor: Some(0.0),
+                    ..TradeArgs::default()
+                },
+                "--embargo-danger-floor",
+            ),
+            (
+                TradeArgs {
+                    player_trading: true,
+                    embargo_danger_floor: Some(f64::NAN),
+                    ..TradeArgs::default()
+                },
+                "--embargo-danger-floor",
+            ),
+            (
+                TradeArgs {
+                    player_trading: true,
+                    embargo_danger: Some(f64::NAN),
+                    ..TradeArgs::default()
+                },
+                "--embargo-danger",
+            ),
+            (
+                TradeArgs {
+                    player_trading: true,
+                    embargo_takeover_danger: Some(f64::INFINITY),
+                    ..TradeArgs::default()
+                },
+                "--embargo-takeover-danger",
+            ),
+        ] {
+            let error = args.config().expect_err(expected);
+            assert!(error.contains(expected), "{error}");
+        }
+    }
 }
