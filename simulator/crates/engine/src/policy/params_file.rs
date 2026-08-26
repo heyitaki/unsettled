@@ -543,6 +543,59 @@ mod tests {
         }
     }
 
+    /// Walks the committed H2 screen arms (`placement/arms/h2_*.json`): every file loads
+    /// through the full contract (exact keys, guards, headroom), differs from the
+    /// composite defaults in exactly one leaf, and that leaf sits inside its committed
+    /// sweep-bounds range. The count pins the preregistered 64-parameter x 2-arm set.
+    #[test]
+    fn the_h2_arm_files_are_single_parameter_perturbations_inside_bounds() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base = composite_value();
+        let mut leaves = Vec::new();
+        collect_leaf_paths(&base, "", &mut leaves);
+        let mut count = 0;
+        for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
+            let path = entry.expect("entry").path();
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if !name.starts_with("h2_") || !name.ends_with(".json") {
+                continue;
+            }
+            count += 1;
+            let source = std::fs::read_to_string(&path).expect("arm file");
+            parse_params_file(&source)
+                .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            let changed: Vec<&String> = leaves
+                .iter()
+                .filter(|leaf| file.pointer(leaf) != base.pointer(leaf))
+                .collect();
+            assert_eq!(
+                changed.len(),
+                1,
+                "{name} must perturb exactly one parameter, got {changed:?}"
+            );
+            let leaf = changed[0];
+            let range = bounds["policy"]
+                .pointer(leaf)
+                .unwrap_or_else(|| panic!("{name}: no bounds range for {leaf}"));
+            let value = file.pointer(leaf).expect("leaf").as_f64().expect("number");
+            assert!(
+                range["min"].as_f64().expect("number") <= value
+                    && value <= range["max"].as_f64().expect("number"),
+                "{name}: {leaf} = {value} lies outside its bounds range"
+            );
+        }
+        assert_eq!(count, 128, "the H2 screen commits 64 parameters x 2 arms");
+    }
+
     #[test]
     fn a_negative_generic_port_factor_fails_placement_validation() {
         let mut weights: Value = serde_json::from_str(
