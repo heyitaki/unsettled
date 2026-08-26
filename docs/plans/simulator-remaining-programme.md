@@ -183,7 +183,7 @@ All verified on this machine 2026-08-25 (release timings are warm-cache):
 
 ### Task 23: H3 — `handValue` A/B
 
-- [ ] Preregister the decision rule from Context; run at >=8000 boards; record the answer in `programme.md`
+- [x] Preregister the decision rule from Context; run at >=8000 boards; record the answer in `programme.md` — M-43: prereg `54406d43` committed before the run; `hand_zero` (`handValueWeight: 0`) vs the default formula at 8000 boards x 2 reps against the ETW-aware composite field came back `equivalent` at -0.13pp, clustered `[-0.25pp, -0.01pp]`, strictly inside ±1pp — the preregistered drop condition, so **drop recommended** with the all-negative interval recorded honestly (~0.13pp real residual value, 1464/64000 discordant, consistent with M-38's flat magnitude screen); programme.md's open-question section rewritten with the answer, defaults untouched (Phase I owns adoption)
 
 ### Task 24: H4 — combine, coordinate pass, eval confirmation, candidate
 
