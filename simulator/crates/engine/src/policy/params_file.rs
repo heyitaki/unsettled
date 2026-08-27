@@ -252,6 +252,24 @@ mod tests {
         round_trip(&composite_defaults())
     }
 
+    /// The composite defaults the H screens and combines were generated against,
+    /// before the Phase-I adoption (M-46) moved the four winning axes into
+    /// `Default::default()`. The committed `h2_*`/`h2x_*`/`h4_*` arm files are
+    /// measurement records of that baseline and never change bytes, so their pins
+    /// anchor here rather than to the live defaults.
+    fn screen_baseline_value() -> Value {
+        let mut base = composite_value();
+        for (leaf, pre_adoption) in [
+            ("/devBuyScale", 1.0),
+            ("/trading/etwWeight", 1.0),
+            ("/trading/dangerFloor", 1.0),
+            ("/trading/dangerWeight", 0.5),
+        ] {
+            *base.pointer_mut(leaf).expect("leaf") = Value::from(pre_adoption);
+        }
+        base
+    }
+
     #[test]
     fn the_default_params_file_matches_the_struct_defaults() {
         let source = std::fs::read_to_string(DEFAULT_PARAMS_PATH).expect("committed file");
@@ -660,7 +678,7 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
-        let base = composite_value();
+        let base = screen_baseline_value();
         let mut leaves = Vec::new();
         collect_leaf_paths(&base, "", &mut leaves);
         let mut screen_count = 0;
@@ -738,7 +756,7 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
-        let defaults = composite_value();
+        let defaults = screen_baseline_value();
         let mut combined = defaults.clone();
         for (leaf, _, winner) in H4_WINNERS {
             let range = bounds["policy"]
@@ -788,23 +806,31 @@ mod tests {
         assert_eq!(read("h4_final.json"), final_vector, "h4_final.json drifted");
     }
 
-    /// Pins the Phase-I candidate the M-45 eval confirmation recorded: the policy side
-    /// is byte-shape-identical to the confirmed `h4_final.json` vector and loads through
-    /// the full contract; the placement side is today's `default-weights.json` unchanged
-    /// (H1 produced no winner) and validates. Adoption is the user's Phase-I decision.
+    /// Pins the Phase-I outcome (M-46, gate `better` at +14.10pp, adopted): the
+    /// candidate params are now byte-shape-identical to the *live* composite defaults —
+    /// adoption moved the four winning axes into `Default::default()` — and still match
+    /// the confirmed `h4_final.json` record. The candidate weights file is the
+    /// pre-adoption placement snapshot: identical to `default-weights.json` except
+    /// `handValueWeight`, where adoption applied the M-43 drop (0.4 → 0).
     #[test]
-    fn the_phase_i_candidate_files_load_and_match_their_confirmed_vectors() {
+    fn the_phase_i_candidate_files_record_the_adopted_vectors() {
         let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
         let params_source =
             std::fs::read_to_string(format!("{placement_dir}/phase-i-candidate-params.json"))
                 .expect("committed candidate params");
         parse_params_file(&params_source).expect("candidate params load");
+        let params: Value = serde_json::from_str(&params_source).expect("valid JSON");
         let final_source = std::fs::read_to_string(format!("{placement_dir}/arms/h4_final.json"))
             .expect("committed final vector");
         assert_eq!(
-            serde_json::from_str::<Value>(&params_source).expect("valid JSON"),
+            params,
             serde_json::from_str::<Value>(&final_source).expect("valid JSON"),
             "candidate params drifted from the confirmed h4_final.json vector"
+        );
+        assert_eq!(
+            params,
+            composite_value(),
+            "the adopted defaults drifted from the gate-confirmed candidate"
         );
 
         let weights_source =
@@ -813,11 +839,18 @@ mod tests {
         let weights: EngineWeights =
             serde_json::from_str(&weights_source).expect("weights shape");
         weights.validate().expect("candidate weights validate");
+        let mut candidate: Value = serde_json::from_str(&weights_source).expect("valid JSON");
+        assert_eq!(
+            candidate["handValueWeight"],
+            Value::from(0.4),
+            "the candidate snapshot carries the pre-drop handValueWeight"
+        );
+        candidate["handValueWeight"] = Value::from(0);
         let default_source = std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("defaults");
         assert_eq!(
-            serde_json::from_str::<Value>(&weights_source).expect("valid JSON"),
+            candidate,
             serde_json::from_str::<Value>(&default_source).expect("valid JSON"),
-            "candidate weights drifted from default-weights.json (H1 had no winner)"
+            "default-weights.json must differ from the candidate snapshot only in the adopted handValue drop"
         );
     }
 

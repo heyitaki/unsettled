@@ -219,8 +219,15 @@ fn a_zero_mix_keeps_the_degree_count_bit_for_bit() {
 fn the_dev_buy_scale_multiplies_the_buy_score() {
     let (topology, board, _rules, arena) = fixture();
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    // The deck-aware spelling.
-    let base = heuristic_v1::dev_buy_score(&view, &HeuristicParams::default());
+    // The deck-aware spelling, anchored at an explicit unit scale now that the
+    // adopted default (M-46) is 0.25.
+    let base = heuristic_v1::dev_buy_score(
+        &view,
+        &HeuristicParams {
+            dev_buy_scale: 1.0,
+            ..HeuristicParams::default()
+        },
+    );
     assert!(base > 0.0, "an untouched deck must price a buy above zero");
     let scaled = HeuristicParams {
         dev_buy_scale: 2.5,
@@ -230,8 +237,14 @@ fn the_dev_buy_scale_multiplies_the_buy_score() {
         heuristic_v1::dev_buy_score(&view, &scaled).to_bits(),
         (base * 2.5).to_bits()
     );
+    assert_eq!(
+        heuristic_v1::dev_buy_score(&view, &HeuristicParams::default()).to_bits(),
+        (base * 0.25).to_bits(),
+        "the adopted default scale reaches the buy score"
+    );
     // The legacy deck-blind spelling scales too, so a Phase-H sweep moves every arm.
     let legacy = HeuristicParams {
+        dev_buy_scale: 1.0,
         legacy_valuation: Some(LegacyValuation {
             deck_blind_buying: true,
             ..LegacyValuation::default()

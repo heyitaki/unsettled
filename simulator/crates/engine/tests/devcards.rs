@@ -1581,9 +1581,11 @@ fn vp_rich_small_deck_near_win_boosts_the_buy() {
     let vp_chase = share_vp * 300.0 * proximity;
     // No holder: the contest gap is the full largest-army minimum of 3, ungated pressure 1.
     let contest = 25.0 * (0.5 + proximity) * 1.0 * knight_rel;
-    assert_eq!(score, base + vp_chase + contest);
+    // The adopted default `devBuyScale` 0.25 (M-46) wraps every spelling of the buy
+    // score, so the composition expectations here and below carry the same factor.
+    assert_eq!(score, (base + vp_chase + contest) * 0.25);
     // The composition-blind score for the same state, for direction: the fix must boost.
-    assert!(score > 45.0 + 25.0 * (0.5 + proximity) * 1.0);
+    assert!(score > (45.0 + 25.0 * (0.5 + proximity) * 1.0) * 0.25);
 }
 
 #[test]
@@ -1606,9 +1608,9 @@ fn knight_only_deck_with_largest_army_held_is_near_worthless() {
     let knight_rel = (5.0_f32 / 5.0) / (20.0_f32 / 34.0);
     let base = 45.0 * (0.55 * 0.0 + 0.35 * 0.0 + 0.10 * knight_rel);
     let vp_chase = 0.0_f32 * 300.0 * (5.0_f32 / 10.0);
-    assert_eq!(score, base + vp_chase);
+    assert_eq!(score, (base + vp_chase) * 0.25);
     // Direction: far below the composition-blind holder score of 45.
-    assert!(score < 45.0 / 4.0);
+    assert!(score < 45.0 / 4.0 * 0.25);
 }
 
 #[test]
@@ -1625,7 +1627,7 @@ fn deck_blind_legacy_restores_the_composition_blind_score() {
     let proximity = 8.0_f32 / 10.0;
     assert_eq!(
         heuristic_v1::dev_buy_score(&view, &legacy),
-        45.0 + 25.0 * (0.5 + proximity) * 1.0
+        (45.0 + 25.0 * (0.5 + proximity) * 1.0) * 0.25
     );
 }
 
@@ -1657,6 +1659,6 @@ fn the_gated_denial_pressure_reaches_the_buy_score() {
     let vp_chase = share_vp * 300.0 * proximity;
     assert_eq!(
         score,
-        base + vp_chase + 25.0 * (0.5 + proximity) * pressure * knight_rel
+        (base + vp_chase + 25.0 * (0.5 + proximity) * pressure * knight_rel) * 0.25
     );
 }

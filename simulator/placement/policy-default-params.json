@@ -13,7 +13,7 @@
   "slotReturnWeight": 0.0,
   "costPressureWeight": 0.0,
   "frontierMix": 0.0,
-  "devBuyScale": 1.0,
+  "devBuyScale": 0.25,
   "goalHysteresisMargin": 0.0,
   "threat": null,
   "devCards": null,

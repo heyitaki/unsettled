@@ -45,14 +45,14 @@ pub struct TradeParams {
 impl Default for TradeParams {
     fn default() -> Self {
         Self {
-            etw_weight: 1.0,
+            etw_weight: 4.0,
             etw_floor: 1.0,
             gain_cap: 4.0,
             tempo_weight: 0.20,
             tempo_half: 4.0,
             scarcity_floor: 0.25,
-            danger_floor: 1.0,
-            danger_weight: 0.5,
+            danger_floor: 4.0,
+            danger_weight: 2.0,
             benefit_weight: 0.5,
             margin_scale: 6.0,
             offer_gain_weight: 1.0,
@@ -285,12 +285,13 @@ mod tests {
         }
     }
 
+    /// The two danger floors defaulted together until Phase I: the H2/H4 sweep moved
+    /// only the trading side, and the gate-confirmed adoption (M-46) kept that split,
+    /// so the coupling is measured away rather than a shared-model invariant.
     #[test]
-    fn trade_and_threat_danger_floors_default_together() {
-        assert_eq!(
-            TradeParams::default().danger_floor,
-            ThreatParams::default().danger_floor
-        );
+    fn the_adopted_danger_floors_are_deliberately_decoupled() {
+        assert_eq!(TradeParams::default().danger_floor, 4.0);
+        assert_eq!(ThreatParams::default().danger_floor, 1.0);
     }
 
     #[test]

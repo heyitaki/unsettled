@@ -46,9 +46,10 @@ export interface EngineWeights {
 
 export const DEFAULT_WEIGHTS: EngineWeights = {
   resourceValue: { wheat: 1.35, ore: 1.3, wood: 0.8, brick: 0.8, sheep: 0.75 },
-  // An immediate card is meaningful on turn one, but still worth less than a
-  // pip's production across a full game.
-  handValueWeight: 0.4,
+  // Dropped at Phase I (M-43/M-46): under competent play the setup grant's
+  // value is realized in-game, so the placement-time term double counts; the
+  // measured unique value of keeping it was ~0.13pp. The term code stays.
+  handValueWeight: 0,
   scarcityWeight: 0.35,
   scarcityClampMin: 0.5,
   scarcityClampMax: 2,

@@ -725,8 +725,10 @@ fn the_largest_army_holder_defends_against_a_closing_challenger() {
         ),
         |action| action == Action::BuyDev,
     );
-    assert_eq!(off, 45.0);
-    assert_eq!(on.to_bits(), (45.0 + term).to_bits());
+    // The adopted default `devBuyScale` 0.25 (M-46) wraps the whole buy score,
+    // denial term included.
+    assert_eq!(off, 45.0 * 0.25);
+    assert_eq!(on.to_bits(), ((45.0 + term) * 0.25).to_bits());
 }
 
 #[test]
@@ -851,15 +853,17 @@ fn road_building_is_aimed_by_the_denial_terms() {
     );
 }
 
+/// Denial and threat still share a danger-floor default; trading's was decoupled by the
+/// Phase-I adoption (M-46), which moved only the trade-side floor the sweep won on.
 #[test]
-fn denial_danger_defaults_agree_with_threat_and_trading() {
+fn denial_danger_defaults_agree_with_threat_not_trading() {
     assert_eq!(
         DenialParams::default().danger_floor,
         unsettled_engine::policy::threat::ThreatParams::default().danger_floor
     );
     assert_eq!(
-        DenialParams::default().danger_floor,
-        unsettled_engine::policy::trading::TradeParams::default().danger_floor
+        unsettled_engine::policy::trading::TradeParams::default().danger_floor,
+        4.0
     );
 }
 

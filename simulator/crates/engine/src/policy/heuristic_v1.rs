@@ -209,7 +209,7 @@ impl Default for HeuristicParams {
             slot_return_weight: 0.0,
             cost_pressure_weight: 0.0,
             frontier_mix: 0.0,
-            dev_buy_scale: 1.0,
+            dev_buy_scale: 0.25,
             goal_hysteresis_margin: 0.0,
             threat: None,
             dev_cards: None,
@@ -3235,7 +3235,7 @@ mod devcards_rate_tests {
 
     /// A seed whose game reaches the M-21 review state and flips there; re-found by scan
     /// (`M21_FLIP_SEED_SCAN`) whenever a behavior change moves the trajectories.
-    const SEED: u64 = 200;
+    const SEED: u64 = 667;
 
     // Forwarded-argument table for the SpecialBuild scoring seam (`score_actions_with`'s phase
     // gate, `hold_goal_filter`, and its `goal_shortfall` helper):

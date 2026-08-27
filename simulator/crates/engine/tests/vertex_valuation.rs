@@ -661,7 +661,13 @@ fn a_dev_completing_trade_no_longer_outranks_an_affordable_settlement() {
     arena.state.players[0].vp_public = 9;
     arena.state.players[0].knights_played = 2;
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let actions = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    // Unit dev-buy scale: the adopted default 0.25 (M-46) drops this witness out of the
+    // contested band, and the subject is band ordering, not the scale.
+    let params = HeuristicParams {
+        dev_buy_scale: 1.0,
+        ..HeuristicParams::default()
+    };
+    let actions = heuristic_v1::recommend(&view, &params);
     let settlement = score_for(&actions, |action| {
         matches!(action, Action::BuildSettlement(_))
     });
@@ -892,7 +898,10 @@ fn a_pressured_dev_card_no_longer_outranks_an_affordable_settlement() {
         std::array::from_fn(|index| i16::from(settlement_cost[index].max(dev_cost[index])));
     arena.state.players[0].vp_public = 9;
     arena.state.players[0].knights_played = 2;
+    // Unit dev-buy scale for the same reason as the trade test above: the subject is
+    // band ordering under pressure, at a witness authored inside the band.
     let params = HeuristicParams {
+        dev_buy_scale: 1.0,
         denial: Some(DenialParams {
             pressure_floor: 3.0,
             pressure_span: 0.0,
