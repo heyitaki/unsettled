@@ -1,6 +1,7 @@
 //! Shared opponent-value model for player trading.
 //!
-//! The parameter defaults are unswept Phase-H placeholders.
+//! `etw_weight`, `danger_floor`, and `danger_weight` default to the Phase-I adopted
+//! values (M-46); the remaining parameter defaults are unswept placeholders.
 
 use serde::{Deserialize, Serialize};
 

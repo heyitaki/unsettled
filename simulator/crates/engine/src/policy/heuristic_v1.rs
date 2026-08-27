@@ -160,9 +160,8 @@ pub struct HeuristicParams {
     pub frontier_mix: f32,
     /// Overall scale of the development-card buy score (`dev_card_score`), the SIM-GAP-24
     /// exposure: the buy band's hardcoded magnitudes outrank expansion roads from turn
-    /// one, and whether that biases outcomes is answered by sweeping this scale in
-    /// Phase H rather than by argument. One (the default) leaves the shipped expression
-    /// untouched.
+    /// one. The Phase-H sweep answered the question (buying was overpriced) and Phase I
+    /// adopted 0.25 as the default (M-46); one restores the pre-sweep expression exactly.
     pub dev_buy_scale: f32,
     /// The J4 goal-hysteresis margin (SIM-GAP-25): a challenger goal must beat the seat's
     /// incumbent goal (`DecisionView::incumbent_goal`, the goal committed at the previous
@@ -1793,10 +1792,11 @@ pub fn dev_buy_score(view: &DecisionView<'_>, params: &HeuristicParams) -> f32 {
 
 fn dev_card_score(view: &DecisionView<'_>, params: &HeuristicParams, gated: Gated<'_>) -> f32 {
     let score = unscaled_dev_card_score(view, params, gated);
-    // The SIM-GAP-24 exposure: one overall scale on the buy score, swept by Phase H. A
-    // branch rather than unconditional arithmetic keeps the default arms' expression
-    // untouched, and the scale deliberately wraps the legacy deck-blind branch too so a
-    // sweep moves every spelling of the buy score.
+    // The SIM-GAP-24 exposure: one overall scale on the buy score, swept by Phase H and
+    // adopted at 0.25 in Phase I (M-46). The unit-scale branch keeps the pre-sweep
+    // expression bit-exact for the frozen screen-baseline arms, and the scale
+    // deliberately wraps the legacy deck-blind branch too so it moves every spelling of
+    // the buy score.
     if params.dev_buy_scale == 1.0 {
         score
     } else {
@@ -1881,8 +1881,9 @@ fn unscaled_dev_card_score(
     base + vp_chase + contest_bonus * (0.5 + win_proximity(view)) * pressure * knight_rel
 }
 
-/// The pre-SIM-GAP-17 composition-blind score, preserved bit-for-bit as the measurement
-/// reference behind `LegacyValuation::deck_blind_buying`.
+/// The pre-SIM-GAP-17 composition-blind score, preserved bit-for-bit at the unscaled
+/// level as the measurement reference behind `LegacyValuation::deck_blind_buying`; the
+/// global `dev_buy_scale` (0.25 since M-46) wraps this spelling like every other.
 fn deck_blind_dev_card_score(view: &DecisionView<'_>, gated: Gated<'_>) -> f32 {
     if view.largest_army_holder() == Some(view.observer()) {
         return gated

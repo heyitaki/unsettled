@@ -1919,8 +1919,6 @@ fn applied_aware_trade_forwards_a_nonzero_delta_to_selection() {
     let (topology, board, rules, mut config, mut arena) = explicit_trading_state();
     config.policies = [PolicyKind::HeuristicV1TraderAware; 6];
     move_from_bank(&mut arena, 0, Resource::Ore, 1);
-    // Under the adopted params the count-2 delta selects seat 2; a zero delta would
-    // select seat 5, so an unforwarded delta fails the seat-5 assertion below.
     let seat_five_before = arena.state.players[5].resources[Resource::Wood.index()];
     let seat_two_before = arena.state.players[2].resources[Resource::Wood.index()];
     let action = Action::OfferTrade {
@@ -1928,6 +1926,37 @@ fn applied_aware_trade_forwards_a_nonzero_delta_to_selection() {
         get: Resource::Wood,
         count: 2,
     };
+    // Fixture preconditions, asserted rather than claimed: under the count-2 responder
+    // delta seat 2 is the strict cheapest of the wood-holding acceptors {1, 2, 5}, while
+    // a zero (unforwarded) delta ranks seat 5 below seat 2 — so the seat-5 assertion at
+    // the end fails if the delta does not reach selection.
+    {
+        let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
+        let delta = trading::responder_delta(TradeOffer {
+            proposer: 0,
+            give: Resource::Ore,
+            get: Resource::Wood,
+            count: 2,
+        });
+        let score = |seat: usize, delta: &[f64; RESOURCE_COUNT]| {
+            trading::counterparty_score(
+                &etw::inputs_for_seat(&proposer_view, seat),
+                &TradeParams::default(),
+                delta,
+            )
+        };
+        for other in [1, 5] {
+            assert!(
+                score(2, &delta) < score(other, &delta),
+                "fixture precondition: seat 2 must be the strict cheapest under the real delta"
+            );
+        }
+        let zero = [0.0; RESOURCE_COUNT];
+        assert!(
+            score(5, &zero) < score(2, &zero),
+            "fixture precondition: a zero delta must prefer seat 5, else the subject is untested"
+        );
+    }
     assert!(arena.apply_action_for_test(
         &board,
         &topology,
@@ -2312,15 +2341,17 @@ fn find_forwarding_fixtures() {
                 let devcards = run_pre_roll(PolicyKind::HeuristicV1TraderAwareDevcards);
                 let default = run_pre_roll(PolicyKind::HeuristicV1Trader);
                 let threat = run_pre_roll(PolicyKind::HeuristicV1TraderAwareThreat);
+                let aware_pre = run_pre_roll(PolicyKind::HeuristicV1TraderAware);
                 if !found_w15_devcards && devcards != default {
                     eprintln!(
                         "W15_DEVCARDS turn_cap={turn_cap} game={game} seat={seat} correct={devcards:?} mutant={default:?}"
                     );
                     found_w15_devcards = true;
                 }
-                if !found_w15_threat && threat != default {
+                // Threat vs aware, matching the committed test's isolated-axis contrast.
+                if !found_w15_threat && threat != aware_pre {
                     eprintln!(
-                        "W15_THREAT turn_cap={turn_cap} game={game} seat={seat} correct={threat:?} mutant={default:?}"
+                        "W15_THREAT turn_cap={turn_cap} game={game} seat={seat} correct={threat:?} mutant={aware_pre:?}"
                     );
                     found_w15_threat = true;
                 }
