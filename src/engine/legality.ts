@@ -17,7 +17,7 @@ export function vertexAdjacency(layout: LayoutId): ReadonlyMap<VertexId, readonl
   return adjacency
 }
 
-export const occupiedVertices = (board: Board): Set<VertexId> =>
+const occupiedVertices = (board: Board): Set<VertexId> =>
   new Set(board.buildings.map((building) => building.vertexId))
 
 export function blockVertex(

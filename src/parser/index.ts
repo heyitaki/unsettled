@@ -4,13 +4,7 @@ import type { ParseBoardImageResult, ParseIssue } from './sources/types'
 import type { TextReader } from './textReader'
 
 export type { RgbaImage } from './image'
-export type {
-  ParseBoardImageResult,
-  ParseIssue,
-  SourceDetection,
-  SourceParse,
-  SourceRoster,
-} from './sources/types'
+export type { ParseBoardImageResult, ParseIssue } from './sources/types'
 export type { TextReader } from './textReader'
 
 const registry = createSourceRegistry(DEFAULT_SOURCES)

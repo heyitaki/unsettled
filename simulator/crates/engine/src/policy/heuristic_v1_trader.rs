@@ -10,7 +10,6 @@ use crate::trade::{self, TradeOffer, softened_accept, vp_estimate};
 use crate::view::{Action, DecisionPhase, DecisionView};
 
 #[cfg(test)]
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AwareOfferObservation {
     pub offer: TradeOffer,
@@ -157,13 +156,11 @@ pub fn action(
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) fn reset_aware_offer_probe() {
     AWARE_OFFER_PROBE.with(|observations| observations.borrow_mut().clear());
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) fn aware_offer_probe() -> Vec<AwareOfferObservation> {
     AWARE_OFFER_PROBE.with(|observations| observations.borrow().clone())
 }

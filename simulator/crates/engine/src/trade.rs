@@ -51,17 +51,6 @@ pub fn conservative_hidden_vp(
     upper as u8
 }
 
-pub fn expected_hidden_vp_for(view: &DecisionView<'_>, target: usize) -> f64 {
-    let own_hidden = view
-        .own_total_vp()
-        .saturating_sub(view.public_vp(view.observer()));
-    if target == view.observer() {
-        return f64::from(own_hidden);
-    }
-    let (pool, victory_points) = posterior_pool(view, own_hidden);
-    expected_hidden_vp(view.dev_count(target), victory_points, pool)
-}
-
 pub fn conservative_hidden_vp_for(view: &DecisionView<'_>, target: usize, confidence: f64) -> u8 {
     let own_hidden = view
         .own_total_vp()

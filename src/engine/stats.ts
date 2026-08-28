@@ -7,12 +7,9 @@ import type { Game } from '../model/game'
 import type { Board, EdgeId, VertexId } from '../model/types'
 
 export const SUPER_CITY_VP = 3
-// A super city collects 3 resources per bordering tile roll (a city collects
-// 2). Irrelevant to VP math; the hook for yield-aware valuation in phase 3.
-export const SUPER_CITY_YIELD = 3
 
-export const LONGEST_ROAD_MIN = 5
-export const LARGEST_ARMY_MIN = 3
+const LONGEST_ROAD_MIN = 5
+const LARGEST_ARMY_MIN = 3
 
 // Trail enumeration is exponential in road density, and nothing caps a player at
 // 15 roads: all 72 edges owned by one player took ~22s exhaustively, freezing the
@@ -92,7 +89,7 @@ function runLength(edges: readonly EdgeId[], blocked: ReadonlySet<VertexId>): nu
  * records no placement order across piece types, and a settlement dropped on an
  * opponent's road only ever shortens a run that already earned the card.
  */
-export function longestRoadHolder(board: Board): string | null {
+function longestRoadHolder(board: Board): string | null {
   let holder: string | null = null
   let holderRun = LONGEST_ROAD_MIN - 1
   const laid = new Map<string, EdgeId[]>()

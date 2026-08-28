@@ -7,9 +7,7 @@ use unsettled_engine::etw::{self, EtwInputs};
 use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::PolicyScratch;
 use unsettled_engine::policy::denial::{self, DenialParams};
-use unsettled_engine::policy::devcards::{
-    self, DevCardContext, DevCardParams, DevOffers, ScoredDevPlay,
-};
+use unsettled_engine::policy::devcards::{self, DevCardContext, DevCardParams, DevOffers};
 use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams, LegacyValuation};
 use unsettled_engine::policy::threat;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
@@ -1336,11 +1334,6 @@ fn outside_the_plateau_the_etw_term_leads() {
             + params.tempo_weight * devcards::tempo(&context, &params, &context.own, &delta)
     };
     assert!(score([0.0, 1.0, 1.0, 0.0, 0.0]) > score([2.0, 0.0, 0.0, 2.0, 0.0]));
-}
-
-#[allow(dead_code)]
-fn scored(play: Option<DevPlay>, score: f64) -> Option<ScoredDevPlay> {
-    Some(ScoredDevPlay { play, score })
 }
 
 // Card-play scope: Year of Plenty offered beyond the exactly-two-short case with picks by

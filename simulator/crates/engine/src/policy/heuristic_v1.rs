@@ -35,7 +35,6 @@ std::thread_local! {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(crate) struct CensusCrossing {
     pub action: Action,
@@ -44,7 +43,6 @@ pub(crate) struct CensusCrossing {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub(crate) struct DecisionTrace {
     pub observer: usize,
@@ -2173,25 +2171,21 @@ pub(crate) fn best_goal_calls() -> u32 {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) fn reset_crossing_census() {
     CROSSING_CENSUS.with(|crossings| crossings.borrow_mut().clear());
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) fn crossing_census() -> Vec<CensusCrossing> {
     CROSSING_CENSUS.with(|crossings| crossings.borrow().clone())
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) fn reset_decision_trace() {
     DECISION_TRACE.with(|trace| trace.borrow_mut().clear());
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) fn decision_trace() -> Vec<DecisionTrace> {
     DECISION_TRACE.with(|trace| trace.borrow().clone())
 }

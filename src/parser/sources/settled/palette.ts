@@ -1,7 +1,7 @@
 import type { Rgb, RgbaImage } from '../../image'
 import type { ParserPalette } from '../../palette'
 
-export const RAW_PALETTE: ParserPalette = {
+const RAW_PALETTE: ParserPalette = {
   bgBlue: [77, 125, 186],
   tokenCream: [242, 234, 210],
   chipCream: [249, 243, 226],
@@ -25,7 +25,7 @@ export const RAW_PALETTE: ParserPalette = {
   },
 }
 
-export const SRGB_PALETTE: ParserPalette = {
+const SRGB_PALETTE: ParserPalette = {
   bgBlue: [60, 127, 191],
   tokenCream: [244, 234, 207],
   chipCream: [250, 243, 224],

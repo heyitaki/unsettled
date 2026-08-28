@@ -24,7 +24,6 @@ export interface Port {
 }
 
 export type BuildingTier = 'settlement' | 'city' | 'superCity'
-export type PieceTier = 'road' | BuildingTier
 
 export interface Road {
   edgeId: EdgeId
@@ -70,5 +69,3 @@ export const PLAYER_PALETTE = {
   green: '#5d9e52',
   brown: '#7a5230',
 } as const
-
-export type PlayerPaletteName = keyof typeof PLAYER_PALETTE

@@ -1,25 +1,8 @@
+import { layoutRows } from '../model/layouts'
 import type { AxialCoord, LayoutId, TileKind } from '../model/types'
 import { nearColor, pixel, type Rgb, type RgbaImage } from './image'
 import type { ParserPalette } from './palette'
 import { findTileComponents, type TileComponent } from './tiles'
-
-interface RowSpec {
-  qStart: number
-  r: number
-  count: number
-}
-
-const ROWS_4: readonly RowSpec[] = [
-  { qStart: 0, r: -2, count: 3 }, { qStart: -1, r: -1, count: 4 },
-  { qStart: -2, r: 0, count: 5 }, { qStart: -2, r: 1, count: 4 },
-  { qStart: -2, r: 2, count: 3 },
-]
-const ROWS_6: readonly RowSpec[] = [
-  { qStart: 0, r: -3, count: 3 }, { qStart: -1, r: -2, count: 4 },
-  { qStart: -2, r: -1, count: 5 }, { qStart: -3, r: 0, count: 6 },
-  { qStart: -3, r: 1, count: 5 }, { qStart: -3, r: 2, count: 4 },
-  { qStart: -3, r: 3, count: 3 },
-]
 
 export interface RegisteredTile extends AxialCoord {
   tile: TileKind
@@ -40,7 +23,7 @@ export interface Registration {
   center(coord: AxialCoord): [number, number]
 }
 
-export function findBoardBand(image: RgbaImage, bg: Rgb): [number, number] | null {
+function findBoardBand(image: RgbaImage, bg: Rgb): [number, number] | null {
   let top = -1
   let bottom = -1
   for (let y = 0; y < image.height; y += 4) {
@@ -73,9 +56,10 @@ export function registerBoard(image: RgbaImage, palette: ParserPalette): Registr
     } else rows.push({ y: component.y, tiles: [component] })
   }
   const signature = rows.map((row) => row.tiles.length).join('-')
-  const specs = signature === '3-4-5-4-3' ? ROWS_4 : signature === '3-4-5-6-5-4-3' ? ROWS_6 : null
-  if (!specs) return null
-  const layout: LayoutId = specs === ROWS_4 ? 'standard4' : 'extension6'
+  const layout: LayoutId | null =
+    signature === '3-4-5-4-3' ? 'standard4' : signature === '3-4-5-6-5-4-3' ? 'extension6' : null
+  if (!layout) return null
+  const specs = layoutRows(layout)
   const observations: (RegisteredTile & { x: number; y: number })[] = []
   rows.forEach((row, rowIndex) => {
     row.tiles.sort((a, b) => a.x - b.x).forEach((tile, index) => observations.push({

@@ -43,7 +43,7 @@ const VIEW_SPAN: Record<StructureShape, number> = {
 }
 const strokeFor = (shape: StructureShape): number => STROKE_RATIO * VIEW_SPAN[shape]
 /** The same rendered width for the line art drawn in a 20-unit box. */
-export const LINE_STROKE = STROKE_RATIO * 20
+const LINE_STROKE = STROKE_RATIO * 20
 
 /**
  * Per-shape viewBox, cropped tight to the silhouette (stroke included) with the

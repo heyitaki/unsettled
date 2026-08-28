@@ -35,5 +35,3 @@ export class SettledSource extends ScreenshotSource<SettledRoster> {
     return roster.players.map((entry) => ({ playerId: entry.player.id, rect: entry.labelRect }))
   }
 }
-
-export default SettledSource

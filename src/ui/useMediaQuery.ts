@@ -14,7 +14,7 @@ function listFor(query: string): MediaQueryList | null {
   return media
 }
 
-export function useMediaQuery(query: string): boolean {
+function useMediaQuery(query: string): boolean {
   const subscribe = useCallback((notify: () => void) => {
     const media = listFor(query)
     if (!media) return () => {}

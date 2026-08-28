@@ -3,7 +3,6 @@ import { newId } from './ids'
 import { boardGrid, defaultPortEdges, NUMBER_TOKEN_COUNTS } from './layouts'
 import {
   PLAYER_PALETTE,
-  RESOURCES,
   type AxialCoord,
   type Board,
   type BuildingTier,
@@ -327,7 +326,6 @@ export function draftOrder(board: Board, rounds = 2): string[] {
 }
 
 export const pips = (token: number | null): number => token === null ? 0 : Math.max(0, 6 - Math.abs(7 - token))
-export const tokenProbability = (token: number | null): number => pips(token) / 36
 
 export function vertexProduction(board: Board, vertexId: VertexId): Partial<Record<Resource, number>> {
   const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
@@ -402,6 +400,3 @@ export function validateBoard(board: Board): Issue[] {
   }
   return issues
 }
-
-export const isResource = (value: unknown): value is Resource =>
-  typeof value === 'string' && (RESOURCES as readonly string[]).includes(value)

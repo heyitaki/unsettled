@@ -1,21 +1,14 @@
-import {
-  axialKey,
-  axialToPixel,
-  edgeIdOf,
-  edgePairAt,
-  hexEdgeIds,
-  hexVertexIds,
-  parseEdgeId,
-} from './coords'
+import { axialKey, hexEdgeIds, hexVertexIds, parseEdgeId } from './coords'
 import type { AxialCoord, EdgeId, Hex, LayoutId, VertexId } from './types'
 
-interface RowSpec {
+/** One row of the land grid: which `r` it sits on, its leftmost `q`, and how many hexes. */
+export interface RowSpec {
   r: number
   qStart: number
   count: number
 }
 
-export const ROWS_STANDARD4: readonly RowSpec[] = [
+const ROWS_STANDARD4: readonly RowSpec[] = [
   { r: -2, qStart: 0, count: 3 },
   { r: -1, qStart: -1, count: 4 },
   { r: 0, qStart: -2, count: 5 },
@@ -23,7 +16,7 @@ export const ROWS_STANDARD4: readonly RowSpec[] = [
   { r: 2, qStart: -2, count: 3 },
 ]
 
-export const ROWS_EXTENSION6: readonly RowSpec[] = [
+const ROWS_EXTENSION6: readonly RowSpec[] = [
   { r: -3, qStart: 0, count: 3 },
   { r: -2, qStart: -1, count: 4 },
   { r: -1, qStart: -2, count: 5 },
@@ -43,14 +36,19 @@ export interface BoardGrid {
 
 const cache = new Map<LayoutId, BoardGrid>()
 
-function rowsFor(layout: LayoutId): readonly RowSpec[] {
+/**
+ * Rows in ascending `r`, which is top-to-bottom on screen. The parser's
+ * registration pairs these positionally with the tile rows it detects (sorted
+ * by y), so reordering either table silently mis-registers every board.
+ */
+export function layoutRows(layout: LayoutId): readonly RowSpec[] {
   return layout === 'standard4' ? ROWS_STANDARD4 : ROWS_EXTENSION6
 }
 
 export function boardGrid(layout: LayoutId): BoardGrid {
   const cached = cache.get(layout)
   if (cached) return cached
-  const landCoords = rowsFor(layout).flatMap(({ r, qStart, count }) =>
+  const landCoords = layoutRows(layout).flatMap(({ r, qStart, count }) =>
     Array.from({ length: count }, (_, index) => ({ q: qStart + index, r })),
   )
   const landKeys = new Set(landCoords.map(axialKey))
@@ -102,16 +100,6 @@ export const PORT_EDGES_EXTENSION6: EdgeId[] = [
 
 export const defaultPortEdges = (layout: LayoutId): EdgeId[] =>
   layout === 'standard4' ? [...PORT_EDGES_STANDARD4] : [...PORT_EDGES_EXTENSION6]
-
-export function edgeMidpoint(edgeId: EdgeId, size: number): { x: number; y: number } {
-  const [a, b] = parseEdgeId(edgeId)
-  const ap = axialToPixel(a, size)
-  const bp = axialToPixel(b, size)
-  return { x: (ap.x + bp.x) / 2, y: (ap.y + bp.y) / 2 }
-}
-
-export const edgeAt = (coord: AxialCoord, direction: number): EdgeId =>
-  edgeIdOf(edgePairAt(coord, direction))
 
 // The fixed multiset of number tokens each standard board ships with. Placement
 // is random but the counts are not, which lets us recover a single token that a

@@ -3,7 +3,6 @@ use crate::longest_road::RoadCard;
 use crate::rules::{Buildable, RESOURCE_COUNT};
 use crate::topology::Hex;
 
-pub const MAX_HEXES: usize = 30;
 pub const MAX_VERTICES: usize = 80;
 pub const MAX_EDGES: usize = 109;
 pub const MAX_SEATS: usize = 6;

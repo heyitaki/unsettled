@@ -25,7 +25,7 @@ export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
 
 export type HandCounts = Readonly<Partial<Record<Resource, number>>>
 
-export const handValue = (weights: EngineWeights, counts: HandCounts): number => {
+const handValue = (weights: EngineWeights, counts: HandCounts): number => {
   let value = 0
   for (const resource of RESOURCES) {
     value += (counts[resource] ?? 0) * weights.resourceValue[resource]

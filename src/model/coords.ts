@@ -1,6 +1,6 @@
 import type { AxialCoord, EdgeId, VertexId } from './types'
 
-export const DIRS: readonly AxialCoord[] = [
+const DIRS: readonly AxialCoord[] = [
   { q: 1, r: 0 },
   { q: 0, r: 1 },
   { q: -1, r: 1 },
