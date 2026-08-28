@@ -121,7 +121,7 @@ fn discard_preserves_the_active_city_cost() {
         goal: Some(Buildable::City),
         ..PolicyScratch::default()
     };
-    let discarded = heuristic_v1::discard(&view, 4, &mut scratch);
+    let discarded = heuristic_v1::discard(&view, 4, &mut scratch, &HeuristicParams::default());
     assert_eq!(discarded[Resource::Wheat.index()], 0);
     assert_eq!(discarded[Resource::Ore.index()], 0);
     assert_eq!(discarded.iter().sum::<u8>(), 4);

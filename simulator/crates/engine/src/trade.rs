@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::etw;
+use crate::policy::{threat, trading};
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::Resource;
 use crate::view::DecisionView;
@@ -76,15 +78,43 @@ pub fn vp_estimate(view: &DecisionView<'_>, target: usize, confidence: f64) -> u
         .saturating_add(conservative_hidden_vp_for(view, target, confidence))
 }
 
-pub fn embargoed(view: &DecisionView<'_>, seat: usize) -> bool {
+/// Whether the table refuses to trade with `seat`.
+///
+/// The threshold runs on the shared ETW danger model (`threat::danger_from_etw`), the same
+/// standing-danger function the robber and trading policies use: a seat expected to win soon
+/// is embargoed outright, and a slower one only while it holds an imminent Largest Army or
+/// Longest Road swing, which the ETW closed form deliberately excludes. `legacy_vp` restores
+/// the pre-danger VP-estimate thresholds for the `-legacyembargo` reference arm.
+pub fn embargoed(view: &DecisionView<'_>, seat: usize, legacy_vp: bool) -> bool {
     let Some(config) = view.trade_config() else {
         return false;
     };
-    let estimate = vp_estimate(view, seat, config.hidden_vp_confidence);
-    if estimate >= view.win_vp().saturating_sub(1) {
+    if legacy_vp {
+        let estimate = vp_estimate(view, seat, config.hidden_vp_confidence);
+        if estimate >= view.win_vp().saturating_sub(1) {
+            return true;
+        }
+        return estimate >= view.win_vp().saturating_sub(2)
+            && (view.knight_takes_largest_army_for(seat) || view.road_takes_longest_road(seat));
+    }
+    debug_assert!(config.embargo_danger_floor.is_finite() && config.embargo_danger_floor > 0.0);
+    debug_assert!(config.embargo_danger.is_finite());
+    debug_assert!(config.embargo_takeover_danger.is_finite());
+    // A seat prices its own embargo from its real hand (the engine's per-seat eligibility
+    // pass observes the seat itself); a rival's stands on the belief-derived expectation.
+    let inputs = if seat == view.observer() {
+        trading::own_inputs(view)
+    } else {
+        etw::inputs_for_seat(view, seat)
+    };
+    let danger = threat::danger_from_etw(
+        etw::expected_turns_to_win(&inputs),
+        config.embargo_danger_floor,
+    );
+    if danger >= config.embargo_danger {
         return true;
     }
-    estimate >= view.win_vp().saturating_sub(2)
+    danger >= config.embargo_takeover_danger
         && (view.knight_takes_largest_army_for(seat) || view.road_takes_longest_road(seat))
 }
 

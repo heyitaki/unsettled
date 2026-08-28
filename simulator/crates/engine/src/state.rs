@@ -1,6 +1,6 @@
 use crate::belief::BeliefState;
 use crate::longest_road::RoadCard;
-use crate::rules::RESOURCE_COUNT;
+use crate::rules::{Buildable, RESOURCE_COUNT};
 use crate::topology::Hex;
 
 pub const MAX_HEXES: usize = 30;
@@ -8,6 +8,15 @@ pub const MAX_VERTICES: usize = 80;
 pub const MAX_EDGES: usize = 109;
 pub const MAX_SEATS: usize = 6;
 pub const EMPTY: u8 = u8::MAX;
+
+/// Indices into the per-kind development-card arrays (`playable_dev`, `bought_dev`,
+/// `dev_plays_revealed`) and every composition vector derived from them.
+pub const DEV_KNIGHT: usize = 0;
+pub const DEV_VP: usize = 1;
+pub const DEV_ROAD_BUILDING: usize = 2;
+pub const DEV_YEAR_OF_PLENTY: usize = 3;
+pub const DEV_MONOPOLY: usize = 4;
+pub const DEV_KIND_COUNT: usize = 5;
 
 impl PlayerState {
     /// Cards in hand. Clamps per resource so a negative count (which `invariants_hold` forbids)
@@ -42,6 +51,10 @@ pub struct PlayerState {
     pub vp_public: u8,
     pub vp_dev: u8,
     pub longest_road_len: u8,
+    /// The goal the seat's policy committed to at its last pre-roll or action decision,
+    /// recorded by the engine (SIM-GAP-25). Read back through `DecisionView::incumbent_goal`
+    /// by the J4 hysteresis margin; `None` until the seat's first decision of the game.
+    pub incumbent_goal: Option<Buildable>,
 }
 
 impl Default for PlayerState {
@@ -57,6 +70,7 @@ impl Default for PlayerState {
             vp_public: 0,
             vp_dev: 0,
             longest_road_len: 0,
+            incumbent_goal: None,
         }
     }
 }

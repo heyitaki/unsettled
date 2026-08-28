@@ -12,7 +12,8 @@ pub fn pre_roll(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar) -> Option
             if destination == view.robber() {
                 continue;
             }
-            // Declining the steal is only legal when nobody on the hex is worth robbing.
+            // Declining the steal outright is only legal when nobody on the hex holds a card;
+            // naming any adjacent seat (even an empty-handed one) is always legal.
             if !has_stealable_victim(view, destination) {
                 consider(
                     DevPlay::Knight {
@@ -25,7 +26,7 @@ pub fn pre_roll(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar) -> Option
                 );
             }
             for victim in 0..view.seats() {
-                if victim != view.observer() && view.stealable_on_hex(destination, victim) {
+                if victim != view.observer() && view.victim_on_hex(destination, victim) {
                     consider(
                         DevPlay::Knight {
                             destination,
@@ -180,7 +181,7 @@ pub fn legal_actions(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar, out:
                 })));
             }
             for victim in 0..view.seats() {
-                if victim != view.observer() && view.stealable_on_hex(destination, victim) {
+                if victim != view.observer() && view.victim_on_hex(destination, victim) {
                     out.push(scored(Action::PlayDev(DevPlay::Knight {
                         destination,
                         victim: Some(victim as u8),
@@ -271,9 +272,9 @@ pub fn robber(view: &DecisionView<'_>, rng: &mut Xoshiro256StarStar) -> (u8, Opt
     let mut victims = [0_u8; 6];
     let mut len = 0;
     for seat in 0..view.seats() {
-        // Only loaded seats are eligible; naming an empty-handed one is an illegal decision now
-        // that a mandatory steal is enforced.
-        if seat != view.observer() && view.stealable_on_hex(destination, seat) {
+        // Any adjacent seat is nameable, empty-handed or not; only declining outright while a
+        // loaded seat is adjacent would be illegal, so name someone whenever anyone is adjacent.
+        if seat != view.observer() && view.victim_on_hex(destination, seat) {
             victims[len] = seat as u8;
             len += 1;
         }

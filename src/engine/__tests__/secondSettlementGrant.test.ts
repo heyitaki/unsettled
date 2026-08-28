@@ -95,16 +95,24 @@ const threeHexVertex = grid.vertexIds.find((vertex) =>
   vertexTouchingHexes(vertex).filter((coord) => grid.landKeys.has(axialKey(coord))).length === 3)
 if (!threeHexVertex) throw new Error('standard4 has no three-hex vertex')
 
+/**
+ * The adopted default weight is 0 (M-43/M-46: under competent play the grant's
+ * value is realized in-game, so the placement-time term double counts). The
+ * term itself survives, and every mechanism assertion below reduces to a
+ * tautology at a zero weight, so the suite pins the mechanism at the pre-drop
+ * weight instead of the shipped default.
+ */
+const witnessWeights: EngineWeights = { ...DEFAULT_WEIGHTS, handValueWeight: 0.4 }
+
 describe('second settlement resource grant (SU-7)', () => {
-  it('is worth something by default', () => {
-    // Every assertion below reduces to a tautology at a zero weight.
-    expect(DEFAULT_WEIGHTS.handValueWeight).toBeGreaterThan(0)
+  it('ships disabled by default since the Phase-I adoption', () => {
+    expect(DEFAULT_WEIGHTS.handValueWeight).toBe(0)
   })
 
   it('makes a candidate worth more as a second pick than as a first pick', () => {
     const board = productiveBoard()
-    const firstPick = rank(board, 0)
-    const secondPick = rank(board, 3)
+    const firstPick = rank(board, 0, witnessWeights)
+    const secondPick = rank(board, 3, witnessWeights)
     const first = firstPick.recommendations[0]
     const second = secondPick.recommendations.find(
       (recommendation) => recommendation.firstPick === first.firstPick,
@@ -116,7 +124,7 @@ describe('second settlement resource grant (SU-7)', () => {
 
   it('grants nothing on the first pick, leaving today\'s score exactly intact', () => {
     const board = productiveBoard()
-    const firstPick = rank(board, 0)
+    const firstPick = rank(board, 0, witnessWeights)
     for (const recommendation of firstPick.recommendations) {
       expect(recommendation.breakdown.handValue).toBe(0)
     }
@@ -127,11 +135,11 @@ describe('second settlement resource grant (SU-7)', () => {
 
   it('prices the second pick as one card per adjacent producing hex', () => {
     const board = productiveBoard()
-    const secondPick = rank(board, 3)
+    const secondPick = rank(board, 3, witnessWeights)
     expect(secondPick.recommendations.length).toBeGreaterThan(0)
     for (const recommendation of secondPick.recommendations) {
       expect(recommendation.breakdown.handValue).toBeCloseTo(
-        expectedHandValue(board, recommendation.firstPick, DEFAULT_WEIGHTS),
+        expectedHandValue(board, recommendation.firstPick, witnessWeights),
         12,
       )
     }
@@ -146,9 +154,9 @@ describe('second settlement resource grant (SU-7)', () => {
     if (!lost || lost === 'desert') throw new Error('sacrificed hex does not produce')
     const withDesert = setTile(producing, sacrificed, 'desert', null)
 
-    const before = rank(producing, 3).recommendations
+    const before = rank(producing, 3, witnessWeights).recommendations
       .find((recommendation) => recommendation.firstPick === threeHexVertex)
-    const after = rank(withDesert, 3).recommendations
+    const after = rank(withDesert, 3, witnessWeights).recommendations
       .find((recommendation) => recommendation.firstPick === threeHexVertex)
     expect(before).toBeDefined()
     expect(after).toBeDefined()
@@ -157,7 +165,7 @@ describe('second settlement resource grant (SU-7)', () => {
     // difference in `handValue` is that hex's card and nothing else.
     expect(after!.breakdown.handValue).toBeLessThan(before!.breakdown.handValue)
     expect(before!.breakdown.handValue - after!.breakdown.handValue).toBeCloseTo(
-      DEFAULT_WEIGHTS.resourceValue[lost as Resource] * DEFAULT_WEIGHTS.handValueWeight,
+      witnessWeights.resourceValue[lost as Resource] * witnessWeights.handValueWeight,
       12,
     )
   })

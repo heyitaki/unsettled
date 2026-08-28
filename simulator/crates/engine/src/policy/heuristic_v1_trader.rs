@@ -44,9 +44,12 @@ pub fn action(
     let old_settlement_score =
         heuristic_v1::old_band_settlement_score(view, params, &scratch.actions);
     if let Some(trading_params) = params.trading.as_ref() {
+        let legacy_embargo = params
+            .legacy_valuation
+            .is_some_and(|legacy| legacy.vp_embargo);
         let mut recipients: [Option<EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
         for seat in 0..view.seats() {
-            if seat == view.observer() || trade::embargoed(view, seat) {
+            if seat == view.observer() || trade::embargoed(view, seat, legacy_embargo) {
                 continue;
             }
             recipients[seat] = Some(etw::inputs_for_seat(view, seat));
@@ -305,7 +308,7 @@ mod tests {
             );
             let responder = trading::responder_delta(observation.offer);
             let theirs = (0..view.seats())
-                .filter(|seat| *seat != view.observer() && !trade::embargoed(&view, *seat))
+                .filter(|seat| *seat != view.observer() && !trade::embargoed(&view, *seat, false))
                 .map(|seat| crate::etw::inputs_for_seat(&view, seat))
                 .filter(|inputs| inputs.belief_expected[get.index()] >= 1.0)
                 .map(|inputs| trading::counterparty_score(&inputs, trade_params, &responder))

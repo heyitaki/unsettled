@@ -6,10 +6,11 @@ use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::etw::{self, EtwInputs};
 use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::PolicyScratch;
+use unsettled_engine::policy::denial::{self, DenialParams};
 use unsettled_engine::policy::devcards::{
     self, DevCardContext, DevCardParams, DevOffers, ScoredDevPlay,
 };
-use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams};
+use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams, LegacyValuation};
 use unsettled_engine::policy::threat;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
@@ -160,9 +161,20 @@ fn score_for_live_view(
     topology: &Topology,
     offers: DevOffers,
     goal_cost: Option<[u8; RESOURCE_COUNT]>,
+    params: &DevCardParams,
 ) -> unsettled_engine::policy::devcards::DevCandidates {
     let view = arena.decision_view(board, topology, 0, DecisionPhase::PreRoll);
-    devcards::score_candidates(&view, &DevCardParams::default(), offers, goal_cost)
+    devcards::score_candidates(&view, params, offers, goal_cost)
+}
+
+/// The seven-exposure charge zeroed, for tests whose subject (candidate ordering, belief
+/// choice, cost-variant scope) is orthogonal to hand-size risk; the charge itself is pinned
+/// in exposure.rs.
+fn exposure_free() -> DevCardParams {
+    DevCardParams {
+        exposure_weight: 0.0,
+        ..DevCardParams::default()
+    }
 }
 
 fn monopoly(play: Option<DevPlay>) -> Option<Resource> {
@@ -175,6 +187,13 @@ fn monopoly(play: Option<DevPlay>) -> Option<Resource> {
 fn heuristic_choices(
     view: &unsettled_engine::view::DecisionView<'_>,
 ) -> (Option<DevPlay>, Option<DevPlay>) {
+    heuristic_choices_with(view, DevCardParams::default())
+}
+
+fn heuristic_choices_with(
+    view: &unsettled_engine::view::DecisionView<'_>,
+    cards: DevCardParams,
+) -> (Option<DevPlay>, Option<DevPlay>) {
     let mut baseline_scratch = PolicyScratch::default();
     let baseline = heuristic_v1::pre_roll(view, &mut baseline_scratch, &HeuristicParams::default());
     let mut devcards_scratch = PolicyScratch::default();
@@ -182,7 +201,7 @@ fn heuristic_choices(
         view,
         &mut devcards_scratch,
         &HeuristicParams {
-            dev_cards: Some(DevCardParams::default()),
+            dev_cards: Some(cards),
             ..HeuristicParams::default()
         },
     );
@@ -198,7 +217,7 @@ fn monopoly_prefers_the_belief_holding_over_the_production_proxy() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
     let choice = devcards::pre_roll_choice(
         &view,
-        &DevCardParams::default(),
+        &exposure_free(),
         DevOffers {
             monopoly: true,
             ..DevOffers::default()
@@ -206,7 +225,7 @@ fn monopoly_prefers_the_belief_holding_over_the_production_proxy() {
         None,
     );
     assert_eq!(monopoly(choice), Some(Resource::Wheat));
-    let (baseline, arm) = heuristic_choices(&view);
+    let (baseline, arm) = heuristic_choices_with(&view, exposure_free());
     assert!(
         baseline.is_none()
             || matches!(
@@ -874,7 +893,7 @@ fn monopoly_considers_resources_outside_the_current_goal() {
     set_belief_and_hand(&mut arena, 1, [0, 0, 0, 9, 0]);
     arena.state.players[0].playable_dev[4] = 1;
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
-    let (baseline, arm) = heuristic_choices(&view);
+    let (baseline, arm) = heuristic_choices_with(&view, exposure_free());
     assert!(!matches!(baseline, Some(DevPlay::Monopoly { .. })));
     assert_eq!(monopoly(arm), Some(Resource::Brick));
 }
@@ -928,6 +947,7 @@ fn plateau_states_are_still_ranked_by_the_tempo_term() {
                 road: Some((Some(0), Some(1))),
             },
             None,
+            &exposure_free(),
         );
         let context = &candidates.context;
         let params = DevCardParams::default();
@@ -1108,7 +1128,8 @@ fn the_hold_option_is_reachable_in_a_plateau_state() {
         monopoly: true,
         ..DevOffers::default()
     };
-    let candidates = score_for_live_view(&arena, &board, &topology, offers, None);
+    let candidates =
+        score_for_live_view(&arena, &board, &topology, offers, None, &DevCardParams::default());
     assert!(candidates.scored[2].is_some());
     assert!(candidates.scored[0].unwrap().score > candidates.scored[2].unwrap().score);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
@@ -1320,4 +1341,324 @@ fn outside_the_plateau_the_etw_term_leads() {
 #[allow(dead_code)]
 fn scored(play: Option<DevPlay>, score: f64) -> Option<ScoredDevPlay> {
     Some(ScoredDevPlay { play, score })
+}
+
+// Card-play scope: Year of Plenty offered beyond the exactly-two-short case with picks by
+// value, and Monopoly reading every cost variant of the goal.
+//
+// Forwarded arguments of `heuristic_v1::plenty_offer`, one observing test each:
+// - `view` (hand vs goal cost): plenty_prefers_the_goal_missing_resource_over_spares
+// - `view` (bank stock, ranking and feasibility): plenty_spare_pick_banks_the_scarce_resource,
+//   plenty_spare_picks_rank_by_own_production_then_bank
+// - `view` (own production pips): plenty_spare_picks_rank_by_own_production_then_bank
+// - `view` (cost variants): plenty_uses_the_closest_cost_variant
+// - `goal` (`None` still offers): plenty_spare_pick_banks_the_scarce_resource
+// - `params` (legacy narrow scope): plenty_legacy_scope_restores_the_two_short_gate
+//
+// Forwarded arguments of `heuristic_v1::monopoly_for_goal`, one observing test each:
+// - `view` (opponent holdings and production): monopoly_prefers_the_belief_holding_over_the_production_proxy
+// - `goal` (every cost variant): monopoly_reads_every_cost_variant_of_the_goal
+// - `params` (legacy first-variant scope): monopoly_reads_every_cost_variant_of_the_goal
+
+fn narrow_params() -> HeuristicParams {
+    HeuristicParams {
+        legacy_valuation: Some(LegacyValuation {
+            narrow_card_plays: true,
+            ..LegacyValuation::default()
+        }),
+        ..HeuristicParams::default()
+    }
+}
+
+#[test]
+fn plenty_prefers_the_goal_missing_resource_over_spares() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 2]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // City costs [0,0,2,0,3]: one ore short. The need pick takes the ore; the spare pick then
+    // ties on zero own pips and equal banks, and the index tie-break names ore again.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &HeuristicParams::default()),
+        Some((Resource::Ore, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_legacy_scope_restores_the_two_short_gate() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 2]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // One short of the city was never offered under the narrow scope.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &narrow_params()),
+        None
+    );
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 1]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Exactly two short still is, in index order.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &narrow_params()),
+        Some((Resource::Ore, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_spare_pick_banks_the_scarce_resource() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    arena.state.bank[Resource::Wood.index()] = 5;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // No goal at all: the card still banks two spares. With no own production the scarcest
+    // bank stock wins both picks; were bank stock ignored the index tie-break would name ore.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, None, &HeuristicParams::default()),
+        Some((Resource::Wood, Resource::Wood))
+    );
+    // The narrow scope had no goalless offer.
+    assert_eq!(heuristic_v1::plenty_offer(&view, None, &narrow_params()), None);
+}
+
+#[test]
+fn plenty_spare_picks_rank_by_own_production_then_bank() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    give_exact_production(&mut arena, &board, &topology, 0, [8, 5, 9, 6, 4]);
+    arena.state.bank[Resource::Ore.index()] = 1;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Ore has the fewest own pips (4) and one card left in the bank; the first pick takes it
+    // and exhausts the stock. The second pick falls to sheep (5 pips), not brick -- the index
+    // tie-break would name brick only if own production were ignored.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, None, &HeuristicParams::default()),
+        Some((Resource::Sheep, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_uses_the_closest_cost_variant() {
+    let (topology, board, rules, _config, _arena) = fixture();
+    let mut config = GameConfig::default();
+    config.modifiers[0]
+        .extra_cost_alternatives
+        .push((Buildable::Settlement, [0, 0, 0, 4, 0]));
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    set_belief_and_hand(&mut arena, 0, [0, 0, 0, 3, 0]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // The base settlement cost [1,1,1,1,0] is three short; the brick alternative [0,0,0,4,0]
+    // is one short and wins. The need pick takes the brick, the spare tie resolves to ore.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement), &HeuristicParams::default()),
+        Some((Resource::Brick, Resource::Ore))
+    );
+}
+
+#[test]
+fn plenty_picks_missing_resources_by_value_not_index_order() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 0, 3, 0]);
+    arena.state.bank[Resource::Wheat.index()] = 2;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Three short of the base settlement cost: wood, sheep and wheat all carry need 1, so the
+    // scarcer wheat stock and then the index tie-break decide. Index-order picking would have
+    // named wood and sheep.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement), &HeuristicParams::default()),
+        Some((Resource::Sheep, Resource::Wheat))
+    );
+}
+
+#[test]
+fn plenty_degrades_a_bank_blocked_need_to_a_spare() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 0]);
+    arena.state.bank[Resource::Ore.index()] = 1;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Three ore short of the city with one ore banked: the first pick takes the last ore, and
+    // the still-unmet need degrades to a spare pick (index tie-break: brick) instead of
+    // cancelling the offer.
+    assert_eq!(
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &HeuristicParams::default()),
+        Some((Resource::Brick, Resource::Ore))
+    );
+}
+
+#[test]
+fn monopoly_reads_every_cost_variant_of_the_goal() {
+    let (topology, board, rules, _config, _arena) = fixture();
+    let mut config = GameConfig::default();
+    config.modifiers[0]
+        .extra_cost_alternatives
+        .push((Buildable::Settlement, [0, 0, 0, 0, 4]));
+    let mut arena = GameArena::default();
+    arena.prepare(&board, &topology, &rules, &config);
+    set_belief_and_hand(&mut arena, 0, [1, 1, 1, 1, 0]);
+    set_belief_and_hand(&mut arena, 1, [0, 0, 0, 0, 6]);
+    give_resource_production(&mut arena, &board, &topology, 1, Resource::Ore, 12);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // The base settlement cost is fully covered, so the first variant alone finds no missing
+    // resource; the ore alternative is four short and the opponent's ore holding is takeable.
+    assert_eq!(
+        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement, &HeuristicParams::default()),
+        Some(Resource::Ore)
+    );
+    assert_eq!(
+        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement, &narrow_params()),
+        None
+    );
+}
+
+#[test]
+fn both_pre_roll_paths_receive_the_widened_offer() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    arena.state.players[0].playable_dev[3] = 1;
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
+    // Empty board and empty hand: no goal exists, so the narrow scope never offered the card.
+    // Both paths now bank two spares (equal banks, no own production: index tie-break, ore).
+    let (baseline, arm) = heuristic_choices(&view);
+    let expected = Some(DevPlay::YearOfPlenty {
+        first: Resource::Ore,
+        second: Resource::Ore,
+    });
+    assert_eq!(baseline, expected);
+    assert_eq!(arm, expected);
+    // The legacy composite restores the pre-widening hold on both paths.
+    let mut narrow = narrow_params();
+    assert_eq!(
+        heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
+        None
+    );
+    narrow.dev_cards = Some(DevCardParams::default());
+    assert_eq!(
+        heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
+        None
+    );
+}
+
+// Deck-composition-aware dev buying (SIM-GAP-17). `heuristic_v1::dev_buy_score` prices a buy by
+// what the remaining deck can still contain, via `DecisionView::deck_belief`.
+//
+// Forwarded arguments of `heuristic_v1::dev_buy_score`, one observing test each:
+// - `view` (deck composition: revealed plays, own held cards, undrawn count):
+//   vp_rich_small_deck_near_win_boosts_the_buy,
+//   knight_only_deck_with_largest_army_held_is_near_worthless
+// - `view` (largest-army state: holder, knights played, contest gap):
+//   knight_only_deck_with_largest_army_held_is_near_worthless
+// - `params` (`legacy_valuation.deck_blind_buying` restores the flat base):
+//   deck_blind_legacy_restores_the_composition_blind_score
+// - `params` (`denial` gates the contest pressure, non-default `pressure_floor`):
+//   the_gated_denial_pressure_reaches_the_buy_score
+//
+// The derivation itself (bounds, apportioning, the `DeckBelief::derive` argument table) is
+// pinned in tests/belief.rs.
+
+/// 29 of extension6's 34 cards accounted for, leaving [2 knights, 3 VP, 0, 0, 0] exactly:
+/// 18 knights and all 9 progress cards revealed as plays, 2 VP held by the observer.
+/// The observer sits at 8 of 10 VP.
+fn vp_rich_near_win_state() -> (Topology, SimBoard, GameArena) {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    arena.state.players[1].dev_plays_revealed[0] = 18;
+    arena.state.players[1].dev_plays_revealed[2] = 3;
+    arena.state.players[1].dev_plays_revealed[3] = 3;
+    arena.state.players[1].dev_plays_revealed[4] = 3;
+    arena.state.players[0].vp_dev = 2;
+    arena.state.players[0].vp_public = 6;
+    arena.drain_dev_deck_for_test(29);
+    (topology, board, arena)
+}
+
+#[test]
+fn vp_rich_small_deck_near_win_boosts_the_buy() {
+    let (topology, board, arena) = vp_rich_near_win_state();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let score = heuristic_v1::dev_buy_score(&view, &HeuristicParams::default());
+    // Closed form: exact composition [2, 3, 0, 0, 0] of 5 remaining, initial mix 20/5/9 of 34.
+    let share_vp = 3.0_f32 / 5.0;
+    let share_knight = 2.0_f32 / 5.0;
+    let vp_rel = share_vp / (5.0_f32 / 34.0);
+    let knight_rel = share_knight / (20.0_f32 / 34.0);
+    let progress_rel = 0.0_f32;
+    let base = 45.0 * (0.55 * vp_rel + 0.35 * progress_rel + 0.10 * knight_rel);
+    let proximity = 8.0_f32 / 10.0;
+    let vp_chase = share_vp * 300.0 * proximity;
+    // No holder: the contest gap is the full largest-army minimum of 3, ungated pressure 1.
+    let contest = 25.0 * (0.5 + proximity) * 1.0 * knight_rel;
+    // The adopted default `devBuyScale` 0.25 (M-46) wraps every spelling of the buy
+    // score, so the composition expectations here and below carry the same factor.
+    assert_eq!(score, (base + vp_chase + contest) * 0.25);
+    // The composition-blind score for the same state, for direction: the fix must boost.
+    assert!(score > (45.0 + 25.0 * (0.5 + proximity) * 1.0) * 0.25);
+}
+
+#[test]
+fn knight_only_deck_with_largest_army_held_is_near_worthless() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    // 29 cards accounted, leaving 5 knights exactly: 15 knights revealed (3 by the observer,
+    // who holds Largest Army), all 9 progress cards revealed, all 5 VP drawn by the observer.
+    arena.state.players[0].dev_plays_revealed[0] = 3;
+    arena.state.players[0].knights_played = 3;
+    arena.state.players[1].dev_plays_revealed[0] = 12;
+    arena.state.players[1].dev_plays_revealed[2] = 3;
+    arena.state.players[1].dev_plays_revealed[3] = 3;
+    arena.state.players[1].dev_plays_revealed[4] = 3;
+    arena.state.players[0].vp_dev = 5;
+    arena.state.largest_army = Some(0);
+    arena.drain_dev_deck_for_test(29);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let score = heuristic_v1::dev_buy_score(&view, &HeuristicParams::default());
+    // Only the thin knight slice of the base survives; ungated, the defend term is absent.
+    let knight_rel = (5.0_f32 / 5.0) / (20.0_f32 / 34.0);
+    let base = 45.0 * (0.55 * 0.0 + 0.35 * 0.0 + 0.10 * knight_rel);
+    let vp_chase = 0.0_f32 * 300.0 * (5.0_f32 / 10.0);
+    assert_eq!(score, (base + vp_chase) * 0.25);
+    // Direction: far below the composition-blind holder score of 45.
+    assert!(score < 45.0 / 4.0 * 0.25);
+}
+
+#[test]
+fn deck_blind_legacy_restores_the_composition_blind_score() {
+    let (topology, board, arena) = vp_rich_near_win_state();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let legacy = HeuristicParams {
+        legacy_valuation: Some(LegacyValuation {
+            deck_blind_buying: true,
+            ..LegacyValuation::default()
+        }),
+        ..HeuristicParams::default()
+    };
+    let proximity = 8.0_f32 / 10.0;
+    assert_eq!(
+        heuristic_v1::dev_buy_score(&view, &legacy),
+        (45.0 + 25.0 * (0.5 + proximity) * 1.0) * 0.25
+    );
+}
+
+#[test]
+fn the_gated_denial_pressure_reaches_the_buy_score() {
+    let (topology, board, arena) = vp_rich_near_win_state();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let denial_params = DenialParams {
+        pressure_floor: 2.0,
+        ..DenialParams::default()
+    };
+    let gated = HeuristicParams {
+        denial: Some(denial_params),
+        ..HeuristicParams::default()
+    };
+    let score = heuristic_v1::dev_buy_score(&view, &gated);
+    let pressure = denial::pressure(
+        &denial::context(&view, &denial_params),
+        &denial_params,
+        None,
+    );
+    assert!(pressure >= 2.0);
+    let share_vp = 3.0_f32 / 5.0;
+    let share_knight = 2.0_f32 / 5.0;
+    let vp_rel = share_vp / (5.0_f32 / 34.0);
+    let knight_rel = share_knight / (20.0_f32 / 34.0);
+    let base = 45.0 * (0.55 * vp_rel + 0.35 * 0.0 + 0.10 * knight_rel);
+    let proximity = 8.0_f32 / 10.0;
+    let vp_chase = share_vp * 300.0 * proximity;
+    assert_eq!(
+        score,
+        (base + vp_chase + 25.0 * (0.5 + proximity) * pressure * knight_rel) * 0.25
+    );
 }

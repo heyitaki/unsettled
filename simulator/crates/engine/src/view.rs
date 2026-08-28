@@ -2,12 +2,14 @@ use std::cell::Cell;
 
 use serde::{Deserialize, Serialize};
 
-use crate::belief::BeliefState;
+use crate::belief::{BeliefState, DeckBelief};
 use crate::board::{SimBoard, SimPort};
 use crate::game::can_build_road;
 use crate::longest_road::RoadNetwork;
 use crate::rules::{Buildable, FlattenedRules, OwnedPort, RESOURCE_COUNT, Resource, TradeConfig};
-use crate::state::{EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES};
+use crate::state::{
+    DEV_KIND_COUNT, DEV_VP, EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES,
+};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 
 pub const MAX_ACTIONS: usize = 4096;
@@ -106,6 +108,19 @@ impl ActionBuf {
 
     pub fn as_slice(&self) -> &[ScoredAction] {
         &self.values[..self.len]
+    }
+
+    /// Drops candidates in place, preserving order, so a phase-scoped filter can prune an
+    /// already-scored buffer without rescoring anything.
+    pub fn retain(&mut self, mut keep: impl FnMut(&ScoredAction) -> bool) {
+        let mut kept = 0;
+        for index in 0..self.len {
+            if keep(&self.values[index]) {
+                self.values[kept] = self.values[index];
+                kept += 1;
+            }
+        }
+        self.len = kept;
     }
 }
 
@@ -295,6 +310,13 @@ impl<'a> DecisionView<'a> {
         self.state.players[self.observer].vp_public + self.state.players[self.observer].vp_dev
     }
 
+    /// The observer's last committed goal, recorded by the engine after each pre-roll and
+    /// action decision (see `PlayerState::incumbent_goal`). Consumed by the J4 goal-hysteresis
+    /// margin in the goal chooser.
+    pub const fn incumbent_goal(&self) -> Option<Buildable> {
+        self.state.players[self.observer].incumbent_goal
+    }
+
     pub fn dev_count(&self, seat: usize) -> u8 {
         self.state.players[seat].playable_dev.iter().sum::<u8>()
             + self.state.players[seat].bought_dev.iter().sum::<u8>()
@@ -303,6 +325,34 @@ impl<'a> DecisionView<'a> {
 
     pub const fn dev_plays_revealed(&self, seat: usize) -> &[u8; 5] {
         &self.state.players[seat].dev_plays_revealed
+    }
+
+    /// Bounds on what the undrawn deck can still contain, derived from public plays, public card
+    /// counts, and the observer's own held cards. See [`DeckBelief`].
+    pub fn deck_belief(&self) -> DeckBelief {
+        let mut revealed = [0_u8; DEV_KIND_COUNT];
+        for seat in 0..self.seats {
+            for kind in 0..DEV_KIND_COUNT {
+                revealed[kind] = revealed[kind]
+                    .saturating_add(self.state.players[seat].dev_plays_revealed[kind]);
+            }
+        }
+        let own = &self.state.players[self.observer];
+        let mut own_held: [u8; DEV_KIND_COUNT] = std::array::from_fn(|kind| {
+            own.playable_dev[kind].saturating_add(own.bought_dev[kind])
+        });
+        own_held[DEV_VP] = own_held[DEV_VP].saturating_add(own.vp_dev);
+        let opponent_hidden = (0..self.seats)
+            .filter(|seat| *seat != self.observer)
+            .map(|seat| u16::from(self.dev_count(seat)))
+            .sum();
+        DeckBelief::derive(
+            self.rules.dev_deck_initial(),
+            &revealed,
+            &own_held,
+            opponent_hidden,
+            self.dev_deck_remaining,
+        )
     }
 
     pub const fn knights_played(&self, seat: usize) -> u8 {
@@ -315,6 +365,12 @@ impl<'a> DecisionView<'a> {
 
     pub const fn pieces(&self, seat: usize, buildable: Buildable) -> u8 {
         self.state.players[seat].pieces[buildable.index()]
+    }
+
+    /// The observer's rule-set piece limit for `buildable`: the per-seat supply the remaining
+    /// `pieces` count depletes (widened when an imported board already carries more).
+    pub const fn piece_limit(&self, buildable: Buildable) -> u8 {
+        self.rules.limit(buildable)
     }
 
     pub const fn trade_rate_for(&self, seat: usize, resource: Resource) -> u32 {
@@ -375,6 +431,14 @@ impl<'a> DecisionView<'a> {
 
     pub const fn dev_deck_remaining(&self) -> u8 {
         self.dev_deck_remaining
+    }
+
+    pub const fn dev_deck_initial(&self) -> &[u8; DEV_KIND_COUNT] {
+        self.rules.dev_deck_initial()
+    }
+
+    pub const fn discard_threshold(&self) -> u8 {
+        self.rules.discard_threshold()
     }
 
     pub const fn largest_army_holder(&self) -> Option<usize> {
@@ -455,24 +519,34 @@ impl<'a> DecisionView<'a> {
         self.own_roads().count
     }
 
+    /// Whether the observer's road network already reaches a vertex.
+    pub fn road_reaches(&self, vertex: Vertex) -> bool {
+        self.own_roads().vertices & (1 << vertex) != 0
+    }
+
     pub fn compute_one_step(&self, seat: usize) -> u128 {
         let mut vertices = 0_u128;
         for edge in 0..self.topology.edge_count() {
             let edge = edge as Edge;
-            if can_build_road(
-                self.topology,
-                &self.state.vertex_owner,
-                &self.state.edge_owner,
-                seat as u8,
-                edge,
-                self.pieces(seat, Buildable::Road),
-            ) {
+            if self.legal_road_for(seat, edge) {
                 for vertex in self.topology.edge_endpoints(edge) {
                     vertices |= 1 << vertex;
                 }
             }
         }
         vertices
+    }
+
+    /// As [`Self::legal_road`], for an arbitrary seat and without the observer's bitmask cache.
+    pub fn legal_road_for(&self, seat: usize, edge: Edge) -> bool {
+        can_build_road(
+            self.topology,
+            &self.state.vertex_owner,
+            &self.state.edge_owner,
+            seat as u8,
+            edge,
+            self.pieces(seat, Buildable::Road),
+        )
     }
 
     pub fn compute_road_count(&self, seat: usize) -> u8 {
@@ -915,8 +989,13 @@ impl<'a> DecisionView<'a> {
             .any(|vertex| self.vertex_owner(*vertex) == Some(seat as u8))
     }
 
-    /// A victim worth naming: adjacent to the hex *and* holding at least one card. Stealing from
-    /// an empty hand moves nothing, so the rules treat only these seats as eligible.
+    /// A victim worth robbing: adjacent to the hex *and* holding at least one card. Any adjacent
+    /// seat may legally be named (`victim_on_hex` is the presence half of
+    /// `game.rs::nameable_victim`, whose different-seat check each caller applies; naming an
+    /// empty hand steals nothing and is the rules' decline mechanism), but declining outright
+    /// (`victim: None`) is legal only when no seat passes this predicate. Both predicates must
+    /// stay in lockstep with `game.rs::valid_robber` or a legal decision counts as an illegal
+    /// action.
     pub fn stealable_on_hex(&self, hex: Hex, seat: usize) -> bool {
         self.victim_on_hex(hex, seat) && self.hand_size(seat) > 0
     }

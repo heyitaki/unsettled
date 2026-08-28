@@ -7,12 +7,15 @@ use std::cell::Cell;
 use serde::{Deserialize, Serialize};
 
 use crate::etw;
+use crate::policy::params_file::check;
 use crate::policy::threat;
 use crate::rules::Buildable;
 use crate::state::MAX_SEATS;
 use crate::view::DecisionView;
 
-pub const MAX_RACE_CHECKS: u8 = 2;
+/// Upper bound on exact Longest Road race checks per decision: every rival in the largest
+/// layout. The budget a decision actually spends is `DenialParams::race_check_cap`.
+pub const MAX_RACE_CHECKS: u8 = (MAX_SEATS - 1) as u8;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -22,11 +25,19 @@ pub struct DenialParams {
     pub pressure_span: f32,
     pub race_bonus: f32,
     pub race_danger_min: f64,
+    /// Exact `road_takes_longest_road` checks allowed per decision, spent in danger order. The
+    /// default covers every rival in the largest layout; two restores the pre-SIM-GAP-07 budget
+    /// whose third-rival blind spot that gap recorded.
+    pub race_check_cap: u8,
     pub defend_weight: f32,
     pub defend_headroom_half: f32,
     pub defend_probe_slack: u8,
     pub contest_weight: f32,
     pub contest_cap: f32,
+    /// Multiplier on a rival's contest contribution when the candidate edge is that rival's only
+    /// remaining approach to the contested vertex, so the block itself is priced and not just the
+    /// race to settle first (SIM-GAP-08). Zero restores blocking-blind contesting.
+    pub contest_block_bonus: f32,
     pub contest_goal_share: f32,
     pub army_defend_weight: f32,
     pub army_gap_half: f32,
@@ -40,11 +51,13 @@ impl Default for DenialParams {
             pressure_span: 0.85,
             race_bonus: 0.5,
             race_danger_min: 0.25,
+            race_check_cap: MAX_RACE_CHECKS,
             defend_weight: 12_000.0,
             defend_headroom_half: 1.0,
             defend_probe_slack: 2,
             contest_weight: 60.0,
             contest_cap: 120.0,
+            contest_block_bonus: 0.5,
             contest_goal_share: 0.5,
             army_defend_weight: 80.0,
             army_gap_half: 1.0,
@@ -124,7 +137,25 @@ pub fn contest_term(
             {
                 continue;
             }
-            maximum = maximum.max(ctx.danger[seat]);
+            // Blocking is priced, not just the race to settle first (SIM-GAP-08): a one-road
+            // approach to `target` must come through an edge incident to it, so when every other
+            // incident edge is illegal for this rival, building the candidate removes the vertex
+            // from their one-road *build* reach. Known over-credit (SIM-GAP-33): a rival who
+            // already owns an incident edge also passes this predicate (an owned edge is not
+            // legal to build) yet keeps reaching the vertex with zero new roads; the predicate
+            // is kept as measured because the Phase-I candidate was eval-confirmed with it, and
+            // tightening it must ride a preregistered A/B.
+            let blocks = view
+                .topology()
+                .vertex_edges(target)
+                .iter()
+                .all(|approach| *approach == edge || !view.legal_road_for(seat, *approach));
+            let scale = if blocks {
+                1.0 + f64::from(params.contest_block_bonus)
+            } else {
+                1.0
+            };
+            maximum = maximum.max(ctx.danger[seat] * scale);
         }
     }
     (params.contest_weight * maximum as f32).min(params.contest_cap)
@@ -200,22 +231,73 @@ pub fn should_defend(ctx: &DenialContext) -> Option<(usize, f64)> {
     ctx.longest_road_challenger()
 }
 
+/// The `assert_params` domain, spelled as load-time errors (JSON field names) so the H0
+/// params-file loader rejects a bad vector instead of tripping a debug assert mid-run.
+pub(crate) fn validate(params: &DenialParams) -> Result<(), String> {
+    check(
+        "denial.dangerFloor is positive and finite",
+        params.danger_floor.is_finite() && params.danger_floor > 0.0,
+    )?;
+    check(
+        "denial.pressureFloor is non-negative and finite",
+        params.pressure_floor.is_finite() && params.pressure_floor >= 0.0,
+    )?;
+    check(
+        "denial.pressureSpan is non-negative and finite",
+        params.pressure_span.is_finite() && params.pressure_span >= 0.0,
+    )?;
+    check(
+        "denial.raceBonus is non-negative and finite",
+        params.race_bonus.is_finite() && params.race_bonus >= 0.0,
+    )?;
+    check(
+        "denial.raceDangerMin lies in [0, 1]",
+        params.race_danger_min.is_finite() && (0.0..=1.0).contains(&params.race_danger_min),
+    )?;
+    check(
+        "denial.raceCheckCap lies in 1..=5",
+        (1..=MAX_RACE_CHECKS).contains(&params.race_check_cap),
+    )?;
+    check(
+        "denial.defendWeight is non-negative and finite",
+        params.defend_weight.is_finite() && params.defend_weight >= 0.0,
+    )?;
+    check(
+        "denial.defendHeadroomHalf is positive and finite",
+        params.defend_headroom_half.is_finite() && params.defend_headroom_half > 0.0,
+    )?;
+    check(
+        "denial.defendProbeSlack lies in 1..=4",
+        (1..=4).contains(&params.defend_probe_slack),
+    )?;
+    check(
+        "denial.contestWeight is non-negative and finite",
+        params.contest_weight.is_finite() && params.contest_weight >= 0.0,
+    )?;
+    check(
+        "denial.contestCap is non-negative and finite",
+        params.contest_cap.is_finite() && params.contest_cap >= 0.0,
+    )?;
+    check(
+        "denial.contestBlockBonus is non-negative and finite",
+        params.contest_block_bonus.is_finite() && params.contest_block_bonus >= 0.0,
+    )?;
+    check(
+        "denial.contestGoalShare is non-negative and finite",
+        params.contest_goal_share.is_finite() && params.contest_goal_share >= 0.0,
+    )?;
+    check(
+        "denial.armyDefendWeight is non-negative and finite",
+        params.army_defend_weight.is_finite() && params.army_defend_weight >= 0.0,
+    )?;
+    check(
+        "denial.armyGapHalf is positive and finite",
+        params.army_gap_half.is_finite() && params.army_gap_half > 0.0,
+    )
+}
+
 pub fn assert_params(params: &DenialParams) {
-    debug_assert!(params.danger_floor.is_finite() && params.danger_floor > 0.0);
-    debug_assert!(params.pressure_floor.is_finite() && params.pressure_floor >= 0.0);
-    debug_assert!(params.pressure_span.is_finite() && params.pressure_span >= 0.0);
-    debug_assert!(params.race_bonus.is_finite() && params.race_bonus >= 0.0);
-    debug_assert!(
-        params.race_danger_min.is_finite() && (0.0..=1.0).contains(&params.race_danger_min)
-    );
-    debug_assert!(params.defend_weight.is_finite() && params.defend_weight >= 0.0);
-    debug_assert!(params.defend_headroom_half.is_finite() && params.defend_headroom_half > 0.0);
-    debug_assert!((1..=4).contains(&params.defend_probe_slack));
-    debug_assert!(params.contest_weight.is_finite() && params.contest_weight >= 0.0);
-    debug_assert!(params.contest_cap.is_finite() && params.contest_cap >= 0.0);
-    debug_assert!(params.contest_goal_share.is_finite() && params.contest_goal_share >= 0.0);
-    debug_assert!(params.army_defend_weight.is_finite() && params.army_defend_weight >= 0.0);
-    debug_assert!(params.army_gap_half.is_finite() && params.army_gap_half > 0.0);
+    debug_assert_eq!(validate(params), Ok(()));
 }
 
 fn largest_army_challenger(
@@ -282,7 +364,7 @@ fn resolve_longest_road_challenger(
         if view.compute_road_count(seat).saturating_add(1) < required {
             continue;
         }
-        if ctx.race_checks.get() >= MAX_RACE_CHECKS {
+        if ctx.race_checks.get() >= params.race_check_cap {
             break;
         }
         ctx.race_checks.set(ctx.race_checks.get().saturating_add(1));
@@ -571,6 +653,8 @@ mod tests {
         };
         let budget_view = budget_arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
         reset();
+        // Three rivals survive the prefilter. The default budget covers them all (SIM-GAP-07's
+        // blind spot closed), while a non-default `race_check_cap` is forwarded and binds.
         let budget_context = context(
             &budget_view,
             &DenialParams {
@@ -578,8 +662,19 @@ mod tests {
                 ..DenialParams::default()
             },
         );
-        assert_eq!(budget_context.race_checks(), MAX_RACE_CHECKS);
-        assert_eq!(exact_checks(), MAX_RACE_CHECKS);
+        assert_eq!(budget_context.race_checks(), 3);
+        assert_eq!(exact_checks(), 3);
+        reset();
+        let capped_context = context(
+            &budget_view,
+            &DenialParams {
+                race_danger_min: 0.0,
+                race_check_cap: 2,
+                ..DenialParams::default()
+            },
+        );
+        assert_eq!(capped_context.race_checks(), 2);
+        assert_eq!(exact_checks(), 2);
 
         let (topology, board, _rules, _config, arena) = challenger_fixture();
         let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
@@ -619,6 +714,112 @@ mod tests {
         let fresh = context(&negative_view, &quiet_params);
         assert_eq!(fresh.race_checks(), 0);
         assert_eq!(exact_checks(), 0);
+    }
+
+    #[test]
+    fn the_default_budget_finds_the_third_ranked_challenger() {
+        let _guard = denial_test_lock();
+        let (topology, board, rules, _config, mut arena) = fixture();
+        let mut excluded = HashSet::new();
+        for seat in 1..=3 {
+            let (_, roads) = simple_path(&topology, 5, &excluded);
+            excluded.extend(roads.iter().copied());
+            give_path(&mut arena, seat, &roads);
+        }
+        // Seats 1 and 2 outrank seat 3 on danger but cannot lay another road, so their exact
+        // checks fail; seat 3 is the live challenger sitting third in the ranking -- exactly the
+        // rival the old two-check budget never reached (SIM-GAP-07).
+        for seat in 1..=2 {
+            arena.state.players[seat].pieces[Buildable::Road.index()] = 0;
+            arena.state.players[seat].vp_public = 9;
+        }
+        arena.recompute_roads_for_test(&topology, &rules, board.seats());
+        arena.state.longest_road = RoadCard {
+            holder: Some(0),
+            retired: false,
+        };
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let params = DenialParams {
+            race_danger_min: 0.0,
+            ..DenialParams::default()
+        };
+        reset();
+        let capped = context(
+            &view,
+            &DenialParams {
+                race_check_cap: 2,
+                ..params
+            },
+        );
+        assert_eq!(capped.longest_road_challenger(), None);
+        assert_eq!(capped.race_checks(), 2);
+        reset();
+        let full = context(&view, &params);
+        let (challenger, _) = full.longest_road_challenger().unwrap();
+        assert_eq!(challenger, 3);
+        assert_eq!(full.race_checks(), 3);
+
+        // `LegacyValuation::bounded_race` restores the two-check budget through the real
+        // decision path, without `denial.rs` ever reading the flag itself.
+        let fixed_params = HeuristicParams {
+            denial: Some(params),
+            ..HeuristicParams::default()
+        };
+        let legacy_params = HeuristicParams {
+            legacy_valuation: Some(heuristic_v1::LegacyValuation {
+                bounded_race: true,
+                ..heuristic_v1::LegacyValuation::default()
+            }),
+            ..fixed_params.clone()
+        };
+        let mut actions = Box::new(crate::view::ActionBuf::new());
+        reset();
+        heuristic_v1::score_actions(&view, &fixed_params, &mut actions);
+        assert_eq!(exact_checks(), 3);
+        reset();
+        heuristic_v1::score_actions(&view, &legacy_params, &mut actions);
+        assert_eq!(exact_checks(), 2);
+    }
+
+    #[test]
+    #[ignore = "single-state timing observation; run deliberately"]
+    fn race_check_budget_per_decision_cost_is_reported() {
+        let _guard = denial_test_lock();
+        let (topology, board, rules, _config, mut arena) = fixture();
+        let mut excluded = HashSet::new();
+        for seat in 1..=3 {
+            let (_, roads) = simple_path(&topology, 5, &excluded);
+            excluded.extend(roads.iter().copied());
+            give_path(&mut arena, seat, &roads);
+        }
+        for seat in 1..=2 {
+            arena.state.players[seat].pieces[Buildable::Road.index()] = 0;
+            arena.state.players[seat].vp_public = 9;
+        }
+        arena.recompute_roads_for_test(&topology, &rules, board.seats());
+        arena.state.longest_road = RoadCard {
+            holder: Some(0),
+            retired: false,
+        };
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        const DECISIONS: u64 = 20_000;
+        for cap in [2, MAX_RACE_CHECKS] {
+            let params = DenialParams {
+                race_danger_min: 0.0,
+                race_check_cap: cap,
+                ..DenialParams::default()
+            };
+            for run in 1..=5 {
+                let started = std::time::Instant::now();
+                for _ in 0..DECISIONS {
+                    std::hint::black_box(context(&view, &params));
+                }
+                eprintln!(
+                    "path=denial_context raceCheckCap={cap} run={run} decisions={DECISIONS} nsPerDecision={:.3}",
+                    started.elapsed().as_nanos() as f64 / DECISIONS as f64
+                );
+            }
+        }
     }
 
     #[test]

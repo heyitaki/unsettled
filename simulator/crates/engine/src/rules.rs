@@ -89,15 +89,31 @@ pub struct TradeConfig {
     pub acceptance_temperature: f32,
     pub max_offers_per_turn: u8,
     pub hidden_vp_confidence: f64,
+    /// Positive, finite turns added before ETW is inverted into embargo danger. Defaults
+    /// together with the threat and trading danger floors.
+    pub embargo_danger_floor: f64,
+    /// Finite standing danger at or above which a seat is refused all player trades.
+    pub embargo_danger: f64,
+    /// Finite standing danger at or above which a seat holding an imminent Largest Army or
+    /// Longest Road takeover is refused; the softer threshold exists because the ETW closed
+    /// form deliberately excludes award proximity.
+    pub embargo_takeover_danger: f64,
 }
 
 impl Default for TradeConfig {
     fn default() -> Self {
+        // The embargo thresholds are unswept Phase-H placeholders sized to the legacy
+        // VP-estimate trigger surfaces at danger floor 1.0: 0.125 is ETW <= 7 turns
+        // (roughly one point from winning on endgame income), 0.0625 is ETW <= 15
+        // (roughly two points out, gated on the award swing).
         Self {
             opponent_gain_weight: 1.0,
             acceptance_temperature: 0.5,
             max_offers_per_turn: 2,
             hidden_vp_confidence: 0.9,
+            embargo_danger_floor: 1.0,
+            embargo_danger: 0.125,
+            embargo_takeover_danger: 0.0625,
         }
     }
 }
@@ -242,6 +258,11 @@ pub struct FlattenedRules {
     largest_army_min: u8,
     largest_army_vp: u8,
     dev_victory_points: u8,
+    /// Initial dev-deck composition in `state::DEV_*` index order, so a policy can derive the
+    /// remaining deck's bounds from public plays and card counts.
+    dev_deck_initial: [u8; 5],
+    /// Hand size above which a seven forces a discard, so a policy can price hand exposure.
+    discard_threshold: u8,
     player_trading: Option<TradeConfig>,
 }
 
@@ -350,6 +371,14 @@ impl RuleConfig {
             largest_army_min: self.largest_army_min,
             largest_army_vp: self.largest_army_vp,
             dev_victory_points: self.dev_deck.victory_point,
+            dev_deck_initial: [
+                self.dev_deck.knight,
+                self.dev_deck.victory_point,
+                self.dev_deck.road_building,
+                self.dev_deck.year_of_plenty,
+                self.dev_deck.monopoly,
+            ],
+            discard_threshold: self.discard_threshold,
             player_trading: self.player_trading,
             ..FlattenedRules::default()
         };
@@ -430,6 +459,14 @@ impl FlattenedRules {
 
     pub const fn dev_victory_points(&self) -> u8 {
         self.dev_victory_points
+    }
+
+    pub const fn dev_deck_initial(&self) -> &[u8; 5] {
+        &self.dev_deck_initial
+    }
+
+    pub const fn discard_threshold(&self) -> u8 {
+        self.discard_threshold
     }
 
     pub const fn win_vp(&self) -> u8 {

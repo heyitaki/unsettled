@@ -725,8 +725,10 @@ fn the_largest_army_holder_defends_against_a_closing_challenger() {
         ),
         |action| action == Action::BuyDev,
     );
-    assert_eq!(off, 45.0);
-    assert_eq!(on.to_bits(), (45.0 + term).to_bits());
+    // The adopted default `devBuyScale` 0.25 (M-46) wraps the whole buy score,
+    // denial term included.
+    assert_eq!(off, 45.0 * 0.25);
+    assert_eq!(on.to_bits(), ((45.0 + term) * 0.25).to_bits());
 }
 
 #[test]
@@ -851,15 +853,17 @@ fn road_building_is_aimed_by_the_denial_terms() {
     );
 }
 
+/// Denial and threat still share a danger-floor default; trading's was decoupled by the
+/// Phase-I adoption (M-46), which moved only the trade-side floor the sweep won on.
 #[test]
-fn denial_danger_defaults_agree_with_threat_and_trading() {
+fn denial_danger_defaults_agree_with_threat_not_trading() {
     assert_eq!(
         DenialParams::default().danger_floor,
         unsettled_engine::policy::threat::ThreatParams::default().danger_floor
     );
     assert_eq!(
-        DenialParams::default().danger_floor,
-        unsettled_engine::policy::trading::TradeParams::default().danger_floor
+        unsettled_engine::policy::trading::TradeParams::default().danger_floor,
+        4.0
     );
 }
 
@@ -1012,11 +1016,13 @@ fn the_denial_goal_change_reaches_pre_roll_dev_card_targeting() {
     );
 }
 
-#[test]
-fn knight_action_score_is_identical_under_the_denial_gate() {
+/// The old frozen-knight fixture: seat 1 holds one card on a non-robber hex, and the observer
+/// either takes Largest Army with the next knight (`knights_played` 2) or merely holds spares
+/// (`knights_played` 0, two playable knights).
+fn knight_fixture(knights_played: u8) -> (Topology, SimBoard, GameArena) {
     let (topology, board, _rules, _config, mut arena) = fixture();
-    arena.state.players[0].playable_dev[0] = 1;
-    arena.state.players[0].knights_played = 2;
+    arena.state.players[0].playable_dev[0] = if knights_played > 0 { 1 } else { 2 };
+    arena.state.players[0].knights_played = knights_played;
     arena.state.players[0].vp_public = 4;
     let victim_vertex = topology.hex_vertices(
         (0..topology.hex_count())
@@ -1027,20 +1033,176 @@ fn knight_action_score_is_identical_under_the_denial_gate() {
     arena.state.vertex_owner[usize::from(victim_vertex)] = 1;
     arena.state.vertex_tier[usize::from(victim_vertex)] = 1;
     arena.state.players[1].resources[Resource::Wood.index()] = 1;
+    arena.state.belief.gain(1, Resource::Wood.index(), 1);
+    (topology, board, arena)
+}
+
+fn knight_score(actions: &[ScoredAction]) -> f32 {
+    score_for(actions, |action| {
+        matches!(action, Action::PlayDev(DevPlay::Knight { .. }))
+    })
+}
+
+fn knight_play(actions: &[ScoredAction]) -> (u8, Option<u8>) {
+    actions
+        .iter()
+        .find_map(|candidate| match candidate.action {
+            Action::PlayDev(DevPlay::Knight {
+                destination,
+                victim,
+            }) => Some((destination, victim)),
+            _ => None,
+        })
+        .unwrap()
+}
+
+// Forwarded arguments of the SIM-GAP-05/06/09 knight rejoin, one observing test each:
+// - denial pressure into the contested-card term (non-default pressure params):
+//   the_denial_gate_scales_the_knight_contested_card
+// - denial pressure into the progress term (non-default pressure params):
+//   the_denial_gate_scales_the_knight_progress_term
+// - `ThreatParams::knight_steal_weight` / `knight_placement_weight` and the priced
+//   `RobberChoice`, played pair equal to the priced pair (closed form, non-default weights):
+//   the_threat_gate_prices_knight_steal_and_placement
+// - `RobberChoice::placement_score` / `steal_value` derivations, including belief sensitivity:
+//   robber_choice_* (tests/threat_robber.rs)
+// - `LegacyValuation::frozen_knight` (restores flat pressure and self-regarding pricing):
+//   the_frozen_knight_flag_restores_the_g1_score
+#[test]
+fn the_denial_gate_scales_the_knight_contested_card() {
+    let (topology, board, arena) = knight_fixture(2);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    assert!(view.knight_takes_largest_army());
     let off = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    assert_eq!(knight_score(&off).to_bits(), 12_300.0_f32.to_bits());
+
+    let denial_params = DenialParams {
+        pressure_floor: 0.25,
+        pressure_span: 2.0,
+        ..DenialParams::default()
+    };
     let params = HeuristicParams {
-        denial: Some(DenialParams::default()),
+        denial: Some(denial_params),
         ..HeuristicParams::default()
     };
     let on = heuristic_v1::recommend(&view, &params);
-    let knight = |actions: &[ScoredAction]| {
-        score_for(actions, |action| {
-            matches!(action, Action::PlayDev(DevPlay::Knight { .. }))
-        })
+    let ctx = denial::context(&view, &denial_params);
+    let pressure = denial::pressure(&ctx, &denial_params, view.largest_army_holder());
+    assert_ne!(pressure, 1.0);
+    assert_eq!(
+        knight_score(&on).to_bits(),
+        (knight_score(&off) * pressure).to_bits()
+    );
+}
+
+#[test]
+fn the_denial_gate_scales_the_knight_progress_term() {
+    let (topology, board, arena) = knight_fixture(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    assert!(!view.knight_takes_largest_army());
+
+    let denial_params = DenialParams {
+        pressure_floor: 0.25,
+        pressure_span: 2.0,
+        ..DenialParams::default()
     };
-    assert_eq!(knight(&off).to_bits(), knight(&on).to_bits());
-    assert_eq!(knight(&off).to_bits(), 12_300.0_f32.to_bits());
+    let params = HeuristicParams {
+        denial: Some(denial_params),
+        ..HeuristicParams::default()
+    };
+    let on = heuristic_v1::recommend(&view, &params);
+    let (destination, victim) = knight_play(&on);
+    assert_eq!(victim, Some(1));
+    let ctx = denial::context(&view, &denial_params);
+    let pressure = denial::pressure(&ctx, &denial_params, view.largest_army_holder());
+    assert_ne!(pressure, 1.0);
+    let proximity = f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1));
+    let progress_base =
+        f32::from(1_u8) / f32::from(view.largest_army_min().max(1)) * (45.0 + 35.0 * proximity);
+    let steal = f32::from(view.hand_size(1).min(12)) * 2.0;
+    let tiebreak = if destination != view.robber() { 1.0 } else { 0.0 };
+    let expected = 20.0 + progress_base * pressure + 0.0 + steal + tiebreak;
+    assert_eq!(knight_score(&on).to_bits(), expected.to_bits());
+
+    let off = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    let unscaled = 20.0 + progress_base + 0.0 + steal + tiebreak;
+    assert_eq!(
+        knight_score(&off).to_bits(),
+        unscaled.to_bits(),
+        "the ungated path must keep the flat progress term"
+    );
+}
+
+#[test]
+fn the_threat_gate_prices_knight_steal_and_placement() {
+    let (topology, board, arena) = knight_fixture(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let threat_params = ThreatParams {
+        knight_steal_weight: 7.0,
+        knight_placement_weight: 11.0,
+        ..ThreatParams::default()
+    };
+    let params = HeuristicParams {
+        threat: Some(threat_params),
+        ..HeuristicParams::default()
+    };
+    let on = heuristic_v1::recommend(&view, &params);
+    let choice = unsettled_engine::policy::threat::robber_choice(&view, &threat_params);
+    assert!(choice.placement_score > 0.0);
+    assert!(choice.steal_value > 0.0);
+    // The rejoin: the priced pair is the played pair, not the self-regarding baseline.
+    assert_eq!(knight_play(&on), (choice.destination, choice.victim));
+
+    let proximity = f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1));
+    let progress =
+        f32::from(1_u8) / f32::from(view.largest_army_min().max(1)) * (45.0 + 35.0 * proximity);
+    let steal = (threat_params.knight_steal_weight * choice.steal_value) as f32;
+    let placement = (threat_params.knight_placement_weight * choice.placement_score) as f32;
+    let expected = 20.0
+        + progress
+        + 0.0
+        + steal
+        + placement
+        + if choice.destination != view.robber() {
+            1.0
+        } else {
+            0.0
+        };
+    assert_eq!(knight_score(&on).to_bits(), expected.to_bits());
+}
+
+#[test]
+fn the_frozen_knight_flag_restores_the_g1_score() {
+    let (topology, board, arena) = knight_fixture(0);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let gated = HeuristicParams {
+        threat: Some(ThreatParams::default()),
+        denial: Some(DenialParams::default()),
+        ..HeuristicParams::default()
+    };
+    let frozen = HeuristicParams {
+        legacy_valuation: Some(heuristic_v1::LegacyValuation {
+            frozen_knight: true,
+            ..heuristic_v1::LegacyValuation::default()
+        }),
+        ..gated.clone()
+    };
+    let ungated = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    let rejoined = heuristic_v1::recommend(&view, &gated);
+    let restored = heuristic_v1::recommend(&view, &frozen);
+    // The freeze prices the self-regarding baseline at flat pressure, so its score is
+    // bit-identical to the fully ungated policy even though the threat gate still plays the
+    // threat-chosen destination.
+    assert_eq!(
+        knight_score(&restored).to_bits(),
+        knight_score(&ungated).to_bits()
+    );
+    assert_eq!(knight_play(&restored), knight_play(&rejoined));
+    assert_ne!(
+        knight_score(&rejoined).to_bits(),
+        knight_score(&restored).to_bits(),
+        "the rejoined score must actually move under the gates"
+    );
 }
 
 #[test]
@@ -1546,7 +1708,7 @@ fn the_action_path_goal_reaches_the_next_discard() {
         &HeuristicParams::default(),
         &mut off_rng,
     );
-    let off = heuristic_v1::discard(&view, 3, &mut off_scratch);
+    let off = heuristic_v1::discard(&view, 3, &mut off_scratch, &HeuristicParams::default());
     let params = HeuristicParams {
         denial: Some(DenialParams {
             pressure_floor: 0.0,
@@ -1558,8 +1720,216 @@ fn the_action_path_goal_reaches_the_next_discard() {
     let mut on_scratch = PolicyScratch::default();
     let mut on_rng = Xoshiro256StarStar::from_seed(19);
     heuristic_v1::action(&view, &mut on_scratch, &params, &mut on_rng);
-    let on = heuristic_v1::discard(&view, 3, &mut on_scratch);
+    let on = heuristic_v1::discard(&view, 3, &mut on_scratch, &params);
     assert_ne!(off, on);
+}
+
+// Forwarded arguments of `heuristic_v1::discard`, one observing test each:
+// - `view` (hand contents): discard_preserves_the_active_city_cost (tactical_policy.rs)
+// - `view` (trade rates, conversion ranking): the_discard_sheds_the_cheapest_conversion_first
+//   (exposure.rs)
+// - `count`: discard_preserves_the_active_city_cost asserts the discarded sum
+// - `scratch` (carried goal): the_action_path_goal_reaches_the_next_discard
+// - `params` (fallback path, scratch goal absent): the_gated_params_reach_the_discard_fallback
+// - `params` (legacy_valuation.exposure_blind): the_legacy_flag_restores_the_greedy_discard
+//   (exposure.rs)
+#[test]
+fn the_gated_params_reach_the_discard_fallback() {
+    let (topology, board, mut arena) = road_city_fixture(false, 5);
+    arena.state.players[0].resources = [2, 1, 1, 1, 2];
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    // No prior action() call: scratch.goal is None, so discard recomputes the goal itself. The
+    // ungated and gated params reach different goals on this fixture (the action-path test above
+    // establishes that), and each goal's cost fixes the greedy discard vector in closed form:
+    // hand [2,1,1,1,2], count 3, discard = argmax(remaining - cost), ties to the highest index.
+    let off = heuristic_v1::discard(
+        &view,
+        3,
+        &mut PolicyScratch::default(),
+        &HeuristicParams::default(),
+    );
+    let params = HeuristicParams {
+        denial: Some(DenialParams {
+            pressure_floor: 0.0,
+            pressure_span: 0.0,
+            ..DenialParams::default()
+        }),
+        ..HeuristicParams::default()
+    };
+    let on = heuristic_v1::discard(&view, 3, &mut PolicyScratch::default(), &params);
+    // Ungated goal: road, cost [1,0,0,1,0] -> shed ore, ore (tie with wood, highest index wins),
+    // then wheat.
+    assert_eq!(off, [0, 0, 1, 0, 2]);
+    // Gated goal: settlement, cost [1,1,1,1,0] -> shed ore, ore, then wood.
+    assert_eq!(on, [1, 0, 0, 0, 2]);
+}
+
+/// A state where one edge is simultaneously the observer's legal road and the rival's only
+/// remaining one-road approach to a contested vertex: `target -- e0 -- s0`, with the observer
+/// extending from `s0` through `a`, the rival through `b`, and every other edge the rival could
+/// build from occupied by seat 2 (whose settlement pieces are zeroed so it contests nothing).
+fn blocking_fixture() -> (Topology, SimBoard, GameArena, Edge) {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    for target in 0..topology.vertex_count() {
+        let target = target as Vertex;
+        for e0 in topology.vertex_edges(target).to_vec() {
+            let s0 = topology
+                .edge_endpoints(e0)
+                .into_iter()
+                .find(|vertex| *vertex != target)
+                .unwrap();
+            let side = topology
+                .vertex_edges(s0)
+                .iter()
+                .copied()
+                .filter(|edge| *edge != e0)
+                .collect::<Vec<_>>();
+            if side.len() < 2 {
+                continue;
+            }
+            let (a, b) = (side[0], side[1]);
+            arena.state.edge_owner[usize::from(a)] = 0;
+            arena.state.edge_owner[usize::from(b)] = 1;
+            for extra in side.iter().skip(2) {
+                arena.state.edge_owner[usize::from(*extra)] = 2;
+            }
+            let t_b = topology
+                .edge_endpoints(b)
+                .into_iter()
+                .find(|vertex| *vertex != s0)
+                .unwrap();
+            for extra in topology.vertex_edges(t_b).to_vec() {
+                if extra != b {
+                    arena.state.edge_owner[usize::from(extra)] = 2;
+                }
+            }
+            arena.state.players[1].vp_public = 9;
+            arena.state.players[2].pieces[Buildable::Settlement.index()] = 0;
+            arena.state.players[0].resources = [1, 0, 0, 1, 0];
+            return (topology, board, arena, e0);
+        }
+    }
+    panic!("fixture needs a shared approach edge");
+}
+
+// Forwarded arguments of the SIM-GAP-07/08 denial scope, one observing test each:
+// - `DenialParams::race_check_cap` (non-default value binds where the default spends all three
+//   checks): the_cheap_race_prefilter_is_sound_memoized_and_actually_fires (policy/denial.rs)
+// - `DenialParams::race_check_cap` (default reaches the third-ranked live challenger):
+//   the_default_budget_finds_the_third_ranked_challenger (policy/denial.rs)
+// - `DenialParams::contest_block_bonus` (non-default value, closed form both scaled and
+//   unscaled): the_block_bonus_prices_the_rivals_only_approach
+// - `LegacyValuation::bounded_race` (race half through `score_actions`):
+//   the_default_budget_finds_the_third_ranked_challenger (policy/denial.rs)
+// - `LegacyValuation::bounded_race` (blocking half through `recommend`):
+//   the_legacy_race_flag_restores_blocking_blind_contesting
+#[test]
+fn the_block_bonus_prices_the_rivals_only_approach() {
+    let (topology, board, arena, candidate) = blocking_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    // Preconditions: the candidate is legal for both sides and every other approach to the
+    // contested vertex is closed to the rival.
+    assert!(view.legal_road(candidate));
+    assert!(view.legal_road_for(1, candidate));
+    for target in view.topology().edge_endpoints(candidate) {
+        assert!(view.is_expansion_target(target));
+        for approach in view.topology().vertex_edges(target) {
+            assert!(*approach == candidate || !view.legal_road_for(1, *approach));
+        }
+    }
+    let context = denial::context(&view, &params);
+    let danger = context.danger(1);
+    assert!(danger > 0.0);
+    let blocked = denial::contest_term(&view, &context, &params, candidate);
+    let expected_blocked =
+        params.contest_weight * ((danger * (1.0 + f64::from(params.contest_block_bonus))) as f32);
+    assert_eq!(blocked.to_bits(), expected_blocked.to_bits());
+    // Zero restores blocking-blind contesting bit-for-bit.
+    let blind_params = DenialParams {
+        contest_block_bonus: 0.0,
+        ..params
+    };
+    let blind_context = denial::context(&view, &blind_params);
+    let blind = denial::contest_term(&view, &blind_context, &blind_params, candidate);
+    assert_eq!(
+        blind.to_bits(),
+        (params.contest_weight * (danger as f32)).to_bits()
+    );
+    assert!(blocked > blind);
+}
+
+#[test]
+fn an_open_second_approach_earns_no_block_bonus() {
+    let (topology, board, arena, candidate, opponent_edge) = contest_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    // The rival's own approach stays open, so the observer's approach contests at raw danger.
+    assert!(view.legal_road_for(1, opponent_edge));
+    let context = denial::context(&view, &params);
+    let danger = context.danger(1);
+    assert!(danger > 0.0);
+    assert_eq!(
+        denial::contest_term(&view, &context, &params, candidate).to_bits(),
+        (params.contest_weight * (danger as f32)).to_bits()
+    );
+}
+
+#[test]
+fn the_legacy_race_flag_restores_blocking_blind_contesting() {
+    let (topology, board, arena, candidate) = blocking_fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let denial_params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    let fixed = HeuristicParams {
+        denial: Some(denial_params),
+        ..HeuristicParams::default()
+    };
+    let legacy = HeuristicParams {
+        legacy_valuation: Some(heuristic_v1::LegacyValuation {
+            bounded_race: true,
+            ..heuristic_v1::LegacyValuation::default()
+        }),
+        ..fixed.clone()
+    };
+    let road_score = |params: &HeuristicParams| {
+        score_for(&heuristic_v1::recommend(&view, params), |action| {
+            action == Action::BuildRoad(candidate)
+        })
+    };
+    // The candidate's contest dominates every other road, so it is the recommended road under
+    // both param sets; the legacy flag strips exactly the block bonus from its score.
+    let context = denial::context(&view, &denial_params);
+    let blocked = denial::contest_term(&view, &context, &denial_params, candidate);
+    let blind_params = DenialParams {
+        contest_block_bonus: 0.0,
+        ..denial_params
+    };
+    let blind_context = denial::context(&view, &blind_params);
+    let blind = denial::contest_term(&view, &blind_context, &blind_params, candidate);
+    let expansion = expansion_score(&view, candidate, &fixed).unwrap_or_default();
+    assert_eq!(
+        road_score(&fixed).to_bits(),
+        (40.0 + expansion + blocked).to_bits()
+    );
+    assert_eq!(
+        road_score(&legacy).to_bits(),
+        (40.0 + expansion + blind).to_bits()
+    );
 }
 
 macro_rules! denial_param_guard {
@@ -1632,4 +2002,19 @@ denial_param_guard!(
     denial_assert_params_rejects_army_gap_half,
     army_gap_half,
     0.0
+);
+denial_param_guard!(
+    denial_assert_params_rejects_race_check_cap_zero,
+    race_check_cap,
+    0
+);
+denial_param_guard!(
+    denial_assert_params_rejects_race_check_cap_above_the_rival_bound,
+    race_check_cap,
+    6
+);
+denial_param_guard!(
+    denial_assert_params_rejects_contest_block_bonus,
+    contest_block_bonus,
+    -1.0
 );

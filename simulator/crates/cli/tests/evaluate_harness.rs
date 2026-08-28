@@ -13,6 +13,9 @@ use unsettled_sim::evaluate::{
 
 fn policy_name(policy: PolicyKind) -> &'static str {
     match policy {
+        // The harness sweeps the static roster; params-file policies register at runtime
+        // and carry their own spec string.
+        PolicyKind::Custom(_) => unreachable!("custom params policies are outside the roster"),
         PolicyKind::RandomLegal => "random-legal",
         PolicyKind::GreedyNoTrade => "greedy-no-trade",
         PolicyKind::PriorityTrader => "priority-trader",
@@ -66,6 +69,69 @@ fn policy_name(policy: PolicyKind) -> &'static str {
         }
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal => {
             "heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacycards"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacydeck"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyexposure"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyrace => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyrace"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacypair => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacypair"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyknight => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-legacyknight"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialSbmute => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-sbmute"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialSbhold => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-sbhold"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialGoalneedlo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-goalneedlo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialGoalneedhi => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-goalneedhi"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialStagelo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-stagelo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialStagehi => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-stagehi"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialEconlo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-econlo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialEconhi => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-econhi"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialHystlo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-hystlo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialHysthi => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-hysthi"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialFrontierlo => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-frontierlo"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialFrontierhi => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-frontierhi"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialJall => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-jall"
+        }
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialJnohyst => {
+            "heuristic-v1-trader-aware-threat-devcards-denial-jnohyst"
         }
     }
 }

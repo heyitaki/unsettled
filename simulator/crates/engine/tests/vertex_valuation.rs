@@ -533,18 +533,24 @@ fn road_building_pair_targets_are_scored_as_settlements() {
                         continue;
                     }
                     first_pair.get_or_insert((first, *second));
-                    let score = topology
-                        .edge_endpoints(*second)
-                        .iter()
+                    // The pair credit mirrors `expansion_road_score`: both laid edges' endpoints,
+                    // gated on `is_expansion_target`, zero when the pair opens no settleable site.
+                    let score = [first, *second]
+                        .into_iter()
+                        .flat_map(|edge| topology.edge_endpoints(edge))
+                        .filter(|vertex| view.is_expansion_target(*vertex))
                         .map(|vertex| {
-                            local_production(&board, &topology, *vertex)
+                            local_production(&board, &topology, vertex)
                                 .iter()
                                 .enumerate()
                                 .filter(|(resource, value)| **value > 0 && own[*resource] == 0)
                                 .count() as f32
                                 * 1_000.0
                         })
-                        .fold(f32::NEG_INFINITY, f32::max);
+                        .fold(None, |best: Option<f32>, score| {
+                            Some(best.map_or(score, |best| best.max(score)))
+                        })
+                        .unwrap_or(0.0);
                     if score > best_score {
                         best_score = score;
                         expected = Some((first, *second));
@@ -655,7 +661,13 @@ fn a_dev_completing_trade_no_longer_outranks_an_affordable_settlement() {
     arena.state.players[0].vp_public = 9;
     arena.state.players[0].knights_played = 2;
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let actions = heuristic_v1::recommend(&view, &HeuristicParams::default());
+    // Unit dev-buy scale: the adopted default 0.25 (M-46) drops this witness out of the
+    // contested band, and the subject is band ordering, not the scale.
+    let params = HeuristicParams {
+        dev_buy_scale: 1.0,
+        ..HeuristicParams::default()
+    };
+    let actions = heuristic_v1::recommend(&view, &params);
     let settlement = score_for(&actions, |action| {
         matches!(action, Action::BuildSettlement(_))
     });
@@ -751,6 +763,9 @@ fn ablation_kinds_dispatch_through_trader_paths() {
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
         PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck,
+        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
     ] {
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(11);
@@ -883,7 +898,10 @@ fn a_pressured_dev_card_no_longer_outranks_an_affordable_settlement() {
         std::array::from_fn(|index| i16::from(settlement_cost[index].max(dev_cost[index])));
     arena.state.players[0].vp_public = 9;
     arena.state.players[0].knights_played = 2;
+    // Unit dev-buy scale for the same reason as the trade test above: the subject is
+    // band ordering under pressure, at a witness authored inside the band.
     let params = HeuristicParams {
+        dev_buy_scale: 1.0,
         denial: Some(DenialParams {
             pressure_floor: 3.0,
             pressure_span: 0.0,

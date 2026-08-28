@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use unsettled_engine::belief::BeliefState;
+use unsettled_engine::belief::{BeliefState, DeckBelief};
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::PolicyKind;
@@ -86,10 +86,15 @@ fn first_productive_hex(board: &SimBoard, topology: &Topology, robber: Hex) -> (
 #[test]
 fn steal_free_scripted_game_reconstructs_every_hand_exactly() {
     let (topology, board, mut rules, mut config, mut arena) = fixture();
+    // Free dev cards collapse every seat's ETW to zero, so the danger embargo would
+    // refuse all trades; this script never exercised the embargo, so park the
+    // thresholds above the danger range.
     rules.player_trading = Some(TradeConfig {
         opponent_gain_weight: 0.0,
         acceptance_temperature: 0.0,
         max_offers_per_turn: 8,
+        embargo_danger: 2.0,
+        embargo_takeover_danger: 2.0,
         ..TradeConfig::default()
     });
     rules.dev_cost = [0; RESOURCE_COUNT];
@@ -586,4 +591,85 @@ fn fix2_hostile_deserialized_upper_bound_is_repaired_by_a_public_update() {
     .unwrap();
     belief.gain(0, Resource::Wood.index(), 0);
     assert_valid(&belief, 0);
+}
+
+// Remaining-deck composition (SIM-GAP-17). `DeckBelief::derive` takes the configured deck,
+// public plays, the observer's own held cards, the opponents' hidden card total, and the
+// undrawn count; `DecisionView::deck_belief` assembles those from game state.
+//
+// Forwarded arguments of `DeckBelief::derive`, one observing test each:
+// - `initial` (configured mix drives the bounds): deck_belief_pins_a_fresh_deck_exactly
+// - `revealed_played`: deck_belief_bounds_track_plays_holds_and_hidden_opponents
+// - `own_held` (incl. own victory-point draws): deck_belief_bounds_track_plays_holds_and_hidden_opponents
+// - `opponent_hidden` (widens lo under hi): deck_belief_bounds_track_plays_holds_and_hidden_opponents
+// - `remaining` (caps hi, defends lo <= hi): deck_belief_defends_against_a_desynced_state
+//
+// Forwarded state behind `DecisionView::deck_belief`, observed by
+// view_deck_belief_reads_plays_holds_counts_and_the_configured_deck: every seat's
+// `dev_plays_revealed`, the observer's `playable_dev`/`bought_dev`/`vp_dev`, opponents'
+// public card counts, the undrawn deck size, and the rules' configured deck.
+
+#[test]
+fn deck_belief_pins_a_fresh_deck_exactly() {
+    let initial = [20, 5, 3, 3, 3];
+    let deck = DeckBelief::derive(&initial, &[0; 5], &[0; 5], 0, 34);
+    assert_eq!(deck.total(), 34);
+    assert_eq!(deck.lo(), &initial);
+    assert_eq!(deck.hi(), &initial);
+    assert_eq!(deck.expected(), initial.map(f64::from));
+}
+
+#[test]
+fn deck_belief_bounds_track_plays_holds_and_hidden_opponents() {
+    // standard4 deck, 25 cards: 4 knights and 1 monopoly played publicly, the observer holds a
+    // knight and a victory-point card, opponents hold 3 hidden cards, 15 cards undrawn.
+    let deck = DeckBelief::derive(&[14, 5, 2, 2, 2], &[4, 0, 0, 0, 1], &[1, 1, 0, 0, 0], 3, 15);
+    assert_eq!(deck.total(), 15);
+    // Unseen (deck or an opponent's hand): [9, 4, 2, 2, 1]. Any of the 3 hidden opponent cards
+    // could be any kind, so each lower bound gives up exactly 3.
+    assert_eq!(deck.hi(), &[9, 4, 2, 2, 1]);
+    assert_eq!(deck.lo(), &[6, 1, 0, 0, 0]);
+    // Same apportioning closed form as the resource belief: sum_lo 7 leaves 8 unknown cards
+    // spread over a lo..hi width totalling 11.
+    let expected = deck.expected();
+    assert_eq!(expected[0], 6.0 + 8.0 * 3.0 / 11.0);
+    assert_eq!(expected[1], 1.0 + 8.0 * 3.0 / 11.0);
+    assert_eq!(expected[2], 0.0 + 8.0 * 2.0 / 11.0);
+    assert_eq!(expected[3], 0.0 + 8.0 * 2.0 / 11.0);
+    assert_eq!(expected[4], 0.0 + 8.0 * 1.0 / 11.0);
+}
+
+#[test]
+fn deck_belief_defends_against_a_desynced_state() {
+    // Nothing accounted for, yet only 3 cards claimed undrawn: hi clamps to the total and lo
+    // clamps under hi instead of asserting the caller's consistency.
+    let deck = DeckBelief::derive(&[14, 5, 2, 2, 2], &[0; 5], &[0; 5], 0, 3);
+    assert_eq!(deck.hi(), &[3, 3, 2, 2, 2]);
+    for kind in 0..5 {
+        assert!(deck.lo()[kind] <= deck.hi()[kind]);
+    }
+}
+
+#[test]
+fn view_deck_belief_reads_plays_holds_counts_and_the_configured_deck() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    // Seat 1 has publicly played 2 knights, the observer 1 monopoly.
+    arena.state.players[1].dev_plays_revealed[0] = 2;
+    arena.state.players[0].dev_plays_revealed[4] = 1;
+    // The observer holds a playable road building, a bought year of plenty, and a VP card.
+    arena.state.players[0].playable_dev[2] = 1;
+    arena.state.players[0].bought_dev[3] = 1;
+    arena.state.players[0].vp_dev = 1;
+    // Seat 2 holds two hidden cards (kinds must not leak into the observer's bounds).
+    arena.state.players[2].playable_dev[0] = 1;
+    arena.state.players[2].bought_dev[1] = 1;
+    // Eight cards have left the extension6 deck of 34: 3 plays + 3 own + 2 opponent-held.
+    arena.drain_dev_deck_for_test(8);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let deck = view.deck_belief();
+    assert_eq!(deck.total(), 26);
+    // Unseen: knights 20-2, VP 5-1, road building 3-1, year of plenty 3-1, monopoly 3-1.
+    assert_eq!(deck.hi(), &[18, 4, 2, 2, 2]);
+    // Seat 2's two hidden cards widen every kind's floor by exactly two.
+    assert_eq!(deck.lo(), &[16, 2, 0, 0, 0]);
 }

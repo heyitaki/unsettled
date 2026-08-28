@@ -9,16 +9,14 @@ use crate::rules::{
     Buildable, Effect, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource,
     RuleConfig,
 };
-use crate::state::{EMPTY, GameState, MAX_SEATS};
+use crate::state::{
+    DEV_KNIGHT, DEV_MONOPOLY, DEV_ROAD_BUILDING, DEV_VP, DEV_YEAR_OF_PLENTY, EMPTY, GameState,
+    MAX_SEATS,
+};
 use crate::topology::{Edge, Hex, Topology, Vertex};
 use crate::trade::{TradeOffer, embargoed};
 use crate::view::{Action, DecisionPhase, DecisionView, DevPlay, can_pay};
 
-const DEV_KNIGHT: usize = 0;
-const DEV_VP: usize = 1;
-const DEV_ROAD_BUILDING: usize = 2;
-const DEV_YEAR_OF_PLENTY: usize = 3;
-const DEV_MONOPOLY: usize = 4;
 /// One slot per resource-specific port plus one for the generic (3:1) port. A seat can touch any
 /// number of ports, but only the best rate in each slot is ever consulted.
 const MAX_PORTS: usize = RESOURCE_COUNT + 1;
@@ -368,6 +366,18 @@ impl GameArena {
     }
 
     #[doc(hidden)]
+    pub fn ask_action_for_test(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        config: &GameConfig,
+        seat: usize,
+        phase: DecisionPhase,
+    ) -> Action {
+        self.ask_action(board, topology, config, seat, phase)
+    }
+
+    #[doc(hidden)]
     pub fn begin_turn_for_test(
         &mut self,
         board: &SimBoard,
@@ -428,6 +438,14 @@ impl GameArena {
         seats: usize,
     ) {
         self.produce(board, topology, config, roll, seats);
+    }
+
+    /// Advances the deck cursor as if `count` cards had been drawn, without crediting them to a
+    /// seat. Callers building deck-composition states must place the drawn cards themselves
+    /// (`dev_plays_revealed`, `playable_dev`, `vp_dev`, ...) to keep the state consistent.
+    #[doc(hidden)]
+    pub fn drain_dev_deck_for_test(&mut self, count: usize) {
+        self.dev_cursor = (self.dev_cursor + count).min(self.dev_len);
     }
 
     #[doc(hidden)]
@@ -572,6 +590,10 @@ impl GameArena {
                 }
             }
         }
+        // Seed every seat's trail length from the placed stubs so policies never read a stale 0
+        // before the game's first road build. Two stubs cannot reach the award minimum, so this
+        // can only set lengths, never move the card.
+        self.recompute_all_roads(topology, rules, seats);
     }
 
     fn setup_pick(
@@ -639,12 +661,14 @@ impl GameArena {
             self.offers_remaining(seat),
             phase,
         );
-        policy::action(
+        let selected = policy::action(
             config.policies[seat],
             &view,
             &mut self.scratch[seat],
             &mut self.streams.policy[seat],
-        )
+        );
+        self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
+        selected
     }
 
     fn begin_turn(
@@ -705,6 +729,7 @@ impl GameArena {
                 &mut self.streams.policy[seat],
             )
         };
+        self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
         if let Some(play) = play {
             self.apply_action_internal(
                 board,
@@ -785,13 +810,14 @@ impl GameArena {
         if !self.valid_robber(topology, board.seats(), seat, destination, victim) {
             self.illegal_decision("illegal robber decision");
             // The recovery move must obey the same mandatory-steal rule it just enforced, so name
-            // an eligible victim on the fallback hex rather than declining the steal outright.
+            // some adjacent victim on the fallback hex (any adjacent seat is nameable) rather than
+            // declining the steal outright.
             let fallback = (0..topology.hex_count())
                 .map(|hex| hex as u8)
                 .find(|hex| *hex != self.state.robber)
                 .expect("board has another hex");
             let fallback_victim = (0..board.seats())
-                .find(|candidate| self.eligible_victim(topology, seat, fallback, *candidate as u8));
+                .find(|candidate| self.nameable_victim(topology, seat, fallback, *candidate as u8));
             self.move_robber_and_steal(topology, seat, fallback, fallback_victim);
         } else {
             self.move_robber_and_steal(topology, seat, destination, victim.map(usize::from));
@@ -825,7 +851,7 @@ impl GameArena {
                 self.offers_remaining(seat),
                 DecisionPhase::TradeResponse,
             );
-            *value = embargoed(&view, seat);
+            *value = embargoed(&view, seat, policy::vp_embargo(config.policies[seat]));
         }
         if embargoes[proposer] {
             return;
@@ -1183,21 +1209,25 @@ impl GameArena {
         match victim {
             Some(victim) => {
                 usize::from(victim) < seats
-                    && self.eligible_victim(topology, seat, destination, victim)
+                    && self.nameable_victim(topology, seat, destination, victim)
             }
-            // Stealing is mandatory when the destination touches anyone worth robbing; declining
-            // is legal only when no eligible victim exists.
+            // Stealing is mandatory when the destination touches anyone holding a card; declining
+            // outright is legal only when nobody adjacent could yield one. Naming an adjacent
+            // empty-handed seat is always legal and steals nothing -- that is how the rules let a
+            // player decline a steal.
             None => !(0..seats).any(|candidate| {
-                self.eligible_victim(topology, seat, destination, candidate as u8)
+                self.nameable_victim(topology, seat, destination, candidate as u8)
+                    && self.state.players[candidate].hand_size() > 0
             }),
         }
     }
 
-    /// Whether `candidate` can be robbed at `destination`: a different seat, present on the hex,
-    /// and holding at least one card. This is the single definition of "worth robbing" -- the
-    /// policies' `DecisionView::stealable_on_hex` must agree with it or a legal decision becomes
-    /// an illegal action.
-    fn eligible_victim(
+    /// Whether `candidate` can be named as the robber victim at `destination`: a different seat,
+    /// present on the hex. Hand size is deliberately not checked -- naming an empty-handed seat is
+    /// the rules' decline mechanism. This is the single definition of "nameable"; the policies'
+    /// `DecisionView::victim_on_hex` must agree with it, and `DecisionView::stealable_on_hex` must
+    /// agree with the mandatory-steal clause above, or a legal decision becomes an illegal action.
+    fn nameable_victim(
         &self,
         topology: &Topology,
         seat: usize,
@@ -1205,7 +1235,6 @@ impl GameArena {
         candidate: u8,
     ) -> bool {
         usize::from(candidate) != seat
-            && self.state.players[usize::from(candidate)].hand_size() > 0
             && topology
                 .hex_vertices(destination)
                 .iter()
@@ -1256,6 +1285,9 @@ impl GameArena {
     ) {
         self.state.edge_owner[usize::from(edge)] = seat as u8;
         self.state.players[seat].pieces[Buildable::Road.index()] -= 1;
+        // A road cannot shorten a rival's trail and setup() seeds every seat's length, so
+        // recomputing only the builder would be sound; narrowing this all-seat recompute is a
+        // pure performance change, deliberately not bundled with a behavior fix.
         self.recompute_all_roads(topology, rules, seats);
     }
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::rules::RESOURCE_COUNT;
-use crate::state::MAX_SEATS;
+use crate::state::{DEV_KIND_COUNT, MAX_SEATS};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -189,5 +189,82 @@ impl BeliefState {
 impl Default for BeliefState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Bounds on the remaining development deck's composition, in the same lo/hi-with-total shape as
+/// the per-seat resource belief above.
+///
+/// The composition is derivable from public information: the initial counts come from the rules,
+/// every knight and progress card played is revealed, and the observer knows its own held cards.
+/// Opponents' held cards are the bounded unknown pool. Victory-point cards are never played, so
+/// they never leave that pool by revelation and are only ever bounded, exactly as
+/// `contracts.md` states.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DeckBelief {
+    total: u8,
+    lo: [u8; DEV_KIND_COUNT],
+    hi: [u8; DEV_KIND_COUNT],
+}
+
+impl DeckBelief {
+    /// `initial` is the configured deck in `state::DEV_*` order, `revealed_played` sums every
+    /// seat's public plays, `own_held` is the observer's playable + bought cards (with its own
+    /// victory-point draws counted under `DEV_VP`), `opponent_hidden` is the total cards
+    /// opponents hold, and `remaining` is the undrawn deck size.
+    pub fn derive(
+        initial: &[u8; DEV_KIND_COUNT],
+        revealed_played: &[u8; DEV_KIND_COUNT],
+        own_held: &[u8; DEV_KIND_COUNT],
+        opponent_hidden: u16,
+        remaining: u8,
+    ) -> Self {
+        let hidden = u8::try_from(opponent_hidden).unwrap_or(u8::MAX);
+        // Cards of each kind that are either still in the deck or hidden in an opponent's hand.
+        let unseen: [u8; DEV_KIND_COUNT] = std::array::from_fn(|kind| {
+            initial[kind]
+                .saturating_sub(revealed_played[kind])
+                .saturating_sub(own_held[kind])
+        });
+        let hi: [u8; DEV_KIND_COUNT] = std::array::from_fn(|kind| unseen[kind].min(remaining));
+        // In a consistent state the unseen counts sum to `remaining + opponent_hidden`, which
+        // keeps lo <= hi; the extra clamp only defends against a desynced caller.
+        let lo: [u8; DEV_KIND_COUNT] =
+            std::array::from_fn(|kind| unseen[kind].saturating_sub(hidden).min(hi[kind]));
+        Self {
+            total: remaining,
+            lo,
+            hi,
+        }
+    }
+
+    pub const fn total(&self) -> u8 {
+        self.total
+    }
+
+    pub const fn lo(&self) -> &[u8; DEV_KIND_COUNT] {
+        &self.lo
+    }
+
+    pub const fn hi(&self) -> &[u8; DEV_KIND_COUNT] {
+        &self.hi
+    }
+
+    /// Same apportioning rule as [`BeliefState::expected`]: the mass not pinned by the lower
+    /// bounds spreads across kinds in proportion to each kind's lo..hi width.
+    pub fn expected(&self) -> [f64; DEV_KIND_COUNT] {
+        let sum_lo = self.lo.iter().map(|value| u32::from(*value)).sum::<u32>();
+        let unknown = u32::from(self.total).saturating_sub(sum_lo);
+        let spread = (0..DEV_KIND_COUNT)
+            .map(|kind| u32::from(self.hi[kind].saturating_sub(self.lo[kind])))
+            .sum::<u32>();
+        if spread == 0 {
+            return self.lo.map(f64::from);
+        }
+        std::array::from_fn(|kind| {
+            f64::from(self.lo[kind])
+                + f64::from(unknown) * f64::from(self.hi[kind].saturating_sub(self.lo[kind]))
+                    / f64::from(spread)
+        })
     }
 }

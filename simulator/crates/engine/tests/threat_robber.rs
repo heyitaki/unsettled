@@ -6,6 +6,7 @@ use unsettled_engine::etw::{self, EtwInputs, expected_turns_to_win};
 use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams};
 use unsettled_engine::policy::threat::{self, ThreatContext, ThreatParams};
+use unsettled_engine::policy::trading;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::view::{DecisionPhase, pips};
@@ -527,7 +528,7 @@ fn threat_hex_score_uses_the_highest_ranked_steal_regardless_of_seat_order() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic(expected = "params.hand_cap.is_finite() && params.hand_cap > 0.0")]
+#[should_panic(expected = "threat.handCap is positive and finite")]
 fn threat_seat_terms_rejects_invalid_params() {
     let (topology, board, _rules, _config, mut arena) = fixture();
     let target = dominant_hex_with_two_offsets(&board, &topology).0;
@@ -632,6 +633,136 @@ fn default_heuristic_params_keep_todays_robber_rule() {
     assert!(params.threat.is_none());
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     assert_eq!(heuristic_v1::robber(&view, &params), (target, Some(1)));
+}
+
+// Forwarded arguments of `threat::robber_choice` (the SIM-GAP-09 knight seam), one observing
+// test each; every test also asserts the (destination, victim) pair still equals `robber`'s:
+// - `placement_score` re-derives from `seat_terms` at the chosen hex (non-default params):
+//   robber_choice_reports_the_maximized_placement_score
+// - `steal_value` = the shared-danger victim rank plus the belief-derived own-need hit
+//   (closed form, non-default params): robber_choice_prices_the_steal_through_belief_and_danger
+// - the fallback hex zeroes `placement_score`: robber_choice_zeroes_placement_on_the_fallback_hex
+#[test]
+fn robber_choice_reports_the_maximized_placement_score() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    let (hex, offsets) = dominant_hex_with_two_offsets(&board, &topology);
+    place_on_hex(&mut arena, &topology, hex, 1, offsets[0]);
+    place_on_hex(&mut arena, &topology, hex, 2, offsets[1]);
+    make_stalled_leader(&mut arena, 1);
+    make_city_runner(&mut arena, 2);
+    set_belief_and_hand(&mut arena, 1, [3, 0, 0, 0, 0]);
+    set_belief_and_hand(&mut arena, 2, [0, 0, 2, 0, 0]);
+
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let params = ThreatParams {
+        delay_weight: 2.0,
+        need_weight: 0.7,
+        block_weight: 0.4,
+        steal_weight: 1.5,
+        victim_hand_weight: 0.4,
+        ..ThreatParams::default()
+    };
+    let choice = threat::robber_choice(&view, &params);
+    assert_eq!(
+        (choice.destination, choice.victim),
+        threat::robber(&view, &params)
+    );
+    assert_eq!(choice.destination, hex);
+
+    let context = threat::context(&view, &params);
+    let mut expected = 0.0;
+    let mut best_steal = 0.0_f64;
+    for seat in 0..view.seats() {
+        if seat == view.observer() {
+            continue;
+        }
+        let terms = threat::seat_terms(&view, &params, &context, hex, seat);
+        expected += terms.delay + terms.need + terms.block;
+        best_steal = best_steal.max(terms.steal);
+    }
+    expected += best_steal;
+    assert!(expected > 0.0);
+    assert_eq!(choice.placement_score.to_bits(), expected.to_bits());
+}
+
+#[test]
+fn robber_choice_prices_the_steal_through_belief_and_danger() {
+    let steal_value_for = |cards: [u16; RESOURCE_COUNT], params: &ThreatParams| {
+        let (topology, board, _rules, _config, mut arena) = fixture();
+        let (hex, offsets) = dominant_hex_with_two_offsets(&board, &topology);
+        place_on_hex(&mut arena, &topology, hex, 1, offsets[0]);
+        make_stalled_leader(&mut arena, 1);
+        set_belief_and_hand(&mut arena, 1, cards);
+
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let choice = threat::robber_choice(&view, params);
+        assert_eq!(
+            (choice.destination, choice.victim),
+            threat::robber(&view, params)
+        );
+        assert_eq!(choice.victim, Some(1));
+
+        let context = threat::context(&view, &params);
+        let rank = context.danger[1]
+            + params.victim_hand_weight * f64::from(view.hand_total(1)).min(params.hand_cap)
+                / params.hand_cap;
+        let shortfall = threat::cheapest_route_shortfall(&trading::own_inputs(&view));
+        let shortfall_total = shortfall.iter().sum::<f64>();
+        assert!(shortfall_total > 0.0);
+        let need = shortfall.map(|value| value / shortfall_total);
+        let expected_hand = view.belief().expected(1);
+        let total = expected_hand.iter().sum::<f64>();
+        let hit = (0..RESOURCE_COUNT)
+            .map(|resource| need[resource] * expected_hand[resource])
+            .sum::<f64>()
+            / total;
+        assert_eq!(choice.steal_value.to_bits(), (rank + hit).to_bits());
+        (choice.steal_value, hit)
+    };
+
+    let params = ThreatParams {
+        steal_weight: 1.0,
+        victim_hand_weight: 0.5,
+        hand_cap: 6.0,
+        ..ThreatParams::default()
+    };
+    // Same public card count, different believed composition: only one fills the observer's
+    // own cheapest-route shortfall, so the belief must move the value.
+    let (needed_value, needed_hit) = steal_value_for([0, 0, 0, 0, 5], &params);
+    let (chaff_value, chaff_hit) = steal_value_for([5, 0, 0, 0, 0], &params);
+    assert_ne!(needed_hit.to_bits(), chaff_hit.to_bits());
+    assert_ne!(needed_value.to_bits(), chaff_value.to_bits());
+}
+
+#[test]
+fn robber_choice_zeroes_placement_on_the_fallback_hex() {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    for vertex in 0..topology.vertex_count() {
+        arena.state.vertex_owner[vertex] = 0;
+        arena.state.vertex_tier[vertex] = 1;
+    }
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let choice = threat::robber_choice(&view, &ThreatParams::default());
+    assert_eq!(
+        (choice.destination, choice.victim),
+        threat::robber(&view, &ThreatParams::default())
+    );
+    assert_eq!(choice.victim, None);
+    assert_eq!(choice.placement_score, 0.0);
+    assert_eq!(choice.steal_value, 0.0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "threat.knightStealWeight is non-negative and finite")]
+fn robber_choice_rejects_invalid_knight_params() {
+    let (topology, board, _rules, _config, arena) = fixture();
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    let params = ThreatParams {
+        knight_steal_weight: -1.0,
+        ..ThreatParams::default()
+    };
+    let _ = threat::robber_choice(&view, &params);
 }
 
 fn representative_inputs() -> EtwInputs {
