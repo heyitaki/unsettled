@@ -194,5 +194,5 @@ The `simulator-known-gaps` memory was reduced in the same pass, for the same rea
 Claims deliberately **not** moved, because they are not about the simulator or cannot live in the repo:
 
 - The solve-pipeline scope-control finding and the forwarded-argument test-design rule are process learnings about how this repo's runs are driven, and `spec.md` assigns those to memory.
-- The rules-audit corpus and its reproductions are in `.claude/pairs/sim-rules-audit/`, which is ignored. Memory keeps a pointer and the warning that it exists in no fresh clone. Whether to track it is open.
+- The rules-audit corpus and its reproductions lived in the ignored `.claude/pairs/sim-rules-audit/`. That directory was deleted in the 2026-08-28 repo sweep after the open question of whether to track it was decided against; the corpus is not recoverable. What the audit established survives as the `SIM-GAP-*` entries in [gaps.md](gaps.md) and the guarantees in [contracts.md](contracts.md).
 - Measurement conditions specific to this host — a known background CPU floor, and that `uptime`'s user count is not a contention signal — describe the machine rather than the simulator.
