@@ -9,7 +9,8 @@ The normative specification for the Catan self-play simulator in `simulator/`. E
 | File | Class | Holds |
 | --- | --- | --- |
 | [contracts.md](contracts.md) | **C** | Invariants and guarantees. A violation is a bug. |
-| [programme.md](programme.md) | **D** | Decisions: phase order, status, rationale, what each revision replaced. |
+| [programme.md](programme.md) | **D** | Decisions: phase order, status, rationale, what each revision replaced. Covers the opponent-model programme, phases A through J. |
+| [placement-programme.md](placement-programme.md) | **D** | Decisions for the settlement-placement programme, phases SP0 through SP6, and the verdicts behind them. |
 | [gaps.md](gaps.md) | **G** | Unmodelled scoring surfaces, each with a `SIM-GAP-NN` id. |
 | [measurements.md](measurements.md) | **M** | Append-only log of readings, one entry per reading, with provenance. |
 | [migration-ledger.md](migration-ledger.md) | — | Provenance of this extraction: one row per source claim and heading. |
@@ -34,6 +35,8 @@ Precedence matters because claims overlap. `--domain` having no default is **O**
 >
 > **One exception, stated narrowly because an unstated one becomes the next drift:** the repo-root `CLAUDE.md` may restate a rule as a bare imperative — no rationale, no numbers, no thresholds — when an agent must obey it without first reading the spec, and it must link to the owner. "Run `cargo test` in both profiles" qualifies; "release compiles out `debug_assert!(invariants_hold)`, the only detector for a class of piece/VP accounting bugs" does not.
 >
+> **A second exception, narrow in the same way:** a class-**D** file may state the **shape** of a reading it argues from, meaning what that reading intervened on and on what surface it was taken, when a phase's order or scope turns on that shape. It must link the owner. Never a number out of the entry, and never its verdict, including a shape worded so that the verdict follows from it. Why: a decision file whose argument a reader cannot check at the point it is made is worth less than the drift a bounded exception carries. "M-36 intervened on a count, mid-game, while SP3 is a quality measure at setup" qualifies; "M-36 measured the frontier count flat, so a quality term will read flat too" does not, because "flat" is the entry's verdict and what follows it is the entry's conclusion rather than this file's. The exception covers readings and nothing else: a contract, a gap, or another decision file's rule is named and linked, never restated.
+>
 > **Memory holds only process learnings and undecided questions.** No decisions, no measurements, no contracts, no gaps.
 
 ## The staleness contract
@@ -47,7 +50,9 @@ A number appearing in more than one file is a defect in this tree, not a conveni
 
 ## Citing code
 
-Cite code as `file.rs::symbol`, never `file.rs:line`. Line numbers rot silently; symbols fail loudly. `tools/link-check.py` enforces this indirectly: a citation carrying a directory prefix — a module written with its `policy/` directory in front, say — is treated as a repo path and reported missing unless it resolves in full. Bare module names carry no slash and are read as prose, so the `file.rs::symbol` form always passes.
+Cite code as `file.rs::symbol`, never `file.rs:line`. Line numbers rot silently; a symbol that moves fails loudly the moment a reader goes looking for it. A Rust module path spelled with `::` separators, `policy::frontier::opened`, is permitted where the module chain is what identifies the symbol, and is what this tree already uses for that symbol.
+
+Be exact about what `tools/link-check.py` does here, because it is natural to assume it enforces this rule and it does not. It resolves a backticked token only when that token contains a slash **and** ends at a known extension, so `simulator/placement/arms/h4_final.json` is checked and reported when it goes missing. Every symbol citation is invisible to it: `file.rs::symbol`, `policy::frontier::opened`, and a slashed `policy/frontier.rs::opened` all end at the symbol rather than at an extension, so none of the three is resolved and a typo in any of them is caught by nothing. The checker guards paths. A citation is guarded by review and by nothing else, so resolve every citation you touch by hand, which is also why the form has to name something a reviewer can open. Do not write the slashed citation form: it reads as a path, is not checked as one, and is not what the tree uses.
 
 ## One operational note about this directory
 

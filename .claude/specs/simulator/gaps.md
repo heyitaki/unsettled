@@ -2,11 +2,19 @@
 
 Class **G**: statements that the code does not do something, or does it wrong. Fixing the code makes the entry false — closing a gap means deleting its entry and saying so in the commit, not editing it into a contract. See [spec.md](spec.md) for the class rules and [programme.md](programme.md) for how to read this inventory.
 
-Ids are stable and assigned in source order. A closed gap's id is retired, not reused.
+Ids are stable and assigned in increasing order as gaps are recorded; an entry then sits under the topic heading it belongs to, so file order and id order do not agree and are not meant to. (Ids 01 through 33 were assigned in the order their claims appeared in `simulator/README.md`, which is what [migration-ledger.md](migration-ledger.md) means by source order; that was a property of the one-time extraction and does not govern ids minted after it.) A closed gap's id is retired, not reused.
 
 ## Initial placement
 
-**SIM-GAP-20.** The placement heuristics read `vertex_owner` for legality only — occupied, or adjacent to occupied. There is no draft-order awareness, no denial, and no model of what an opponent takes next, so the threat machinery G1 through G3 built is unavailable at setup. That is the placement tuning programme's subject rather than this one's, but it is worth stating plainly: setup is the one phase of the game the opponent model does not reach.
+**SIM-GAP-20.** The placement heuristics read `vertex_owner` for legality only — occupied, or adjacent to occupied. There is no draft-order awareness, no denial, and no model of what an opponent takes next, so the threat machinery G1 through G3 built is unavailable at setup. That is [the placement programme](placement-programme.md)'s subject rather than this one's, and its SP5 owns closing it, but it is worth stating plainly: setup is the one phase of the game the opponent model does not reach.
+
+**SIM-GAP-34.** Neither placement scorer prices what a settlement opens. `valuation.ts` scores production, board scarcity, the robber, diversity, ports and the setup grant, and none of those is sensitive to whether legal expansion sites exist behind the vertex, so a pair with no reachable third site scores identically to one with a strong third site at equal production. `policy::frontier::opened` is the in-game measure of the same quantity and has no placement counterpart.
+
+**SIM-GAP-35.** No term in the placement formula is sensitive to a vertex's hex count independently of its pip total. The setup grant is one card per adjacent producing hex regardless of token, so `handValue` was the only place hex count entered; with its weight adopted at zero, a two-hex coastal vertex and a three-hex inland vertex of equal pips now differ only through diversity. Whether that over-selects coastal port vertices is unmeasured.
+
+**SIM-GAP-36.** The placement formula prices no dev-card recipe. `recipeRoadBonus`, `recipeCityBonus` and `recipeSettlementBonus` cover the three building costs; the ore/wheat/sheep cost has no counterpart, so sheep earns credit only through the spread and the settlement recipe.
+
+**SIM-GAP-37.** Port value is not conditioned on coverage. `portWeight` is a flat scale, so a port is worth the same to a pair covering five resources as to one covering three, though converting a narrow spread is what a port is for. `portSurplusThreshold` gates on production of the ported resource alone and cannot express the deficit elsewhere.
 
 ## Performance
 
@@ -19,3 +27,9 @@ What follows for the gate: the throughput target the G3 plan registered for the 
 ## Action valuation
 
 **SIM-GAP-33.** The SIM-GAP-08 block bonus in `denial.rs::contest_term` decides "blocked" from build legality alone: a rival counts as blocked when every edge incident to the contested vertex other than the candidate is illegal for them to build. An edge the rival already owns is not legal to build, so a rival whose road network already touches the vertex — who can settle there with zero new roads — can satisfy the predicate, and the candidate is credited `contestBlockBonus` for a block that denies nothing. The missing condition is that the rival owns no edge incident to the vertex. Found in post-completion review and deliberately not hot-fixed: M-26 measured this seam and the Phase-I vector (M-44/M-45, denial gate on) was confirmed on `eval` and adopted on `gate` (M-46) with this exact semantics, so tightening the predicate must ride a preregistered `tuning` A/B with a fresh corpus against the adopted defaults. Until then, `contestBlockBonus` over-credits precisely on the edges where the rival is least blockable, bounded by `contestCap`.
+
+**SIM-GAP-38.** The robber's destination and its victim are both chosen blind to what would be stolen. `threat.rs::own_need_hit` prices the belief-derived probability that a stolen card fills the observer's own shortfall, but it is reachable only through `RobberChoice::steal_value`, which `heuristic_v1.rs::knight_action_score` consumes for play timing. The steal term inside `threat.rs::seat_terms` that participates in choosing the hex uses `victim_rank`, which carries normalized danger and hand size only, and the victim is then taken from whoever sits on the already-chosen hex. `victim_rank` also prices no denial of the victim's own need, though the belief state carries what would be needed to.
+
+**SIM-GAP-39.** The knight's own-tile relief motive is a hardcoded constant in `heuristic_v1.rs::knight_action_score`, not a declared parameter, so it cannot be swept, bounds-declared, or rejected by the params-file loader with the rest of the vector.
+
+**SIM-GAP-40.** Resource need is a smooth share wherever it is priced. `threat.rs::need_share` spreads the cheapest-route shortfall proportionally, so a steal or block that completes a build this turn scores the same as one that moves a distant goal a single card closer.

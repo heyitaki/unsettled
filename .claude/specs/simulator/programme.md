@@ -4,6 +4,8 @@ Class **D**: decisions, their rationale, and what each revision replaced. Not fa
 
 The simulator exists to measure which starting placements win, and ultimately to calibrate the app's own scorer (`src/engine/weights.ts`). The phase order below was revised after two findings, and the revision matters more than the list: **weight tuning now runs last.**
 
+This file covers phases A through J and the knight-timing item, all closed. The successor programme, which sharpens the placement scorer itself rather than the field it is measured against, is [placement-programme.md](placement-programme.md), phases SP0 through SP6.
+
 Why: a full-power sweep of the `resourceValue` spread found the optimum is policy-dependent and tracks trading volume — a light-trading policy and a heavy-trading one disagree about the best value, and neither answer is the answer. Every result measured so far was measured against a field of *self-regarding* policies, which model opponents almost not at all. Making the field threat-aware will invalidate those results the same way trading threatened to. Tuning weights against a field that is about to be replaced spends held-out seed domains on answers that will not survive.
 
 **Phases E, F and G were reassigned in this revision.** They previously meant "re-tune across the trading grid", "structural formula terms" and "adopt"; those survive as H and I below. An older note referring to Phase E or F means the old plan.
