@@ -305,10 +305,10 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 20: Run M-52 and record it
 
-- [ ] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [ ] Append `## M-52 — SP2a dev-card recipe bonus` with full provenance and the paired table
-- [ ] Record the disposition under the standing rule, including the single four-times-boards retry if it read `inconclusive`. If it survives, name it an SP6 candidate; adopt nothing
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
+- [x] Append `## M-52 — SP2a dev-card recipe bonus` with full provenance and the paired table
+- [x] Record the disposition under the standing rule, including the single four-times-boards retry if it read `inconclusive`. If it survives, name it an SP6 candidate; adopt nothing
+- [x] Link check passes
 
 ### Task 21: SP2b, condition port value on coverage deficit
 
