@@ -972,7 +972,7 @@ RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.to
 target/release/unsettled-sim evaluate ... --out runs/m49-post
 ```
 
-Load before the pre-change run `1.32 1.39 1.73`, after `2.89 1.72 1.84` (3.81s at 18 workers); before the post-change run `2.66 1.69 1.83`, after `4.05 1.99 1.93` (3.81s at 18 workers). 32,000 games per run, 64,000 total, **zero illegal actions in both**; the two invocations ran one at a time, after both builds finished, with no other CPU-heavy job. **The `base` identity check passes exactly**: 16,000 games, 3,986 wins, 0 draws in both artifacts, so no seat outside the changed code moved and the two runs share one reference vector.
+Load before the pre-change run `1.32 1.39 1.73`, after `2.89 1.72 1.84` (3.81s at 18 workers); before the post-change run `2.66 1.69 1.83`, after `4.05 1.99 1.93` (3.81s at 18 workers). 32,000 games per run, 64,000 total, **zero illegal actions in both**; the two invocations ran one at a time, after both builds finished, with no other CPU-heavy job. **The `base` identity check passes exactly**: 16,000 games, 3,986 wins, 0 draws in both artifacts, so no seat outside the changed code moved and the two runs share one reference vector. Both runs are admissible.
 
 | Run | Arm | Estimate | b | c | Selected interval | Verdict |
 | --- | --- | ---: | ---: | ---: | --- | --- |
@@ -1005,7 +1005,7 @@ target/release/unsettled-sim evaluate --layout standard4 --seats 4 --domain tuni
 
 The command above is the preregistered one elided at the repeated arms; the file carries it in full and every `--arm-policy` matched it exactly.
 
-Load before `5.41 4.00 3.09`, after `11.25 5.46 3.64` (24.6s at 18 workers, 7,163 games/s), `rustc 1.94.0 (4a4ef493e 2026-03-02)`. 176,000 games, **zero illegal actions**, 0 draws in every arm; the invocation ran alone, against a binary built beforehand, with no build or test suite in its command block. `base` sits at 3,975 wins of 16,000, `0.2484375`, close to the symmetric 0.25 corner as expected.
+Load before `5.41 4.00 3.09`, after `11.25 5.46 3.64` (24.6s at 18 workers, 7,163 games/s), `rustc 1.94.0 (4a4ef493e 2026-03-02)`. 176,000 games, **zero illegal actions**, 0 draws in every arm; the invocation ran alone, against a binary built beforehand, with no build or test suite in its command block. `base` sits at 3,975 wins of 16,000, `0.2484375`, close to the symmetric 0.25 corner as expected. The run is admissible.
 
 **A note on the timed window.** The invocation was issued twice. The first went through `cargo run` without `RUSTFLAGS="-D warnings"`, which re-fingerprinted and put a 12s compile inside the recorded `uptime` window; the compile finished before the measurement began, but the load pair no longer described the run. The second, recorded above, ran the prebuilt binary alone. The two `evaluation.json` artifacts compare **byte-identical**, which is the determinism contract holding and is why the first invocation costs nothing beyond the wasted seconds. Only the second is the record.
 

@@ -373,21 +373,21 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 27: Verify acceptance criteria
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` clean (the pre-existing `src/ui/glyphs.tsx` fast-refresh warning is the only permitted warning and must not have grown)
-- [ ] `npm test` fully green
-- [ ] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green
-- [ ] `git status` is clean apart from gitignored run artifacts
-- [ ] `.claude/specs/simulator/gaps.md` no longer contains `SIM-GAP-33`, `SIM-GAP-38`, `SIM-GAP-39` or `SIM-GAP-40`, and still contains `SIM-GAP-35`, `SIM-GAP-36` and `SIM-GAP-37`, since a term shipped at weight 0 closes nothing
-- [ ] `.claude/specs/simulator/measurements.md` contains M-47 through M-53, plus M-54 unless SP2c was skipped, each with a date, a commit, a domain, an exact command, load before and after, a games count, an illegal-action count, and an admissibility statement
-- [ ] Every M entry's `--domain` is `tuning`. Grep the file's new entries and the new preregs for `--domain eval` and `--domain gate` and confirm neither appears
-- [ ] `simulator/placement/default-weights.json` still matches `DEFAULT_WEIGHTS` (the vitest mirror test proves it), and every value in it that existed before this run is unchanged. The only additions are the new weights at 0
-- [ ] `simulator/placement/policy-default-params.json` differs from its pre-run state only by the new threat keys at their stated defaults
-- [ ] Every weights-shaped file under `simulator/placement/arms/` loads through the new exact-key walk test
-- [ ] `.claude/specs/simulator/placement-programme.md` carries dated decision notes for the SP2c gate outcome, the SP3 branch outcome, and SP1 completion, each appended rather than editing an existing paragraph
-- [ ] Write a run summary at the end of `.ralphex/progress/progress-simulator-placement-sp0-sp2.txt` listing every M entry produced, its verdict, and the surviving terms carried to SP6
+- [x] `npm run typecheck` clean (verified)
+- [x] `npm run lint` clean (the pre-existing `src/ui/glyphs.tsx` fast-refresh warning is the only permitted warning and must not have grown) (verified: one warning, the permitted `src/ui/glyphs.tsx` fast-refresh one, unchanged)
+- [x] `npm test` fully green (verified: 32 files, 367 tests)
+- [x] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references (verified: 0 bad references in 39 files)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green (verified)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green (verified)
+- [x] `git status` is clean apart from gitignored run artifacts (verified)
+- [x] `.claude/specs/simulator/gaps.md` no longer contains `SIM-GAP-33`, `SIM-GAP-38`, `SIM-GAP-39` or `SIM-GAP-40`, and still contains `SIM-GAP-35`, `SIM-GAP-36` and `SIM-GAP-37`, since a term shipped at weight 0 closes nothing (verified: gaps.md carries only SIM-GAP-34 through SIM-GAP-37 in that range)
+- [x] `.claude/specs/simulator/measurements.md` contains M-47 through M-53, plus M-54 unless SP2c was skipped, each with a date, a commit, a domain, an exact command, load before and after, a games count, an illegal-action count, and an admissibility statement (verified; M-54 absent as SP2c was skipped. M-49 and M-50 stated their admissibility conditions without the word, so an explicit admissibility sentence was added to each; M-48 cross-references M-47's load, command and admissibility because it is the same single invocation)
+- [x] Every M entry's `--domain` is `tuning`. Grep the file's new entries and the new preregs for `--domain eval` and `--domain gate` and confirm neither appears (verified: 8 `--domain tuning` in the new entries, 16 in the seven new preregs, zero `--domain eval` or `--domain gate` in either)
+- [x] `simulator/placement/default-weights.json` still matches `DEFAULT_WEIGHTS` (the vitest mirror test proves it), and every value in it that existed before this run is unchanged. The only additions are the new weights at 0 (verified: the only diff against the pre-run tree is `recipeDevCardBonus` and `portCoverageDeficitWeight`, both at 0)
+- [x] `simulator/placement/policy-default-params.json` differs from its pre-run state only by the new threat keys at their stated defaults (verified: byte-identical, because its `threat` section is null and the new keys therefore live in `ThreatParams::default()` and in `phase-i-candidate-params.json`, where they carry 0.15, 0.35 and 12.0 as their tasks specified)
+- [x] Every weights-shaped file under `simulator/placement/arms/` loads through the new exact-key walk test (verified: 51 weights-shaped arm files, all walked and count-pinned by `every_committed_weights_file_loads_through_the_full_contract`)
+- [x] `.claude/specs/simulator/placement-programme.md` carries dated decision notes for the SP2c gate outcome, the SP3 branch outcome, and SP1 completion, each appended rather than editing an existing paragraph (verified: SP0 decisions, SP1 completion, SP2 terms as built, SP2a verdict, SP2b term as built and SP2c closure, all dated 2026-09-01 and all appended)
+- [x] Write a run summary at the end of `.ralphex/progress/progress-simulator-placement-sp0-sp2.txt` listing every M entry produced, its verdict, and the surviving terms carried to SP6 (done)
 
 ## Post-Completion
 
