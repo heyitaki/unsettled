@@ -954,3 +954,36 @@ One confound the specification has to resolve before that term is built, recorde
 
 **Zero-site incidence answers the threshold question SP3's merge was hedged against, and answers it cleanly.** Not one of 16,000 pairs was boxed to zero reachable sites, so at four seats on `standard4` the threshold case a single gradient term could not carry does not occur at pair completion, and the response over the observed 1-to-20 range is a gradient. That is the reading SP3's one-term merge needed; it does not extend to `extension6` or to other seat counts, which this run did not observe.
 
+## M-49 — `SIM-GAP-33` contest block-bonus predicate
+
+2026-09-01, commit `5f27c8ef` (the preregistration commit; the predicate fix itself landed at `65203baa` and no shipped default moved), domain `tuning`. Preregistered in `docs/plans/preregs/2026-09-01-m49-simgap33-block-predicate.md` (committed before the run). `denial.rs::contest_term` scales a rival's danger contribution by `1 + contest_block_bonus` when the candidate edge is that rival's last remaining one-road approach to the contested vertex; until `65203baa` that predicate decided "blocked" from build legality alone, so a rival already owning an edge incident to the vertex passed it despite being able to settle there with no new road. The fix adds the missing condition. **The arm is the code change, not a parameter**: no key in `DenialParams` distinguishes the two predicates and no legacy flag was minted, so the run uses the preregistered two-build protocol against the pre-change binary.
+
+The two builds: pre-change at `47b1f39a` in a detached scratch worktree, post-change at the tree above. The only compiled delta between them is `simulator/crates/engine/src/policy/denial.rs`; everything else that moved is markdown or `simulator/crates/engine/tests/denial.rs`, which the binary does not link. Both built `--release`, both `meta.json` recording `rustc 1.94.0 (4a4ef493e 2026-03-02)`, so no toolchain mismatch. Because a code change applies to every seat in its own build, an all-composite field would cancel it by construction; following M-26, the field here is `heuristic-v1-trader-aware-threat-devcards`, the shipped composite minus exactly the component under test, and the composite sits on the hero seat alone.
+
+```text
+git worktree add --detach /tmp/unsettled-m49-pre 47b1f39ac84b88fba6ddf8268048f56088f862f0
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path /tmp/unsettled-m49-pre/simulator/Cargo.toml -p unsettled-sim
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# pre-change, from simulator/
+/tmp/unsettled-m49-pre/simulator/target/release/unsettled-sim evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity --arm base=pip_diversity --arm block=pip_diversity --arm-policy base=heuristic-v1-trader-aware-threat-devcards --arm-policy block=heuristic-v1-trader-aware-threat-devcards-denial --reference base --boards 2000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards --threads 0 --player-trading --threshold 0.01 --alpha 0.05 --out runs/m49-pre
+
+# post-change, from simulator/, identical in every other argument
+target/release/unsettled-sim evaluate ... --out runs/m49-post
+```
+
+Load before the pre-change run `1.32 1.39 1.73`, after `2.89 1.72 1.84` (3.81s at 18 workers); before the post-change run `2.66 1.69 1.83`, after `4.05 1.99 1.93` (3.81s at 18 workers). 32,000 games per run, 64,000 total, **zero illegal actions in both**; the two invocations ran one at a time, after both builds finished, with no other CPU-heavy job. **The `base` identity check passes exactly**: 16,000 games, 3,986 wins, 0 draws in both artifacts, so no seat outside the changed code moved and the two runs share one reference vector.
+
+| Run | Arm | Estimate | b | c | Selected interval | Verdict |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| pre (`47b1f39a`) | block | `+0.0100625` | 730 | 569 | clustered `[+0.0054648, +0.0146602]` | inconclusive |
+| post (`65203baa`) | block | `+0.0100000` | 729 | 569 | clustered `[+0.0054036, +0.0145964]` | inconclusive |
+
+**The decision statistic.** `delta = est_post - est_pre = -0.0000625`, interval `[-0.0065637, +0.0064387]` from the two selected half-widths combined in quadrature as preregistered. That lies strictly inside +-1pp, so **`delta` reads `equivalent`**: the predicate correction cost nothing and bought nothing measurable, its point estimate being 0.006pp against a 1pp practical threshold. Each run's own `block` verdict is `inconclusive` and answers a different question — whether the denial component beats a denial-free field, which lands almost exactly on the +1pp threshold at about +1.0pp with the interval straddling it — and it is not the decision.
+
+**Disposition, per the preregistered rule.** This is a correctness fix and it lands whatever the verdict; `equivalent` records it as **costless**, so there is nothing to flag for the user and nothing to revert. Nothing is adopted: `src/engine/weights.ts`, `simulator/placement/default-weights.json`, `simulator/placement/policy-default-params.json` and every file under `simulator/placement/arms/` are untouched by this run.
+
+The sharpest number here is not in the table. Between the two builds exactly **one of 16,000 hero games changed outcome** (block wins 4,147 to 4,146; discordant pairs 1,299 to 1,298), which is the effect size the corpus recapture behind the fix already implied when it moved 7 of 600 games on `standard4`. The prereg's honest limit on this design therefore did not bite: each run's interval carries the variance of the whole denial component and quadrature widens it further, but because the two runs are so nearly identical the difference of their estimates is pinned near zero anyway, and `equivalent` survives rather than the `inconclusive` the prereg thought equally likely. The prediction was right in magnitude, calling `delta` inside +-0.3pp against a measured 0.006pp, and wrong only in the sign of a point estimate at one part in 16,000, which is noise rather than a direction.
+
+**Scope, as preregistered.** This is the predicate's effect on one seat playing the composite against three seats that do not. It is **not** the effect in the shipped configuration where every seat is denial-gated and the correction applies to all four at once, which no design available in this binary can measure, since a symmetric field cancels the change by construction. No later phase may cite M-49 as a measurement of the all-composite field.
+

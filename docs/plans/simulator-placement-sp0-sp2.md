@@ -197,10 +197,10 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 10: Run M-49 and record it
 
-- [ ] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [ ] Append `## M-49 — SIM-GAP-33 contest block-bonus predicate` with full provenance and the paired table in the existing format (arm, estimate, b, c, selected interval, verdict)
-- [ ] Record the disposition per the preregistered rule, including a flag for the user if it read `worse`
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
+- [x] Append `## M-49 — SIM-GAP-33 contest block-bonus predicate` with full provenance and the paired table in the existing format (arm, estimate, b, c, selected interval, verdict)
+- [x] Record the disposition per the preregistered rule, including a flag for the user if it read `worse`
+- [x] Link check passes
 
 ### Task 11: SP1b, price denial of the victim's own need
 
