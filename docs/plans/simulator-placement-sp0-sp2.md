@@ -156,12 +156,12 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 6: Run the SP0 diagnostic and record M-47 and M-48
 
-- [ ] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [ ] Append `## M-47 — SP0-D1 coastal selection` to `.claude/specs/simulator/measurements.md` with full provenance (date, commit, domain, exact command, load before and after, games, illegal actions, admissibility) and the D1 numbers overall and per draft slot, ending with the gate outcome for SP2c
-- [ ] Append `## M-48 — SP0-D2 expansion boxing and blockability` in the same shape, with both quartile gaps, the zero-site incidence, and the branch outcome for the robber-attraction term
-- [ ] Append a dated decision note to `.claude/specs/simulator/placement-programme.md` recording, as decisions this run made: whether SP2c runs, and whether SP3 will need a separate boxing penalty rather than one gradient term. Supersede, never edit, per the class-D rule
-- [ ] Copy `diagnostics.json` nowhere: `simulator/runs/` is gitignored and the M entries are the record
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
+- [x] Append `## M-47 — SP0-D1 coastal selection` to `.claude/specs/simulator/measurements.md` with full provenance (date, commit, domain, exact command, load before and after, games, illegal actions, admissibility) and the D1 numbers overall and per draft slot, ending with the gate outcome for SP2c
+- [x] Append `## M-48 — SP0-D2 expansion boxing and blockability` in the same shape, with both quartile gaps, the zero-site incidence, and the branch outcome for the robber-attraction term
+- [x] Append a dated decision note to `.claude/specs/simulator/placement-programme.md` recording, as decisions this run made: whether SP2c runs, and whether SP3 will need a separate boxing penalty rather than one gradient term. Supersede, never edit, per the class-D rule
+- [x] Copy `diagnostics.json` nowhere: `simulator/runs/` is gitignored and the M entries are the record
+- [x] Link check passes
 
 ### Task 7: SP1a, joint argmax over hex and victim
 
