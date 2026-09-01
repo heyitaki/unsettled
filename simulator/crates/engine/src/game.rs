@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::board::SimBoard;
 use crate::longest_road::{RoadNetwork, leading_holder, update_road_card};
-use crate::placement::{PlacementKind, choose};
+use crate::placement::{self, PlacementKind, choose};
 use crate::policy::{self, PolicyKind, PolicyScratch};
 use crate::rng::Streams;
 use crate::rules::{
@@ -1422,23 +1422,13 @@ impl GameArena {
         topology: &Topology,
         seat: usize,
     ) -> [u16; RESOURCE_COUNT] {
-        let mut production = [0; RESOURCE_COUNT];
-        for vertex_index in 0..topology.vertex_count() {
-            if self.state.vertex_owner[vertex_index] != seat as u8 {
-                continue;
-            }
-            for hex in topology.vertex_hexes(vertex_index as Vertex) {
-                if let (Some(resource), Some(token)) = (
-                    board.tiles()[usize::from(*hex)],
-                    board.tokens()[usize::from(*hex)],
-                ) {
-                    production[resource.index()] +=
-                        u16::from(6_u8.saturating_sub(7_u8.abs_diff(token)))
-                            * u16::from(self.state.vertex_tier[vertex_index].max(1));
-                }
-            }
-        }
-        production
+        placement::production_pips(
+            board,
+            topology,
+            &self.state.vertex_owner,
+            Some(&self.state.vertex_tier),
+            seat as u8,
+        )
     }
 
     fn recompute_all_roads(&mut self, topology: &Topology, rules: &RuleConfig, seats: usize) {

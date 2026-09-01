@@ -11,6 +11,9 @@ use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout, Topology};
 
 use crate::boardgen::generate_board;
+use crate::coastal::{
+    CoastalPick, CoastalSelection, PickComparison, coastal_selection, game_comparisons,
+};
 use crate::evaluate::{EvaluationDomain, EvaluationUnit, evaluation_schedule, evaluation_workers};
 use crate::output::Meta;
 use crate::stats::normal_quantile;
@@ -39,11 +42,14 @@ pub struct DiagnoseRequest<'a> {
 }
 
 /// One game's observation: where in the schedule it was played, the setup picks every seat made,
-/// and how it ended. The SP0 statistics are read off these records.
+/// how each pick compared with its pip-matched runner-up, and how the game ended. The SP0
+/// statistics are read off these records.
 #[derive(Clone, Debug)]
 pub struct GameObservation {
     pub unit: EvaluationUnit,
     pub picks: Vec<SetupPick>,
+    /// One entry per pick, in pick order. Computed per game so the aggregation stays serial.
+    pub comparisons: Vec<PickComparison>,
     pub winner: Option<u8>,
     pub draw: bool,
     pub illegal_actions: u32,
@@ -85,6 +91,7 @@ pub struct ObservationCounts {
 pub struct Diagnostics {
     pub config: DiagnosticsConfig,
     pub observations: ObservationCounts,
+    pub coastal_selection: CoastalSelection,
     pub illegal_actions: u64,
 }
 
@@ -131,8 +138,15 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
         schedule
             .par_iter()
             .map_init(
-                || (GameArena::default(), Vec::<SetupPick>::new()),
-                |(arena, trace), unit| {
+                || {
+                    (
+                        GameArena::default(),
+                        Vec::<SetupPick>::new(),
+                        Vec::<u8>::new(),
+                        Vec::<PickComparison>::new(),
+                    )
+                },
+                |(arena, trace, owners, comparisons), unit| {
                     trace.clear();
                     let mut config = GameConfig::default();
                     for seat in 0..request.seats {
@@ -145,11 +159,20 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
                         unit.rep as u64,
                         DIAGNOSTIC_HERO_SEAT as u64,
                     );
-                    let result =
-                        arena.play_traced(&boards[unit.board], &topology, &rules, &config, trace);
+                    let board = &boards[unit.board];
+                    let result = arena.play_traced(board, &topology, &rules, &config, trace);
+                    game_comparisons(
+                        board,
+                        &topology,
+                        request.placement,
+                        trace,
+                        owners,
+                        comparisons,
+                    );
                     GameObservation {
                         unit: *unit,
                         picks: trace.clone(),
+                        comparisons: comparisons.clone(),
                         winner: result.winner,
                         draw: result.draw,
                         illegal_actions: result.illegal_actions,
@@ -169,12 +192,16 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
     // finished first.
     let mut counts = ObservationCounts::default();
     let mut illegal_actions = 0_u64;
+    let mut coastal_picks = Vec::with_capacity(games * 2 * request.seats);
     for (unit, observation) in schedule.iter().zip(&observations) {
         if observation.unit != *unit {
             return Err(
                 "diagnostic schedule integrity error: observations are out of schedule order"
                     .into(),
             );
+        }
+        if observation.comparisons.len() != observation.picks.len() {
+            return Err("diagnostic integrity error: a pick is missing its comparison".into());
         }
         counts.games += 1;
         counts.setup_picks += observation.picks.len();
@@ -185,7 +212,16 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
             counts.drawn_games += 1;
         }
         illegal_actions += u64::from(observation.illegal_actions);
+        for (pick, comparison) in observation.picks.iter().zip(&observation.comparisons) {
+            coastal_picks.push(CoastalPick {
+                board: observation.unit.board,
+                seat: pick.seat,
+                comparison: *comparison,
+                seat_won: observation.winner == Some(pick.seat),
+            });
+        }
     }
+    let z = normal_quantile(1.0 - request.alpha / 2.0);
 
     Ok(Diagnostics {
         config: DiagnosticsConfig {
@@ -201,10 +237,11 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
             reps: request.reps,
             games,
             alpha: request.alpha,
-            z: normal_quantile(1.0 - request.alpha / 2.0),
+            z,
             allow_unofficial: request.allow_unofficial,
         },
         observations: counts,
+        coastal_selection: coastal_selection(&coastal_picks, request.seats, request.boards, z),
         illegal_actions,
     })
 }

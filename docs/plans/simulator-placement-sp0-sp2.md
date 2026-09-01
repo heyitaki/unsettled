@@ -122,16 +122,16 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 3: SP0-D1, the coastal-selection statistic
 
-- [ ] For each recorded setup pick, rebuild the `vertex_owner` array as it stood immediately before that pick by replaying the preceding picks of the same game
-- [ ] Score every legal candidate vertex at that state with the same `AppFormulaScorer::score_for_owner` call the pick used, with the same `grant` flag
-- [ ] Take the chosen vertex and the best-scoring unchosen legal alternative whose pip total is within one of the chosen vertex's pip total. Record the hex count of each. Skip the pick if no such alternative exists
-- [ ] Discard pairs whose two hex counts are equal
-- [ ] Over the pairs that remain, report the share in which the chosen vertex had the lower hex count, with a board-clustered interval at the run's `--alpha`, reusing the clustered interval machinery in `simulator/crates/cli/src/stats.rs`
-- [ ] Report the win rate of the picking seat's games split by that choice: lower hex count chosen versus not
-- [ ] Report all of the above overall and broken down per draft slot, meaning the picking seat's index, so a slot effect cannot hide inside an average
-- [ ] Emit a boolean `sp2cGatePassed` computed from the preregistered passing condition: the share sits above 50% by more than its clustered interval **and** the lower-hex-count games win at least 1 percentage point less often. Both conditions, not either
-- [ ] Add a Rust test over a hand-built fixture game with known picks that pins the pair construction, the tie discard, and the gate boolean in both directions
-- [ ] Both cargo profiles green
+- [x] For each recorded setup pick, rebuild the `vertex_owner` array as it stood immediately before that pick by replaying the preceding picks of the same game
+- [x] Score every legal candidate vertex at that state with the same `AppFormulaScorer::score_for_owner` call the pick used, with the same `grant` flag
+- [x] Take the chosen vertex and the best-scoring unchosen legal alternative whose pip total is within one of the chosen vertex's pip total. Record the hex count of each. Skip the pick if no such alternative exists
+- [x] Discard pairs whose two hex counts are equal
+- [x] Over the pairs that remain, report the share in which the chosen vertex had the lower hex count, with a board-clustered interval at the run's `--alpha`, reusing the clustered interval machinery in `simulator/crates/cli/src/stats.rs`
+- [x] Report the win rate of the picking seat's games split by that choice: lower hex count chosen versus not
+- [x] Report all of the above overall and broken down per draft slot, meaning the picking seat's index, so a slot effect cannot hide inside an average
+- [x] Emit a boolean `sp2cGatePassed` computed from the preregistered passing condition: the share sits above 50% by more than its clustered interval **and** the lower-hex-count games win at least 1 percentage point less often. Both conditions, not either
+- [x] Add a Rust test over a hand-built fixture game with known picks that pins the pair construction, the tie discard, and the gate boolean in both directions
+- [x] Both cargo profiles green
 
 ### Task 4: SP0-D2, boxing and blockability
 
