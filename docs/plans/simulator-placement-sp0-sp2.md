@@ -333,10 +333,10 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 23: Run M-53 and record it
 
-- [ ] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [ ] Append `## M-53 — SP2b coverage-conditioned port value` with full provenance and the paired table
-- [ ] Record the disposition under the standing rule, including the single retry if it read `inconclusive`
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
+- [x] Append `## M-53 — SP2b coverage-conditioned port value` with full provenance and the paired table
+- [x] Record the disposition under the standing rule, including the single retry if it read `inconclusive` (the screen read `inconclusive`, the single preregistered retry at 8000 boards read `inconclusive` again, so the item is recorded unresolved and stops)
+- [x] Link check passes
 
 ### Task 24: SP2c, the hex-count tempo term, conditional on M-47
 
