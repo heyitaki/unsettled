@@ -1503,9 +1503,11 @@ fn on_trade(effects: &[Effect]) {
 
 fn dispatch_effects(effects: &[Effect]) {
     // `Effect` is uninhabited, so the slice is always empty and the match is the exhaustive
-    // handler a future variant would extend. Reading one element rather than looping keeps
-    // `clippy::never_loop`, a deny-by-default lint, from failing the whole workspace.
-    if let Some(effect) = effects.first() {
+    // handler a future variant would extend. The loop stays because a future variant must be
+    // dispatched for every effect, not just the first; the allow is only for the empty case,
+    // where `clippy::never_loop` sees a body that cannot come back.
+    #[allow(clippy::never_loop)]
+    for effect in effects {
         match *effect {}
     }
 }
