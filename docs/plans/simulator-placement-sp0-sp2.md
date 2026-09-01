@@ -147,12 +147,12 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 5: Preregister M-47 and M-48
 
-- [ ] Write `docs/plans/preregs/<today>-m47-sp0-d1-coastal-selection.md` covering the D1 reading: what it measures, why the pip-matched runner-up construction makes 50% the null, the exact command, the passing condition for SP2c stated before the run, and a prediction
-- [ ] Write `docs/plans/preregs/<today>-m48-sp0-d2-expansion-blockability.md` covering both D2 quantities, why both are read at pair completion rather than at game end, the exact command, the branch condition that decides whether the dropped robber-attraction term is revisited, and a prediction
-- [ ] Both preregs name the single invocation that produces all three readings, at `standard4`, 4 seats, `--domain tuning`, 2000 boards x 2 reps, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, placement `app_formula:placement/default-weights.json`, `--alpha 0.05`, `--threads 0`
-- [ ] Both preregs state that this is a diagnostic with no arms and no verdict, so the paired-statistics disposition rule does not apply to it; what it produces is a gate boolean and a branch boolean
-- [ ] Both preregs record the admissibility conditions: `uptime` before and after, zero illegal actions, no concurrent CPU-heavy job
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m47-sp0-d1-coastal-selection.md` covering the D1 reading: what it measures, why the pip-matched runner-up construction makes 50% the null, the exact command, the passing condition for SP2c stated before the run, and a prediction
+- [x] Write `docs/plans/preregs/<today>-m48-sp0-d2-expansion-blockability.md` covering both D2 quantities, why both are read at pair completion rather than at game end, the exact command, the branch condition that decides whether the dropped robber-attraction term is revisited, and a prediction
+- [x] Both preregs name the single invocation that produces all three readings, at `standard4`, 4 seats, `--domain tuning`, 2000 boards x 2 reps, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, placement `app_formula:placement/default-weights.json`, `--alpha 0.05`, `--threads 0`
+- [x] Both preregs state that this is a diagnostic with no arms and no verdict, so the paired-statistics disposition rule does not apply to it; what it produces is a gate boolean and a branch boolean
+- [x] Both preregs record the admissibility conditions: `uptime` before and after, zero illegal actions, no concurrent CPU-heavy job
+- [x] Link check passes
 
 ### Task 6: Run the SP0 diagnostic and record M-47 and M-48
 
