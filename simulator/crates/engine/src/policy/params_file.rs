@@ -792,6 +792,79 @@ mod tests {
         assert_eq!(found, expected, "the SP1e sweep commits 5 axes x 2 arms");
     }
 
+    /// The four axes M-46 adopted, as JSON pointer, arm slug and the value the axis
+    /// carried before the adoption. The pre-adoption values are the ones
+    /// `screen_baseline_value` restores; M-51 reverts them one at a time to ask whether
+    /// the adoption still reads the same way against the post-SP1 field.
+    const SP1R_REVERTS: [(&str, &str, f64); 4] = [
+        ("/devBuyScale", "devbuy", 1.0),
+        ("/trading/etwWeight", "tretw", 1.0),
+        ("/trading/dangerFloor", "trfloor", 1.0),
+        ("/trading/dangerWeight", "trdangerw", 0.5),
+    ];
+
+    /// Walks the committed M-51 re-screen arms (`placement/arms/sp1r_*.json`): each file
+    /// loads through the full contract, is the *post-SP1 live* composite defaults with
+    /// exactly one adopted axis put back to its pre-adoption value, and that value sits
+    /// inside the axis's committed sweep-bounds range. The M-51 run also carries a fifth
+    /// arm on the weights side, which needs no file of its own: it is the committed
+    /// `phase-i-candidate-weights.json`, already pinned as the defaults with
+    /// `handValueWeight` at its pre-drop 0.4 by
+    /// `the_phase_i_candidate_files_record_the_adopted_vectors`.
+    #[test]
+    fn the_sp1r_arm_files_are_the_committed_pre_adoption_reverts() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base = composite_value();
+        let baseline = screen_baseline_value();
+
+        let mut expected = Vec::new();
+        for (leaf, slug, pre_adoption) in SP1R_REVERTS {
+            assert_eq!(
+                baseline.pointer(leaf).expect("leaf").as_f64(),
+                Some(pre_adoption),
+                "{leaf}: the revert value must be the pre-adoption baseline the H screens ran on"
+            );
+            let range = bounds["policy"]
+                .pointer(leaf)
+                .unwrap_or_else(|| panic!("no bounds range for {leaf}"));
+            assert!(
+                range["min"].as_f64().expect("number") <= pre_adoption
+                    && pre_adoption <= range["max"].as_f64().expect("number"),
+                "{leaf}: revert value {pre_adoption} lies outside its bounds range"
+            );
+
+            let name = format!("sp1r_{slug}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            parse_params_file(&source).unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+
+            let mut reverted = base.clone();
+            *reverted.pointer_mut(leaf).expect("leaf") = Value::from(pre_adoption);
+            assert_eq!(
+                file, reverted,
+                "{name} must be the post-SP1 defaults with {leaf} back at {pre_adoption}"
+            );
+            expected.push(name);
+        }
+
+        // No stray sp1r_ file: an arm nobody preregistered would silently join the run.
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
+            let name = entry.expect("entry").file_name().to_string_lossy().into_owned();
+            if name.starts_with("sp1r_") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "the M-51 re-screen commits one arm per adopted axis");
+    }
+
     /// The M-44 H4 combine winners: JSON pointer, slug of the committed revert arm, and
     /// the winner value. Preregistered in the M-44 prereg; the values are the largest
     /// `better` estimate per axis from M-41/M-42.

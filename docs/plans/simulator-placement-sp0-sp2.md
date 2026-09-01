@@ -264,14 +264,14 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 16: Preregister M-51, the post-SP1 re-screen
 
-- [ ] Write `docs/plans/preregs/<today>-m51-post-sp1-rescreen.md`
-- [ ] The SP1 field change invalidates the reading that confirmed the adopted Phase-I vector, so this run re-measures that vector against the moved field before SP2 opens. The defaults stay shipped either way; what is at stake is whether the reading still supports them
-- [ ] Arms: the four adopted Phase-I axes reverted to their pre-adoption values, one arm each, against reference `base` = the post-SP1 defaults. The four axes are named in M-46; read that entry rather than restating it here
-- [ ] Add a fifth arm re-screening `handValueWeight` at its pre-drop value, since M-43 was taken on a field playing ETW-aware and SP1 is what changed that property. This arm is a weights file, so preregister it as its own invocation with field `app_formula:placement/default-weights.json`
-- [ ] Confirmation power: 8000 boards x 2 reps for each invocation
-- [ ] Decision rule fixed before the run: record only. A `worse` reading on any reverted axis confirms the adoption still holds against the moved field; a `better` reading means the adoption no longer holds and is recorded and flagged for the user, with no default changed
-- [ ] Record the prediction and the admissibility conditions
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m51-post-sp1-rescreen.md`
+- [x] The SP1 field change invalidates the reading that confirmed the adopted Phase-I vector, so this run re-measures that vector against the moved field before SP2 opens. The defaults stay shipped either way; what is at stake is whether the reading still supports them
+- [x] Arms: the four adopted Phase-I axes reverted to their pre-adoption values, one arm each, against reference `base` = the post-SP1 defaults. The four axes are named in M-46; read that entry rather than restating it here
+- [x] Add a fifth arm re-screening `handValueWeight` at its pre-drop value, since M-43 was taken on a field playing ETW-aware and SP1 is what changed that property. This arm is a weights file, so preregister it as its own invocation with field `app_formula:placement/default-weights.json`
+- [x] Confirmation power: 8000 boards x 2 reps for each invocation
+- [x] Decision rule fixed before the run: record only. A `worse` reading on any reverted axis confirms the adoption still holds against the moved field; a `better` reading means the adoption no longer holds and is recorded and flagged for the user, with no default changed
+- [x] Record the prediction and the admissibility conditions
+- [x] Link check passes
 
 ### Task 17: Run M-51 and record it
 
