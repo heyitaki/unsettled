@@ -177,7 +177,7 @@ Positional competition is threat multiplied by legal one-road reach, site openne
 
 ## Output stability
 
-Deterministic result artifacts include a `playerTrading` config block only when the mechanism is enabled. `evaluation.json` likewise carries an `armPolicies` block only when at least one `--arm-policy` was given, so default-off output remains byte-identical.
+Deterministic result artifacts include a `playerTrading` config block only when the mechanism is enabled. `evaluation.json` likewise carries an `armPolicies` block only when at least one `--arm-policy` was given, so default-off output remains byte-identical. `diagnostics.json` follows the same rule for its own `playerTrading` block.
 
 `--allow-unofficial` is echoed in `results.json`.
 
@@ -188,12 +188,13 @@ What each artifact contains:
 - `meta.json`: elapsed time, throughput, worker count, and version data.
 - Optional JSONL: ordered per-game schedule coordinates, seat placements, and result.
 - `evaluation.json`: the run configuration, label-keyed arm marginals, ordered paired comparisons, and the total illegal-action count.
+- `diagnostics.json`: the run configuration, the observation counts the statistics rest on, the setup-time statistics themselves, and the total illegal-action count.
 
 The optional corpus JSONL carries identifiers, placements, and a terminal `GameResult` only. It records no candidate scores, chosen action, or per-turn state. A byte-exact corpus can identify which games changed and prove a mechanical stage stable, but it cannot by itself supply per-decision evidence; a behavioural explanation needs a paired decision trace read at each game's first divergence.
 
 ## Determinism
 
-`results.json` and `evaluation.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. Dice, deck, chance, player trading, and each seat policy use independent xoshiro256** streams. Player-trade response softening uses only the trade stream; acceptor selection is deterministic from the proposer's view. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
+`results.json`, `evaluation.json` and `diagnostics.json` contain no time or thread-count fields. Tournament game seeds are derived from the base seed and `(board, rep)` only, so all rotations share dice, deck, and chance streams; evaluation game seeds use the domain and full unit coordinate described above. A diagnostic has no arm to rotate, so `diagnose` pins the rotation coordinate at hero seat 0 and generates its boards exactly as `evaluate` does, which puts its games on an `evaluate` run's boards at the same domain, layout and seat count. Dice, deck, chance, player trading, and each seat policy use independent xoshiro256** streams. Player-trade response softening uses only the trade stream; acceptor selection is deterministic from the proposer's view. Rayon collects each indexed schedule in order, then aggregation runs serially through that order. Repeating a run with the same seed or domain produces byte-identical result artifacts at any worker count.
 
 ## Acceptance for any engine change
 

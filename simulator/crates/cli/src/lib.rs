@@ -1,4 +1,5 @@
 pub mod boardgen;
+pub mod diagnose;
 pub mod evaluate;
 pub mod heuristics;
 pub mod output;

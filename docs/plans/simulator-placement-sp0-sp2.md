@@ -112,13 +112,13 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 2: `diagnose` subcommand and its deterministic artifact
 
-- [ ] Add `Command::Diagnose(DiagnoseArgs)` to `simulator/crates/cli/src/main.rs` with `--layout`, `--seats`, `--domain`, `--placement`, `--boards`, `--reps`, `--policy`, `--player-trading`, `--alpha`, `--threads`, `--out`, and `--allow-unofficial`, following `EvaluateArgs` for defaults and validation
-- [ ] Every seat uses `--placement` and `--policy`; there is no field, no arm and no hero-seat rotation
-- [ ] Derive the game seed from `(domain seed, board, rep, hero seat = 0)` through the existing evaluation seed derivation, so a diagnose run is reproducible and its boards are the same board set an `evaluate` run at the same domain, layout and seat count would generate. Document the fixed hero-seat slot in the code
-- [ ] Run `boards * reps` games in schedule order under rayon, collecting one traced observation record per game, aggregated serially through that order
-- [ ] Write `diagnostics.json` plus `meta.json` to `--out`. `diagnostics.json` carries the run configuration and the statistics only, with no elapsed time and no worker count, so repeating a run produces a byte-identical artifact at any worker count. Populate it in this task with the observation counts alone; Tasks 3 and 4 add the statistics
-- [ ] Add a CLI test asserting `--domain` is required, that an unofficial seat count is rejected without `--allow-unofficial`, and that two runs at different `--threads` produce byte-identical `diagnostics.json`
-- [ ] Both cargo profiles green
+- [x] Add `Command::Diagnose(DiagnoseArgs)` to `simulator/crates/cli/src/main.rs` with `--layout`, `--seats`, `--domain`, `--placement`, `--boards`, `--reps`, `--policy`, `--player-trading`, `--alpha`, `--threads`, `--out`, and `--allow-unofficial`, following `EvaluateArgs` for defaults and validation
+- [x] Every seat uses `--placement` and `--policy`; there is no field, no arm and no hero-seat rotation
+- [x] Derive the game seed from `(domain seed, board, rep, hero seat = 0)` through the existing evaluation seed derivation, so a diagnose run is reproducible and its boards are the same board set an `evaluate` run at the same domain, layout and seat count would generate. Document the fixed hero-seat slot in the code
+- [x] Run `boards * reps` games in schedule order under rayon, collecting one traced observation record per game, aggregated serially through that order
+- [x] Write `diagnostics.json` plus `meta.json` to `--out`. `diagnostics.json` carries the run configuration and the statistics only, with no elapsed time and no worker count, so repeating a run produces a byte-identical artifact at any worker count. Populate it in this task with the observation counts alone; Tasks 3 and 4 add the statistics
+- [x] Add a CLI test asserting `--domain` is required, that an unofficial seat count is rejected without `--allow-unofficial`, and that two runs at different `--threads` produce byte-identical `diagnostics.json`
+- [x] Both cargo profiles green
 
 ### Task 3: SP0-D1, the coastal-selection statistic
 

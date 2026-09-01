@@ -13,6 +13,7 @@ use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::wire::WireBoard;
 use unsettled_sim::boardgen::generate_board;
+use unsettled_sim::diagnose::{DiagnoseRequest, diagnose, write_diagnostic_outputs};
 use unsettled_sim::evaluate::{
     EvaluateRequest, EvaluationDomain, evaluate, evaluation_meta, parse_arm_spec,
     write_evaluation_outputs,
@@ -38,6 +39,8 @@ enum Command {
     Tournament(TournamentArgs),
     /// Evaluate labelled hero placement arms against a fixed field.
     Evaluate(EvaluateArgs),
+    /// Observe one placement and policy playing every seat, and report setup-time diagnostics.
+    Diagnose(DiagnoseArgs),
     /// Simulate games from an app-exported Board JSON file.
     Simulate(SimulateArgs),
     /// Measure single-core and parallel game throughput.
@@ -157,6 +160,36 @@ struct EvaluateArgs {
     trade: TradeArgs,
 }
 
+/// Defaults and validation follow `EvaluateArgs`, minus everything that only an arm needs: a
+/// diagnostic has no field, no arm, no arm policy, no reference and no equivalence threshold.
+#[derive(Args)]
+struct DiagnoseArgs {
+    #[arg(long, default_value = "standard4")]
+    layout: String,
+    #[arg(long)]
+    seats: Option<usize>,
+    #[arg(long)]
+    domain: String,
+    #[arg(long)]
+    placement: String,
+    #[arg(long)]
+    boards: usize,
+    #[arg(long)]
+    reps: usize,
+    #[arg(long, default_value = "heuristic-v1")]
+    policy: String,
+    #[arg(long, default_value_t = 0.05)]
+    alpha: f64,
+    #[arg(long, default_value_t = 0)]
+    threads: usize,
+    #[arg(long)]
+    out: PathBuf,
+    #[arg(long)]
+    allow_unofficial: bool,
+    #[command(flatten)]
+    trade: TradeArgs,
+}
+
 #[derive(Args)]
 struct BenchArgs {
     #[arg(long, default_value = "standard4")]
@@ -243,6 +276,7 @@ fn execute(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::Tournament(args) => tournament(args),
         Command::Evaluate(args) => evaluate_command(args),
+        Command::Diagnose(args) => diagnose_command(args),
         Command::Simulate(args) => simulate(args),
         Command::Bench(args) => bench(args),
     }
@@ -438,6 +472,45 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         evaluation.config.units,
         games,
         evaluation.illegal_actions
+    );
+    Ok(())
+}
+
+fn diagnose_command(args: DiagnoseArgs) -> Result<(), String> {
+    let player_trading = args.trade.config()?;
+    let layout = parse_layout(&args.layout)?;
+    let seats = args
+        .seats
+        .unwrap_or(if layout == Layout::Standard4 { 4 } else { 6 });
+    let domain = EvaluationDomain::parse(&args.domain)?;
+    let placement = parse_heuristic(&args.placement)?;
+    let policy = parse_policy(&args.policy)?;
+    let started = Instant::now();
+    let diagnostics = diagnose(DiagnoseRequest {
+        layout,
+        seats,
+        domain,
+        placement_spec: &args.placement,
+        placement,
+        boards: args.boards,
+        reps: args.reps,
+        policy,
+        policy_name: &args.policy,
+        player_trading,
+        alpha: args.alpha,
+        threads: args.threads,
+        allow_unofficial: args.allow_unofficial,
+    })?;
+    let elapsed = started.elapsed().as_secs_f64();
+    let meta = evaluation_meta(elapsed, diagnostics.config.games, args.threads);
+    write_diagnostic_outputs(&args.out, &diagnostics, &meta)?;
+    println!(
+        "completed diagnostic domain {} ({}) with {} games, {} setup picks, illegal actions: {}",
+        diagnostics.config.domain,
+        diagnostics.config.domain_seed,
+        diagnostics.observations.games,
+        diagnostics.observations.setup_picks,
+        diagnostics.illegal_actions
     );
     Ok(())
 }

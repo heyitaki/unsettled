@@ -56,6 +56,25 @@ cargo run --release -p unsettled-sim -- evaluate \
 
 `--domain tuning|eval|gate` is required and has no default.
 
+Observe one placement and policy playing every seat, and read setup-time diagnostics off the games:
+
+```sh
+cargo run --release -p unsettled-sim -- diagnose \
+  --layout standard4 \
+  --seats 4 \
+  --domain tuning \
+  --placement app_formula:placement/default-weights.json \
+  --boards 2000 \
+  --reps 2 \
+  --policy heuristic-v1-trader-aware-threat-devcards-denial \
+  --player-trading \
+  --alpha 0.05 \
+  --threads 0 \
+  --out runs/diagnostic
+```
+
+`diagnose` has no field, no arms and no hero-seat rotation: every seat plays `--placement` and `--policy`. It plays `--boards` x `--reps` games on the board set an `evaluate` run at the same domain, layout and seat count would generate, seeding each game like that run's first hero-seat unit. `--layout`, `--seats`, `--domain`, `--policy`, `--threads`, `--alpha` and `--allow-unofficial` behave as they do for `evaluate`.
+
 Use an app Board JSON file:
 
 ```sh
@@ -86,7 +105,7 @@ cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
 
 Player trading is disabled by default. Set `RuleConfig::player_trading` to `Some(TradeConfig)` and use a trader-family policy to exercise it.
 
-The `tournament`, `evaluate`, and `simulate` commands enable the mechanism with `--player-trading`. Their optional `--opponent-gain-weight`, `--acceptance-temperature`, `--max-offers-per-turn`, `--hidden-vp-confidence`, `--embargo-danger-floor`, `--embargo-danger`, and `--embargo-takeover-danger` flags override the corresponding defaults and require `--player-trading`.
+The `tournament`, `evaluate`, `diagnose`, and `simulate` commands enable the mechanism with `--player-trading`. Their optional `--opponent-gain-weight`, `--acceptance-temperature`, `--max-offers-per-turn`, `--hidden-vp-confidence`, `--embargo-danger-floor`, `--embargo-danger`, and `--embargo-takeover-danger` flags override the corresponding defaults and require `--player-trading`.
 
 `--allow-unofficial` permits non-official seat counts.
 
@@ -116,7 +135,7 @@ Fields are optional. At least one board source and an output directory are requi
 
 ## Outputs and determinism
 
-Each run writes `results.json`, `results.csv`, `meta.json`, and optionally JSONL. `evaluate` instead writes deterministic `evaluation.json` plus `meta.json`, with no CSV.
+Each run writes `results.json`, `results.csv`, `meta.json`, and optionally JSONL. `evaluate` instead writes deterministic `evaluation.json` plus `meta.json`, with no CSV, and `diagnose` writes deterministic `diagnostics.json` plus `meta.json` the same way.
 
 What each artifact contains, and the determinism guarantees, are contracts — see [`contracts.md`](../.claude/specs/simulator/contracts.md).
 
