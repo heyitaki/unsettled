@@ -188,12 +188,12 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 9: Preregister M-49, the `SIM-GAP-33` A/B
 
-- [ ] Write `docs/plans/preregs/<today>-m49-simgap33-block-predicate.md`
-- [ ] One decision arm: the composite policy with the tightened predicate, against reference `base` = the composite at the adopted defaults with the predicate as it was. Build both arms as committed policy params files under `simulator/placement/arms/` if the change is expressible as a parameter; if it is not, state plainly that the arm is the code change itself and that the reference is the pre-change binary, and preregister the two-build protocol the run will use
-- [ ] Screen power: `standard4`, 4 seats, `--domain tuning`, field `pip_diversity`, 2000 boards x 2 reps, `--player-trading`, `--threshold 0.01`, `--alpha 0.05`
-- [ ] Decision rule fixed before the run: this is a correctness fix and lands whatever the verdict. `better` or `equivalent` records the fix as costless or positive; `worse` records the loss and flags it for the user without reverting
-- [ ] Record the prediction and the admissibility conditions
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m49-simgap33-block-predicate.md`
+- [x] One decision arm: the composite policy with the tightened predicate, against reference `base` = the composite at the adopted defaults with the predicate as it was. Build both arms as committed policy params files under `simulator/placement/arms/` if the change is expressible as a parameter; if it is not, state plainly that the arm is the code change itself and that the reference is the pre-change binary, and preregister the two-build protocol the run will use
+- [x] Screen power: `standard4`, 4 seats, `--domain tuning`, field `pip_diversity`, 2000 boards x 2 reps, `--player-trading`, `--threshold 0.01`, `--alpha 0.05`
+- [x] Decision rule fixed before the run: this is a correctness fix and lands whatever the verdict. `better` or `equivalent` records the fix as costless or positive; `worse` records the loss and flags it for the user without reverting
+- [x] Record the prediction and the admissibility conditions
+- [x] Link check passes
 
 ### Task 10: Run M-49 and record it
 
