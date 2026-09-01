@@ -245,14 +245,14 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 14: Preregister M-50, the SP1e sweep
 
-- [ ] Write `docs/plans/preregs/<today>-m50-sp1e-knight-threat-sweep.md`
-- [ ] Five axes, two arms each: `knightStealWeight`, `knightPlacementWeight`, `knightReliefWeight`, `victimNeedWeight`, `needCompletionWeight`. State plainly that the programme lists three and that the two new axes were added because leaving a brand-new parameter unswept beside three swept ones is worse
-- [ ] Build ten committed arm files under `simulator/placement/arms/` named `sp1e_<slug>_lo.json` and `sp1e_<slug>_hi.json`, each a single-parameter perturbation of the post-SP1 defaults at its bounds endpoints, and extend the committed pin test in `params_file.rs` to walk them the way the `h2_*` walk does
-- [ ] Because arms must not exceed the number of paired contrasts a run can carry cleanly, split the sweep across runs if needed and preregister each invocation explicitly. Reference arm is the post-SP1 defaults under a distinct label
-- [ ] Screen power: 2000 boards x 2 reps, field `pip_diversity`, composite policy, `--player-trading`, `--threshold 0.01`, `--alpha 0.05`
-- [ ] Decision rule fixed before the run: the standing disposition rule in this plan's Overview. Record only, adopt nothing
-- [ ] Record the prediction and the admissibility conditions
-- [ ] Both cargo profiles green (the pin test is new code), link check passes
+- [x] Write `docs/plans/preregs/<today>-m50-sp1e-knight-threat-sweep.md`
+- [x] Five axes, two arms each: `knightStealWeight`, `knightPlacementWeight`, `knightReliefWeight`, `victimNeedWeight`, `needCompletionWeight`. State plainly that the programme lists three and that the two new axes were added because leaving a brand-new parameter unswept beside three swept ones is worse
+- [x] Build ten committed arm files under `simulator/placement/arms/` named `sp1e_<slug>_lo.json` and `sp1e_<slug>_hi.json`, each a single-parameter perturbation of the post-SP1 defaults at its bounds endpoints, and extend the committed pin test in `params_file.rs` to walk them the way the `h2_*` walk does
+- [x] Because arms must not exceed the number of paired contrasts a run can carry cleanly, split the sweep across runs if needed and preregister each invocation explicitly. Reference arm is the post-SP1 defaults under a distinct label
+- [x] Screen power: 2000 boards x 2 reps, field `pip_diversity`, composite policy, `--player-trading`, `--threshold 0.01`, `--alpha 0.05`
+- [x] Decision rule fixed before the run: the standing disposition rule in this plan's Overview. Record only, adopt nothing
+- [x] Record the prediction and the admissibility conditions
+- [x] Both cargo profiles green (the pin test is new code), link check passes
 
 ### Task 15: Run M-50 and record it
 

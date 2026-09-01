@@ -731,6 +731,67 @@ mod tests {
         assert_eq!(extension_count, 10, "the M-42 extension commits 10 arms");
     }
 
+    /// The M-50 SP1e sweep axes: JSON pointer and arm slug. Five axes, two arms each,
+    /// every arm sitting on its declared sweep-bounds endpoint.
+    const SP1E_AXES: [(&str, &str); 5] = [
+        ("/threat/knightStealWeight", "knsteal"),
+        ("/threat/knightPlacementWeight", "knplace"),
+        ("/threat/knightReliefWeight", "knrelief"),
+        ("/threat/victimNeedWeight", "victimneed"),
+        ("/threat/needCompletionWeight", "needcomp"),
+    ];
+
+    /// Walks the committed SP1e sweep arms (`placement/arms/sp1e_*.json`): each file
+    /// loads through the full contract, differs from the *post-SP1 live* composite
+    /// defaults in exactly one leaf, and carries that leaf's bounds endpoint exactly —
+    /// `_lo` the `min`, `_hi` the `max`. The H2 walk anchors to the pre-adoption
+    /// baseline its frozen files were generated against; SP1e is a new sweep, so it
+    /// anchors to the defaults it will actually be measured against.
+    #[test]
+    fn the_sp1e_arm_files_are_the_committed_bounds_endpoint_perturbations() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base = composite_value();
+
+        let mut expected = Vec::new();
+        for (leaf, slug) in SP1E_AXES {
+            let range = bounds["policy"]
+                .pointer(leaf)
+                .unwrap_or_else(|| panic!("no bounds range for {leaf}"));
+            for (endpoint, suffix) in [("min", "lo"), ("max", "hi")] {
+                let name = format!("sp1e_{slug}_{suffix}.json");
+                let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                    .unwrap_or_else(|_| panic!("{name} must be committed"));
+                parse_params_file(&source)
+                    .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+                let file: Value = serde_json::from_str(&source).expect("valid JSON");
+
+                let mut perturbed = base.clone();
+                *perturbed.pointer_mut(leaf).expect("leaf") = range[endpoint].clone();
+                assert_eq!(
+                    file, perturbed,
+                    "{name} must be the post-SP1 defaults with {leaf} at its {endpoint} bound"
+                );
+                expected.push(name);
+            }
+        }
+
+        // No stray sp1e_ file: an arm nobody preregistered would silently join a run.
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
+            let name = entry.expect("entry").file_name().to_string_lossy().into_owned();
+            if name.starts_with("sp1e_") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "the SP1e sweep commits 5 axes x 2 arms");
+    }
+
     /// The M-44 H4 combine winners: JSON pointer, slug of the committed revert arm, and
     /// the winner value. Preregistered in the M-44 prereg; the values are the largest
     /// `better` estimate per axis from M-41/M-42.
