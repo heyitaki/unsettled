@@ -342,6 +342,102 @@ describe('placement valuation', () => {
     expect(dedicatedValue).toBeGreaterThan(genericValue)
   })
 
+  it('prices the ore/wheat/sheep recipe only at a nonzero recipeDevCardBonus', () => {
+    // Hand arithmetic at DEFAULT_WEIGHTS on a vertex with no wood and no brick,
+    // so the road and settlement recipes are both zero and only the spread, the
+    // city recipe and the dev-card recipe are left. recipeCap and diversityCap
+    // are both 4, so coverage is (min(pips, 4) / 4) ** 1.5: ore and wheat
+    // saturate at 1 and sheep, at 3 pips, sits at 0.75 ** 1.5. Board scarcity is
+    // flat, so each resource's coverage value is its raw resourceValue.
+    const sheepCover = 0.75 ** 1.5
+    const spread = 1.6 * (1.3 * 1 + 1.35 * 1 + 0.75 * sheepCover)
+    const city = 2 * 1
+    const pips = { ore: 4, wheat: 4, sheep: 3 }
+    const off = { ...DEFAULT_WEIGHTS, recipeDevCardBonus: 0 }
+    const on = { ...DEFAULT_WEIGHTS, recipeDevCardBonus: 2 }
+    expect(
+      marginalBreakdown(context([[vertices[0], pips]], off), emptyHoldings(), vertices[0]).diversity,
+    ).toBeCloseTo(spread + city, 12)
+    expect(
+      marginalBreakdown(context([[vertices[0], pips]], on), emptyHoldings(), vertices[0]).diversity,
+    ).toBeCloseTo(spread + city + 2 * sheepCover, 12)
+  })
+
+  it('ships the dev-card recipe at zero, so it moves no shipped score', () => {
+    // The same vertex as the test above, read at DEFAULT_WEIGHTS: the shipped diversity must
+    // still be the spread plus the city recipe alone, with no dev-card contribution. Comparing
+    // against a weights object that also sets the bonus to 0 would be a comparison with itself.
+    const sheepCover = 0.75 ** 1.5
+    const spread = 1.6 * (1.3 * 1 + 1.35 * 1 + 0.75 * sheepCover)
+    const city = 2 * 1
+    expect(DEFAULT_WEIGHTS.recipeDevCardBonus).toBe(0)
+    expect(
+      marginalBreakdown(
+        context([[vertices[0], { ore: 4, wheat: 4, sheep: 3 }]]),
+        emptyHoldings(),
+        vertices[0],
+      ).diversity,
+    ).toBeCloseTo(spread + city, 12)
+  })
+
+  it('pays a port more to a narrow spread than to a broad one at equal production', () => {
+    // Hand arithmetic at DEFAULT_WEIGHTS plus the witness weight. A dedicated
+    // 2:1 port has portFactor 1 and empty holdings carry no port, so the whole
+    // delta is the post-move half: portWeight (0.55) * portSurplus(8) (8 - 3)
+    // * 1 * (1 + weight * deficit). recipeCap is 4, so 4 pips saturate a
+    // resource's coverage at 1: the narrow pair covers none of the other four
+    // (deficit 1) and the broad pair covers all four (deficit 0).
+    const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
+    const weights = { ...DEFAULT_WEIGHTS, portCoverageDeficitWeight: 1 }
+    const narrow = context([[vertices[0], { wood: 8 }, [port]]], weights)
+    const broad = context(
+      [[vertices[0], { wood: 8, sheep: 4, wheat: 4, brick: 4, ore: 4 }, [port]]],
+      weights,
+    )
+    expect(marginalBreakdown(narrow, emptyHoldings(), vertices[0]).port)
+      .toBeCloseTo(0.55 * 5 * 2, 12)
+    expect(marginalBreakdown(broad, emptyHoldings(), vertices[0]).port)
+      .toBeCloseTo(0.55 * 5 * 1, 12)
+  })
+
+  it('prices each half of the port delta at its own coverage deficit', () => {
+    // The holding sits on the port with 6 wood and nothing else, so before the
+    // move wood's deficit is 1 and its factor 2. The candidate adds 4 wood and
+    // 4 sheep, so after the move sheep is saturated too: one of the other four
+    // is covered, the deficit is 0.75 and the factor 1.75. A true delta is
+    // 0.55 * (portSurplus(10) * 1.75 - portSurplus(6) * 2); repricing the
+    // holding's existing port at either single factor gives 3.85 or 4.4.
+    const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
+    const ctx = context(
+      [
+        [vertices[0], { wood: 4, sheep: 4 }],
+        [vertices[1], { wood: 6 }, [port]],
+      ],
+      { ...DEFAULT_WEIGHTS, portCoverageDeficitWeight: 1 },
+    )
+    const holding = addToHoldings(ctx, emptyHoldings(), vertices[1])
+    expect(marginalBreakdown(ctx, holding, vertices[0]).port)
+      .toBeCloseTo(0.55 * (7 * 1.75 - 3 * 2), 12)
+  })
+
+  it('ships the port coverage deficit at zero, leaving the port delta unchanged', () => {
+    // The same holding and candidate as above at the shipped default, where
+    // every factor is 1 and the delta is the pre-change arithmetic:
+    // portWeight * (portSurplus(6 + 4) * 1 - portSurplus(6) * 1).
+    const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
+    const ctx = context([
+      [vertices[0], { wood: 4, sheep: 4 }],
+      [vertices[1], { wood: 6 }, [port]],
+    ])
+    const shipped = marginalBreakdown(
+      ctx,
+      addToHoldings(ctx, emptyHoldings(), vertices[1]),
+      vertices[0],
+    )
+    expect(DEFAULT_WEIGHTS.portCoverageDeficitWeight).toBe(0)
+    expect(shipped.port).toBeCloseTo(0.55 * (7 - 3), 12)
+  })
+
   it('dedupes one port edge across a two-vertex holding', () => {
     const port: Port = { edgeId: edgeIds[0], resource: 'ore', rate: 2 }
     const ctx = context([

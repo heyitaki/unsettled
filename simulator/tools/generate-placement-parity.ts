@@ -205,6 +205,38 @@ const noDesertNullRobber = setRobber(
 const absentOre = completeBoard('standard4', 'ore')
 const nullTile = setHexTile(standard, standard.hexes[0].coord, null)
 const nullToken = setNumberToken(standard, standard.hexes[0].coord, null)
+// The dev-card recipe is the one term gated on ore, wheat and sheep together, and
+// no programmatic board hands out a vertex touching all three, so build one: three
+// land hexes clear of the desert, at distinct tokens so sheep stays below recipeCap
+// and the min the term takes is a fraction rather than a saturated 1.
+const standardGrid = boardGrid('standard4')
+const landHexesOf = (vertex: VertexId) =>
+  vertexTouchingHexes(vertex).filter((coord) => standardGrid.landKeys.has(axialKey(coord)))
+const devCardVertex = standardGrid.vertexIds.find((candidate) => {
+  const hexes = landHexesOf(candidate)
+  return hexes.length === 3 &&
+    !hexes.some((coord) => axialKey(coord) === axialKey(desertCoord))
+})
+if (!devCardVertex) throw new Error('No three-hex vertex clear of the desert')
+const devCardBoard = ([['ore', 8], ['wheat', 5], ['sheep', 10]] as const).reduce(
+  (board, [resource, token], index) => {
+    const coord = landHexesOf(devCardVertex)[index]
+    return setNumberToken(setHexTile(board, coord, resource), coord, token)
+  },
+  standard,
+)
+
+// The coverage-deficit port factor needs a pair that actually has surplus in the
+// ported resource *and* a spread that moves when the candidate is added, so the
+// pre-move and post-move deficits differ and the term is exercised as a delta.
+// completeBoard's rotation gives the port endpoints neither, so force both land
+// hexes under the port to wood at 6 (5 pips each, well past portSurplusThreshold)
+// and take the inland neighbour, which brings its own resources with it.
+const portDeficitBoard = landHexesOf(firstPortA).reduce(
+  (board, coord) => setNumberToken(setHexTile(board, coord, 'wood'), coord, 6),
+  dedicatedPort,
+)
+
 const draftEmpty = readBoardFixture('board-draft-empty.json')
 const endgame = readBoardFixture('board-endgame-pieces.json')
 
@@ -290,6 +322,10 @@ const cases: CaseInput[] = [
     id: 'extension-granted-hand',
     covers: ['G5'],
     board: extension,
+    // The one grant case on a nonzero handValueWeight. DEFAULT_WEIGHTS ships the
+    // term at 0 since the M-43 drop, so without an explicit witness here the
+    // whole hand-value path would leave the parity fixture uncovered.
+    weights: cloneWeights({ handValueWeight: 0.4 }),
     candidate: vertexWithHexCount(extension, 3),
     receivesGrant: true,
   },
@@ -423,6 +459,21 @@ const cases: CaseInput[] = [
     holdings: [],
     candidate: boardGrid(draftEmpty.layout).vertexIds[20],
     receivesGrant: true,
+  },
+  {
+    id: 'dev-card-recipe',
+    covers: ['W11'],
+    board: devCardBoard,
+    weights: cloneWeights({ recipeDevCardBonus: 2 }),
+    candidate: devCardVertex,
+  },
+  {
+    id: 'port-coverage-deficit',
+    covers: ['W12'],
+    board: portDeficitBoard,
+    weights: cloneWeights({ portCoverageDeficitWeight: 1 }),
+    holdings: [firstPortA],
+    candidate: offPortNeighbor,
   },
   {
     id: 'real-endgame-pieces',

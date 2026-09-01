@@ -9,7 +9,7 @@ use unsettled_engine::policy::threat::{self, ThreatContext, ThreatParams};
 use unsettled_engine::policy::trading;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
-use unsettled_engine::view::{DecisionPhase, pips};
+use unsettled_engine::view::{DecisionPhase, DecisionView, pips};
 use unsettled_engine::wire::WireBoard;
 
 fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
@@ -374,9 +374,15 @@ fn threat_robber_prefers_blocking_a_resource_the_victim_still_needs() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let params = ThreatParams::default();
     let context = threat::context(&view, &params);
+    // The victim is one wheat and two ore short of its city, so the proportional spread is
+    // 1/3 wheat and 2/3 ore. SP1c adds the completion step on top: wheat is exactly one card
+    // from done and takes it, ore is not, and the shares are renormalized over the stepped
+    // total, so ore pays for wheat's lift.
+    let wheat = 1.0 / 3.0 + params.need_completion_weight;
+    let ore = 2.0 / 3.0;
     let mut expected = [0.0; RESOURCE_COUNT];
-    expected[Resource::Wheat.index()] = 1.0 / 3.0;
-    expected[Resource::Ore.index()] = 2.0 / 3.0;
+    expected[Resource::Wheat.index()] = wheat / (wheat + ore);
+    expected[Resource::Ore.index()] = ore / (wheat + ore);
     assert_eq!(context.need[1], expected);
     assert_eq!(threat::robber(&view, &params).0, needed);
 }
@@ -639,9 +645,12 @@ fn default_heuristic_params_keep_todays_robber_rule() {
 // test each; every test also asserts the (destination, victim) pair still equals `robber`'s:
 // - `placement_score` re-derives from `seat_terms` at the chosen hex (non-default params):
 //   robber_choice_reports_the_maximized_placement_score
-// - `steal_value` = the shared-danger victim rank plus the belief-derived own-need hit
-//   (closed form, non-default params): robber_choice_prices_the_steal_through_belief_and_danger
+// - `steal_value` = the shared-danger victim rank, including the victim's own believed need,
+//   plus the belief-derived own-need hit over the stepped need model (closed form, non-default
+//   params): robber_choice_prices_the_steal_through_belief_and_danger
 // - the fallback hex zeroes `placement_score`: robber_choice_zeroes_placement_on_the_fallback_hex
+// The joint `(hex, victim)` argmax behind all three is pinned against a transcription of the
+// two-stage search it replaced: robber_choice_matches_the_two_stage_search_it_replaced
 #[test]
 fn robber_choice_reports_the_maximized_placement_score() {
     let (topology, board, _rules, _config, mut arena) = fixture();
@@ -703,13 +712,16 @@ fn robber_choice_prices_the_steal_through_belief_and_danger() {
         assert_eq!(choice.victim, Some(1));
 
         let context = threat::context(&view, &params);
+        // The victim's own need is the SP1b term inside `victim_rank`, and the observer's need
+        // takes the SP1c completion step, so the reference reads both through the shipped
+        // `need_share` rather than the proportional spread that predates them.
+        let victim_need = reference_victim_need_hit(&view, &context, 1);
         let rank = context.danger[1]
             + params.victim_hand_weight * f64::from(view.hand_total(1)).min(params.hand_cap)
-                / params.hand_cap;
-        let shortfall = threat::cheapest_route_shortfall(&trading::own_inputs(&view));
-        let shortfall_total = shortfall.iter().sum::<f64>();
-        assert!(shortfall_total > 0.0);
-        let need = shortfall.map(|value| value / shortfall_total);
+                / params.hand_cap
+            + params.victim_need_weight * victim_need;
+        let need = threat::need_share(&trading::own_inputs(&view), params.need_completion_weight);
+        assert!(need.iter().sum::<f64>() > 0.0);
         let expected_hand = view.belief().expected(1);
         let total = expected_hand.iter().sum::<f64>();
         let hit = (0..RESOURCE_COUNT)
@@ -717,7 +729,7 @@ fn robber_choice_prices_the_steal_through_belief_and_danger() {
             .sum::<f64>()
             / total;
         assert_eq!(choice.steal_value.to_bits(), (rank + hit).to_bits());
-        (choice.steal_value, hit)
+        (choice.steal_value, hit, victim_need)
     };
 
     let params = ThreatParams {
@@ -728,10 +740,18 @@ fn robber_choice_prices_the_steal_through_belief_and_danger() {
     };
     // Same public card count, different believed composition: only one fills the observer's
     // own cheapest-route shortfall, so the belief must move the value.
-    let (needed_value, needed_hit) = steal_value_for([0, 0, 0, 0, 5], &params);
-    let (chaff_value, chaff_hit) = steal_value_for([5, 0, 0, 0, 0], &params);
+    let (needed_value, needed_hit, needed_victim_need) = steal_value_for([0, 0, 0, 0, 5], &params);
+    let (chaff_value, chaff_hit, chaff_victim_need) = steal_value_for([5, 0, 0, 0, 0], &params);
     assert_ne!(needed_hit.to_bits(), chaff_hit.to_bits());
     assert_ne!(needed_value.to_bits(), chaff_value.to_bits());
+    // What this fixture cannot separate, stated so the closed form above is not over-trusted: a
+    // stalled leader's every route is one card of each missing resource, so holding a resource
+    // zeroes its own shortfall and the SP1b victim-need term is 0 on both arms. The observer's
+    // shortfall is likewise all-ones, where the SP1c completion step renormalizes back to the
+    // proportional spread. `victimNeedWeight` and `needCompletionWeight` earn their own biting
+    // tests below and in `need_share_lifts_a_shortfall_a_single_card_completes`.
+    assert_eq!(needed_victim_need, 0.0);
+    assert_eq!(chaff_victim_need, 0.0);
 }
 
 #[test]
@@ -750,6 +770,429 @@ fn robber_choice_zeroes_placement_on_the_fallback_hex() {
     assert_eq!(choice.victim, None);
     assert_eq!(choice.placement_score, 0.0);
     assert_eq!(choice.steal_value, 0.0);
+}
+
+// `threat::robber_choice` maximizes over `(hex, victim)` pairs; it replaced a two-stage search
+// that picked the hex on the summed rival terms plus the best available steal, then re-picked
+// the victim on the winning hex. `reference_two_stage` below is that search, kept here so the
+// equivalence is pinned against constructed decision states instead of asserted in prose.
+type StateBuilder = fn(&mut GameArena, &SimBoard, &Topology);
+
+fn state_two_victims_on_one_hex(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (hex, offsets) = dominant_hex_with_two_offsets(board, topology);
+    place_on_hex(arena, topology, hex, 1, offsets[0]);
+    place_on_hex(arena, topology, hex, 2, offsets[1]);
+    make_stalled_leader(arena, 1);
+    make_city_runner(arena, 2);
+    set_belief_and_hand(arena, 1, [3, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [0, 0, 2, 0, 0]);
+}
+
+fn state_equal_pip_rivals_apart(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (low, low_offsets, high, high_offsets) = dominant_tie_pair(board, topology);
+    place_on_hex(arena, topology, low, 1, low_offsets[0]);
+    place_on_hex(arena, topology, high, 2, high_offsets[0]);
+    set_belief_and_hand(arena, 1, [2, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [2, 0, 0, 0, 0]);
+}
+
+fn state_equal_rank_victims(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (hex, offsets) = dominant_hex_with_two_offsets(board, topology);
+    place_on_hex(arena, topology, hex, 1, offsets[0]);
+    place_on_hex(arena, topology, hex, 2, offsets[1]);
+    set_belief_and_hand(arena, 1, [1, 1, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [1, 1, 0, 0, 0]);
+}
+
+fn state_one_rival_holds_nothing(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (hex, offsets) = dominant_hex_with_two_offsets(board, topology);
+    place_on_hex(arena, topology, hex, 1, offsets[0]);
+    place_on_hex(arena, topology, hex, 2, offsets[1]);
+    make_city_runner(arena, 2);
+    set_belief_and_hand(arena, 1, [4, 0, 0, 0, 0]);
+}
+
+fn state_multi_and_single_victim_hexes(
+    arena: &mut GameArena,
+    board: &SimBoard,
+    topology: &Topology,
+) {
+    let (multi, offsets, single, single_offset) = dominant_multi_victim_pair(board, topology);
+    place_on_hex(arena, topology, multi, 1, offsets[0]);
+    place_on_hex(arena, topology, multi, 2, offsets[1]);
+    place_on_hex(arena, topology, single, 3, single_offset);
+    make_stalled_leader(arena, 3);
+    set_belief_and_hand(arena, 1, [2, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [0, 5, 0, 0, 0]);
+    set_belief_and_hand(arena, 3, [0, 0, 3, 0, 0]);
+}
+
+fn state_no_rival_holds_cards(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (multi, offsets, single, single_offset) = dominant_multi_victim_pair(board, topology);
+    place_on_hex(arena, topology, multi, 1, offsets[0]);
+    place_on_hex(arena, topology, single, 2, single_offset);
+    make_city_runner(arena, 2);
+}
+
+fn state_robber_on_a_rival_hex(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (multi, offsets, single, single_offset) = dominant_multi_victim_pair(board, topology);
+    place_on_hex(arena, topology, multi, 1, offsets[0]);
+    place_on_hex(arena, topology, multi, 2, offsets[1]);
+    place_on_hex(arena, topology, single, 3, single_offset);
+    arena.state.robber = multi;
+    make_stalled_leader(arena, 2);
+    set_belief_and_hand(arena, 1, [1, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [0, 0, 0, 7, 0]);
+    set_belief_and_hand(arena, 3, [0, 2, 0, 0, 0]);
+}
+
+fn state_observer_owns_every_vertex(
+    arena: &mut GameArena,
+    _board: &SimBoard,
+    topology: &Topology,
+) {
+    for vertex in 0..topology.vertex_count() {
+        arena.state.vertex_owner[vertex] = 0;
+        arena.state.vertex_tier[vertex] = 1;
+    }
+}
+
+fn state_empty_board(_arena: &mut GameArena, _board: &SimBoard, _topology: &Topology) {}
+
+/// `threat.rs::victim_rank`, which the crate keeps private.
+fn reference_victim_rank(
+    view: &DecisionView<'_>,
+    params: &ThreatParams,
+    context: &ThreatContext,
+    seat: usize,
+) -> f64 {
+    context.danger[seat]
+        + params.victim_hand_weight * f64::from(view.hand_total(seat)).min(params.hand_cap)
+            / params.hand_cap
+        + params.victim_need_weight * reference_victim_need_hit(view, context, seat)
+}
+
+/// `threat.rs::victim_need_hit`, likewise private.
+fn reference_victim_need_hit(
+    view: &DecisionView<'_>,
+    context: &ThreatContext,
+    seat: usize,
+) -> f64 {
+    let expected = view.belief().expected(seat);
+    let total = expected.iter().sum::<f64>();
+    if total <= 0.0 {
+        return 0.0;
+    }
+    (0..RESOURCE_COUNT)
+        .map(|resource| context.need[seat][resource] * expected[resource])
+        .sum::<f64>()
+        / total
+}
+
+/// The two-stage search `threat::robber_choice` replaced, transcribed.
+fn reference_two_stage(view: &DecisionView<'_>, params: &ThreatParams) -> (u8, Option<u8>, f64) {
+    let context = threat::context(view, params);
+    let mut best = view.robber();
+    let mut best_score = f64::NEG_INFINITY;
+    for hex in 0..view.topology().hex_count() {
+        let hex = hex as u8;
+        if hex == view.robber() || view.hex_touches_seat(hex, view.observer()) {
+            continue;
+        }
+        let mut score = 0.0;
+        let mut best_steal = 0.0_f64;
+        for seat in 0..view.seats() {
+            if seat == view.observer() {
+                continue;
+            }
+            let terms = threat::seat_terms(view, params, &context, hex, seat);
+            score += terms.delay + terms.need + terms.block;
+            best_steal = best_steal.max(terms.steal);
+        }
+        score += best_steal;
+        if !score.is_finite() {
+            continue;
+        }
+        if score > best_score {
+            best = hex;
+            best_score = score;
+        }
+    }
+    let mut placement_score = best_score;
+    if best == view.robber() {
+        best = (0..view.topology().hex_count())
+            .map(|hex| hex as u8)
+            .find(|hex| *hex != view.robber())
+            .expect("board has another hex");
+        placement_score = 0.0;
+    }
+    let mut victim = None;
+    let mut best_rank = f64::NEG_INFINITY;
+    for seat in 0..view.seats() {
+        if seat == view.observer() || !view.stealable_on_hex(best, seat) {
+            continue;
+        }
+        let rank = reference_victim_rank(view, params, &context, seat);
+        if rank > best_rank {
+            victim = Some(seat as u8);
+            best_rank = rank;
+        }
+    }
+    (best, victim, placement_score)
+}
+
+#[test]
+fn robber_choice_matches_the_two_stage_search_it_replaced() {
+    let states: [(&str, StateBuilder); 9] = [
+        ("two victims on one hex", state_two_victims_on_one_hex),
+        ("equal-pip rivals apart", state_equal_pip_rivals_apart),
+        ("equal-rank victims", state_equal_rank_victims),
+        ("one rival holds nothing", state_one_rival_holds_nothing),
+        (
+            "multi- and single-victim hexes",
+            state_multi_and_single_victim_hexes,
+        ),
+        ("no rival holds cards", state_no_rival_holds_cards),
+        ("robber on a rival hex", state_robber_on_a_rival_hex),
+        ("observer owns every vertex", state_observer_owns_every_vertex),
+        ("empty board", state_empty_board),
+    ];
+    // Endpoints that move the ordering: a steal term large enough to decide the hex, a zero
+    // steal weight where every pair on a hex ties and only the victim rank separates them, a
+    // flat victim rank, and a hex score carrying block alone.
+    let param_sets = [
+        ThreatParams::default(),
+        ThreatParams {
+            delay_weight: 2.0,
+            need_weight: 0.7,
+            block_weight: 0.4,
+            steal_weight: 1.5,
+            victim_hand_weight: 0.4,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            steal_weight: 0.0,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            steal_weight: 0.5,
+            victim_hand_weight: 0.0,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            steal_weight: 0.5,
+            victim_hand_weight: 0.0,
+            victim_need_weight: 0.6,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            delay_weight: 0.0,
+            need_weight: 0.0,
+            block_weight: 1.0,
+            ..ThreatParams::default()
+        },
+    ];
+
+    let mut named = 0;
+    let mut declined = 0;
+    let mut destinations = Vec::new();
+    for (name, build) in states {
+        for params in &param_sets {
+            let (topology, board, _rules, _config, mut arena) = fixture();
+            build(&mut arena, &board, &topology);
+            let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+            let choice = threat::robber_choice(&view, params);
+            let (destination, victim, placement_score) = reference_two_stage(&view, params);
+            assert_eq!(choice.destination, destination, "{name}");
+            assert_eq!(choice.victim, victim, "{name}");
+            assert_eq!(
+                choice.placement_score.to_bits(),
+                placement_score.to_bits(),
+                "{name}"
+            );
+            if choice.victim.is_some() {
+                named += 1;
+            } else {
+                declined += 1;
+            }
+            if !destinations.contains(&choice.destination) {
+                destinations.push(choice.destination);
+            }
+        }
+    }
+    // The agreement above is only worth something if the states exercised both outcomes.
+    assert!(named > 0);
+    assert!(declined > 0);
+    assert!(destinations.len() > 1);
+}
+
+// SP1b: the victim rank prices the denial of the victim's *own* need, mirroring how
+// `own_need_hit` prices the observer's. Two readings pin it:
+// - the term itself, isolated against a hand-built context: victim_rank_prices_the_denial_of_the_victims_own_need
+// - the wiring half of SIM-GAP-38, that the joint argmax carries it into the maximized hex
+//   quantity and not only into the victim tie-break: the_victim_need_term_reaches_the_hex_score
+
+/// Two victims alike in danger, hand size and blocked production, differing only in whether their
+/// believed hand holds the resource their own cheapest route is short of. The context is built by
+/// hand so danger and need are pinned equal by construction and only the belief moves; `steal` is
+/// `steal_weight * victim_rank`, so the closed-form gap reads the new term directly.
+#[test]
+fn victim_rank_prices_the_denial_of_the_victims_own_need() {
+    let steal_for = |cards: [u16; RESOURCE_COUNT], params: &ThreatParams| {
+        let (topology, board, _rules, _config, mut arena) = fixture();
+        let hex = (0..topology.hex_count())
+            .map(|hex| hex as u8)
+            .find(|hex| {
+                board.tiles()[usize::from(*hex)] == Some(Resource::Ore)
+                    && board.tokens()[usize::from(*hex)].map(pips) == Some(5)
+            })
+            .unwrap();
+        place_on_hex(&mut arena, &topology, hex, 1, 0);
+        set_belief_and_hand(&mut arena, 1, cards);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let inputs = representative_inputs();
+        let mut context = ThreatContext {
+            inputs: [const { None }; 6],
+            free_pips: [[0; RESOURCE_COUNT]; 6],
+            etw_free: [0.0; 6],
+            danger: [0.0; 6],
+            need: [[0.0; RESOURCE_COUNT]; 6],
+        };
+        context.etw_free[1] = etw::expected_turns_to_win(&inputs);
+        context.free_pips[1] = inputs.production_pips;
+        context.inputs[1] = Some(inputs);
+        context.danger[1] = 0.5;
+        context.need[1][Resource::Ore.index()] = 1.0;
+        threat::seat_terms(&view, params, &context, hex, 1).steal
+    };
+
+    // Equal hand sizes: the hand term is identical and only the composition can separate them.
+    let needed = [0, 0, 0, 0, 4];
+    let chaff = [4, 0, 0, 0, 0];
+    let params = ThreatParams::default();
+    let gap = steal_for(needed, &params) - steal_for(chaff, &params);
+    // The needed hand is all ore against a one-hot ore need, so the hit is exactly 1 against 0.
+    assert!((gap - params.steal_weight * params.victim_need_weight).abs() < 1e-12);
+    assert!(gap > 0.0);
+
+    let off = ThreatParams {
+        victim_need_weight: 0.0,
+        ..ThreatParams::default()
+    };
+    assert_eq!(steal_for(needed, &off).to_bits(), steal_for(chaff, &off).to_bits());
+}
+
+/// The wiring half of `SIM-GAP-38`: `placement_score` is the quantity the joint argmax maximized
+/// over `(hex, victim)` pairs, so the victim-scoped need term moving it is what shows the term
+/// reaches hex choice rather than only the victim tie-break.
+#[test]
+fn the_victim_need_term_reaches_the_hex_score() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    // Without the dev route the cheapest route is the city, which a hand of one wheat and one ore
+    // is short of in both resources: what the victim holds is exactly what it still needs more of.
+    rules.dev_deck.victory_point = 0;
+    arena.prepare(&board, &topology, &rules, &config);
+    let (hex, offsets) = dominant_hex_with_two_offsets(&board, &topology);
+    place_on_hex(&mut arena, &topology, hex, 1, offsets[0]);
+    place_on_hex(&mut arena, &topology, hex, 2, offsets[1]);
+    make_city_runner(&mut arena, 1);
+    make_city_runner(&mut arena, 2);
+    set_belief_and_hand(&mut arena, 1, [0, 0, 1, 0, 1]);
+    set_belief_and_hand(&mut arena, 2, [0, 0, 1, 0, 1]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+
+    let off = ThreatParams {
+        victim_need_weight: 0.0,
+        ..ThreatParams::default()
+    };
+    let on = ThreatParams {
+        victim_need_weight: 0.6,
+        ..ThreatParams::default()
+    };
+    let quiet = threat::robber_choice(&view, &off);
+    let loud = threat::robber_choice(&view, &on);
+    assert_eq!(quiet.destination, loud.destination);
+    assert_eq!(quiet.victim, loud.victim);
+
+    // `context` does not read `victim_need_weight`, so one build serves both readings.
+    let context = threat::context(&view, &on);
+    let victim = usize::from(loud.victim.expect("a stealable victim"));
+    let hit = reference_victim_need_hit(&view, &context, victim);
+    assert!(hit > 0.0, "the fixture must give the victim a believed hand it needs");
+    let gap = loud.placement_score - quiet.placement_score;
+    assert!((gap - on.steal_weight * on.victim_need_weight * hit).abs() < 1e-12);
+}
+
+// SP1c: the need model has a completion step, so a card that clears the last of what a route
+// wants of a resource outranks one that moves a distant goal the same proportional distance
+// (`SIM-GAP-40`).
+
+/// Inputs whose only live route is the city one, so `cheapest_route_shortfall` returns the city
+/// cost against an empty believed hand and the test names the shortfall directly.
+fn city_route_inputs(cost: [u8; RESOURCE_COUNT]) -> EtwInputs {
+    EtwInputs {
+        city_cost: Some(cost),
+        belief_expected: [0.0; RESOURCE_COUNT],
+        ..representative_inputs()
+    }
+}
+
+/// Two seats on the same city route, one of them three times as far from it. The proportional
+/// spread is identical by construction, so the only thing that can separate the two shares is
+/// the completion step.
+#[test]
+fn need_share_lifts_a_shortfall_a_single_card_completes() {
+    let close = city_route_inputs([1, 2, 0, 0, 0]);
+    let distant = city_route_inputs([3, 6, 0, 0, 0]);
+    let params = ThreatParams::default();
+
+    // The step's predicate is per resource, not per route, and this fixture is the case that
+    // separates the two: one wheat clears everything the route still wants of wheat, while two
+    // ore keep the city out of reach, so no single card finishes the build and the step fires
+    // regardless. A per-resource share vector cannot express a route-level predicate.
+    let close_shortfall = threat::cheapest_route_shortfall(&close);
+    assert_eq!(close_shortfall[0], 1.0);
+    assert!(close_shortfall[1] > 1.0);
+
+    // The construction's premise: at weight 0 the two are the same proportional spread, so a
+    // pre-SP1c reading could not tell them apart at all.
+    let base: f64 = 1.0 / 3.0;
+    assert_eq!(threat::need_share(&close, 0.0), threat::need_share(&distant, 0.0));
+    assert_eq!(threat::need_share(&close, 0.0)[0].to_bits(), base.to_bits());
+
+    let close_share = threat::need_share(&close, params.need_completion_weight);
+    let distant_share = threat::need_share(&distant, params.need_completion_weight);
+
+    // Nothing on the distant route is within a card of done, so it takes no step at any weight.
+    assert_eq!(distant_share[0].to_bits(), base.to_bits());
+    assert!(close_share[0] > distant_share[0]);
+
+    // Closed form, in the function's own summation order: the step lands on the resource one
+    // card from done and the shares are renormalized over the stepped total.
+    let stepped = [base + params.need_completion_weight, 2.0 / 3.0, 0.0, 0.0, 0.0];
+    let total = stepped.iter().sum::<f64>();
+    assert!((close_share[0] - stepped[0] / total).abs() < 1e-15);
+
+    // Still a total-normalized share, so the far resource pays for the lift rather than the
+    // whole vector growing.
+    assert!((close_share.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    assert!(close_share[1] < distant_share[1]);
+
+    // A resource the route is not short of at all is not "within one card of done": it carries
+    // no need, so it takes no step.
+    assert_eq!(close_share[2], 0.0);
+}
+
+/// The term vanishes at weight 0: the shipped-default reading above is a change, and this is
+/// the switch that turns it off, bit for bit against the proportional spread.
+#[test]
+fn the_need_completion_step_vanishes_at_weight_zero() {
+    let inputs = city_route_inputs([1, 2, 0, 0, 0]);
+    let shortfall = threat::cheapest_route_shortfall(&inputs);
+    let total = shortfall.iter().sum::<f64>();
+    let proportional = shortfall.map(|value| value / total);
+    assert_eq!(threat::need_share(&inputs, 0.0), proportional);
+    assert_ne!(threat::need_share(&inputs, 0.35), proportional);
 }
 
 #[cfg(debug_assertions)]

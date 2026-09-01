@@ -92,7 +92,7 @@ Default heuristic parameters were tuned only on the named TUNING seed domain. Th
 
 ## How to read the gap inventory
 
-[gaps.md](gaps.md) began as an audit of the policy layer after the four G consumers; SIM-BATCH1 closed the valuation defects it named, and the gap-closing batch after that closed every remaining entry it was scoped to, so what is left is setup-phase placement (`SIM-GAP-20`), `SIM-GAP-21`, kept as a diagnosis record rather than as work, and `SIM-GAP-33`, the contest block-bonus over-credit found in post-completion review, which waits for a preregistered `tuning` A/B because the Phase-I candidate was eval-confirmed with the current semantics (`SIM-GAP-24` closed with the M-41/M-42 `dev_buy_scale` sweep confirming its bias). The inventory stays grouped by what kind of work an entry is.
+[gaps.md](gaps.md) began as an audit of the policy layer after the four G consumers; SIM-BATCH1 closed the valuation defects it named, and the gap-closing batch after that closed every remaining entry it was scoped to, so what is left is setup-phase placement (`SIM-GAP-20`) and `SIM-GAP-21`, kept as a diagnosis record rather than as work (`SIM-GAP-24` closed with the M-41/M-42 `dev_buy_scale` sweep confirming its bias, and `SIM-GAP-33`, the contest block-bonus over-credit, closed under the placement programme's SP1). The inventory stays grouped by what kind of work an entry is.
 
 ## Design notes that outlive their phase
 

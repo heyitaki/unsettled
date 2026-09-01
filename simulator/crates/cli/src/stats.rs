@@ -237,3 +237,80 @@ fn polynomial(value: f64, coefficients: &[f64; 8]) -> f64 {
         .rev()
         .fold(0.0, |result, coefficient| result * value + coefficient)
 }
+
+/// A cluster-robust interval for the mean of a set of values grouped into clusters.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClusteredMean {
+    pub mean: f64,
+    pub interval: [f64; 2],
+    /// Clusters that contributed at least one value.
+    pub clusters: usize,
+    /// True when fewer than two clusters contributed, leaving no between-cluster variance to
+    /// estimate. The interval is then the statistic's full range and says nothing.
+    pub degenerate: bool,
+}
+
+/// The unbalanced generalization of the board-clustered interval `evaluate::try_paired_stats`
+/// builds. Each cluster's total is compared with what the overall mean predicts for a cluster of
+/// its size; with equal cluster sizes that is the same estimator as the variance of the cluster
+/// means. `bounds` clamps the result to the statistic's range.
+///
+/// `values` and `cluster_of_value` are consumed in order and clusters are accumulated by index,
+/// so the result does not depend on how the values were produced.
+pub fn clustered_mean(
+    values: &[f64],
+    cluster_of_value: &[usize],
+    clusters: usize,
+    z: f64,
+    bounds: [f64; 2],
+) -> ClusteredMean {
+    let degenerate = ClusteredMean {
+        mean: 0.0,
+        interval: bounds,
+        clusters: 0,
+        degenerate: true,
+    };
+    if values.is_empty() || values.len() != cluster_of_value.len() {
+        return degenerate;
+    }
+    let n = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / n;
+    let mut sums = vec![0.0; clusters];
+    let mut counts = vec![0_usize; clusters];
+    for (value, cluster) in values.iter().zip(cluster_of_value) {
+        if *cluster >= clusters {
+            return degenerate;
+        }
+        sums[*cluster] += *value;
+        counts[*cluster] += 1;
+    }
+    let contributing = counts.iter().filter(|count| **count > 0).count();
+    if contributing < 2 {
+        return ClusteredMean {
+            mean,
+            clusters: contributing,
+            ..degenerate
+        };
+    }
+    let residual = sums
+        .iter()
+        .zip(&counts)
+        .filter(|(_, count)| **count > 0)
+        .map(|(sum, count)| {
+            let centered = sum - *count as f64 * mean;
+            centered * centered
+        })
+        .sum::<f64>();
+    let variance = contributing as f64 * residual / ((contributing - 1) as f64 * n * n);
+    let margin = z * variance.sqrt();
+    ClusteredMean {
+        mean,
+        interval: [
+            (mean - margin).max(bounds[0]),
+            (mean + margin).min(bounds[1]),
+        ],
+        clusters: contributing,
+        degenerate: false,
+    }
+}

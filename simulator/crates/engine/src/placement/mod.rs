@@ -6,9 +6,10 @@ pub mod app_formula;
 
 use crate::board::SimBoard;
 use crate::rng::Xoshiro256StarStar;
-use crate::rules::Resource;
+use crate::rules::{RESOURCE_COUNT, Resource};
 use crate::state::EMPTY;
 use crate::topology::{Edge, Topology, Vertex};
+use crate::view::pips;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -238,6 +239,77 @@ fn choose_app_formula(
         }
     }
     Some((vertex, selected_edge))
+}
+
+/// The producing hexes adjacent to `vertex`: those carrying both a resource and a token, which
+/// are the hexes the setup grant pays on. Returns their count and their pip total, the two
+/// quantities the SP0 diagnostics compare candidates on.
+pub fn vertex_production(board: &SimBoard, topology: &Topology, vertex: Vertex) -> (u8, u16) {
+    let mut hexes = 0_u8;
+    let mut total = 0_u16;
+    for hex in topology.vertex_hexes(vertex) {
+        if let (Some(_), Some(token)) = (
+            board.tiles()[usize::from(*hex)],
+            board.tokens()[usize::from(*hex)],
+        ) {
+            hexes += 1;
+            total += u16::from(pips(token));
+        }
+    }
+    (hexes, total)
+}
+
+/// Production pips per resource for `seat`, summed over the hexes its buildings touch and scaled
+/// by each building's tier. `vertex_tier` of `None` treats every owned vertex as a settlement,
+/// which is what the setup phase holds and what a diagnostic replaying setup can assume.
+pub fn production_pips(
+    board: &SimBoard,
+    topology: &Topology,
+    vertex_owner: &[u8],
+    vertex_tier: Option<&[u8]>,
+    seat: u8,
+) -> [u16; RESOURCE_COUNT] {
+    let mut production = [0; RESOURCE_COUNT];
+    for vertex_index in 0..topology.vertex_count() {
+        if vertex_owner[vertex_index] != seat {
+            continue;
+        }
+        let tier = u16::from(vertex_tier.map_or(1, |tiers| tiers[vertex_index].max(1)));
+        for hex in topology.vertex_hexes(vertex_index as Vertex) {
+            if let (Some(resource), Some(token)) = (
+                board.tiles()[usize::from(*hex)],
+                board.tokens()[usize::from(*hex)],
+            ) {
+                production[resource.index()] += u16::from(pips(token)) * tier;
+            }
+        }
+    }
+    production
+}
+
+/// Re-score a setup candidate exactly as `choose` ranked it at this owner array. Observation
+/// only: this is `choose`'s scoring half without its random tie-break, so a diagnostic replaying
+/// a recorded pick reads the same numbers the pick was made from.
+pub fn setup_candidate_score(
+    kind: PlacementKind,
+    board: &SimBoard,
+    topology: &Topology,
+    vertex_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+    grant: bool,
+) -> f64 {
+    if let PlacementKind::AppFormula(index) = kind {
+        let name = app_formula_definition(index).name;
+        let scorer = board.app_formula_scorer(index).unwrap_or_else(|| {
+            panic!("app formula arm {name} has no prepared context for this board")
+        });
+        return scorer.score_for_owner(vertex_owner, seat, candidate, grant);
+    }
+    // The setup grant never reaches the other heuristics: `choose` scores them from the board and
+    // the seat's own production alone.
+    let production = production_pips(board, topology, vertex_owner, None, seat);
+    f64::from(vertex_score(kind, board, topology, candidate, &production))
 }
 
 pub fn vertex_score(

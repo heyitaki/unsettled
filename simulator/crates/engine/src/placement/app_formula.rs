@@ -43,10 +43,12 @@ pub struct EngineWeights {
     pub recipe_road_bonus: f64,
     pub recipe_city_bonus: f64,
     pub recipe_settlement_bonus: f64,
+    pub recipe_dev_card_bonus: f64,
     pub recipe_cap: f64,
     pub port_weight: f64,
     pub generic_port_factor: f64,
     pub port_surplus_threshold: f64,
+    pub port_coverage_deficit_weight: f64,
     pub near_port_radius: f64,
     pub near_port_decay: f64,
     pub robber_discount: f64,
@@ -83,10 +85,15 @@ impl EngineWeights {
             ("recipeRoadBonus", self.recipe_road_bonus),
             ("recipeCityBonus", self.recipe_city_bonus),
             ("recipeSettlementBonus", self.recipe_settlement_bonus),
+            ("recipeDevCardBonus", self.recipe_dev_card_bonus),
             ("recipeCap", self.recipe_cap),
             ("portWeight", self.port_weight),
             ("genericPortFactor", self.generic_port_factor),
             ("portSurplusThreshold", self.port_surplus_threshold),
+            (
+                "portCoverageDeficitWeight",
+                self.port_coverage_deficit_weight,
+            ),
             ("nearPortRadius", self.near_port_radius),
             ("nearPortDecay", self.near_port_decay),
             ("robberDiscount", self.robber_discount),
@@ -104,6 +111,13 @@ impl EngineWeights {
         }
         if self.generic_port_factor < 0.0 {
             return Err("weights violate: genericPortFactor >= 0".into());
+        }
+        // `port_deficit_factor` is `1 + w * d` with `d` in [0, 1], so a weight below -1 turns the
+        // whole port term negative and the scorer starts preferring portless vertices. The bound
+        // is 0 rather than -1 for the same reason `genericPortFactor` carries one: a port that
+        // penalises is outside the candidate space, and `sweep-bounds.json` declares min 0.
+        if self.port_coverage_deficit_weight < 0.0 {
+            return Err("weights violate: portCoverageDeficitWeight >= 0".into());
         }
         Ok(())
     }
@@ -430,7 +444,9 @@ impl AppFormulaScorer {
                 js_min(js_min(wood_recipe, brick_recipe), wheat_recipe),
                 sheep_recipe,
             );
-        spread + road + city + settlement
+        let dev_card =
+            weights.recipe_dev_card_bonus * js_min(js_min(ore_recipe, wheat_recipe), sheep_recipe);
+        spread + road + city + settlement + dev_card
     }
 
     fn duplicate_number_penalty(&self, holdings: &Holdings, candidate: &VertexStats) -> f64 {
@@ -460,37 +476,98 @@ impl AppFormulaScorer {
         let wheat = holdings.pips[Resource::Wheat.index()];
         let brick = holdings.pips[Resource::Brick.index()];
         let ore = holdings.pips[Resource::Ore.index()];
+        // Each half of each difference carries its own state's deficit, so the term stays
+        // a true delta rather than repricing the holding's existing ports at the post-move
+        // spread. Left at 1 unless the weight asks for the ten fractional `coverage`
+        // powers below, which sit in every rollout scan.
+        let mut wood_pre = 1.0;
+        let mut sheep_pre = 1.0;
+        let mut wheat_pre = 1.0;
+        let mut brick_pre = 1.0;
+        let mut ore_pre = 1.0;
+        let mut wood_post = 1.0;
+        let mut sheep_post = 1.0;
+        let mut wheat_post = 1.0;
+        let mut brick_post = 1.0;
+        let mut ore_post = 1.0;
+        if weights.port_coverage_deficit_weight != 0.0 {
+            let cap = weights.recipe_cap;
+            let wood_cover = coverage(weights, wood, cap);
+            let sheep_cover = coverage(weights, sheep, cap);
+            let wheat_cover = coverage(weights, wheat, cap);
+            let brick_cover = coverage(weights, brick, cap);
+            let ore_cover = coverage(weights, ore, cap);
+            let total = wood_cover + sheep_cover + wheat_cover + brick_cover + ore_cover;
+            wood_pre = port_deficit_factor(weights, total, wood_cover);
+            sheep_pre = port_deficit_factor(weights, total, sheep_cover);
+            wheat_pre = port_deficit_factor(weights, total, wheat_cover);
+            brick_pre = port_deficit_factor(weights, total, brick_cover);
+            ore_pre = port_deficit_factor(weights, total, ore_cover);
+            let wood_next = coverage(
+                weights,
+                wood + precompute.adjusted[Resource::Wood.index()],
+                cap,
+            );
+            let sheep_next = coverage(
+                weights,
+                sheep + precompute.adjusted[Resource::Sheep.index()],
+                cap,
+            );
+            let wheat_next = coverage(
+                weights,
+                wheat + precompute.adjusted[Resource::Wheat.index()],
+                cap,
+            );
+            let brick_next = coverage(
+                weights,
+                brick + precompute.adjusted[Resource::Brick.index()],
+                cap,
+            );
+            let ore_next = coverage(
+                weights,
+                ore + precompute.adjusted[Resource::Ore.index()],
+                cap,
+            );
+            let next_total = wood_next + sheep_next + wheat_next + brick_next + ore_next;
+            wood_post = port_deficit_factor(weights, next_total, wood_next);
+            sheep_post = port_deficit_factor(weights, next_total, sheep_next);
+            wheat_post = port_deficit_factor(weights, next_total, wheat_next);
+            brick_post = port_deficit_factor(weights, next_total, brick_next);
+            ore_post = port_deficit_factor(weights, next_total, ore_next);
+        }
         weights.port_weight
             * (port_surplus(weights, wood + precompute.adjusted[Resource::Wood.index()])
                 * js_max(held[Resource::Wood.index()], gained[Resource::Wood.index()])
-                - port_surplus(weights, wood) * held[Resource::Wood.index()]
+                * wood_post
+                - port_surplus(weights, wood) * held[Resource::Wood.index()] * wood_pre
                 + port_surplus(
                     weights,
                     sheep + precompute.adjusted[Resource::Sheep.index()],
                 ) * js_max(
                     held[Resource::Sheep.index()],
                     gained[Resource::Sheep.index()],
-                )
-                - port_surplus(weights, sheep) * held[Resource::Sheep.index()]
+                ) * sheep_post
+                - port_surplus(weights, sheep) * held[Resource::Sheep.index()] * sheep_pre
                 + port_surplus(
                     weights,
                     wheat + precompute.adjusted[Resource::Wheat.index()],
                 ) * js_max(
                     held[Resource::Wheat.index()],
                     gained[Resource::Wheat.index()],
-                )
-                - port_surplus(weights, wheat) * held[Resource::Wheat.index()]
+                ) * wheat_post
+                - port_surplus(weights, wheat) * held[Resource::Wheat.index()] * wheat_pre
                 + port_surplus(
                     weights,
                     brick + precompute.adjusted[Resource::Brick.index()],
                 ) * js_max(
                     held[Resource::Brick.index()],
                     gained[Resource::Brick.index()],
-                )
-                - port_surplus(weights, brick) * held[Resource::Brick.index()]
+                ) * brick_post
+                - port_surplus(weights, brick) * held[Resource::Brick.index()] * brick_pre
                 + port_surplus(weights, ore + precompute.adjusted[Resource::Ore.index()])
                     * js_max(held[Resource::Ore.index()], gained[Resource::Ore.index()])
-                - port_surplus(weights, ore) * held[Resource::Ore.index()])
+                    * ore_post
+                - port_surplus(weights, ore) * held[Resource::Ore.index()] * ore_pre)
     }
 
     fn total_with_holdings(
@@ -632,6 +709,15 @@ fn port_precompute(
         }
     }
     (has_ports, factors)
+}
+
+/// What a port converts surplus *into*. `total` is the summed recipe-cap coverage of
+/// all five resources and `own` the ported resource's own share, so the fraction is the
+/// mean coverage of the other four: 0 when they are untouched, 1 when all four are
+/// saturated. At weight 0 the factor is exactly 1 and every product it multiplies is
+/// bit-for-bit unchanged. Mirrors `valuation.ts::portDeficitFactor`.
+fn port_deficit_factor(weights: &EngineWeights, total: f64, own: f64) -> f64 {
+    1.0 + weights.port_coverage_deficit_weight * (1.0 - (total - own) / 4.0)
 }
 
 fn port_surplus(weights: &EngineWeights, pips: f64) -> f64 {

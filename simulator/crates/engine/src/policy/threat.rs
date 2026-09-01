@@ -14,12 +14,18 @@ pub struct ThreatParams {
     pub delay_weight: f64,
     /// Finite weight on blocked production matching the opponent's nearest-build shortfall.
     pub need_weight: f64,
+    /// Non-negative, finite weight on the completion step inside `need_share`: how much extra
+    /// share a resource carries when the cheapest route is at most one card short of it.
+    pub need_completion_weight: f64,
     /// Finite weight on raw blocked production, independent of danger.
     pub block_weight: f64,
     /// Finite weight on the best available victim rank.
     pub steal_weight: f64,
     /// Finite weight on victim hand size inside the victim rank.
     pub victim_hand_weight: f64,
+    /// Non-negative, finite weight on the belief-derived chance a stolen card fills the
+    /// victim's own cheapest-route shortfall, inside the victim rank.
+    pub victim_need_weight: f64,
     /// Positive, finite turns added before ETW is inverted into danger.
     pub danger_floor: f64,
     /// Non-negative, finite upper bound on fractional delay, in horizons.
@@ -34,6 +40,11 @@ pub struct ThreatParams {
     /// action-score points, rejoining knight play timing to the robber placement value the
     /// chooser maximized. An unswept Phase-H placeholder, not a tuned value.
     pub knight_placement_weight: f64,
+    /// Non-negative, finite points per pip of the observer's own robbed hex, priced into the
+    /// knight's play/hold score when the robber sits on a hex the observer touches. The
+    /// declared form of the constant `heuristic_v1.rs::knight_action_score` used to hardcode;
+    /// the ungated knight path, which carries no `ThreatParams`, keeps that literal.
+    pub knight_relief_weight: f64,
 }
 
 impl Default for ThreatParams {
@@ -41,14 +52,17 @@ impl Default for ThreatParams {
         Self {
             delay_weight: 1.0,
             need_weight: 0.35,
+            need_completion_weight: 0.35,
             block_weight: 0.25,
             steal_weight: 0.02,
             victim_hand_weight: 0.15,
+            victim_need_weight: 0.15,
             danger_floor: 1.0,
             delay_cap: 4.0,
             hand_cap: 8.0,
             knight_steal_weight: 12.0,
             knight_placement_weight: 30.0,
+            knight_relief_weight: 12.0,
         }
     }
 }
@@ -102,76 +116,143 @@ pub struct RobberChoice {
     pub steal_value: f64,
 }
 
+/// One `(hex, victim)` pair the robber search considers, and the value it maximizes.
+struct RobberPair {
+    hex: u8,
+    victim: Option<u8>,
+    /// The hex terms every pair on this hex shares, plus this victim's steal term.
+    score: f64,
+    /// This victim's rank, the tie-break inside a hex. Unused on a declining pair.
+    rank: f64,
+}
+
+/// One joint maximum over `(hex, victim)` pairs. The hex terms do not depend on the victim, so
+/// the pair score splits into a shared part and the victim's steal term; enumerating the pairs
+/// anyway is what lets a victim-scoped term reach the hex choice as well as the victim choice.
+/// `victim_need_weight` is the term riding that wiring today.
+///
+/// Equivalent to the two-stage search this replaced (a hex loop maximizing the shared terms plus
+/// the best available steal, then a victim loop re-picking that same victim on the winning hex)
+/// wherever the steal term is non-negative, which covers every declared bound and every shipped
+/// default. `tests/threat_robber.rs::robber_choice_matches_the_two_stage_search_it_replaced`
+/// pins that against a reference implementation of the old search.
 pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberChoice {
     let context = context(view, params);
-    let mut best = view.robber();
-    let mut best_score = f64::NEG_INFINITY;
+    // The victim rank reads only the seat's context and view state, never the hex, so rank each
+    // seat once per decision. Deriving it inside the pair enumeration instead would repeat the
+    // belief expectation and its need dot product on every candidate hex, and the knight path
+    // that reaches here is already gated on throughput grounds.
+    let mut ranks = [0.0; MAX_SEATS];
+    for seat in 0..view.seats() {
+        if seat != view.observer() {
+            ranks[seat] = victim_rank(view, params, &context, seat);
+        }
+    }
+    let mut best: Option<RobberPair> = None;
     for hex in 0..view.topology().hex_count() {
         let hex = hex as u8;
         if hex == view.robber() || view.hex_touches_seat(hex, view.observer()) {
             continue;
         }
-        let mut score = 0.0;
-        let mut best_steal = 0.0_f64;
+        let mut shared = 0.0;
         for seat in 0..view.seats() {
             if seat == view.observer() {
                 continue;
             }
-            let terms = seat_terms(view, params, &context, hex, seat);
-            score += terms.delay + terms.need + terms.block;
-            best_steal = best_steal.max(terms.steal);
+            let Some(terms) = hex_terms(view, params, &context, hex, seat) else {
+                continue;
+            };
+            shared += terms.delay + terms.need + terms.block;
         }
-        score += best_steal;
-        if !score.is_finite() {
+        let Some(pair) = best_pair_on_hex(view, params, &ranks, hex, shared) else {
             continue;
-        }
-        if score > best_score {
-            best = hex;
-            best_score = score;
-        }
-    }
-    let mut placement_score = best_score;
-    if best == view.robber() {
-        best = (0..view.topology().hex_count())
-            .map(|hex| hex as u8)
-            .find(|hex| *hex != view.robber())
-            .expect("board has another hex");
-        placement_score = 0.0;
-    }
-
-    let mut victim = None;
-    let mut best_rank = f64::NEG_INFINITY;
-    for seat in 0..view.seats() {
-        if seat == view.observer() || !view.stealable_on_hex(best, seat) {
-            continue;
-        }
-        let rank = victim_rank(view, params, &context, seat);
-        if rank > best_rank {
-            victim = Some(seat as u8);
-            best_rank = rank;
+        };
+        // Ties across hexes go to the lower hex index, as the hex loop's strict `>` did.
+        if best.as_ref().is_none_or(|current| pair.score > current.score) {
+            best = Some(pair);
         }
     }
+    let (destination, victim, placement_score) = match best {
+        Some(pair) => (pair.hex, pair.victim, pair.score),
+        None => {
+            // No pair was scoreable: fall back to the first hex that is not the robber's own,
+            // price the placement at zero, and name whatever victim that hex offers.
+            let hex = (0..view.topology().hex_count())
+                .map(|hex| hex as u8)
+                .find(|hex| *hex != view.robber())
+                .expect("board has another hex");
+            let victim =
+                best_pair_on_hex(view, params, &ranks, hex, 0.0).and_then(|pair| pair.victim);
+            (hex, victim, 0.0)
+        }
+    };
     RobberChoice {
-        destination: best,
+        destination,
         victim,
         placement_score,
         steal_value: victim.map_or(0.0, |seat| {
             let seat = usize::from(seat);
-            victim_rank(view, params, &context, seat) + own_need_hit(view, seat)
+            ranks[seat] + own_need_hit(view, params, seat)
         }),
     }
+}
+
+/// The best pair on one hex, given `shared`, the hex terms every pair on it carries. Declining
+/// (`victim: None`) is a pair only where no seat is stealable, since `view::stealable_on_hex` is
+/// also what makes declining legal. Ties go to the higher-ranked victim and then to the lower
+/// seat, which is the victim the two-stage search re-picked on its chosen hex. A pair scoring
+/// non-finite is no candidate, as a non-finite hex score was not.
+fn best_pair_on_hex(
+    view: &DecisionView<'_>,
+    params: &ThreatParams,
+    ranks: &[f64; MAX_SEATS],
+    hex: u8,
+    shared: f64,
+) -> Option<RobberPair> {
+    let mut best: Option<RobberPair> = None;
+    let mut stealable = false;
+    for seat in 0..view.seats() {
+        if seat == view.observer() || !view.stealable_on_hex(hex, seat) {
+            continue;
+        }
+        stealable = true;
+        let rank = ranks[seat];
+        let score = shared + params.steal_weight * rank;
+        if !score.is_finite() {
+            continue;
+        }
+        if best.as_ref().is_none_or(|current| {
+            score > current.score || (score == current.score && rank > current.rank)
+        }) {
+            best = Some(RobberPair {
+                hex,
+                victim: Some(seat as u8),
+                score,
+                rank,
+            });
+        }
+    }
+    if stealable {
+        return best;
+    }
+    shared.is_finite().then_some(RobberPair {
+        hex,
+        victim: None,
+        score: shared,
+        rank: f64::NEG_INFINITY,
+    })
 }
 
 /// Belief-derived probability that a uniformly random card from `victim`'s believed hand fills
 /// the observer's own cheapest-route shortfall. The observer's shortfall prices the real hand,
 /// mirroring `trading::own_inputs`; the victim's composition stands on belief.
-fn own_need_hit(view: &DecisionView<'_>, victim: usize) -> f64 {
+fn own_need_hit(view: &DecisionView<'_>, params: &ThreatParams, victim: usize) -> f64 {
     let expected = view.belief().expected(victim);
     let total = expected.iter().sum::<f64>();
     if total <= 0.0 {
         return 0.0;
     }
-    let need = need_share(&trading::own_inputs(view));
+    let need = need_share(&trading::own_inputs(view), params.need_completion_weight);
     (0..RESOURCE_COUNT)
         .map(|resource| need[resource] * expected[resource])
         .sum::<f64>()
@@ -217,7 +298,7 @@ pub fn context(view: &DecisionView<'_>, params: &ThreatParams) -> ThreatContext 
         let etw_free = etw::expected_turns_to_win(&inputs);
         raw[seat] = danger_from_etw(etw_free, params.danger_floor);
         maximum = maximum.max(raw[seat]);
-        result.need[seat] = need_share(&inputs);
+        result.need[seat] = need_share(&inputs, params.need_completion_weight);
         result.free_pips[seat] = free_pips;
         result.etw_free[seat] = etw_free;
         result.inputs[seat] = Some(inputs);
@@ -230,20 +311,21 @@ pub fn context(view: &DecisionView<'_>, params: &ThreatParams) -> ThreatContext 
     result
 }
 
-pub fn seat_terms(
+/// The hex-dependent half of `seat_terms`: every term except the steal, which prices the victim
+/// rather than the hex. `None` where the seat contributes nothing on this hex, which is the
+/// `ThreatTerms::ZERO` the full form returns.
+fn hex_terms(
     view: &DecisionView<'_>,
     params: &ThreatParams,
     context: &ThreatContext,
     hex: u8,
     seat: usize,
-) -> ThreatTerms {
+) -> Option<ThreatTerms> {
     assert_params(params);
     if seat == view.observer() || seat >= view.seats() || !view.victim_on_hex(hex, seat) {
-        return ThreatTerms::ZERO;
+        return None;
     }
-    let Some(mut inputs) = context.inputs[seat].clone() else {
-        return ThreatTerms::ZERO;
-    };
+    let mut inputs = context.inputs[seat].clone()?;
     let blocked = hex_contribution(view, hex, seat);
     let mut hypothetical = context.free_pips[seat];
     for resource in 0..RESOURCE_COUNT {
@@ -264,16 +346,30 @@ pub fn seat_terms(
         .map(|resource| context.need[seat][resource] * f64::from(blocked[resource]))
         .sum::<f64>()
         / 36.0;
-    ThreatTerms {
+    Some(ThreatTerms {
         delay: context.danger[seat] * params.delay_weight * delay,
         need: context.danger[seat] * params.need_weight * need_share,
         block: params.block_weight * block_share,
-        steal: if view.stealable_on_hex(hex, seat) {
-            params.steal_weight * victim_rank(view, params, context, seat)
-        } else {
-            0.0
-        },
+        steal: 0.0,
+    })
+}
+
+/// One seat's full contribution on one candidate hex. `robber_choice` reads `hex_terms` and the
+/// per-decision victim ranks instead, so this is the form consumers outside the hot loop read.
+pub fn seat_terms(
+    view: &DecisionView<'_>,
+    params: &ThreatParams,
+    context: &ThreatContext,
+    hex: u8,
+    seat: usize,
+) -> ThreatTerms {
+    let Some(mut terms) = hex_terms(view, params, context, hex, seat) else {
+        return ThreatTerms::ZERO;
+    };
+    if view.stealable_on_hex(hex, seat) {
+        terms.steal = params.steal_weight * victim_rank(view, params, context, seat);
     }
+    terms
 }
 
 pub fn robber_free_production_pips(view: &DecisionView<'_>, seat: usize) -> [u16; RESOURCE_COUNT] {
@@ -319,16 +415,28 @@ pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
         params.need_weight.is_finite(),
     )?;
     check(
+        "threat.needCompletionWeight is non-negative and finite",
+        params.need_completion_weight.is_finite() && params.need_completion_weight >= 0.0,
+    )?;
+    check(
         "threat.blockWeight is finite",
         params.block_weight.is_finite(),
     )?;
+    // Both bounds are what makes `robber_choice`'s joint argmax equivalent to the two-stage
+    // search it replaced: that search floored the steal term at 0, so the two agree only where
+    // `steal_weight * victim_rank` cannot go negative. `victim_rank`'s other two terms are
+    // non-negative by construction.
     check(
-        "threat.stealWeight is finite",
-        params.steal_weight.is_finite(),
+        "threat.stealWeight is non-negative and finite",
+        params.steal_weight.is_finite() && params.steal_weight >= 0.0,
     )?;
     check(
-        "threat.victimHandWeight is finite",
-        params.victim_hand_weight.is_finite(),
+        "threat.victimHandWeight is non-negative and finite",
+        params.victim_hand_weight.is_finite() && params.victim_hand_weight >= 0.0,
+    )?;
+    check(
+        "threat.victimNeedWeight is non-negative and finite",
+        params.victim_need_weight.is_finite() && params.victim_need_weight >= 0.0,
     )?;
     check(
         "threat.dangerFloor is positive and finite",
@@ -349,6 +457,10 @@ pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
     check(
         "threat.knightPlacementWeight is non-negative and finite",
         params.knight_placement_weight.is_finite() && params.knight_placement_weight >= 0.0,
+    )?;
+    check(
+        "threat.knightReliefWeight is non-negative and finite",
+        params.knight_relief_weight.is_finite() && params.knight_relief_weight >= 0.0,
     )
 }
 
@@ -356,14 +468,55 @@ fn assert_params(params: &ThreatParams) {
     debug_assert_eq!(validate(params), Ok(()));
 }
 
-fn need_share(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {
+/// The shared need model: how the seat's remaining need is spread over the resources, given
+/// its `cheapest_route_shortfall`. Every robber and knight consumer of "how badly does this seat
+/// want this resource" reads this one function, so a steal, a block and a knight price need
+/// alike. `trading.rs` and `devcards.rs` read `cheapest_route_shortfall` directly and do not
+/// take the completion step.
+///
+/// The proportional spread of the shortfall is the base, which keeps a distant goal priced.
+/// On top of it, a resource the route is at most `COMPLETION_SHORTFALL` short of carries a
+/// completion step of `need_completion_weight`, so a card that clears the last of what the route
+/// still wants of that resource outranks one that moves a far goal the same proportional
+/// distance (`SIM-GAP-40`).
+///
+/// The step is per resource, not per route, which is the only thing a per-resource share vector
+/// can express: it fires on a resource one card from satisfied even when a second resource still
+/// keeps the build out of reach this turn. The route-level case is the special case where exactly
+/// one resource sits inside the step and taking it does finish the build.
+///
+/// The result stays total-normalized, which every caller depends on: `seat_terms` and both
+/// need-hit functions read it as the *share* of the seat's remaining need a resource carries,
+/// not as a magnitude. What the normalization divides by is now the proportional total plus
+/// one step per stepped resource, so a step redistributes share toward what the route is nearly
+/// done needing rather than inflating the total; the shares still sum to 1 and no caller's scale
+/// moves. With no resource inside the step, or at weight 0, the return is exactly the
+/// proportional spread this function returned before the step existed, bit for bit.
+pub fn need_share(inputs: &EtwInputs, need_completion_weight: f64) -> [f64; RESOURCE_COUNT] {
     let shortfall = cheapest_route_shortfall(inputs);
     let total = shortfall.iter().sum::<f64>();
     if total == 0.0 || !total.is_finite() {
         return [0.0; RESOURCE_COUNT];
     }
-    shortfall.map(|value| value / total)
+    let mut share = shortfall.map(|value| value / total);
+    let mut stepped = 0.0;
+    for resource in 0..RESOURCE_COUNT {
+        if shortfall[resource] > 0.0 && shortfall[resource] <= COMPLETION_SHORTFALL {
+            share[resource] += need_completion_weight;
+            stepped += need_completion_weight;
+        }
+    }
+    if stepped == 0.0 {
+        return share;
+    }
+    let stepped_total = share.iter().sum::<f64>();
+    share.map(|value| value / stepped_total)
 }
+
+/// Remaining shortfall, in cards, at or below which a resource counts as satisfied for the
+/// cheapest route. One card: the step prices "this steal clears the last card of that resource
+/// the route wants", and a shortfall is a real magnitude, so the unit is a card.
+const COMPLETION_SHORTFALL: f64 = 1.0;
 
 /// Raw per-resource shortfall of the route with the smallest total shortfall, over the same
 /// three routes `etw::expected_turns_to_win` considers. Zero when no route is available.
@@ -420,4 +573,25 @@ fn victim_rank(
     context.danger[seat]
         + params.victim_hand_weight * f64::from(view.hand_total(seat)).min(params.hand_cap)
             / params.hand_cap
+        + params.victim_need_weight * victim_need_hit(view, context, seat)
+}
+
+/// Belief-derived probability that a uniformly random card from `seat`'s believed hand fills
+/// *that seat's* own cheapest-route shortfall: the mirror of `own_need_hit`, which prices what
+/// the same card is worth to the observer. `ThreatContext::need` already carries the seat's
+/// `need_share` over its `cheapest_route_shortfall`, so this reads the shared opponent model
+/// rather than building a second one.
+///
+/// Non-negative by construction, which is what keeps `robber_choice`'s joint argmax equivalent
+/// to the two-stage search it replaced.
+fn victim_need_hit(view: &DecisionView<'_>, context: &ThreatContext, seat: usize) -> f64 {
+    let expected = view.belief().expected(seat);
+    let total = expected.iter().sum::<f64>();
+    if total <= 0.0 {
+        return 0.0;
+    }
+    (0..RESOURCE_COUNT)
+        .map(|resource| context.need[seat][resource] * expected[resource])
+        .sum::<f64>()
+        / total
 }

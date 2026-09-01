@@ -19,10 +19,12 @@
     "recipeRoadBonus": { "min": 0.375, "max": 6.0 },
     "recipeCityBonus": { "min": 0.5, "max": 8.0 },
     "recipeSettlementBonus": { "min": 0.25, "max": 4.0 },
+    "recipeDevCardBonus": { "min": 0.0, "max": 4.0 },
     "recipeCap": { "min": 2.0, "max": 8.0 },
     "portWeight": { "min": 0.1375, "max": 2.2 },
     "genericPortFactor": { "min": 0.5, "max": 0.5 },
     "portSurplusThreshold": { "min": 1.0, "max": 6.0 },
+    "portCoverageDeficitWeight": { "min": 0.0, "max": 4.0 },
     "nearPortRadius": { "min": 1.0, "max": 3.0 },
     "nearPortDecay": { "min": 0.125, "max": 1.0 },
     "robberDiscount": { "min": 0.0, "max": 1.0 },
@@ -53,14 +55,17 @@
     "threat": {
       "delayWeight": { "min": 0.25, "max": 4.0 },
       "needWeight": { "min": 0.0875, "max": 1.4 },
+      "needCompletionWeight": { "min": 0.0875, "max": 1.4 },
       "blockWeight": { "min": 0.0625, "max": 1.0 },
       "stealWeight": { "min": 0.005, "max": 0.08 },
       "victimHandWeight": { "min": 0.0375, "max": 0.6 },
+      "victimNeedWeight": { "min": 0.0375, "max": 0.6 },
       "dangerFloor": { "min": 0.25, "max": 4.0 },
       "delayCap": { "min": 1.0, "max": 16.0 },
       "handCap": { "min": 4.0, "max": 16.0 },
       "knightStealWeight": { "min": 3.0, "max": 48.0 },
-      "knightPlacementWeight": { "min": 7.5, "max": 120.0 }
+      "knightPlacementWeight": { "min": 7.5, "max": 120.0 },
+      "knightReliefWeight": { "min": 3.0, "max": 48.0 }
     },
     "devCards": {
       "etwWeight": { "min": 0.25, "max": 4.0 },

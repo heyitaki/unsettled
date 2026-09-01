@@ -374,7 +374,9 @@ function diversityScore(
   const city = weights.recipeCityBonus * Math.min(oreRecipe, wheatRecipe)
   const settlement = weights.recipeSettlementBonus *
     Math.min(woodRecipe, brickRecipe, wheatRecipe, sheepRecipe)
-  return spread + road + city + settlement
+  const devCard = weights.recipeDevCardBonus *
+    Math.min(oreRecipe, wheatRecipe, sheepRecipe)
+  return spread + road + city + settlement + devCard
 }
 
 function duplicateNumberPenalty(
@@ -450,6 +452,14 @@ function foldPortFactors(
 const portSurplus = (weights: EngineWeights, pips: number): number =>
   Math.max(0, pips - weights.portSurplusThreshold)
 
+// What a port converts surplus *into*. `total` is the summed recipe-cap
+// coverage of all five resources and `own` the ported resource's own share, so
+// the fraction below is the mean coverage of the other four: 0 when they are
+// untouched, 1 when all four are saturated. At weight 0 the factor is exactly
+// 1 and every product it multiplies is bit-for-bit unchanged.
+const portDeficitFactor = (weights: EngineWeights, total: number, own: number): number =>
+  1 + weights.portCoverageDeficitWeight * (1 - (total - own) / 4)
+
 /**
  * Port value gained by adding this vertex. The candidate's folded factors
  * combine with the holding's by `Math.max` — each is already a maximum over
@@ -471,17 +481,56 @@ function portDelta(
   const wheat = holdings.pips.wheat ?? 0
   const brick = holdings.pips.brick ?? 0
   const ore = holdings.pips.ore ?? 0
+  // Each half of each difference carries its own state's deficit, so the term
+  // stays a true delta rather than repricing the holding's existing ports at
+  // the post-move spread. Left at 1 unless the weight asks for the ten
+  // fractional `coverage` powers below, which sit in every rollout scan.
+  let woodPre = 1
+  let sheepPre = 1
+  let wheatPre = 1
+  let brickPre = 1
+  let orePre = 1
+  let woodPost = 1
+  let sheepPost = 1
+  let wheatPost = 1
+  let brickPost = 1
+  let orePost = 1
+  if (weights.portCoverageDeficitWeight !== 0) {
+    const cap = weights.recipeCap
+    const woodCover = coverage(weights, wood, cap)
+    const sheepCover = coverage(weights, sheep, cap)
+    const wheatCover = coverage(weights, wheat, cap)
+    const brickCover = coverage(weights, brick, cap)
+    const oreCover = coverage(weights, ore, cap)
+    const total = woodCover + sheepCover + wheatCover + brickCover + oreCover
+    woodPre = portDeficitFactor(weights, total, woodCover)
+    sheepPre = portDeficitFactor(weights, total, sheepCover)
+    wheatPre = portDeficitFactor(weights, total, wheatCover)
+    brickPre = portDeficitFactor(weights, total, brickCover)
+    orePre = portDeficitFactor(weights, total, oreCover)
+    const woodNext = coverage(weights, wood + precompute.adjustedWood, cap)
+    const sheepNext = coverage(weights, sheep + precompute.adjustedSheep, cap)
+    const wheatNext = coverage(weights, wheat + precompute.adjustedWheat, cap)
+    const brickNext = coverage(weights, brick + precompute.adjustedBrick, cap)
+    const oreNext = coverage(weights, ore + precompute.adjustedOre, cap)
+    const nextTotal = woodNext + sheepNext + wheatNext + brickNext + oreNext
+    woodPost = portDeficitFactor(weights, nextTotal, woodNext)
+    sheepPost = portDeficitFactor(weights, nextTotal, sheepNext)
+    wheatPost = portDeficitFactor(weights, nextTotal, wheatNext)
+    brickPost = portDeficitFactor(weights, nextTotal, brickNext)
+    orePost = portDeficitFactor(weights, nextTotal, oreNext)
+  }
   return weights.portWeight * (
-    portSurplus(weights, wood + precompute.adjustedWood) * Math.max(held.wood, gained.wood) -
-      portSurplus(weights, wood) * held.wood +
-    portSurplus(weights, sheep + precompute.adjustedSheep) * Math.max(held.sheep, gained.sheep) -
-      portSurplus(weights, sheep) * held.sheep +
-    portSurplus(weights, wheat + precompute.adjustedWheat) * Math.max(held.wheat, gained.wheat) -
-      portSurplus(weights, wheat) * held.wheat +
-    portSurplus(weights, brick + precompute.adjustedBrick) * Math.max(held.brick, gained.brick) -
-      portSurplus(weights, brick) * held.brick +
-    portSurplus(weights, ore + precompute.adjustedOre) * Math.max(held.ore, gained.ore) -
-      portSurplus(weights, ore) * held.ore
+    portSurplus(weights, wood + precompute.adjustedWood) * Math.max(held.wood, gained.wood) * woodPost -
+      portSurplus(weights, wood) * held.wood * woodPre +
+    portSurplus(weights, sheep + precompute.adjustedSheep) * Math.max(held.sheep, gained.sheep) * sheepPost -
+      portSurplus(weights, sheep) * held.sheep * sheepPre +
+    portSurplus(weights, wheat + precompute.adjustedWheat) * Math.max(held.wheat, gained.wheat) * wheatPost -
+      portSurplus(weights, wheat) * held.wheat * wheatPre +
+    portSurplus(weights, brick + precompute.adjustedBrick) * Math.max(held.brick, gained.brick) * brickPost -
+      portSurplus(weights, brick) * held.brick * brickPre +
+    portSurplus(weights, ore + precompute.adjustedOre) * Math.max(held.ore, gained.ore) * orePost -
+      portSurplus(weights, ore) * held.ore * orePre
   )
 }
 

@@ -255,8 +255,10 @@ mod tests {
     /// The composite defaults the H screens and combines were generated against,
     /// before the Phase-I adoption (M-46) moved the four winning axes into
     /// `Default::default()`. The committed `h2_*`/`h2x_*`/`h4_*` arm files are
-    /// measurement records of that baseline and never change bytes, so their pins
-    /// anchor here rather than to the live defaults.
+    /// measurement records of that baseline: their measured axis values never move,
+    /// though their bytes do, since the exact-key contract makes every arm file gain a
+    /// key whenever a parameter is added. That is why their pins anchor to a
+    /// reconstructed baseline rather than to the live defaults.
     fn screen_baseline_value() -> Value {
         let mut base = composite_value();
         for (leaf, pre_adoption) in [
@@ -465,7 +467,7 @@ mod tests {
     /// against the live composite shape: silently dropping any sign or range guard from
     /// `validate_params` or a block `validate` fails here, and a new params field cannot
     /// land without declaring whether it has a JSON-expressible bad value. `None` marks
-    /// fields whose only constraint is finiteness — JSON cannot spell a non-finite
+    /// fields whose only constraint is finiteness: JSON cannot spell a non-finite
     /// number (serde_json rejects `1e999` and has no NaN literal), so those guards are
     /// unreachable through the loader and only back the engine's debug asserts.
     #[test]
@@ -491,14 +493,17 @@ mod tests {
             ("/goalHysteresisMargin", float(-1.0)),
             ("/threat/delayWeight", None),
             ("/threat/needWeight", None),
+            ("/threat/needCompletionWeight", float(-1.0)),
             ("/threat/blockWeight", None),
-            ("/threat/stealWeight", None),
-            ("/threat/victimHandWeight", None),
+            ("/threat/stealWeight", float(-1.0)),
+            ("/threat/victimHandWeight", float(-1.0)),
+            ("/threat/victimNeedWeight", float(-1.0)),
             ("/threat/dangerFloor", float(0.0)),
             ("/threat/delayCap", float(-1.0)),
             ("/threat/handCap", float(0.0)),
             ("/threat/knightStealWeight", float(-1.0)),
             ("/threat/knightPlacementWeight", float(-1.0)),
+            ("/threat/knightReliefWeight", float(-1.0)),
             ("/devCards/etwWeight", None),
             ("/devCards/etwFloor", float(0.0)),
             ("/devCards/gainCap", float(-1.0)),
@@ -728,6 +733,140 @@ mod tests {
         assert_eq!(extension_count, 10, "the M-42 extension commits 10 arms");
     }
 
+    /// The M-50 SP1e sweep axes: JSON pointer and arm slug. Five axes, two arms each,
+    /// every arm sitting on its declared sweep-bounds endpoint.
+    const SP1E_AXES: [(&str, &str); 5] = [
+        ("/threat/knightStealWeight", "knsteal"),
+        ("/threat/knightPlacementWeight", "knplace"),
+        ("/threat/knightReliefWeight", "knrelief"),
+        ("/threat/victimNeedWeight", "victimneed"),
+        ("/threat/needCompletionWeight", "needcomp"),
+    ];
+
+    /// Walks the committed SP1e sweep arms (`placement/arms/sp1e_*.json`): each file
+    /// loads through the full contract, differs from the *post-SP1 live* composite
+    /// defaults in exactly one leaf, and carries that leaf's bounds endpoint exactly:
+    /// `_lo` the `min`, `_hi` the `max`. The H2 walk anchors to the pre-adoption
+    /// baseline its frozen files were generated against; SP1e is a new sweep, so it
+    /// anchors to the defaults it will actually be measured against.
+    #[test]
+    fn the_sp1e_arm_files_are_the_committed_bounds_endpoint_perturbations() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base = composite_value();
+
+        let mut expected = Vec::new();
+        for (leaf, slug) in SP1E_AXES {
+            let range = bounds["policy"]
+                .pointer(leaf)
+                .unwrap_or_else(|| panic!("no bounds range for {leaf}"));
+            for (endpoint, suffix) in [("min", "lo"), ("max", "hi")] {
+                let name = format!("sp1e_{slug}_{suffix}.json");
+                let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                    .unwrap_or_else(|_| panic!("{name} must be committed"));
+                parse_params_file(&source)
+                    .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+                let file: Value = serde_json::from_str(&source).expect("valid JSON");
+
+                let mut perturbed = base.clone();
+                *perturbed.pointer_mut(leaf).expect("leaf") = range[endpoint].clone();
+                assert_eq!(
+                    file, perturbed,
+                    "{name} must be the post-SP1 defaults with {leaf} at its {endpoint} bound"
+                );
+                expected.push(name);
+            }
+        }
+
+        // No stray sp1e_ file: an arm nobody preregistered would silently join a run.
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
+            let name = entry.expect("entry").file_name().to_string_lossy().into_owned();
+            if name.starts_with("sp1e_") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "the SP1e sweep commits 5 axes x 2 arms");
+    }
+
+    /// The four axes M-46 adopted, as JSON pointer, arm slug and the value the axis
+    /// carried before the adoption. The pre-adoption values are the ones
+    /// `screen_baseline_value` restores; M-51 reverts them one at a time to ask whether
+    /// the adoption still reads the same way against the post-SP1 field.
+    const SP1R_REVERTS: [(&str, &str, f64); 4] = [
+        ("/devBuyScale", "devbuy", 1.0),
+        ("/trading/etwWeight", "tretw", 1.0),
+        ("/trading/dangerFloor", "trfloor", 1.0),
+        ("/trading/dangerWeight", "trdangerw", 0.5),
+    ];
+
+    /// Walks the committed M-51 re-screen arms (`placement/arms/sp1r_*.json`): each file
+    /// loads through the full contract, is the *post-SP1 live* composite defaults with
+    /// exactly one adopted axis put back to its pre-adoption value, and that value sits
+    /// inside the axis's committed sweep-bounds range. The M-51 run also carries a fifth
+    /// arm on the weights side, which needs no file of its own: it is the committed
+    /// `phase-i-candidate-weights.json`, already pinned as the defaults with
+    /// `handValueWeight` at its pre-drop 0.4 by
+    /// `the_phase_i_candidate_files_record_the_adopted_vectors`.
+    #[test]
+    fn the_sp1r_arm_files_are_the_committed_pre_adoption_reverts() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base = composite_value();
+        let baseline = screen_baseline_value();
+
+        let mut expected = Vec::new();
+        for (leaf, slug, pre_adoption) in SP1R_REVERTS {
+            assert_eq!(
+                baseline.pointer(leaf).expect("leaf").as_f64(),
+                Some(pre_adoption),
+                "{leaf}: the revert value must be the pre-adoption baseline the H screens ran on"
+            );
+            let range = bounds["policy"]
+                .pointer(leaf)
+                .unwrap_or_else(|| panic!("no bounds range for {leaf}"));
+            assert!(
+                range["min"].as_f64().expect("number") <= pre_adoption
+                    && pre_adoption <= range["max"].as_f64().expect("number"),
+                "{leaf}: revert value {pre_adoption} lies outside its bounds range"
+            );
+
+            let name = format!("sp1r_{slug}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            parse_params_file(&source).unwrap_or_else(|error| panic!("{name} must load: {error}"));
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+
+            let mut reverted = base.clone();
+            *reverted.pointer_mut(leaf).expect("leaf") = Value::from(pre_adoption);
+            assert_eq!(
+                file, reverted,
+                "{name} must be the post-SP1 defaults with {leaf} back at {pre_adoption}"
+            );
+            expected.push(name);
+        }
+
+        // No stray sp1r_ file: an arm nobody preregistered would silently join the run.
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
+            let name = entry.expect("entry").file_name().to_string_lossy().into_owned();
+            if name.starts_with("sp1r_") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "the M-51 re-screen commits one arm per adopted axis");
+    }
+
     /// The M-44 H4 combine winners: JSON pointer, slug of the committed revert arm, and
     /// the winner value. Preregistered in the M-44 prereg; the values are the largest
     /// `better` estimate per axis from M-41/M-42.
@@ -746,7 +885,7 @@ mod tests {
     /// Pins the committed H4 combine set: `h4_combined.json` is the composite defaults
     /// with exactly the nine preregistered winner leaves moved, each `h4_no_<slug>.json`
     /// is the combined vector with that one winner reverted to its default, and every
-    /// file loads through the full contract (exact keys, guards, headroom — the load is
+    /// file loads through the full contract (exact keys, guards, headroom; the load is
     /// H4's mechanical headroom re-check). Every winner value sits inside its committed
     /// sweep-bounds range.
     #[test]
@@ -807,8 +946,8 @@ mod tests {
     }
 
     /// Pins the Phase-I outcome (M-46, gate `better` at +14.10pp, adopted): the
-    /// candidate params are now byte-shape-identical to the *live* composite defaults —
-    /// adoption moved the four winning axes into `Default::default()` — and still match
+    /// candidate params are now byte-shape-identical to the *live* composite defaults
+    /// (adoption moved the four winning axes into `Default::default()`) and still match
     /// the confirmed `h4_final.json` record. The candidate weights file is the
     /// pre-adoption placement snapshot: identical to `default-weights.json` except
     /// `handValueWeight`, where adoption applied the M-43 drop (0.4 → 0).
@@ -854,6 +993,21 @@ mod tests {
         );
     }
 
+    /// SP1d promoted the knight's own-tile relief constant to a swept axis, so the loader
+    /// owes it the same rejection every other declared threat weight gets: a bad vector must
+    /// fail at load rather than trip a debug assert mid-run.
+    #[test]
+    fn a_negative_knight_relief_weight_fails_the_loader() {
+        let mut file = composite_value();
+        file["threat"]["knightReliefWeight"] = Value::from(-1.0);
+        let error = parse_params_file(&file.to_string()).expect_err("negative relief weight");
+        assert!(error.contains("threat.knightReliefWeight"), "{error}");
+
+        let mut file = composite_value();
+        file["threat"]["knightReliefWeight"] = Value::from(0.0);
+        parse_params_file(&file.to_string()).expect("zero is inside the domain");
+    }
+
     #[test]
     fn a_negative_generic_port_factor_fails_placement_validation() {
         let mut weights: Value = serde_json::from_str(
@@ -864,6 +1018,169 @@ mod tests {
         let weights: EngineWeights = serde_json::from_value(weights).expect("weights shape");
         let error = weights.validate().expect_err("hard bound");
         assert!(error.contains("genericPortFactor >= 0"), "{error}");
+    }
+
+    /// `port_deficit_factor` is `1 + w * d` with `d` in [0, 1], so a weight below -1 makes the
+    /// whole port term negative and the scorer starts preferring portless vertices. Same hard
+    /// bound, and same reason, as `genericPortFactor`.
+    #[test]
+    fn a_negative_port_coverage_deficit_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["portCoverageDeficitWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("portCoverageDeficitWeight >= 0"), "{error}");
+
+        weights["portCoverageDeficitWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
+    /// `robber_choice`'s joint argmax only agrees with the two-stage search it replaced where the
+    /// steal term cannot go negative, and both of these scale it.
+    #[test]
+    fn a_negative_steal_or_victim_hand_weight_fails_the_loader() {
+        for key in ["stealWeight", "victimHandWeight"] {
+            let mut file = composite_value();
+            file["threat"][key] = Value::from(-0.1);
+            let error = parse_params_file(&file.to_string())
+                .err()
+                .unwrap_or_else(|| panic!("negative {key} must fail at load"));
+            assert!(error.contains(&format!("threat.{key}")), "{error}");
+
+            let mut file = composite_value();
+            file["threat"][key] = Value::from(0.0);
+            parse_params_file(&file.to_string()).expect("zero is inside the domain");
+        }
+    }
+
+    /// The two SP2 term arms, as weights key, arm file stem and the value the arm carries.
+    /// Both terms ship at 0, so an arm is the live defaults with its own term switched on.
+    const SP2_ARMS: [(&str, &str, f64); 2] = [
+        ("recipeDevCardBonus", "sp2a_devcard", 1.0),
+        ("portCoverageDeficitWeight", "sp2b_portdeficit", 1.0),
+    ];
+
+    /// Walks the committed SP2 term arms (`placement/arms/sp2*.json`): each is the live
+    /// `default-weights.json` with exactly one new weight raised, and that value sits inside
+    /// the axis's committed sweep-bounds range. The weights-file walk below only proves these
+    /// load; without this an edit that also moved `portWeight` would run and be recorded as an
+    /// isolated port-deficit A/B. The stray-file check is the same one the SP1e walk carries:
+    /// an arm nobody preregistered would silently join a run.
+    #[test]
+    fn the_sp2_arm_files_are_the_committed_single_term_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (key, stem, value) in SP2_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let range = &bounds["placement"][key];
+            assert!(
+                value >= range["min"].as_f64().expect("min")
+                    && value <= range["max"].as_f64().expect("max"),
+                "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+            );
+            assert_eq!(
+                base[key].as_f64(),
+                Some(0.0),
+                "{key} ships at 0, which is what makes the arm a single-term perturbation"
+            );
+
+            let mut perturbed = base.clone();
+            perturbed[key] = Value::from(value);
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {key} at {value} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp2") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "the SP2 phase commits one arm per term");
+    }
+
+    /// Walks every committed weights-shaped file (the two shipped vectors plus the
+    /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
+    /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
+    /// `validate`. `contracts.md` states such a walk exists and none did, so until now a
+    /// weights arm left behind by a new formula weight failed silently, at run time, in
+    /// whichever measurement first selected it. A weights file is one carrying
+    /// `resourceValue`; the count pins the set so a file that loses the key is a failure
+    /// rather than a skip.
+    #[test]
+    fn every_committed_weights_file_loads_through_the_full_contract() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let load = |name: &str, source: &str| {
+            let weights: EngineWeights = serde_json::from_str(source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+        };
+        for name in ["default-weights.json", "phase-i-candidate-weights.json"] {
+            let source = std::fs::read_to_string(format!("{placement_dir}/{name}"))
+                .expect("committed weights vector");
+            load(name, &source);
+        }
+
+        let mut weights_arms = 0;
+        for entry in std::fs::read_dir(format!("{placement_dir}/arms")).expect("arms dir") {
+            let path = entry.expect("entry").path();
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("arm file");
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            if file.get("resourceValue").is_none() {
+                continue;
+            }
+            weights_arms += 1;
+            load(&name, &source);
+        }
+        assert_eq!(
+            weights_arms, 51,
+            "the committed weights arms are 51 files; a change to the set is a decision"
+        );
     }
 
     /// Collects `/a/b`-style JSON pointers to every non-object leaf, descending into
