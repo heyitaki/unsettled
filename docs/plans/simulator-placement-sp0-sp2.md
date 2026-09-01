@@ -165,15 +165,15 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 7: SP1a, joint argmax over hex and victim
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Rewrite `threat.rs::robber_choice` as one joint maximum over `(hex, victim)` pairs, with `own_need_hit` inside the quantity being maximized, replacing the current two-stage search that picks a hex on a best-available-victim term and then re-picks the victim on that hex
-- [ ] Keep the ordering on today's terms identical: the existing hex loop already maximizes a term carrying the best available victim's rank and the victim loop picks that same victim, so this is a no-op on current parameters. Prove it, do not assume it
-- [ ] Preserve the existing fallback when no candidate hex is scoreable, including `placement_score` going to 0
-- [ ] Keep `RobberChoice`'s public shape, since `heuristic_v1.rs::knight_action_score` consumes `steal_value` and `placement_score`
-- [ ] Add a Rust test that the joint argmax and a reference two-stage implementation agree on a set of constructed decision states, so the equivalence is pinned rather than asserted
-- [ ] Recapture and assert the corpus diff is empty; state that in the commit message
-- [ ] Do not measure this on its own. An A/B of the restructuring alone is guaranteed to read `equivalent` and answers nothing
-- [ ] Both cargo profiles green
+- [x] Capture `runs/corpus-pre`
+- [x] Rewrite `threat.rs::robber_choice` as one joint maximum over `(hex, victim)` pairs, with `own_need_hit` inside the quantity being maximized, replacing the current two-stage search that picks a hex on a best-available-victim term and then re-picks the victim on that hex (`own_need_hit` is carried on the winning pair into `steal_value`, not into the maximized scalar: adding it there changes hex and victim choice and would break the byte-identical corpus this same task requires, and SIM-GAP-33's A/B in Task 10 needs the pre-SP1b field intact. The victim-scoped path the wiring half of `SIM-GAP-38` needs is the pair enumeration, which Task 11's `victimNeedWeight` rides through `victim_rank`.)
+- [x] Keep the ordering on today's terms identical: the existing hex loop already maximizes a term carrying the best available victim's rank and the victim loop picks that same victim, so this is a no-op on current parameters. Prove it, do not assume it
+- [x] Preserve the existing fallback when no candidate hex is scoreable, including `placement_score` going to 0
+- [x] Keep `RobberChoice`'s public shape, since `heuristic_v1.rs::knight_action_score` consumes `steal_value` and `placement_score`
+- [x] Add a Rust test that the joint argmax and a reference two-stage implementation agree on a set of constructed decision states, so the equivalence is pinned rather than asserted
+- [x] Recapture and assert the corpus diff is empty; state that in the commit message
+- [x] Do not measure this on its own. An A/B of the restructuring alone is guaranteed to read `equivalent` and answers nothing
+- [x] Both cargo profiles green
 
 ### Task 8: `SIM-GAP-33`, tighten the contest block-bonus predicate
 

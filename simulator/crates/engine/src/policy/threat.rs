@@ -102,57 +102,65 @@ pub struct RobberChoice {
     pub steal_value: f64,
 }
 
+/// One `(hex, victim)` pair the robber search considers, and the value it maximizes.
+struct RobberPair {
+    hex: u8,
+    victim: Option<u8>,
+    /// The hex terms every pair on this hex shares, plus this victim's steal term.
+    score: f64,
+    /// This victim's rank, the tie-break inside a hex. Unused on a declining pair.
+    rank: f64,
+}
+
+/// One joint maximum over `(hex, victim)` pairs. The hex terms do not depend on the victim, so
+/// the pair score splits into a shared part and the victim's steal term; enumerating the pairs
+/// anyway is what lets a victim-scoped term reach the hex choice as well as the victim choice.
+///
+/// Equivalent to the two-stage search this replaced (a hex loop maximizing the shared terms plus
+/// the best available steal, then a victim loop re-picking that same victim on the winning hex)
+/// wherever the steal term is non-negative, which covers every declared bound and every shipped
+/// default. `tests/threat_robber.rs::robber_choice_matches_the_two_stage_search_it_replaced`
+/// pins that against a reference implementation of the old search.
 pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberChoice {
     let context = context(view, params);
-    let mut best = view.robber();
-    let mut best_score = f64::NEG_INFINITY;
+    let mut best: Option<RobberPair> = None;
     for hex in 0..view.topology().hex_count() {
         let hex = hex as u8;
         if hex == view.robber() || view.hex_touches_seat(hex, view.observer()) {
             continue;
         }
-        let mut score = 0.0;
-        let mut best_steal = 0.0_f64;
+        let mut shared = 0.0;
         for seat in 0..view.seats() {
             if seat == view.observer() {
                 continue;
             }
             let terms = seat_terms(view, params, &context, hex, seat);
-            score += terms.delay + terms.need + terms.block;
-            best_steal = best_steal.max(terms.steal);
+            shared += terms.delay + terms.need + terms.block;
         }
-        score += best_steal;
-        if !score.is_finite() {
+        let Some(pair) = best_pair_on_hex(view, params, &context, hex, shared) else {
             continue;
-        }
-        if score > best_score {
-            best = hex;
-            best_score = score;
-        }
-    }
-    let mut placement_score = best_score;
-    if best == view.robber() {
-        best = (0..view.topology().hex_count())
-            .map(|hex| hex as u8)
-            .find(|hex| *hex != view.robber())
-            .expect("board has another hex");
-        placement_score = 0.0;
-    }
-
-    let mut victim = None;
-    let mut best_rank = f64::NEG_INFINITY;
-    for seat in 0..view.seats() {
-        if seat == view.observer() || !view.stealable_on_hex(best, seat) {
-            continue;
-        }
-        let rank = victim_rank(view, params, &context, seat);
-        if rank > best_rank {
-            victim = Some(seat as u8);
-            best_rank = rank;
+        };
+        // Ties across hexes go to the lower hex index, as the hex loop's strict `>` did.
+        if best.as_ref().is_none_or(|current| pair.score > current.score) {
+            best = Some(pair);
         }
     }
+    let (destination, victim, placement_score) = match best {
+        Some(pair) => (pair.hex, pair.victim, pair.score),
+        None => {
+            // No pair was scoreable: fall back to the first hex that is not the robber's own,
+            // price the placement at zero, and name whatever victim that hex offers.
+            let hex = (0..view.topology().hex_count())
+                .map(|hex| hex as u8)
+                .find(|hex| *hex != view.robber())
+                .expect("board has another hex");
+            let victim =
+                best_pair_on_hex(view, params, &context, hex, 0.0).and_then(|pair| pair.victim);
+            (hex, victim, 0.0)
+        }
+    };
     RobberChoice {
-        destination: best,
+        destination,
         victim,
         placement_score,
         steal_value: victim.map_or(0.0, |seat| {
@@ -160,6 +168,52 @@ pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberCh
             victim_rank(view, params, &context, seat) + own_need_hit(view, seat)
         }),
     }
+}
+
+/// The best pair on one hex, given `shared`, the hex terms every pair on it carries. Declining
+/// (`victim: None`) is a pair only where no seat is stealable, since `view::stealable_on_hex` is
+/// also what makes declining legal. Ties go to the higher-ranked victim and then to the lower
+/// seat, which is the victim the two-stage search re-picked on its chosen hex. A pair scoring
+/// non-finite is no candidate, as a non-finite hex score was not.
+fn best_pair_on_hex(
+    view: &DecisionView<'_>,
+    params: &ThreatParams,
+    context: &ThreatContext,
+    hex: u8,
+    shared: f64,
+) -> Option<RobberPair> {
+    let mut best: Option<RobberPair> = None;
+    let mut stealable = false;
+    for seat in 0..view.seats() {
+        if seat == view.observer() || !view.stealable_on_hex(hex, seat) {
+            continue;
+        }
+        stealable = true;
+        let rank = victim_rank(view, params, context, seat);
+        let score = shared + params.steal_weight * rank;
+        if !score.is_finite() {
+            continue;
+        }
+        if best.as_ref().is_none_or(|current| {
+            score > current.score || (score == current.score && rank > current.rank)
+        }) {
+            best = Some(RobberPair {
+                hex,
+                victim: Some(seat as u8),
+                score,
+                rank,
+            });
+        }
+    }
+    if stealable {
+        return best;
+    }
+    shared.is_finite().then_some(RobberPair {
+        hex,
+        victim: None,
+        score: shared,
+        rank: f64::NEG_INFINITY,
+    })
 }
 
 /// Belief-derived probability that a uniformly random card from `victim`'s believed hand fills

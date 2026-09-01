@@ -9,7 +9,7 @@ use unsettled_engine::policy::threat::{self, ThreatContext, ThreatParams};
 use unsettled_engine::policy::trading;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
-use unsettled_engine::view::{DecisionPhase, pips};
+use unsettled_engine::view::{DecisionPhase, DecisionView, pips};
 use unsettled_engine::wire::WireBoard;
 
 fn fixture() -> (Topology, SimBoard, RuleConfig, GameConfig, GameArena) {
@@ -642,6 +642,8 @@ fn default_heuristic_params_keep_todays_robber_rule() {
 // - `steal_value` = the shared-danger victim rank plus the belief-derived own-need hit
 //   (closed form, non-default params): robber_choice_prices_the_steal_through_belief_and_danger
 // - the fallback hex zeroes `placement_score`: robber_choice_zeroes_placement_on_the_fallback_hex
+// The joint `(hex, victim)` argmax behind all three is pinned against a transcription of the
+// two-stage search it replaced: robber_choice_matches_the_two_stage_search_it_replaced
 #[test]
 fn robber_choice_reports_the_maximized_placement_score() {
     let (topology, board, _rules, _config, mut arena) = fixture();
@@ -750,6 +752,236 @@ fn robber_choice_zeroes_placement_on_the_fallback_hex() {
     assert_eq!(choice.victim, None);
     assert_eq!(choice.placement_score, 0.0);
     assert_eq!(choice.steal_value, 0.0);
+}
+
+// `threat::robber_choice` maximizes over `(hex, victim)` pairs; it replaced a two-stage search
+// that picked the hex on the summed rival terms plus the best available steal, then re-picked
+// the victim on the winning hex. `reference_two_stage` below is that search, kept here so the
+// equivalence is pinned against constructed decision states instead of asserted in prose.
+type StateBuilder = fn(&mut GameArena, &SimBoard, &Topology);
+
+fn state_two_victims_on_one_hex(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (hex, offsets) = dominant_hex_with_two_offsets(board, topology);
+    place_on_hex(arena, topology, hex, 1, offsets[0]);
+    place_on_hex(arena, topology, hex, 2, offsets[1]);
+    make_stalled_leader(arena, 1);
+    make_city_runner(arena, 2);
+    set_belief_and_hand(arena, 1, [3, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [0, 0, 2, 0, 0]);
+}
+
+fn state_equal_pip_rivals_apart(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (low, low_offsets, high, high_offsets) = dominant_tie_pair(board, topology);
+    place_on_hex(arena, topology, low, 1, low_offsets[0]);
+    place_on_hex(arena, topology, high, 2, high_offsets[0]);
+    set_belief_and_hand(arena, 1, [2, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [2, 0, 0, 0, 0]);
+}
+
+fn state_equal_rank_victims(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (hex, offsets) = dominant_hex_with_two_offsets(board, topology);
+    place_on_hex(arena, topology, hex, 1, offsets[0]);
+    place_on_hex(arena, topology, hex, 2, offsets[1]);
+    set_belief_and_hand(arena, 1, [1, 1, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [1, 1, 0, 0, 0]);
+}
+
+fn state_one_rival_holds_nothing(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (hex, offsets) = dominant_hex_with_two_offsets(board, topology);
+    place_on_hex(arena, topology, hex, 1, offsets[0]);
+    place_on_hex(arena, topology, hex, 2, offsets[1]);
+    make_city_runner(arena, 2);
+    set_belief_and_hand(arena, 1, [4, 0, 0, 0, 0]);
+}
+
+fn state_multi_and_single_victim_hexes(
+    arena: &mut GameArena,
+    board: &SimBoard,
+    topology: &Topology,
+) {
+    let (multi, offsets, single, single_offset) = dominant_multi_victim_pair(board, topology);
+    place_on_hex(arena, topology, multi, 1, offsets[0]);
+    place_on_hex(arena, topology, multi, 2, offsets[1]);
+    place_on_hex(arena, topology, single, 3, single_offset);
+    make_stalled_leader(arena, 3);
+    set_belief_and_hand(arena, 1, [2, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [0, 5, 0, 0, 0]);
+    set_belief_and_hand(arena, 3, [0, 0, 3, 0, 0]);
+}
+
+fn state_no_rival_holds_cards(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (multi, offsets, single, single_offset) = dominant_multi_victim_pair(board, topology);
+    place_on_hex(arena, topology, multi, 1, offsets[0]);
+    place_on_hex(arena, topology, single, 2, single_offset);
+    make_city_runner(arena, 2);
+}
+
+fn state_robber_on_a_rival_hex(arena: &mut GameArena, board: &SimBoard, topology: &Topology) {
+    let (multi, offsets, single, single_offset) = dominant_multi_victim_pair(board, topology);
+    place_on_hex(arena, topology, multi, 1, offsets[0]);
+    place_on_hex(arena, topology, multi, 2, offsets[1]);
+    place_on_hex(arena, topology, single, 3, single_offset);
+    arena.state.robber = multi;
+    make_stalled_leader(arena, 2);
+    set_belief_and_hand(arena, 1, [1, 0, 0, 0, 0]);
+    set_belief_and_hand(arena, 2, [0, 0, 0, 7, 0]);
+    set_belief_and_hand(arena, 3, [0, 2, 0, 0, 0]);
+}
+
+fn state_observer_owns_every_vertex(
+    arena: &mut GameArena,
+    _board: &SimBoard,
+    topology: &Topology,
+) {
+    for vertex in 0..topology.vertex_count() {
+        arena.state.vertex_owner[vertex] = 0;
+        arena.state.vertex_tier[vertex] = 1;
+    }
+}
+
+fn state_empty_board(_arena: &mut GameArena, _board: &SimBoard, _topology: &Topology) {}
+
+/// `threat.rs::victim_rank`, which the crate keeps private.
+fn reference_victim_rank(
+    view: &DecisionView<'_>,
+    params: &ThreatParams,
+    context: &ThreatContext,
+    seat: usize,
+) -> f64 {
+    context.danger[seat]
+        + params.victim_hand_weight * f64::from(view.hand_total(seat)).min(params.hand_cap)
+            / params.hand_cap
+}
+
+/// The two-stage search `threat::robber_choice` replaced, transcribed.
+fn reference_two_stage(view: &DecisionView<'_>, params: &ThreatParams) -> (u8, Option<u8>, f64) {
+    let context = threat::context(view, params);
+    let mut best = view.robber();
+    let mut best_score = f64::NEG_INFINITY;
+    for hex in 0..view.topology().hex_count() {
+        let hex = hex as u8;
+        if hex == view.robber() || view.hex_touches_seat(hex, view.observer()) {
+            continue;
+        }
+        let mut score = 0.0;
+        let mut best_steal = 0.0_f64;
+        for seat in 0..view.seats() {
+            if seat == view.observer() {
+                continue;
+            }
+            let terms = threat::seat_terms(view, params, &context, hex, seat);
+            score += terms.delay + terms.need + terms.block;
+            best_steal = best_steal.max(terms.steal);
+        }
+        score += best_steal;
+        if !score.is_finite() {
+            continue;
+        }
+        if score > best_score {
+            best = hex;
+            best_score = score;
+        }
+    }
+    let mut placement_score = best_score;
+    if best == view.robber() {
+        best = (0..view.topology().hex_count())
+            .map(|hex| hex as u8)
+            .find(|hex| *hex != view.robber())
+            .expect("board has another hex");
+        placement_score = 0.0;
+    }
+    let mut victim = None;
+    let mut best_rank = f64::NEG_INFINITY;
+    for seat in 0..view.seats() {
+        if seat == view.observer() || !view.stealable_on_hex(best, seat) {
+            continue;
+        }
+        let rank = reference_victim_rank(view, params, &context, seat);
+        if rank > best_rank {
+            victim = Some(seat as u8);
+            best_rank = rank;
+        }
+    }
+    (best, victim, placement_score)
+}
+
+#[test]
+fn robber_choice_matches_the_two_stage_search_it_replaced() {
+    let states: [(&str, StateBuilder); 9] = [
+        ("two victims on one hex", state_two_victims_on_one_hex),
+        ("equal-pip rivals apart", state_equal_pip_rivals_apart),
+        ("equal-rank victims", state_equal_rank_victims),
+        ("one rival holds nothing", state_one_rival_holds_nothing),
+        (
+            "multi- and single-victim hexes",
+            state_multi_and_single_victim_hexes,
+        ),
+        ("no rival holds cards", state_no_rival_holds_cards),
+        ("robber on a rival hex", state_robber_on_a_rival_hex),
+        ("observer owns every vertex", state_observer_owns_every_vertex),
+        ("empty board", state_empty_board),
+    ];
+    // Endpoints that move the ordering: a steal term large enough to decide the hex, a zero
+    // steal weight where every pair on a hex ties and only the victim rank separates them, a
+    // flat victim rank, and a hex score carrying block alone.
+    let param_sets = [
+        ThreatParams::default(),
+        ThreatParams {
+            delay_weight: 2.0,
+            need_weight: 0.7,
+            block_weight: 0.4,
+            steal_weight: 1.5,
+            victim_hand_weight: 0.4,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            steal_weight: 0.0,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            steal_weight: 0.5,
+            victim_hand_weight: 0.0,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
+            delay_weight: 0.0,
+            need_weight: 0.0,
+            block_weight: 1.0,
+            ..ThreatParams::default()
+        },
+    ];
+
+    let mut named = 0;
+    let mut declined = 0;
+    let mut destinations = Vec::new();
+    for (name, build) in states {
+        for params in &param_sets {
+            let (topology, board, _rules, _config, mut arena) = fixture();
+            build(&mut arena, &board, &topology);
+            let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+            let choice = threat::robber_choice(&view, params);
+            let (destination, victim, placement_score) = reference_two_stage(&view, params);
+            assert_eq!(choice.destination, destination, "{name}");
+            assert_eq!(choice.victim, victim, "{name}");
+            assert_eq!(
+                choice.placement_score.to_bits(),
+                placement_score.to_bits(),
+                "{name}"
+            );
+            if choice.victim.is_some() {
+                named += 1;
+            } else {
+                declined += 1;
+            }
+            if !destinations.contains(&choice.destination) {
+                destinations.push(choice.destination);
+            }
+        }
+    }
+    // The agreement above is only worth something if the states exercised both outcomes.
+    assert!(named > 0);
+    assert!(declined > 0);
+    assert!(destinations.len() > 1);
 }
 
 #[cfg(debug_assertions)]
