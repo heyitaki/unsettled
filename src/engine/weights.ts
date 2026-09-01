@@ -23,6 +23,9 @@ export interface EngineWeights {
   recipeRoadBonus: number
   recipeCityBonus: number
   recipeSettlementBonus: number
+  // The ore/wheat/sheep cost buys no building, so it is the one recipe sheep
+  // gates on its own (SIM-GAP-36). Ships at 0 until an A/B prices it.
+  recipeDevCardBonus: number
   recipeCap: number
   portWeight: number
   genericPortFactor: number
@@ -61,6 +64,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   recipeRoadBonus: 1.5,
   recipeCityBonus: 2,
   recipeSettlementBonus: 1,
+  recipeDevCardBonus: 0,
   // Matches diversityCap so "real coverage" means one thing everywhere: at a
   // lower cap a lone 2/12 cleared a larger fraction of the recipe bar and a
   // never-rolled fifth resource still bought most of a recipe bonus.

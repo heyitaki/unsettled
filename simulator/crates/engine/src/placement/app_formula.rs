@@ -43,6 +43,7 @@ pub struct EngineWeights {
     pub recipe_road_bonus: f64,
     pub recipe_city_bonus: f64,
     pub recipe_settlement_bonus: f64,
+    pub recipe_dev_card_bonus: f64,
     pub recipe_cap: f64,
     pub port_weight: f64,
     pub generic_port_factor: f64,
@@ -83,6 +84,7 @@ impl EngineWeights {
             ("recipeRoadBonus", self.recipe_road_bonus),
             ("recipeCityBonus", self.recipe_city_bonus),
             ("recipeSettlementBonus", self.recipe_settlement_bonus),
+            ("recipeDevCardBonus", self.recipe_dev_card_bonus),
             ("recipeCap", self.recipe_cap),
             ("portWeight", self.port_weight),
             ("genericPortFactor", self.generic_port_factor),
@@ -430,7 +432,9 @@ impl AppFormulaScorer {
                 js_min(js_min(wood_recipe, brick_recipe), wheat_recipe),
                 sheep_recipe,
             );
-        spread + road + city + settlement
+        let dev_card =
+            weights.recipe_dev_card_bonus * js_min(js_min(ore_recipe, wheat_recipe), sheep_recipe);
+        spread + road + city + settlement + dev_card
     }
 
     fn duplicate_number_penalty(&self, holdings: &Holdings, candidate: &VertexStats) -> f64 {

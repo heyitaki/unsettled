@@ -1018,6 +1018,55 @@ mod tests {
         assert!(error.contains("genericPortFactor >= 0"), "{error}");
     }
 
+    /// Walks every committed weights-shaped file — the two shipped vectors plus the
+    /// weights arms under `placement/arms/` — through the full `EngineWeights` contract:
+    /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
+    /// `validate`. `contracts.md` states such a walk exists and none did, so until now a
+    /// weights arm left behind by a new formula weight failed silently, at run time, in
+    /// whichever measurement first selected it. A weights file is one carrying
+    /// `resourceValue`; the count pins the set so a file that loses the key is a failure
+    /// rather than a skip.
+    #[test]
+    fn every_committed_weights_file_loads_through_the_full_contract() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let load = |name: &str, source: &str| {
+            let weights: EngineWeights = serde_json::from_str(source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+        };
+        for name in ["default-weights.json", "phase-i-candidate-weights.json"] {
+            let source = std::fs::read_to_string(format!("{placement_dir}/{name}"))
+                .expect("committed weights vector");
+            load(name, &source);
+        }
+
+        let mut weights_arms = 0;
+        for entry in std::fs::read_dir(format!("{placement_dir}/arms")).expect("arms dir") {
+            let path = entry.expect("entry").path();
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("arm file");
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            if file.get("resourceValue").is_none() {
+                continue;
+            }
+            weights_arms += 1;
+            load(&name, &source);
+        }
+        assert_eq!(
+            weights_arms, 49,
+            "the committed weights arms are 49 files; a change to the set is a decision"
+        );
+    }
+
     /// Collects `/a/b`-style JSON pointers to every non-object leaf, descending into
     /// objects (a `null` gate is itself a leaf and is skipped by callers via retain).
     fn collect_leaf_paths(value: &Value, path: &str, into: &mut Vec<String>) {

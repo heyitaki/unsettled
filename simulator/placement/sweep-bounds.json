@@ -19,6 +19,7 @@
     "recipeRoadBonus": { "min": 0.375, "max": 6.0 },
     "recipeCityBonus": { "min": 0.5, "max": 8.0 },
     "recipeSettlementBonus": { "min": 0.25, "max": 4.0 },
+    "recipeDevCardBonus": { "min": 0.0, "max": 4.0 },
     "recipeCap": { "min": 2.0, "max": 8.0 },
     "portWeight": { "min": 0.1375, "max": 2.2 },
     "genericPortFactor": { "min": 0.5, "max": 0.5 },

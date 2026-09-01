@@ -283,15 +283,15 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 18: SP2a, the dev-card recipe term
 
-- [ ] Add `recipeDevCardBonus` to `EngineWeights` in `src/engine/weights.ts` with `DEFAULT_WEIGHTS` value 0, and mirror it in `EngineWeights` in `simulator/crates/engine/src/placement/app_formula.rs`
-- [ ] Implement the term in `src/engine/valuation.ts::diversityScore` exactly mirroring the three existing recipe terms: `recipeDevCardBonus * Math.min(oreRecipe, wheatRecipe, sheepRecipe)`, using the same `recipeCap`-based coverage the others use. Mirror it in `app_formula.rs`. It contributes to the existing `diversity` breakdown component; no new component
-- [ ] Declare `recipeDevCardBonus` in `simulator/placement/sweep-bounds.json` under `placement` with `min` 0.0 and `max` 4.0
-- [ ] Add the key at 0 to `simulator/placement/default-weights.json`, `simulator/placement/phase-i-candidate-weights.json`, and all 49 weights-shaped files under `simulator/placement/arms/`. Script the arm edit; preserve each file's existing key order and formatting
-- [ ] Add a Rust test walking every weights-shaped file under `simulator/placement/arms/` plus the two committed vectors, loading each through the full `EngineWeights` exact-key contract and `validate`. `contracts.md` says such a test exists and none does; this is the one that makes the 51-file edit verifiable
-- [ ] Add a vitest case pinning the term's contribution at an explicit nonzero witness weight on a hand-computed board, with the expected value derived in the test rather than read off the implementation, and a case pinning the shipped default at 0
-- [ ] Leave the `SIM-GAP-36` entry in `gaps.md` in place: a term shipped at weight 0 prices nothing, so the gap closes on adoption, not on implementation, and adoption is SP6's business. Record in `placement-programme.md` that the term now exists and awaits its verdict
-- [ ] Add a new coverage class to `simulator/crates/engine/tests/placement_parity.rs::REQUIRED_CLASSES` for the dev-card recipe, add the matching case to `simulator/tools/generate-placement-parity.ts`, and regenerate `simulator/fixtures/placement-parity.json` with `npx tsx simulator/tools/generate-placement-parity.ts`
-- [ ] All six validation commands green
+- [x] Add `recipeDevCardBonus` to `EngineWeights` in `src/engine/weights.ts` with `DEFAULT_WEIGHTS` value 0, and mirror it in `EngineWeights` in `simulator/crates/engine/src/placement/app_formula.rs`
+- [x] Implement the term in `src/engine/valuation.ts::diversityScore` exactly mirroring the three existing recipe terms: `recipeDevCardBonus * Math.min(oreRecipe, wheatRecipe, sheepRecipe)`, using the same `recipeCap`-based coverage the others use. Mirror it in `app_formula.rs`. It contributes to the existing `diversity` breakdown component; no new component
+- [x] Declare `recipeDevCardBonus` in `simulator/placement/sweep-bounds.json` under `placement` with `min` 0.0 and `max` 4.0
+- [x] Add the key at 0 to `simulator/placement/default-weights.json`, `simulator/placement/phase-i-candidate-weights.json`, and all 49 weights-shaped files under `simulator/placement/arms/`. Script the arm edit; preserve each file's existing key order and formatting
+- [x] Add a Rust test walking every weights-shaped file under `simulator/placement/arms/` plus the two committed vectors, loading each through the full `EngineWeights` exact-key contract and `validate`. `contracts.md` says such a test exists and none does; this is the one that makes the 51-file edit verifiable (`params_file.rs::every_committed_weights_file_loads_through_the_full_contract`; shown to fail against an arm with the key removed)
+- [x] Add a vitest case pinning the term's contribution at an explicit nonzero witness weight on a hand-computed board, with the expected value derived in the test rather than read off the implementation, and a case pinning the shipped default at 0
+- [x] Leave the `SIM-GAP-36` entry in `gaps.md` in place: a term shipped at weight 0 prices nothing, so the gap closes on adoption, not on implementation, and adoption is SP6's business. Record in `placement-programme.md` that the term now exists and awaits its verdict
+- [x] Add a new coverage class to `simulator/crates/engine/tests/placement_parity.rs::REQUIRED_CLASSES` for the dev-card recipe, add the matching case to `simulator/tools/generate-placement-parity.ts`, and regenerate `simulator/fixtures/placement-parity.json` with `npx tsx simulator/tools/generate-placement-parity.ts` (class `W11`, case `dev-card-recipe` at a witness weight of 2; regeneration also rolled the fixture forward onto the adopted `handValueWeight` drop, so `extension-granted-hand` now pins 0.4 explicitly to keep the hand-value path covered)
+- [x] All six validation commands green
 
 ### Task 19: Preregister M-52, the SP2a A/B
 

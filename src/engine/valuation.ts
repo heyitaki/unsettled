@@ -374,7 +374,9 @@ function diversityScore(
   const city = weights.recipeCityBonus * Math.min(oreRecipe, wheatRecipe)
   const settlement = weights.recipeSettlementBonus *
     Math.min(woodRecipe, brickRecipe, wheatRecipe, sheepRecipe)
-  return spread + road + city + settlement
+  const devCard = weights.recipeDevCardBonus *
+    Math.min(oreRecipe, wheatRecipe, sheepRecipe)
+  return spread + road + city + settlement + devCard
 }
 
 function duplicateNumberPenalty(

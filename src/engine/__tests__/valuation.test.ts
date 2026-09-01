@@ -342,6 +342,43 @@ describe('placement valuation', () => {
     expect(dedicatedValue).toBeGreaterThan(genericValue)
   })
 
+  it('prices the ore/wheat/sheep recipe only at a nonzero recipeDevCardBonus', () => {
+    // Hand arithmetic at DEFAULT_WEIGHTS on a vertex with no wood and no brick,
+    // so the road and settlement recipes are both zero and only the spread, the
+    // city recipe and the dev-card recipe are left. recipeCap and diversityCap
+    // are both 4, so coverage is (min(pips, 4) / 4) ** 1.5: ore and wheat
+    // saturate at 1 and sheep, at 3 pips, sits at 0.75 ** 1.5. Board scarcity is
+    // flat, so each resource's coverage value is its raw resourceValue.
+    const sheepCover = 0.75 ** 1.5
+    const spread = 1.6 * (1.3 * 1 + 1.35 * 1 + 0.75 * sheepCover)
+    const city = 2 * 1
+    const pips = { ore: 4, wheat: 4, sheep: 3 }
+    const off = { ...DEFAULT_WEIGHTS, recipeDevCardBonus: 0 }
+    const on = { ...DEFAULT_WEIGHTS, recipeDevCardBonus: 2 }
+    expect(
+      marginalBreakdown(context([[vertices[0], pips]], off), emptyHoldings(), vertices[0]).diversity,
+    ).toBeCloseTo(spread + city, 12)
+    expect(
+      marginalBreakdown(context([[vertices[0], pips]], on), emptyHoldings(), vertices[0]).diversity,
+    ).toBeCloseTo(spread + city + 2 * sheepCover, 12)
+  })
+
+  it('ships the dev-card recipe at zero, so it moves no shipped score', () => {
+    const pips = { ore: 4, wheat: 4, sheep: 3, wood: 2, brick: 2 }
+    const shipped = marginalBreakdown(
+      context([[vertices[0], pips]]),
+      emptyHoldings(),
+      vertices[0],
+    )
+    const off = marginalBreakdown(
+      context([[vertices[0], pips]], { ...DEFAULT_WEIGHTS, recipeDevCardBonus: 0 }),
+      emptyHoldings(),
+      vertices[0],
+    )
+    expect(DEFAULT_WEIGHTS.recipeDevCardBonus).toBe(0)
+    expect(shipped).toEqual(off)
+  })
+
   it('dedupes one port edge across a two-vertex holding', () => {
     const port: Port = { edgeId: edgeIds[0], resource: 'ore', rate: 2 }
     const ctx = context([

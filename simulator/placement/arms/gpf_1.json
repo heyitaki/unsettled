@@ -18,6 +18,7 @@
   "recipeRoadBonus": 1.5,
   "recipeCityBonus": 2,
   "recipeSettlementBonus": 1,
+  "recipeDevCardBonus": 0,
   "recipeCap": 4,
   "portWeight": 0.55,
   "genericPortFactor": 1.0,
