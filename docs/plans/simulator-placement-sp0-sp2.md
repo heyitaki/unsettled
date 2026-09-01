@@ -295,13 +295,13 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 19: Preregister M-52, the SP2a A/B
 
-- [ ] Write `docs/plans/preregs/<today>-m52-sp2a-devcard-recipe.md`
-- [ ] One decision arm: `simulator/placement/arms/sp2a_devcard.json`, the live default weights with `recipeDevCardBonus` at 1.0, the value matching `recipeSettlementBonus`'s scale for the other three-resource recipe. Reference `base` = `app_formula:placement/default-weights.json`
-- [ ] Screen power: 2000 boards x 2 reps, field `app_formula:placement/default-weights.json`, composite policy, `--player-trading`, `--threshold 0.01`, `--alpha 0.05`
-- [ ] State why this A/B is informative: the term is the only one in the programme that raises sheep's standing on its own, so a null reads "sheep's existing credit through the spread and the settlement recipe is already enough"
-- [ ] Decision rule fixed before the run: the standing disposition rule. Record only
-- [ ] Record the prediction and the admissibility conditions
-- [ ] Both cargo profiles green (the arm file is walked by the new test), link check passes
+- [x] Write `docs/plans/preregs/2026-09-01-m52-sp2a-devcard-recipe.md`
+- [x] One decision arm: `simulator/placement/arms/sp2a_devcard.json`, the live default weights with `recipeDevCardBonus` at 1.0, the value matching `recipeSettlementBonus`'s scale for the other three-resource recipe. Reference `base` = `app_formula:placement/default-weights.json` (the arm differs from `default-weights.json` on that key alone; the weights-arm count in `params_file.rs::every_committed_weights_file_loads_through_the_full_contract` moves 49 to 50)
+- [x] Screen power: 2000 boards x 2 reps, field `app_formula:placement/default-weights.json`, composite policy, `--player-trading`, `--threshold 0.01`, `--alpha 0.05`
+- [x] State why this A/B is informative: the term is the only one in the programme that raises sheep's standing on its own, so a null reads "sheep's existing credit through the spread and the settlement recipe is already enough"
+- [x] Decision rule fixed before the run: the standing disposition rule. Record only
+- [x] Record the prediction and the admissibility conditions
+- [x] Both cargo profiles green (the arm file is walked by the new test), link check passes
 
 ### Task 20: Run M-52 and record it
 
@@ -316,7 +316,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 - [ ] In `src/engine/valuation.ts::portDelta`, multiply each per-resource product by `1 + portCoverageDeficitWeight * deficit_r(state)`, where `deficit_r(state) = 1 - (sum over the four resources other than r of coverage(weights, pips_q(state), recipeCap)) / 4`, using the same `coverage` helper the recipe terms use. Apply the post-move deficit to the post-move half of each difference and the pre-move deficit to the pre-move half, so the term stays a true delta. At weight 0 the expression must be arithmetically identical to today's. Mirror it in `app_formula.rs`
 - [ ] It contributes to the existing `port` breakdown component; no new component. `portSurplusThreshold` keeps its current job of gating on the ported resource's own production; this term prices the deficit elsewhere, which is what `SIM-GAP-37` says the threshold cannot express
 - [ ] Declare `portCoverageDeficitWeight` in `sweep-bounds.json` under `placement` with `min` 0.0 and `max` 4.0
-- [ ] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and all 49 weights-shaped arm files
+- [ ] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and all 50 weights-shaped arm files, `sp2a_devcard.json` included
 - [ ] Add a vitest case at an explicit nonzero witness weight showing a port paying more to a narrow-spread pair than to a broad one at equal ported production, with expected values hand-derived in the test, plus a case pinning the shipped default at 0 as arithmetically identical to the pre-change port delta
 - [ ] Add a coverage class to `REQUIRED_CLASSES`, the matching case to the parity generator, and regenerate `placement-parity.json`
 - [ ] Leave the `SIM-GAP-37` entry in `gaps.md` in place. A term that exists at a shipped weight of 0 prices nothing, so the gap is not closed until the term is adopted, which is SP6's business and out of scope here. Record in `placement-programme.md` that the term now exists and awaits its verdict
@@ -346,7 +346,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 - [ ] Follow the new component through every consumer: `src/engine/analyze.ts` (`emptyBreakdown`, `addBreakdown`, and the averaging block near the end), `src/engine/modifiers.ts`, and `src/ui/AnalysisPanel.tsx`, where it needs a row label
 - [ ] Mirror the component in `ScoreBreakdown` in `app_formula.rs` and in `FixtureBreakdown` in `simulator/crates/engine/tests/placement_parity.rs`
 - [ ] Declare `tempoHexWeight` in `sweep-bounds.json` under `placement` with `min` 0.0 and `max` 1.0
-- [ ] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and all 49 weights-shaped arm files
+- [ ] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and every weights-shaped arm file, the SP2a and SP2b arms included
 - [ ] Add a vitest case at an explicit nonzero witness weight showing a three-hex vertex outscoring a two-hex vertex of equal pips, with expected values hand-derived, plus a case pinning the shipped default at 0
 - [ ] Add a coverage class to `REQUIRED_CLASSES`, the matching case to the parity generator, and regenerate `placement-parity.json`
 - [ ] Leave the `SIM-GAP-35` entry in `gaps.md` in place, for the reason given in Task 21, and record in `placement-programme.md` that the term now exists and awaits its verdict
