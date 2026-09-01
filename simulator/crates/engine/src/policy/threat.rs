@@ -138,6 +138,16 @@ struct RobberPair {
 /// pins that against a reference implementation of the old search.
 pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberChoice {
     let context = context(view, params);
+    // The victim rank reads only the seat's context and view state, never the hex, so rank each
+    // seat once per decision. Deriving it inside the pair enumeration instead would repeat the
+    // belief expectation and its need dot product on every candidate hex, and the knight path
+    // that reaches here is already gated on throughput grounds.
+    let mut ranks = [0.0; MAX_SEATS];
+    for seat in 0..view.seats() {
+        if seat != view.observer() {
+            ranks[seat] = victim_rank(view, params, &context, seat);
+        }
+    }
     let mut best: Option<RobberPair> = None;
     for hex in 0..view.topology().hex_count() {
         let hex = hex as u8;
@@ -149,10 +159,12 @@ pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberCh
             if seat == view.observer() {
                 continue;
             }
-            let terms = seat_terms(view, params, &context, hex, seat);
+            let Some(terms) = hex_terms(view, params, &context, hex, seat) else {
+                continue;
+            };
             shared += terms.delay + terms.need + terms.block;
         }
-        let Some(pair) = best_pair_on_hex(view, params, &context, hex, shared) else {
+        let Some(pair) = best_pair_on_hex(view, params, &ranks, hex, shared) else {
             continue;
         };
         // Ties across hexes go to the lower hex index, as the hex loop's strict `>` did.
@@ -170,7 +182,7 @@ pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberCh
                 .find(|hex| *hex != view.robber())
                 .expect("board has another hex");
             let victim =
-                best_pair_on_hex(view, params, &context, hex, 0.0).and_then(|pair| pair.victim);
+                best_pair_on_hex(view, params, &ranks, hex, 0.0).and_then(|pair| pair.victim);
             (hex, victim, 0.0)
         }
     };
@@ -180,7 +192,7 @@ pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberCh
         placement_score,
         steal_value: victim.map_or(0.0, |seat| {
             let seat = usize::from(seat);
-            victim_rank(view, params, &context, seat) + own_need_hit(view, params, seat)
+            ranks[seat] + own_need_hit(view, params, seat)
         }),
     }
 }
@@ -193,7 +205,7 @@ pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberCh
 fn best_pair_on_hex(
     view: &DecisionView<'_>,
     params: &ThreatParams,
-    context: &ThreatContext,
+    ranks: &[f64; MAX_SEATS],
     hex: u8,
     shared: f64,
 ) -> Option<RobberPair> {
@@ -204,7 +216,7 @@ fn best_pair_on_hex(
             continue;
         }
         stealable = true;
-        let rank = victim_rank(view, params, context, seat);
+        let rank = ranks[seat];
         let score = shared + params.steal_weight * rank;
         if !score.is_finite() {
             continue;
@@ -299,20 +311,21 @@ pub fn context(view: &DecisionView<'_>, params: &ThreatParams) -> ThreatContext 
     result
 }
 
-pub fn seat_terms(
+/// The hex-dependent half of `seat_terms`: every term except the steal, which prices the victim
+/// rather than the hex. `None` where the seat contributes nothing on this hex, which is the
+/// `ThreatTerms::ZERO` the full form returns.
+fn hex_terms(
     view: &DecisionView<'_>,
     params: &ThreatParams,
     context: &ThreatContext,
     hex: u8,
     seat: usize,
-) -> ThreatTerms {
+) -> Option<ThreatTerms> {
     assert_params(params);
     if seat == view.observer() || seat >= view.seats() || !view.victim_on_hex(hex, seat) {
-        return ThreatTerms::ZERO;
+        return None;
     }
-    let Some(mut inputs) = context.inputs[seat].clone() else {
-        return ThreatTerms::ZERO;
-    };
+    let mut inputs = context.inputs[seat].clone()?;
     let blocked = hex_contribution(view, hex, seat);
     let mut hypothetical = context.free_pips[seat];
     for resource in 0..RESOURCE_COUNT {
@@ -333,16 +346,30 @@ pub fn seat_terms(
         .map(|resource| context.need[seat][resource] * f64::from(blocked[resource]))
         .sum::<f64>()
         / 36.0;
-    ThreatTerms {
+    Some(ThreatTerms {
         delay: context.danger[seat] * params.delay_weight * delay,
         need: context.danger[seat] * params.need_weight * need_share,
         block: params.block_weight * block_share,
-        steal: if view.stealable_on_hex(hex, seat) {
-            params.steal_weight * victim_rank(view, params, context, seat)
-        } else {
-            0.0
-        },
+        steal: 0.0,
+    })
+}
+
+/// One seat's full contribution on one candidate hex. `robber_choice` reads `hex_terms` and the
+/// per-decision victim ranks instead, so this is the form consumers outside the hot loop read.
+pub fn seat_terms(
+    view: &DecisionView<'_>,
+    params: &ThreatParams,
+    context: &ThreatContext,
+    hex: u8,
+    seat: usize,
+) -> ThreatTerms {
+    let Some(mut terms) = hex_terms(view, params, context, hex, seat) else {
+        return ThreatTerms::ZERO;
+    };
+    if view.stealable_on_hex(hex, seat) {
+        terms.steal = params.steal_weight * victim_rank(view, params, context, seat);
     }
+    terms
 }
 
 pub fn robber_free_production_pips(view: &DecisionView<'_>, seat: usize) -> [u16; RESOURCE_COUNT] {
