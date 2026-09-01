@@ -56,6 +56,7 @@
       "blockWeight": { "min": 0.0625, "max": 1.0 },
       "stealWeight": { "min": 0.005, "max": 0.08 },
       "victimHandWeight": { "min": 0.0375, "max": 0.6 },
+      "victimNeedWeight": { "min": 0.0375, "max": 0.6 },
       "dangerFloor": { "min": 0.25, "max": 4.0 },
       "delayCap": { "min": 1.0, "max": 16.0 },
       "handCap": { "min": 4.0, "max": 16.0 },

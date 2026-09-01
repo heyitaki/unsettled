@@ -204,18 +204,18 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 11: SP1b, price denial of the victim's own need
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Add `victim_need_weight` to `ThreatParams` in `threat.rs`, default 0.15 to match its sibling `victim_hand_weight`, with a `validate` condition that it is non-negative and finite, in the same shape as the existing checks
-- [ ] Extend `threat.rs::victim_rank` with a term pricing the denial of the victim's own need: the belief-derived probability that a card taken from the victim's believed hand fills the *victim's* cheapest-route shortfall, mirroring how `own_need_hit` prices the observer's. Reuse `need_share` and `cheapest_route_shortfall`; do not build a parallel opponent model
-- [ ] Confirm the joint argmax from Task 7 carries the new term into hex choice as well as victim choice, which is the wiring half `SIM-GAP-38` names
-- [ ] Declare `victimNeedWeight` in `simulator/placement/sweep-bounds.json` under `policy.threat` with range 0.0375 to 0.6
-- [ ] Regenerate `simulator/placement/policy-default-params.json` and `simulator/placement/phase-i-candidate-params.json` so both carry the new key at its default. Do not change any other value in either file
-- [ ] Add the new key to every `h2_*`, `h2x_*` and `h4_*` file under `simulator/placement/arms/` at the value their frozen baseline carries, so each stays a single-parameter perturbation and the committed pin tests still pass
-- [ ] Add a Rust test that a victim holding exactly what they need ranks above an otherwise identical victim who does not, and that the term vanishes at weight 0
-- [ ] Regenerate `simulator/fixtures/robber-gate-baseline.json` and any other baseline this moves, through the committed harnesses
-- [ ] Recapture the corpus and record which corpora moved
-- [ ] Delete the `SIM-GAP-38` entry from `gaps.md` and say so in the commit message
-- [ ] Both cargo profiles green, link check passes
+- [x] Capture `runs/corpus-pre`
+- [x] Add `victim_need_weight` to `ThreatParams` in `threat.rs`, default 0.15 to match its sibling `victim_hand_weight`, with a `validate` condition that it is non-negative and finite, in the same shape as the existing checks
+- [x] Extend `threat.rs::victim_rank` with a term pricing the denial of the victim's own need: the belief-derived probability that a card taken from the victim's believed hand fills the *victim's* cheapest-route shortfall, mirroring how `own_need_hit` prices the observer's. Reuse `need_share` and `cheapest_route_shortfall`; do not build a parallel opponent model
+- [x] Confirm the joint argmax from Task 7 carries the new term into hex choice as well as victim choice, which is the wiring half `SIM-GAP-38` names
+- [x] Declare `victimNeedWeight` in `simulator/placement/sweep-bounds.json` under `policy.threat` with range 0.0375 to 0.6
+- [x] Regenerate `simulator/placement/policy-default-params.json` and `simulator/placement/phase-i-candidate-params.json` so both carry the new key at its default. Do not change any other value in either file
+- [x] Add the new key to every `h2_*`, `h2x_*` and `h4_*` file under `simulator/placement/arms/` at the value their frozen baseline carries, so each stays a single-parameter perturbation and the committed pin tests still pass
+- [x] Add a Rust test that a victim holding exactly what they need ranks above an otherwise identical victim who does not, and that the term vanishes at weight 0
+- [x] Regenerate `simulator/fixtures/robber-gate-baseline.json` and any other baseline this moves, through the committed harnesses (re-ran `generate_robber_gate_baseline`: byte-identical, since that baseline pins `PolicyKind::HeuristicV1`, which carries no threat params. No committed baseline moved)
+- [x] Recapture the corpus and record which corpora moved
+- [x] Delete the `SIM-GAP-38` entry from `gaps.md` and say so in the commit message
+- [x] Both cargo profiles green, link check passes
 
 ### Task 12: SP1c, a completion step in the need model
 

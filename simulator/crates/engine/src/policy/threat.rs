@@ -20,6 +20,9 @@ pub struct ThreatParams {
     pub steal_weight: f64,
     /// Finite weight on victim hand size inside the victim rank.
     pub victim_hand_weight: f64,
+    /// Non-negative, finite weight on the belief-derived chance a stolen card fills the
+    /// victim's own cheapest-route shortfall, inside the victim rank.
+    pub victim_need_weight: f64,
     /// Positive, finite turns added before ETW is inverted into danger.
     pub danger_floor: f64,
     /// Non-negative, finite upper bound on fractional delay, in horizons.
@@ -44,6 +47,7 @@ impl Default for ThreatParams {
             block_weight: 0.25,
             steal_weight: 0.02,
             victim_hand_weight: 0.15,
+            victim_need_weight: 0.15,
             danger_floor: 1.0,
             delay_cap: 4.0,
             hand_cap: 8.0,
@@ -115,6 +119,7 @@ struct RobberPair {
 /// One joint maximum over `(hex, victim)` pairs. The hex terms do not depend on the victim, so
 /// the pair score splits into a shared part and the victim's steal term; enumerating the pairs
 /// anyway is what lets a victim-scoped term reach the hex choice as well as the victim choice.
+/// `victim_need_weight` is the term riding that wiring today.
 ///
 /// Equivalent to the two-stage search this replaced (a hex loop maximizing the shared terms plus
 /// the best available steal, then a victim loop re-picking that same victim on the winning hex)
@@ -385,6 +390,10 @@ pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
         params.victim_hand_weight.is_finite(),
     )?;
     check(
+        "threat.victimNeedWeight is non-negative and finite",
+        params.victim_need_weight.is_finite() && params.victim_need_weight >= 0.0,
+    )?;
+    check(
         "threat.dangerFloor is positive and finite",
         params.danger_floor.is_finite() && params.danger_floor > 0.0,
     )?;
@@ -474,4 +483,25 @@ fn victim_rank(
     context.danger[seat]
         + params.victim_hand_weight * f64::from(view.hand_total(seat)).min(params.hand_cap)
             / params.hand_cap
+        + params.victim_need_weight * victim_need_hit(view, context, seat)
+}
+
+/// Belief-derived probability that a uniformly random card from `seat`'s believed hand fills
+/// *that seat's* own cheapest-route shortfall: the mirror of `own_need_hit`, which prices what
+/// the same card is worth to the observer. `ThreatContext::need` already carries the seat's
+/// `need_share` over its `cheapest_route_shortfall`, so this reads the shared opponent model
+/// rather than building a second one.
+///
+/// Non-negative by construction, which is what keeps `robber_choice`'s joint argmax equivalent
+/// to the two-stage search it replaced.
+fn victim_need_hit(view: &DecisionView<'_>, context: &ThreatContext, seat: usize) -> f64 {
+    let expected = view.belief().expected(seat);
+    let total = expected.iter().sum::<f64>();
+    if total <= 0.0 {
+        return 0.0;
+    }
+    (0..RESOURCE_COUNT)
+        .map(|resource| context.need[seat][resource] * expected[resource])
+        .sum::<f64>()
+        / total
 }

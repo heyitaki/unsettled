@@ -26,8 +26,6 @@ What follows for the gate: the throughput target the G3 plan registered for the 
 
 ## Action valuation
 
-**SIM-GAP-38.** The robber's destination and its victim are both chosen blind to what would be stolen. `threat.rs::own_need_hit` prices the belief-derived probability that a stolen card fills the observer's own shortfall, but it is reachable only through `RobberChoice::steal_value`, which `heuristic_v1.rs::knight_action_score` consumes for play timing. The steal term inside `threat.rs::seat_terms` that participates in choosing the hex uses `victim_rank`, which carries normalized danger and hand size only, and the victim is then taken from whoever sits on the already-chosen hex. `victim_rank` also prices no denial of the victim's own need, though the belief state carries what would be needed to.
-
 **SIM-GAP-39.** The knight's own-tile relief motive is a hardcoded constant in `heuristic_v1.rs::knight_action_score`, not a declared parameter, so it cannot be swept, bounds-declared, or rejected by the params-file loader with the rest of the vector.
 
 **SIM-GAP-40.** Resource need is a smooth share wherever it is priced. `threat.rs::need_share` spreads the cheapest-route shortfall proportionally, so a steal or block that completes a build this turn scores the same as one that moves a distant goal a single card closer.

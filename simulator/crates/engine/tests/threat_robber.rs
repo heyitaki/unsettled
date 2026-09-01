@@ -851,6 +851,24 @@ fn reference_victim_rank(
     context.danger[seat]
         + params.victim_hand_weight * f64::from(view.hand_total(seat)).min(params.hand_cap)
             / params.hand_cap
+        + params.victim_need_weight * reference_victim_need_hit(view, context, seat)
+}
+
+/// `threat.rs::victim_need_hit`, likewise private.
+fn reference_victim_need_hit(
+    view: &DecisionView<'_>,
+    context: &ThreatContext,
+    seat: usize,
+) -> f64 {
+    let expected = view.belief().expected(seat);
+    let total = expected.iter().sum::<f64>();
+    if total <= 0.0 {
+        return 0.0;
+    }
+    (0..RESOURCE_COUNT)
+        .map(|resource| context.need[seat][resource] * expected[resource])
+        .sum::<f64>()
+        / total
 }
 
 /// The two-stage search `threat::robber_choice` replaced, transcribed.
@@ -944,6 +962,12 @@ fn robber_choice_matches_the_two_stage_search_it_replaced() {
             ..ThreatParams::default()
         },
         ThreatParams {
+            steal_weight: 0.5,
+            victim_hand_weight: 0.0,
+            victim_need_weight: 0.6,
+            ..ThreatParams::default()
+        },
+        ThreatParams {
             delay_weight: 0.0,
             need_weight: 0.0,
             block_weight: 1.0,
@@ -982,6 +1006,103 @@ fn robber_choice_matches_the_two_stage_search_it_replaced() {
     assert!(named > 0);
     assert!(declined > 0);
     assert!(destinations.len() > 1);
+}
+
+// SP1b: the victim rank prices the denial of the victim's *own* need, mirroring how
+// `own_need_hit` prices the observer's. Two readings pin it:
+// - the term itself, isolated against a hand-built context: victim_rank_prices_the_denial_of_the_victims_own_need
+// - the wiring half of SIM-GAP-38, that the joint argmax carries it into the maximized hex
+//   quantity and not only into the victim tie-break: the_victim_need_term_reaches_the_hex_score
+
+/// Two victims alike in danger, hand size and blocked production, differing only in whether their
+/// believed hand holds the resource their own cheapest route is short of. The context is built by
+/// hand so danger and need are pinned equal by construction and only the belief moves; `steal` is
+/// `steal_weight * victim_rank`, so the closed-form gap reads the new term directly.
+#[test]
+fn victim_rank_prices_the_denial_of_the_victims_own_need() {
+    let steal_for = |cards: [u16; RESOURCE_COUNT], params: &ThreatParams| {
+        let (topology, board, _rules, _config, mut arena) = fixture();
+        let hex = (0..topology.hex_count())
+            .map(|hex| hex as u8)
+            .find(|hex| {
+                board.tiles()[usize::from(*hex)] == Some(Resource::Ore)
+                    && board.tokens()[usize::from(*hex)].map(pips) == Some(5)
+            })
+            .unwrap();
+        place_on_hex(&mut arena, &topology, hex, 1, 0);
+        set_belief_and_hand(&mut arena, 1, cards);
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        let inputs = representative_inputs();
+        let mut context = ThreatContext {
+            inputs: [const { None }; 6],
+            free_pips: [[0; RESOURCE_COUNT]; 6],
+            etw_free: [0.0; 6],
+            danger: [0.0; 6],
+            need: [[0.0; RESOURCE_COUNT]; 6],
+        };
+        context.etw_free[1] = etw::expected_turns_to_win(&inputs);
+        context.free_pips[1] = inputs.production_pips;
+        context.inputs[1] = Some(inputs);
+        context.danger[1] = 0.5;
+        context.need[1][Resource::Ore.index()] = 1.0;
+        threat::seat_terms(&view, params, &context, hex, 1).steal
+    };
+
+    // Equal hand sizes: the hand term is identical and only the composition can separate them.
+    let needed = [0, 0, 0, 0, 4];
+    let chaff = [4, 0, 0, 0, 0];
+    let params = ThreatParams::default();
+    let gap = steal_for(needed, &params) - steal_for(chaff, &params);
+    // The needed hand is all ore against a one-hot ore need, so the hit is exactly 1 against 0.
+    assert!((gap - params.steal_weight * params.victim_need_weight).abs() < 1e-12);
+    assert!(gap > 0.0);
+
+    let off = ThreatParams {
+        victim_need_weight: 0.0,
+        ..ThreatParams::default()
+    };
+    assert_eq!(steal_for(needed, &off).to_bits(), steal_for(chaff, &off).to_bits());
+}
+
+/// The wiring half of `SIM-GAP-38`: `placement_score` is the quantity the joint argmax maximized
+/// over `(hex, victim)` pairs, so the victim-scoped need term moving it is what shows the term
+/// reaches hex choice rather than only the victim tie-break.
+#[test]
+fn the_victim_need_term_reaches_the_hex_score() {
+    let (topology, board, mut rules, config, mut arena) = fixture();
+    // Without the dev route the cheapest route is the city, which a hand of one wheat and one ore
+    // is short of in both resources: what the victim holds is exactly what it still needs more of.
+    rules.dev_deck.victory_point = 0;
+    arena.prepare(&board, &topology, &rules, &config);
+    let (hex, offsets) = dominant_hex_with_two_offsets(&board, &topology);
+    place_on_hex(&mut arena, &topology, hex, 1, offsets[0]);
+    place_on_hex(&mut arena, &topology, hex, 2, offsets[1]);
+    make_city_runner(&mut arena, 1);
+    make_city_runner(&mut arena, 2);
+    set_belief_and_hand(&mut arena, 1, [0, 0, 1, 0, 1]);
+    set_belief_and_hand(&mut arena, 2, [0, 0, 1, 0, 1]);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+
+    let off = ThreatParams {
+        victim_need_weight: 0.0,
+        ..ThreatParams::default()
+    };
+    let on = ThreatParams {
+        victim_need_weight: 0.6,
+        ..ThreatParams::default()
+    };
+    let quiet = threat::robber_choice(&view, &off);
+    let loud = threat::robber_choice(&view, &on);
+    assert_eq!(quiet.destination, loud.destination);
+    assert_eq!(quiet.victim, loud.victim);
+
+    // `context` does not read the new weight, so one build serves both readings.
+    let context = threat::context(&view, &on);
+    let victim = usize::from(loud.victim.expect("a stealable victim"));
+    let hit = reference_victim_need_hit(&view, &context, victim);
+    assert!(hit > 0.0, "the fixture must give the victim a believed hand it needs");
+    let gap = loud.placement_score - quiet.placement_score;
+    assert!((gap - on.steal_weight * on.victim_need_weight * hit).abs() < 1e-12);
 }
 
 #[cfg(debug_assertions)]

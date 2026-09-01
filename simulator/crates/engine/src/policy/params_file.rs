@@ -494,6 +494,7 @@ mod tests {
             ("/threat/blockWeight", None),
             ("/threat/stealWeight", None),
             ("/threat/victimHandWeight", None),
+            ("/threat/victimNeedWeight", float(-1.0)),
             ("/threat/dangerFloor", float(0.0)),
             ("/threat/delayCap", float(-1.0)),
             ("/threat/handCap", float(0.0)),

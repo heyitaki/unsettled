@@ -21,6 +21,7 @@
     "blockWeight": 0.25,
     "stealWeight": 0.01,
     "victimHandWeight": 0.15,
+    "victimNeedWeight": 0.15,
     "dangerFloor": 1.0,
     "delayCap": 4.0,
     "handCap": 8.0,
