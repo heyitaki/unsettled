@@ -275,11 +275,11 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 17: Run M-51 and record it
 
-- [ ] Record `uptime`, run every preregistered invocation from `simulator/`, record `uptime` again
-- [ ] Append `## M-51 — post-SP1 re-screen of the adopted Phase-I vector` with full provenance and one paired table per invocation
-- [ ] Record whether each adopted axis and `handValueWeight` still reads the way M-43 through M-46 recorded, and flag anything that does not
-- [ ] Append a dated decision note to `.claude/specs/simulator/placement-programme.md` recording that SP1 is complete, that the field has moved, and that every SP2 reading below is measured against the re-screened field
-- [ ] Link check passes
+- [x] Record `uptime`, run every preregistered invocation from `simulator/`, record `uptime` again
+- [x] Append `## M-51 — post-SP1 re-screen of the adopted Phase-I vector` with full provenance and one paired table per invocation
+- [x] Record whether each adopted axis and `handValueWeight` still reads the way M-43 through M-46 recorded, and flag anything that does not
+- [x] Append a dated decision note to `.claude/specs/simulator/placement-programme.md` recording that SP1 is complete, that the field has moved, and that every SP2 reading below is measured against the re-screened field
+- [x] Link check passes
 
 ### Task 18: SP2a, the dev-card recipe term
 
