@@ -226,6 +226,17 @@ const devCardBoard = ([['ore', 8], ['wheat', 5], ['sheep', 10]] as const).reduce
   standard,
 )
 
+// The coverage-deficit port factor needs a pair that actually has surplus in the
+// ported resource *and* a spread that moves when the candidate is added, so the
+// pre-move and post-move deficits differ and the term is exercised as a delta.
+// completeBoard's rotation gives the port endpoints neither, so force both land
+// hexes under the port to wood at 6 (5 pips each, well past portSurplusThreshold)
+// and take the inland neighbour, which brings its own resources with it.
+const portDeficitBoard = landHexesOf(firstPortA).reduce(
+  (board, coord) => setNumberToken(setHexTile(board, coord, 'wood'), coord, 6),
+  dedicatedPort,
+)
+
 const draftEmpty = readBoardFixture('board-draft-empty.json')
 const endgame = readBoardFixture('board-endgame-pieces.json')
 
@@ -455,6 +466,14 @@ const cases: CaseInput[] = [
     board: devCardBoard,
     weights: cloneWeights({ recipeDevCardBonus: 2 }),
     candidate: devCardVertex,
+  },
+  {
+    id: 'port-coverage-deficit',
+    covers: ['W12'],
+    board: portDeficitBoard,
+    weights: cloneWeights({ portCoverageDeficitWeight: 1 }),
+    holdings: [firstPortA],
+    candidate: offPortNeighbor,
   },
   {
     id: 'real-endgame-pieces',

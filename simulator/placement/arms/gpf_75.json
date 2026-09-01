@@ -23,6 +23,7 @@
   "portWeight": 0.55,
   "genericPortFactor": 0.75,
   "portSurplusThreshold": 3,
+  "portCoverageDeficitWeight": 0,
   "nearPortRadius": 2,
   "nearPortDecay": 0.5,
   "robberDiscount": 0.35,

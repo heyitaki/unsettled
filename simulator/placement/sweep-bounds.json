@@ -24,6 +24,7 @@
     "portWeight": { "min": 0.1375, "max": 2.2 },
     "genericPortFactor": { "min": 0.5, "max": 0.5 },
     "portSurplusThreshold": { "min": 1.0, "max": 6.0 },
+    "portCoverageDeficitWeight": { "min": 0.0, "max": 4.0 },
     "nearPortRadius": { "min": 1.0, "max": 3.0 },
     "nearPortDecay": { "min": 0.125, "max": 1.0 },
     "robberDiscount": { "min": 0.0, "max": 1.0 },

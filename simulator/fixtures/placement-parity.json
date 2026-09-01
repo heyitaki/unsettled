@@ -268,6 +268,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -560,6 +561,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -817,6 +819,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -1074,6 +1077,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -1331,6 +1335,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -1588,6 +1593,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -1845,6 +1851,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -2137,6 +2144,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -2426,6 +2434,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -2719,6 +2728,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -3012,6 +3022,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -3304,6 +3315,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -3597,6 +3609,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -3890,6 +3903,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -4285,6 +4299,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -4680,6 +4695,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -4932,6 +4948,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": "Infinity",
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -5184,6 +5201,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": "Infinity",
         "robberDiscount": 0.35,
@@ -5476,6 +5494,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 2,
@@ -5770,6 +5789,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -6062,6 +6082,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -6314,6 +6335,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0,
         "robberDiscount": 0.35,
@@ -6567,6 +6589,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 1,
         "robberDiscount": 0.35,
@@ -6819,6 +6842,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 1000,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -7111,6 +7135,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -7403,6 +7428,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -7695,6 +7721,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -7947,6 +7974,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -8200,6 +8228,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -8448,6 +8477,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -8740,6 +8770,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -9037,6 +9068,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -9434,6 +9466,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -9829,6 +9862,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -10121,6 +10155,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,
@@ -10144,6 +10179,261 @@
       },
       "marginalTotal": 21.68105819607846,
       "breakdownTotal": 21.68105819607846,
+      "ingestion": {
+        "outcome": "score"
+      },
+      "degenerate": false
+    },
+    {
+      "id": "port-coverage-deficit",
+      "covers": [
+        "W12"
+      ],
+      "board": {
+        "schemaVersion": 1,
+        "layout": "standard4",
+        "hexes": [
+          {
+            "coord": {
+              "q": 0,
+              "r": -2
+            },
+            "tile": "wood",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -2
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -2
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": -1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -1
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 0
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 0
+            },
+            "tile": "brick",
+            "numberToken": 11
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 0
+            },
+            "tile": "ore",
+            "numberToken": 12
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 0
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": 0
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 1
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 2
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 2
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 2
+            },
+            "tile": "desert",
+            "numberToken": null
+          }
+        ],
+        "ports": [
+          {
+            "edgeId": "e:-1,-2;-1,-1",
+            "resource": "wood",
+            "rate": 2
+          }
+        ],
+        "robber": {
+          "q": 0,
+          "r": 2
+        },
+        "roads": [],
+        "buildings": [],
+        "players": [
+          {
+            "id": "aki",
+            "name": "aki",
+            "color": "#c23f38"
+          },
+          {
+            "id": "p2",
+            "name": "P2",
+            "color": "#3063ba"
+          },
+          {
+            "id": "p3",
+            "name": "P3",
+            "color": "#e58331"
+          },
+          {
+            "id": "p4",
+            "name": "P4",
+            "color": "#ffffff"
+          }
+        ],
+        "mePlayerId": "aki"
+      },
+      "weights": {
+        "resourceValue": {
+          "wheat": 1.35,
+          "ore": 1.3,
+          "wood": 0.8,
+          "brick": 0.8,
+          "sheep": 0.75
+        },
+        "handValueWeight": 0,
+        "scarcityWeight": 0.35,
+        "scarcityClampMin": 0.5,
+        "scarcityClampMax": 2,
+        "diversityWeight": 1.6,
+        "diversityCap": 4,
+        "coverageExponent": 1.5,
+        "coverageScarcityWeight": 0.5,
+        "duplicateNumberPenalty": 0.08,
+        "recipeRoadBonus": 1.5,
+        "recipeCityBonus": 2,
+        "recipeSettlementBonus": 1,
+        "recipeDevCardBonus": 0,
+        "recipeCap": 4,
+        "portWeight": 0.55,
+        "genericPortFactor": 0.5,
+        "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 1,
+        "nearPortRadius": 2,
+        "nearPortDecay": 0.5,
+        "robberDiscount": 0.35,
+        "opponentTopK": 3,
+        "softmaxTemperature": 1.25,
+        "rolloutBudget": 500000,
+        "rolloutsMin": 4,
+        "rolloutsMax": 24,
+        "maxResults": 8
+      },
+      "holdings": [
+        "v:-1,-2;-1,-1;0,-2"
+      ],
+      "candidate": "v:-1,-1;0,-2;0,-1",
+      "receivesGrant": false,
+      "components": {
+        "production": 14.5,
+        "scarcity": -1.2106060606060607,
+        "robber": 0,
+        "diversity": 1.4123636363636363,
+        "port": 8.662500000000001,
+        "handValue": 0
+      },
+      "marginalTotal": 23.364257575757577,
+      "breakdownTotal": 23.364257575757577,
       "ingestion": {
         "outcome": "score"
       },
@@ -10765,6 +11055,7 @@
         "portWeight": 0.55,
         "genericPortFactor": 0.5,
         "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
         "robberDiscount": 0.35,

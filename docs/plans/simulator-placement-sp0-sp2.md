@@ -312,15 +312,15 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 21: SP2b, condition port value on coverage deficit
 
-- [ ] Add `portCoverageDeficitWeight` to `EngineWeights` in `src/engine/weights.ts` with `DEFAULT_WEIGHTS` value 0, and mirror it in `app_formula.rs`
-- [ ] In `src/engine/valuation.ts::portDelta`, multiply each per-resource product by `1 + portCoverageDeficitWeight * deficit_r(state)`, where `deficit_r(state) = 1 - (sum over the four resources other than r of coverage(weights, pips_q(state), recipeCap)) / 4`, using the same `coverage` helper the recipe terms use. Apply the post-move deficit to the post-move half of each difference and the pre-move deficit to the pre-move half, so the term stays a true delta. At weight 0 the expression must be arithmetically identical to today's. Mirror it in `app_formula.rs`
-- [ ] It contributes to the existing `port` breakdown component; no new component. `portSurplusThreshold` keeps its current job of gating on the ported resource's own production; this term prices the deficit elsewhere, which is what `SIM-GAP-37` says the threshold cannot express
-- [ ] Declare `portCoverageDeficitWeight` in `sweep-bounds.json` under `placement` with `min` 0.0 and `max` 4.0
-- [ ] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and all 50 weights-shaped arm files, `sp2a_devcard.json` included
-- [ ] Add a vitest case at an explicit nonzero witness weight showing a port paying more to a narrow-spread pair than to a broad one at equal ported production, with expected values hand-derived in the test, plus a case pinning the shipped default at 0 as arithmetically identical to the pre-change port delta
-- [ ] Add a coverage class to `REQUIRED_CLASSES`, the matching case to the parity generator, and regenerate `placement-parity.json`
-- [ ] Leave the `SIM-GAP-37` entry in `gaps.md` in place. A term that exists at a shipped weight of 0 prices nothing, so the gap is not closed until the term is adopted, which is SP6's business and out of scope here. Record in `placement-programme.md` that the term now exists and awaits its verdict
-- [ ] All six validation commands green
+- [x] Add `portCoverageDeficitWeight` to `EngineWeights` in `src/engine/weights.ts` with `DEFAULT_WEIGHTS` value 0, and mirror it in `app_formula.rs`
+- [x] In `src/engine/valuation.ts::portDelta`, multiply each per-resource product by `1 + portCoverageDeficitWeight * deficit_r(state)`, where `deficit_r(state) = 1 - (sum over the four resources other than r of coverage(weights, pips_q(state), recipeCap)) / 4`, using the same `coverage` helper the recipe terms use. Apply the post-move deficit to the post-move half of each difference and the pre-move deficit to the pre-move half, so the term stays a true delta. At weight 0 the expression must be arithmetically identical to today's. Mirror it in `app_formula.rs`
+- [x] It contributes to the existing `port` breakdown component; no new component. `portSurplusThreshold` keeps its current job of gating on the ported resource's own production; this term prices the deficit elsewhere, which is what `SIM-GAP-37` says the threshold cannot express
+- [x] Declare `portCoverageDeficitWeight` in `sweep-bounds.json` under `placement` with `min` 0.0 and `max` 4.0
+- [x] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and all 50 weights-shaped arm files, `sp2a_devcard.json` included
+- [x] Add a vitest case at an explicit nonzero witness weight showing a port paying more to a narrow-spread pair than to a broad one at equal ported production, with expected values hand-derived in the test, plus a case pinning the shipped default at 0 as arithmetically identical to the pre-change port delta
+- [x] Add a coverage class to `REQUIRED_CLASSES`, the matching case to the parity generator, and regenerate `placement-parity.json`
+- [x] Leave the `SIM-GAP-37` entry in `gaps.md` in place. A term that exists at a shipped weight of 0 prices nothing, so the gap is not closed until the term is adopted, which is SP6's business and out of scope here. Record in `placement-programme.md` that the term now exists and awaits its verdict
+- [x] All six validation commands green
 
 ### Task 22: Preregister M-53, the SP2b A/B
 

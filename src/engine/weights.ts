@@ -33,6 +33,11 @@ export interface EngineWeights {
   // resource earn no port credit, so sitting on a port with weak production
   // (and a sacrificed hex) no longer outranks real production.
   portSurplusThreshold: number
+  // How much the *other* four resources' shortfall raises a port's credit. A
+  // port is for converting a narrow spread, and portSurplusThreshold gates on
+  // the ported resource alone (SIM-GAP-37). Ships at 0, where every port
+  // factor is exactly 1 and the port delta is unchanged.
+  portCoverageDeficitWeight: number
   // How many road-builds away a port still counts. A strong inland spot can
   // build toward a port by mid-game, which beats sitting on it and forfeiting
   // a hex; reach decays per road so on-port access still ranks highest.
@@ -72,6 +77,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   portWeight: 0.55,
   genericPortFactor: 0.5,
   portSurplusThreshold: 3,
+  portCoverageDeficitWeight: 0,
   nearPortRadius: 2,
   nearPortDecay: 0.5,
   robberDiscount: 0.35,
