@@ -501,6 +501,7 @@ mod tests {
             ("/threat/handCap", float(0.0)),
             ("/threat/knightStealWeight", float(-1.0)),
             ("/threat/knightPlacementWeight", float(-1.0)),
+            ("/threat/knightReliefWeight", float(-1.0)),
             ("/devCards/etwWeight", None),
             ("/devCards/etwFloor", float(0.0)),
             ("/devCards/gainCap", float(-1.0)),
@@ -854,6 +855,21 @@ mod tests {
             serde_json::from_str::<Value>(&default_source).expect("valid JSON"),
             "default-weights.json must differ from the candidate snapshot only in the adopted handValue drop"
         );
+    }
+
+    /// SP1d promoted the knight's own-tile relief constant to a swept axis, so the loader
+    /// owes it the same rejection every other declared threat weight gets: a bad vector must
+    /// fail at load rather than trip a debug assert mid-run.
+    #[test]
+    fn a_negative_knight_relief_weight_fails_the_loader() {
+        let mut file = composite_value();
+        file["threat"]["knightReliefWeight"] = Value::from(-1.0);
+        let error = parse_params_file(&file.to_string()).expect_err("negative relief weight");
+        assert!(error.contains("threat.knightReliefWeight"), "{error}");
+
+        let mut file = composite_value();
+        file["threat"]["knightReliefWeight"] = Value::from(0.0);
+        parse_params_file(&file.to_string()).expect("zero is inside the domain");
     }
 
     #[test]

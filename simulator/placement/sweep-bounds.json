@@ -62,7 +62,8 @@
       "delayCap": { "min": 1.0, "max": 16.0 },
       "handCap": { "min": 4.0, "max": 16.0 },
       "knightStealWeight": { "min": 3.0, "max": 48.0 },
-      "knightPlacementWeight": { "min": 7.5, "max": 120.0 }
+      "knightPlacementWeight": { "min": 7.5, "max": 120.0 },
+      "knightReliefWeight": { "min": 3.0, "max": 48.0 }
     },
     "devCards": {
       "etwWeight": { "min": 0.25, "max": 4.0 },

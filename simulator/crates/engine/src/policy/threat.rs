@@ -40,6 +40,11 @@ pub struct ThreatParams {
     /// action-score points, rejoining knight play timing to the robber placement value the
     /// chooser maximized. An unswept Phase-H placeholder, not a tuned value.
     pub knight_placement_weight: f64,
+    /// Non-negative, finite points per pip of the observer's own robbed hex, priced into the
+    /// knight's play/hold score when the robber sits on a hex the observer touches. The
+    /// declared form of the constant `heuristic_v1.rs::knight_action_score` used to hardcode;
+    /// the ungated knight path, which carries no `ThreatParams`, keeps that literal.
+    pub knight_relief_weight: f64,
 }
 
 impl Default for ThreatParams {
@@ -57,6 +62,7 @@ impl Default for ThreatParams {
             hand_cap: 8.0,
             knight_steal_weight: 12.0,
             knight_placement_weight: 30.0,
+            knight_relief_weight: 12.0,
         }
     }
 }
@@ -420,6 +426,10 @@ pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
     check(
         "threat.knightPlacementWeight is non-negative and finite",
         params.knight_placement_weight.is_finite() && params.knight_placement_weight >= 0.0,
+    )?;
+    check(
+        "threat.knightReliefWeight is non-negative and finite",
+        params.knight_relief_weight.is_finite() && params.knight_relief_weight >= 0.0,
     )
 }
 

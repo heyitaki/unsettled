@@ -233,15 +233,15 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 13: SP1d, promote the knight own-tile relief constant
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Add `knight_relief_weight` to `ThreatParams`, default 12.0, which is exactly the literal it replaces in `heuristic_v1.rs::knight_action_score`, validated non-negative and finite
-- [ ] Replace the hardcoded `12.0` multiplying the blocked hex's pips with the parameter. The ungated path that takes no `ThreatParams` keeps its current arithmetic unchanged
-- [ ] Declare `knightReliefWeight` in `sweep-bounds.json` under `policy.threat` with range 3.0 to 48.0
-- [ ] Regenerate `policy-default-params.json` and `phase-i-candidate-params.json`, and add the key to every `h2_*`, `h2x_*` and `h4_*` arm at its baseline value
-- [ ] Add a Rust test that the params-file loader rejects a negative value on this axis, so the parameter is genuinely bounds-checked
-- [ ] Recapture and assert the corpus diff is empty; this task is behaviour-neutral. State that in the commit message
-- [ ] Delete the `SIM-GAP-39` entry from `gaps.md` and say so in the commit message
-- [ ] Both cargo profiles green, link check passes
+- [x] Capture `runs/corpus-pre`
+- [x] Add `knight_relief_weight` to `ThreatParams`, default 12.0, which is exactly the literal it replaces in `heuristic_v1.rs::knight_action_score`, validated non-negative and finite
+- [x] Replace the hardcoded `12.0` multiplying the blocked hex's pips with the parameter. The ungated path that takes no `ThreatParams` keeps its current arithmetic unchanged
+- [x] Declare `knightReliefWeight` in `sweep-bounds.json` under `policy.threat` with range 3.0 to 48.0
+- [x] Regenerate `policy-default-params.json` and `phase-i-candidate-params.json`, and add the key to every `h2_*`, `h2x_*` and `h4_*` arm at its baseline value
+- [x] Add a Rust test that the params-file loader rejects a negative value on this axis, so the parameter is genuinely bounds-checked
+- [x] Recapture and assert the corpus diff is empty; this task is behaviour-neutral. State that in the commit message (every `results.json` and `games.jsonl` byte-identical across all eight corpora; only `meta.json` elapsed-time fields differ)
+- [x] Delete the `SIM-GAP-39` entry from `gaps.md` and say so in the commit message
+- [x] Both cargo profiles green, link check passes
 
 ### Task 14: Preregister M-50, the SP1e sweep
 

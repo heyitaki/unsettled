@@ -12,6 +12,7 @@ use unsettled_engine::policy::threat::ThreatParams;
 use unsettled_engine::policy::{self, PolicyKind, PolicyScratch};
 use unsettled_engine::rng::Xoshiro256StarStar;
 use unsettled_engine::rules::{Buildable, Resource, RuleConfig, TradeConfig};
+use unsettled_engine::state::EMPTY;
 use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
 use unsettled_engine::trade::TradeOffer;
 use unsettled_engine::view::{Action, DecisionPhase, DevPlay, ScoredAction, pips};
@@ -1064,6 +1065,8 @@ fn knight_play(actions: &[ScoredAction]) -> (u8, Option<u8>) {
 // - `ThreatParams::knight_steal_weight` / `knight_placement_weight` and the priced
 //   `RobberChoice`, played pair equal to the priced pair (closed form, non-default weights):
 //   the_threat_gate_prices_knight_steal_and_placement
+// - `ThreatParams::knight_relief_weight` into the own-tile relief term (closed form at the
+//   default and at a doubled weight): the_threat_gate_prices_the_knight_own_tile_relief
 // - `RobberChoice::placement_score` / `steal_value` derivations, including belief sensitivity:
 //   robber_choice_* (tests/threat_robber.rs)
 // - `LegacyValuation::frozen_knight` (restores flat pressure and self-regarding pricing):
@@ -1169,6 +1172,71 @@ fn the_threat_gate_prices_knight_steal_and_placement() {
             0.0
         };
     assert_eq!(knight_score(&on).to_bits(), expected.to_bits());
+}
+
+/// The SP1d promotion: the own-tile relief motive is `knightReliefWeight` times the blocked
+/// hex's pips, so the axis genuinely reaches the knight's play/hold score and is sweepable.
+/// At the default 12.0 the term is the literal it replaced, which is what makes the promotion
+/// behaviour-neutral.
+#[test]
+fn the_threat_gate_prices_the_knight_own_tile_relief() {
+    let (topology, board, mut arena) = knight_fixture(0);
+    // Sit the robber on a token hex the observer touches, the only state in which the relief
+    // term is nonzero. `knight_fixture` leaves the robber on the desert, where pips are 0.
+    let blocked = (0..topology.hex_count() as u8)
+        .find(|hex| board.tokens()[usize::from(*hex)].is_some())
+        .expect("a hex carrying a token");
+    let own_vertex = *topology
+        .hex_vertices(blocked)
+        .iter()
+        .find(|vertex| arena.state.vertex_owner[usize::from(**vertex)] == EMPTY)
+        .expect("a free vertex on that hex");
+    arena.state.robber = blocked;
+    arena.state.vertex_owner[usize::from(own_vertex)] = 0;
+    arena.state.vertex_tier[usize::from(own_vertex)] = 1;
+
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    assert!(!view.knight_takes_largest_army());
+    assert!(view.hex_touches_seat(view.robber(), view.observer()));
+    let relief_pips = f32::from(board.tokens()[usize::from(blocked)].map_or(0, pips));
+    assert!(relief_pips > 0.0);
+
+    let proximity = f32::from(view.own_total_vp()) / f32::from(view.win_vp().max(1));
+    let progress =
+        f32::from(1_u8) / f32::from(view.largest_army_min().max(1)) * (45.0 + 35.0 * proximity);
+
+    let scored = |relief_weight: f64| {
+        let threat_params = ThreatParams {
+            knight_relief_weight: relief_weight,
+            ..ThreatParams::default()
+        };
+        let params = HeuristicParams {
+            threat: Some(threat_params),
+            ..HeuristicParams::default()
+        };
+        let actions = heuristic_v1::recommend(&view, &params);
+        let choice = unsettled_engine::policy::threat::robber_choice(&view, &threat_params);
+        let steal = (threat_params.knight_steal_weight * choice.steal_value) as f32;
+        let placement = (threat_params.knight_placement_weight * choice.placement_score) as f32;
+        let tiebreak = if knight_play(&actions).0 != view.robber() {
+            1.0
+        } else {
+            0.0
+        };
+        let expected = 20.0
+            + progress
+            + relief_pips * relief_weight as f32
+            + steal
+            + placement
+            + tiebreak;
+        (knight_score(&actions), expected)
+    };
+
+    let (default_score, default_expected) = scored(12.0);
+    assert_eq!(default_score.to_bits(), default_expected.to_bits());
+    let (doubled_score, doubled_expected) = scored(24.0);
+    assert_eq!(doubled_score.to_bits(), doubled_expected.to_bits());
+    assert_ne!(default_score.to_bits(), doubled_score.to_bits());
 }
 
 #[test]

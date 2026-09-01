@@ -27,7 +27,8 @@
     "delayCap": 4.0,
     "handCap": 16.0,
     "knightStealWeight": 12.0,
-    "knightPlacementWeight": 30.0
+    "knightPlacementWeight": 30.0,
+    "knightReliefWeight": 12.0
   },
   "devCards": {
     "etwWeight": 1.0,

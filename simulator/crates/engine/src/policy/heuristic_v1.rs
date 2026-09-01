@@ -1912,7 +1912,8 @@ fn deck_blind_dev_card_score(view: &DecisionView<'_>, gated: Gated<'_>) -> f32 {
 /// the victim through belief and the shared danger model, and the placement term rejoins play
 /// timing to the robber placement value the chooser maximized (SIM-GAP-09). With every gate
 /// off this is bit-identical to `frozen_knight_action_score`: the pressure multiplier is
-/// exactly 1.0, the steal arm is the same expression, and the placement term is literal zero.
+/// exactly 1.0, the steal arm is the same expression, the relief scale is the same literal,
+/// and the placement term is literal zero.
 fn knight_action_score(
     view: &DecisionView<'_>,
     gated: Gated<'_>,
@@ -1938,8 +1939,14 @@ fn knight_action_score(
     let progress = f32::from(next) / f32::from(view.largest_army_min().max(1))
         * (45.0 + 35.0 * win_proximity(view))
         * pressure;
+    // The own-tile relief motive. Under the threat gate its scale is the declared
+    // `knightReliefWeight`; the ungated path carries no params and keeps the literal the
+    // parameter defaults to, so both arms are the same arithmetic (SIM-GAP-39).
+    let relief_weight = threat.map_or(12.0, |(threat_params, _)| {
+        threat_params.knight_relief_weight as f32
+    });
     let blocked = if view.hex_touches_seat(view.robber(), view.observer()) {
-        f32::from(view.board().tokens()[usize::from(view.robber())].map_or(0, pips)) * 12.0
+        f32::from(view.board().tokens()[usize::from(view.robber())].map_or(0, pips)) * relief_weight
     } else {
         0.0
     };
