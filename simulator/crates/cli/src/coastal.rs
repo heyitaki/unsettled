@@ -64,7 +64,8 @@ pub fn compare_pick(
             placement, board, topology, owners, pick.seat, vertex, pick.grant,
         );
         // Lowest vertex index wins a tie. The diagnostic ranks candidates rather than picking
-        // one, so it has no RNG stream to break ties with and must not invent one.
+        // one, so it has no RNG stream to break ties with and must not invent one, and an
+        // artifact that has to be byte-identical on a repeat could not take one anyway.
         if best.is_none_or(|(best_score, _)| score > best_score) {
             best = Some((score, hexes));
         }

@@ -1,4 +1,4 @@
-# M-50 preregistration — SP1e knight and threat axis sweep
+# M-50 preregistration: SP1e knight and threat axis sweep
 
 Date: 2026-09-01. Committed before the run.
 

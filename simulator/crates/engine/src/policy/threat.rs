@@ -476,16 +476,22 @@ fn assert_params(params: &ThreatParams) {
 ///
 /// The proportional spread of the shortfall is the base, which keeps a distant goal priced.
 /// On top of it, a resource the route is at most `COMPLETION_SHORTFALL` short of carries a
-/// completion step of `need_completion_weight`, so a card that finishes a build this turn
-/// outranks one that moves a far goal the same proportional distance (`SIM-GAP-40`).
+/// completion step of `need_completion_weight`, so a card that clears the last of what the route
+/// still wants of that resource outranks one that moves a far goal the same proportional
+/// distance (`SIM-GAP-40`).
+///
+/// The step is per resource, not per route, which is the only thing a per-resource share vector
+/// can express: it fires on a resource one card from satisfied even when a second resource still
+/// keeps the build out of reach this turn. The route-level case is the special case where exactly
+/// one resource sits inside the step and taking it does finish the build.
 ///
 /// The result stays total-normalized, which every caller depends on: `seat_terms` and both
 /// need-hit functions read it as the *share* of the seat's remaining need a resource carries,
 /// not as a magnitude. What the normalization divides by is now the proportional total plus
-/// one step per completing resource, so a step redistributes share toward what finishes rather
-/// than inflating the total; the shares still sum to 1 and no caller's scale moves. With no
-/// resource inside the step, or at weight 0, the return is exactly the proportional spread
-/// this function returned before the step existed, bit for bit.
+/// one step per stepped resource, so a step redistributes share toward what the route is nearly
+/// done needing rather than inflating the total; the shares still sum to 1 and no caller's scale
+/// moves. With no resource inside the step, or at weight 0, the return is exactly the
+/// proportional spread this function returned before the step existed, bit for bit.
 pub fn need_share(inputs: &EtwInputs, need_completion_weight: f64) -> [f64; RESOURCE_COUNT] {
     let shortfall = cheapest_route_shortfall(inputs);
     let total = shortfall.iter().sum::<f64>();
@@ -507,9 +513,9 @@ pub fn need_share(inputs: &EtwInputs, need_completion_weight: f64) -> [f64; RESO
     share.map(|value| value / stepped_total)
 }
 
-/// Remaining shortfall, in cards, at or below which a resource counts as completing the
-/// cheapest route. One card: the step prices "this steal finishes the build", and a shortfall
-/// is a real magnitude, so the unit is a card.
+/// Remaining shortfall, in cards, at or below which a resource counts as satisfied for the
+/// cheapest route. One card: the step prices "this steal clears the last card of that resource
+/// the route wants", and a shortfall is a real magnitude, so the unit is a card.
 const COMPLETION_SHORTFALL: f64 = 1.0;
 
 /// Raw per-resource shortfall of the route with the smallest total shortfall, over the same

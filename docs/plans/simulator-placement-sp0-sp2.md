@@ -23,7 +23,7 @@ When this run is done:
 
 **Disposition rule, preregistered.** For an optional term: `better` keeps it at its measured value as an SP6 survivor, `worse` drops it and the M entry records why it was expected to help, `equivalent` at declared power drops it and records the null as the answer, `inconclusive` buys units exactly once at four times the boards (raise `--boards`, never `--reps`) and if it is still `inconclusive` records the item unresolved and stops. Gap-closing work (SP1a-d and the `SIM-GAP-33` fix) lands whatever its A/B reads; if such a fix reads `worse`, record it and flag it, do not revert.
 
-**Both cargo profiles, every simulator change, as the last step of the task.** Always prefix every cargo invocation with `RUSTFLAGS="-D warnings"` — cargo fingerprints `RUSTFLAGS`, so an invocation without it forces a full rebuild of the workspace and burns several minutes. Run the two profiles once, not repeatedly.
+**Both cargo profiles, every simulator change, as the last step of the task.** Always prefix every cargo invocation with `RUSTFLAGS="-D warnings"`: cargo fingerprints `RUSTFLAGS`, so an invocation without it forces a full rebuild of the workspace and burns several minutes. Run the two profiles once, not repeatedly.
 
 **Byte-exact corpus before any behaviour change.** Run `simulator/tools/capture-corpus.sh runs/corpus-pre` *before* touching engine code, then recapture to `runs/corpus-post` after and diff. A task labelled behaviour-neutral must show a byte-identical diff and say so in its commit message. A task that moves behaviour records which policy/layout corpora moved.
 
@@ -43,15 +43,15 @@ SP3 (expansion term), SP4 (draft-slot conditioning), SP5 (setup draft awareness 
 
 ### Where things live
 
-- `simulator/crates/engine/src/policy/threat.rs` — `robber_choice`, `own_need_hit`, `victim_rank`, `need_share`, `cheapest_route_shortfall`, `seat_terms`, `ThreatParams`. SP1a, SP1b, SP1c.
-- `simulator/crates/engine/src/policy/heuristic_v1.rs` — `knight_action_score`. The own-tile relief constant is the literal `12.0` multiplying the blocked hex's pips. SP1d.
-- `simulator/crates/engine/src/policy/denial.rs` — `contest_term`, the `contest_block_bonus` predicate. `SIM-GAP-33`.
-- `simulator/crates/engine/src/game.rs` — `setup`, `setup_pick`, `setup_order`. The setup trace hooks here.
-- `simulator/crates/engine/src/placement/mod.rs` — `choose`, `choose_app_formula`, `vertex_score`. `AppFormulaScorer::score_for_owner(vertex_owner, seat, vertex, grant)` is the entry point a diagnostic re-scores candidates with.
-- `simulator/crates/engine/src/placement/app_formula.rs` — the Rust mirror of the app formula, including `EngineWeights`, `coverage`, `port_surplus`.
-- `simulator/crates/engine/src/policy/frontier.rs` — `opened`, the in-game reference implementation of what "opened" means. SP0-D2's boxing walk follows its notion of an expansion target.
-- `simulator/crates/cli/src/main.rs` — the `Command` enum and per-command arg structs. `simulator/crates/cli/src/evaluate.rs` — `evaluation_schedule`, `evaluate`, `paired_stats`, artifact writing. `simulator/crates/cli/src/stats.rs` — the McNemar and board-clustered interval machinery.
-- `src/engine/valuation.ts` — `ScoreBreakdown`, `diversityScore` (which holds all three recipe terms), `portDelta`, `portSurplus`, `coverage`, `marginalBreakdown`, `marginalTotal`. `src/engine/weights.ts` — `EngineWeights` and `DEFAULT_WEIGHTS`.
+- `simulator/crates/engine/src/policy/threat.rs`: `robber_choice`, `own_need_hit`, `victim_rank`, `need_share`, `cheapest_route_shortfall`, `seat_terms`, `ThreatParams`. SP1a, SP1b, SP1c.
+- `simulator/crates/engine/src/policy/heuristic_v1.rs`: `knight_action_score`. The own-tile relief constant is the literal `12.0` multiplying the blocked hex's pips. SP1d.
+- `simulator/crates/engine/src/policy/denial.rs`: `contest_term`, the `contest_block_bonus` predicate. `SIM-GAP-33`.
+- `simulator/crates/engine/src/game.rs`: `setup`, `setup_pick`, `setup_order`. The setup trace hooks here.
+- `simulator/crates/engine/src/placement/mod.rs`: `choose`, `choose_app_formula`, `vertex_score`. `AppFormulaScorer::score_for_owner(vertex_owner, seat, vertex, grant)` is the entry point a diagnostic re-scores candidates with.
+- `simulator/crates/engine/src/placement/app_formula.rs`: the Rust mirror of the app formula, including `EngineWeights`, `coverage`, `port_surplus`.
+- `simulator/crates/engine/src/policy/frontier.rs`: `opened`, the in-game reference implementation of what "opened" means. SP0-D2's boxing walk follows its notion of an expansion target.
+- `simulator/crates/cli/src/main.rs`: the `Command` enum and per-command arg structs. `simulator/crates/cli/src/evaluate.rs`: `evaluation_schedule`, `evaluate`, `paired_stats`, artifact writing. `simulator/crates/cli/src/stats.rs`: the McNemar and board-clustered interval machinery.
+- `src/engine/valuation.ts`: `ScoreBreakdown`, `diversityScore` (which holds all three recipe terms), `portDelta`, `portSurplus`, `coverage`, `marginalBreakdown`, `marginalTotal`. `src/engine/weights.ts`: `EngineWeights` and `DEFAULT_WEIGHTS`.
 - `simulator/tools/generate-placement-parity.ts` regenerates `simulator/fixtures/placement-parity.json`; `simulator/crates/engine/tests/placement_parity.rs` consumes it and asserts its `REQUIRED_CLASSES` coverage set exactly.
 - Preregistrations go in `docs/plans/preregs/`. M entries append to `.claude/specs/simulator/measurements.md`. Gap entries are deleted from `.claude/specs/simulator/gaps.md`. Decisions and phase status append to `.claude/specs/simulator/placement-programme.md`.
 
@@ -157,8 +157,8 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 ### Task 6: Run the SP0 diagnostic and record M-47 and M-48
 
 - [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [x] Append `## M-47 — SP0-D1 coastal selection` to `.claude/specs/simulator/measurements.md` with full provenance (date, commit, domain, exact command, load before and after, games, illegal actions, admissibility) and the D1 numbers overall and per draft slot, ending with the gate outcome for SP2c
-- [x] Append `## M-48 — SP0-D2 expansion boxing and blockability` in the same shape, with both quartile gaps, the zero-site incidence, and the branch outcome for the robber-attraction term
+- [x] Append `## M-47: SP0-D1 coastal selection` to `.claude/specs/simulator/measurements.md` with full provenance (date, commit, domain, exact command, load before and after, games, illegal actions, admissibility) and the D1 numbers overall and per draft slot, ending with the gate outcome for SP2c
+- [x] Append `## M-48: SP0-D2 expansion boxing and blockability` in the same shape, with both quartile gaps, the zero-site incidence, and the branch outcome for the robber-attraction term
 - [x] Append a dated decision note to `.claude/specs/simulator/placement-programme.md` recording, as decisions this run made: whether SP2c runs, and whether SP3 will need a separate boxing penalty rather than one gradient term. Supersede, never edit, per the class-D rule
 - [x] Copy `diagnostics.json` nowhere: `simulator/runs/` is gitignored and the M entries are the record
 - [x] Link check passes
@@ -198,7 +198,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 ### Task 10: Run M-49 and record it
 
 - [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [x] Append `## M-49 — SIM-GAP-33 contest block-bonus predicate` with full provenance and the paired table in the existing format (arm, estimate, b, c, selected interval, verdict)
+- [x] Append `## M-49: SIM-GAP-33 contest block-bonus predicate` with full provenance and the paired table in the existing format (arm, estimate, b, c, selected interval, verdict)
 - [x] Record the disposition per the preregistered rule, including a flag for the user if it read `worse`
 - [x] Link check passes
 
@@ -257,7 +257,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 ### Task 15: Run M-50 and record it
 
 - [x] Record `uptime`, run every preregistered invocation from `simulator/`, record `uptime` again
-- [x] Append `## M-50 — SP1e knight and threat axis sweep` with full provenance and one paired table per invocation
+- [x] Append `## M-50: SP1e knight and threat axis sweep` with full provenance and one paired table per invocation
 - [x] Record each axis's verdict and its disposition under the standing rule, and list the surviving axes explicitly as SP6 candidates. Adopt nothing
 - [x] If any axis read `inconclusive`, run the single preregistered retry at four times the boards and record it in the same entry; if it is still `inconclusive`, record the axis unresolved and stop
 - [x] Link check passes
@@ -276,7 +276,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 ### Task 17: Run M-51 and record it
 
 - [x] Record `uptime`, run every preregistered invocation from `simulator/`, record `uptime` again
-- [x] Append `## M-51 — post-SP1 re-screen of the adopted Phase-I vector` with full provenance and one paired table per invocation
+- [x] Append `## M-51: post-SP1 re-screen of the adopted Phase-I vector` with full provenance and one paired table per invocation
 - [x] Record whether each adopted axis and `handValueWeight` still reads the way M-43 through M-46 recorded, and flag anything that does not
 - [x] Append a dated decision note to `.claude/specs/simulator/placement-programme.md` recording that SP1 is complete, that the field has moved, and that every SP2 reading below is measured against the re-screened field
 - [x] Link check passes
@@ -306,7 +306,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 ### Task 20: Run M-52 and record it
 
 - [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [x] Append `## M-52 — SP2a dev-card recipe bonus` with full provenance and the paired table
+- [x] Append `## M-52: SP2a dev-card recipe bonus` with full provenance and the paired table
 - [x] Record the disposition under the standing rule, including the single four-times-boards retry if it read `inconclusive`. If it survives, name it an SP6 candidate; adopt nothing
 - [x] Link check passes
 
@@ -334,7 +334,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 ### Task 23: Run M-53 and record it
 
 - [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [x] Append `## M-53 — SP2b coverage-conditioned port value` with full provenance and the paired table
+- [x] Append `## M-53: SP2b coverage-conditioned port value` with full provenance and the paired table
 - [x] Record the disposition under the standing rule, including the single retry if it read `inconclusive` (the screen read `inconclusive`, the single preregistered retry at 8000 boards read `inconclusive` again, so the item is recorded unresolved and stops)
 - [x] Link check passes
 
@@ -367,7 +367,7 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 - [x] If Task 24 recorded the skip, tick these boxes with the same skip note and stop (skipped: SP0-D1 gate did not pass)
 - [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again (skipped: SP0-D1 gate did not pass)
-- [x] Append `## M-54 — SP2c hex-count tempo term` with full provenance and the paired table (skipped: SP0-D1 gate did not pass)
+- [x] Append `## M-54: SP2c hex-count tempo term` with full provenance and the paired table (skipped: SP0-D1 gate did not pass)
 - [x] Record the disposition under the standing rule, including the single retry if it read `inconclusive` (skipped: SP0-D1 gate did not pass)
 - [x] Link check passes (skipped: SP0-D1 gate did not pass)
 

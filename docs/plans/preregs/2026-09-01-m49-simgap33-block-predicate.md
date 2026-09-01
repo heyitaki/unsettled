@@ -1,4 +1,4 @@
-# M-49 preregistration — `SIM-GAP-33` contest block-bonus predicate
+# M-49 preregistration: `SIM-GAP-33` contest block-bonus predicate
 
 Date: 2026-09-01. Committed before the run.
 

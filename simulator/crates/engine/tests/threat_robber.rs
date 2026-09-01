@@ -1123,8 +1123,9 @@ fn the_victim_need_term_reaches_the_hex_score() {
     assert!((gap - on.steal_weight * on.victim_need_weight * hit).abs() < 1e-12);
 }
 
-// SP1c: the need model has a completion step, so a card that finishes a build outranks one
-// that moves a distant goal the same proportional distance (`SIM-GAP-40`).
+// SP1c: the need model has a completion step, so a card that clears the last of what a route
+// wants of a resource outranks one that moves a distant goal the same proportional distance
+// (`SIM-GAP-40`).
 
 /// Inputs whose only live route is the city one, so `cheapest_route_shortfall` returns the city
 /// cost against an empty believed hand and the test names the shortfall directly.
@@ -1144,6 +1145,14 @@ fn need_share_lifts_a_shortfall_a_single_card_completes() {
     let close = city_route_inputs([1, 2, 0, 0, 0]);
     let distant = city_route_inputs([3, 6, 0, 0, 0]);
     let params = ThreatParams::default();
+
+    // The step's predicate is per resource, not per route, and this fixture is the case that
+    // separates the two: one wheat clears everything the route still wants of wheat, while two
+    // ore keep the city out of reach, so no single card finishes the build and the step fires
+    // regardless. A per-resource share vector cannot express a route-level predicate.
+    let close_shortfall = threat::cheapest_route_shortfall(&close);
+    assert_eq!(close_shortfall[0], 1.0);
+    assert!(close_shortfall[1] > 1.0);
 
     // The construction's premise: at weight 0 the two are the same proportional spread, so a
     // pre-SP1c reading could not tell them apart at all.

@@ -1,4 +1,4 @@
-# M-52 preregistration — SP2a dev-card recipe bonus
+# M-52 preregistration: SP2a dev-card recipe bonus
 
 Date: 2026-09-01. Committed before the run.
 

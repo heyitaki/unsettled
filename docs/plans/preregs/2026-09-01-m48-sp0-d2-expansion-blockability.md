@@ -1,4 +1,4 @@
-# M-48 preregistration — SP0-D2 expansion boxing and blockability
+# M-48 preregistration: SP0-D2 expansion boxing and blockability
 
 Date: 2026-09-01. Committed before the run.
 

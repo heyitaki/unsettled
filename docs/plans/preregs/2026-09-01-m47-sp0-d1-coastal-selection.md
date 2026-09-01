@@ -1,4 +1,4 @@
-# M-47 preregistration — SP0-D1 coastal selection
+# M-47 preregistration: SP0-D1 coastal selection
 
 Date: 2026-09-01. Committed before the run.
 

@@ -1,10 +1,10 @@
-# M-51 preregistration — post-SP1 re-screen of the adopted Phase-I vector
+# M-51 preregistration: post-SP1 re-screen of the adopted Phase-I vector
 
 Date: 2026-09-01. Committed before the run.
 
 **Change under test.** Nothing. This is a re-screen: the five axes the Phase-I decision disposed of are each put back to the value they carried before that decision, one arm at a time, and measured against the post-SP1 defaults. No shipped default moves in any branch of any outcome.
 
-**Why this run exists.** A measurement is a statement about the field it was taken on, and SP1 moved the field: the robber now picks hex and victim by one joint argmax, the victim's own need is priced, the need model has a completion step, and `SIM-GAP-33`'s block-bonus predicate is tighter. `.claude/specs/simulator/placement-programme.md` records the consequence rather than escaping it — **SP1 invalidates the M-46 vector as a confirmed result**. The defaults stay shipped either way; this run does not propose reverting them and cannot. What is at stake is only whether the reading still supports them, and the reason to take it now is that every SP2-through-SP6 measurement is taken on this field, so the field's own provenance has to be on the record before SP2 opens.
+**Why this run exists.** A measurement is a statement about the field it was taken on, and SP1 moved the field: the robber now picks hex and victim by one joint argmax, the victim's own need is priced, the need model has a completion step, and `SIM-GAP-33`'s block-bonus predicate is tighter. `.claude/specs/simulator/placement-programme.md` records the consequence rather than escaping it: **SP1 invalidates the M-46 vector as a confirmed result**. The defaults stay shipped either way; this run does not propose reverting them and cannot. What is at stake is only whether the reading still supports them, and the reason to take it now is that every SP2-through-SP6 measurement is taken on this field, so the field's own provenance has to be on the record before SP2 opens.
 
 **The five axes.** Four are the policy axes M-46 adopted; the fifth is the placement weight the same decision dropped. The pre-adoption values are exactly the ones `params_file.rs::screen_baseline_value` restores, which is what the committed H-screen arm pins already anchor to.
 

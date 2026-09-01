@@ -1,4 +1,4 @@
-# M-53 preregistration — SP2b coverage-conditioned port value
+# M-53 preregistration: SP2b coverage-conditioned port value
 
 Date: 2026-09-01. Committed before the run.
 

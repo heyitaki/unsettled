@@ -467,7 +467,7 @@ mod tests {
     /// against the live composite shape: silently dropping any sign or range guard from
     /// `validate_params` or a block `validate` fails here, and a new params field cannot
     /// land without declaring whether it has a JSON-expressible bad value. `None` marks
-    /// fields whose only constraint is finiteness — JSON cannot spell a non-finite
+    /// fields whose only constraint is finiteness: JSON cannot spell a non-finite
     /// number (serde_json rejects `1e999` and has no NaN literal), so those guards are
     /// unreachable through the loader and only back the engine's debug asserts.
     #[test]
@@ -745,7 +745,7 @@ mod tests {
 
     /// Walks the committed SP1e sweep arms (`placement/arms/sp1e_*.json`): each file
     /// loads through the full contract, differs from the *post-SP1 live* composite
-    /// defaults in exactly one leaf, and carries that leaf's bounds endpoint exactly —
+    /// defaults in exactly one leaf, and carries that leaf's bounds endpoint exactly:
     /// `_lo` the `min`, `_hi` the `max`. The H2 walk anchors to the pre-adoption
     /// baseline its frozen files were generated against; SP1e is a new sweep, so it
     /// anchors to the defaults it will actually be measured against.
@@ -885,7 +885,7 @@ mod tests {
     /// Pins the committed H4 combine set: `h4_combined.json` is the composite defaults
     /// with exactly the nine preregistered winner leaves moved, each `h4_no_<slug>.json`
     /// is the combined vector with that one winner reverted to its default, and every
-    /// file loads through the full contract (exact keys, guards, headroom — the load is
+    /// file loads through the full contract (exact keys, guards, headroom; the load is
     /// H4's mechanical headroom re-check). Every winner value sits inside its committed
     /// sweep-bounds range.
     #[test]
@@ -946,8 +946,8 @@ mod tests {
     }
 
     /// Pins the Phase-I outcome (M-46, gate `better` at +14.10pp, adopted): the
-    /// candidate params are now byte-shape-identical to the *live* composite defaults —
-    /// adoption moved the four winning axes into `Default::default()` — and still match
+    /// candidate params are now byte-shape-identical to the *live* composite defaults
+    /// (adoption moved the four winning axes into `Default::default()`) and still match
     /// the confirmed `h4_final.json` record. The candidate weights file is the
     /// pre-adoption placement snapshot: identical to `default-weights.json` except
     /// `handValueWeight`, where adoption applied the M-43 drop (0.4 → 0).
@@ -1134,8 +1134,8 @@ mod tests {
         assert_eq!(found, expected, "the SP2 phase commits one arm per term");
     }
 
-    /// Walks every committed weights-shaped file — the two shipped vectors plus the
-    /// weights arms under `placement/arms/` — through the full `EngineWeights` contract:
+    /// Walks every committed weights-shaped file (the two shipped vectors plus the
+    /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
     /// `validate`. `contracts.md` states such a walk exists and none did, so until now a
     /// weights arm left behind by a new formula weight failed silently, at run time, in
