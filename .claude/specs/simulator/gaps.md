@@ -27,5 +27,3 @@ What follows for the gate: the throughput target the G3 plan registered for the 
 ## Action valuation
 
 **SIM-GAP-39.** The knight's own-tile relief motive is a hardcoded constant in `heuristic_v1.rs::knight_action_score`, not a declared parameter, so it cannot be swept, bounds-declared, or rejected by the params-file loader with the rest of the vector.
-
-**SIM-GAP-40.** Resource need is a smooth share wherever it is priced. `threat.rs::need_share` spreads the cheapest-route shortfall proportionally, so a steal or block that completes a build this turn scores the same as one that moves a distant goal a single card closer.

@@ -491,6 +491,7 @@ mod tests {
             ("/goalHysteresisMargin", float(-1.0)),
             ("/threat/delayWeight", None),
             ("/threat/needWeight", None),
+            ("/threat/needCompletionWeight", float(-1.0)),
             ("/threat/blockWeight", None),
             ("/threat/stealWeight", None),
             ("/threat/victimHandWeight", None),

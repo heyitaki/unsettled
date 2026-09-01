@@ -374,9 +374,15 @@ fn threat_robber_prefers_blocking_a_resource_the_victim_still_needs() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let params = ThreatParams::default();
     let context = threat::context(&view, &params);
+    // The victim is one wheat and two ore short of its city, so the proportional spread is
+    // 1/3 wheat and 2/3 ore. SP1c adds the completion step on top: wheat is exactly one card
+    // from done and takes it, ore is not, and the shares are renormalized over the stepped
+    // total, so ore pays for wheat's lift.
+    let wheat = 1.0 / 3.0 + params.need_completion_weight;
+    let ore = 2.0 / 3.0;
     let mut expected = [0.0; RESOURCE_COUNT];
-    expected[Resource::Wheat.index()] = 1.0 / 3.0;
-    expected[Resource::Ore.index()] = 2.0 / 3.0;
+    expected[Resource::Wheat.index()] = wheat / (wheat + ore);
+    expected[Resource::Ore.index()] = ore / (wheat + ore);
     assert_eq!(context.need[1], expected);
     assert_eq!(threat::robber(&view, &params).0, needed);
 }
@@ -1096,13 +1102,76 @@ fn the_victim_need_term_reaches_the_hex_score() {
     assert_eq!(quiet.destination, loud.destination);
     assert_eq!(quiet.victim, loud.victim);
 
-    // `context` does not read the new weight, so one build serves both readings.
+    // `context` does not read `victim_need_weight`, so one build serves both readings.
     let context = threat::context(&view, &on);
     let victim = usize::from(loud.victim.expect("a stealable victim"));
     let hit = reference_victim_need_hit(&view, &context, victim);
     assert!(hit > 0.0, "the fixture must give the victim a believed hand it needs");
     let gap = loud.placement_score - quiet.placement_score;
     assert!((gap - on.steal_weight * on.victim_need_weight * hit).abs() < 1e-12);
+}
+
+// SP1c: the need model has a completion step, so a card that finishes a build outranks one
+// that moves a distant goal the same proportional distance (`SIM-GAP-40`).
+
+/// Inputs whose only live route is the city one, so `cheapest_route_shortfall` returns the city
+/// cost against an empty believed hand and the test names the shortfall directly.
+fn city_route_inputs(cost: [u8; RESOURCE_COUNT]) -> EtwInputs {
+    EtwInputs {
+        city_cost: Some(cost),
+        belief_expected: [0.0; RESOURCE_COUNT],
+        ..representative_inputs()
+    }
+}
+
+/// Two seats on the same city route, one of them three times as far from it. The proportional
+/// spread is identical by construction, so the only thing that can separate the two shares is
+/// the completion step.
+#[test]
+fn need_share_lifts_a_shortfall_a_single_card_completes() {
+    let close = city_route_inputs([1, 2, 0, 0, 0]);
+    let distant = city_route_inputs([3, 6, 0, 0, 0]);
+    let params = ThreatParams::default();
+
+    // The construction's premise: at weight 0 the two are the same proportional spread, so a
+    // pre-SP1c reading could not tell them apart at all.
+    let base: f64 = 1.0 / 3.0;
+    assert_eq!(threat::need_share(&close, 0.0), threat::need_share(&distant, 0.0));
+    assert_eq!(threat::need_share(&close, 0.0)[0].to_bits(), base.to_bits());
+
+    let close_share = threat::need_share(&close, params.need_completion_weight);
+    let distant_share = threat::need_share(&distant, params.need_completion_weight);
+
+    // Nothing on the distant route is within a card of done, so it takes no step at any weight.
+    assert_eq!(distant_share[0].to_bits(), base.to_bits());
+    assert!(close_share[0] > distant_share[0]);
+
+    // Closed form, in the function's own summation order: the step lands on the resource one
+    // card from done and the shares are renormalized over the stepped total.
+    let stepped = [base + params.need_completion_weight, 2.0 / 3.0, 0.0, 0.0, 0.0];
+    let total = stepped.iter().sum::<f64>();
+    assert!((close_share[0] - stepped[0] / total).abs() < 1e-15);
+
+    // Still a total-normalized share, so the far resource pays for the lift rather than the
+    // whole vector growing.
+    assert!((close_share.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    assert!(close_share[1] < distant_share[1]);
+
+    // A resource the route is not short of at all is not "within one card of done": it carries
+    // no need, so it takes no step.
+    assert_eq!(close_share[2], 0.0);
+}
+
+/// The term vanishes at weight 0: the shipped-default reading above is a change, and this is
+/// the switch that turns it off, bit for bit against the proportional spread.
+#[test]
+fn the_need_completion_step_vanishes_at_weight_zero() {
+    let inputs = city_route_inputs([1, 2, 0, 0, 0]);
+    let shortfall = threat::cheapest_route_shortfall(&inputs);
+    let total = shortfall.iter().sum::<f64>();
+    let proportional = shortfall.map(|value| value / total);
+    assert_eq!(threat::need_share(&inputs, 0.0), proportional);
+    assert_ne!(threat::need_share(&inputs, 0.35), proportional);
 }
 
 #[cfg(debug_assertions)]

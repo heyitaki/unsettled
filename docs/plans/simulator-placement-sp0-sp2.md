@@ -219,17 +219,17 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 12: SP1c, a completion step in the need model
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Add `need_completion_weight` to `ThreatParams`, default 0.35 to match `need_weight`, validated non-negative and finite
-- [ ] Extend `threat.rs::need_share` so a shortfall a single card completes scores above the smooth proportional share it gets today: keep the proportional spread as the base and add a completion step scaled by the new weight for resources where the remaining shortfall is at most one card. Do not replace the smooth term; a distant goal must still be priced
-- [ ] Keep the function total-normalized where callers depend on it, and state in a comment what the normalization now means
-- [ ] Declare `needCompletionWeight` in `sweep-bounds.json` under `policy.threat` with range 0.0875 to 1.4
-- [ ] Regenerate `policy-default-params.json` and `phase-i-candidate-params.json`, and add the key to every `h2_*`, `h2x_*` and `h4_*` arm at its baseline value, as in Task 11
-- [ ] Add a Rust test that a one-card-from-done shortfall now outscores an equal proportional share that is three cards from done, and that the term vanishes at weight 0
-- [ ] Regenerate every committed baseline this moves, through the committed harnesses
-- [ ] Recapture the corpus and record which corpora moved
-- [ ] Delete the `SIM-GAP-40` entry from `gaps.md` and say so in the commit message
-- [ ] Both cargo profiles green, link check passes
+- [x] Capture `runs/corpus-pre`
+- [x] Add `need_completion_weight` to `ThreatParams`, default 0.35 to match `need_weight`, validated non-negative and finite
+- [x] Extend `threat.rs::need_share` so a shortfall a single card completes scores above the smooth proportional share it gets today: keep the proportional spread as the base and add a completion step scaled by the new weight for resources where the remaining shortfall is at most one card. Do not replace the smooth term; a distant goal must still be priced
+- [x] Keep the function total-normalized where callers depend on it, and state in a comment what the normalization now means
+- [x] Declare `needCompletionWeight` in `sweep-bounds.json` under `policy.threat` with range 0.0875 to 1.4
+- [x] Regenerate `policy-default-params.json` and `phase-i-candidate-params.json`, and add the key to every `h2_*`, `h2x_*` and `h4_*` arm at its baseline value, as in Task 11
+- [x] Add a Rust test that a one-card-from-done shortfall now outscores an equal proportional share that is three cards from done, and that the term vanishes at weight 0
+- [x] Regenerate every committed baseline this moves, through the committed harnesses
+- [x] Recapture the corpus and record which corpora moved
+- [x] Delete the `SIM-GAP-40` entry from `gaps.md` and say so in the commit message
+- [x] Both cargo profiles green, link check passes
 
 ### Task 13: SP1d, promote the knight own-tile relief constant
 

@@ -18,6 +18,7 @@
   "threat": {
     "delayWeight": 2.0,
     "needWeight": 0.35,
+    "needCompletionWeight": 0.35,
     "blockWeight": 0.25,
     "stealWeight": 0.02,
     "victimHandWeight": 0.15,

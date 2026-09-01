@@ -53,6 +53,7 @@
     "threat": {
       "delayWeight": { "min": 0.25, "max": 4.0 },
       "needWeight": { "min": 0.0875, "max": 1.4 },
+      "needCompletionWeight": { "min": 0.0875, "max": 1.4 },
       "blockWeight": { "min": 0.0625, "max": 1.0 },
       "stealWeight": { "min": 0.005, "max": 0.08 },
       "victimHandWeight": { "min": 0.0375, "max": 0.6 },

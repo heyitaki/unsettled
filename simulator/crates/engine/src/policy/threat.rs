@@ -14,6 +14,9 @@ pub struct ThreatParams {
     pub delay_weight: f64,
     /// Finite weight on blocked production matching the opponent's nearest-build shortfall.
     pub need_weight: f64,
+    /// Non-negative, finite weight on the completion step inside `need_share`: how much extra
+    /// share a resource carries when the cheapest route is at most one card short of it.
+    pub need_completion_weight: f64,
     /// Finite weight on raw blocked production, independent of danger.
     pub block_weight: f64,
     /// Finite weight on the best available victim rank.
@@ -44,6 +47,7 @@ impl Default for ThreatParams {
         Self {
             delay_weight: 1.0,
             need_weight: 0.35,
+            need_completion_weight: 0.35,
             block_weight: 0.25,
             steal_weight: 0.02,
             victim_hand_weight: 0.15,
@@ -170,7 +174,7 @@ pub fn robber_choice(view: &DecisionView<'_>, params: &ThreatParams) -> RobberCh
         placement_score,
         steal_value: victim.map_or(0.0, |seat| {
             let seat = usize::from(seat);
-            victim_rank(view, params, &context, seat) + own_need_hit(view, seat)
+            victim_rank(view, params, &context, seat) + own_need_hit(view, params, seat)
         }),
     }
 }
@@ -224,13 +228,13 @@ fn best_pair_on_hex(
 /// Belief-derived probability that a uniformly random card from `victim`'s believed hand fills
 /// the observer's own cheapest-route shortfall. The observer's shortfall prices the real hand,
 /// mirroring `trading::own_inputs`; the victim's composition stands on belief.
-fn own_need_hit(view: &DecisionView<'_>, victim: usize) -> f64 {
+fn own_need_hit(view: &DecisionView<'_>, params: &ThreatParams, victim: usize) -> f64 {
     let expected = view.belief().expected(victim);
     let total = expected.iter().sum::<f64>();
     if total <= 0.0 {
         return 0.0;
     }
-    let need = need_share(&trading::own_inputs(view));
+    let need = need_share(&trading::own_inputs(view), params.need_completion_weight);
     (0..RESOURCE_COUNT)
         .map(|resource| need[resource] * expected[resource])
         .sum::<f64>()
@@ -276,7 +280,7 @@ pub fn context(view: &DecisionView<'_>, params: &ThreatParams) -> ThreatContext 
         let etw_free = etw::expected_turns_to_win(&inputs);
         raw[seat] = danger_from_etw(etw_free, params.danger_floor);
         maximum = maximum.max(raw[seat]);
-        result.need[seat] = need_share(&inputs);
+        result.need[seat] = need_share(&inputs, params.need_completion_weight);
         result.free_pips[seat] = free_pips;
         result.etw_free[seat] = etw_free;
         result.inputs[seat] = Some(inputs);
@@ -378,6 +382,10 @@ pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
         params.need_weight.is_finite(),
     )?;
     check(
+        "threat.needCompletionWeight is non-negative and finite",
+        params.need_completion_weight.is_finite() && params.need_completion_weight >= 0.0,
+    )?;
+    check(
         "threat.blockWeight is finite",
         params.block_weight.is_finite(),
     )?;
@@ -419,14 +427,47 @@ fn assert_params(params: &ThreatParams) {
     debug_assert_eq!(validate(params), Ok(()));
 }
 
-fn need_share(inputs: &EtwInputs) -> [f64; RESOURCE_COUNT] {
+/// The shared need model: how the seat's remaining need is spread over the resources, given
+/// its `cheapest_route_shortfall`. Every consumer of "how badly does this seat want this
+/// resource" reads this one function, so a steal, a block and a knight all price need alike.
+///
+/// The proportional spread of the shortfall is the base, which keeps a distant goal priced.
+/// On top of it, a resource the route is at most `COMPLETION_SHORTFALL` short of carries a
+/// completion step of `need_completion_weight`, so a card that finishes a build this turn
+/// outranks one that moves a far goal the same proportional distance (`SIM-GAP-40`).
+///
+/// The result stays total-normalized, which every caller depends on: `seat_terms` and both
+/// need-hit functions read it as the *share* of the seat's remaining need a resource carries,
+/// not as a magnitude. What the normalization divides by is now the proportional total plus
+/// one step per completing resource, so a step redistributes share toward what finishes rather
+/// than inflating the total; the shares still sum to 1 and no caller's scale moves. With no
+/// resource inside the step, or at weight 0, the return is exactly the proportional spread
+/// this function returned before the step existed, bit for bit.
+pub fn need_share(inputs: &EtwInputs, need_completion_weight: f64) -> [f64; RESOURCE_COUNT] {
     let shortfall = cheapest_route_shortfall(inputs);
     let total = shortfall.iter().sum::<f64>();
     if total == 0.0 || !total.is_finite() {
         return [0.0; RESOURCE_COUNT];
     }
-    shortfall.map(|value| value / total)
+    let mut share = shortfall.map(|value| value / total);
+    let mut stepped = 0.0;
+    for resource in 0..RESOURCE_COUNT {
+        if shortfall[resource] > 0.0 && shortfall[resource] <= COMPLETION_SHORTFALL {
+            share[resource] += need_completion_weight;
+            stepped += need_completion_weight;
+        }
+    }
+    if stepped == 0.0 {
+        return share;
+    }
+    let stepped_total = share.iter().sum::<f64>();
+    share.map(|value| value / stepped_total)
 }
+
+/// Remaining shortfall, in cards, at or below which a resource counts as completing the
+/// cheapest route. One card: the step prices "this steal finishes the build", and a shortfall
+/// is a real magnitude, so the unit is a card.
+const COMPLETION_SHORTFALL: f64 = 1.0;
 
 /// Raw per-resource shortfall of the route with the smallest total shortfall, over the same
 /// three routes `etw::expected_turns_to_win` considers. Zero when no route is available.
