@@ -2,6 +2,7 @@ pub mod boardgen;
 pub mod coastal;
 pub mod diagnose;
 pub mod evaluate;
+pub mod expansion;
 pub mod heuristics;
 pub mod output;
 pub mod runner;

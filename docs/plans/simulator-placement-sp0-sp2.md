@@ -135,15 +135,15 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 4: SP0-D2, boxing and blockability
 
-- [ ] For each seat in each game, take the board state immediately after that seat's second setup pick, which is the moment its pair is completed
-- [ ] **Boxing:** count the legal expansion sites the pair can reach within two road builds. A site is a vertex that is unoccupied and not adjacent to an occupied vertex at that moment; reachable means reachable from the seat's own road network by adding at most two roads, counting distances 0, 1 and 2. Follow `policy::frontier::opened` for what counts as an expansion target, but walk from the seat's road network rather than from one vertex
-- [ ] **Blockability:** compute the share of the pair's total pips sitting on its single highest-pip hex, over the distinct producing hexes adjacent to either settlement. Report 0 when the pair has no producing hexes
-- [ ] Join both to the game's outcome and report each as the win rate of the top quartile of that quantity minus the win rate of the bottom quartile, constructed identically so the two magnitudes are comparable
-- [ ] Report the incidence of zero reachable expansion sites alongside the boxing gap
-- [ ] Report both overall and per draft slot
-- [ ] Emit a boolean `robberAttractionRevisit`, true when the absolute blockability quartile gap exceeds the absolute boxing quartile gap
-- [ ] Add a Rust test over a hand-built fixture pinning the two-road reach set, the zero-site case, the blockability share, and the quartile split
-- [ ] Both cargo profiles green
+- [x] For each seat in each game, take the board state immediately after that seat's second setup pick, which is the moment its pair is completed
+- [x] **Boxing:** count the legal expansion sites the pair can reach within two road builds. A site is a vertex that is unoccupied and not adjacent to an occupied vertex at that moment; reachable means reachable from the seat's own road network by adding at most two roads, counting distances 0, 1 and 2. Follow `policy::frontier::opened` for what counts as an expansion target, but walk from the seat's road network rather than from one vertex
+- [x] **Blockability:** compute the share of the pair's total pips sitting on its single highest-pip hex, over the distinct producing hexes adjacent to either settlement. Report 0 when the pair has no producing hexes
+- [x] Join both to the game's outcome and report each as the win rate of the top quartile of that quantity minus the win rate of the bottom quartile, constructed identically so the two magnitudes are comparable
+- [x] Report the incidence of zero reachable expansion sites alongside the boxing gap
+- [x] Report both overall and per draft slot
+- [x] Emit a boolean `robberAttractionRevisit`, true when the absolute blockability quartile gap exceeds the absolute boxing quartile gap
+- [x] Add a Rust test over a hand-built fixture pinning the two-road reach set, the zero-site case, the blockability share, and the quartile split
+- [x] Both cargo profiles green
 
 ### Task 5: Preregister M-47 and M-48
 

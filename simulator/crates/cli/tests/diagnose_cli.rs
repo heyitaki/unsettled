@@ -100,6 +100,8 @@ fn diagnostics_are_byte_identical_across_worker_counts() {
     assert_eq!(diagnostics["observations"]["games"], 12);
     // Four seats, two settlements each, over twelve games.
     assert_eq!(diagnostics["observations"]["setupPicks"], 96);
+    // One completed pair per seat per game, which is the second half of those picks.
+    assert_eq!(diagnostics["expansion"]["overall"]["pairs"], 48);
     assert_eq!(diagnostics["illegalActions"], 0);
     assert!(
         diagnostics["config"].get("playerTrading").is_none(),
