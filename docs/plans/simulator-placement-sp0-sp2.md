@@ -324,12 +324,12 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 22: Preregister M-53, the SP2b A/B
 
-- [ ] Write `docs/plans/preregs/<today>-m53-sp2b-port-coverage-deficit.md`
-- [ ] One decision arm: `simulator/placement/arms/sp2b_portdeficit.json`, the live default weights with `portCoverageDeficitWeight` at 1.0, which at most doubles a port's credit for a pair covering nothing else. Reference `base` = `app_formula:placement/default-weights.json`
-- [ ] Screen power and protocol as in Task 19
-- [ ] Decision rule fixed before the run: the standing disposition rule. Record only
-- [ ] Record the prediction and the admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Write `docs/plans/preregs/2026-09-01-m53-sp2b-port-coverage-deficit.md`
+- [x] One decision arm: `simulator/placement/arms/sp2b_portdeficit.json`, the live default weights with `portCoverageDeficitWeight` at 1.0, which at most doubles a port's credit for a pair covering nothing else. Reference `base` = `app_formula:placement/default-weights.json` (the arm differs from `default-weights.json` on that key alone; the weights-arm count in `params_file.rs::every_committed_weights_file_loads_through_the_full_contract` moves 50 to 51)
+- [x] Screen power and protocol as in Task 19
+- [x] Decision rule fixed before the run: the standing disposition rule. Record only
+- [x] Record the prediction and the admissibility conditions
+- [x] Both cargo profiles green, link check passes
 
 ### Task 23: Run M-53 and record it
 

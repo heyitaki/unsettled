@@ -1062,8 +1062,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 50,
-            "the committed weights arms are 50 files; a change to the set is a decision"
+            weights_arms, 51,
+            "the committed weights arms are 51 files; a change to the set is a decision"
         );
     }
 
