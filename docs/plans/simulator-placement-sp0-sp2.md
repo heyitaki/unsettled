@@ -102,13 +102,13 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 1: Setup-pick trace, behaviour-neutral
 
-- [ ] Capture the pre-change corpus: `cd simulator && tools/capture-corpus.sh runs/corpus-pre`
-- [ ] Add a `SetupPick` record to `simulator/crates/engine/src/game.rs` carrying the seat, the pick index (0 or 1), whether the pick took the setup grant, the chosen vertex and the chosen edge
-- [ ] Thread an opt-in `Option<&mut Vec<SetupPick>>` (or an equivalent that keeps the hot path allocation-free when absent) from the game runner through `Game::setup` into `Game::setup_pick`, defaulting to absent everywhere it is not requested
-- [ ] Confirm no scoring, RNG draw, or ordering changes: the trace only observes
-- [ ] Add a Rust test that a traced game records exactly `2 * seats` picks, in the snake order `setup_order` produces, and that replaying the recorded picks onto an empty owner array reproduces the game's final setup ownership and edge ownership
-- [ ] Recapture to `runs/corpus-post` and assert the diff against `runs/corpus-pre` is empty; state that in the commit message
-- [ ] Both cargo profiles green
+- [x] Capture the pre-change corpus: `cd simulator && tools/capture-corpus.sh runs/corpus-pre`
+- [x] Add a `SetupPick` record to `simulator/crates/engine/src/game.rs` carrying the seat, the pick index (0 or 1), whether the pick took the setup grant, the chosen vertex and the chosen edge
+- [x] Thread an opt-in `Option<&mut Vec<SetupPick>>` (or an equivalent that keeps the hot path allocation-free when absent) from the game runner through `Game::setup` into `Game::setup_pick`, defaulting to absent everywhere it is not requested
+- [x] Confirm no scoring, RNG draw, or ordering changes: the trace only observes
+- [x] Add a Rust test that a traced game records exactly `2 * seats` picks, in the snake order `setup_order` produces, and that replaying the recorded picks onto an empty owner array reproduces the game's final setup ownership and edge ownership
+- [x] Recapture to `runs/corpus-post` and assert the diff against `runs/corpus-pre` is empty; state that in the commit message
+- [x] Both cargo profiles green
 
 ### Task 2: `diagnose` subcommand and its deterministic artifact
 

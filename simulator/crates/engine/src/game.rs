@@ -40,6 +40,20 @@ impl Default for GameConfig {
     }
 }
 
+/// One settlement-and-road placement made during setup, recorded in the order `setup_order`
+/// produces. Observation only: nothing in the engine reads a `SetupPick` back.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupPick {
+    pub seat: u8,
+    /// 0 for the first settlement, 1 for the second.
+    pub pick: u8,
+    /// Whether this pick took the setup resource grant, which only the second round does.
+    pub grant: bool,
+    pub vertex: Vertex,
+    pub edge: Edge,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameResult {
@@ -93,8 +107,34 @@ impl GameArena {
         rules: &RuleConfig,
         config: &GameConfig,
     ) -> GameResult {
+        self.play_inner(board, topology, rules, config, None)
+    }
+
+    /// Plays a game and appends every setup pick to `trace`, in `setup_order` order. Identical to
+    /// `play` in every other respect: the trace only observes, so a traced and an untraced game on
+    /// the same seed play out the same. `play` passes `None`, which keeps the hot path
+    /// allocation-free.
+    pub fn play_traced(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+        trace: &mut Vec<SetupPick>,
+    ) -> GameResult {
+        self.play_inner(board, topology, rules, config, Some(trace))
+    }
+
+    fn play_inner(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+        setup_trace: Option<&mut Vec<SetupPick>>,
+    ) -> GameResult {
         self.prepare(board, topology, rules, config);
-        self.setup(board, topology, rules, config);
+        self.setup(board, topology, rules, config, setup_trace);
         debug_assert!(self.invariants_hold(board, topology, rules));
         let seats = board.seats();
         let mut turns = 0_u16;
@@ -464,7 +504,7 @@ impl GameArena {
         rules: &RuleConfig,
         config: &GameConfig,
     ) {
-        self.setup(board, topology, rules, config);
+        self.setup(board, topology, rules, config, None);
     }
 
     #[doc(hidden)]
@@ -477,7 +517,16 @@ impl GameArena {
         seat: usize,
         grant: bool,
     ) -> Option<Vertex> {
-        self.setup_pick(board, topology, rules, config, seat, grant)
+        self.setup_pick(
+            board,
+            topology,
+            rules,
+            config,
+            seat,
+            grant,
+            u8::from(grant),
+            None,
+        )
     }
 
     pub fn invariants_hold(
@@ -573,20 +622,39 @@ impl GameArena {
         topology: &Topology,
         rules: &RuleConfig,
         config: &GameConfig,
+        mut trace: Option<&mut Vec<SetupPick>>,
     ) {
         if !board.buildings().is_empty() {
             self.recompute_all_roads(topology, rules, board.seats());
             return;
         }
         let seats = board.seats();
-        for pick in 0..2 {
+        for pick in 0..2_u8 {
             if pick == 0 {
                 for seat in 0..seats {
-                    let _ = self.setup_pick(board, topology, rules, config, seat, false);
+                    let _ = self.setup_pick(
+                        board,
+                        topology,
+                        rules,
+                        config,
+                        seat,
+                        false,
+                        pick,
+                        trace.as_deref_mut(),
+                    );
                 }
             } else {
                 for seat in (0..seats).rev() {
-                    let _ = self.setup_pick(board, topology, rules, config, seat, true);
+                    let _ = self.setup_pick(
+                        board,
+                        topology,
+                        rules,
+                        config,
+                        seat,
+                        true,
+                        pick,
+                        trace.as_deref_mut(),
+                    );
                 }
             }
         }
@@ -604,6 +672,8 @@ impl GameArena {
         config: &GameConfig,
         seat: usize,
         grant: bool,
+        pick: u8,
+        trace: Option<&mut Vec<SetupPick>>,
     ) -> Option<Vertex> {
         let production = self.production_pips(board, topology, seat);
         let Some((vertex, edge)) = choose(
@@ -618,6 +688,15 @@ impl GameArena {
         ) else {
             return None;
         };
+        if let Some(trace) = trace {
+            trace.push(SetupPick {
+                seat: seat as u8,
+                pick,
+                grant,
+                vertex,
+                edge,
+            });
+        }
         self.state.vertex_owner[usize::from(vertex)] = seat as u8;
         self.state.vertex_tier[usize::from(vertex)] = 1;
         self.state.edge_owner[usize::from(edge)] = seat as u8;
