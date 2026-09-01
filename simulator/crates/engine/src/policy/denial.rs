@@ -140,16 +140,14 @@ pub fn contest_term(
             // Blocking is priced, not just the race to settle first (SIM-GAP-08): a one-road
             // approach to `target` must come through an edge incident to it, so when every other
             // incident edge is illegal for this rival, building the candidate removes the vertex
-            // from their one-road *build* reach. Known over-credit (SIM-GAP-33): a rival who
-            // already owns an incident edge also passes this predicate (an owned edge is not
-            // legal to build) yet keeps reaching the vertex with zero new roads; the predicate
-            // is kept as measured because the Phase-I candidate was eval-confirmed with it, and
-            // tightening it must ride a preregistered A/B.
-            let blocks = view
-                .topology()
-                .vertex_edges(target)
-                .iter()
-                .all(|approach| *approach == edge || !view.legal_road_for(seat, *approach));
+            // from their one-road *build* reach. A rival that already owns an incident edge is
+            // never blocked: its road network touches the vertex, so it settles there with no
+            // new road whatever the observer builds. An owned edge is not legal to build, so
+            // that rival would otherwise pass the legality half of the predicate.
+            let blocks = view.topology().vertex_edges(target).iter().all(|approach| {
+                view.edge_owner(*approach) != Some(seat as u8)
+                    && (*approach == edge || !view.legal_road_for(seat, *approach))
+            });
             let scale = if blocks {
                 1.0 + f64::from(params.contest_block_bonus)
             } else {

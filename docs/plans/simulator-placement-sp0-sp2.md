@@ -177,14 +177,14 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 8: `SIM-GAP-33`, tighten the contest block-bonus predicate
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] In `denial.rs::contest_term`, add the missing condition to the `contest_block_bonus` predicate: the rival must own no edge incident to the contested vertex. A rival whose road network already touches the vertex can settle there with zero new roads and is not blocked by taking their last legal edge
-- [ ] Keep `contestCap` and the rest of the positional-competition arithmetic untouched
-- [ ] Add a Rust test with a rival owning an incident edge, asserting the bonus is now withheld, and a companion case with no incident edge asserting it is still credited
-- [ ] Regenerate `simulator/fixtures/denial-gate-baseline.json` through `generate_denial_gate_baseline`, and any other committed baseline this moves, through its own committed harness
-- [ ] Recapture the corpus and record in the commit message which policy and layout corpora moved
-- [ ] Delete the `SIM-GAP-33` entry from `.claude/specs/simulator/gaps.md` and say so in the commit message. Then update the two sentences that name it as pending: the "How to read the gap inventory" section of `.claude/specs/simulator/programme.md`, and the `SIM-GAP-33` mention in the four-constraints section of `.claude/specs/simulator/placement-programme.md`
-- [ ] Both cargo profiles green, link check passes
+- [x] Capture `runs/corpus-pre`
+- [x] In `denial.rs::contest_term`, add the missing condition to the `contest_block_bonus` predicate: the rival must own no edge incident to the contested vertex. A rival whose road network already touches the vertex can settle there with zero new roads and is not blocked by taking their last legal edge
+- [x] Keep `contestCap` and the rest of the positional-competition arithmetic untouched
+- [x] Add a Rust test with a rival owning an incident edge, asserting the bonus is now withheld, and a companion case with no incident edge asserting it is still credited
+- [x] Regenerate `simulator/fixtures/denial-gate-baseline.json` through `generate_denial_gate_baseline`, and any other committed baseline this moves, through its own committed harness
+- [x] Recapture the corpus and record in the commit message which policy and layout corpora moved
+- [x] Delete the `SIM-GAP-33` entry from `.claude/specs/simulator/gaps.md` and say so in the commit message. Then update the two sentences that name it as pending: the "How to read the gap inventory" section of `.claude/specs/simulator/programme.md`, and the `SIM-GAP-33` mention in the four-constraints section of `.claude/specs/simulator/placement-programme.md`
+- [x] Both cargo profiles green, link check passes
 
 ### Task 9: Preregister M-49, the `SIM-GAP-33` A/B
 

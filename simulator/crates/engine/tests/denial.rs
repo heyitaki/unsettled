@@ -1864,6 +1864,104 @@ fn the_block_bonus_prices_the_rivals_only_approach() {
     assert!(blocked > blind);
 }
 
+/// A state where the rival's only *buildable* approach to a degree-two contested vertex is the
+/// observer's candidate edge, while the vertex's other incident edge is already owned: by the
+/// rival itself when `rival_owns_incident`, by a non-contesting seat otherwise. Returns the
+/// candidate edge and the contested vertex. `target -- candidate -- s0`, with `target`'s other
+/// edge `other` owned, the observer extending from `s0` through `p` and the rival through `q`.
+fn incident_edge_fixture(
+    rival_owns_incident: bool,
+) -> (Topology, SimBoard, GameArena, Edge, Vertex) {
+    let (topology, board, _rules, _config, mut arena) = fixture();
+    for target in 0..topology.vertex_count() {
+        let target = target as Vertex;
+        let incident = topology.vertex_edges(target).to_vec();
+        // Degree two makes the rival's approaches exactly `candidate` and `other`, so owning
+        // `other` is the only thing that separates the two variants.
+        if incident.len() != 2 {
+            continue;
+        }
+        for (candidate, other) in [(incident[0], incident[1]), (incident[1], incident[0])] {
+            let s0 = topology
+                .edge_endpoints(candidate)
+                .into_iter()
+                .find(|vertex| *vertex != target)
+                .unwrap();
+            let side = topology
+                .vertex_edges(s0)
+                .iter()
+                .copied()
+                .filter(|edge| *edge != candidate)
+                .collect::<Vec<_>>();
+            if side.len() < 2 {
+                continue;
+            }
+            let (p, q) = (side[0], side[1]);
+            arena.state.edge_owner[usize::from(p)] = 0;
+            arena.state.edge_owner[usize::from(q)] = 1;
+            arena.state.edge_owner[usize::from(other)] = if rival_owns_incident { 1 } else { 2 };
+            arena.state.players[1].vp_public = 9;
+            arena.state.players[2].pieces[Buildable::Settlement.index()] = 0;
+            arena.state.players[0].resources = [1, 0, 0, 1, 0];
+            return (topology, board, arena, candidate, target);
+        }
+    }
+    panic!("fixture needs a degree-two vertex with a branching neighbour");
+}
+
+/// SIM-GAP-33: a rival whose road already touches the contested vertex settles there with no new
+/// road, so taking its last *buildable* approach blocks nothing and earns no bonus.
+#[test]
+fn a_rival_owning_an_incident_edge_earns_no_block_bonus() {
+    let params = DenialParams {
+        contest_weight: 10_000.0,
+        contest_cap: 1_000_000.0,
+        contest_block_bonus: 2.0,
+        ..DenialParams::default()
+    };
+    let (topology, board, arena, candidate, target) = incident_edge_fixture(true);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    // Preconditions: the candidate is the rival's only buildable approach to a live expansion
+    // target, and the rival owns the other incident edge outright.
+    assert!(view.is_expansion_target(target));
+    assert!(view.legal_road(candidate));
+    assert!(view.legal_road_for(1, candidate));
+    let mut owned_incident = 0;
+    for approach in view.topology().vertex_edges(target) {
+        assert!(*approach == candidate || !view.legal_road_for(1, *approach));
+        if view.edge_owner(*approach) == Some(1) {
+            owned_incident += 1;
+        }
+    }
+    assert_eq!(owned_incident, 1);
+    let context = denial::context(&view, &params);
+    let danger = context.danger(1);
+    assert!(danger > 0.0);
+    assert_eq!(
+        denial::contest_term(&view, &context, &params, candidate).to_bits(),
+        (params.contest_weight * (danger as f32)).to_bits()
+    );
+
+    // Companion: the same shape with the incident edge held by a non-contesting seat, where the
+    // block is real and still credited.
+    let (topology, board, arena, candidate, target) = incident_edge_fixture(false);
+    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+    assert!(view.is_expansion_target(target));
+    for approach in view.topology().vertex_edges(target) {
+        assert!(*approach == candidate || !view.legal_road_for(1, *approach));
+        assert!(view.edge_owner(*approach) != Some(1));
+    }
+    let context = denial::context(&view, &params);
+    let credited_danger = context.danger(1);
+    assert_eq!(credited_danger.to_bits(), danger.to_bits());
+    assert_eq!(
+        denial::contest_term(&view, &context, &params, candidate).to_bits(),
+        (params.contest_weight * ((credited_danger * (1.0 + f64::from(params.contest_block_bonus)))
+            as f32))
+            .to_bits()
+    );
+}
+
 #[test]
 fn an_open_second_approach_earns_no_block_bonus() {
     let (topology, board, arena, candidate, opponent_edge) = contest_fixture();
