@@ -112,6 +112,13 @@ impl EngineWeights {
         if self.generic_port_factor < 0.0 {
             return Err("weights violate: genericPortFactor >= 0".into());
         }
+        // `port_deficit_factor` is `1 + w * d` with `d` in [0, 1], so a weight below -1 turns the
+        // whole port term negative and the scorer starts preferring portless vertices. The bound
+        // is 0 rather than -1 for the same reason `genericPortFactor` carries one: a port that
+        // penalises is outside the candidate space, and `sweep-bounds.json` declares min 0.
+        if self.port_coverage_deficit_weight < 0.0 {
+            return Err("weights violate: portCoverageDeficitWeight >= 0".into());
+        }
         Ok(())
     }
 }

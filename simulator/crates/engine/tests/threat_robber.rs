@@ -645,8 +645,9 @@ fn default_heuristic_params_keep_todays_robber_rule() {
 // test each; every test also asserts the (destination, victim) pair still equals `robber`'s:
 // - `placement_score` re-derives from `seat_terms` at the chosen hex (non-default params):
 //   robber_choice_reports_the_maximized_placement_score
-// - `steal_value` = the shared-danger victim rank plus the belief-derived own-need hit
-//   (closed form, non-default params): robber_choice_prices_the_steal_through_belief_and_danger
+// - `steal_value` = the shared-danger victim rank, including the victim's own believed need,
+//   plus the belief-derived own-need hit over the stepped need model (closed form, non-default
+//   params): robber_choice_prices_the_steal_through_belief_and_danger
 // - the fallback hex zeroes `placement_score`: robber_choice_zeroes_placement_on_the_fallback_hex
 // The joint `(hex, victim)` argmax behind all three is pinned against a transcription of the
 // two-stage search it replaced: robber_choice_matches_the_two_stage_search_it_replaced
@@ -711,13 +712,16 @@ fn robber_choice_prices_the_steal_through_belief_and_danger() {
         assert_eq!(choice.victim, Some(1));
 
         let context = threat::context(&view, &params);
+        // The victim's own need is the SP1b term inside `victim_rank`, and the observer's need
+        // takes the SP1c completion step, so the reference reads both through the shipped
+        // `need_share` rather than the proportional spread that predates them.
+        let victim_need = reference_victim_need_hit(&view, &context, 1);
         let rank = context.danger[1]
             + params.victim_hand_weight * f64::from(view.hand_total(1)).min(params.hand_cap)
-                / params.hand_cap;
-        let shortfall = threat::cheapest_route_shortfall(&trading::own_inputs(&view));
-        let shortfall_total = shortfall.iter().sum::<f64>();
-        assert!(shortfall_total > 0.0);
-        let need = shortfall.map(|value| value / shortfall_total);
+                / params.hand_cap
+            + params.victim_need_weight * victim_need;
+        let need = threat::need_share(&trading::own_inputs(&view), params.need_completion_weight);
+        assert!(need.iter().sum::<f64>() > 0.0);
         let expected_hand = view.belief().expected(1);
         let total = expected_hand.iter().sum::<f64>();
         let hit = (0..RESOURCE_COUNT)
@@ -725,7 +729,7 @@ fn robber_choice_prices_the_steal_through_belief_and_danger() {
             .sum::<f64>()
             / total;
         assert_eq!(choice.steal_value.to_bits(), (rank + hit).to_bits());
-        (choice.steal_value, hit)
+        (choice.steal_value, hit, victim_need)
     };
 
     let params = ThreatParams {
@@ -736,10 +740,18 @@ fn robber_choice_prices_the_steal_through_belief_and_danger() {
     };
     // Same public card count, different believed composition: only one fills the observer's
     // own cheapest-route shortfall, so the belief must move the value.
-    let (needed_value, needed_hit) = steal_value_for([0, 0, 0, 0, 5], &params);
-    let (chaff_value, chaff_hit) = steal_value_for([5, 0, 0, 0, 0], &params);
+    let (needed_value, needed_hit, needed_victim_need) = steal_value_for([0, 0, 0, 0, 5], &params);
+    let (chaff_value, chaff_hit, chaff_victim_need) = steal_value_for([5, 0, 0, 0, 0], &params);
     assert_ne!(needed_hit.to_bits(), chaff_hit.to_bits());
     assert_ne!(needed_value.to_bits(), chaff_value.to_bits());
+    // What this fixture cannot separate, stated so the closed form above is not over-trusted: a
+    // stalled leader's every route is one card of each missing resource, so holding a resource
+    // zeroes its own shortfall and the SP1b victim-need term is 0 on both arms. The observer's
+    // shortfall is likewise all-ones, where the SP1c completion step renormalizes back to the
+    // proportional spread. `victimNeedWeight` and `needCompletionWeight` earn their own biting
+    // tests below and in `need_share_lifts_a_shortfall_a_single_card_completes`.
+    assert_eq!(needed_victim_need, 0.0);
+    assert_eq!(chaff_victim_need, 0.0);
 }
 
 #[test]

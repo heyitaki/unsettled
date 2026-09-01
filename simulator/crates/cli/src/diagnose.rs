@@ -58,8 +58,10 @@ pub struct GameObservation {
     pub illegal_actions: u32,
 }
 
-/// Per-worker scratch, reused across games so the parallel map allocates once per worker rather
-/// than once per game.
+/// Per-worker scratch, reused across games so the walks below refill buffers a worker already
+/// owns rather than allocating a fresh one per game. The three vectors an observation keeps are
+/// still cloned out of here once per game, which is what makes the serial aggregation independent
+/// of which worker finished first.
 #[derive(Default)]
 struct Scratch {
     arena: GameArena,

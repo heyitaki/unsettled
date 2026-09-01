@@ -71,6 +71,67 @@ fn unofficial_seat_counts_require_the_gate() {
     );
 }
 
+#[test]
+fn a_zero_board_or_rep_count_is_a_named_error() {
+    for (flag, value, message) in [
+        ("--boards", "0", "boards must be positive"),
+        ("--reps", "0", "reps must be positive"),
+    ] {
+        let out = output_dir(&format!("diagnose-cli-zero{flag}"));
+        let mut arguments = valid_arguments(&out);
+        let index = arguments.iter().position(|argument| argument == flag).unwrap();
+        arguments[index + 1] = value.into();
+        assert_named_error(&arguments, message);
+    }
+}
+
+#[test]
+fn an_alpha_outside_the_open_unit_interval_is_a_named_error() {
+    for value in ["0", "1", "nan"] {
+        let out = output_dir(&format!("diagnose-cli-alpha-{value}"));
+        let mut arguments = valid_arguments(&out);
+        arguments.extend(["--alpha".into(), value.into()]);
+        assert_named_error(
+            &arguments,
+            "alpha must be greater than 0 and less than 1",
+        );
+    }
+}
+
+/// `--allow-unofficial` widens the layout-and-seat rule, not the engine's own seat range.
+#[test]
+fn the_unofficial_gate_does_not_admit_a_seat_count_the_engine_cannot_play() {
+    let out = output_dir("diagnose-cli-one-seat");
+    let mut arguments = valid_arguments(&out);
+    arguments.extend([
+        "--seats".into(),
+        "1".into(),
+        "--allow-unofficial".into(),
+    ]);
+    assert_named_error(&arguments, "seat count must be between 2 and 6");
+}
+
+/// The other half of the trading contract: `contracts.md` says `diagnostics.json` carries the
+/// block when the mechanism is on, and only the absent direction was pinned.
+#[test]
+fn player_trading_is_recorded_in_the_artifact_when_it_is_on() {
+    let out = output_dir("diagnose-cli-player-trading");
+    let mut arguments = valid_arguments(&out);
+    arguments.extend(["--player-trading".into()]);
+    let output = run(&arguments);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8(output.stderr).unwrap()
+    );
+    let diagnostics: serde_json::Value =
+        serde_json::from_slice(&fs::read(out.join("diagnostics.json")).unwrap()).unwrap();
+    assert!(
+        diagnostics["config"]["playerTrading"].is_object(),
+        "trading must be recorded when the run enables it"
+    );
+}
+
 /// The artifact carries no elapsed time and no worker count, so the same run at a different
 /// worker count must produce the same bytes. Aggregating out of schedule order is exactly the
 /// defect this catches.

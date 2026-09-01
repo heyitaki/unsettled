@@ -445,6 +445,30 @@ fn the_revisit_branch_fires_when_blockability_separates_more_sharply() {
     assert!(!reading.robber_attraction_revisit);
 }
 
+/// A degenerate split whose two arms are *not* the same set still carries a nonzero gap: the
+/// bottom arm is everything at or below the cut and the top arm everything at or above it, so a
+/// lopsided sample contrasts a set with a superset of itself. That number separates nothing and
+/// the branch must not read it as a magnitude.
+#[test]
+fn a_degenerate_quantity_cannot_fire_the_revisit_branch_on_its_artifact_gap() {
+    // Blockability is 0.1 four times and 0.9 once, so both quarter cuts land on 0.1: the bottom
+    // arm is the four 0.1s and the top arm is all five. Only the 0.9 pair won, so the artifact
+    // gap is 0.2. Boxing runs 1 through 5 and its winner sits in the middle, so its own arms tie.
+    let pairs = vec![
+        outcome(0, 1, 0.1, false),
+        outcome(0, 2, 0.1, false),
+        outcome(0, 3, 0.9, true),
+        outcome(0, 4, 0.1, false),
+        outcome(0, 5, 0.1, false),
+    ];
+    let reading = expansion_reading(&pairs, SEATS);
+    assert!(reading.overall.blockability.degenerate);
+    assert!(reading.overall.blockability.gap.abs() > 0.0);
+    assert!(!reading.overall.boxing.degenerate);
+    assert_eq!(reading.overall.boxing.gap, 0.0);
+    assert!(!reading.robber_attraction_revisit);
+}
+
 #[test]
 fn zero_site_pairs_are_counted_alongside_the_boxing_gap() {
     let pairs = vec![

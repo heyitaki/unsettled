@@ -60,7 +60,13 @@ pub fn reachable_expansion_sites(
     seat: u8,
 ) -> u32 {
     // Distance 0: every vertex the seat's existing roads touch. A vertex bitmask matches the
-    // engine's own `own_roads` summary and keeps the walk allocation-free.
+    // engine's own `own_roads` summary and keeps the walk allocation-free. `extension6`, the
+    // widest layout, has 80 vertices; a wider one would shift past the mask's end, which is a
+    // silent wrong answer in release rather than a panic.
+    debug_assert!(
+        topology.vertex_count() <= 128,
+        "the reach walk's vertex bitmask is 128 bits wide"
+    );
     let mut reached = 0_u128;
     for edge in 0..topology.edge_count() {
         if edge_owner[edge] == seat {
@@ -110,7 +116,12 @@ pub fn blockability_share(
     vertex_owner: &[u8],
     seat: u8,
 ) -> f64 {
-    let mut seen = 0_u32;
+    // `extension6` has 30 hexes; see the vertex-mask note in `reachable_expansion_sites`.
+    debug_assert!(
+        topology.hex_count() <= 64,
+        "the producing-hex bitmask is 64 bits wide"
+    );
+    let mut seen = 0_u64;
     let mut total = 0_u16;
     let mut highest = 0_u16;
     for vertex in 0..topology.vertex_count() {
@@ -221,14 +232,24 @@ pub struct ExpansionReading {
     pub per_slot: Vec<ExpansionGroup>,
     /// The preregistered branch, read off the overall row: the robber-attraction term SP3 dropped
     /// is worth revisiting when concentration separates outcomes more sharply than expansion room
-    /// does.
+    /// does. A degenerate quantity counts as separating nothing, which is what it means: its two
+    /// arms overlap, so its `gap` contrasts a set with a superset of itself and is an artifact
+    /// rather than a magnitude the branch may compare against.
     pub robber_attraction_revisit: bool,
 }
 
 pub fn expansion_reading(pairs: &[PairOutcome], seats: usize) -> ExpansionReading {
     let overall = group(None, pairs);
     let per_slot = (0..seats).map(|slot| group(Some(slot), pairs)).collect();
-    let robber_attraction_revisit = overall.blockability.gap.abs() > overall.boxing.gap.abs();
+    let separation = |quartile: &QuartileGap| {
+        if quartile.degenerate {
+            0.0
+        } else {
+            quartile.gap.abs()
+        }
+    };
+    let robber_attraction_revisit =
+        separation(&overall.blockability) > separation(&overall.boxing);
     ExpansionReading {
         overall,
         per_slot,

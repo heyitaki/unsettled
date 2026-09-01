@@ -255,8 +255,10 @@ mod tests {
     /// The composite defaults the H screens and combines were generated against,
     /// before the Phase-I adoption (M-46) moved the four winning axes into
     /// `Default::default()`. The committed `h2_*`/`h2x_*`/`h4_*` arm files are
-    /// measurement records of that baseline and never change bytes, so their pins
-    /// anchor here rather than to the live defaults.
+    /// measurement records of that baseline: their measured axis values never move,
+    /// though their bytes do, since the exact-key contract makes every arm file gain a
+    /// key whenever a parameter is added. That is why their pins anchor to a
+    /// reconstructed baseline rather than to the live defaults.
     fn screen_baseline_value() -> Value {
         let mut base = composite_value();
         for (leaf, pre_adoption) in [
@@ -493,8 +495,8 @@ mod tests {
             ("/threat/needWeight", None),
             ("/threat/needCompletionWeight", float(-1.0)),
             ("/threat/blockWeight", None),
-            ("/threat/stealWeight", None),
-            ("/threat/victimHandWeight", None),
+            ("/threat/stealWeight", float(-1.0)),
+            ("/threat/victimHandWeight", float(-1.0)),
             ("/threat/victimNeedWeight", float(-1.0)),
             ("/threat/dangerFloor", float(0.0)),
             ("/threat/delayCap", float(-1.0)),
@@ -1016,6 +1018,120 @@ mod tests {
         let weights: EngineWeights = serde_json::from_value(weights).expect("weights shape");
         let error = weights.validate().expect_err("hard bound");
         assert!(error.contains("genericPortFactor >= 0"), "{error}");
+    }
+
+    /// `port_deficit_factor` is `1 + w * d` with `d` in [0, 1], so a weight below -1 makes the
+    /// whole port term negative and the scorer starts preferring portless vertices. Same hard
+    /// bound, and same reason, as `genericPortFactor`.
+    #[test]
+    fn a_negative_port_coverage_deficit_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["portCoverageDeficitWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("portCoverageDeficitWeight >= 0"), "{error}");
+
+        weights["portCoverageDeficitWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
+    /// `robber_choice`'s joint argmax only agrees with the two-stage search it replaced where the
+    /// steal term cannot go negative, and both of these scale it.
+    #[test]
+    fn a_negative_steal_or_victim_hand_weight_fails_the_loader() {
+        for key in ["stealWeight", "victimHandWeight"] {
+            let mut file = composite_value();
+            file["threat"][key] = Value::from(-0.1);
+            let error = parse_params_file(&file.to_string())
+                .err()
+                .unwrap_or_else(|| panic!("negative {key} must fail at load"));
+            assert!(error.contains(&format!("threat.{key}")), "{error}");
+
+            let mut file = composite_value();
+            file["threat"][key] = Value::from(0.0);
+            parse_params_file(&file.to_string()).expect("zero is inside the domain");
+        }
+    }
+
+    /// The two SP2 term arms, as weights key, arm file stem and the value the arm carries.
+    /// Both terms ship at 0, so an arm is the live defaults with its own term switched on.
+    const SP2_ARMS: [(&str, &str, f64); 2] = [
+        ("recipeDevCardBonus", "sp2a_devcard", 1.0),
+        ("portCoverageDeficitWeight", "sp2b_portdeficit", 1.0),
+    ];
+
+    /// Walks the committed SP2 term arms (`placement/arms/sp2*.json`): each is the live
+    /// `default-weights.json` with exactly one new weight raised, and that value sits inside
+    /// the axis's committed sweep-bounds range. The weights-file walk below only proves these
+    /// load; without this an edit that also moved `portWeight` would run and be recorded as an
+    /// isolated port-deficit A/B. The stray-file check is the same one the SP1e walk carries:
+    /// an arm nobody preregistered would silently join a run.
+    #[test]
+    fn the_sp2_arm_files_are_the_committed_single_term_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (key, stem, value) in SP2_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let range = &bounds["placement"][key];
+            assert!(
+                value >= range["min"].as_f64().expect("min")
+                    && value <= range["max"].as_f64().expect("max"),
+                "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+            );
+            assert_eq!(
+                base[key].as_f64(),
+                Some(0.0),
+                "{key} ships at 0, which is what makes the arm a single-term perturbation"
+            );
+
+            let mut perturbed = base.clone();
+            perturbed[key] = Value::from(value);
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {key} at {value} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp2") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "the SP2 phase commits one arm per term");
     }
 
     /// Walks every committed weights-shaped file — the two shipped vectors plus the

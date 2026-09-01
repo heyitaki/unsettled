@@ -364,19 +364,20 @@ describe('placement valuation', () => {
   })
 
   it('ships the dev-card recipe at zero, so it moves no shipped score', () => {
-    const pips = { ore: 4, wheat: 4, sheep: 3, wood: 2, brick: 2 }
-    const shipped = marginalBreakdown(
-      context([[vertices[0], pips]]),
-      emptyHoldings(),
-      vertices[0],
-    )
-    const off = marginalBreakdown(
-      context([[vertices[0], pips]], { ...DEFAULT_WEIGHTS, recipeDevCardBonus: 0 }),
-      emptyHoldings(),
-      vertices[0],
-    )
+    // The same vertex as the test above, read at DEFAULT_WEIGHTS: the shipped diversity must
+    // still be the spread plus the city recipe alone, with no dev-card contribution. Comparing
+    // against a weights object that also sets the bonus to 0 would be a comparison with itself.
+    const sheepCover = 0.75 ** 1.5
+    const spread = 1.6 * (1.3 * 1 + 1.35 * 1 + 0.75 * sheepCover)
+    const city = 2 * 1
     expect(DEFAULT_WEIGHTS.recipeDevCardBonus).toBe(0)
-    expect(shipped).toEqual(off)
+    expect(
+      marginalBreakdown(
+        context([[vertices[0], { ore: 4, wheat: 4, sheep: 3 }]]),
+        emptyHoldings(),
+        vertices[0],
+      ).diversity,
+    ).toBeCloseTo(spread + city, 12)
   })
 
   it('pays a port more to a narrow spread than to a broad one at equal production', () => {
@@ -424,24 +425,17 @@ describe('placement valuation', () => {
     // every factor is 1 and the delta is the pre-change arithmetic:
     // portWeight * (portSurplus(6 + 4) * 1 - portSurplus(6) * 1).
     const port: Port = { edgeId: edgeIds[0], resource: 'wood', rate: 2 }
-    const entries: [VertexId, Partial<Record<Resource, number>>, Port[]?][] = [
+    const ctx = context([
       [vertices[0], { wood: 4, sheep: 4 }],
       [vertices[1], { wood: 6 }, [port]],
-    ]
-    const shippedCtx = context(entries)
-    const offCtx = context(entries, { ...DEFAULT_WEIGHTS, portCoverageDeficitWeight: 0 })
+    ])
     const shipped = marginalBreakdown(
-      shippedCtx,
-      addToHoldings(shippedCtx, emptyHoldings(), vertices[1]),
+      ctx,
+      addToHoldings(ctx, emptyHoldings(), vertices[1]),
       vertices[0],
     )
     expect(DEFAULT_WEIGHTS.portCoverageDeficitWeight).toBe(0)
     expect(shipped.port).toBeCloseTo(0.55 * (7 - 3), 12)
-    expect(shipped).toEqual(marginalBreakdown(
-      offCtx,
-      addToHoldings(offCtx, emptyHoldings(), vertices[1]),
-      vertices[0],
-    ))
   })
 
   it('dedupes one port edge across a two-vertex holding', () => {

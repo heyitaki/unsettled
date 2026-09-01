@@ -395,13 +395,17 @@ pub(crate) fn validate(params: &ThreatParams) -> Result<(), String> {
         "threat.blockWeight is finite",
         params.block_weight.is_finite(),
     )?;
+    // Both bounds are what makes `robber_choice`'s joint argmax equivalent to the two-stage
+    // search it replaced: that search floored the steal term at 0, so the two agree only where
+    // `steal_weight * victim_rank` cannot go negative. `victim_rank`'s other two terms are
+    // non-negative by construction.
     check(
-        "threat.stealWeight is finite",
-        params.steal_weight.is_finite(),
+        "threat.stealWeight is non-negative and finite",
+        params.steal_weight.is_finite() && params.steal_weight >= 0.0,
     )?;
     check(
-        "threat.victimHandWeight is finite",
-        params.victim_hand_weight.is_finite(),
+        "threat.victimHandWeight is non-negative and finite",
+        params.victim_hand_weight.is_finite() && params.victim_hand_weight >= 0.0,
     )?;
     check(
         "threat.victimNeedWeight is non-negative and finite",
@@ -438,8 +442,10 @@ fn assert_params(params: &ThreatParams) {
 }
 
 /// The shared need model: how the seat's remaining need is spread over the resources, given
-/// its `cheapest_route_shortfall`. Every consumer of "how badly does this seat want this
-/// resource" reads this one function, so a steal, a block and a knight all price need alike.
+/// its `cheapest_route_shortfall`. Every robber and knight consumer of "how badly does this seat
+/// want this resource" reads this one function, so a steal, a block and a knight price need
+/// alike. `trading.rs` and `devcards.rs` read `cheapest_route_shortfall` directly and do not
+/// take the completion step.
 ///
 /// The proportional spread of the shortfall is the base, which keeps a distant goal priced.
 /// On top of it, a resource the route is at most `COMPLETION_SHORTFALL` short of carries a

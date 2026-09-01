@@ -107,7 +107,6 @@ pub struct CoastalGroup {
     pub no_alternative: usize,
     pub ties: usize,
     pub pairs: usize,
-    pub lower_hex_chosen: usize,
     /// The share of pairs in which the chosen vertex had the lower hex count. 50% is the null.
     pub share: f64,
     pub clustered: [f64; 2],
@@ -135,7 +134,9 @@ pub struct CoastalSelection {
     pub sp2c_gate_passed: bool,
 }
 
-/// How far below 50% the lower-hex-count picks must win for the gate's second condition to hold.
+/// How much less often, in win rate, the lower-hex-count picks must win than the higher-hex-count
+/// ones for the gate's second condition to hold. It reads `win_rate_gap`, a contrast between the
+/// two arms, not either arm against 50%.
 const GATE_WIN_RATE_GAP: f64 = 0.01;
 
 pub fn coastal_selection(
@@ -166,7 +167,6 @@ fn group(slot: Option<usize>, picks: &[CoastalPick], boards: usize, z: f64) -> C
         no_alternative: 0,
         ties: 0,
         pairs: 0,
-        lower_hex_chosen: 0,
         share: 0.0,
         clustered: [0.0, 1.0],
         clusters: 0,
@@ -201,7 +201,6 @@ fn group(slot: Option<usize>, picks: &[CoastalPick], boards: usize, z: f64) -> C
         values.push(f64::from(u8::from(chose_lower)));
         clusters.push(pick.board);
         if chose_lower {
-            counted.lower_hex_chosen += 1;
             counted.lower_hex_pairs += 1;
             counted.lower_hex_wins += usize::from(pick.seat_won);
         } else {

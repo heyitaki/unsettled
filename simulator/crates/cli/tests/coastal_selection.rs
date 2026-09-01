@@ -6,7 +6,11 @@
 
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::game::{SetupPick, can_place_settlement};
-use unsettled_engine::placement::{PlacementKind, vertex_production};
+use unsettled_engine::placement::app_formula::EngineWeights;
+use unsettled_engine::placement::{
+    PlacementKind, prepare_app_formula_boards, register_app_formula, setup_candidate_score,
+    vertex_production,
+};
 use unsettled_engine::rules::RuleConfig;
 use unsettled_engine::state::EMPTY;
 use unsettled_engine::topology::{Hex, Layout, Topology, Vertex};
@@ -345,7 +349,7 @@ fn skipped_and_tied_picks_are_counted_but_never_enter_the_share() {
     assert_eq!(selection.overall.ties, 1);
     assert_eq!(selection.overall.no_alternative, 1);
     assert_eq!(selection.overall.pairs, 2);
-    assert_eq!(selection.overall.lower_hex_chosen, 1);
+    assert_eq!(selection.overall.lower_hex_pairs, 1);
     assert_eq!(selection.overall.share, 0.5);
     assert_eq!(selection.overall.lower_hex_win_rate, 1.0);
     assert_eq!(selection.overall.higher_hex_win_rate, 0.0);
@@ -407,6 +411,27 @@ fn clustered_mean_matches_the_balanced_cluster_mean_variance() {
     assert!((result.interval[1] - (mean + margin)).abs() < 1e-12);
 }
 
+/// The two plumbing guards. Both return the degenerate reading rather than an error, so a
+/// mis-sized cluster vector or a board index outside the run reads as "no signal" instead of
+/// failing loudly: that is the shape a caller has to know about.
+#[test]
+fn a_mismatched_or_out_of_range_cluster_vector_reads_as_degenerate() {
+    let short = clustered_mean(&[1.0, 0.0, 1.0], &[0, 1], 4, Z, [0.0, 1.0]);
+    assert!(short.degenerate);
+    assert_eq!(short.clusters, 0);
+    assert_eq!(short.mean, 0.0);
+    assert_eq!(short.interval, [0.0, 1.0]);
+
+    let out_of_range = clustered_mean(&[1.0, 0.0, 1.0], &[0, 1, 9], 4, Z, [0.0, 1.0]);
+    assert!(out_of_range.degenerate);
+    assert_eq!(out_of_range.clusters, 0);
+    assert_eq!(out_of_range.mean, 0.0);
+
+    let empty = clustered_mean(&[], &[], 4, Z, [0.0, 1.0]);
+    assert!(empty.degenerate);
+    assert_eq!(empty.clusters, 0);
+}
+
 #[test]
 fn a_single_cluster_leaves_the_interval_degenerate() {
     let values = vec![1.0, 0.0, 1.0];
@@ -415,4 +440,152 @@ fn a_single_cluster_leaves_the_interval_degenerate() {
     assert!(result.degenerate);
     assert_eq!(result.clusters, 1);
     assert_eq!(result.interval, [0.0, 1.0]);
+}
+
+// The app-formula branch of `setup_candidate_score`. M-47 and M-48 both ran
+// `--placement app_formula:placement/default-weights.json`, so the branch that reaches a prepared
+// `AppFormulaScorer` is the one the recorded readings scored on; every test above rides
+// `max_pips` and leaves it untouched.
+
+/// Registers a committed weights file as an app-formula arm and prepares the fixture's board for
+/// it, which is what `diagnose` does before it replays any pick.
+fn app_formula_fixture(interior_pip_token: u8, weights_file: &str, label: &str) -> (Fixture, PlacementKind) {
+    let weights: EngineWeights = serde_json::from_str(weights_file).expect("committed weights");
+    let placement = register_app_formula(label.into(), weights).expect("registry has room");
+    let mut fixture = fixture(interior_pip_token);
+    prepare_app_formula_boards(
+        std::slice::from_mut(&mut fixture.board),
+        &fixture.topology,
+        &[placement],
+    );
+    (fixture, placement)
+}
+
+/// The runner-up `compare_pick` should draw, recomputed from the public scorer over the same
+/// candidate set: every legal unchosen vertex whose pip total is within one of the chosen
+/// vertex's, highest score first and lowest vertex index on a tie.
+fn reference_runner_up(
+    fixture: &Fixture,
+    placement: PlacementKind,
+    owners: &[u8],
+    pick: &SetupPick,
+) -> Option<(Vertex, u8)> {
+    let (_, chosen_pips) = vertex_production(&fixture.board, &fixture.topology, pick.vertex);
+    let mut best: Option<(f64, Vertex, u8)> = None;
+    for index in 0..fixture.topology.vertex_count() {
+        let vertex = index as Vertex;
+        if vertex == pick.vertex || !can_place_settlement(&fixture.topology, owners, vertex) {
+            continue;
+        }
+        let (hexes, pips) = vertex_production(&fixture.board, &fixture.topology, vertex);
+        if pips.abs_diff(chosen_pips) > 1 {
+            continue;
+        }
+        let score = setup_candidate_score(
+            placement,
+            &fixture.board,
+            &fixture.topology,
+            owners,
+            pick.seat,
+            vertex,
+            pick.grant,
+        );
+        if best.is_none_or(|(best_score, _, _)| score > best_score) {
+            best = Some((score, vertex, hexes));
+        }
+    }
+    best.map(|(_, vertex, hexes)| (vertex, hexes))
+}
+
+#[test]
+fn the_app_formula_branch_draws_the_runner_up_its_own_scorer_ranks() {
+    let (fixture, placement) = app_formula_fixture(
+        12,
+        include_str!("../../../placement/default-weights.json"),
+        "app_formula:coastal-default",
+    );
+    let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    let pick = pick(fixture.coastal, 0);
+    let (_, runner_up_hexes) =
+        reference_runner_up(&fixture, placement, &owners, &pick).expect("a pip-matched alternative");
+    let (chosen_hexes, _) = vertex_production(&fixture.board, &fixture.topology, fixture.coastal);
+    let expected = if runner_up_hexes == chosen_hexes {
+        PickComparison::Tied
+    } else {
+        PickComparison::Pair {
+            chose_lower: chosen_hexes < runner_up_hexes,
+        }
+    };
+    assert_eq!(
+        compare_pick(
+            &fixture.board,
+            &fixture.topology,
+            placement,
+            &owners,
+            &pick,
+        ),
+        expected
+    );
+}
+
+/// `compare_pick` re-scores each pick with the `grant` flag that pick carried, and the app formula
+/// is the only scorer that reads it. The shipped defaults set `handValueWeight` to 0, which prices
+/// the grant at nothing, so the witness is the committed pre-drop snapshot where it is 0.4.
+#[test]
+fn the_app_formula_branch_forwards_the_setup_grant() {
+    let (shipped, shipped_placement) = app_formula_fixture(
+        12,
+        include_str!("../../../placement/default-weights.json"),
+        "app_formula:coastal-grant-shipped",
+    );
+    let (pre_drop, pre_drop_placement) = app_formula_fixture(
+        12,
+        include_str!("../../../placement/phase-i-candidate-weights.json"),
+        "app_formula:coastal-grant-predrop",
+    );
+    let score = |fixture: &Fixture, placement: PlacementKind, grant: bool| {
+        let owners = vec![EMPTY; fixture.topology.vertex_count()];
+        setup_candidate_score(
+            placement,
+            &fixture.board,
+            &fixture.topology,
+            &owners,
+            0,
+            fixture.interior,
+            grant,
+        )
+    };
+    assert_eq!(
+        score(&shipped, shipped_placement, false),
+        score(&shipped, shipped_placement, true),
+        "handValueWeight 0 prices the grant at nothing"
+    );
+    assert_ne!(
+        score(&pre_drop, pre_drop_placement, false),
+        score(&pre_drop, pre_drop_placement, true),
+        "the grant must reach the scorer, so a nonzero handValueWeight must move the score"
+    );
+}
+
+/// A board the run never prepared has no scorer, and scoring it would silently mean scoring
+/// something else. The named panic is the contract.
+#[test]
+#[should_panic(expected = "no prepared context")]
+fn the_app_formula_branch_refuses_an_unprepared_board() {
+    let weights: EngineWeights =
+        serde_json::from_str(include_str!("../../../placement/default-weights.json"))
+            .expect("committed weights");
+    let placement =
+        register_app_formula("app_formula:coastal-unprepared".into(), weights).expect("registry");
+    let fixture = fixture(12);
+    let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    setup_candidate_score(
+        placement,
+        &fixture.board,
+        &fixture.topology,
+        &owners,
+        0,
+        fixture.coastal,
+        false,
+    );
 }
