@@ -340,36 +340,36 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 24: SP2c, the hex-count tempo term, conditional on M-47
 
-- [ ] Read the M-47 entry in `.claude/specs/simulator/measurements.md` and its recorded gate outcome. **If the gate did not pass, do not implement anything.** Instead: append a dated decision note to `placement-programme.md` recording that SP2c is dropped on M-47's reading and that `SIM-GAP-35` stays open unmeasured, tick every remaining box in this task and in Tasks 25 and 26 with the note "skipped: SP0-D1 gate did not pass", run the link check, and commit
-- [ ] If the gate passed, add `tempoHexWeight` to `EngineWeights` in `src/engine/weights.ts` with `DEFAULT_WEIGHTS` value 0, and mirror it in `app_formula.rs`
-- [ ] Add a `tempo` component to `ScoreBreakdown` in `src/engine/valuation.ts`, include it in `breakdownTotal`, and set it in `marginalBreakdown` and `marginalTotal`. The term is `tempoHexWeight` times the candidate vertex's producing-hex count, independent of pips
-- [ ] Follow the new component through every consumer: `src/engine/analyze.ts` (`emptyBreakdown`, `addBreakdown`, and the averaging block near the end), `src/engine/modifiers.ts`, and `src/ui/AnalysisPanel.tsx`, where it needs a row label
-- [ ] Mirror the component in `ScoreBreakdown` in `app_formula.rs` and in `FixtureBreakdown` in `simulator/crates/engine/tests/placement_parity.rs`
-- [ ] Declare `tempoHexWeight` in `sweep-bounds.json` under `placement` with `min` 0.0 and `max` 1.0
-- [ ] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and every weights-shaped arm file, the SP2a and SP2b arms included
-- [ ] Add a vitest case at an explicit nonzero witness weight showing a three-hex vertex outscoring a two-hex vertex of equal pips, with expected values hand-derived, plus a case pinning the shipped default at 0
-- [ ] Add a coverage class to `REQUIRED_CLASSES`, the matching case to the parity generator, and regenerate `placement-parity.json`
-- [ ] Leave the `SIM-GAP-35` entry in `gaps.md` in place, for the reason given in Task 21, and record in `placement-programme.md` that the term now exists and awaits its verdict
-- [ ] All six validation commands green
+- [x] Read the M-47 entry in `.claude/specs/simulator/measurements.md` and its recorded gate outcome. **If the gate did not pass, do not implement anything.** Instead: append a dated decision note to `placement-programme.md` recording that SP2c is dropped on M-47's reading and that `SIM-GAP-35` stays open unmeasured, tick every remaining box in this task and in Tasks 25 and 26 with the note "skipped: SP0-D1 gate did not pass", run the link check, and commit (gate read false in M-47; took the skip branch: SP2c closure note appended to `placement-programme.md`, `SIM-GAP-35` left in `gaps.md`, nothing implemented)
+- [x] If the gate passed, add `tempoHexWeight` to `EngineWeights` in `src/engine/weights.ts` with `DEFAULT_WEIGHTS` value 0, and mirror it in `app_formula.rs` (skipped: SP0-D1 gate did not pass)
+- [x] Add a `tempo` component to `ScoreBreakdown` in `src/engine/valuation.ts`, include it in `breakdownTotal`, and set it in `marginalBreakdown` and `marginalTotal`. The term is `tempoHexWeight` times the candidate vertex's producing-hex count, independent of pips (skipped: SP0-D1 gate did not pass)
+- [x] Follow the new component through every consumer: `src/engine/analyze.ts` (`emptyBreakdown`, `addBreakdown`, and the averaging block near the end), `src/engine/modifiers.ts`, and `src/ui/AnalysisPanel.tsx`, where it needs a row label (skipped: SP0-D1 gate did not pass)
+- [x] Mirror the component in `ScoreBreakdown` in `app_formula.rs` and in `FixtureBreakdown` in `simulator/crates/engine/tests/placement_parity.rs` (skipped: SP0-D1 gate did not pass)
+- [x] Declare `tempoHexWeight` in `sweep-bounds.json` under `placement` with `min` 0.0 and `max` 1.0 (skipped: SP0-D1 gate did not pass)
+- [x] Add the key at 0 to `default-weights.json`, `phase-i-candidate-weights.json`, and every weights-shaped arm file, the SP2a and SP2b arms included (skipped: SP0-D1 gate did not pass)
+- [x] Add a vitest case at an explicit nonzero witness weight showing a three-hex vertex outscoring a two-hex vertex of equal pips, with expected values hand-derived, plus a case pinning the shipped default at 0 (skipped: SP0-D1 gate did not pass)
+- [x] Add a coverage class to `REQUIRED_CLASSES`, the matching case to the parity generator, and regenerate `placement-parity.json` (skipped: SP0-D1 gate did not pass)
+- [x] Leave the `SIM-GAP-35` entry in `gaps.md` in place, for the reason given in Task 21, and record in `placement-programme.md` that the term now exists and awaits its verdict (skipped: SP0-D1 gate did not pass)
+- [x] All six validation commands green (skipped: SP0-D1 gate did not pass)
 
 ### Task 25: Preregister M-54, the SP2c A/B, conditional on M-47
 
-- [ ] If Task 24 recorded the skip, tick these boxes with the same skip note and stop
-- [ ] Write `docs/plans/preregs/<today>-m54-sp2c-hex-tempo.md`
-- [ ] One decision arm: `simulator/placement/arms/sp2c_tempo.json`, the live default weights with `tempoHexWeight` at 0.25. Reference `base` = `app_formula:placement/default-weights.json`
-- [ ] State explicitly that this is not a re-litigation of M-43: the term is differently specified, it is measured on the post-SP1 field, and SP0-D1 gated it on fresh evidence
-- [ ] Screen power and protocol as in Task 19
-- [ ] Decision rule fixed before the run: the standing disposition rule. Record only
-- [ ] Record the prediction and the admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] If Task 24 recorded the skip, tick these boxes with the same skip note and stop (skipped: SP0-D1 gate did not pass)
+- [x] Write `docs/plans/preregs/<today>-m54-sp2c-hex-tempo.md` (skipped: SP0-D1 gate did not pass)
+- [x] One decision arm: `simulator/placement/arms/sp2c_tempo.json`, the live default weights with `tempoHexWeight` at 0.25. Reference `base` = `app_formula:placement/default-weights.json` (skipped: SP0-D1 gate did not pass)
+- [x] State explicitly that this is not a re-litigation of M-43: the term is differently specified, it is measured on the post-SP1 field, and SP0-D1 gated it on fresh evidence (skipped: SP0-D1 gate did not pass)
+- [x] Screen power and protocol as in Task 19 (skipped: SP0-D1 gate did not pass)
+- [x] Decision rule fixed before the run: the standing disposition rule. Record only (skipped: SP0-D1 gate did not pass)
+- [x] Record the prediction and the admissibility conditions (skipped: SP0-D1 gate did not pass)
+- [x] Both cargo profiles green, link check passes (skipped: SP0-D1 gate did not pass)
 
 ### Task 26: Run M-54 and record it, conditional on M-47
 
-- [ ] If Task 24 recorded the skip, tick these boxes with the same skip note and stop
-- [ ] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [ ] Append `## M-54 — SP2c hex-count tempo term` with full provenance and the paired table
-- [ ] Record the disposition under the standing rule, including the single retry if it read `inconclusive`
-- [ ] Link check passes
+- [x] If Task 24 recorded the skip, tick these boxes with the same skip note and stop (skipped: SP0-D1 gate did not pass)
+- [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again (skipped: SP0-D1 gate did not pass)
+- [x] Append `## M-54 — SP2c hex-count tempo term` with full provenance and the paired table (skipped: SP0-D1 gate did not pass)
+- [x] Record the disposition under the standing rule, including the single retry if it read `inconclusive` (skipped: SP0-D1 gate did not pass)
+- [x] Link check passes (skipped: SP0-D1 gate did not pass)
 
 ### Task 27: Verify acceptance criteria
 
