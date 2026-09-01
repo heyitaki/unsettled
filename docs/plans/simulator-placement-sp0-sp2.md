@@ -256,11 +256,11 @@ Measurement commands run from `simulator/`, because arm paths are relative to it
 
 ### Task 15: Run M-50 and record it
 
-- [ ] Record `uptime`, run every preregistered invocation from `simulator/`, record `uptime` again
-- [ ] Append `## M-50 — SP1e knight and threat axis sweep` with full provenance and one paired table per invocation
-- [ ] Record each axis's verdict and its disposition under the standing rule, and list the surviving axes explicitly as SP6 candidates. Adopt nothing
-- [ ] If any axis read `inconclusive`, run the single preregistered retry at four times the boards and record it in the same entry; if it is still `inconclusive`, record the axis unresolved and stop
-- [ ] Link check passes
+- [x] Record `uptime`, run every preregistered invocation from `simulator/`, record `uptime` again
+- [x] Append `## M-50 — SP1e knight and threat axis sweep` with full provenance and one paired table per invocation
+- [x] Record each axis's verdict and its disposition under the standing rule, and list the surviving axes explicitly as SP6 candidates. Adopt nothing
+- [x] If any axis read `inconclusive`, run the single preregistered retry at four times the boards and record it in the same entry; if it is still `inconclusive`, record the axis unresolved and stop
+- [x] Link check passes
 
 ### Task 16: Preregister M-51, the post-SP1 re-screen
 

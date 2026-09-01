@@ -987,3 +987,49 @@ The sharpest number here is not in the table. Between the two builds exactly **o
 
 **Scope, as preregistered.** This is the predicate's effect on one seat playing the composite against three seats that do not. It is **not** the effect in the shipped configuration where every seat is denial-gated and the correction applies to all four at once, which no design available in this binary can measure, since a symmetric field cancels the change by construction. No later phase may cite M-49 as a measurement of the all-composite field.
 
+
+## M-50 — SP1e knight and threat axis sweep
+
+2026-09-01, commit `eb4cb111` (the preregistration commit; no code and no default moved for this run), domain `tuning`. Preregistered in `docs/plans/preregs/2026-09-01-m50-sp1e-knight-threat-sweep.md` (committed before the run). A screen, not a change: five declared `ThreatParams` axes perturbed one at a time to the endpoints of their committed `sweep-bounds.json` ranges and measured against the post-SP1 composite defaults. The five are `knightStealWeight`, `knightPlacementWeight` and SP1d's `knightReliefWeight`, which the programme names, plus SP1b's `victimNeedWeight` and SP1c's `needCompletionWeight`, which this plan added because a brand-new parameter left unswept beside three swept ones in the same struct is worse than paying for two more arms. Endpoints rather than H2's half and double, because M-41 read both knight axes `equivalent` on single-digit discordance and that is a statement about reach rather than about value.
+
+Protocol as preregistered: `evaluate`, `standard4`, 4 seats, placement field `pip_diversity`, every arm placing via `pip_diversity` so it differs from the field in exactly one policy leaf, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 2000 boards x 2 reps (16,000 paired units over 2000 clusters per arm), `--threshold 0.01`, `--alpha 0.05`, reference `base` = the post-SP1 defaults named explicitly through `--arm-policy`. One invocation, eleven arms, exactly as preregistered; the sweep was not split.
+
+```text
+target/release/unsettled-sim evaluate --layout standard4 --seats 4 --domain tuning --field pip_diversity \
+  --arm base=pip_diversity --arm knsteal_lo=pip_diversity ... --arm needcomp_hi=pip_diversity \
+  --arm-policy base=heuristic-v1-trader-aware-threat-devcards-denial \
+  --arm-policy knsteal_lo=heuristic-v1-trader-aware-threat-devcards-denial@placement/arms/sp1e_knsteal_lo.json ... \
+  --reference base --boards 2000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial \
+  --threads 0 --player-trading --threshold 0.01 --alpha 0.05 --out runs/m50-sp1e
+```
+
+The command above is the preregistered one elided at the repeated arms; the file carries it in full and every `--arm-policy` matched it exactly.
+
+Load before `5.41 4.00 3.09`, after `11.25 5.46 3.64` (24.6s at 18 workers, 7,163 games/s), `rustc 1.94.0 (4a4ef493e 2026-03-02)`. 176,000 games, **zero illegal actions**, 0 draws in every arm; the invocation ran alone, against a binary built beforehand, with no build or test suite in its command block. `base` sits at 3,975 wins of 16,000, `0.2484375`, close to the symmetric 0.25 corner as expected.
+
+**A note on the timed window.** The invocation was issued twice. The first went through `cargo run` without `RUSTFLAGS="-D warnings"`, which re-fingerprinted and put a 12s compile inside the recorded `uptime` window; the compile finished before the measurement began, but the load pair no longer described the run. The second, recorded above, ran the prebuilt binary alone. The two `evaluation.json` artifacts compare **byte-identical**, which is the determinism contract holding and is why the first invocation costs nothing beyond the wasted seconds. Only the second is the record.
+
+| Arm | Parameter | Value | Estimate | b | c | Selected interval | Verdict |
+| --- | --- | ---: | ---: | ---: | ---: | --- | --- |
+| knsteal_lo | `knightStealWeight` | 3.0 | `-6.25e-05` | 1 | 2 | clustered `[-0.0002747, +0.0001497]` | equivalent |
+| knsteal_hi | `knightStealWeight` | 48.0 | `+0.000125` | 10 | 8 | clustered `[-0.0003948, +0.0006448]` | equivalent |
+| knplace_lo | `knightPlacementWeight` | 7.5 | `-6.25e-05` | 2 | 3 | clustered `[-0.0003365, +0.0002115]` | equivalent |
+| knplace_hi | `knightPlacementWeight` | 120.0 | `+6.25e-05` | 9 | 8 | clustered `[-0.0004427, +0.0005677]` | equivalent |
+| knrelief_lo | `knightReliefWeight` | 3.0 | `-6.25e-05` | 0 | 1 | clustered `[-0.0001850, +0.0000600]` | equivalent |
+| knrelief_hi | `knightReliefWeight` | 48.0 | `+6.25e-05` | 1 | 0 | clustered `[-0.0000600, +0.0001850]` | equivalent |
+| victimneed_lo | `victimNeedWeight` | 0.0375 | `-0.0009375` | 74 | 89 | McNemar `[-0.0025014, +0.0006264]` | equivalent |
+| victimneed_hi | `victimNeedWeight` | 0.6 | `-0.0025625` | 232 | 273 | McNemar `[-0.0053150, +0.0001900]` | equivalent |
+| needcomp_lo | `needCompletionWeight` | 0.0875 | `-0.000125` | 18 | 20 | clustered `[-0.0008803, +0.0006303]` | equivalent |
+| needcomp_hi | `needCompletionWeight` | 1.4 | `-0.0006875` | 18 | 29 | McNemar `[-0.0015272, +0.0001522]` | equivalent |
+
+**Verdicts and disposition, per the standing rule.** All five axes read `equivalent` in both directions at the declared power, and no arm reads `better`, `worse` or `inconclusive`. `equivalent` drops the axis and records the null as the answer, so **the surviving-axis list is empty**: this run contributes no SP6 candidate. No retry was triggered, because the retry is preregistered for `inconclusive` only and nothing read `inconclusive`. Nothing was adopted: `src/engine/weights.ts`, `simulator/placement/default-weights.json`, `simulator/placement/policy-default-params.json`, `simulator/placement/phase-i-candidate-params.json`, `HeuristicParams::default()` and every file under `simulator/placement/arms/` are byte-identical to what commit `eb4cb111` carries.
+
+**Multiplicity, as preregistered rather than corrected.** Ten contrasts at alpha 0.05 against a true null everywhere would be expected to throw roughly one nominal exceedance by chance. **Zero** arms exclude zero from the selected interval, so the table is quieter than chance alone would predict and there is no lone `better` to read down.
+
+**What the numbers say beyond the verdicts.** The three knight axes are flat to the point of near-silence: a factor of four either way on `knightStealWeight` or `knightPlacementWeight` moves 3 to 18 games of 16,000, and on `knightReliefWeight` it moves exactly one. That is not a degenerate zero (`clusteredDegenerate` is false on every arm and each interval has real width), but it puts a firm number on how rarely the knight is the marginal action inside `knight_action_score`: SP1d's own corpus recapture was byte-identical for the same reason. Any later phase proposing to tune a knight axis on this instrument should expect no signal and should reach for a design that forces knight decisions rather than sampling them.
+
+The two new axes behave like an interior optimum. Both read negative at both endpoints (`victimneed` -0.094pp and -0.256pp, `needcomp` -0.013pp and -0.069pp), which is the sign pattern of a default sitting at or near a local maximum, though at these magnitudes it is not separable from noise and the M entry claims nothing stronger. `victimneed_hi` is the loudest arm in the table at 505 discordant pairs and carries the widest interval, so `victimNeedWeight` is the one axis here that a four-fold move genuinely reaches; its estimate is still a quarter of the practical threshold.
+
+**Prediction against outcome.** Right on the shape: no arm read `better`, every point estimate landed inside +-0.5pp (the largest being `victimneed_hi` at -0.256pp), and the three knight axes repeated M-41's reading in the low tens rather than the hundreds. Right that `victimneed` would be where movement lives. **Wrong on `needcomp`**, predicted to show discordance in the hundreds from SP1c's 37 of 400 corpus games and delivering 38 and 47 pairs of 16,000, an order of magnitude less; a term that moves the corpus does not move the win rate at the same rate, and the corpus figure is a poor power estimate. Also wrong on the most likely non-`equivalent` outcome, predicted to be `inconclusive` on one of the two `hi` arms and in the event nothing at all: the intervals came in tighter than expected, so the run resolved every axis rather than buying its retry.
+
+**Interpretive limit, per `contracts.md`.** The default ordering of the threat terms is regime-dependent, holding above danger roughly 0.108 and 0.105 and reversing below. The `victimneed` and `needcomp` verdicts therefore average over both regimes, and their nulls do **not** establish either axis dead within one regime alone. The three knight axes are outside that ordering, scoring an action rather than ranking threat terms, so their nulls carry no such caveat.
