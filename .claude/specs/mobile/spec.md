@@ -76,7 +76,7 @@ The block below the caption, and the reason the page exists.
 
 The pencil replaces the analysis block with the board tools in the same slot. Everything above the block stays put, so nothing jumps.
 
-- Three sideways-scrolling rows: Terrain, Number token, Structures.
+- Four sideways-scrolling rows: Terrain, Number token, Structures, Player. The Player row picks whose piece a structure tool places; on desktop that brush is the roster's dot, which the phone roster (S8) does not carry.
 - `Done` and `Cancel` live inside the block, in a footer strip on its own tint, not floating below it.
 - Randomize, clear, undo and redo are **not** repeated here; they are in the header's dots menu.
 

@@ -599,6 +599,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .tool-grid button, .phone-shell .token-tools button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; min-height: 0; padding: 7px 6px; border-radius: 11px; font-size: 10px; font-weight: 600; line-height: normal; overflow: visible; }
   .phone-shell .token-tools button { min-width: 42px; border-radius: 50%; padding: 11px 0; font-size: 15px; font-weight: 700; }
   .phone-shell .hex-swatch { width: 21px; height: 23px; }
+  .phone-shell .player-grid button[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; }
   .phone-overlay { position: fixed; inset: 0; z-index: 22; display: flex; flex-direction: column; background: var(--paper-light); outline: 0; animation: phone-overlay-in .28s cubic-bezier(.32, .72, 0, 1); }
   @keyframes phone-overlay-in { from { transform: translateX(100%); } to { transform: none; } }
