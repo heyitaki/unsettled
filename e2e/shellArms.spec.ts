@@ -111,6 +111,24 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(1)
   })
 
+  test('the tool heading is glyphs alone and the labels carry the counts the caption lost', async ({ page }) => {
+    await page.goto('')
+    const heading = page.locator('.tools-panel .panel-heading')
+    for (const name of ['Randomize', 'Clear all', 'Undo', 'Redo']) {
+      const button = heading.getByRole('button', { name })
+      await expect(button.locator('svg')).toHaveCount(1)
+      await expect(button).not.toContainText(/[\u2190\u2192]/)
+    }
+    // Clearing the board reads as destructive, as it does in the phone's menu (spec D3).
+    await expect(heading.getByRole('button', { name: 'Clear all' })).toHaveClass(/\bdanger\b/)
+
+    await heading.getByRole('button', { name: 'Randomize' }).click()
+    const labels = page.locator('.tools-panel .tool-label')
+    await expect(labels.filter({ hasText: 'Terrain' }).locator('.tool-count')).toHaveText('19/19')
+    await expect(labels.filter({ hasText: 'Structures' }).locator('.tool-count')).toHaveText('0 pieces')
+    await snap(page, 'desktop-tools')
+  })
+
   test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {
     await page.goto('')
     const trigger = page.getByRole('button', { name: 'Board layout' })

@@ -56,9 +56,9 @@ button.selected.danger { color: #fff; }
 /* Hover label from aria-label, replacing the native tooltip and its delay. */
 .history-buttons button, .player-add { position: relative; }
 .history-buttons button::after, .player-add::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 9px; font-weight: 400; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 6; }
-.btn-icon { flex: none; width: 16px; height: 16px; fill: currentColor; }
 .tool-group + .tool-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
-.tool-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.tool-label { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.tool-count { margin-left: auto; font-variant-numeric: tabular-nums; letter-spacing: .02em; text-transform: none; }
 .tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .tool-grid button { padding: 8px 5px; font-size: 11px; text-transform: capitalize; }
 .structure-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }

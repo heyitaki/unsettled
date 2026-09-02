@@ -239,7 +239,8 @@ test.describe('build mode', () => {
     await expect(pencil).toHaveAttribute('aria-pressed', 'true')
     await expect(tools).toBeVisible()
     await expect(analysis).toHaveCount(0)
-    await expect(tools.locator('.tool-label')).toHaveText(['Terrain', 'Number token', 'Structures', 'Player'])
+    // The counts the board caption lost ride along on the labels (spec D3 tools).
+    await expect(tools.locator('.tool-label')).toHaveText(['Terrain0/19', 'Number token', 'Structures0 pieces', 'Player'])
     expect((await page.locator('.board-canvas').boundingBox())!.y).toBe(boardTop)
     const sideways = await page.locator('.phone-page').evaluate((root) =>
       Array.from(root.querySelectorAll<HTMLElement>('*'))

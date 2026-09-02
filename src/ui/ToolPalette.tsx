@@ -1,7 +1,15 @@
 import { clearBoard, randomizeBoard } from '../model/board'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
-import { GLYPH_MUTED, StructureGlyph, type StructureShape } from './glyphs'
+import {
+  ClearBoardGlyph,
+  DiceGlyph,
+  GLYPH_MUTED,
+  RedoGlyph,
+  StructureGlyph,
+  UndoGlyph,
+  type StructureShape,
+} from './glyphs'
 import { activeTab, useStore, type Tool } from './store'
 
 const TILES: TileKind[] = [...RESOURCES, 'desert']
@@ -40,10 +48,14 @@ export function ToolGroups() {
   // have one (e.g. imported from a screenshot), so the palette stays base-game.
   const hasSuperCity = tab.game.board.buildings.some((building) => building.tier === 'superCity')
   const structures = hasSuperCity ? STRUCTURES : STRUCTURES.filter((item) => item.key !== 'superCity')
+  // The counts the board caption used to carry (spec D3): how much terrain is
+  // painted, and how many pieces stand on the board.
+  const placed = tab.game.board.hexes.filter((hex) => hex.tile).length
+  const pieces = tab.game.board.roads.length + tab.game.board.buildings.length
   return (
     <>
       <div className="tool-group">
-        <span className="tool-label">Terrain</span>
+        <span className="tool-label">Terrain<span className="tool-count">{placed}/{tab.game.board.hexes.length}</span></span>
         <div className="tool-grid terrain-grid">
           {TILES.map((tile) => (
             <button
@@ -76,7 +88,7 @@ export function ToolGroups() {
         </div>
       </div>
       <div className="tool-group">
-        <span className="tool-label">Structures</span>
+        <span className="tool-label">Structures<span className="tool-count">{pieces} pieces</span></span>
         <div className="tool-grid structure-grid">
           {structures.map((item) => {
             const active = selected === keyOf(item.tool)
@@ -110,23 +122,17 @@ export function ToolPalette() {
         </div>
         <div className="history-buttons">
           <button type="button" aria-label="Randomize" onClick={() => dispatch({ type: 'commit', board: randomizeBoard(tab.game.board) })}>
-            <svg viewBox="0 0 20 20" className="btn-icon" aria-hidden="true">
-              <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="7" cy="7" r="1.35" />
-              <circle cx="13" cy="7" r="1.35" />
-              <circle cx="10" cy="10" r="1.35" />
-              <circle cx="7" cy="13" r="1.35" />
-              <circle cx="13" cy="13" r="1.35" />
-            </svg>
+            <DiceGlyph />
           </button>
-          <button type="button" aria-label="Clear all" onClick={() => dispatch({ type: 'commit', board: clearBoard(tab.game.board) })}>
-            <svg viewBox="0 0 20 20" className="btn-icon" style={{ fill: 'none' }} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-              <path d="M10 2.6 16.4 6.3 V13.7 L10 17.4 3.6 13.7 V6.3 Z" />
-              <path d="M6.3 13.4 13.7 6.4" />
-            </svg>
+          <button type="button" className="danger" aria-label="Clear all" onClick={() => dispatch({ type: 'commit', board: clearBoard(tab.game.board) })}>
+            <ClearBoardGlyph />
           </button>
-          <button type="button" aria-label="Undo" onClick={() => dispatch({ type: 'undo' })} disabled={!tab.past.length}>←</button>
-          <button type="button" aria-label="Redo" onClick={() => dispatch({ type: 'redo' })} disabled={!tab.future.length}>→</button>
+          <button type="button" aria-label="Undo" onClick={() => dispatch({ type: 'undo' })} disabled={!tab.past.length}>
+            <UndoGlyph />
+          </button>
+          <button type="button" aria-label="Redo" onClick={() => dispatch({ type: 'redo' })} disabled={!tab.future.length}>
+            <RedoGlyph />
+          </button>
         </div>
       </div>
       <ToolGroups />

@@ -130,9 +130,9 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 5: Tool heading and the moved counts (D5)
 
-- [ ] Tests first. `e2e/shellArms.spec.ts` desktop: the tools heading has buttons named `Randomize`, `Clear all`, `Undo`, `Redo`, each containing an `svg` and no `←`/`→` text; `Clear all` has the `danger` class; after `Randomize` the `Terrain` label's `.tool-count` reads `19/19` and the `Structures` label's reads `0 pieces`; the phone build test asserts the same two counts appear in the build block.
-- [ ] `ToolPalette.tsx`: the heading buttons render `DiceGlyph`, `ClearBoardGlyph`, `UndoGlyph`, `RedoGlyph`; delete the inline SVGs and `.btn-icon`; `Clear all` carries `className="danger"`. `ToolGroups` renders the counts inside the `Terrain` and `Structures` labels as `tool-count`, computed from `board.hexes` and `board.roads.length + board.buildings.length`; `.tool-label` becomes flex with the count at its end.
-- [ ] Ledger: D5 done.
+- [x] Tests first. `e2e/shellArms.spec.ts` desktop: the tools heading has buttons named `Randomize`, `Clear all`, `Undo`, `Redo`, each containing an `svg` and no `←`/`→` text; `Clear all` has the `danger` class; after `Randomize` the `Terrain` label's `.tool-count` reads `19/19` and the `Structures` label's reads `0 pieces`; the phone build test asserts the same two counts appear in the build block.
+- [x] `ToolPalette.tsx`: the heading buttons render `DiceGlyph`, `ClearBoardGlyph`, `UndoGlyph`, `RedoGlyph`; delete the inline SVGs and `.btn-icon`; `Clear all` carries `className="danger"`. `ToolGroups` renders the counts inside the `Terrain` and `Structures` labels as `tool-count`, computed from `board.hexes` and `board.roads.length + board.buildings.length`; `.tool-label` becomes flex with the count at its end.
+- [x] Ledger: D5 done.
 
 ### Task 6: Analysis behaviour (D6, DB2)
 
