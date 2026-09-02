@@ -36,22 +36,17 @@ function state(tabs: TabState[], activeTabId = tabs[0].id): StoreState {
   }
 }
 
-// The provider's wiring in miniature: the autosave sees every action before the
-// reducer does, and the tab set after every commit, including the commits its
-// own dispatches cause.
+// The provider's wiring in miniature: the autosave sees the tab set after
+// every commit, including the commits its own dispatches cause.
 function harness(initial: StoreState) {
   let current = initial
   const dispatched: StoreAction[] = []
-  const raw = (action: StoreAction) => {
+  const dispatch = (action: StoreAction) => {
     dispatched.push(action)
     current = reducer(current, action)
     autosave.arm(current.tabs)
   }
-  const autosave = createLibraryAutosave(raw, initial.tabs)
-  const dispatch = (action: StoreAction) => {
-    autosave.observe(action)
-    raw(action)
-  }
+  const autosave = createLibraryAutosave(dispatch, initial.tabs)
   const edit = (game: Game) => dispatch({ type: 'commit-game', game })
   return {
     dispatch,
@@ -170,19 +165,74 @@ describe('library autosave', () => {
     const game = painted(blank())
     const mapId = savedId('Thursday game', game)
     const store = harness(state([tab('t1')]))
+    const opened = loaded(mapId)
+    const getItem = vi.spyOn(Storage.prototype, 'getItem')
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
-    store.dispatch({ type: 'tab-add', game: loaded(mapId), title: 'Thursday game', mapId })
+    store.dispatch({ type: 'tab-add', game: opened, title: 'Thursday game', mapId })
     vi.advanceTimersByTime(2000)
+    // Never even scheduled: an opened map is not compared against the library,
+    // let alone written back into it.
+    expect(getItem).not.toHaveBeenCalled()
     expect(setItem).not.toHaveBeenCalled()
+    const next = painted(opened, 1, 0, 8)
+    store.edit(next)
+    vi.advanceTimersByTime(500)
+    expect(mapNames()).toEqual(['Thursday game'])
+    expect(store.active().mapId).toBe(mapId)
+    expect(loaded(mapId)).toEqual(next)
   })
 
-  it('flushes a pending save on pagehide', () => {
+  it('writes an undo back to the state a map was opened with', () => {
+    const opened = painted(blank())
+    const mapId = savedId('Thursday game', opened)
     const store = harness(state([tab('t1')]))
+    store.dispatch({ type: 'tab-add', game: loaded(mapId), title: 'Thursday game', mapId })
+    const original = store.active().game
+    store.edit(painted(original, 1, 0, 8))
+    vi.advanceTimersByTime(500)
+    expect(loaded(mapId)).not.toEqual(original)
+    store.dispatch({ type: 'undo' })
+    vi.advanceTimersByTime(500)
+    expect(loaded(mapId)).toEqual(original)
+  })
+
+  it('leaves an imported or duplicated board out of the library until it is edited', () => {
+    // A tab-add carrying a game but no link: JSON and screenshot imports, and
+    // Duplicate, which shares the source tab's game object.
+    const store = harness(state([tab('t1', painted(blank()))]))
+    const source = store.active().game
+    store.dispatch({ type: 'tab-add', game: source, title: 'Copy' })
+    vi.advanceTimersByTime(2000)
+    expect(mapNames()).toEqual([])
+    const next = painted(source, 1, 0, 8)
+    store.edit(next)
+    vi.advanceTimersByTime(500)
+    expect(mapNames()).toEqual(['Copy'])
+    expect(loaded(store.active().mapId as string)).toEqual(next)
+  })
+
+  it('keeps a pending save on the source tab when it is duplicated mid-debounce', () => {
+    const store = harness(state([tab('t1')]))
+    const game = painted(store.active().game)
+    store.edit(game)
+    vi.advanceTimersByTime(100)
+    store.dispatch({ type: 'tab-add', game, title: 'Copy' })
+    vi.advanceTimersByTime(500)
+    expect(mapNames()).toEqual(['t1'])
+    expect(store.state().tabs.map((entry) => entry.mapId === null)).toEqual([false, true])
+  })
+
+  it('flushes a pending save on pagehide and hands back the link it made', () => {
+    const store = harness(state([tab('t1'), tab('t2')]))
     store.edit(painted(store.active().game))
     vi.advanceTimersByTime(100)
-    store.autosave.flush()
+    const linked = store.autosave.flush()
     expect(mapNames()).toEqual(['t1'])
     expect(store.active().mapId).not.toBeNull()
+    // The workspace written on unload has to carry the link, since the
+    // dispatch that carries it will never render.
+    expect(linked?.map((entry) => entry.mapId)).toEqual([store.active().mapId, null])
+    expect(store.autosave.flush()).toBeNull()
     // Nothing is left to fire once the flush has written it.
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     vi.advanceTimersByTime(2000)

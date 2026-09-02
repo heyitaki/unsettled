@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { analyzeBoardCached } from '../../engine/analyze'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { BoardCanvas } from '../BoardCanvas'
 import { GlobalNotice } from '../GlobalNotice'
+import { restingMarks } from '../restMarks'
 import { activeTab, useStore } from '../store'
 import { buildSessionEnded, cancelTarget, openBuildSession, type BuildSession } from './buildMode'
 import { MapsScreen } from './MapsScreen'
@@ -10,7 +12,6 @@ import { PhoneHeader } from './PhoneHeader'
 import { PhoneRibbon } from './PhoneRibbon'
 import { PlayersScreen } from './PlayersScreen'
 
-export type PhoneMode = 'analyze' | 'build'
 export type PhoneOverlay = 'maps' | 'players'
 
 /**
@@ -25,6 +26,13 @@ export function PhoneShell() {
   const [session, setSession] = useState<BuildSession | null>(null)
   const [overlay, setOverlay] = useState<PhoneOverlay | null>(null)
   const building = session !== null && !buildSessionEnded(session, tab)
+  // What the board shows while nothing is selected (spec S5); bare in build
+  // mode, where the analysis block is not on the page.
+  const { board } = tab.game
+  const restMarks = useMemo(
+    () => building ? null : restingMarks(board, analyzeBoardCached(board)),
+    [board, building],
+  )
   // The store boots with the desktop's default tile tool. Here the pencil is the
   // only way into editing, so a board tap in analyze mode must not paint.
   useEffect(() => {
@@ -49,14 +57,10 @@ export function PhoneShell() {
   }
   return (
     <div className="phone-shell" data-overlay={overlay ?? undefined}>
-      <PhoneHeader
-        mode={building ? 'build' : 'analyze'}
-        onToggleMode={building ? done : enter}
-        onOpen={setOverlay}
-      />
+      <PhoneHeader building={building} onToggleMode={building ? done : enter} onOpen={setOverlay} />
       <main className="phone-page">
         <PhoneRibbon />
-        <BoardCanvas />
+        <BoardCanvas restMarks={restMarks} />
         {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel variant="phone" onBuild={enter} />}
       </main>
       {overlay === 'maps' && <MapsScreen onClose={() => setOverlay(null)} />}

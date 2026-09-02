@@ -38,25 +38,21 @@ export function copyTitle(title: string, taken: Set<string>): string {
 
 /**
  * The library map a save writes back into, and the name it writes there — or
- * null when the save should address the library by name instead (a new map, or
- * a replacement of some other map that happens to share the name).
+ * null when the save should add a new map instead.
  *
  * Identity is the id: only a real link counts, or an unlinked tab would
- * silently overwrite a library entry that has no id yet. `typedName` is the
- * name the user actually edited, or null for a name field they left following
- * the tab's title — in which case the save adopts whatever the map is called
- * now, so a rename that landed in another window cannot fork it in two.
+ * silently overwrite a library entry that has no id yet. The name is whatever
+ * the map is called now, not the tab's title, so a rename that landed in
+ * another window cannot fork the map in two.
  */
 export function inPlaceTarget(
   maps: readonly { id: string | null; name: string }[],
   mapId: string | null,
-  typedName: string | null,
 ): { id: string; name: string } | null {
   if (mapId === null) return null
   const map = maps.find((candidate) => candidate.id === mapId)
   if (map === undefined || map.id === null) return null
-  if (typedName !== null && typedName !== map.name) return null
-  return { id: map.id, name: typedName ?? map.name }
+  return { id: map.id, name: map.name }
 }
 
 /** What the library holds for a tab: nothing, a game, or no longer anything. */
@@ -94,9 +90,10 @@ function blankSignature(layout: LayoutId): string {
 }
 
 /**
- * Does closing this tab lose work? A linked tab whose map has vanished is dirty
- * whatever it holds, because it is then the only copy left. An unlinked tab is
- * dirty once it holds anything beyond a fresh board.
+ * Does the library differ from what this tab holds, so that an autosave has
+ * something to write? A linked tab whose map has vanished is dirty whatever it
+ * holds, because it is then the only copy left. An unlinked tab is dirty once
+ * it holds anything beyond a fresh board.
  */
 export function tabIsDirty(game: Game, saved: SavedMap): boolean {
   if (!saved.linked) return signature(game) !== blankSignature(game.board.layout)
@@ -124,7 +121,7 @@ export function saveTab(
   const maps = library.readable ? library.maps : []
   // Under the map's own name, not the tab's title: a save is not a rename, and
   // inPlaceTarget is where that rule lives for every save path.
-  const inPlace = inPlaceTarget(maps, tab.mapId, null)
+  const inPlace = inPlaceTarget(maps, tab.mapId)
   if (inPlace !== null) {
     const updated = updateMap(inPlace.id, inPlace.name, tab.game)
     return updated.ok ? { ok: true, id: updated.id, name: inPlace.name } : updated

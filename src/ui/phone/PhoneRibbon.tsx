@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { analyzeBoardCached } from '../../engine/analyze'
 import { readableInk } from '../colors'
 import { draftSlots } from '../draftSlots'
-import { activeTab, useStore } from '../store'
+import { activeTab, useStore, type HighlightMark } from '../store'
 
 /**
  * The snake draft above the board (spec S2): one circle per pick, tinted to the
@@ -20,6 +20,12 @@ export function PhoneRibbon() {
   useEffect(() => {
     setSelected(null)
   }, [board])
+  // The marks this ribbon last put on the board. Anything else writing the
+  // highlight (a card tapped in the analysis block) takes the outline with it.
+  const own = useRef<readonly HighlightMark[] | null>(null)
+  useEffect(() => {
+    if (state.highlight !== own.current) setSelected(null)
+  }, [state.highlight])
   return (
     <div className="phone-ribbon" aria-label="Snake draft order">
       {slots.map((slot, index) => {
@@ -41,12 +47,10 @@ export function PhoneRibbon() {
             onClick={() => {
               const next = selected === index ? null : index
               setSelected(next)
-              dispatch({
-                type: 'highlight',
-                marks: next !== null && slot.vertex
-                  ? [{ ref: slot.vertex, color: player.color, label: String(index + 1) }]
-                  : null,
-              })
+              own.current = next !== null && slot.vertex
+                ? [{ ref: slot.vertex, color: player.color, label: String(index + 1) }]
+                : null
+              dispatch({ type: 'highlight', marks: own.current })
             }}
           >
             {index + 1}

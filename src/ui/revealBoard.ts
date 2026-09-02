@@ -10,19 +10,14 @@
 const VISIBLE_SLACK = 120
 
 /** True when the board's bottom edge sits above the band just under the header. */
-export const shouldRevealBoard = (
-  boardBottom: number,
-  headerBottom: number,
-  slack = VISIBLE_SLACK,
-): boolean => boardBottom < headerBottom + slack
-
-export function revealBoard(): void {
-  document.documentElement.scrollTop = 0
-}
+export const shouldRevealBoard = (boardBottom: number, headerBottom: number): boolean =>
+  boardBottom < headerBottom + VISIBLE_SLACK
 
 /** Measures the phone shell's header and board, and reveals the board if it has scrolled past. */
 export function revealBoardIfScrolledPast(): void {
   const board = document.querySelector('.phone-shell .board-canvas')?.getBoundingClientRect()
   const header = document.querySelector('.phone-head')?.getBoundingClientRect()
-  if (board && header && shouldRevealBoard(board.bottom, header.bottom)) revealBoard()
+  if (board && header && shouldRevealBoard(board.bottom, header.bottom)) {
+    document.documentElement.scrollTop = 0
+  }
 }

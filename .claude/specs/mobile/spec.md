@@ -146,11 +146,11 @@ Do not rebuild these; move or restyle them.
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, shared by `MapsPanel.tsx` and `phone/MapsScreen.tsx` |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `ImportPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
-| Undo, redo, randomize, clear | `ToolPalette.tsx` heading |
+| Undo, redo, randomize, clear | `ToolPalette.tsx` heading; on the phone the header's dots menu in `phone/PhoneHeader.tsx`, with the tool rows shared as `ToolGroups` |
 | Open, close, select, rename boards | `BoardTabs.tsx` and `store.ts` (`tab-*` actions) |
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, shared by `BoardTabs.tsx` and `phone/MapsScreen.tsx` |
-| Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes an adopted game | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
-| Toast | `App.tsx`, `global-notice` |
+| Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
+| Toast | `GlobalNotice.tsx`, rendered by both `Workspace` and `PhoneShell` |
 | Snake draft strip, with the slot derivation in `draftSlots.ts` shared with the phone ribbon | `PlayerPanel.tsx`, `draft-strip`; `phone/PhoneRibbon.tsx` |
 
 ## Decisions
@@ -201,4 +201,4 @@ One row per work item. Keep the state column current; this file is the durable c
 
 ## Out of scope
 
-Landscape phone. Desktop. Phase 3 boons and curses. The random header subtitle, which the phone header drops along with the rest of the site header.
+Landscape phone. Desktop layout (B7 and the S5 factor labels change desktop behaviour deliberately). Phase 3 boons and curses. The random header subtitle, which the phone header drops along with the rest of the site header.

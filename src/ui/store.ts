@@ -199,7 +199,7 @@ export function adoptLegacyLinks(tabs: TabState[], library: LibraryView): TabSta
     if (tab.mapId !== null) return tab
     const mapId = idByName.get(tab.title)
     if (mapId === undefined || claimed.has(mapId)) return tab
-    // Identical to what the library holds, by the same comparison the tab strip
+    // Identical to what the library holds, by the same comparison the autosave
     // uses — so this cannot drift from what "matches its saved map" means.
     if (tabIsDirty(tab.game, savedMap(saved.get(mapId)))) return tab
     claimed.add(mapId)
@@ -309,6 +309,9 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         return {
           ...tab,
           game: action.game,
+          // A whole game can carry a different roster (build mode's Cancel
+          // restores one), so the id is reconciled as every other write is.
+          activePlayerId: activePlayerFor(action.game.board, tab.activePlayerId),
           past: [...tab.past, tab.game].slice(-50),
           future: [],
         }
@@ -492,20 +495,13 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
 const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<StoreAction> } | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, rawDispatch] = useReducer(reducer, undefined, initialState)
+  const [state, dispatch] = useReducer(reducer, undefined, initialState)
   // Created on the first render, when their reads of shared storage are still
-  // this document's own history rather than another document's write. Every
-  // action passes the autosave before the reducer, so a game adopted from
-  // another document is known as such before it is installed; the sync's own
-  // adoptions go the same way.
-  const [{ autosave, dispatch, sync }] = useState(() => {
-    const autosave = createLibraryAutosave(rawDispatch, state.tabs)
-    const dispatch: Dispatch<StoreAction> = (action) => {
-      autosave.observe(action)
-      rawDispatch(action)
-    }
-    return { autosave, dispatch, sync: createWorkspaceSync(dispatch) }
-  })
+  // this document's own history rather than another document's write.
+  const [{ autosave, sync }] = useState(() => ({
+    autosave: createLibraryAutosave(dispatch, state.tabs),
+    sync: createWorkspaceSync(dispatch),
+  }))
   // A write that stood down leaves work owed, and the reconciled workspace only
   // exists after a render — so the retry is a render this asks for. Nothing
   // reads the token; it is the dependency that re-runs the arming effect.
@@ -552,7 +548,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // document whose storage moved underneath it can only stand down, and
     // whatever it still owed is lost.
     const flushWorkspace = () => {
-      autosave.flush()
+      // A link the autosave makes here rides a dispatch that will not render
+      // before the document unloads, so the workspace is re-armed with it
+      // rather than written as it stood before the save.
+      const linked = autosave.flush()
+      if (linked !== null) sync.arm(persistedWorkspace(linked))
       void sync.flush()
     }
     // A document restored from bfcache missed every write while it was frozen.

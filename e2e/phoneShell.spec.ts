@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { resolve } from 'node:path'
 
 /**
  * The portrait-phone shell, in the one emulation that makes both
@@ -44,11 +45,17 @@ test('the dots menu holds undo, redo and the board actions', async ({ page }) =>
 
 test('the window is the only scroller and nothing overflows sideways', async ({ page }) => {
   await open(page)
+  // Judged on the declared overflow, not on whether the content happens to
+  // fit today: a nested scroller that fits a blank board still scrolls a full
+  // one. A sideways tool row computes to `overflow-y: auto` as well, so only
+  // those are held to their actual height.
   const nested = await page.locator('.phone-page').evaluate((root) =>
     Array.from(root.querySelectorAll<HTMLElement>('*'))
       .filter((el) => {
-        const overflow = getComputedStyle(el).overflowY
-        return (overflow === 'auto' || overflow === 'scroll') && el.scrollHeight > el.clientHeight
+        const { overflowX, overflowY } = getComputedStyle(el)
+        const scrolls = (value: string) => value === 'auto' || value === 'scroll'
+        if (!scrolls(overflowY)) return false
+        return scrolls(overflowX) ? el.scrollHeight > el.clientHeight : true
       })
       .map((el) => el.className))
   expect(nested).toEqual([])
@@ -234,6 +241,27 @@ test.describe('build mode', () => {
     await snap(page, 'build-cancel')
   })
 
+  test('a tile tool paints a tapped hex, Cancel takes it back, and analyze mode never paints', async ({ page }) => {
+    await open(page)
+    const board = page.locator('.board-canvas')
+    const wood = page.locator('.board-canvas polygon[fill="#1e7a3a"]')
+    const centre = (await board.boundingBox())!
+    const tap = () => page.mouse.click(centre.x + centre.width / 2, centre.y + centre.height / 2)
+    await tap()
+    await expect(wood).toHaveCount(0)
+    const pencil = page.getByRole('button', { name: 'Edit the board' })
+    const tools = page.locator('.phone-build')
+    await pencil.click()
+    await tools.getByRole('button', { name: 'wood' }).click()
+    await tap()
+    await expect(wood).toHaveCount(1)
+    await tools.getByRole('button', { name: 'Cancel' }).click()
+    await expect(pencil).toHaveAttribute('aria-pressed', 'false')
+    await expect(wood).toHaveCount(0)
+    await tap()
+    await expect(wood).toHaveCount(0)
+  })
+
   test('Done keeps the tiles and drops the picked tool', async ({ page }) => {
     await open(page)
     const pencil = page.getByRole('button', { name: 'Edit the board' })
@@ -328,6 +356,74 @@ test.describe('maps screen', () => {
     await expect(screen).toHaveCount(0)
     await expect(title).toHaveText('Thursday')
   })
+
+  test('Escape in a rename field reverts the name and leaves the screen up', async ({ page }) => {
+    await open(page)
+    const screen = page.getByRole('dialog', { name: 'Maps' })
+    await page.locator('.phone-title').click()
+    await screen.getByRole('button', { name: 'Rename Board 1', exact: true }).click()
+    const field = screen.getByRole('textbox', { name: 'Rename Board 1' })
+    await field.fill('Discarded')
+    await field.press('Escape')
+    await expect(field).toHaveCount(0)
+    await expect(screen).toBeVisible()
+    await expect(screen.locator('.phone-open-boards .phone-row-name')).toHaveText('Board 1')
+    await expect(page.locator('.phone-title')).toHaveText('Board 1')
+  })
+
+  test('renaming a saved map from its row retitles the board linked to it', async ({ page }) => {
+    await open(page)
+    await page.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+    const screen = page.getByRole('dialog', { name: 'Maps' })
+    const saved = screen.locator('.phone-saved-maps .phone-row')
+    await page.locator('.phone-title').click()
+    await expect(saved).toHaveCount(1)
+    await saved.first().getByRole('button', { name: 'Rename Board 1', exact: true }).click()
+    const field = screen.getByRole('textbox', { name: 'Rename Board 1' })
+    await field.fill('Friday')
+    await field.press('Enter')
+    await expect(field).toHaveCount(0)
+    await expect(saved.first().locator('.phone-row-name')).toHaveText('Friday')
+    await expect(screen.locator('.phone-open-boards .phone-row-name')).toHaveText('Friday')
+    await expect(page.locator('.phone-title')).toHaveText('Friday')
+    await expect(screen).toBeVisible()
+  })
+
+  test('only an import that lands closes the screen', async ({ page }) => {
+    await open(page)
+    const screen = page.getByRole('dialog', { name: 'Maps' })
+    const importDialog = page.getByRole('dialog', { name: 'Import screenshot' })
+    await page.locator('.phone-title').click()
+    // Dismissed with nothing imported: the screen stays.
+    await screen.getByRole('button', { name: 'Import screenshot' }).click()
+    await expect(importDialog).toBeVisible()
+    await importDialog.getByRole('button', { name: 'Done' }).click()
+    await expect(importDialog).toHaveCount(0)
+    await expect(screen).toBeVisible()
+    // Closing the current board afterwards changes the active tab, which is
+    // not an import either.
+    await screen.getByRole('button', { name: 'New board' }).click()
+    await expect(screen).toHaveCount(0)
+    await page.locator('.phone-title').click()
+    await screen.getByRole('button', { name: 'Close Board 2', exact: true }).click()
+    await expect(screen.locator('.phone-open-boards .phone-row')).toHaveCount(1)
+    await expect(screen).toBeVisible()
+    // A JSON file that does not parse: a toast, and the screen stays.
+    await screen.locator('input[type="file"]').setInputFiles({
+      name: 'bad.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from('not a board'),
+    })
+    await expect(page.locator('.global-notice')).toContainText('Import failed')
+    await expect(screen).toBeVisible()
+    // A screenshot that parses becomes the active board and takes the screen with it.
+    await screen.getByRole('button', { name: 'Import screenshot' }).click()
+    await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-draft-3player.png'))
+    await expect(page.locator('.phone-title')).toHaveText('board-draft-3player', { timeout: 30_000 })
+    await expect(screen).toHaveCount(0)
+    await expect(importDialog).toHaveCount(0)
+  })
 })
 
 test.describe('players screen', () => {
@@ -396,5 +492,41 @@ test.describe('players screen', () => {
     await expect(page.locator('.phone-dot')).toHaveCount(5)
     await screen.getByRole('button', { name: 'Back to the board' }).click()
     await expect(screen).toHaveCount(0)
+  })
+
+  test('a swipe before the hold lands keeps the row, a hold lifts it, and the trash removes it', async ({ page }) => {
+    await open(page)
+    await seedUnclaimedRoster(page)
+    const screen = page.getByRole('dialog', { name: 'Players' })
+    const rows = screen.locator('.phone-prow')
+    await page.getByRole('button', { name: 'Players', exact: true }).click()
+    await expect(rows).toHaveCount(4)
+    await screen.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+    // Pressed on the row itself, well away from the grip, and moved before
+    // the hold could land: a scroll, so nothing lifts.
+    const last = (await rows.nth(3).boundingBox())!
+    const x = last.x + last.width * 0.8
+    const y = last.y + last.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x, y + 20, { steps: 4 })
+    await page.waitForTimeout(500)
+    await expect(rows.nth(3)).not.toHaveClass(/\bdragging\b/)
+    await expect(screen.locator('.phone-trash')).toHaveCount(0)
+    await page.mouse.up()
+    // Held still past the threshold: the row lifts and the trash appears.
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.waitForTimeout(500)
+    await expect(rows.nth(3)).toHaveClass(/\bdragging\b/)
+    const trash = screen.locator('.phone-trash')
+    await expect(trash).toBeVisible()
+    const bin = (await trash.boundingBox())!
+    await page.mouse.move(bin.x + bin.width / 2, bin.y + bin.height / 2, { steps: 12 })
+    await expect(trash).toHaveClass(/\bover\b/)
+    await page.mouse.up()
+    await expect(rows).toHaveCount(3)
+    await expect(rows.locator('.phone-row-name')).toHaveText(['Red', 'Blue', 'Orange'])
+    await expect(page.locator('.phone-dot')).toHaveCount(3)
   })
 })

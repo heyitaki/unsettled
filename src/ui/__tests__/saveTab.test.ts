@@ -85,7 +85,7 @@ describe('saveTab', () => {
     // Named but id-less: written before ids existed and left that way by a
     // failed migration. saveMap still refuses over it, so a save that only
     // consulted the addressable maps would pick a name and then be rejected,
-    // leaving the board unsaveable from a close prompt that offers no way out.
+    // and the autosave would toast a failure on every edit of the board.
     localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'Thursday game', game: pristine() }]))
     const game = edited()
 

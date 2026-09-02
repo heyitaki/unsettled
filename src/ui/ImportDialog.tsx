@@ -30,7 +30,8 @@ async function decodeImage(file: File): Promise<RgbaImage> {
 // Screenshot import lives in a modal launched from the Library. On a clean
 // parse it closes itself; when the parse raises issues it stays open so they
 // can be reviewed and clicked to highlight the offending element on the board.
-export function ImportDialog({ onClose }: { onClose: () => void }) {
+// `onImported` runs once a parse has become a tab, before either close.
+export function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported?: () => void }) {
   const { state, dispatch } = useStore()
   const [issues, setIssues] = useState<ParseIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -85,6 +86,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     ])
                     const importTitle = firstFreeName(fileTitle(file.name), reserved)
                     dispatch({ type: 'tab-add', game: result.game, title: importTitle })
+                    onImported?.()
                     notice(`Imported ${file.name}`)
                     setIssues(result.issues)
                     if (result.issues.length === 0) onClose()

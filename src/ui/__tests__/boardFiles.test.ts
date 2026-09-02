@@ -54,31 +54,21 @@ describe('savedMap', () => {
 describe('inPlaceTarget', () => {
   const maps = [{ id: 'map-1', name: 'Alpha' }, { id: null, name: 'Legacy' }]
 
-  it('resolves only the linked tab writing back to its own map', () => {
-    expect(inPlaceTarget(maps, 'map-1', 'Alpha')).toEqual({ id: 'map-1', name: 'Alpha' })
-    // Same map, new name: that is a save-as, so it must go through the prompt.
-    expect(inPlaceTarget(maps, 'map-1', 'Beta')).toBeNull()
-    // Same name, someone else's map.
-    expect(inPlaceTarget(maps, 'map-2', 'Alpha')).toBeNull()
-  })
-
-  it('adopts the map’s current name when the user did not type one', () => {
+  it('resolves the linked tab to its own map under the map’s current name', () => {
     // The tab's title can be a rename behind the library. Saving under the
     // stale name would miss the map by name and fork it into a second entry;
     // the link says which map this is, and the library says what it is called.
-    expect(inPlaceTarget(maps, 'map-1', null)).toEqual({ id: 'map-1', name: 'Alpha' })
+    expect(inPlaceTarget(maps, 'map-1')).toEqual({ id: 'map-1', name: 'Alpha' })
   })
 
   it('never matches an unlinked tab against an entry that has no id', () => {
     // Both sides null would read as "my own map" and overwrite a stranger's
     // map with no confirmation at all.
-    expect(inPlaceTarget(maps, null, 'Legacy')).toBeNull()
-    expect(inPlaceTarget(maps, null, 'Alpha')).toBeNull()
-    expect(inPlaceTarget(maps, null, null)).toBeNull()
+    expect(inPlaceTarget(maps, null)).toBeNull()
   })
 
   it('resolves nothing when the link points at a map that is gone', () => {
-    expect(inPlaceTarget(maps, 'deleted', null)).toBeNull()
+    expect(inPlaceTarget(maps, 'deleted')).toBeNull()
   })
 })
 

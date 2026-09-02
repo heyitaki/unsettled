@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { SORT_LABEL, SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, stampFor } from './library'
+import { SORT_LABEL, SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, sortMaps, stampFor } from './library'
 import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 import { useLibrary } from './useLibrary'
@@ -8,8 +8,8 @@ export function MapsPanel() {
   const { state } = useStore()
   const { mapId } = activeTab(state)
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
-  const { listed, sortedMaps: sortBy, openMap, deleteSavedMap } = useLibrary()
-  const sortedMaps = useMemo(() => sortBy(sortKey), [sortBy, sortKey])
+  const { listed, openMap, deleteSavedMap } = useLibrary()
+  const sortedMaps = useMemo(() => sortMaps(listed.maps, sortKey), [listed, sortKey])
   // Fade whichever end of the scrollable map list still hides cut-off rows,
   // mirroring the tab strip's edge masks.
   const scrollerRef = useRef<HTMLDivElement>(null)

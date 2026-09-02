@@ -1,9 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { boardColor } from '../boardColor'
 import type { ContextMenuItem } from '../ContextMenu'
 import { BoardHexGlyph, PhotoGlyph, PlusGlyph, TrashGlyph, XMarkGlyph } from '../glyphs'
 import { ImportDialog } from '../ImportDialog'
-import { SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, stampFor } from '../library'
+import { SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, sortMaps, stampFor } from '../library'
 import { MenuSelect } from '../MenuSelect'
 import { useStore } from '../store'
 import { useJsonFiles } from '../useJsonFiles'
@@ -62,19 +62,14 @@ type Editing = { key: string; draft: string }
 export function MapsScreen({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useStore()
   const renameTab = useRenameTab()
-  const { listed, sortedMaps, openMap, deleteSavedMap, renameSavedMap } = useLibrary()
+  const { listed, openMap, deleteSavedMap, renameSavedMap } = useLibrary()
   const { importJson, exportJson, fileInput } = useJsonFiles({ onImported: onClose })
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
   const [editing, setEditing] = useState<Editing | null>(null)
   // The screenshot dialog closes itself once a parse has landed and also when
-  // it is dismissed. Only the first should close this screen, and the dialog's
-  // own close runs before the new tab has rendered, so the tab change is read
-  // afterwards: the dialog is closed and the active tab is not the one it
-  // opened over.
-  const [screenshot, setScreenshot] = useState<{ openedOn: string; closed: boolean } | null>(null)
-  useEffect(() => {
-    if (screenshot?.closed && state.activeTabId !== screenshot.openedOn) onClose()
-  }, [screenshot, state.activeTabId, onClose])
+  // it is dismissed; only the first should take this screen with it.
+  const [importOpen, setImportOpen] = useState(false)
+  const imported = useRef(false)
   const menu: ContextMenuItem[] = [
     { label: 'Import JSON', onClick: importJson },
     { label: 'Export JSON', onClick: exportJson },
@@ -85,13 +80,16 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
     onDraft: (next: string) => setEditing({ key, draft: next }),
     onCancel: () => setEditing(null),
   })
-  const maps = sortedMaps(sortKey)
+  const maps = useMemo(() => sortMaps(listed.maps, sortKey), [listed, sortKey])
   return (
     <PhoneOverlay title="Maps" menu={menu} menuLabel="Import and export files" onClose={onClose}>
       <button
         type="button"
         className="phone-hero-import"
-        onClick={() => setScreenshot({ openedOn: state.activeTabId, closed: false })}
+        onClick={() => {
+          imported.current = false
+          setImportOpen(true)
+        }}
       >
         <PhotoGlyph />
         Import screenshot
@@ -164,9 +162,9 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
                 meta={!map.valid ? 'corrupt' : stamp === undefined ? '' : relativeTime(stamp)}
                 selectLabel={`Open ${map.name}`}
                 selectDisabled={!map.valid}
+                // A refused open has toasted why; the list stays for a retry.
                 onSelect={() => {
-                  openMap(map)
-                  onClose()
+                  if (openMap(map)) onClose()
                 }}
                 {...rename(key)}
                 // Only an entry with no name at all is beyond addressing; one
@@ -189,8 +187,14 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       {fileInput}
-      {screenshot && !screenshot.closed && (
-        <ImportDialog onClose={() => setScreenshot((open) => open && { ...open, closed: true })} />
+      {importOpen && (
+        <ImportDialog
+          onImported={() => { imported.current = true }}
+          onClose={() => {
+            setImportOpen(false)
+            if (imported.current) onClose()
+          }}
+        />
       )}
     </PhoneOverlay>
   )

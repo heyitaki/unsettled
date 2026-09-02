@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useMemo } from 'react'
 import {
   deleteMap,
   type ListedMap,
@@ -10,14 +10,14 @@ import {
   renameMap,
 } from '../persistence/localStorage'
 import { loadedNotice } from './boardFiles'
-import { type SortKey, sortMaps } from './library'
 import { useStore } from './store'
 
 /**
  * The saved-map library as both trees see it: the listing, cached on the
  * store's revision counter, and the open, delete and rename paths that address
  * an entry by id. Shared by MapsPanel and the phone's Maps screen so there is
- * one open path and one delete path.
+ * one open path and one delete path. Sorting is the caller's: `sortMaps` in
+ * library.ts over `listed.maps`.
  */
 export function useLibrary() {
   const { state, dispatch } = useStore()
@@ -28,7 +28,6 @@ export function useLibrary() {
     void state.mapsRevision
     return listMaps()
   }, [state.mapsRevision])
-  const sortedMaps = useCallback((sortKey: SortKey) => sortMaps(listed.maps, sortKey), [listed])
   const notice = (message: string) => dispatch({ type: 'notice', message })
   const refresh = () => dispatch({ type: 'maps-changed', library: readLibrary() })
   /**
@@ -57,13 +56,14 @@ export function useLibrary() {
     if (stamped.id === null) notice('This map entry is malformed and cannot be opened or deleted')
     return stamped.id
   }
-  const openMap = (map: ListedMap) => {
+  /** Opens or switches to the map. Returns false when it refused, with the reason already toasted. */
+  const openMap = (map: ListedMap): boolean => {
     const mapKey = addressable(map)
-    if (mapKey === null) return
+    if (mapKey === null) return false
     const loaded = loadMap(mapKey)
     if (!loaded.ok) {
       notice(loaded.errors.join(', '))
-      return
+      return false
     }
     markMapOpened(mapKey)
     refresh()
@@ -73,10 +73,11 @@ export function useLibrary() {
     if (existing) {
       dispatch({ type: 'tab-select', id: existing.id })
       notice(`Switched to "${map.name}"`)
-      return
+      return true
     }
     dispatch({ type: 'tab-add', game: loaded.game, title: map.name, mapId: mapKey })
     notice(loadedNotice(`Loaded "${map.name}"`, loaded.game.board))
+    return true
   }
   const deleteSavedMap = (map: ListedMap) => {
     const mapKey = addressable(map)
@@ -100,5 +101,5 @@ export function useLibrary() {
     refresh()
     return result.ok
   }
-  return { listed, sortedMaps, openMap, deleteSavedMap, renameSavedMap }
+  return { listed, openMap, deleteSavedMap, renameSavedMap }
 }

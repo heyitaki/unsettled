@@ -120,6 +120,18 @@ describe('editor history', () => {
     // A no-op commit-game (same reference) leaves the state untouched.
     expect(reducer(committed, { type: 'commit-game', game: activeTab(committed).game })).toBe(committed)
   })
+
+  it('commit-game re-selects the active player when the restored roster drops them', () => {
+    // Build mode's Cancel restores a whole earlier game; a player added and
+    // selected meanwhile must not survive as a dangling id.
+    const original = newGame(createBoard('standard4'))
+    const withPlayer: Game = {
+      ...original,
+      board: addPlayer(original.board, { id: 'b', name: 'Bee', color: '#3063ba' }),
+    }
+    const start = state([tab('t1', withPlayer, { activePlayerId: 'b' })])
+    expect(activeTab(reducer(start, { type: 'commit-game', game: original })).activePlayerId).toBe('aki')
+  })
 })
 
 describe('workspace tabs', () => {

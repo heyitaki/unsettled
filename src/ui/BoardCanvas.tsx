@@ -36,7 +36,7 @@ import { ROBBER_BODY, ROBBER_HEAD } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
-import { activeTab, useStore } from './store'
+import { activeTab, useStore, type HighlightMark } from './store'
 import {
   IDENTITY,
   clampTransform,
@@ -135,7 +135,15 @@ interface PortLayout {
   point: { x: number; y: number }
 }
 
-export function BoardCanvas() {
+/**
+ * `restMarks` is what the board wears while nothing has been selected: the
+ * phone's ranked picks (spec S5). A selection in the store always wins, and a
+ * clear (`highlight: null`) falls back to them, so no panel has to reinstate
+ * them after another panel's clear.
+ */
+const NO_MARKS: readonly HighlightMark[] = []
+
+export function BoardCanvas({ restMarks = null }: { restMarks?: readonly HighlightMark[] | null } = {}) {
   const { state, dispatch } = useStore()
   const coarse = useCoarsePointer()
   const tab = activeTab(state)
@@ -164,18 +172,19 @@ export function BoardCanvas() {
   }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
+  const highlight = state.highlight ?? restMarks ?? NO_MARKS
   const highlightSet = useMemo(
-    () => new Set((state.highlight ?? []).map((mark) => mark.ref)),
-    [state.highlight],
+    () => new Set(highlight.map((mark) => mark.ref)),
+    [highlight],
   )
   // Marks that land on a vertex someone has already built on. The piece itself
   // takes the emphasis — thick border, deeper shadow, the pick number stamped
   // on it — instead of a circle parked on top of it, hiding whose it is.
   const markedBuildings = useMemo(
     () => new Map(board.buildings
-      .filter((building) => (state.highlight ?? []).some((mark) => mark.ref === building.vertexId))
+      .filter((building) => highlight.some((mark) => mark.ref === building.vertexId))
       .map((building) => [building.vertexId as string, building] as const)),
-    [state.highlight, board.buildings],
+    [highlight, board.buildings],
   )
   const ports = useMemo<PortLayout[]>(
     () =>
@@ -677,7 +686,7 @@ export function BoardCanvas() {
       </g>
     )
   }), [board.buildings, markedBuildings, playerColor])
-  const markLayer = useMemo(() => (state.highlight ?? [])
+  const markLayer = useMemo(() => highlight
     .filter((mark) => mark.ref.startsWith('v:') && gridVertexSet.has(mark.ref))
     .map((mark) => {
       const point = vertexPoint(mark.ref as VertexId)
@@ -719,7 +728,7 @@ export function BoardCanvas() {
           )}
         </g>
       )
-    }), [state.highlight, gridVertexSet, markedBuildings])
+    }), [highlight, gridVertexSet, markedBuildings])
   return (
     // The fitted box's proportions, for the portrait arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.

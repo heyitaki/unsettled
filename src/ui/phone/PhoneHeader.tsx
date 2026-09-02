@@ -5,7 +5,7 @@ import { ContextMenu, type ContextMenuItem } from '../ContextMenu'
 import { BoardHexGlyph, ChevronGlyph, DotsGlyph, PencilGlyph } from '../glyphs'
 import { activeTab, useStore } from '../store'
 import { useJsonFiles } from '../useJsonFiles'
-import type { PhoneMode, PhoneOverlay } from './PhoneShell'
+import type { PhoneOverlay } from './PhoneShell'
 
 /** Past this much scroll the header casts a shadow on the page sliding under it. */
 const SCROLLED_AT = 4
@@ -15,8 +15,8 @@ const SCROLLED_AT = 4
  * the pencil that toggles build mode, and the dots menu that holds what the
  * desktop tool palette's heading holds.
  */
-export function PhoneHeader({ mode, onToggleMode, onOpen }: {
-  mode: PhoneMode
+export function PhoneHeader({ building, onToggleMode, onOpen }: {
+  building: boolean
   onToggleMode: () => void
   onOpen: (overlay: PhoneOverlay) => void
 }) {
@@ -74,7 +74,7 @@ export function PhoneHeader({ mode, onToggleMode, onOpen }: {
         type="button"
         className="phone-icon-btn"
         aria-label="Edit the board"
-        aria-pressed={mode === 'build'}
+        aria-pressed={building}
         onClick={onToggleMode}
       >
         <PencilGlyph />
