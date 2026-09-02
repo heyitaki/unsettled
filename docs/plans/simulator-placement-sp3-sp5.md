@@ -261,9 +261,9 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 19: Run M-58 and record it
 
-- [ ] Record `uptime`, run every preregistered invocation, record `uptime` again
-- [ ] Append `## M-58: SP4 slot-scale profiles` with full provenance, pooled and per-hero-seat tables per arm, and the disposition per arm including the single retry
-- [ ] Link check passes
+- [x] Record `uptime`, run every preregistered invocation, record `uptime` again
+- [x] Append `## M-58: SP4 slot-scale profiles` with full provenance, pooled and per-hero-seat tables per arm, and the disposition per arm including the single retry
+- [x] Link check passes
 
 ### Task 20: SP5 draft-aware placement kind
 
