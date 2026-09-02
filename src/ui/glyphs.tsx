@@ -358,3 +358,38 @@ export function PhotoGlyph() {
     </svg>
   )
 }
+
+/** The overlay header's back chevron. */
+export function BackGlyph() {
+  return (
+    <svg {...LINE_ART} width="18" height="18" viewBox="0 0 18 18" strokeWidth="2">
+      <path d="M11.2 3.4 5.6 9l5.6 5.6" />
+    </svg>
+  )
+}
+
+export function XMarkGlyph() {
+  return (
+    <svg {...LINE_ART} width="13" height="13" viewBox="0 0 12 12" strokeWidth="1.6">
+      <path d="M2 2 10 10M10 2 2 10" />
+    </svg>
+  )
+}
+
+export function PlusGlyph() {
+  return (
+    <svg {...LINE_ART} width="12" height="12" viewBox="0 0 12 12" strokeWidth="1.8">
+      <path d="M6 1.4V10.6M1.4 6H10.6" />
+    </svg>
+  )
+}
+
+export function TrashGlyph() {
+  return (
+    <svg {...LINE_ART} width="14" height="15" viewBox="3 2.7 14 15.1" strokeWidth="1.5">
+      <path d="M3.6 5.6H16.4" />
+      <path d="M8 5.6V4.4a1.1 1.1 0 0 1 1.1-1.1h1.8a1.1 1.1 0 0 1 1.1 1.1V5.6" />
+      <path d="M5.4 5.6 6.2 16.1a1.3 1.3 0 0 0 1.3 1.2h5a1.3 1.3 0 0 0 1.3-1.2L14.6 5.6" />
+    </svg>
+  )
+}

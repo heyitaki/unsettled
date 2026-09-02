@@ -43,3 +43,12 @@ export function placeBelow(
  */
 export const overlayOpen = (): boolean =>
   document.querySelector('.popover-backdrop, .menu-backdrop') !== null
+
+/**
+ * Is the keystroke going into a field? Global key handling stays out of the
+ * way of one: F2 and Escape would otherwise fire while a title is being typed.
+ */
+export const isTextEntry = (element: Element | null): boolean =>
+  element instanceof HTMLInputElement ||
+  element instanceof HTMLTextAreaElement ||
+  (element instanceof HTMLElement && element.isContentEditable)

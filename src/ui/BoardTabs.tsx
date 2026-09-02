@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { readLibrary, renameMap } from '../persistence/localStorage'
+import { readLibrary } from '../persistence/localStorage'
 import { copyTitle } from './boardFiles'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import {
@@ -10,18 +10,10 @@ import {
   shortcutLabel,
   type Shortcut,
 } from './shortcuts'
-import { overlayOpen } from './overlayPosition'
+import { isTextEntry, overlayOpen } from './overlayPosition'
 import { activeTab, type TabState, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
-
-/**
- * Is the keystroke going into a field? Board shortcuts stay out of the way of
- * one — F2 and ⌘D would otherwise fire while a tab title is being typed.
- */
-const isTextEntry = (element: Element | null): boolean =>
-  element instanceof HTMLInputElement ||
-  element instanceof HTMLTextAreaElement ||
-  (element instanceof HTMLElement && element.isContentEditable)
+import { useRenameTab } from './useRenameTab'
 
 /**
  * Where to open the menu for a contextmenu event. Shift+F10 and the menu key
@@ -83,39 +75,17 @@ export function BoardTabs() {
     observer.observe(el)
     return () => observer.disconnect()
   }, [syncEdges])
+  const renameTab = useRenameTab()
   /**
-   * Closes the inline rename, returning the title the tab carries afterwards —
+   * Closes the inline rename, returning the title the tab carries afterwards,
    * or null when the rename was refused and said so, so a caller never reports
    * a success over that message.
    */
   const commitEdit = (): string | null => {
     const id = editingId
-    const next = draft.trim()
     setEditingId(null)
     const tab = state.tabs.find((candidate) => candidate.id === id)
-    // A blank field cancels the rename, leaving the board named as it was.
-    if (id === null || next.length === 0) return tab?.title ?? null
-    if (!tab || next === tab.title) {
-      dispatch({ type: 'tab-rename', id, title: next })
-      return next
-    }
-    // Only a real link may rename a map — titles carry no identity, so a
-    // same-named tab that owns nothing cannot rename someone else's map.
-    if (tab.mapId !== null) {
-      const result = renameMap(tab.mapId, next)
-      const library = readLibrary()
-      const gone = library.readable && !library.maps.some((map) => map.id === tab.mapId)
-      // A map deleted in another window must not block a local rename: unlink
-      // and let the tab be renamed, rather than refusing over a map the user
-      // cannot see and cannot act on.
-      if (!result.ok && !gone) {
-        dispatch({ type: 'notice', message: result.error })
-        return null
-      }
-      dispatch({ type: 'maps-changed', library })
-    }
-    dispatch({ type: 'tab-rename', id, title: next })
-    return next
+    return tab ? renameTab(tab, draft) : null
   }
   // One dispatch per board rather than a bulk action: the reducer folds them in
   // order, so each close re-picks the active tab exactly as a lone close does.

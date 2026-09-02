@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { clearBoard, randomizeBoard } from '../../model/board'
-import { serializeGame } from '../../model/serialization'
 import { boardColor } from '../boardColor'
-import { downloadBoard } from '../boardFiles'
 import { ContextMenu, type ContextMenuItem } from '../ContextMenu'
 import { BoardHexGlyph, ChevronGlyph, DotsGlyph, PencilGlyph } from '../glyphs'
 import { activeTab, useStore } from '../store'
+import { useJsonFiles } from '../useJsonFiles'
 import type { PhoneMode, PhoneOverlay } from './PhoneShell'
 
 /** Past this much scroll the header casts a shadow on the page sliding under it. */
@@ -24,6 +23,7 @@ export function PhoneHeader({ mode, onToggleMode, onOpen }: {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const { board } = tab.game
+  const { exportJson } = useJsonFiles()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
@@ -40,7 +40,7 @@ export function PhoneHeader({ mode, onToggleMode, onOpen }: {
       separated: true,
       onClick: () => dispatch({ type: 'commit', board: randomizeBoard(board) }),
     },
-    { label: 'Export JSON', onClick: () => downloadBoard(tab.title, serializeGame(tab.game)) },
+    { label: 'Export JSON', onClick: exportJson },
     {
       label: 'Clear board',
       danger: true,

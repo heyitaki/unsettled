@@ -4,6 +4,7 @@ import { BoardCanvas } from '../BoardCanvas'
 import { GlobalNotice } from '../GlobalNotice'
 import { activeTab, useStore } from '../store'
 import { buildSessionEnded, cancelTarget, openBuildSession, type BuildSession } from './buildMode'
+import { MapsScreen } from './MapsScreen'
 import { PhoneBuild } from './PhoneBuild'
 import { PhoneHeader } from './PhoneHeader'
 import { PhoneRibbon } from './PhoneRibbon'
@@ -57,6 +58,7 @@ export function PhoneShell() {
         <BoardCanvas />
         {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel variant="phone" onBuild={enter} />}
       </main>
+      {overlay === 'maps' && <MapsScreen onClose={() => setOverlay(null)} />}
       <GlobalNotice />
     </div>
   )

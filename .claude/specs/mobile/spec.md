@@ -143,12 +143,12 @@ Do not rebuild these; move or restyle them.
 | Reorder players by drag, both mouse DnD and a coarse-pointer hold | `PlayerPanel.tsx` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP` |
 | Add and remove players | `PlayerPanel.tsx`, `addPlayer` / drag-to-trash |
 | Claim yourself | `AnalysisPanel.tsx`, `MenuSelect` → `setMe`; the phone variant of the same component adds the swatch row and the empty-board state |
-| Saved-map sort, four keys | `MapsPanel.tsx`, `SORT_MENU_LABEL` |
-| Import screenshot, import and export JSON | `ImportPanel.tsx` |
+| Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, shared by `MapsPanel.tsx` and `phone/MapsScreen.tsx` |
+| Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `ImportPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
 | Undo, redo, randomize, clear | `ToolPalette.tsx` heading |
 | Open, close, select, rename boards | `BoardTabs.tsx` and `store.ts` (`tab-*` actions) |
-| Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `BoardTabs.tsx`, `commitEdit` |
+| Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, shared by `BoardTabs.tsx` and `phone/MapsScreen.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes an adopted game | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `App.tsx`, `global-notice` |
 | Snake draft strip, with the slot derivation in `draftSlots.ts` shared with the phone ribbon | `PlayerPanel.tsx`, `draft-strip`; `phone/PhoneRibbon.tsx` |
@@ -184,10 +184,10 @@ One row per work item. Keep the state column current; this file is the durable c
 | M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | — | done |
 | M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | — | done |
 | M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
-| M4 | Board colour hash (B4) and the hex in header and both lists | — | done: `ui/boardColor.ts` and the header hex; the list hexes ride M7 |
+| M4 | Board colour hash (B4) and the hex in header and both lists | — | done |
 | M5 | Draft ribbon above the board (S2) | M2 | done |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | done |
-| M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | not started |
+| M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | done |
 | M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | not started |
 | M9 | Seat order drives the draft (B3) | M8 | not started |
 | M10 | Points ledger block in the Players overlay | — | dropped (O1) |

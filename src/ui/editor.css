@@ -600,6 +600,31 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .token-tools button { min-width: 42px; border-radius: 50%; padding: 11px 0; font-size: 15px; font-weight: 700; }
   .phone-shell .hex-swatch { width: 21px; height: 23px; }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; }
+  .phone-overlay { position: fixed; inset: 0; z-index: 22; display: flex; flex-direction: column; background: var(--paper-light); outline: 0; animation: phone-overlay-in .28s cubic-bezier(.32, .72, 0, 1); }
+  @keyframes phone-overlay-in { from { transform: translateX(100%); } to { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .phone-overlay { animation: none; } }
+  .phone-overlay-head { flex: none; display: flex; align-items: center; gap: 4px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; border-bottom: 1px solid var(--line); }
+  .phone-overlay-title { flex: 1; min-width: 0; font: 700 19px/1 Georgia, serif; }
+  .phone-ohead-btn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+  .phone-ohead-btn.back { margin-left: -6px; color: var(--ink); }
+  .phone-ohead-btn.invisible { visibility: hidden; pointer-events: none; }
+  .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+  .phone-group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  .phone-group-label .count { font-weight: 600; opacity: .72; }
+  .phone-group-label .menu-trigger { display: inline-flex; align-items: center; gap: 5px; margin-right: -6px; padding: 3px 6px 3px 8px; border-radius: 7px; color: var(--ink); font-size: 11px; letter-spacing: 0; text-transform: none; }
+  .phone-hero-import { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border: 1px solid var(--accent-dark); border-radius: 13px; background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 700; }
+  .phone-list { display: flex; flex-direction: column; gap: 5px; }
+  .phone-row { position: relative; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 11px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; }
+  .phone-row.current { border-color: var(--accent-dark); background: #fff; }
+  .phone-row-select { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; }
+  .phone-row-hex { flex: none; width: 17px; height: 19px; pointer-events: none; }
+  .phone-row-main { flex: 1; min-width: 0; display: flex; align-items: center; pointer-events: none; }
+  .phone-row-name { position: relative; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; border-bottom: 1.5px dotted rgba(55, 45, 32, .4); border-radius: 0; background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.4; pointer-events: auto; }
+  .phone-row-name.plain { border-bottom: 0; color: var(--muted); }
+  .phone-row-rename { position: relative; width: auto; min-width: 30px; max-width: 100%; height: 30px; padding: 0 5px; border: 1px solid var(--accent-dark); border-radius: 7px; background: #fff; color: var(--ink); font-weight: 600; pointer-events: auto; }
+  .phone-row-meta { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .phone-row-x { position: relative; flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: rgba(119, 111, 100, .8); }
+  .phone-new-board { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; padding: 0; border: 1px dashed rgba(55, 45, 32, .26); border-radius: 12px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; }
 }
 
 /* Landscape phone keeps a fixed viewport, unlike portrait: at 342px tall there
