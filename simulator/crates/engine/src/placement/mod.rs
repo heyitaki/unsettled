@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 pub mod app_formula;
+pub(crate) mod draft;
 mod expansion;
 
 use crate::board::SimBoard;
@@ -22,6 +23,7 @@ pub enum PlacementKind {
     PortSynergy,
     CityFocus,
     AppFormula(u8),
+    AppFormulaDraft(u8),
 }
 
 struct AppFormulaDefinition {
@@ -29,7 +31,16 @@ struct AppFormulaDefinition {
     weights: app_formula::EngineWeights,
 }
 
+/// A draft arm's pair of formulas: the hero's, which the arm sweeps, and the opponent model's,
+/// which every arm in a run pins to the field's weights so a sweep moves one side only.
+struct DraftDefinition {
+    name: &'static str,
+    hero: app_formula::EngineWeights,
+    opponent: app_formula::EngineWeights,
+}
+
 static APP_FORMULAS: Mutex<Vec<&'static AppFormulaDefinition>> = Mutex::new(Vec::new());
+static DRAFT_FORMULAS: Mutex<Vec<&'static DraftDefinition>> = Mutex::new(Vec::new());
 
 impl PlacementKind {
     pub const ALL: [Self; 6] = [
@@ -62,6 +73,7 @@ impl PlacementKind {
             Self::PortSynergy => "port_synergy",
             Self::CityFocus => "city_focus",
             Self::AppFormula(index) => app_formula_definition(index).name,
+            Self::AppFormulaDraft(index) => draft_definition(index).name,
         }
     }
 }
@@ -81,18 +93,54 @@ pub fn register_app_formula(
     Ok(PlacementKind::AppFormula(index))
 }
 
+/// Registers a draft-aware arm. Two weights files rather than one: the hero's formula is what an
+/// arm moves, and the opponent formula its lookahead models the rest of the field with stays
+/// pinned, so an A/B reads the hero's change and not a change of opponent.
+pub fn register_app_formula_draft(
+    name: String,
+    hero: app_formula::EngineWeights,
+    opponent: app_formula::EngineWeights,
+) -> Result<PlacementKind, String> {
+    let mut formulas = DRAFT_FORMULAS
+        .lock()
+        .map_err(|_| "draft formula registry is poisoned".to_string())?;
+    let index = u8::try_from(formulas.len())
+        .map_err(|_| "at most 256 draft formula arms may be registered".to_string())?;
+    let name = Box::leak(name.into_boxed_str());
+    let definition = Box::leak(Box::new(DraftDefinition {
+        name,
+        hero,
+        opponent,
+    }));
+    formulas.push(definition);
+    Ok(PlacementKind::AppFormulaDraft(index))
+}
+
 pub fn prepare_app_formula_boards(
     boards: &mut [SimBoard],
     topology: &Topology,
     kinds: &[PlacementKind],
 ) {
     for kind in kinds {
-        let PlacementKind::AppFormula(index) = *kind else {
-            continue;
-        };
-        let definition = app_formula_definition(index);
-        for board in &mut *boards {
-            board.prepare_app_formula(index, topology, definition.weights.clone());
+        match *kind {
+            PlacementKind::AppFormula(index) => {
+                let definition = app_formula_definition(index);
+                for board in &mut *boards {
+                    board.prepare_app_formula(index, topology, definition.weights.clone());
+                }
+            }
+            PlacementKind::AppFormulaDraft(index) => {
+                let definition = draft_definition(index);
+                for board in &mut *boards {
+                    board.prepare_app_formula_draft(
+                        index,
+                        topology,
+                        definition.hero.clone(),
+                        definition.opponent.clone(),
+                    );
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -104,6 +152,22 @@ fn app_formula_definition(index: u8) -> &'static AppFormulaDefinition {
         .get(usize::from(index))
         .copied()
         .unwrap_or_else(|| panic!("app formula index {index} is not registered"))
+}
+
+fn draft_definition(index: u8) -> &'static DraftDefinition {
+    DRAFT_FORMULAS
+        .lock()
+        .expect("draft formula registry is poisoned")
+        .get(usize::from(index))
+        .copied()
+        .unwrap_or_else(|| panic!("draft formula index {index} is not registered"))
+}
+
+fn draft_scorers(board: &SimBoard, index: u8) -> &draft::DraftScorers {
+    let name = draft_definition(index).name;
+    board.draft_scorer(index).unwrap_or_else(|| {
+        panic!("draft formula arm {name} has no prepared context for this board")
+    })
 }
 
 pub fn choose(
@@ -127,6 +191,18 @@ pub fn choose(
             seat,
             grant,
             rng,
+        );
+    }
+    if let PlacementKind::AppFormulaDraft(index) = kind {
+        // The lookahead is deterministic, so it draws nothing from the policy stream.
+        return draft::choose(
+            draft_scorers(board, index),
+            topology,
+            board.seats(),
+            vertex_owner,
+            edge_owner,
+            seat,
+            grant,
         );
     }
     let mut selected = None;
@@ -262,6 +338,35 @@ fn choose_app_formula(
     Some((vertex, selected_edge))
 }
 
+/// The intervening picks the draft kind's lookahead predicts when the hero takes `candidate` at
+/// this state, in `setup_order` order. Observation only: the replay without the valuation it
+/// feeds, so a test or a diagnostic can hold the opponent model against picks a real field made.
+pub fn draft_replay(
+    kind: PlacementKind,
+    board: &SimBoard,
+    topology: &Topology,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+) -> Vec<(u8, Vertex)> {
+    let PlacementKind::AppFormulaDraft(index) = kind else {
+        panic!(
+            "draft_replay wants a draft placement kind, got {}",
+            kind.name()
+        );
+    };
+    draft::replay_picks(
+        draft_scorers(board, index),
+        topology,
+        board.seats(),
+        vertex_owner,
+        edge_owner,
+        seat,
+        candidate,
+    )
+}
+
 /// The producing hexes adjacent to `vertex`: those carrying both a resource and a token, which
 /// are the hexes the setup grant pays on. Returns their count and their pip total, the two
 /// quantities the SP0 diagnostics compare candidates on.
@@ -327,6 +432,18 @@ pub fn setup_candidate_score(
             panic!("app formula arm {name} has no prepared context for this board")
         });
         return scorer.score_for_owner(vertex_owner, edge_owner, seat, candidate, grant);
+    }
+    if let PlacementKind::AppFormulaDraft(index) = kind {
+        return draft::candidate_score(
+            draft_scorers(board, index),
+            topology,
+            board.seats(),
+            vertex_owner,
+            edge_owner,
+            seat,
+            candidate,
+            grant,
+        );
     }
     // The setup grant never reaches the other heuristics: `choose` scores them from the board and
     // the seat's own production alone.
@@ -400,5 +517,8 @@ pub fn vertex_score(
         PlacementKind::PortSynergy => f32::from(pips) + port + diversity,
         PlacementKind::CityFocus => f32::from(pips) + city * 0.01,
         PlacementKind::AppFormula(_) => unreachable!("app formula uses its f64 scorer"),
+        PlacementKind::AppFormulaDraft(_) => {
+            unreachable!("app formula draft uses its f64 scorers")
+        }
     }
 }

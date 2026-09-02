@@ -75,6 +75,8 @@ port_synergy
 city_focus
 ```
 
+Two placement specs are loaded at run time rather than named here: `app_formula:<weights>`, registered under its file stem, and `app_formula_draft:<hero weights>@<opponent weights>`, the draft-aware kind whose first-pick lookahead replays every intervening seat's argmax under the opponent weights. Every arm in a measurement pins that opponent path to the field's weights, so an A/B moves the hero's formula alone and never the model of the field it is measured against.
+
 Available policies:
 
 ```

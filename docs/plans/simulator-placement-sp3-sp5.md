@@ -267,12 +267,12 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 20: SP5 draft-aware placement kind
 
-- [ ] Add `PlacementKind::AppFormulaDraft(u8)` with its own registry entry carrying the hero and opponent `EngineWeights`, `parse_heuristic` support for `app_formula_draft:<hero>@<opponent>` per Context, `prepare_app_formula_boards` building both scorers per board, and `PlacementKind::name` reporting the registered name
-- [ ] Implement the first-pick and second-pick valuation from Context in a new `placement/draft.rs`, exact over every legal candidate, using `score_for_owner` at the hero weights for the hero and at the opponent weights for each intervening seat, replaying intervening argmaxes onto scratch owner arrays. Choose the setup road by SP3's road rule at the hero weights. Read `setup_denial_weight` as 0 for now (Task 23 adds the credit); structure the lookahead so the rival's pre- and post-`c` best scores are available to it
-- [ ] Cache per-candidate opponent scores where the holdings do not change between candidates; measure a 200-board `evaluate` with a draft arm before and after and record the games per second in the commit message. Never prune the candidate set
-- [ ] Rust test: on ten traced games from the `tuning` domain where every field pick is tie-free (assert it by re-scoring), the lookahead's predicted intervening picks equal the picks the field actually made; a test that the hero's second pick equals `AppFormula`'s choice on the same state; a test that a `standard4` first pick completes in under 50 milliseconds in release
-- [ ] `simulator/README.md`: document the kind and its spec string; `contracts.md`: one sentence under "Rosters" or the placement section naming the kind and the pinned-opponent rule
-- [ ] Both cargo profiles green, link check passes
+- [x] Add `PlacementKind::AppFormulaDraft(u8)` with its own registry entry carrying the hero and opponent `EngineWeights`, `parse_heuristic` support for `app_formula_draft:<hero>@<opponent>` per Context, `prepare_app_formula_boards` building both scorers per board, and `PlacementKind::name` reporting the registered name
+- [x] Implement the first-pick and second-pick valuation from Context in a new `placement/draft.rs`, exact over every legal candidate, using `score_for_owner` at the hero weights for the hero and at the opponent weights for each intervening seat, replaying intervening argmaxes onto scratch owner arrays. Choose the setup road by SP3's road rule at the hero weights. Read `setup_denial_weight` as 0 for now (Task 23 adds the credit); structure the lookahead so the rival's pre- and post-`c` best scores are available to it
+- [x] Cache per-candidate opponent scores where the holdings do not change between candidates; measure a 200-board `evaluate` with a draft arm before and after and record the games per second in the commit message. Never prune the candidate set
+- [x] Rust test: on ten traced games from the `tuning` domain where every field pick is tie-free (assert it by re-scoring), the lookahead's predicted intervening picks equal the picks the field actually made; a test that the hero's second pick equals `AppFormula`'s choice on the same state; a test that a `standard4` first pick completes in under 50 milliseconds in release
+- [x] `simulator/README.md`: document the kind and its spec string; `contracts.md`: one sentence under "Rosters" or the placement section naming the kind and the pinned-opponent rule
+- [x] Both cargo profiles green, link check passes
 
 ### Task 21: Preregister M-59, the opponent-model A/B
 
