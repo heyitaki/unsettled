@@ -108,10 +108,10 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 2: Library autosave in the store (B7, M16)
 
-- [ ] Add `src/ui/__tests__/libraryAutosave.test.ts` (jsdom, fake timers) covering: a blank new tab is never written to the library; the first tile placement on an unlinked tab, after 500ms, creates exactly one map named after the tab title and links the tab (`mapId` set); two edits 100ms apart produce one write; an edit to a linked tab updates the same map id and never adds a second entry; `undo` writes; a `workspace-adopt` carrying a foreign game writes nothing; a `pagehide` event flushes a pending save immediately.
-- [ ] Implement `src/ui/libraryAutosave.ts` (a hook or a factory driven from `StoreProvider` in `store.ts`, whichever keeps the store's existing `createWorkspaceSync` wiring untouched) using `saveTab` from `boardFiles.ts`, dispatching `tab-link` when the id is new to the tab and `maps-changed` with `readLibrary()` after every write. Track "needs a save" per tab id by the game identity last saved or adopted, so cross-window adoption never causes a write.
-- [ ] Surface a failed save through the `notice` action once per failure, not once per keystroke.
-- [ ] Ledger: M16 done.
+- [x] Add `src/ui/__tests__/libraryAutosave.test.ts` (jsdom, fake timers) covering: a blank new tab is never written to the library; the first tile placement on an unlinked tab, after 500ms, creates exactly one map named after the tab title and links the tab (`mapId` set); two edits 100ms apart produce one write; an edit to a linked tab updates the same map id and never adds a second entry; `undo` writes; a `workspace-adopt` carrying a foreign game writes nothing; a `pagehide` event flushes a pending save immediately.
+- [x] Implement `src/ui/libraryAutosave.ts` (a hook or a factory driven from `StoreProvider` in `store.ts`, whichever keeps the store's existing `createWorkspaceSync` wiring untouched) using `saveTab` from `boardFiles.ts`, dispatching `tab-link` when the id is new to the tab and `maps-changed` with `readLibrary()` after every write. Track "needs a save" per tab id by the game identity last saved or adopted, so cross-window adoption never causes a write.
+- [x] Surface a failed save through the `notice` action once per failure, not once per keystroke.
+- [x] Ledger: M16 done.
 
 ### Task 3: Retire the explicit save UI (M17)
 

@@ -194,7 +194,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M13 | Reveal-on-select scroll (B2) | M6 | not started |
 | M14 | One-word factor labels in `displayedFactors` | — | done |
 | M15 | Landscape and desktop regression pass | all | not started |
-| M16 | Library autosave in the store (B7) | — | not started |
+| M16 | Library autosave in the store (B7) | — | done |
 | M17 | Retire the explicit save UI on desktop: tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row (B7) | M16 | not started |
 
 ## Out of scope

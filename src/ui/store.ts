@@ -31,6 +31,7 @@ import {
   type WorkspaceTab,
 } from '../persistence/localStorage'
 import { savedMap, tabIsDirty } from './boardFiles'
+import { createLibraryAutosave } from './libraryAutosave'
 import {
   NOTHING_UNFLUSHED,
   createWorkspaceSync,
@@ -488,10 +489,20 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
 const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<StoreAction> } | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, initialState)
-  // Created on the first render, when its reads of shared storage are still
-  // this document's own history rather than another document's write.
-  const [sync] = useState(() => createWorkspaceSync(dispatch))
+  const [state, rawDispatch] = useReducer(reducer, undefined, initialState)
+  // Created on the first render, when their reads of shared storage are still
+  // this document's own history rather than another document's write. Every
+  // action passes the autosave before the reducer, so a game adopted from
+  // another document is known as such before it is installed; the sync's own
+  // adoptions go the same way.
+  const [{ autosave, dispatch, sync }] = useState(() => {
+    const autosave = createLibraryAutosave(rawDispatch, state.tabs)
+    const dispatch: Dispatch<StoreAction> = (action) => {
+      autosave.observe(action)
+      rawDispatch(action)
+    }
+    return { autosave, dispatch, sync: createWorkspaceSync(dispatch) }
+  })
   // A write that stood down leaves work owed, and the reconciled workspace only
   // exists after a render — so the retry is a render this asks for. Nothing
   // reads the token; it is the dependency that re-runs the arming effect.
@@ -524,6 +535,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // document; written straight out rather than debounced because it is one
   // short string and losing it costs the user their place.
   useEffect(() => saveActiveTab(state.activeTabId), [state.activeTabId])
+  useEffect(() => autosave.arm(state.tabs), [autosave, state.tabs])
   // Layout, for the same reason as the arming above and because this effect is
   // declared after it: a write landing between the first commit and a passive
   // listener would never be delivered at all, leaving `seen` stale from birth.
@@ -536,7 +548,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // alive, so flush there rather than waiting for pagehide — by then a
     // document whose storage moved underneath it can only stand down, and
     // whatever it still owed is lost.
-    const flushWorkspace = () => void sync.flush()
+    const flushWorkspace = () => {
+      autosave.flush()
+      void sync.flush()
+    }
     // A document restored from bfcache missed every write while it was frozen.
     // Reading storage back is what stops its stale view from being written out.
     const resyncRestored = (event: PageTransitionEvent) => {
@@ -552,9 +567,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pagehide', flushWorkspace)
       window.removeEventListener('pageshow', resyncRestored)
       document.removeEventListener('visibilitychange', flushHidden)
+      autosave.dispose()
     }
-  }, [sync])
-  const value = useMemo(() => ({ state, dispatch }), [state])
+  }, [sync, autosave])
+  const value = useMemo(() => ({ state, dispatch }), [state, dispatch])
   return createElement(StoreContext.Provider, { value }, children)
 }
 
