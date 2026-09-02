@@ -328,6 +328,11 @@ test.describe('desktop', () => {
     await expect(rows.nth(2)).not.toHaveClass(/\bme\b/)
     await snap(page, 'desktop-roster')
 
+    // The grip only reorders: a click on it must not claim the row behind it.
+    await rows.nth(2).locator('.roster-grip').click()
+    await expect(rows.nth(1)).toHaveClass(/\bme\b/)
+    await expect(rows.nth(2)).not.toHaveClass(/\bme\b/)
+
     // The name is the rename target; the rest of the row is still the claim (spec DB4).
     await rows.nth(0).getByRole('button', { name: 'Rename Red', exact: true }).click()
     const field = panel.locator('.list-row-rename')
@@ -382,6 +387,33 @@ test.describe('desktop', () => {
     await expect(rows.locator('.list-row-name')).toHaveText(['Orange', 'Red', 'White'])
     await expect(cells).toHaveCount(6)
     await expect(panel.locator('.roster-trash')).toHaveCount(0)
+  })
+
+  test('a drag held still until the rows settle still lands where it was aimed', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const panel = page.locator('.player-panel')
+    const rows = panel.locator('.roster-row')
+    await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
+
+    const third = (await rows.nth(2).boundingBox())!
+    const x = third.x + third.width / 2
+    const y = third.y + third.height / 2
+    await rows.first().locator('.roster-grip').hover()
+    await page.mouse.down()
+    await page.mouse.move(x, y, { steps: 8 })
+    // The lifted row leaves its own slot for the rows easing into it, and lands
+    // in the one it is aimed at: a slot down the list, not a slot's height.
+    await expect.poll(() => rows.first().evaluate((el) =>
+      new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)).toBeGreaterThan(third.height)
+    // One more pointer event now that every row has settled, which is what a
+    // real drag supplies on its own (Chromium re-fires dragover on a still
+    // pointer; the driver's drag interception only fires one per move). The
+    // third row is no longer under the pointer, so the aim has to come from the
+    // list and the layout the drag started with, or the drop is refused.
+    await page.mouse.move(x, y + 1)
+    await page.mouse.up()
+    await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
   })
 })
 

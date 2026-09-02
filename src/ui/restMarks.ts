@@ -9,7 +9,7 @@ export const SOLID_RANKS = 3
 export const LISTED_PICKS = 5
 
 /**
- * The marks a phone board wears while nothing is selected (spec S5): every
+ * The marks a board wears while nothing is selected (spec S5, DB1): every
  * listed recommendation's first pick at once, ranked, in the claimed colour,
  * the lower ranks faded. Null when there is nothing to rank or nobody to rank
  * it for, which leaves the board bare.

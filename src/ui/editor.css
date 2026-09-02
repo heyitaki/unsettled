@@ -236,7 +236,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
 .roster-row.me { border-color: var(--ink); background: #fff; }
 .roster.reordering { touch-action: none; }
-.roster-row.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
+.roster-row.dragging { z-index: 2; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
 .roster-row.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
 .roster-row.dragging .roster-grip { cursor: grabbing; }
 .roster-grip { position: relative; display: grid; place-items: center; height: 100%; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
@@ -335,6 +335,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .list-row-x:hover:not(:disabled), .group-label .menu-trigger:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--ink); background: var(--paper-deep); }
   .list-add:hover:not(:disabled) { transform: none; box-shadow: none; border-style: solid; color: var(--ink); }
   .list-row-name:not(.plain):hover { transform: none; box-shadow: none; text-decoration-color: var(--accent-dark); }
+  .list-row-select:hover:not(:disabled) { transform: none; box-shadow: none; }
+  /* The generic hover shadow would otherwise replace the current pick's ring. */
+  .draft-ribbon-slot.now:hover { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
   .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
   .menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--paper-deep); }
   .placement-slot:hover { fill: #fffdf7; }
@@ -348,6 +351,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 }
 
 @media (pointer: coarse) {
+  /* The lifted row tracks the finger, which easing would lag behind. The native
+     drag path instead eases it into the slot it would land in. */
+  .roster-row.dragging { transition: none; }
   .stat-chip button { width: 38px; padding: 11px 0; font-size: 16px; }
   .player-list { --tally-col: 30px; }
   .stat-face { min-width: 30px; font-size: 14px; }

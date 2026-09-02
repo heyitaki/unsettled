@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   parseBoardImageWithNames,
   type ParseIssue,
@@ -37,6 +37,13 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
   const [busy, setBusy] = useState(false)
   const coarse = useCoarsePointer()
   const notice = (message: string) => dispatch({ type: 'notice', message })
+  // An issue mark outlives the dialog otherwise, and the analysis panel reads a
+  // highlight it does not own as a pinned selection: hover previews would stay
+  // dead for the rest of the session.
+  const marked = useRef(false)
+  useEffect(() => () => {
+    if (marked.current) dispatch({ type: 'highlight', marks: null })
+  }, [dispatch])
   return (
     <div className="popover-backdrop" onClick={onClose}>
       <div
@@ -112,10 +119,10 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
                 type="button"
                 key={`${issue.stage}:${issue.ref ?? index}`}
                 className={issue.severity}
-                onClick={() => dispatch({
-                  type: 'highlight',
-                  marks: issue.ref ? [{ ref: issue.ref }] : null,
-                })}
+                onClick={() => {
+                  marked.current = Boolean(issue.ref)
+                  dispatch({ type: 'highlight', marks: issue.ref ? [{ ref: issue.ref }] : null })
+                }}
               >
                 <span>{issue.stage}</span>
                 {issue.message}

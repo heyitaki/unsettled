@@ -54,11 +54,12 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
         <div
           className={reorder.dragId !== null ? 'list roster reordering' : 'list roster'}
           ref={reorder.listRef}
+          {...reorder.listProps}
         >
           {board.players.map((player, index) => {
             const me = board.mePlayerId === player.id
             const lifted = reorder.dragId === player.id
-            const shift = lifted ? 0 : reorder.shiftFor(index)
+            const offset = reorder.offsetFor(index)
             const classes = ['roster-row']
             if (me) classes.push('me')
             if (lifted) classes.push('dragging')
@@ -70,11 +71,10 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
               <div
                 key={player.id}
                 className={classes.join(' ')}
-                // The lifted row tracks the pointer; the others ease into the
-                // slot they stand in for, over the row's own transition.
-                style={lifted || shift !== 0
-                  ? { transform: `translateY(${lifted ? reorder.dragOffset : shift}px)` }
-                  : undefined}
+                // Every row is drawn where the drag currently puts it, over the
+                // row's own transition; the lifted row loses that transition so
+                // it can track a finger.
+                style={offset !== 0 ? { transform: `translateY(${offset}px)` } : undefined}
                 {...reorder.rowProps(player.id)}
               >
                 <button
@@ -112,10 +112,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           {/* Only exists mid-drag: removing a player is rare enough that it does
               not deserve permanent UI, and the drag is already in the hand. */}
           {reorder.dragId !== null && board.players.length > 1 && (
-            <div
-              className={reorder.dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}
-              {...reorder.trashProps}
-            >
+            <div className={reorder.dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}>
               <TrashGlyph />
               Drop here to remove
             </div>

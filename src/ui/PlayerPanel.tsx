@@ -162,7 +162,7 @@ export function PlayerPanel() {
   // exists mid-drag) removes the player.
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
   const ids = board.players.map((player) => player.id)
-  const { listRef, dragId, dragOffset, dropTarget, shiftFor, rowProps, startImmediately, trashProps } = useRowReorder({
+  const { listRef, dragId, dropTarget, offsetFor, rowProps, startImmediately, listProps } = useRowReorder({
     coarse,
     ids,
     rowSelector: '.roster-row',
@@ -198,6 +198,7 @@ export function PlayerPanel() {
       <div
         className={dragId !== null ? 'player-list roster reordering' : 'player-list roster'}
         ref={listRef}
+        {...listProps}
       >
         {/* Column headings, with the view switch on their left. Each player's
             numbers carry their own aria-label, so the icon strip is decorative
@@ -249,7 +250,7 @@ export function PlayerPanel() {
           const active = tab.activePlayerId === player.id
           const isMe = board.mePlayerId === player.id
           const lifted = dragId === player.id
-          const shift = lifted ? 0 : shiftFor(index)
+          const offset = offsetFor(index)
           const classes = ['roster-row']
           if (isMe) classes.push('me')
           if (lifted) classes.push('dragging')
@@ -260,11 +261,10 @@ export function PlayerPanel() {
             <Fragment key={player.id}>
               <div
                 className={classes.join(' ')}
-                // The lifted row tracks the pointer; the others ease into the
-                // slot they stand in for, over the row's own transition.
-                style={lifted || shift !== 0
-                  ? { transform: `translateY(${lifted ? dragOffset : shift}px)` }
-                  : undefined}
+                // Every row is drawn where the drag currently puts it, over the
+                // row's own transition; the lifted row loses that transition so
+                // it can track a finger.
+                style={offset !== 0 ? { transform: `translateY(${offset}px)` } : undefined}
                 {...rowProps(player.id)}
                 onClick={() => commit(setMe(board, player.id))}
               >
@@ -272,6 +272,9 @@ export function PlayerPanel() {
                   className="roster-grip"
                   aria-hidden="true"
                   onPointerDown={(event) => startImmediately(event, player.id)}
+                  // The grip reorders; a click on it must not also claim the
+                  // seat through the row behind it.
+                  onClick={(event) => event.stopPropagation()}
                 >
                   <GripGlyph />
                 </span>
@@ -403,10 +406,7 @@ export function PlayerPanel() {
         {/* Only exists mid-drag: removing a player is rare enough that it does
             not deserve permanent UI, and the drag is already in the hand. */}
         {dragId !== null && board.players.length > 1 && (
-          <div
-            className={dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}
-            {...trashProps}
-          >
+          <div className={dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}>
             <TrashGlyph />
             Drop here to remove
           </div>
