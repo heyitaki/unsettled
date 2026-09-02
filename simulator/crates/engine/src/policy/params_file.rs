@@ -1403,6 +1403,91 @@ mod tests {
         );
     }
 
+    /// The two SP5 denial arms, as weights key, arm file stem and the value the arm carries. Both
+    /// move the one key, at two values, because the phase asks how much of a term to price rather
+    /// than which term to add: `sp5_denial_lo` is the ordinary optional-term value and
+    /// `sp5_denial_hi` carries the preregistered null.
+    const SP5_ARMS: [(&str, &str, f64); 2] = [
+        ("setupDenialWeight", "sp5_denial_lo", 0.25),
+        ("setupDenialWeight", "sp5_denial_hi", 1.0),
+    ];
+
+    /// Walks the committed SP5 arms (`placement/arms/sp5*.json`) as the SP2, SP3 and SP4 walks
+    /// walk theirs: each is the live `default-weights.json` with only `setupDenialWeight` raised,
+    /// that value sits inside the axis's committed sweep-bounds range, and no `sp5*` file nobody
+    /// preregistered is sitting in the directory waiting to join a run.
+    ///
+    /// The file is the hero half of an SP5 arm and nothing more. `setupDenialWeight` is read by
+    /// `placement/draft.rs` alone, through the hero path of an `app_formula_draft:<hero>@<opponent>`
+    /// spec, and every arm in this phase pins the opponent path to `default-weights.json`, so the
+    /// weight a rival's loss is priced at never moves. Nothing in a JSON file can pin that half of
+    /// the contrast; the preregistration and the committed command are where it lives.
+    #[test]
+    fn the_sp5_arm_files_are_the_committed_denial_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (key, stem, value) in SP5_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let range = &bounds["placement"][key];
+            assert!(
+                value >= range["min"].as_f64().expect("min")
+                    && value <= range["max"].as_f64().expect("max"),
+                "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+            );
+            assert_eq!(
+                base[key].as_f64(),
+                Some(0.0),
+                "{key} ships at 0, which is what makes the arm a single-term perturbation"
+            );
+
+            let mut perturbed = base.clone();
+            perturbed[key] = Value::from(value);
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {key} at {value} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp5") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP5 phase commits one arm per preregistered value"
+        );
+    }
+
     /// Walks every committed weights-shaped file (the two shipped vectors plus the
     /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
@@ -1447,8 +1532,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 56,
-            "the committed weights arms are 56 files; a change to the set is a decision"
+            weights_arms, 58,
+            "the committed weights arms are 58 files; a change to the set is a decision"
         );
     }
 

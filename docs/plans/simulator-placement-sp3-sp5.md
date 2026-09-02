@@ -298,12 +298,12 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 24: Preregister M-60, the denial A/B
 
-- [ ] Write `docs/plans/preregs/<today>-m60-sp5-setup-denial.md`
-- [ ] Arms `sp5_denial_lo` (0.25) and `sp5_denial_hi` (1.0), each `app_formula_draft:placement/arms/<file>.json@placement/default-weights.json`, reference `draft` = the kind at the live defaults; add an `SP5_ARMS` pin and move the count. State plainly that the opponent path is pinned to the live defaults in every arm and why
-- [ ] Preregister the null for `sp5_denial_hi`: expected `equivalent` or `worse` at the `±1pp` threshold; `equivalent` at screen power confirms it, `inconclusive` confirms nothing and buys the single retry. `sp5_denial_lo` is an ordinary optional term under the standing rule
-- [ ] Screen power, protocol and the long-run timing preregistration as in Task 21
-- [ ] Prediction and admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Write `docs/plans/preregs/<today>-m60-sp5-setup-denial.md`
+- [x] Arms `sp5_denial_lo` (0.25) and `sp5_denial_hi` (1.0), each `app_formula_draft:placement/arms/<file>.json@placement/default-weights.json`, reference `draft` = the kind at the live defaults; add an `SP5_ARMS` pin and move the count. State plainly that the opponent path is pinned to the live defaults in every arm and why
+- [x] Preregister the null for `sp5_denial_hi`: expected `equivalent` or `worse` at the `±1pp` threshold; `equivalent` at screen power confirms it, `inconclusive` confirms nothing and buys the single retry. `sp5_denial_lo` is an ordinary optional term under the standing rule
+- [x] Screen power, protocol and the long-run timing preregistration as in Task 21
+- [x] Prediction and admissibility conditions
+- [x] Both cargo profiles green, link check passes
 
 ### Task 25: Run M-60 and record it
 
