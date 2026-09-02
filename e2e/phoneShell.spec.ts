@@ -136,6 +136,7 @@ test('an import with parse issues keeps its dialog over the new board, and close
   await expect(block.locator('h2')).toHaveText('Best picks')
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.issue-list button.warning')).not.toHaveCount(0)
+  await snap(page, 'import-issues')
   await dialog.getByRole('button', { name: 'Done' }).click()
   await expect(dialog).toHaveCount(0)
   // Emptying the board again must not bring the dialog back on its own.

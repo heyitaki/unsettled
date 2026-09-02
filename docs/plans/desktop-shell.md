@@ -174,12 +174,12 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `npm run typecheck`, `npm run lint`, `npm test`, `npx playwright test --reporter=list`, then `npm run build`, all green, each alone.
-- [ ] `ls src/ui/phone/` lists exactly `MapsScreen.tsx`, `PhoneBuild.tsx`, `PhoneHeader.tsx`, `PhoneOverlay.tsx`, `PhoneShell.tsx`, `PlayersScreen.tsx`, `buildMode.ts`; `ls src/ui/` includes `InlineRename.tsx`, `ListRow.tsx`, `DraftRibbon.tsx`, `DraftGrid.tsx` and not `BoardTabs.tsx`, `ImportPanel.tsx`, `shortcuts.ts`.
-- [ ] Every grep in Tasks 2, 3, 4, 8, 9 and 10 is still empty.
-- [ ] Every desktop spec ledger row D1 to D12 reads `done`; `CLAUDE.md` and both specs match the code.
-- [ ] `test-results/phone/` holds a screenshot per phone, desktop and landscape e2e test; list them in the progress output with their sizes.
-- [ ] `git status` is clean apart from this plan file.
+- [x] `npm run typecheck`, `npm run lint`, `npm test`, `npx playwright test --reporter=list`, then `npm run build`, all green, each alone. 434 vitest tests in 45 files, 33 e2e tests, build clean.
+- [x] `ls src/ui/phone/` lists exactly `MapsScreen.tsx`, `PhoneBuild.tsx`, `PhoneHeader.tsx`, `PhoneOverlay.tsx`, `PhoneShell.tsx`, `PlayersScreen.tsx`, `buildMode.ts`; `ls src/ui/` includes `InlineRename.tsx`, `ListRow.tsx`, `DraftRibbon.tsx`, `DraftGrid.tsx` and not `BoardTabs.tsx`, `ImportPanel.tsx`, `shortcuts.ts`.
+- [x] Every grep in Tasks 2, 3, 4, 8, 9 and 10 is still empty. Task 2's `e2e/` grep leaves only the three `.board-tabs` count-0 assertions it asked for; Task 10's `phone-` grep leaves only `src/ui/revealBoard.ts`.
+- [x] Every desktop spec ledger row D1 to D12 reads `done`; `CLAUDE.md` and both specs match the code. D12 marked in this task; the `DraftRibbon`, `DraftGrid` and `LibraryLists` mount points named in both specs were checked against their importers.
+- [x] `test-results/phone/` holds a screenshot per phone, desktop and landscape e2e test; list them in the progress output with their sizes. The import-with-parse-issues phone test dropped none, so it now snaps `import-issues` over the filled board; 33 shots for 30 tests.
+- [x] `git status` is clean apart from this plan file.
 
 ## Post-Completion
 

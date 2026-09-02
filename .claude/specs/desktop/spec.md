@@ -129,7 +129,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | D9 | Drag feel and the draft grid on desktop (D5 dragging and snake draft) | D8, D4 | done |
 | D10 | Vocabulary sweep: `current` and `me` states everywhere, gold pair gone, DB7 grep clean | D2, D3, D7, D9 | done |
 | D11 | Docs: `CLAUDE.md` ui bullet, the mobile spec's `What already exists` paths, this ledger | D10 | done |
-| D12 | Regression screenshots and acceptance verification | all | not started |
+| D12 | Regression screenshots and acceptance verification | all | done |
 
 ## Out of scope
 
