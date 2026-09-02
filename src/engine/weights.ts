@@ -1,5 +1,33 @@
 import type { Resource } from '../model/types'
 
+/** How much a draft slot leans on the two position-sensitive components. */
+export interface SlotScale {
+  expansion: number
+  diversity: number
+}
+
+/**
+ * Seat count (`"3"` to `"6"`) to draft slot (`"0"` to seats minus one) to that slot's scales.
+ * Exact keys: a missing or extra seat count, or a missing or extra slot, is a load error.
+ */
+export type SlotScales = Record<string, Record<string, SlotScale>>
+
+/** Seat counts the block carries an entry for. Outside this range every scale is 1. */
+export const SLOT_SCALE_SEATS = [3, 4, 5, 6] as const
+
+/** The shipped block: every entry 1, so no slot is scaled and the formula is what it was. */
+export function neutralSlotScales(): SlotScales {
+  const scales: SlotScales = {}
+  for (const seats of SLOT_SCALE_SEATS) {
+    const bySlot: Record<string, SlotScale> = {}
+    for (let slot = 0; slot < seats; slot += 1) {
+      bySlot[String(slot)] = { expansion: 1, diversity: 1 }
+    }
+    scales[String(seats)] = bySlot
+  }
+  return scales
+}
+
 export interface EngineWeights {
   // Intrinsic worth of a pip by resource, normalized so the five average ~1.0.
   // Wheat/ore dominate win paths; sheep is least-consumed. See MEMORY roadmap.
@@ -65,6 +93,10 @@ export interface EngineWeights {
   rolloutsMin: number
   rolloutsMax: number
   maxResults: number
+  // Per-draft-slot multipliers on the two components a pick's position in the snake draft moves:
+  // what is left to complement (diversity) and what is left to open (expansion). Ships at 1
+  // everywhere, where every product is the unscaled component.
+  slotScales: SlotScales
 }
 
 export const DEFAULT_WEIGHTS: EngineWeights = {
@@ -105,4 +137,5 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   rolloutsMin: 4,
   rolloutsMax: 24,
   maxResults: 8,
+  slotScales: neutralSlotScales(),
 }

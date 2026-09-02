@@ -13,7 +13,7 @@ import {
 import { expansionTerm } from './expansion'
 import { vertexAdjacency } from './legality'
 import type { PlacementModifier } from './modifiers'
-import type { EngineWeights } from './weights'
+import type { EngineWeights, SlotScale } from './weights'
 
 export interface ScoreBreakdown {
   production: number
@@ -122,6 +122,28 @@ export interface Occupancy {
 const EMPTY_OCCUPANCY: Occupancy = { blocked: new Set(), edgeOwner: new Map(), seat: null }
 
 export const emptyOccupancy = (): Occupancy => EMPTY_OCCUPANCY
+
+/**
+ * Which pick of the snake draft a score is being taken for: how many seats are drafting and which
+ * of them is picking. A player's slot is its index in `board.players`, which `draft.ts` builds the
+ * pick order from, so the same pair names the seat in both directions of the snake.
+ */
+export interface DraftSlot {
+  seats: number
+  slot: number
+}
+
+const NEUTRAL_SLOT_SCALE: SlotScale = { expansion: 1, diversity: 1 }
+
+/**
+ * The scales for one draft slot, or 1 everywhere when the caller named no slot or the block
+ * carries no entry for it. A seat count outside the block's 3 to 6 is unscaled rather than an
+ * error, because the app ranks two-player and solo boards the simulator never drafts.
+ */
+export const slotScaleOf = (weights: EngineWeights, slot: DraftSlot | null): SlotScale =>
+  (slot === null
+    ? undefined
+    : weights.slotScales[String(slot.seats)]?.[String(slot.slot)]) ?? NEUTRAL_SLOT_SCALE
 
 type BoardPieces = Pick<Occupancy, 'blocked' | 'edgeOwner'>
 
@@ -663,6 +685,7 @@ export function marginalBreakdown(
   candidate: VertexId,
   hand: HandCounts | null = null,
   occupancy: Occupancy = emptyOccupancy(),
+  slot: DraftSlot | null = null,
 ): ScoreBreakdown {
   const stats = ctx.stats.get(candidate)
   if (!stats) {
@@ -678,16 +701,17 @@ export function marginalBreakdown(
   }
   const precompute = precomputeFor(ctx, candidate, stats)
   const [production, scarcity, robber] = baseParts(ctx.weights, ctx.scarcity, stats)
+  const scale = slotScaleOf(ctx.weights, slot)
   return {
     production,
     scarcity,
     robber: robber + concentrationDelta(ctx.weights, holdings, stats),
-    diversity: diversityDelta(ctx, holdings, stats, precompute),
+    diversity: scale.diversity * diversityDelta(ctx, holdings, stats, precompute),
     port: portDelta(ctx, holdings, stats, precompute),
     handValue: hand === null ? 0 : handValue(ctx.weights, hand),
     // `expansionTerm` returns 0 at weight 0 without walking, which is the shipped default and
     // every rollout scan.
-    expansion: expansionTerm(ctx, holdings, occupancy, candidate).value,
+    expansion: scale.expansion * expansionTerm(ctx, holdings, occupancy, candidate).value,
   }
 }
 
@@ -703,9 +727,11 @@ export function marginalTotal(
   candidate: VertexId,
   hand: HandCounts | null = null,
   occupancy: Occupancy = emptyOccupancy(),
+  slot: DraftSlot | null = null,
 ): number {
-  return marginalWithoutExpansion(ctx, holdings, candidate, hand) +
-    expansionTerm(ctx, holdings, occupancy, candidate).value
+  return marginalWithoutExpansion(ctx, holdings, candidate, hand, slot) +
+    slotScaleOf(ctx.weights, slot).expansion *
+      expansionTerm(ctx, holdings, occupancy, candidate).value
 }
 
 /**
@@ -718,13 +744,14 @@ export function marginalWithoutExpansion(
   holdings: Holdings,
   candidate: VertexId,
   hand: HandCounts | null = null,
+  slot: DraftSlot | null = null,
 ): number {
   const stats = ctx.stats.get(candidate)
   if (!stats) return 0
   const precompute = precomputeFor(ctx, candidate, stats)
   return precompute.base +
     concentrationDelta(ctx.weights, holdings, stats) +
-    diversityDelta(ctx, holdings, stats, precompute) +
+    slotScaleOf(ctx.weights, slot).diversity * diversityDelta(ctx, holdings, stats, precompute) +
     portDelta(ctx, holdings, stats, precompute) +
     (hand === null
       ? 0
@@ -744,8 +771,9 @@ export function scoreCandidate(
   modifier: PlacementModifier,
   hand: HandCounts | null = null,
   occupancy: Occupancy = emptyOccupancy(),
+  slot: DraftSlot | null = null,
 ): { breakdown: ScoreBreakdown; total: number } {
-  const marginal = marginalBreakdown(ctx, holdings, candidate, hand, occupancy)
+  const marginal = marginalBreakdown(ctx, holdings, candidate, hand, occupancy, slot)
   const breakdown = modifier(playerId, marginal, {
     board,
     vertexId: candidate,

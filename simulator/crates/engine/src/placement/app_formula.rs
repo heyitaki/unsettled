@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 use super::expansion;
@@ -26,6 +28,47 @@ impl ResourceValues {
             Resource::Ore => self.ore,
         }
     }
+}
+
+/// How much a draft slot leans on the two position-sensitive components.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SlotScale {
+    pub expansion: f64,
+    pub diversity: f64,
+}
+
+impl SlotScale {
+    /// The scales an unkeyed score uses: both components pass through untouched.
+    pub const NEUTRAL: Self = Self {
+        expansion: 1.0,
+        diversity: 1.0,
+    };
+}
+
+/// Seat counts `slotScales` carries a row for. A board outside this range is scored unscaled.
+pub const SLOT_SCALE_SEATS: [usize; 4] = [3, 4, 5, 6];
+
+/// Seat count (`"3"` to `"6"`) to draft slot (`"0"` to seats minus one) to that slot's scales.
+///
+/// A `BTreeMap` rather than a `HashMap` so `validate`'s error messages name the same key on every
+/// run: the exact-key check is the only reader, and a nondeterministic one would make a bad
+/// weights file report a different rule each time it was loaded.
+pub type SlotScales = BTreeMap<String, BTreeMap<String, SlotScale>>;
+
+/// The shipped block: every entry 1, so no slot is scaled. Mirrors `weights.ts::neutralSlotScales`.
+pub fn neutral_slot_scales() -> SlotScales {
+    SLOT_SCALE_SEATS
+        .iter()
+        .map(|seats| {
+            (
+                seats.to_string(),
+                (0..*seats)
+                    .map(|slot| (slot.to_string(), SlotScale::NEUTRAL))
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -62,6 +105,10 @@ pub struct EngineWeights {
     pub rollouts_min: f64,
     pub rollouts_max: f64,
     pub max_results: f64,
+    /// Per-draft-slot multipliers on the two components a pick's position in the snake draft
+    /// moves: what is left to complement (diversity) and what is left to open (expansion). Ships
+    /// at 1 everywhere, where every product is the unscaled component.
+    pub slot_scales: SlotScales,
 }
 
 impl EngineWeights {
@@ -142,6 +189,47 @@ impl EngineWeights {
         if self.robber_concentration_weight < 0.0 {
             return Err("weights violate: robberConcentrationWeight >= 0".into());
         }
+        self.validate_slot_scales()?;
+        Ok(())
+    }
+
+    /// The `slotScales` block's exact-key rule and its domain.
+    ///
+    /// A missing seat count or slot cannot fall back to 1: a file that dropped the four-seat row
+    /// would silently score every measured run unscaled and read as the reference arm. An extra
+    /// key is the same failure seen from the other side, an entry nothing will ever look up. The
+    /// scales multiply components rather than adding to them, so a negative one flips the sign of
+    /// a whole term and is outside the candidate space `sweep-bounds.json` declares (0.25 to 4).
+    fn validate_slot_scales(&self) -> Result<(), String> {
+        let expected: Vec<String> = SLOT_SCALE_SEATS.iter().map(usize::to_string).collect();
+        let found: Vec<String> = self.slot_scales.keys().cloned().collect();
+        if found != expected {
+            return Err(format!(
+                "weights violate: slotScales carries seat counts {expected:?}, found {found:?}"
+            ));
+        }
+        for seats in SLOT_SCALE_SEATS {
+            let row = &self.slot_scales[&seats.to_string()];
+            let expected: Vec<String> = (0..seats).map(|slot| slot.to_string()).collect();
+            let found: Vec<String> = row.keys().cloned().collect();
+            if found != expected {
+                return Err(format!(
+                    "weights violate: slotScales.{seats} carries slots {expected:?}, found {found:?}"
+                ));
+            }
+            for (slot, scale) in row {
+                for (component, value) in [
+                    ("expansion", scale.expansion),
+                    ("diversity", scale.diversity),
+                ] {
+                    if !value.is_finite() || value < 0.0 {
+                        return Err(format!(
+                            "weights violate: slotScales.{seats}.{slot}.{component} >= 0 and finite"
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -193,6 +281,10 @@ pub struct AppFormulaScorer {
     /// Raw pips per hex index, 0 for a hex that produces nothing. The concentration term takes
     /// its share over these, so a hex two settlements share is read once rather than twice.
     hex_pips: Vec<f64>,
+    /// This board's row of `slotScales`, resolved once and indexed by slot, so the hot path costs
+    /// an array read rather than two keyed lookups. Empty when the board's seat count is outside
+    /// the block's 3 to 6, which scores every seat unscaled.
+    slot_scales: Vec<SlotScale>,
 }
 
 /// The scorer's own copy of the board graph around one vertex.
@@ -381,6 +473,22 @@ impl AppFormulaScorer {
             }
             links.push(entry);
         }
+        // `game.rs::setup_order` runs `0..seats` and then the reverse, so a seat index *is* its
+        // draft slot in both directions of the snake, which is what lets `score_for_owner` key the
+        // scales off the seat it is already given.
+        let slot_scales = weights
+            .slot_scales
+            .get(&board.seats().to_string())
+            .map(|row| {
+                (0..board.seats())
+                    .map(|slot| {
+                        row.get(&slot.to_string())
+                            .copied()
+                            .unwrap_or(SlotScale::NEUTRAL)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         Self {
             weights,
             scarcity,
@@ -388,7 +496,17 @@ impl AppFormulaScorer {
             vertices,
             links,
             hex_pips,
+            slot_scales,
         }
+    }
+
+    /// The scales this board's `slotScales` row gives a seat, or 1 everywhere for a seat count the
+    /// block carries no row for and for a seat past the row's last slot.
+    pub fn slot_scale(&self, seat: u8) -> SlotScale {
+        self.slot_scales
+            .get(usize::from(seat))
+            .copied()
+            .unwrap_or(SlotScale::NEUTRAL)
     }
 
     /// The scorer's copy of `Topology::vertex_adjacent`.
@@ -457,8 +575,13 @@ impl AppFormulaScorer {
     /// `edge_owner` carries the roads.
     ///
     /// The expansion component is the one that reads that occupancy; every other component is a
-    /// function of the seat's own holdings alone, so at `expansionWeight` 0 this agrees
-    /// bit-for-bit with `breakdown` over the same holdings.
+    /// function of the seat's own holdings alone, so at `expansionWeight` 0 and a neutral
+    /// `slotScales` block this agrees bit-for-bit with `breakdown` over the same holdings.
+    ///
+    /// The seat is also the draft slot SP4's scales are keyed by, which is why only the owner
+    /// entries scale: `breakdown` is handed a holdings list with no seat behind it, so it has no
+    /// slot to look one up with and scores unscaled, exactly as the TypeScript entries do when
+    /// their caller names no slot.
     pub fn breakdown_for_owner(
         &self,
         vertex_owner: &[u8],
@@ -468,9 +591,11 @@ impl AppFormulaScorer {
         receives_grant: bool,
     ) -> ScoreBreakdown {
         let holdings = self.holdings_for_owner(vertex_owner, seat);
+        let scale = self.slot_scale(seat);
         let mut breakdown = self.breakdown_with_holdings(holdings, candidate, receives_grant);
-        breakdown.expansion =
-            expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value;
+        breakdown.diversity *= scale.diversity;
+        breakdown.expansion = scale.expansion
+            * expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value;
         breakdown
     }
 
@@ -485,8 +610,10 @@ impl AppFormulaScorer {
         receives_grant: bool,
     ) -> f64 {
         let holdings = self.holdings_for_owner(vertex_owner, seat);
-        self.total_with_holdings(holdings, candidate, receives_grant)
-            + expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value
+        let scale = self.slot_scale(seat);
+        self.scaled_total_with_holdings(holdings, candidate, receives_grant, scale.diversity)
+            + scale.expansion
+                * expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value
     }
 
     /// The setup road SP3's road rule points at: the first edge of the cheapest path to the best
@@ -597,6 +724,9 @@ impl AppFormulaScorer {
         )
     }
 
+    /// The unscaled breakdown over a resolved holdings set. Callers holding a seat scale the
+    /// diversity component afterwards; the expansion component is always 0 here, because pricing
+    /// it needs the occupancy.
     fn breakdown_with_holdings(
         &self,
         holdings: Holdings,
@@ -833,11 +963,26 @@ impl AppFormulaScorer {
         candidate: Vertex,
         receives_grant: bool,
     ) -> f64 {
+        self.scaled_total_with_holdings(holdings, candidate, receives_grant, 1.0)
+    }
+
+    /// `total_with_holdings` with SP4's diversity scale folded in at the one place the component
+    /// enters the sum, so the fused total and the summed breakdown scale the same product rather
+    /// than two differently rounded ones. A scale of 1 multiplies the delta by exactly 1, which
+    /// is the identity on every finite float and on NaN's payload alike, so the shipped block
+    /// leaves this path bit-identical to the unscaled one.
+    fn scaled_total_with_holdings(
+        &self,
+        holdings: Holdings,
+        candidate: Vertex,
+        receives_grant: bool,
+        diversity_scale: f64,
+    ) -> f64 {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
         precompute.base
             + self.concentration_delta(&holdings, stats)
-            + self.diversity_delta(&holdings, stats, precompute)
+            + diversity_scale * self.diversity_delta(&holdings, stats, precompute)
             + self.port_delta(&holdings, stats, precompute)
             + if receives_grant {
                 precompute.setup_grant_value

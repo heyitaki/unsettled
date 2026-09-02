@@ -227,6 +227,9 @@ export function expansionTerm(
   const discounted = (site: ExpansionSite): number => {
     let score = scores.get(site.vertexId)
     if (score === undefined) {
+      // No draft slot: a site is a settlement some later turn buys, so what the pair's *current*
+      // pick position leans on says nothing about it. SP4's scales price this whole term instead,
+      // through the `expansion` scale its caller applies. `placement/expansion.rs::term` matches.
       score = marginalWithoutExpansion(ctx, withCandidate, site.vertexId)
       scores.set(site.vertexId, score)
     }

@@ -212,6 +212,10 @@ pub(super) fn term(
             let score = match scores[index] {
                 Some(score) => score,
                 None => {
+                    // Unscaled by any draft slot: a site is a settlement some later turn buys,
+                    // so what the pair's *current* pick position leans on says nothing about it.
+                    // SP4's scales price this whole term instead, through the `expansion` scale
+                    // its caller applies. `expansion.ts::expansionTerm` matches.
                     let score = scorer.total_with_holdings(with_candidate, site.vertex, false);
                     scores[index] = Some(score);
                     score

@@ -36,7 +36,89 @@
     "rolloutBudget": { "min": 500000.0, "max": 500000.0 },
     "rolloutsMin": { "min": 4.0, "max": 4.0 },
     "rolloutsMax": { "min": 24.0, "max": 24.0 },
-    "maxResults": { "min": 8.0, "max": 8.0 }
+    "maxResults": { "min": 8.0, "max": 8.0 },
+    "slotScales": {
+      "3": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      },
+      "4": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "3": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      },
+      "5": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "3": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "4": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      },
+      "6": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "3": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "4": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "5": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      }
+    }
   },
   "policy": {
     "productionWeight": { "min": 0.25, "max": 4.0 },

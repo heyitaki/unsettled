@@ -19,8 +19,15 @@ import {
   marginalBreakdown,
   marginalTotal,
   occupancyFromBoard,
+  type DraftSlot,
 } from '../../src/engine/valuation.ts'
-import { DEFAULT_WEIGHTS, type EngineWeights } from '../../src/engine/weights.ts'
+import {
+  DEFAULT_WEIGHTS,
+  neutralSlotScales,
+  type EngineWeights,
+  type SlotScale,
+  type SlotScales,
+} from '../../src/engine/weights.ts'
 import {
   axialKey,
   edgeEndpointVertexIds,
@@ -51,6 +58,8 @@ interface CaseInput {
   holdings?: VertexId[]
   candidate: VertexId
   receivesGrant?: boolean
+  /** The draft slot the case is scored at, or absent for an unscaled score. */
+  slot?: DraftSlot
   ingestion?: {
     outcome: 'reject'
     error: 'NullTile' | 'MissingToken' | 'NoRobberPlacement'
@@ -67,8 +76,16 @@ const weightsDir = resolve(simulatorDir, 'placement')
 const cloneWeights = (changes: Partial<EngineWeights> = {}): EngineWeights => ({
   ...DEFAULT_WEIGHTS,
   resourceValue: { ...DEFAULT_WEIGHTS.resourceValue },
+  slotScales: neutralSlotScales(),
   ...changes,
 })
+
+/** The shipped block with one (seat count, slot) entry moved, which is all a case ever needs. */
+const scaledSlot = (slot: DraftSlot, scale: SlotScale): SlotScales => {
+  const scales = neutralSlotScales()
+  scales[String(slot.seats)][String(slot.slot)] = scale
+  return scales
+}
 
 function completeBoard(layout: LayoutId, absent?: Resource): Board {
   const grid = boardGrid(layout)
@@ -161,7 +178,8 @@ function scoreCase(input: CaseInput) {
   const hand = input.receivesGrant
     ? ctx.stats.get(input.candidate)?.setupGrant ?? null
     : null
-  const components = marginalBreakdown(ctx, holdings, input.candidate, hand, occupancy)
+  const slot = input.slot ?? null
+  const components = marginalBreakdown(ctx, holdings, input.candidate, hand, occupancy, slot)
   return {
     id: input.id,
     covers: input.covers,
@@ -170,8 +188,9 @@ function scoreCase(input: CaseInput) {
     holdings: input.holdings ?? [],
     candidate: input.candidate,
     receivesGrant: input.receivesGrant ?? false,
+    slot,
     components,
-    marginalTotal: marginalTotal(ctx, holdings, input.candidate, hand, occupancy),
+    marginalTotal: marginalTotal(ctx, holdings, input.candidate, hand, occupancy, slot),
     breakdownTotal: breakdownTotal(components),
     ingestion: input.ingestion ?? { outcome: 'score' as const },
     degenerate: input.degenerate ?? false,
@@ -625,6 +644,25 @@ const cases: CaseInput[] = [
     weights: cloneWeights({ robberConcentrationWeight: 4 }),
     holdings: [sharedHexHolding],
     candidate: sharedHexCandidate,
+  },
+  {
+    // SP4's slot scales. `expansion-sites` is the same board, holding, candidate and expansion
+    // weight, so the two cases differ only in the scale, and the fixture pins the scaled
+    // components against the unscaled ones on both sides at once. The seat is `aki`, whose index
+    // in the board's four players is slot 0, which is the entry the scale moves.
+    id: 'slot-scales',
+    covers: ['W15'],
+    board: expansionBoard,
+    weights: cloneWeights({
+      expansionWeight: 0.3,
+      slotScales: scaledSlot(
+        { seats: 4, slot: 0 },
+        { expansion: 2, diversity: 0.5 },
+      ),
+    }),
+    holdings: [expansionHolding],
+    candidate: expansionCandidate,
+    slot: { seats: 4, slot: 0 },
   },
   {
     id: 'real-endgame-pieces',

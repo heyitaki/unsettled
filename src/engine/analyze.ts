@@ -19,6 +19,7 @@ import {
   occupancyFromBoard,
   scoreCandidate,
   type BoardContext,
+  type DraftSlot,
   type HandCounts,
   type Holdings,
   type Occupancy,
@@ -185,6 +186,16 @@ const rolloutOccupancy = (
   seat,
 })
 
+/**
+ * The draft slot a player picks from: its index in `board.players`, which is what `draft.ts`
+ * builds the pick order from in both directions of the snake, beside the seat count. Null for a
+ * player the board does not list, which scores unscaled.
+ */
+const draftSlotOf = (board: Board, playerId: string): DraftSlot | null => {
+  const slot = board.players.findIndex((player) => player.id === playerId)
+  return slot < 0 ? null : { seats: board.players.length, slot }
+}
+
 const scoreForScan = (
   ctx: BoardContext,
   board: Board,
@@ -194,6 +205,7 @@ const scoreForScan = (
   modifier: PlacementModifier,
   receivesGrant: boolean,
   occupancy: Occupancy,
+  slot: DraftSlot | null,
 ): number => modifier === neutralModifier
   ? marginalTotal(
       ctx,
@@ -201,6 +213,7 @@ const scoreForScan = (
       vertexId,
       handForCandidate(ctx, vertexId, receivesGrant),
       occupancy,
+      slot,
     )
   : scoreCandidate(
       ctx,
@@ -211,6 +224,7 @@ const scoreForScan = (
       modifier,
       handForCandidate(ctx, vertexId, receivesGrant),
       occupancy,
+      slot,
     ).total
 
 function bestLegalCandidate(
@@ -225,6 +239,7 @@ function bestLegalCandidate(
   let best: VertexId | null = null
   let bestScore = -Infinity
   const occupancy = rolloutOccupancy(board, blocked, playerId)
+  const slot = draftSlotOf(board, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
     const score = scoreForScan(
@@ -236,6 +251,7 @@ function bestLegalCandidate(
       modifier,
       receivesGrant,
       occupancy,
+      slot,
     )
     if (score > bestScore) {
       best = vertexId
@@ -259,6 +275,7 @@ function opponentPick(
   const topScores: number[] = []
   const topK = Math.max(1, ctx.weights.opponentTopK)
   const occupancy = rolloutOccupancy(board, blocked, playerId)
+  const slot = draftSlotOf(board, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
     const score = scoreForScan(
@@ -270,6 +287,7 @@ function opponentPick(
       modifier,
       receivesGrant,
       occupancy,
+      slot,
     )
     let index = 0
     while (index < topScores.length && score <= topScores[index]) index += 1
@@ -436,6 +454,9 @@ export function rankCandidates(
   const firstReceivesGrant = receivesSecondSettlementGrant(draft, firstPickIndex)
   // Scored once, before any rollout, so the board's own pieces are the whole occupancy.
   const boardOccupancy = occupancyFromBoard(board, me)
+  // Both of my picks come off the same slot: the snake reverses the order seats pick in, never
+  // which seat I am.
+  const mySlot = draftSlotOf(board, me)
   const firstScores = new Map(candidates.map((candidate) => [
     candidate,
     scoreCandidate(
@@ -447,6 +468,7 @@ export function rankCandidates(
       options.modifier,
       handForCandidate(ctx, candidate, firstReceivesGrant),
       boardOccupancy,
+      mySlot,
     ),
   ]))
   // The road the expansion walk would lay from each first pick. The scoring above already ran the
@@ -519,6 +541,7 @@ export function rankCandidates(
           receivesSecondSettlementGrant(draft, secondPickIndex),
         ),
         rolloutOccupancy(board, blocked, me),
+        mySlot,
       )
       addBreakdown(aggregate.breakdown, secondScore.breakdown)
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
@@ -614,6 +637,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
   const meDone = draft.myRemainingPickIndices.length === 0
   const me = board.mePlayerId
   const boardOccupancy = occupancyFromBoard(board, me)
+  const mySlot = me === null ? null : draftSlotOf(board, me)
   const baseHoldings = holdingsFromBoard(ctx, board)
   const myHoldings = me === null ? emptyHoldings() : baseHoldings.get(me) ?? emptyHoldings()
   const canRank = !complete && meValid && !meDone && legal.length > 0 && me !== null
@@ -630,6 +654,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
       modifier,
       pendingReceivesGrant,
       boardOccupancy,
+      mySlot,
     ) > 0)
   const shouldRank = canRank && hasPositiveScore
   let recommendations: Recommendation[] = []

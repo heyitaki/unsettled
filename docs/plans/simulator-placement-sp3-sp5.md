@@ -241,14 +241,14 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 17: SP4 `slotScales` block and slot plumbing, behaviour-neutral
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Add `slotScales` to both `EngineWeights` with the shape, defaults and `validate` rules in Context; TypeScript `DEFAULT_WEIGHTS` and the Rust mirror build the 3-to-6 seat entries at 1.0
-- [ ] Plumb the slot: TypeScript `DraftSlot` parameter on `marginalBreakdown`, `marginalTotal`, `scoreCandidate`, passed from `analyze.ts` for the picking player at each scored pick (first pick and planned second alike); Rust `score_for_owner` uses `seat` and the scorer's seat count taken from the board in `new`. Apply the `diversity` scale to the diversity delta and the `expansion` scale to the expansion term
-- [ ] Sweep bounds: one `{min 0.25, max 4.0}` range per leaf under `placement/slotScales`; add the block at 1.0 to every weights-shaped file, scripted
-- [ ] Parity: `FixtureCase` gains `slot: { seats, slot } | null` on both sides (null means no scaling); add class `W15`, case `slot-scales`, at a non-neutral four-seat scale, and regenerate
-- [ ] Vitest: a scaled slot changes only the two scaled components by exactly the scale factor; a 1.0 block is bit-identical to no block; `validate` rejects a missing slot key, an extra seat count and a negative scale (Rust test for the same three rejections)
-- [ ] Recapture and assert the corpus diff is empty; state that in the commit message
-- [ ] All six validation commands green
+- [x] Capture `runs/corpus-pre`
+- [x] Add `slotScales` to both `EngineWeights` with the shape, defaults and `validate` rules in Context; TypeScript `DEFAULT_WEIGHTS` and the Rust mirror build the 3-to-6 seat entries at 1.0
+- [x] Plumb the slot: TypeScript `DraftSlot` parameter on `marginalBreakdown`, `marginalTotal`, `scoreCandidate`, passed from `analyze.ts` for the picking player at each scored pick (first pick and planned second alike); Rust `score_for_owner` uses `seat` and the scorer's seat count taken from the board in `new`. Apply the `diversity` scale to the diversity delta and the `expansion` scale to the expansion term
+- [x] Sweep bounds: one `{min 0.25, max 4.0}` range per leaf under `placement/slotScales`; add the block at 1.0 to every weights-shaped file, scripted
+- [x] Parity: `FixtureCase` gains `slot: { seats, slot } | null` on both sides (null means no scaling); add class `W15`, case `slot-scales`, at a non-neutral four-seat scale, and regenerate
+- [x] Vitest: a scaled slot changes only the two scaled components by exactly the scale factor; a 1.0 block is bit-identical to no block; `validate` rejects a missing slot key, an extra seat count and a negative scale (Rust test for the same three rejections)
+- [x] Recapture and assert the corpus diff is empty; state that in the commit message
+- [x] All six validation commands green
 
 ### Task 18: Preregister M-58, the SP4 profile sweep
 

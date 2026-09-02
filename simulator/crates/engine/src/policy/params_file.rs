@@ -1060,6 +1060,50 @@ mod tests {
         parsed.validate().expect("zero is inside the domain");
     }
 
+    /// `slotScales` is keyed by seat count and slot, so a dropped or misspelled key is a silent
+    /// no-op rather than a load error unless the block is checked for exact keys: a file missing
+    /// the four-seat slot 3 entry would score the last pick of every measured run unscaled and
+    /// read as the reference arm. The scales multiply components, so a negative one flips a whole
+    /// term's sign and is outside the range `sweep-bounds.json` declares.
+    #[test]
+    fn a_malformed_slot_scales_block_fails_placement_validation() {
+        let committed: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        let parsed: EngineWeights =
+            serde_json::from_value(committed.clone()).expect("weights shape");
+        parsed.validate().expect("the shipped block is exact");
+
+        let mut missing_slot = committed.clone();
+        missing_slot["slotScales"]["4"]
+            .as_object_mut()
+            .expect("a seat row is an object")
+            .remove("3")
+            .expect("the four-seat block carries slot 3");
+        let parsed: EngineWeights =
+            serde_json::from_value(missing_slot).expect("weights shape");
+        let error = parsed.validate().expect_err("a missing slot is a load error");
+        assert!(error.contains("slotScales.4 carries slots"), "{error}");
+
+        let mut extra_seats = committed.clone();
+        extra_seats["slotScales"]["7"] = committed["slotScales"]["6"].clone();
+        let parsed: EngineWeights = serde_json::from_value(extra_seats).expect("weights shape");
+        let error = parsed
+            .validate()
+            .expect_err("an extra seat count is a load error");
+        assert!(error.contains("slotScales carries seat counts"), "{error}");
+
+        let mut negative = committed;
+        negative["slotScales"]["4"]["2"]["diversity"] = Value::from(-0.5);
+        let parsed: EngineWeights = serde_json::from_value(negative).expect("weights shape");
+        let error = parsed.validate().expect_err("a negative scale is a load error");
+        assert!(
+            error.contains("slotScales.4.2.diversity >= 0 and finite"),
+            "{error}"
+        );
+    }
+
     /// `robber_choice`'s joint argmax only agrees with the two-stage search it replaced where the
     /// steal term cannot go negative, and both of these scale it.
     #[test]

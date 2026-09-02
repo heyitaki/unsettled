@@ -4,7 +4,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use unsettled_engine::board::{ConversionError, ConversionOptions, SimBoard};
 use unsettled_engine::placement::app_formula::{
-    AppFormulaScorer, EngineWeights, ResourceValues, ScoreBreakdown,
+    AppFormulaScorer, EngineWeights, ResourceValues, ScoreBreakdown, SlotScale, SlotScales,
+    neutral_slot_scales,
 };
 use unsettled_engine::rules::RuleConfig;
 use unsettled_engine::state::EMPTY;
@@ -12,10 +13,10 @@ use unsettled_engine::topology::{Topology, Vertex};
 use unsettled_engine::wire::WireBoard;
 
 const TOLERANCE: f64 = 1e-9;
-const REQUIRED_CLASSES: [&str; 42] = [
-    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12", "W13", "W14", "B1",
-    "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4", "P5",
-    "H1", "H2", "H3", "H4", "F1", "F2", "G1", "G2", "G3", "G4", "G5", "G6",
+const REQUIRED_CLASSES: [&str; 43] = [
+    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12", "W13", "W14", "W15",
+    "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4",
+    "P5", "H1", "H2", "H3", "H4", "F1", "F2", "G1", "G2", "G3", "G4", "G5", "G6",
 ];
 
 #[derive(Deserialize)]
@@ -34,11 +35,19 @@ struct FixtureCase {
     holdings: Vec<String>,
     candidate: String,
     receives_grant: bool,
+    /// The draft slot the TypeScript side scored the case at, or `None` for an unscaled score.
+    slot: Option<FixtureSlot>,
     components: FixtureBreakdown,
     marginal_total: FixtureNumber,
     breakdown_total: FixtureNumber,
     ingestion: Ingestion,
     degenerate: bool,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+struct FixtureSlot {
+    seats: usize,
+    slot: u8,
 }
 
 #[derive(Deserialize)]
@@ -196,6 +205,26 @@ fn typescript_and_rust_placement_formulas_match() {
                 let board = conversion.expect("fixture expected successful conversion");
                 let weights = parse_weights(&case.weights);
                 let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                // The Rust entries key SP4's scales off the seat they are already given and the
+                // board's own seat count, where the TypeScript ones are handed the slot. Nothing
+                // else ties the two readings together, so a case that names a slot pins them as
+                // the same pair, and a case that names none pins its derived pair as unscaled.
+                match case.slot {
+                    Some(slot) => {
+                        assert_eq!(
+                            (board.seats(), occupancy.seat),
+                            (slot.seats, slot.slot),
+                            "case {} was scored at a different slot on each side",
+                            case.id
+                        );
+                    }
+                    None => assert_eq!(
+                        scorer.slot_scale(occupancy.seat),
+                        SlotScale::NEUTRAL,
+                        "case {} names no slot, so its derived slot must scale nothing",
+                        case.id
+                    ),
+                }
                 let candidate = topology.vertex_by_id(&case.candidate).unwrap();
                 let actual = scorer.breakdown_for_owner(
                     &occupancy.vertex_owner,
@@ -342,7 +371,12 @@ fn occupancy_moves_the_expansion_component_and_nothing_else() {
             },
         )
         .expect("fixture expected successful conversion");
-        let scorer = AppFormulaScorer::new(&board, &topology, parse_weights(&case.weights));
+        // The slot scale is not occupancy, and the holdings entry has no seat to look one up
+        // with, so it is held at 1 here and the two entries are compared on the occupancy alone.
+        // The main parity test above drives the case's own scales.
+        let mut weights = parse_weights(&case.weights);
+        weights.slot_scales = neutral_slot_scales();
+        let scorer = AppFormulaScorer::new(&board, &topology, weights);
 
         let candidate = topology.vertex_by_id(&case.candidate).unwrap();
         let expected = scorer.breakdown(&holdings, candidate, case.receives_grant);
@@ -641,7 +675,26 @@ fn parse_weights(value: &Value) -> EngineWeights {
         rollouts_min: number("rolloutsMin"),
         rollouts_max: number("rolloutsMax"),
         max_results: number("maxResults"),
+        slot_scales: parse_slot_scales(&value["slotScales"]),
     }
+}
+
+fn parse_slot_scales(value: &Value) -> SlotScales {
+    let mut scales = SlotScales::new();
+    for (seats, row) in value.as_object().expect("slotScales is an object") {
+        let mut parsed = std::collections::BTreeMap::new();
+        for (slot, scale) in row.as_object().expect("a slotScales row is an object") {
+            parsed.insert(
+                slot.clone(),
+                SlotScale {
+                    expansion: fixture_number(&scale["expansion"]),
+                    diversity: fixture_number(&scale["diversity"]),
+                },
+            );
+        }
+        scales.insert(seats.clone(), parsed);
+    }
+    scales
 }
 
 fn fixture_number(value: &Value) -> f64 {

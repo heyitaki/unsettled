@@ -26,7 +26,7 @@ import {
   type PortAccess,
   type VertexStats,
 } from '../valuation'
-import { DEFAULT_WEIGHTS, type EngineWeights } from '../weights'
+import { DEFAULT_WEIGHTS, neutralSlotScales, type EngineWeights } from '../weights'
 
 const vertices = boardGrid('standard4').vertexIds
 const edgeIds = boardGrid('standard4').coastalEdgeIds
@@ -685,6 +685,87 @@ describe('occupancy', () => {
         hand,
         occupancy,
       )).toEqual(scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand))
+    }
+  })
+})
+
+describe('slot scales', () => {
+  const board = endgame as Board
+  const grid = boardGrid(board.layout)
+  // A four-seat slot 2 entry, off 1 in both directions, so a component that took the wrong one is
+  // not merely off by a sign.
+  const slot = { seats: 4, slot: 2 }
+  const scaled: EngineWeights = {
+    ...DEFAULT_WEIGHTS,
+    // Nonzero, or the expansion scale would multiply a term that is 0 whatever it is told.
+    expansionWeight: 0.3,
+    slotScales: {
+      ...neutralSlotScales(),
+      '4': { ...neutralSlotScales()['4'], '2': { expansion: 2, diversity: 0.5 } },
+    },
+  }
+  const witness: EngineWeights = { ...scaled, slotScales: neutralSlotScales() }
+
+  it('multiplies exactly the diversity and expansion components', () => {
+    const ctx = computeBoardContext(board, scaled)
+    const plainCtx = computeBoardContext(board, witness)
+    const occupancy = occupancyFromBoard(board, board.players[2].id)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    let moved = 0
+    for (const vertexId of grid.vertexIds) {
+      const plain = marginalBreakdown(plainCtx, holding, vertexId, null, occupancy)
+      const actual = marginalBreakdown(ctx, holding, vertexId, null, occupancy, slot)
+      expect(actual).toEqual({
+        ...plain,
+        diversity: plain.diversity * 0.5,
+        expansion: plain.expansion * 2,
+      })
+      // The fused total scales the same products the breakdown does, so the two entries cannot
+      // disagree about what a scaled slot is worth.
+      expect(marginalTotal(ctx, holding, vertexId, null, occupancy, slot))
+        .toBe(breakdownTotal(actual))
+      if (plain.expansion !== 0) moved += 1
+    }
+    expect(moved).toBeGreaterThan(0)
+  })
+
+  it('scores a 1.0 block bit-for-bit as an unnamed slot does', () => {
+    const ctx = computeBoardContext(board, witness)
+    const occupancy = occupancyFromBoard(board, board.players[2].id)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const vertexId of grid.vertexIds) {
+      const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
+      expect(marginalBreakdown(ctx, holding, vertexId, hand, occupancy, slot))
+        .toEqual(marginalBreakdown(ctx, holding, vertexId, hand, occupancy))
+      expect(marginalTotal(ctx, holding, vertexId, hand, occupancy, slot))
+        .toBe(marginalTotal(ctx, holding, vertexId, hand, occupancy))
+      expect(scoreCandidate(
+        ctx,
+        holding,
+        vertexId,
+        'p1',
+        board,
+        neutralModifier,
+        hand,
+        occupancy,
+        slot,
+      )).toEqual(
+        scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand, occupancy),
+      )
+    }
+  })
+
+  // A seat count the block carries no row for, and a slot past the row's last, both score
+  // unscaled: the app ranks two-player and solo boards the simulator never drafts.
+  it('leaves a slot the block does not name unscaled', () => {
+    const ctx = computeBoardContext(board, scaled)
+    const occupancy = occupancyFromBoard(board, board.players[2].id)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const absent of [{ seats: 2, slot: 0 }, { seats: 4, slot: 9 }]) {
+      for (const vertexId of grid.vertexIds) {
+        expect(marginalBreakdown(ctx, holding, vertexId, null, occupancy, absent))
+          .toEqual(marginalBreakdown(ctx, holding, vertexId, null, occupancy))
+      }
     }
   })
 })
