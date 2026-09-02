@@ -161,10 +161,10 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 10: Vocabulary sweep (D10, DB7)
 
-- [ ] `grep -n '#d8bc77\|#fff9e9\|#c77c63\|▾\|⠿' src/ui/editor.css src/ui/*.tsx` is empty; every remaining `current` and `me` rule lives once in the base with the phone's tints.
-- [ ] `grep -rl 'phone-' src/ui --include='*.ts' --include='*.tsx' | grep -v 'src/ui/phone/'` prints only `src/ui/revealBoard.ts`; every `.phone-shell`-scoped rule left in the portrait arm differs from the base rule it overrides (delete any that merely repeats it).
-- [ ] Read the desktop, landscape and phone screenshots from the last e2e run and fix anything the promotions broke on the phone (a lost size, a lost tint), keeping the phone as the reference; note in the progress output which files were touched for it.
-- [ ] Ledger: D10 done.
+- [x] `grep -n '#d8bc77\|#fff9e9\|#c77c63\|▾\|⠿' src/ui/editor.css src/ui/*.tsx` is empty; every remaining `current` and `me` rule lives once in the base with the phone's tints (`.list-row.current`, `.roster-row.me`, `.analysis-row.current`, each carrying the phone's `--accent-dark`/`--ink` border over `#fff`).
+- [x] `grep -rl 'phone-' src/ui --include='*.ts' --include='*.tsx' | grep -v 'src/ui/phone/'` prints only `src/ui/revealBoard.ts`; every `.phone-shell`-scoped rule left in the portrait arm differs from the base rule it overrides (each is a size, a layout flip, a tint or a hover reset, none a repeat). Two base rules had split into duplicate selectors when Task 8 dropped `.player-add` and `.player-vp` from their selector lists; `.history-buttons button` and `.tally-header button` are folded back into one rule each.
+- [x] Read the desktop, landscape and phone screenshots from the last e2e run: nothing on the phone regressed, so no file was touched for it. The two overlay screenshots (`maps-screen.png`, `players-screen.png`) and `dots-menu.png` catch their fade or slide mid-flight, which the untouched `phone-overlay-in` and `menu-pop` animations already did before this run.
+- [x] Ledger: D10 done.
 
 ### Task 11: Docs and the specs (D11)
 
