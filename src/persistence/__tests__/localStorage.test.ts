@@ -296,6 +296,22 @@ describe('map identity', () => {
     expect(listMaps().maps[0]).toMatchObject({ id: null, synthetic: true })
   })
 
+  it('listMaps validates the library once per blob, not once per listing', () => {
+    const id = savedId('a')
+    const first = listMaps()
+    // The rows are the same objects until storage changes: the library panel
+    // re-lists after every autosave, and parsing each stored board again for an
+    // unchanged blob would re-validate the whole library per edit burst.
+    expect(listMaps()).toBe(first)
+    expect(updateMap(id, 'a', game('extension6')).ok).toBe(true)
+    const second = listMaps()
+    expect(second).not.toBe(first)
+    expect(second.maps[0]).toMatchObject({ id, valid: true })
+    // Another document rewriting the key by hand is a change too.
+    localStorage.setItem(MAPS_KEY, JSON.stringify([42]))
+    expect(listMaps().maps[0]).toMatchObject({ id: null, synthetic: true })
+  })
+
   it('migrateMapIds re-mints a repeated id so two rows stop sharing an identity', () => {
     const board = createBoard('standard4')
     localStorage.setItem(MAPS_KEY, JSON.stringify([

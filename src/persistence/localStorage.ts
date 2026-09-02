@@ -176,8 +176,21 @@ export function takenMapNames(): Set<string> {
   return names
 }
 
-export function listMaps(): { maps: ListedMap[]; warning?: string } {
-  const raw = readRawMaps()
+type Listing = { maps: ListedMap[]; warning?: string }
+
+// The listing keyed by the exact blob it came from. Listing validates every
+// stored board, and the library panel re-lists after each autosave, so without
+// this every edit burst would re-validate the whole library.
+let listing: { raw: string | null; result: Listing } | null = null
+
+export function listMaps(): Listing {
+  const raw = localStorage.getItem(MAPS_KEY)
+  if (listing === null || listing.raw !== raw) listing = { raw, result: buildListing(raw) }
+  return listing.result
+}
+
+function buildListing(rawText: string | null): Listing {
+  const raw = parseRawMaps(rawText)
   const maps: ListedMap[] = raw.entries.map((entry, index) => {
     if (!isRecord(entry)) {
       return {
