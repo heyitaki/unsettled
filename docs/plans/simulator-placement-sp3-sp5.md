@@ -216,10 +216,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 13: Run M-56 and record it
 
-- [ ] Record `uptime`, run the preregistered command, record `uptime` again
-- [ ] Append `## M-56: blockability within hex-count strata` with full provenance, the per-stratum table overall and per slot, the weighted mean, and the boolean
-- [ ] Append a dated decision note to `placement-programme.md` recording whether the concentration term is built, superseding the "open with its first task named" sentence of the SP0 decisions
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered command, record `uptime` again
+- [x] Append `## M-56: blockability within hex-count strata` with full provenance, the per-stratum table overall and per slot, the weighted mean, and the boolean
+- [x] Append a dated decision note to `placement-programme.md` recording whether the concentration term is built, superseding the "open with its first task named" sentence of the SP0 decisions
+- [x] Link check passes
 
 ### Task 14: Robber concentration term, conditional on M-56
 
