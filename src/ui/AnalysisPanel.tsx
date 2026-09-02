@@ -3,6 +3,9 @@ import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
+import { readableInk } from './colors'
+import { PencilGlyph, PhotoGlyph } from './glyphs'
+import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { useCoarsePointer } from './useMediaQuery'
@@ -69,14 +72,30 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
     .map(([label, value]) => [label, value / 10])
 }
 
-export function AnalysisPanel() {
+/** No hex carries a tile (spec B5): there is nothing to rank, only ways to fill the board. */
+const boardIsEmpty = (board: Board): boolean => board.hexes.every((hex) => hex.tile === null)
+
+/**
+ * The ranked picks. The desktop panel and the phone's block (spec S5) share
+ * every derivation and the card list; the phone variant swaps the heading, the
+ * context line and the two states the desktop shows as text: an unclaimed
+ * roster becomes a row of swatches, and an empty board becomes the two ways
+ * to fill it, one of which hands off to the shell's build mode.
+ */
+export function AnalysisPanel({ variant = 'desktop', onBuild }: {
+  variant?: 'desktop' | 'phone'
+  onBuild?: () => void
+} = {}) {
   const { state, dispatch } = useStore()
-  const coarse = useCoarsePointer()
+  const phone = variant === 'phone'
+  // The phone's every path works from taps alone, whatever the pointer reports.
+  const coarse = useCoarsePointer() || phone
   const board = activeTab(state).game.board
   const analysis = analyzeBoardCached(board)
   const recommendations = analysis.recommendations.slice(0, 5)
   const [selectedPick, setSelectedPick] = useState<VertexId | null>(null)
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   // Clear any hovered board marks whenever the board changes — after a click
   // places settlements, the previous window's circles are stale.
@@ -149,6 +168,7 @@ export function AnalysisPanel() {
       marks: next === null ? null : recommendationMarks(recommendation, myColor),
     })
   }
+  const claim = (playerId: string) => dispatch({ type: 'commit', board: setMe(board, playerId) })
 
   const emptyMessage: Partial<Record<typeof analysis.status, string>> = {
     'no-me': 'Pick who you are above to get recommendations.',
@@ -156,6 +176,239 @@ export function AnalysisPanel() {
     'no-production': 'Add number tokens to the board to analyze placements.',
     complete: 'The draft is finished. Every starting settlement is placed.',
     'me-done': 'Your starting settlements are placed. Waiting on the rest of the draft.',
+  }
+
+  const warnings = (
+    <>
+      {analysis.warnings.includes('snake-inconsistent') && (
+        <p className="analysis-warning">
+          Placed settlements don't match a clean snake draft, so recommendations are best-effort.
+        </p>
+      )}
+      {analysis.warnings.includes('solo-roster') && (
+        <p className="analysis-warning">Only one player on the board.</p>
+      )}
+    </>
+  )
+
+  const body = analysis.status !== 'ready' ? (
+    <div className="analysis-placeholder">
+      <p>{emptyMessage[analysis.status]}</p>
+      {analysis.status === 'no-availability' && likelyGone.length > 0 && (
+        <span>
+          likely gone: {likelyGone.map(({ vertexId }) =>
+            vertexDescription(board, vertexId)).join(', ')}
+        </span>
+      )}
+    </div>
+  ) : (
+    <>
+      {likelyGone.length > 0 && (
+        coarse ? (
+          <div className={`analysis-likely-gone ${selectedLikelyGone ? 'selected' : ''}`}>
+            <button
+              type="button"
+              className="analysis-touch-select"
+              onClick={() => {
+                const next = !selectedLikelyGone
+                setSelectedLikelyGone(next)
+                setSelectedPick(null)
+                dispatch({ type: 'highlight', marks: next ? likelyGoneMarks : null })
+              }}
+            >
+              <span>Likely gone before your turn</span>
+              {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+                const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+                return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
+              }).join(' · ')}
+            </button>
+            {selectedLikelyGone && (
+              <div className="analysis-touch-actions">
+                <button type="button" className="primary" onClick={placeLikelyGone}>Play these out</button>
+                <button
+                  type="button"
+                  className="analysis-clear"
+                  onClick={() => {
+                    setSelectedLikelyGone(false)
+                    clearHighlight()
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="analysis-likely-gone"
+            onMouseEnter={() => dispatch({ type: 'highlight', marks: likelyGoneMarks })}
+            onMouseLeave={clearHighlight}
+            onClick={placeLikelyGone}
+          >
+            <span>Likely gone before your turn (click to play out)</span>
+            {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+              const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+              return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
+            }).join(' · ')}
+          </button>
+        )
+      )}
+      <div className="analysis-list" onMouseLeave={coarse ? undefined : clearHighlight}>
+        {recommendations.map((recommendation, index) => {
+          const factors = displayedFactors(recommendation)
+          const content = (
+            <>
+              <span
+                className="analysis-rank"
+                style={phone ? { background: myColor, color: readableInk(myColor) } : undefined}
+              >
+                {index + 1}
+              </span>
+              <span className="analysis-row-body">
+                <span className="analysis-pick-line">
+                  <strong>{vertexDescription(board, recommendation.firstPick)}</strong>
+                  <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
+                </span>
+                {recommendation.survival < 1 && (
+                  <span className="analysis-availability">
+                    {Math.round(recommendation.survival * 100)}% likely available
+                  </span>
+                )}
+                {recommendation.plannedSecond.length > 0 && (
+                  <span className="analysis-second">
+                    then: {recommendation.plannedSecond
+                      .map((vertexId) => vertexDescription(board, vertexId))
+                      .join(' / ')}
+                  </span>
+                )}
+                <span className="analysis-factors">
+                  {factors.map(([label, value]) => (
+                    <span key={label}>{label} {formatFactor(value)}</span>
+                  ))}
+                </span>
+              </span>
+            </>
+          )
+          if (coarse) {
+            const selected = selectedPick === recommendation.firstPick
+            return (
+              <div
+                key={recommendation.firstPick}
+                className={`analysis-row ${selected ? 'selected' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="analysis-row-select"
+                  onClick={() => selectRecommendation(recommendation)}
+                >
+                  {content}
+                </button>
+                {selected && (
+                  <div className="analysis-touch-actions">
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => placeRecommendation(recommendation)}
+                    >
+                      Place settlement
+                    </button>
+                    <button
+                      type="button"
+                      className="analysis-clear"
+                      onClick={() => {
+                        setSelectedPick(null)
+                        clearHighlight()
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          }
+          return (
+            <button
+              type="button"
+              key={recommendation.firstPick}
+              className="analysis-row"
+              onMouseEnter={() => dispatch({
+                type: 'highlight',
+                marks: recommendationMarks(recommendation, myColor),
+              })}
+              onClick={() => placeRecommendation(recommendation)}
+            >
+              {content}
+            </button>
+          )
+        })}
+      </div>
+    </>
+  )
+
+  if (phone) {
+    const empty = boardIsEmpty(board)
+    const yourTurn = me !== undefined && analysis.draft.currentPlayerId === me.id
+    return (
+      <section className="phone-block phone-analysis">
+        <div className="phone-block-head">
+          <div>
+            <span className="eyebrow">{empty ? 'Nothing to rank yet' : 'Draft analysis'}</span>
+            <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
+          </div>
+          {!empty && yourTurn && <span className="phone-turn-pill"><i />Your turn</span>}
+        </div>
+        {empty ? (
+          <div className="phone-claim">
+            <p className="phone-hint">
+              Nothing has been laid out yet. Import a screenshot and the parser reads the tiles,
+              numbers and players off it, or place them yourself.
+            </p>
+            <div className="phone-empty-actions">
+              <button type="button" className="primary" onClick={() => setImportOpen(true)}>
+                <PhotoGlyph />
+                Import screenshot
+              </button>
+              <button type="button" onClick={onBuild}>
+                <PencilGlyph />
+                Build it by hand
+              </button>
+            </div>
+            {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
+          </div>
+        ) : !me ? (
+          <div className="phone-claim">
+            <p className="phone-hint">Tap your colour and the ranking starts.</p>
+            <div className="phone-claim-row">
+              {board.players.map((player) => (
+                <button type="button" key={player.id} onClick={() => claim(player.id)}>
+                  <span className="phone-swatch" style={{ background: player.color }} />
+                  {player.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="analysis-context">
+              You are{' '}
+              <MenuSelect
+                ariaLabel="Which player is you"
+                value={board.mePlayerId}
+                options={board.players.map((player) => ({ value: player.id, label: player.name }))}
+                onSelect={claim}
+              >
+                <strong>{me.name}</strong>
+              </MenuSelect>
+              {` · picking ${pickText} of ${analysis.draft.sequence.length}`}
+            </p>
+            {warnings}
+            {body}
+          </>
+        )}
+      </section>
+    )
   }
 
   return (
@@ -172,171 +425,14 @@ export function AnalysisPanel() {
           ariaLabel="Which player is you"
           value={board.mePlayerId}
           options={board.players.map((player) => ({ value: player.id, label: player.name }))}
-          onSelect={(playerId) => dispatch({ type: 'commit', board: setMe(board, playerId) })}
+          onSelect={claim}
         >
           <strong>{me ? me.name : 'choose player'}</strong>
         </MenuSelect>
         {contextTail}
       </p>
-      {analysis.warnings.includes('snake-inconsistent') && (
-        <p className="analysis-warning">
-          Placed settlements don't match a clean snake draft, so recommendations are best-effort.
-        </p>
-      )}
-      {analysis.warnings.includes('solo-roster') && (
-        <p className="analysis-warning">Only one player on the board.</p>
-      )}
-
-      {analysis.status !== 'ready' ? (
-        <div className="analysis-placeholder">
-          <p>{emptyMessage[analysis.status]}</p>
-          {analysis.status === 'no-availability' && likelyGone.length > 0 && (
-            <span>
-              likely gone: {likelyGone.map(({ vertexId }) =>
-                vertexDescription(board, vertexId)).join(', ')}
-            </span>
-          )}
-        </div>
-      ) : (
-        <>
-          {likelyGone.length > 0 && (
-            coarse ? (
-              <div className={`analysis-likely-gone ${selectedLikelyGone ? 'selected' : ''}`}>
-                <button
-                  type="button"
-                  className="analysis-touch-select"
-                  onClick={() => {
-                    const next = !selectedLikelyGone
-                    setSelectedLikelyGone(next)
-                    setSelectedPick(null)
-                    dispatch({ type: 'highlight', marks: next ? likelyGoneMarks : null })
-                  }}
-                >
-                  <span>Likely gone before your turn</span>
-                  {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
-                    const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
-                    return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
-                  }).join(' · ')}
-                </button>
-                {selectedLikelyGone && (
-                  <div className="analysis-touch-actions">
-                    <button type="button" className="primary" onClick={placeLikelyGone}>Play these out</button>
-                    <button
-                      type="button"
-                      className="analysis-clear"
-                      onClick={() => {
-                        setSelectedLikelyGone(false)
-                        clearHighlight()
-                      }}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="analysis-likely-gone"
-                onMouseEnter={() => dispatch({ type: 'highlight', marks: likelyGoneMarks })}
-                onMouseLeave={clearHighlight}
-                onClick={placeLikelyGone}
-              >
-                <span>Likely gone before your turn (click to play out)</span>
-                {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
-                  const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
-                  return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
-                }).join(' · ')}
-              </button>
-            )
-          )}
-          <div className="analysis-list" onMouseLeave={coarse ? undefined : clearHighlight}>
-            {recommendations.map((recommendation, index) => {
-              const factors = displayedFactors(recommendation)
-              const content = (
-                <>
-                  <span className="analysis-rank">{index + 1}</span>
-                  <span className="analysis-row-body">
-                    <span className="analysis-pick-line">
-                      <strong>{vertexDescription(board, recommendation.firstPick)}</strong>
-                      <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
-                    </span>
-                    {recommendation.survival < 1 && (
-                      <span className="analysis-availability">
-                        {Math.round(recommendation.survival * 100)}% likely available
-                      </span>
-                    )}
-                    {recommendation.plannedSecond.length > 0 && (
-                      <span className="analysis-second">
-                        then: {recommendation.plannedSecond
-                          .map((vertexId) => vertexDescription(board, vertexId))
-                          .join(' / ')}
-                      </span>
-                    )}
-                    <span className="analysis-factors">
-                      {factors.map(([label, value]) => (
-                        <span key={label}>{label} {formatFactor(value)}</span>
-                      ))}
-                    </span>
-                  </span>
-                </>
-              )
-              if (coarse) {
-                const selected = selectedPick === recommendation.firstPick
-                return (
-                  <div
-                    key={recommendation.firstPick}
-                    className={`analysis-row ${selected ? 'selected' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className="analysis-row-select"
-                      onClick={() => selectRecommendation(recommendation)}
-                    >
-                      {content}
-                    </button>
-                    {selected && (
-                      <div className="analysis-touch-actions">
-                        <button
-                          type="button"
-                          className="primary"
-                          onClick={() => placeRecommendation(recommendation)}
-                        >
-                          Place settlement
-                        </button>
-                        <button
-                          type="button"
-                          className="analysis-clear"
-                          onClick={() => {
-                            setSelectedPick(null)
-                            clearHighlight()
-                          }}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
-              }
-              return (
-                <button
-                  type="button"
-                  key={recommendation.firstPick}
-                  className="analysis-row"
-                  onMouseEnter={() => dispatch({
-                    type: 'highlight',
-                    marks: recommendationMarks(recommendation, myColor),
-                  })}
-                  onClick={() => placeRecommendation(recommendation)}
-                >
-                  {content}
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
+      {warnings}
+      {body}
     </section>
   )
 }

@@ -27,7 +27,7 @@ export function PhoneShell() {
       <main className="phone-page">
         <PhoneRibbon />
         <BoardCanvas />
-        <AnalysisPanel />
+        <AnalysisPanel variant="phone" onBuild={() => setMode('build')} />
       </main>
       <GlobalNotice />
     </div>

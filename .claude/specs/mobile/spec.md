@@ -142,7 +142,7 @@ Do not rebuild these; move or restyle them.
 | Rename a player on name click | `PlayerPanel.tsx`, `renamingId` + `player-name-input` |
 | Reorder players by drag, both mouse DnD and a coarse-pointer hold | `PlayerPanel.tsx` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP` |
 | Add and remove players | `PlayerPanel.tsx`, `addPlayer` / drag-to-trash |
-| Claim yourself | `AnalysisPanel.tsx`, `MenuSelect` → `setMe` |
+| Claim yourself | `AnalysisPanel.tsx`, `MenuSelect` → `setMe`; the phone variant of the same component adds the swatch row and the empty-board state |
 | Saved-map sort, four keys | `MapsPanel.tsx`, `SORT_MENU_LABEL` |
 | Import screenshot, import and export JSON | `ImportPanel.tsx` |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
@@ -192,7 +192,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M9 | Seat order drives the draft (B3) | M8 | not started |
 | M10 | Points ledger block in the Players overlay | — | dropped (O1) |
 | M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | not started |
-| M12 | Empty-board state (B5) | M6 | not started |
+| M12 | Empty-board state (B5) | M6 | done |
 | M13 | Reveal-on-select scroll (B2) | M6 | not started |
 | M14 | One-word factor labels in `displayedFactors` | — | done |
 | M15 | Landscape and desktop regression pass | all | not started |

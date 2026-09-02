@@ -348,3 +348,13 @@ export function DotsGlyph() {
     </svg>
   )
 }
+
+export function PhotoGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 16 16" strokeWidth="1.5">
+      <rect x="1.9" y="2.9" width="12.2" height="10.2" rx="2.1" />
+      <circle cx="5.5" cy="6.4" r="1.1" />
+      <path d="M2.3 11.3 5.7 8.3l2.9 2.5 2-1.6 2.8 2.3" />
+    </svg>
+  )
+}

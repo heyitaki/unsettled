@@ -83,3 +83,69 @@ test('the six-player layout gets a taller frame under an unmoved ribbon and a ba
   expect(caption).not.toMatch(/terrain|pieces/)
   await snap(page, 'six-player-frame')
 })
+
+/**
+ * A fresh board boots with one claimed player, so the no-me state needs a
+ * roster nobody has claimed. The store flushes its own workspace on pagehide,
+ * so the seed runs at the start of the reloaded document, after that flush,
+ * and edits only the roster fields of the stored tab.
+ */
+async function seedUnclaimedRoster(page: Page) {
+  await page.addInitScript(() => {
+    const key = 'unsettled.workspace.v1'
+    const raw = localStorage.getItem(key)
+    if (raw === null) return
+    const workspace = JSON.parse(raw)
+    const board = workspace.tabs[0].game.board
+    board.players = [
+      { id: 'p1', name: 'Red', color: '#c23f38' },
+      { id: 'p2', name: 'Blue', color: '#3063ba' },
+      { id: 'p3', name: 'Orange', color: '#e58331' },
+      { id: 'p4', name: 'White', color: '#ffffff' },
+    ]
+    board.mePlayerId = null
+    workspace.tabs[0].game.stats = {}
+    delete workspace.tabs[0].activePlayerId
+    localStorage.setItem(key, JSON.stringify(workspace))
+  })
+  await page.reload()
+  await expect(page.locator('.phone-dot')).toHaveCount(4)
+}
+
+test('an empty board offers the two ways to fill it', async ({ page }) => {
+  await open(page)
+  const block = page.locator('.phone-analysis')
+  await expect(block.locator('.eyebrow')).toHaveText('Nothing to rank yet')
+  await expect(block.locator('h2')).toHaveText('This board is empty')
+  await expect(block.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
+  const build = block.getByRole('button', { name: 'Build it by hand' })
+  await expect(build).toBeVisible()
+  const pencil = page.getByRole('button', { name: 'Edit the board' })
+  await expect(pencil).toHaveAttribute('aria-pressed', 'false')
+  await build.click()
+  await expect(pencil).toHaveAttribute('aria-pressed', 'true')
+  await pencil.click()
+  await expect(pencil).toHaveAttribute('aria-pressed', 'false')
+  await snap(page, 'empty-board')
+  await block.getByRole('button', { name: 'Import screenshot' }).click()
+  await expect(page.getByRole('dialog', { name: 'Import screenshot' })).toBeVisible()
+})
+
+test('a filled board asks who you are, and a tapped swatch claims that seat', async ({ page }) => {
+  await open(page)
+  await seedUnclaimedRoster(page)
+  const block = page.locator('.phone-analysis')
+  await expect(block.locator('h2')).toHaveText('This board is empty')
+  await page.getByRole('button', { name: 'Board options' }).click()
+  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+  await expect(block.locator('h2')).toHaveText('Best picks')
+  await expect(block.locator('.analysis-context')).toHaveCount(0)
+  const swatches = block.locator('.phone-claim-row button')
+  await expect(swatches).toHaveCount(4)
+  await snap(page, 'claim-row')
+  await swatches.first().click()
+  await expect(block.locator('.analysis-context')).toHaveText(/^You are/)
+  await expect(page.locator('.phone-dot').first()).toHaveClass(/\bme\b/)
+  await expect(block.locator('.analysis-row').first()).toBeVisible()
+  await snap(page, 'best-picks')
+})

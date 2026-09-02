@@ -549,6 +549,42 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .board-status .menu-trigger { padding: 4px 8px; color: var(--muted); font-weight: 600; }
   .phone-shell .board-status .menu-trigger strong { color: var(--ink); }
   .phone-shell .board-zoom { margin-left: 0; }
+  .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
+  .phone-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .phone-block-head h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
+  .phone-turn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(187, 76, 50, .13); color: var(--accent-dark); font-size: 11px; font-weight: 700; }
+  .phone-turn-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .phone-shell .analysis-context { margin: 0 0 10px; font-size: 12px; line-height: 1.5; }
+  .phone-shell .analysis-context .menu-trigger { color: var(--ink); }
+  .phone-shell .analysis-context .menu-trigger strong { border-bottom: 1.5px dotted var(--accent-dark); }
+  .phone-shell .analysis-context .menu-caret { color: var(--accent-dark); }
+  .phone-claim { display: flex; flex-direction: column; gap: 10px; }
+  .phone-hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+  .phone-claim-row { display: flex; gap: 8px; }
+  .phone-claim-row button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 11px; font-weight: 600; }
+  .phone-swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .55); }
+  .phone-empty-actions { display: flex; flex-direction: column; gap: 6px; }
+  .phone-empty-actions button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 13.5px; font-weight: 700; }
+  .phone-empty-actions button.primary { border-color: var(--accent-dark); background: var(--accent); color: #fff; }
+  .phone-shell .analysis-likely-gone { font-size: 11px; }
+  .phone-shell .analysis-likely-gone span { font-size: 10px; }
+  .phone-shell .analysis-list { gap: 6px; }
+  .phone-shell .analysis-row { gap: 0; padding: 0; border-radius: 13px; background: #f9f5ea; overflow: hidden; }
+  .phone-shell .analysis-row.selected, .phone-shell .analysis-row.selected:hover { border-color: var(--accent-dark); background: #fff; box-shadow: 0 4px 16px rgba(62, 45, 21, .14); }
+  .phone-shell .analysis-row:hover:not(.selected) { border-color: var(--line); background: #f9f5ea; box-shadow: none; }
+  .phone-shell .analysis-row-select { grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 9px 10px; }
+  .phone-shell .analysis-rank { width: 26px; height: 26px; border: 1.5px solid #30271f; font: 800 13px Inter, sans-serif; }
+  .phone-shell .analysis-row-body { gap: 0; }
+  .phone-shell .analysis-pick-line { align-items: baseline; }
+  .phone-shell .analysis-pick-line strong { font: 700 13px/1.25 Inter, sans-serif; }
+  .phone-shell .analysis-score { color: var(--ink); font: 800 15px/1 Inter, sans-serif; font-variant-numeric: tabular-nums; }
+  .phone-shell .analysis-availability { margin-top: 3px; padding: 0; border-radius: 0; color: var(--accent-dark); background: none; font-size: 11px; font-weight: 600; }
+  .phone-shell .analysis-second { margin-top: 2px; font-size: 11px; }
+  .phone-shell .analysis-factors { gap: 3px 6px; margin-top: 6px; }
+  .phone-shell .analysis-factors span { padding: 2px 6px; border: 0; border-radius: 5px; background: var(--paper-deep); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .phone-shell .analysis-touch-actions { grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 0; padding: 9px 10px; border-top: 1px solid var(--line); background: rgba(228, 216, 191, .34); }
+  .phone-shell .analysis-touch-actions button { min-height: 0; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: #f9f5ea; color: var(--ink); font-size: 12px; font-weight: 700; }
+  .phone-shell .analysis-touch-actions .primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; }
 }
 
