@@ -189,12 +189,12 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `npm run typecheck`, `npm run lint`, `npm test`, `npx playwright test --reporter=list`, then `npm run build`, all green, each alone.
-- [ ] `grep -rn 'mobile-nav\|MobileNav\|data-pane' src/ui/phone/` is empty; `grep -n 'MobileNav' src/ui/App.tsx` still finds the landscape mount.
-- [ ] `grep -rn 'Diversity+recipes\|Starting cards' src/` is empty. `grep -rn 'Save to library\|map-save-row\|board-tab-dirty' src/` is empty.
-- [ ] Every spec ledger row M2 to M17 reads `done` except M10 `dropped (O1)`; the spec's `What already exists` and `Out of scope` sections match the code; `CLAUDE.md`'s `ui/` bullet names `PhoneShell`, the two overlays and `usePortraitPhone`, and its persistence bullet names the autosave.
-- [ ] `test-results/phone/` holds a screenshot per phone e2e test; list them in the progress output with their sizes.
-- [ ] `git status` is clean apart from this plan file.
+- [x] `npm run typecheck`, `npm run lint`, `npm test`, `npx playwright test --reporter=list`, then `npm run build`, all green, each alone.
+- [x] `grep -rn 'mobile-nav\|MobileNav\|data-pane' src/ui/phone/` is empty; `grep -n 'MobileNav' src/ui/App.tsx` still finds the landscape mount.
+- [x] `grep -rn 'Diversity+recipes\|Starting cards' src/` is empty. `grep -rn 'Save to library\|map-save-row\|board-tab-dirty' src/` is empty.
+- [x] Every spec ledger row M2 to M17 reads `done` except M10 `dropped (O1)`; the spec's `What already exists` and `Out of scope` sections match the code; `CLAUDE.md`'s `ui/` bullet names `PhoneShell`, the two overlays and `usePortraitPhone`, and its persistence bullet names the autosave.
+- [x] `test-results/phone/` holds a screenshot per phone e2e test; list them in the progress output with their sizes.
+- [x] `git status` is clean apart from this plan file.
 
 ## Post-Completion
 
