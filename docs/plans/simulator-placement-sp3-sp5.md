@@ -313,9 +313,9 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 26: SP3 through SP5 completion note
 
-- [ ] Append a dated `## SP3 through SP5 completion` note to `placement-programme.md`: every M entry from M-54 on with its verdict, the SP6 survivor list (a term, its value, and the entry that made it a survivor), the terms sitting inert at 0, the closed and still-open gaps, and that the field's placement is unchanged pending SP6
-- [ ] Update the repo `CLAUDE.md` simulator bullet if a command or convention this run introduced needs a rule there (the draft kind's pinned-opponent spelling qualifies); leave it alone otherwise
-- [ ] Link check passes
+- [x] Append a dated `## SP3 through SP5 completion` note to `placement-programme.md`: every M entry from M-54 on with its verdict, the SP6 survivor list (a term, its value, and the entry that made it a survivor), the terms sitting inert at 0, the closed and still-open gaps, and that the field's placement is unchanged pending SP6
+- [x] Update the repo `CLAUDE.md` simulator bullet if a command or convention this run introduced needs a rule there (the draft kind's pinned-opponent spelling qualifies); leave it alone otherwise
+- [x] Link check passes
 
 ### Task 27: Verify acceptance criteria
 
