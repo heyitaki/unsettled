@@ -12,10 +12,10 @@ use unsettled_engine::topology::{Topology, Vertex};
 use unsettled_engine::wire::WireBoard;
 
 const TOLERANCE: f64 = 1e-9;
-const REQUIRED_CLASSES: [&str; 40] = [
-    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12", "B1", "B2", "B3",
-    "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4", "P5", "H1", "H2",
-    "H3", "H4", "F1", "F2", "G1", "G2", "G3", "G4", "G5", "G6",
+const REQUIRED_CLASSES: [&str; 41] = [
+    "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12", "W13", "B1", "B2",
+    "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4", "P5", "H1",
+    "H2", "H3", "H4", "F1", "F2", "G1", "G2", "G3", "G4", "G5", "G6",
 ];
 
 #[derive(Deserialize)]
@@ -50,6 +50,7 @@ struct FixtureBreakdown {
     diversity: FixtureNumber,
     port: FixtureNumber,
     hand_value: FixtureNumber,
+    expansion: FixtureNumber,
 }
 
 #[derive(Deserialize)]
@@ -139,9 +140,11 @@ fn case_occupancy(wire: &WireBoard, topology: &Topology, holdings: &[Vertex]) ->
 
 /// Every number the TypeScript scorer wrote into the fixture, read back out of the Rust scorer.
 ///
-/// The breakdown comes from `breakdown_for_owner`, the occupancy-aware entry, so a component that
-/// reads the board around the candidate is covered by every class in the fixture rather than by
-/// nothing. `marginal_total` stays on the holdings entry, which is the fixture field it pins.
+/// Both totals come from the occupancy-aware entries, because SP3's expansion component reads the
+/// board around the candidate and the holdings entries price none of it. `breakdownTotal` sums
+/// `breakdown_for_owner`'s components and `marginalTotal` comes from `marginal_total_for_owner`,
+/// the fused path, so the fixture pins the two code paths separately, exactly as it does on the
+/// TypeScript side.
 #[test]
 fn typescript_and_rust_placement_formulas_match() {
     let fixture: FixturePack =
@@ -206,7 +209,13 @@ fn typescript_and_rust_placement_formulas_match() {
                     &case.id,
                     "marginalTotal",
                     case.marginal_total.value(),
-                    scorer.marginal_total(&holdings, candidate, case.receives_grant),
+                    scorer.marginal_total_for_owner(
+                        &occupancy.vertex_owner,
+                        &occupancy.edge_owner,
+                        occupancy.seat,
+                        candidate,
+                        case.receives_grant,
+                    ),
                     case.degenerate,
                     &mut maximum,
                 );
@@ -291,20 +300,22 @@ fn the_scorer_adjacency_copy_matches_the_topology_it_was_built_from() {
     );
 }
 
-/// The occupancy-aware entry reads the same numbers as `breakdown` on every fixture case, with
-/// the case board's own buildings and roads standing around the holdings.
+/// Expansion is the only component the occupancy moves, on every fixture case.
 ///
 /// Owner arrays come from `case_occupancy`, so the seat holds exactly the case's `holdings` list
-/// while every rival building and every road stays where the board put it, which is the occupancy
-/// SP3's expansion term will read; today not one of them may move a number. The comparison is on
-/// raw bits rather than the fixture's tolerance because the two entries run the same arithmetic
-/// in the same order: `breakdown` folds the holdings list left to right and the owner walk folds
-/// them in ascending vertex order, which the assertion below pins as the same sequence.
+/// while every rival building and every road stays where the board put it. That is what SP3's walk
+/// reads, and no other component may notice it: each of the others is a function of the seat's own
+/// holdings alone, so an occupancy that moved one would mean a term had quietly started reading the
+/// rest of the board. The comparison is on raw bits rather than the fixture's tolerance because
+/// the two entries run the same arithmetic in the same order: `breakdown` folds the holdings list
+/// left to right and the owner walk folds them in ascending vertex order, which the assertion
+/// below pins as the same sequence.
 #[test]
-fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
+fn occupancy_moves_the_expansion_component_and_nothing_else() {
     let fixture: FixturePack =
         serde_json::from_str(include_str!("../../../fixtures/placement-parity.json")).unwrap();
     let mut scored = 0;
+    let mut expanded = 0;
     for case in fixture.cases {
         if matches!(case.ingestion, Ingestion::Reject { .. }) {
             continue;
@@ -349,7 +360,11 @@ fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
             ("diversity", expected.diversity, actual.diversity),
             ("port", expected.port, actual.port),
             ("handValue", expected.hand_value, actual.hand_value),
-            ("total", expected.total(), actual.total()),
+            (
+                "total less expansion",
+                expected.total(),
+                actual.total() - actual.expansion,
+            ),
         ] {
             assert_eq!(
                 expected.to_bits(),
@@ -358,9 +373,37 @@ fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
                 case.id
             );
         }
+        assert_eq!(
+            expected.expansion, 0.0,
+            "case {}: the holdings entry carries no occupancy, so it prices no expansion",
+            case.id
+        );
+        // The fused total is what `score_for_owner` runs in every game, and the summed breakdown is
+        // what the fixture's `breakdownTotal` pins, so the two have to be the same number down to
+        // the bit or the measured formula is not the reported one.
+        let fused = scorer.marginal_total_for_owner(
+            &occupancy.vertex_owner,
+            &occupancy.edge_owner,
+            occupancy.seat,
+            candidate,
+            case.receives_grant,
+        );
+        let summed = actual.total();
+        assert!(
+            fused.to_bits() == summed.to_bits() || (fused.is_nan() && summed.is_nan()),
+            "case {}: the fused total gave {fused:.17e}, the summed breakdown gave {summed:.17e}",
+            case.id
+        );
+        if actual.expansion != 0.0 {
+            expanded += 1;
+        }
         scored += 1;
     }
     assert!(scored > 0, "no fixture case reached the scorer");
+    assert!(
+        expanded > 0,
+        "no fixture case moved the expansion component, so the occupancy reaches nothing"
+    );
 }
 
 /// Both branches of the seat rule, on the two fixture cases that exercise them.
@@ -547,6 +590,11 @@ fn compare_breakdown(
             case.components.hand_value.value(),
             actual.hand_value,
         ),
+        (
+            "expansion",
+            case.components.expansion.value(),
+            actual.expansion,
+        ),
     ] {
         compare(&case.id, name, expected, actual, case.degenerate, maximum);
     }
@@ -583,6 +631,8 @@ fn parse_weights(value: &Value) -> EngineWeights {
         port_coverage_deficit_weight: number("portCoverageDeficitWeight"),
         near_port_radius: number("nearPortRadius"),
         near_port_decay: number("nearPortDecay"),
+        expansion_weight: number("expansionWeight"),
+        expansion_decay: number("expansionDecay"),
         robber_discount: number("robberDiscount"),
         opponent_top_k: number("opponentTopK"),
         softmax_temperature: number("softmaxTemperature"),

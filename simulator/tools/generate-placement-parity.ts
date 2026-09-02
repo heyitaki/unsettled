@@ -1,12 +1,15 @@
 import {
   addPlayer,
   createBoard,
+  placeBuilding,
+  placeRoad,
   setHexTile,
   setNumberToken,
   setRobber,
   upsertPort,
   vertexProduction,
 } from '../../src/model/board.ts'
+import { vertexAdjacency } from '../../src/engine/legality.ts'
 import {
   addToHoldings,
   breakdownTotal,
@@ -22,6 +25,7 @@ import {
   edgeEndpointVertexIds,
   hexVertexIds,
   vertexAdjacentVertexIds,
+  vertexIncidentEdgeIds,
   vertexTouchingHexes,
 } from '../../src/model/coords.ts'
 import { boardGrid } from '../../src/model/layouts.ts'
@@ -146,7 +150,9 @@ function holdingsCoveringAllResources(board: Board): VertexId[] {
 function scoreCase(input: CaseInput) {
   const weights = input.weights ?? cloneWeights()
   const ctx = computeBoardContext(input.board, weights)
-  const occupancy = occupancyFromBoard(input.board)
+  const first = input.holdings?.[0]
+  const seat = input.board.buildings.find((building) => building.vertexId === first)?.playerId
+  const occupancy = occupancyFromBoard(input.board, seat ?? null)
   const holdings = (input.holdings ?? []).reduce(
     (held, vertex) => addToHoldings(ctx, held, vertex),
     emptyHoldings(),
@@ -246,6 +252,55 @@ const devCardBoard = ([['ore', 8], ['wheat', 5], ['sheep', 10]] as const).reduce
 const portDeficitBoard = landHexesOf(firstPortA).reduce(
   (board, coord) => setNumberToken(setHexTile(board, coord, 'wood'), coord, 6),
   dedicatedPort,
+)
+
+// SP3's expansion walk. The candidate is an interior vertex whose three neighbours are interior
+// too, so every direction out of it is open board and each piece below closes exactly one of them:
+// the seat's own road makes its direction free to travel and keeps the free setup road in hand,
+// two rival settlements make the second direction a dead end, and a rival road closes the third
+// outright. `expansionBlockedBoard` is the same board with the seat's road in a rival's name, so
+// the last open path shuts and the candidate opens nothing at all.
+const standardAdjacency = vertexAdjacency('standard4')
+const standardCoastalVertices = new Set(standardGrid.coastalEdgeIds.flatMap(edgeEndpointVertexIds))
+const expansionCandidate = standardGrid.vertexIds.find((vertex) =>
+  !standardCoastalVertices.has(vertex) &&
+  (standardAdjacency.get(vertex) ?? []).every((neighbor) => !standardCoastalVertices.has(neighbor)))
+if (!expansionCandidate) throw new Error('No interior vertex whose neighbours are all interior')
+const expansionEdges = vertexIncidentEdgeIds(expansionCandidate)
+  .filter((edgeId) => standardGrid.edgeIds.includes(edgeId))
+if (expansionEdges.length !== 3) throw new Error('Interior vertex must sit on three edges')
+const [ownRoadEdge, boxedEdge, rivalRoadEdge] = expansionEdges
+const boxedNeighbor = edgeEndpointVertexIds(boxedEdge)
+  .find((vertex) => vertex !== expansionCandidate)
+if (!boxedNeighbor) throw new Error('Boxed edge has no far endpoint')
+// The far endpoint's own two neighbours, which are the whole of that direction beyond it. They are
+// two steps apart, so a settlement on each is legal.
+const boxedSettlements = (standardAdjacency.get(boxedNeighbor) ?? [])
+  .filter((vertex) => vertex !== expansionCandidate)
+const expansionDistances = new Map<VertexId, number>([[expansionCandidate, 0]])
+const expansionQueue: VertexId[] = [expansionCandidate]
+for (let head = 0; head < expansionQueue.length; head += 1) {
+  const vertex = expansionQueue[head]
+  for (const neighbor of standardAdjacency.get(vertex) ?? []) {
+    if (expansionDistances.has(neighbor)) continue
+    expansionDistances.set(neighbor, (expansionDistances.get(vertex) ?? 0) + 1)
+    expansionQueue.push(neighbor)
+  }
+}
+// Far enough out that the seat's own settlement prices the sites without being one of them.
+const expansionHolding = standardGrid.vertexIds.find((vertex) =>
+  (expansionDistances.get(vertex) ?? 0) >= 5 &&
+  boxedSettlements.every((settled) => !(standardAdjacency.get(vertex) ?? []).includes(settled)))
+if (!expansionHolding) throw new Error('No vertex far enough from the expansion candidate')
+const expansionPieces = boxedSettlements.reduce(
+  (board, vertexId) => placeBuilding(board, vertexId, 'p2', 'settlement'),
+  placeBuilding(standard, expansionHolding, 'aki', 'settlement'),
+)
+const expansionBoard = placeRoad(placeRoad(expansionPieces, rivalRoadEdge, 'p3'), ownRoadEdge, 'aki')
+const expansionBlockedBoard = placeRoad(
+  placeRoad(expansionPieces, rivalRoadEdge, 'p3'),
+  ownRoadEdge,
+  'p2',
 )
 
 const draftEmpty = readBoardFixture('board-draft-empty.json')
@@ -485,6 +540,24 @@ const cases: CaseInput[] = [
     weights: cloneWeights({ portCoverageDeficitWeight: 1 }),
     holdings: [firstPortA],
     candidate: offPortNeighbor,
+  },
+  {
+    id: 'expansion-sites',
+    covers: ['W13'],
+    board: expansionBoard,
+    // The shipped weight is 0 and skips the walk, so without a witness value here the whole term
+    // would leave the parity fixture uncovered. 0.3 is SP3's high arm.
+    weights: cloneWeights({ expansionWeight: 0.3 }),
+    holdings: [expansionHolding],
+    candidate: expansionCandidate,
+  },
+  {
+    id: 'expansion-blocked',
+    covers: ['W13'],
+    board: expansionBlockedBoard,
+    weights: cloneWeights({ expansionWeight: 0.3 }),
+    holdings: [expansionHolding],
+    candidate: expansionCandidate,
   },
   {
     id: 'real-endgame-pieces',

@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use super::expansion;
 use crate::board::SimBoard;
 use crate::rules::{RESOURCE_COUNT, Resource};
 use crate::topology::{Edge, Topology, Vertex};
@@ -51,6 +52,8 @@ pub struct EngineWeights {
     pub port_coverage_deficit_weight: f64,
     pub near_port_radius: f64,
     pub near_port_decay: f64,
+    pub expansion_weight: f64,
+    pub expansion_decay: f64,
     pub robber_discount: f64,
     pub opponent_top_k: f64,
     pub softmax_temperature: f64,
@@ -96,6 +99,8 @@ impl EngineWeights {
             ),
             ("nearPortRadius", self.near_port_radius),
             ("nearPortDecay", self.near_port_decay),
+            ("expansionWeight", self.expansion_weight),
+            ("expansionDecay", self.expansion_decay),
             ("robberDiscount", self.robber_discount),
             ("opponentTopK", self.opponent_top_k),
             ("softmaxTemperature", self.softmax_temperature),
@@ -119,6 +124,13 @@ impl EngineWeights {
         if self.port_coverage_deficit_weight < 0.0 {
             return Err("weights violate: portCoverageDeficitWeight >= 0".into());
         }
+        // The decay is applied once per paid road-build, so above 1 a site three roads out is
+        // worth more than the same site next door, and below 0 the sign of the term alternates
+        // with distance. Neither is a placement policy anyone would ship, and `sweep-bounds.json`
+        // declares 0.125 to 1.
+        if !(0.0..=1.0).contains(&self.expansion_decay) {
+            return Err("weights violate: expansionDecay in [0, 1]".into());
+        }
         Ok(())
     }
 }
@@ -131,11 +143,20 @@ pub struct ScoreBreakdown {
     pub diversity: f64,
     pub port: f64,
     pub hand_value: f64,
+    /// What the sites this vertex opens are worth. See `placement/expansion.rs::term`. Only the
+    /// occupancy-aware entries price it; the holdings-list entries leave it at 0.
+    pub expansion: f64,
 }
 
 impl ScoreBreakdown {
     pub fn total(self) -> f64 {
-        self.production + self.scarcity + self.robber + self.diversity + self.port + self.hand_value
+        self.production
+            + self.scarcity
+            + self.robber
+            + self.diversity
+            + self.port
+            + self.hand_value
+            + self.expansion
     }
 }
 
@@ -203,8 +224,10 @@ struct VertexPrecompute {
     setup_grant_value: f64,
 }
 
+/// One player's settled vertices, folded into the quantities the score reads. `pub(super)` for
+/// SP3's expansion walk, which prices every site it finds against the holdings plus the candidate.
 #[derive(Clone, Copy, Debug)]
-struct Holdings {
+pub(super) struct Holdings {
     pips: [f64; RESOURCE_COUNT],
     token_pips: [f64; 13],
     has_ports: bool,
@@ -341,6 +364,16 @@ impl AppFormulaScorer {
         self.links[usize::from(vertex)].edges()
     }
 
+    /// Every step out of `vertex`: the edge taken and the vertex it lands on, in adjacency order.
+    pub(super) fn steps(&self, vertex: Vertex) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
+        let links = &self.links[usize::from(vertex)];
+        links
+            .adjacent()
+            .iter()
+            .enumerate()
+            .map(move |(slot, neighbor)| (links.edge_to[slot], *neighbor))
+    }
+
     /// The scorer's copy of `Topology::edge_between`: the edge joining two adjacent vertices,
     /// `None` when they are not adjacent. This is an adjacency lookup, so a vertex asked against
     /// itself answers `None`, where `Topology` scans incident edges and hands back the first one.
@@ -353,6 +386,13 @@ impl AppFormulaScorer {
             .map(|slot| links.edge_to[slot])
     }
 
+    /// The weights this scorer was built with.
+    pub(super) fn weights(&self) -> &EngineWeights {
+        &self.weights
+    }
+
+    /// The breakdown over a holdings list alone, with no board around it. The expansion component
+    /// is 0 here: pricing it needs the occupancy, which only the `_for_owner` entries carry.
     pub fn breakdown(
         &self,
         holdings: &[Vertex],
@@ -363,6 +403,8 @@ impl AppFormulaScorer {
         self.breakdown_with_holdings(holdings, candidate, receives_grant)
     }
 
+    /// `breakdown`'s total without the breakdown, and without the expansion component for the
+    /// same reason.
     pub fn marginal_total(
         &self,
         holdings: &[Vertex],
@@ -377,9 +419,9 @@ impl AppFormulaScorer {
     /// buildings are its holdings, every other seat's are the occupancy around them, and
     /// `edge_owner` carries the roads.
     ///
-    /// Occupancy is not read yet. Every component today is a function of the seat's own holdings
-    /// alone, so this agrees bit-for-bit with `breakdown` over the same holdings; SP3's expansion
-    /// term is what makes the rest of the board matter.
+    /// The expansion component is the one that reads that occupancy; every other component is a
+    /// function of the seat's own holdings alone, so at `expansionWeight` 0 this agrees
+    /// bit-for-bit with `breakdown` over the same holdings.
     pub fn breakdown_for_owner(
         &self,
         vertex_owner: &[u8],
@@ -388,14 +430,42 @@ impl AppFormulaScorer {
         candidate: Vertex,
         receives_grant: bool,
     ) -> ScoreBreakdown {
-        let _ = edge_owner;
-        let holdings = self.build_holdings(
-            vertex_owner
-                .iter()
-                .enumerate()
-                .filter_map(|(vertex, owner)| (*owner == seat).then_some(vertex as Vertex)),
-        );
-        self.breakdown_with_holdings(holdings, candidate, receives_grant)
+        let holdings = self.holdings_for_owner(vertex_owner, seat);
+        let mut breakdown = self.breakdown_with_holdings(holdings, candidate, receives_grant);
+        breakdown.expansion =
+            expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value;
+        breakdown
+    }
+
+    /// `marginal_total` read from the owner arrays, which is `breakdown_for_owner`'s total taken
+    /// without building the breakdown. The two share every term, so they cannot disagree.
+    pub fn marginal_total_for_owner(
+        &self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> f64 {
+        let holdings = self.holdings_for_owner(vertex_owner, seat);
+        self.total_with_holdings(holdings, candidate, receives_grant)
+            + expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value
+    }
+
+    /// The setup road SP3's road rule points at: the first edge of the cheapest path to the best
+    /// site the candidate opens, or `None` when it opens nothing or the term is switched off.
+    pub(super) fn expansion_road(
+        &self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+    ) -> Option<Edge> {
+        if self.weights.expansion_weight == 0.0 {
+            return None;
+        }
+        let holdings = self.holdings_for_owner(vertex_owner, seat);
+        expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).road
     }
 
     pub(crate) fn score_for_owner(
@@ -406,11 +476,21 @@ impl AppFormulaScorer {
         candidate: Vertex,
         receives_grant: bool,
     ) -> f64 {
-        self.breakdown_for_owner(vertex_owner, edge_owner, seat, candidate, receives_grant)
-            .total()
+        self.marginal_total_for_owner(vertex_owner, edge_owner, seat, candidate, receives_grant)
     }
 
-    fn add_to_holdings(&self, holdings: &mut Holdings, vertex: Vertex) {
+    /// The seat's own buildings, folded in ascending vertex order, which is the order the
+    /// TypeScript scorer's callers list them in.
+    fn holdings_for_owner(&self, vertex_owner: &[u8], seat: u8) -> Holdings {
+        self.build_holdings(
+            vertex_owner
+                .iter()
+                .enumerate()
+                .filter_map(|(vertex, owner)| (*owner == seat).then_some(vertex as Vertex)),
+        )
+    }
+
+    pub(super) fn add_to_holdings(&self, holdings: &mut Holdings, vertex: Vertex) {
         let stats = &self.vertices[usize::from(vertex)];
         for resource in Resource::ALL {
             let index = resource.index();
@@ -461,6 +541,7 @@ impl AppFormulaScorer {
             } else {
                 0.0
             },
+            expansion: 0.0,
         }
     }
 
@@ -667,7 +748,10 @@ impl AppFormulaScorer {
                 - port_surplus(weights, ore) * held[Resource::Ore.index()] * ore_pre)
     }
 
-    fn total_with_holdings(
+    /// The formula without its expansion component, which is what SP3's walk prices a site by: a
+    /// site is worth what the rest of the formula says it is worth, and the term can never recurse
+    /// into itself. Mirrors `valuation.ts::marginalWithoutExpansion`.
+    pub(super) fn total_with_holdings(
         &self,
         holdings: Holdings,
         candidate: Vertex,
@@ -715,7 +799,7 @@ fn js_clamp(value: f64, min: f64, max: f64) -> f64 {
     js_max(min, js_min(max, value))
 }
 
-fn js_max(left: f64, right: f64) -> f64 {
+pub(super) fn js_max(left: f64, right: f64) -> f64 {
     if left.is_nan() || right.is_nan() {
         f64::NAN
     } else {
@@ -723,7 +807,7 @@ fn js_max(left: f64, right: f64) -> f64 {
     }
 }
 
-fn js_min(left: f64, right: f64) -> f64 {
+pub(super) fn js_min(left: f64, right: f64) -> f64 {
     if left.is_nan() || right.is_nan() {
         f64::NAN
     } else {

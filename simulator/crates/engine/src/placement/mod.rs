@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 pub mod app_formula;
+mod expansion;
 
 use crate::board::SimBoard;
 use crate::rng::Xoshiro256StarStar;
@@ -225,6 +226,15 @@ fn choose_app_formula(
         }
     }
     let vertex = selected?;
+    // SP3's road rule, whenever the term is switched on: the road is the first edge of the
+    // cheapest path to the best site the settlement opens, which is the direction the score just
+    // paid for. A boxed settlement opens nothing and has no such direction, so it falls through to
+    // the far-endpoint scoring below. At weight 0 the walk is skipped outright and that scoring is
+    // all there is, so the shipped formula's picks, and its whole draw on the RNG stream, are what
+    // they always were.
+    if let Some(edge) = scorer.expansion_road(vertex_owner, edge_owner, seat, vertex) {
+        return Some((vertex, edge));
+    }
     let mut selected_edge = topology.vertex_edges(vertex)[0];
     let mut selected_edge_score = f64::NEG_INFINITY;
     let mut edge_ties = 0_u32;

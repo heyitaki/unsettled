@@ -155,12 +155,12 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 5: SP3 expansion term in Rust and the parity class
 
-- [ ] Mirror `expansion_weight` and `expansion_decay` in `app_formula.rs::EngineWeights` (fields, `validate` scalars, `expansionDecay` in `[0, 1]` as a hard bound), `expansion` in `ScoreBreakdown` and `total`, and the walk plus term in a new `placement/expansion.rs` using the scorer's adjacency copy from Task 2, with the same site definition, valuation, top-two sum, decay and road rule as the TypeScript
-- [ ] In `choose_app_formula`, when `expansion_weight` is nonzero choose the setup road by the road rule; at 0 keep the existing far-endpoint scoring so the corpus is byte-identical. Capture `runs/corpus-pre` before the edit and recapture after; assert the diff is empty
-- [ ] Add class `W13`, case `expansion-sites`, to `REQUIRED_CLASSES`, `FixtureBreakdown`, `parse_weights` and the generator: a board with rival buildings and roads, a nonzero witness weight, and a second case `expansion-blocked` where a rival road closes the only path. Regenerate the fixture
-- [ ] Add a Rust test that the walk agrees with `cli::expansion::reachable_expansion_sites` on the set of reachable sites for a seat with no roads placed (the two walks differ only in their start), and a test that at weight 0 `score_for_owner` never calls the walk (a counter or a `debug_assert` in a test-only hook)
-- [ ] Update the extension guide in `simulator/README.md` for the new component
-- [ ] All six validation commands green
+- [x] Mirror `expansion_weight` and `expansion_decay` in `app_formula.rs::EngineWeights` (fields, `validate` scalars, `expansionDecay` in `[0, 1]` as a hard bound), `expansion` in `ScoreBreakdown` and `total`, and the walk plus term in a new `placement/expansion.rs` using the scorer's adjacency copy from Task 2, with the same site definition, valuation, top-two sum, decay and road rule as the TypeScript
+- [x] In `choose_app_formula`, when `expansion_weight` is nonzero choose the setup road by the road rule; at 0 keep the existing far-endpoint scoring so the corpus is byte-identical. Capture `runs/corpus-pre` before the edit and recapture after; assert the diff is empty
+- [x] Add class `W13`, case `expansion-sites`, to `REQUIRED_CLASSES`, `FixtureBreakdown`, `parse_weights` and the generator: a board with rival buildings and roads, a nonzero witness weight, and a second case `expansion-blocked` where a rival road closes the only path. Regenerate the fixture
+- [x] Add a Rust test that the walk agrees with `cli::expansion::reachable_expansion_sites` on the set of reachable sites for a seat with no roads placed (the two walks differ only in their start), and a test that at weight 0 `score_for_owner` never calls the walk (a counter or a `debug_assert` in a test-only hook)
+- [x] Update the extension guide in `simulator/README.md` for the new component
+- [x] All six validation commands green
 
 ### Task 6: Road direction in the app
 
