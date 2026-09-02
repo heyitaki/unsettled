@@ -182,10 +182,10 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 11: Landscape and desktop regression specs (M15)
 
-- [ ] Add `e2e/shellArms.spec.ts`. Desktop (`viewport 1280×900`, no touch): `.board-tabs` visible, `.phone-shell` count 0, the tab context menu has no `Save to library`, `MapsPanel` has no `Map name` field, closing an edited tab needs no confirmation. Landscape phone (`viewport 844×390`, `hasTouch`, `isMobile`): `.mobile-nav` present with four tabs, `.phone-shell` count 0. Rotation: `setViewportSize` to `390×844` mounts `.phone-shell`; back to `844×390` unmounts it and `.mobile-nav` returns.
-- [ ] The landscape block of `editor.css` is byte-identical to `main`: extract it from `git show main:src/ui/editor.css` and from the working copy (from the `Landscape phone keeps a fixed viewport` comment to the block's closing brace) and `diff` them; empty output is the requirement.
-- [ ] `git diff main --stat` touches nothing under `simulator/`, `src/parser/`, `src/engine/` (beyond the test added in Task 10), `src/persistence/` or `src/ui/workspaceSync.ts`.
-- [ ] Ledger: M15 done.
+- [x] Add `e2e/shellArms.spec.ts`. Desktop (`viewport 1280×900`, no touch): `.board-tabs` visible, `.phone-shell` count 0, the tab context menu has no `Save to library`, `MapsPanel` has no `Map name` field, closing an edited tab needs no confirmation. Landscape phone (`viewport 844×390`, `hasTouch`, `isMobile`): `.mobile-nav` present with four tabs, `.phone-shell` count 0. Rotation: `setViewportSize` to `390×844` mounts `.phone-shell`; back to `844×390` unmounts it and `.mobile-nav` returns.
+- [x] The landscape block of `editor.css` is byte-identical to `main`: extract it from `git show main:src/ui/editor.css` and from the working copy (from the `Landscape phone keeps a fixed viewport` comment to the block's closing brace) and `diff` them; empty output is the requirement.
+- [x] `git diff main --stat` touches nothing under `simulator/`, `src/parser/`, `src/engine/` (beyond the test added in Task 10), `src/persistence/` or `src/ui/workspaceSync.ts`.
+- [x] Ledger: M15 done.
 
 ### Task 12: Verify acceptance criteria
 
