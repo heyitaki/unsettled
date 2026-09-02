@@ -149,3 +149,46 @@ test('a filled board asks who you are, and a tapped swatch claims that seat', as
   await expect(block.locator('.analysis-row').first()).toBeVisible()
   await snap(page, 'best-picks')
 })
+
+/**
+ * A shorter portrait phone: at 844px tall a fresh board's page barely scrolls
+ * past the reveal threshold, and the card heights vary with the random board,
+ * so the scrolled-past case needs more page than viewport.
+ */
+test.describe('reveal on select', () => {
+  test.use({ viewport: { width: 390, height: 700 } })
+
+  test('the board marks every pick at rest and comes back into view when a card is tapped past it', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await open(page)
+    await page.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+    const block = page.locator('.phone-analysis')
+    await expect(block.locator('.analysis-context')).toHaveText(/^You are/)
+    const marks = page.locator('.vertex-highlight')
+    await expect(marks).toHaveCount(5)
+    await expect(page.locator('.vertex-highlight.faded')).toHaveCount(2)
+    const myColor = await page.locator('.phone-dot.me').evaluate((dot) => getComputedStyle(dot).backgroundColor)
+    await expect(marks.first()).toHaveCSS('fill', myColor)
+    await snap(page, 'rest-marks')
+
+    const cards = block.locator('.analysis-row-select')
+    await expect(cards).toHaveCount(5)
+    await page.evaluate(() => window.scrollBy(0, 2000))
+    const scrolledBoard = (await page.locator('.board-canvas').boundingBox())!
+    const header = (await page.locator('.phone-head').boundingBox())!
+    expect(scrolledBoard.y + scrolledBoard.height).toBeLessThan(header.y + header.height + 120)
+    await cards.last().click()
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    await expect(marks).toHaveCount(2)
+    await expect(page.locator('.vertex-highlight.faded')).toHaveCount(1)
+    await snap(page, 'selected-card')
+
+    await page.evaluate(() => window.scrollTo(0, 60))
+    const first = (await cards.first().boundingBox())!
+    expect(first.y + first.height).toBeLessThan(700)
+    await cards.first().click()
+    await expect(block.locator('.analysis-row.selected .analysis-rank')).toHaveText('1')
+    expect(await page.evaluate(() => window.scrollY)).toBe(60)
+  })
+})

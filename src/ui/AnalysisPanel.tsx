@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
@@ -7,6 +7,7 @@ import { readableInk } from './colors'
 import { PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
+import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 
@@ -37,13 +38,19 @@ function vertexDescription(board: Board, vertexId: VertexId): string {
 
 // A recommendation draws my first pick as "1" and its planned follow-up as "2",
 // both in my colour, so hovering previews the pair I'd end the round holding.
+// The phone sets the follow-up back: it is where the second settlement would
+// go, not what the tap places (spec S5).
 const recommendationMarks = (
   recommendation: Recommendation,
   color: string,
+  fadedSecond = false,
 ): HighlightMark[] => [
   { ref: recommendation.firstPick, color, label: '1' },
-  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2' })),
+  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2', faded: fadedSecond })),
 ]
+
+/** How many of the resting marks stay solid; the ranks below them fade (spec S5). */
+const SOLID_RANKS = 3
 
 function formatFactor(value: number): string {
   const magnitude = Math.abs(value).toFixed(1)
@@ -97,21 +104,41 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
-  // Clear any hovered board marks whenever the board changes — after a click
-  // places settlements, the previous window's circles are stale.
+  const me = board.players.find((player) => player.id === board.mePlayerId)
+  const myColor = me?.color ?? '#8a7a63'
+  // What the board shows while nothing is selected: nothing on the desktop,
+  // where marks follow the hover; on the phone every recommendation's first
+  // pick at once, ranked, in my colour, the lower ranks faded (spec S5).
+  const restMarks = useMemo<HighlightMark[] | null>(
+    () => phone && me && analysis.status === 'ready'
+      ? analysis.recommendations.slice(0, 5).map((recommendation, index) => ({
+        ref: recommendation.firstPick,
+        color: me.color,
+        label: String(index + 1),
+        faded: index >= SOLID_RANKS,
+      }))
+      : null,
+    [phone, me, analysis],
+  )
+
+  // Reset the board marks whenever the board changes — after a click places
+  // settlements, the previous window's circles are stale.
   useEffect(() => {
     setSelectedPick(null)
     setSelectedLikelyGone(false)
-    dispatch({ type: 'highlight', marks: null })
+    dispatch({ type: 'highlight', marks: restMarks })
     return () => dispatch({ type: 'highlight', marks: null })
-  }, [board, dispatch])
+  }, [board, dispatch, restMarks])
+  // Anything else that clears the marks (the ribbon deselecting its pick) hands
+  // the board back to the resting marks rather than leaving it bare.
+  useEffect(() => {
+    if (restMarks && state.highlight === null) dispatch({ type: 'highlight', marks: restMarks })
+  }, [state.highlight, restMarks, dispatch])
 
   const playerColor = (id: string) =>
     board.players.find((player) => player.id === id)?.color ?? '#8a7a63'
-  const clearHighlight = () => dispatch({ type: 'highlight', marks: null })
+  const clearHighlight = () => dispatch({ type: 'highlight', marks: restMarks })
 
-  const me = board.players.find((player) => player.id === board.mePlayerId)
-  const myColor = me?.color ?? '#8a7a63'
   const pickText = analysis.draft.myPickIndices.map((index) => index + 1).join(' and ')
   const turnText = analysis.draft.turnIndex === null
     ? ''
@@ -165,8 +192,10 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
     setSelectedLikelyGone(false)
     dispatch({
       type: 'highlight',
-      marks: next === null ? null : recommendationMarks(recommendation, myColor),
+      marks: next === null ? restMarks : recommendationMarks(recommendation, myColor, phone),
     })
+    // A mark moved on a board scrolled out of view is a change nobody sees (spec B2).
+    if (phone && next !== null) revealBoardIfScrolledPast()
   }
   const claim = (playerId: string) => dispatch({ type: 'commit', board: setMe(board, playerId) })
 
@@ -213,7 +242,7 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
                 const next = !selectedLikelyGone
                 setSelectedLikelyGone(next)
                 setSelectedPick(null)
-                dispatch({ type: 'highlight', marks: next ? likelyGoneMarks : null })
+                dispatch({ type: 'highlight', marks: next ? likelyGoneMarks : restMarks })
               }}
             >
               <span>Likely gone before your turn</span>

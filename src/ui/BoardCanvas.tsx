@@ -694,11 +694,12 @@ export function BoardCanvas() {
         : point.y + 3.6
       const fill = mark.color
       const ink = mark.color ? readableInk(mark.color) : undefined
+      const faded = mark.faded ? ' faded' : ''
       return (
         <g key={`hl:${mark.ref}`} pointerEvents="none">
           {!marked && (
             <circle
-              className="vertex-highlight"
+              className={`vertex-highlight${faded}`}
               cx={point.x}
               cy={point.y}
               r="11"
@@ -710,7 +711,7 @@ export function BoardCanvas() {
               x={point.x}
               y={labelY}
               textAnchor="middle"
-              className="vertex-highlight-label"
+              className={`vertex-highlight-label${faded}`}
               fill={ink}
             >
               {mark.label}

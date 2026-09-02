@@ -193,7 +193,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M10 | Points ledger block in the Players overlay | — | dropped (O1) |
 | M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | not started |
 | M12 | Empty-board state (B5) | M6 | done |
-| M13 | Reveal-on-select scroll (B2) | M6 | not started |
+| M13 | Reveal-on-select scroll (B2) | M6 | done |
 | M14 | One-word factor labels in `displayedFactors` | — | done |
 | M15 | Landscape and desktop regression pass | all | not started |
 | M16 | Library autosave in the store (B7) | — | done |

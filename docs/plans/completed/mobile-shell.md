@@ -150,11 +150,11 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 7: Marks in the claimed colour and reveal-on-select (S5 marks, B2, M13)
 
-- [ ] `HighlightMark` gains `faded?: boolean`; `BoardCanvas` renders faded marks with a `faded` class at reduced opacity. Phone analysis: the nothing-selected marks and the selected-card marks per the defaults above, in `myColor`. Desktop hover marks unchanged.
-- [ ] Add `src/ui/revealBoard.ts`: `shouldRevealBoard(boardBottom: number, headerBottom: number, slack = 120): boolean` (true when the board's bottom edge is above `headerBottom + slack`) and `revealBoard()` setting `document.documentElement.scrollTop = 0`. Test the predicate in `src/ui/__tests__/revealBoard.test.ts`. Portrait arm: `html { scroll-behavior: smooth }` with the reduced-motion override.
-- [ ] Selecting a card calls `revealBoard()` only when the predicate says so.
-- [ ] e2e (with `page.emulateMedia({ reducedMotion: 'reduce' })`): with a randomized board and a claimed player, five `vertex-highlight` marks exist before any tap and two carry the faded class; after scrolling the window by 2000px, tapping the last card returns `window.scrollY` to 0; tapping a card while the board is in view leaves `scrollY` unchanged.
-- [ ] Ledger: M13 done.
+- [x] `HighlightMark` gains `faded?: boolean`; `BoardCanvas` renders faded marks with a `faded` class at reduced opacity. Phone analysis: the nothing-selected marks and the selected-card marks per the defaults above, in `myColor`. Desktop hover marks unchanged.
+- [x] Add `src/ui/revealBoard.ts`: `shouldRevealBoard(boardBottom: number, headerBottom: number, slack = 120): boolean` (true when the board's bottom edge is above `headerBottom + slack`) and `revealBoard()` setting `document.documentElement.scrollTop = 0`. Test the predicate in `src/ui/__tests__/revealBoard.test.ts`. Portrait arm: `html { scroll-behavior: smooth }` with the reduced-motion override.
+- [x] Selecting a card calls `revealBoard()` only when the predicate says so.
+- [x] e2e (with `page.emulateMedia({ reducedMotion: 'reduce' })`): with a randomized board and a claimed player, five `vertex-highlight` marks exist before any tap and two carry the faded class; after scrolling the window by 2000px, tapping the last card returns `window.scrollY` to 0; tapping a card while the board is in view leaves `scrollY` unchanged.
+- [x] Ledger: M13 done.
 
 ### Task 8: Build mode with the snapshot Cancel (S6, B1, M11)
 
