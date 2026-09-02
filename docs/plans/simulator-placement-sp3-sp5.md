@@ -209,10 +209,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 12: Preregister M-56, the separation reading
 
-- [ ] Write `docs/plans/preregs/<today>-m56-robber-separation.md`: the same single `diagnose` invocation as M-47 and M-48 (`standard4`, 4 seats, `--domain tuning`, 2000 boards x 2 reps, composite policy with `--player-trading`, placement `app_formula:placement/default-weights.json`, `--alpha 0.05`, `--threads 0`), a diagnostic with no arm and no verdict, whose product is the `concentrationTermIndicated` boolean
-- [ ] State the passing condition from Context before the run and why each half exists: the weighted mean guards magnitude, the every-stratum sign guards against one stratum carrying the pooled gap
-- [ ] Prediction and admissibility conditions
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m56-robber-separation.md`: the same single `diagnose` invocation as M-47 and M-48 (`standard4`, 4 seats, `--domain tuning`, 2000 boards x 2 reps, composite policy with `--player-trading`, placement `app_formula:placement/default-weights.json`, `--alpha 0.05`, `--threads 0`), a diagnostic with no arm and no verdict, whose product is the `concentrationTermIndicated` boolean
+- [x] State the passing condition from Context before the run and why each half exists: the weighted mean guards magnitude, the every-stratum sign guards against one stratum carrying the pooled gap
+- [x] Prediction and admissibility conditions
+- [x] Link check passes
 
 ### Task 13: Run M-56 and record it
 
