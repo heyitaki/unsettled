@@ -234,7 +234,6 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
               <button type="button" className="primary" onClick={placeLikelyGone}>Play these out</button>
               <button
                 type="button"
-                className="analysis-clear"
                 onClick={() => {
                   setSelectedLikelyGone(false)
                   clearHighlight()
@@ -302,7 +301,6 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                   </button>
                   <button
                     type="button"
-                    className="analysis-clear"
                     onClick={() => {
                       setSelectedPick(null)
                       clearHighlight()

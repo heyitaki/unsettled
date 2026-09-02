@@ -124,7 +124,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | D4 | Board area: ribbon promoted and mounted, resting marks, flat marks, caption trimmed, footer deleted (D2 surface, D7, DB1, DB6) | | done |
 | D5 | Tool heading glyphs, destructive Clear, counts on the tool labels (D3 surface) | D4 | done |
 | D6 | Analysis behaviour: one code path, select on click, hover preview, pill, context line, claim row, empty state (D4 surface, DB2) | D1 | done |
-| D7 | Analysis card styling promoted; desktop card rules deleted (D4 cards) | D6 | not started |
+| D7 | Analysis card styling promoted; desktop card rules deleted (D4 cards) | D6 | done |
 | D8 | Roster rows: grip, swatch brush, rename on name, YOU chip, claim on row, dashed Add player (D5 surface, DB3, DB4) | D1 | not started |
 | D9 | Drag feel and the draft grid on desktop (D5 dragging and snake draft) | D8, D4 | not started |
 | D10 | Vocabulary sweep: `current` and `me` states everywhere, gold pair gone, DB7 grep clean | D2, D3, D7, D9 | not started |

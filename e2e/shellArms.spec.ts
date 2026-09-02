@@ -202,12 +202,17 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(2)
     await expect(marks.first()).not.toHaveClass(/\bfaded\b/)
     await expect(marks.nth(1)).toHaveClass(/\bfaded\b/)
-    await snap(page, 'desktop-selected-card')
 
     // A hover is a preview, and a pinned card outranks it (spec DB2).
     await cards.nth(1).hover()
     await expect(marks).toHaveCount(2)
     await expect(cards.first()).toHaveClass(/\bcurrent\b/)
+
+    // The pointer parks off the rails before the shot: a full-page capture
+    // resizes the viewport, and the draft strip sliding under a live pointer
+    // would repaint the board marks and drop the selection with them.
+    await page.mouse.move(0, 0)
+    await snap(page, 'desktop-selected-card')
 
     // Clearing drops back to the resting marks, and nothing was placed on the way.
     const structures = page.locator('.tools-panel .tool-label')
@@ -224,6 +229,46 @@ test.describe('desktop', () => {
     await expect(structures).toHaveText('1 pieces')
     await expect(panel.locator('.analysis-row.current')).toHaveCount(0)
     await snap(page, 'desktop-placed')
+  })
+
+  test('the cards are the phone cards: claimed rank circle, plain survival, flat chips', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    await page.getByRole('button', { name: 'Randomize' }).click()
+    const panel = page.locator('.analysis-panel')
+    const claim = panel.locator('.claim-row button').first()
+    const mine = await claim.locator('.swatch').evaluate((el) => getComputedStyle(el).backgroundColor)
+    await claim.click()
+    await page.mouse.move(0, 0)
+
+    // The circle wears the claimed colour inside an ink ring, not the accent disc (spec D4).
+    const rank = panel.locator('.analysis-rank').first()
+    await expect(rank).toHaveCSS('background-color', mine)
+    await expect(rank).not.toHaveCSS('border-top-width', '0px')
+
+    // The factors are flat tinted chips, not the bordered pills.
+    await expect(panel.locator('.analysis-factors span').first()).toHaveCSS('border-top-width', '0px')
+
+    // Survival only renders on a spot the rollouts expect to be contested, and a
+    // random board holds none more often than not, so the rule is read off a
+    // probe put in a real card body and taken straight back out. The second read
+    // resolves `--accent-dark` through the same element, so the assertion tracks
+    // the token rather than a copy of its hex.
+    const survival = await panel.locator('.analysis-row-body').first().evaluate((body) => {
+      const probe = document.createElement('span')
+      probe.className = 'analysis-availability'
+      body.append(probe)
+      const { borderRadius, color, backgroundColor } = getComputedStyle(probe)
+      probe.style.color = 'var(--accent-dark)'
+      const accentDark = getComputedStyle(probe).color
+      probe.remove()
+      return { borderRadius, color, backgroundColor, accentDark }
+    })
+    expect(survival.borderRadius).toBe('0px')
+    expect(survival.backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    expect(survival.color).toBe(survival.accentDark)
+
+    await snap(page, 'desktop-cards')
   })
 })
 

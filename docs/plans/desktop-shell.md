@@ -143,9 +143,9 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 7: Analysis card styling (D7)
 
-- [ ] Tests first. `e2e/shellArms.spec.ts` desktop: the first `.analysis-rank`'s computed `background-color` equals the claimed player's colour (read `.roster-row.me .swatch`'s background) and its `border-width` is not `0px`; `.analysis-availability` (when present after the seed) has no `border-radius` pill and the accent colour; `.analysis-factors span` has no border.
-- [ ] Promote every `.phone-shell .analysis-*` rule, `.phone-shell .analysis-context*` and the pill rules to the base, deleting the desktop `.analysis-row`, `.analysis-rank`, `.analysis-pick-line strong`, `.analysis-score`, `.analysis-availability`, `.analysis-second`, `.analysis-factors span`, `.analysis-row.selected` (gold), `.analysis-touch-actions` and `.analysis-clear` rules they replace; the selected card uses `current`. The rank circle's inline `myColor` background applies on both trees.
-- [ ] Ledger: D7 done.
+- [x] Tests first. `e2e/shellArms.spec.ts` desktop: the first `.analysis-rank`'s computed `background-color` equals the claimed player's colour (read `.roster-row.me .swatch`'s background) and its `border-width` is not `0px`; `.analysis-availability` (when present after the seed) has no `border-radius` pill and the accent colour; `.analysis-factors span` has no border.
+- [x] Promote every `.phone-shell .analysis-*` rule, `.phone-shell .analysis-context*` and the pill rules to the base, deleting the desktop `.analysis-row`, `.analysis-rank`, `.analysis-pick-line strong`, `.analysis-score`, `.analysis-availability`, `.analysis-second`, `.analysis-factors span`, `.analysis-row.selected` (gold), `.analysis-touch-actions` and `.analysis-clear` rules they replace; the selected card uses `current`. The rank circle's inline `myColor` background applies on both trees.
+- [x] Ledger: D7 done.
 
 ### Task 8: Roster rows (D8, DB3, DB4)
 
