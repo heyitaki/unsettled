@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::board::SimBoard;
 use crate::rules::{RESOURCE_COUNT, Resource};
-use crate::topology::{Topology, Vertex};
+use crate::topology::{Edge, Topology, Vertex};
 use crate::view::pips;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -147,12 +147,42 @@ pub fn hand_value(weights: &EngineWeights, counts: &[f64; RESOURCE_COUNT]) -> f6
     weights.hand_value_weight * value
 }
 
+/// A vertex sits on at most three edges and three neighbouring vertices, in every layout.
+const VERTEX_FANOUT: usize = 3;
+
 #[derive(Clone, Debug)]
 pub struct AppFormulaScorer {
     weights: EngineWeights,
     scarcity: [f64; RESOURCE_COUNT],
     coverage_value: [f64; RESOURCE_COUNT],
     vertices: Vec<VertexStats>,
+    links: Vec<VertexLinks>,
+}
+
+/// The scorer's own copy of the board graph around one vertex.
+///
+/// The scorer keeps no `Topology` handle after `new`, and SP3's expansion term has to walk
+/// outward from a candidate at score time, so the walk's adjacency is copied once here rather
+/// than threaded through every scoring call. The orders match `Topology`'s, so a walk over this
+/// copy visits vertices and edges in exactly the order a walk over the topology would.
+#[derive(Clone, Copy, Debug)]
+struct VertexLinks {
+    adjacent: [Vertex; VERTEX_FANOUT],
+    adjacent_len: u8,
+    edges: [Edge; VERTEX_FANOUT],
+    edges_len: u8,
+    /// `edge_to[slot]` joins the vertex to `adjacent[slot]`, which is `Topology::edge_between`.
+    edge_to: [Edge; VERTEX_FANOUT],
+}
+
+impl VertexLinks {
+    fn adjacent(&self) -> &[Vertex] {
+        &self.adjacent[..usize::from(self.adjacent_len)]
+    }
+
+    fn edges(&self) -> &[Edge] {
+        &self.edges[..usize::from(self.edges_len)]
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -269,12 +299,58 @@ impl AppFormulaScorer {
                 },
             });
         }
+        let mut links = Vec::with_capacity(topology.vertex_count());
+        for vertex_index in 0..topology.vertex_count() {
+            let vertex = vertex_index as Vertex;
+            let adjacent = topology.vertex_adjacent(vertex);
+            let edges = topology.vertex_edges(vertex);
+            let mut entry = VertexLinks {
+                adjacent: [0; VERTEX_FANOUT],
+                adjacent_len: adjacent.len() as u8,
+                edges: [0; VERTEX_FANOUT],
+                edges_len: edges.len() as u8,
+                edge_to: [0; VERTEX_FANOUT],
+            };
+            for (slot, neighbor) in adjacent.iter().enumerate() {
+                entry.adjacent[slot] = *neighbor;
+                entry.edge_to[slot] = topology
+                    .edge_between(vertex, *neighbor)
+                    .expect("adjacent vertices share an edge");
+            }
+            for (slot, edge) in edges.iter().enumerate() {
+                entry.edges[slot] = *edge;
+            }
+            links.push(entry);
+        }
         Self {
             weights,
             scarcity,
             coverage_value,
             vertices,
+            links,
         }
+    }
+
+    /// The scorer's copy of `Topology::vertex_adjacent`.
+    pub fn vertex_adjacent(&self, vertex: Vertex) -> &[Vertex] {
+        self.links[usize::from(vertex)].adjacent()
+    }
+
+    /// The scorer's copy of `Topology::vertex_edges`.
+    pub fn vertex_edges(&self, vertex: Vertex) -> &[Edge] {
+        self.links[usize::from(vertex)].edges()
+    }
+
+    /// The scorer's copy of `Topology::edge_between`: the edge joining two adjacent vertices,
+    /// `None` when they are not adjacent. This is an adjacency lookup, so a vertex asked against
+    /// itself answers `None`, where `Topology` scans incident edges and hands back the first one.
+    pub fn edge_between(&self, a: Vertex, b: Vertex) -> Option<Edge> {
+        let links = &self.links[usize::from(a)];
+        links
+            .adjacent()
+            .iter()
+            .position(|vertex| *vertex == b)
+            .map(|slot| links.edge_to[slot])
     }
 
     pub fn breakdown(
@@ -297,20 +373,41 @@ impl AppFormulaScorer {
         self.total_with_holdings(holdings, candidate, receives_grant)
     }
 
-    pub(crate) fn score_for_owner(
+    /// `breakdown` read from the engine's owner arrays rather than a holdings list: `seat`'s own
+    /// buildings are its holdings, every other seat's are the occupancy around them, and
+    /// `edge_owner` carries the roads.
+    ///
+    /// Occupancy is not read yet. Every component today is a function of the seat's own holdings
+    /// alone, so this agrees bit-for-bit with `breakdown` over the same holdings; SP3's expansion
+    /// term is what makes the rest of the board matter.
+    pub fn breakdown_for_owner(
         &self,
         vertex_owner: &[u8],
+        edge_owner: &[u8],
         seat: u8,
         candidate: Vertex,
         receives_grant: bool,
-    ) -> f64 {
+    ) -> ScoreBreakdown {
+        let _ = edge_owner;
         let holdings = self.build_holdings(
             vertex_owner
                 .iter()
                 .enumerate()
                 .filter_map(|(vertex, owner)| (*owner == seat).then_some(vertex as Vertex)),
         );
-        self.total_with_holdings(holdings, candidate, receives_grant)
+        self.breakdown_with_holdings(holdings, candidate, receives_grant)
+    }
+
+    pub(crate) fn score_for_owner(
+        &self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> f64 {
+        self.breakdown_for_owner(vertex_owner, edge_owner, seat, candidate, receives_grant)
+            .total()
     }
 
     fn add_to_holdings(&self, holdings: &mut Holdings, vertex: Vertex) {

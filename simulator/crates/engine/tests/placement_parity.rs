@@ -7,6 +7,7 @@ use unsettled_engine::placement::app_formula::{
     AppFormulaScorer, EngineWeights, ResourceValues, ScoreBreakdown,
 };
 use unsettled_engine::rules::RuleConfig;
+use unsettled_engine::state::EMPTY;
 use unsettled_engine::topology::Topology;
 use unsettled_engine::wire::WireBoard;
 
@@ -153,6 +154,176 @@ fn typescript_and_rust_placement_formulas_match() {
         "maximum finite deviation: {:.17e} in {} {}",
         maximum.0, maximum.1, maximum.2
     );
+}
+
+/// The scorer's adjacency copy answers exactly what `Topology` answers, on both layouts.
+///
+/// SP3's expansion walk runs off the copy, not off a topology handle, so a copy that lost an edge
+/// or reordered a neighbour list would silently walk a different board and still look plausible.
+#[test]
+fn the_scorer_adjacency_copy_matches_the_topology_it_was_built_from() {
+    let fixture: FixturePack =
+        serde_json::from_str(include_str!("../../../fixtures/placement-parity.json")).unwrap();
+    let mut layouts = BTreeSet::new();
+    for case in fixture.cases {
+        if matches!(case.ingestion, Ingestion::Reject { .. }) {
+            continue;
+        }
+        let wire = WireBoard::parse_value(case.board.clone()).unwrap();
+        if !layouts.insert(wire.layout.as_str()) {
+            continue;
+        }
+        let topology = Topology::load(wire.layout).unwrap();
+        let board = SimBoard::try_from_wire(
+            wire,
+            &topology,
+            &RuleConfig::base(topology.layout()),
+            ConversionOptions {
+                allow_unofficial: true,
+            },
+        )
+        .expect("fixture expected successful conversion");
+        let scorer = AppFormulaScorer::new(&board, &topology, parse_weights(&case.weights));
+        for index in 0..topology.vertex_count() {
+            let vertex = index as u8;
+            assert_eq!(
+                scorer.vertex_adjacent(vertex),
+                topology.vertex_adjacent(vertex),
+                "vertex {index} adjacency"
+            );
+            assert_eq!(
+                scorer.vertex_edges(vertex),
+                topology.vertex_edges(vertex),
+                "vertex {index} edges"
+            );
+            // Distinct vertices only. `Topology::edge_between` scans incident edges for one
+            // holding `b` as an endpoint, so asked for a vertex against itself it answers with
+            // that vertex's first incident edge; the scorer answers `None`, because a vertex is
+            // not adjacent to itself. No walk asks, since neighbours come out of the adjacency
+            // list, and the scorer's contract is the documented one.
+            for other in 0..topology.vertex_count() {
+                if other == index {
+                    continue;
+                }
+                assert_eq!(
+                    scorer.edge_between(vertex, other as u8),
+                    topology.edge_between(vertex, other as u8),
+                    "edge between {index} and {other}"
+                );
+            }
+        }
+    }
+    assert_eq!(
+        layouts,
+        ["extension6", "standard4"].into_iter().collect(),
+        "the fixture must cover both layouts"
+    );
+}
+
+/// The occupancy-aware entry reads the same numbers as `breakdown` on every fixture case, with
+/// the case board's own buildings and roads standing around the holdings.
+///
+/// Owner arrays come from the case board, one seat per player in board order, and the scoring
+/// seat is a fresh index past every player on the board, so the vertices it owns are exactly the
+/// case's `holdings` list and nothing the board happens to carry leaks into them. Every rival
+/// building and every road stays where the board put it, which is the occupancy SP3's expansion
+/// term will read; today not one of them may move a number. The comparison is on raw bits rather
+/// than the fixture's tolerance because the two entries run the same arithmetic in the same
+/// order: `breakdown` folds the holdings list left to right and the owner walk folds them in
+/// ascending vertex order, which the assertion below pins as the same sequence.
+#[test]
+fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
+    let fixture: FixturePack =
+        serde_json::from_str(include_str!("../../../fixtures/placement-parity.json")).unwrap();
+    let mut scored = 0;
+    for case in fixture.cases {
+        if matches!(case.ingestion, Ingestion::Reject { .. }) {
+            continue;
+        }
+        let wire = WireBoard::parse_value(case.board.clone()).unwrap();
+        let topology = Topology::load(wire.layout).unwrap();
+        let players: Vec<String> = wire.players.iter().map(|player| player.id.clone()).collect();
+        let buildings: Vec<(String, String)> = wire
+            .buildings
+            .iter()
+            .map(|building| (building.vertex_id.clone(), building.player_id.clone()))
+            .collect();
+        let roads: Vec<(String, String)> = wire
+            .roads
+            .iter()
+            .map(|road| (road.edge_id.clone(), road.player_id.clone()))
+            .collect();
+        let board = SimBoard::try_from_wire(
+            wire,
+            &topology,
+            &RuleConfig::base(topology.layout()),
+            ConversionOptions {
+                allow_unofficial: true,
+            },
+        )
+        .expect("fixture expected successful conversion");
+        let scorer = AppFormulaScorer::new(&board, &topology, parse_weights(&case.weights));
+
+        let seat = u8::try_from(players.len()).expect("board player count fits a seat index");
+        let owner_of = |id: &String| {
+            let index = players
+                .iter()
+                .position(|player| player == id)
+                .expect("a piece's player is on the board");
+            u8::try_from(index).expect("board player count fits a seat index")
+        };
+        let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let mut edge_owner = vec![EMPTY; topology.edge_count()];
+        for (vertex_id, player_id) in &buildings {
+            let vertex = topology.vertex_by_id(vertex_id).expect("fixture vertex");
+            vertex_owner[usize::from(vertex)] = owner_of(player_id);
+        }
+        for (edge_id, player_id) in &roads {
+            let edge = topology.edge_by_id(edge_id).expect("fixture edge");
+            edge_owner[usize::from(edge)] = owner_of(player_id);
+        }
+        let holdings: Vec<_> = case
+            .holdings
+            .iter()
+            .map(|vertex| topology.vertex_by_id(vertex).unwrap())
+            .collect();
+        assert!(
+            holdings.is_sorted(),
+            "case {} lists holdings out of vertex order, which would fold the two entries' floats in different orders",
+            case.id
+        );
+        for vertex in &holdings {
+            vertex_owner[usize::from(*vertex)] = seat;
+        }
+
+        let candidate = topology.vertex_by_id(&case.candidate).unwrap();
+        let expected = scorer.breakdown(&holdings, candidate, case.receives_grant);
+        let actual = scorer.breakdown_for_owner(
+            &vertex_owner,
+            &edge_owner,
+            seat,
+            candidate,
+            case.receives_grant,
+        );
+        for (component, expected, actual) in [
+            ("production", expected.production, actual.production),
+            ("scarcity", expected.scarcity, actual.scarcity),
+            ("robber", expected.robber, actual.robber),
+            ("diversity", expected.diversity, actual.diversity),
+            ("port", expected.port, actual.port),
+            ("handValue", expected.hand_value, actual.hand_value),
+            ("total", expected.total(), actual.total()),
+        ] {
+            assert_eq!(
+                expected.to_bits(),
+                actual.to_bits(),
+                "case {} {component}: breakdown gave {expected:.17e}, the occupancy entry gave {actual:.17e}",
+                case.id
+            );
+        }
+        scored += 1;
+    }
+    assert!(scored > 0, "no fixture case reached the scorer");
 }
 
 fn compare(

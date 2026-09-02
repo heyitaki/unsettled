@@ -175,12 +175,14 @@ fn the_fixture_carries_the_pip_totals_the_pairs_are_built_from() {
 fn a_pip_matched_runner_up_with_more_hexes_records_the_coastal_choice() {
     let fixture = fixture(12);
     let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
     assert_eq!(
         compare_pick(
             &fixture.board,
             &fixture.topology,
             PlacementKind::MaxPips,
             &owners,
+            &edge_owners,
             &pick(fixture.coastal, 0),
         ),
         PickComparison::Pair { chose_lower: true }
@@ -191,12 +193,14 @@ fn a_pip_matched_runner_up_with_more_hexes_records_the_coastal_choice() {
 fn the_same_fixture_read_from_the_interior_vertex_records_the_opposite_choice() {
     let fixture = fixture(12);
     let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
     assert_eq!(
         compare_pick(
             &fixture.board,
             &fixture.topology,
             PlacementKind::MaxPips,
             &owners,
+            &edge_owners,
             &pick(fixture.interior, 0),
         ),
         PickComparison::Pair { chose_lower: false }
@@ -209,6 +213,7 @@ fn the_same_fixture_read_from_the_interior_vertex_records_the_opposite_choice() 
 fn an_equal_hex_count_runner_up_is_discarded_as_a_tie() {
     let fixture = fixture(6);
     let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
     assert_eq!(
         vertex_production(&fixture.board, &fixture.topology, fixture.interior),
         (3, 15)
@@ -219,6 +224,7 @@ fn an_equal_hex_count_runner_up_is_discarded_as_a_tie() {
             &fixture.topology,
             PlacementKind::MaxPips,
             &owners,
+            &edge_owners,
             &pick(fixture.coastal, 0),
         ),
         PickComparison::Tied
@@ -231,6 +237,7 @@ fn a_pick_with_no_legal_alternative_is_skipped() {
     // Occupy everything two or more steps away from the coastal vertex. Its own neighbours then
     // all touch an occupied vertex, leaving it the only legal site on the board.
     let mut owners = vec![1_u8; fixture.topology.vertex_count()];
+    let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
     owners[usize::from(fixture.coastal)] = EMPTY;
     for adjacent in fixture.topology.vertex_adjacent(fixture.coastal) {
         owners[usize::from(*adjacent)] = EMPTY;
@@ -245,6 +252,7 @@ fn a_pick_with_no_legal_alternative_is_skipped() {
             &fixture.topology,
             PlacementKind::MaxPips,
             &owners,
+            &edge_owners,
             &pick(fixture.coastal, 0),
         ),
         PickComparison::NoAlternative
@@ -258,6 +266,7 @@ fn replay_applies_each_pick_before_comparing_the_next() {
     let fixture = fixture(12);
     let picks = vec![pick(fixture.interior, 0), pick(fixture.coastal, 1)];
     let mut owners = Vec::new();
+    let mut edge_owners = Vec::new();
     let mut comparisons = Vec::new();
     game_comparisons(
         &fixture.board,
@@ -265,6 +274,7 @@ fn replay_applies_each_pick_before_comparing_the_next() {
         PlacementKind::MaxPips,
         &picks,
         &mut owners,
+        &mut edge_owners,
         &mut comparisons,
     );
     assert_eq!(owners[usize::from(fixture.interior)], 0);
@@ -468,6 +478,7 @@ fn reference_runner_up(
     fixture: &Fixture,
     placement: PlacementKind,
     owners: &[u8],
+    edge_owners: &[u8],
     pick: &SetupPick,
 ) -> Option<(Vertex, u8)> {
     let (_, chosen_pips) = vertex_production(&fixture.board, &fixture.topology, pick.vertex);
@@ -486,6 +497,7 @@ fn reference_runner_up(
             &fixture.board,
             &fixture.topology,
             owners,
+            edge_owners,
             pick.seat,
             vertex,
             pick.grant,
@@ -505,9 +517,10 @@ fn the_app_formula_branch_draws_the_runner_up_its_own_scorer_ranks() {
         "app_formula:coastal-default",
     );
     let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
     let pick = pick(fixture.coastal, 0);
-    let (_, runner_up_hexes) =
-        reference_runner_up(&fixture, placement, &owners, &pick).expect("a pip-matched alternative");
+    let (_, runner_up_hexes) = reference_runner_up(&fixture, placement, &owners, &edge_owners, &pick)
+        .expect("a pip-matched alternative");
     let (chosen_hexes, _) = vertex_production(&fixture.board, &fixture.topology, fixture.coastal);
     let expected = if runner_up_hexes == chosen_hexes {
         PickComparison::Tied
@@ -522,6 +535,7 @@ fn the_app_formula_branch_draws_the_runner_up_its_own_scorer_ranks() {
             &fixture.topology,
             placement,
             &owners,
+            &edge_owners,
             &pick,
         ),
         expected
@@ -545,11 +559,13 @@ fn the_app_formula_branch_forwards_the_setup_grant() {
     );
     let score = |fixture: &Fixture, placement: PlacementKind, grant: bool| {
         let owners = vec![EMPTY; fixture.topology.vertex_count()];
+        let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
         setup_candidate_score(
             placement,
             &fixture.board,
             &fixture.topology,
             &owners,
+            &edge_owners,
             0,
             fixture.interior,
             grant,
@@ -579,11 +595,13 @@ fn the_app_formula_branch_refuses_an_unprepared_board() {
         register_app_formula("app_formula:coastal-unprepared".into(), weights).expect("registry");
     let fixture = fixture(12);
     let owners = vec![EMPTY; fixture.topology.vertex_count()];
+    let edge_owners = vec![EMPTY; fixture.topology.edge_count()];
     setup_candidate_score(
         placement,
         &fixture.board,
         &fixture.topology,
         &owners,
+        &edge_owners,
         0,
         fixture.coastal,
         false,

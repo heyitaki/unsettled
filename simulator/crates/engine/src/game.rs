@@ -681,6 +681,7 @@ impl GameArena {
             board,
             topology,
             &self.state.vertex_owner,
+            &self.state.edge_owner,
             seat as u8,
             &production,
             grant,

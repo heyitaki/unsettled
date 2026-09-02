@@ -110,13 +110,23 @@ pub fn choose(
     board: &SimBoard,
     topology: &Topology,
     vertex_owner: &[u8],
+    edge_owner: &[u8],
     seat: u8,
     own_production: &[u16; 5],
     grant: bool,
     rng: &mut Xoshiro256StarStar,
 ) -> Option<(Vertex, Edge)> {
     if let PlacementKind::AppFormula(index) = kind {
-        return choose_app_formula(index, board, topology, vertex_owner, seat, grant, rng);
+        return choose_app_formula(
+            index,
+            board,
+            topology,
+            vertex_owner,
+            edge_owner,
+            seat,
+            grant,
+            rng,
+        );
     }
     let mut selected = None;
     let mut selected_score = f32::NEG_INFINITY;
@@ -180,6 +190,7 @@ fn choose_app_formula(
     board: &SimBoard,
     topology: &Topology,
     vertex_owner: &[u8],
+    edge_owner: &[u8],
     seat: u8,
     grant: bool,
     rng: &mut Xoshiro256StarStar,
@@ -201,7 +212,7 @@ fn choose_app_formula(
         {
             continue;
         }
-        let score = scorer.score_for_owner(vertex_owner, seat, vertex, grant);
+        let score = scorer.score_for_owner(vertex_owner, edge_owner, seat, vertex, grant);
         if score > selected_score {
             selected = Some(vertex);
             selected_score = score;
@@ -226,7 +237,7 @@ fn choose_app_formula(
         };
         // The road points toward a future expansion site, not a settlement
         // being placed now, so setup cards do not belong in this score.
-        let score = scorer.score_for_owner(vertex_owner, seat, destination, false);
+        let score = scorer.score_for_owner(vertex_owner, edge_owner, seat, destination, false);
         if score > selected_edge_score {
             selected_edge = *edge;
             selected_edge_score = score;
@@ -295,6 +306,7 @@ pub fn setup_candidate_score(
     board: &SimBoard,
     topology: &Topology,
     vertex_owner: &[u8],
+    edge_owner: &[u8],
     seat: u8,
     candidate: Vertex,
     grant: bool,
@@ -304,7 +316,7 @@ pub fn setup_candidate_score(
         let scorer = board.app_formula_scorer(index).unwrap_or_else(|| {
             panic!("app formula arm {name} has no prepared context for this board")
         });
-        return scorer.score_for_owner(vertex_owner, seat, candidate, grant);
+        return scorer.score_for_owner(vertex_owner, edge_owner, seat, candidate, grant);
     }
     // The setup grant never reaches the other heuristics: `choose` scores them from the board and
     // the seat's own production alone.

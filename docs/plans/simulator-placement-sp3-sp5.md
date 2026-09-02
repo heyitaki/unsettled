@@ -128,12 +128,12 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 2: Occupancy reaches the Rust scorer, behaviour-neutral
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Widen `app_formula.rs::AppFormulaScorer::score_for_owner` to take `edge_owner: &[u8]` and keep a compact adjacency copy (vertex adjacency, `edge_between`, vertex edge lists) taken from `Topology` in `new`, so the scorer can walk without a topology handle. Thread the new argument through `placement/mod.rs::choose_app_formula` (both call sites), `setup_candidate_score`, and `simulator/crates/cli/src/coastal.rs::compare_pick`
-- [ ] Add a public occupancy-aware entry beside `breakdown`, taking `vertex_owner`, `edge_owner`, `seat` and returning the `ScoreBreakdown`, and make `score_for_owner` its total. Nothing reads occupancy yet
-- [ ] Add a Rust test that the occupancy-aware entry and `breakdown` agree bit-for-bit on the parity fixture's cases when occupancy is derived from each case's board
-- [ ] Recapture and assert the corpus diff is empty; state that in the commit message
-- [ ] Both cargo profiles green
+- [x] Capture `runs/corpus-pre`
+- [x] Widen `app_formula.rs::AppFormulaScorer::score_for_owner` to take `edge_owner: &[u8]` and keep a compact adjacency copy (vertex adjacency, `edge_between`, vertex edge lists) taken from `Topology` in `new`, so the scorer can walk without a topology handle. Thread the new argument through `placement/mod.rs::choose_app_formula` (both call sites), `setup_candidate_score`, and `simulator/crates/cli/src/coastal.rs::compare_pick`
+- [x] Add a public occupancy-aware entry beside `breakdown`, taking `vertex_owner`, `edge_owner`, `seat` and returning the `ScoreBreakdown`, and make `score_for_owner` its total. Nothing reads occupancy yet
+- [x] Add a Rust test that the occupancy-aware entry and `breakdown` agree bit-for-bit on the parity fixture's cases when occupancy is derived from each case's board
+- [x] Recapture and assert the corpus diff is empty; state that in the commit message
+- [x] Both cargo profiles green
 
 ### Task 3: Occupancy reaches the TypeScript scorer and the parity harness, behaviour-neutral
 

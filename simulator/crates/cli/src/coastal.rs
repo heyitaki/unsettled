@@ -40,13 +40,14 @@ pub struct CoastalPick {
     pub seat_won: bool,
 }
 
-/// Compare one recorded pick against the best pip-matched alternative available at `owners`, the
-/// owner array as it stood immediately before the pick.
+/// Compare one recorded pick against the best pip-matched alternative available at `owners` and
+/// `edge_owners`, the owner arrays as they stood immediately before the pick.
 pub fn compare_pick(
     board: &SimBoard,
     topology: &Topology,
     placement: PlacementKind,
     owners: &[u8],
+    edge_owners: &[u8],
     pick: &SetupPick,
 ) -> PickComparison {
     let (chosen_hexes, chosen_pips) = vertex_production(board, topology, pick.vertex);
@@ -61,7 +62,14 @@ pub fn compare_pick(
             continue;
         }
         let score = setup_candidate_score(
-            placement, board, topology, owners, pick.seat, vertex, pick.grant,
+            placement,
+            board,
+            topology,
+            owners,
+            edge_owners,
+            pick.seat,
+            vertex,
+            pick.grant,
         );
         // Lowest vertex index wins a tie. The diagnostic ranks candidates rather than picking
         // one, so it has no RNG stream to break ties with and must not invent one, and an
@@ -79,22 +87,29 @@ pub fn compare_pick(
     }
 }
 
-/// Replay one game's setup picks in order, comparing each against its runner-up. `owners` is
-/// reusable scratch; `out` receives one comparison per pick, in pick order.
+/// Replay one game's setup picks in order, comparing each against its runner-up. `owners` and
+/// `edge_owners` are reusable scratch, both replayed because a setup pick lays a road stub as
+/// well as a settlement; `out` receives one comparison per pick, in pick order.
 pub fn game_comparisons(
     board: &SimBoard,
     topology: &Topology,
     placement: PlacementKind,
     picks: &[SetupPick],
     owners: &mut Vec<u8>,
+    edge_owners: &mut Vec<u8>,
     out: &mut Vec<PickComparison>,
 ) {
     owners.clear();
     owners.resize(topology.vertex_count(), EMPTY);
+    edge_owners.clear();
+    edge_owners.resize(topology.edge_count(), EMPTY);
     out.clear();
     for pick in picks {
-        out.push(compare_pick(board, topology, placement, owners, pick));
+        out.push(compare_pick(
+            board, topology, placement, owners, edge_owners, pick,
+        ));
         owners[usize::from(pick.vertex)] = pick.seat;
+        edge_owners[usize::from(pick.edge)] = pick.seat;
     }
 }
 
