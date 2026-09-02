@@ -85,7 +85,7 @@ export function PhoneShell() {
       <main className="phone-page">
         <DraftRibbon />
         <BoardCanvas restMarks={restMarks} />
-        {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel variant="phone" onBuild={enter} />}
+        {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
       </main>
       {overlay === 'maps' && <MapsScreen onClose={closeOverlay} />}
       {overlay === 'players' && <PlayersScreen onClose={closeOverlay} />}

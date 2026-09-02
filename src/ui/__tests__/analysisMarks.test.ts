@@ -30,7 +30,7 @@ describe('recommendationMarks', () => {
   it('marks the road beside the pair when the pick opens one', () => {
     expect(recommendationMarks(recommendation(ROAD), '#3063ba')).toEqual([
       { ref: FIRST, color: '#3063ba', label: '1' },
-      { ref: SECOND, color: '#3063ba', label: '2' },
+      { ref: SECOND, color: '#3063ba', label: '2', faded: true },
       { ref: ROAD, color: '#3063ba', label: 'R', kind: 'road' },
     ])
   })
@@ -38,7 +38,7 @@ describe('recommendationMarks', () => {
   it('marks only the pair when there is no road', () => {
     expect(recommendationMarks(recommendation(null), '#3063ba')).toEqual([
       { ref: FIRST, color: '#3063ba', label: '1' },
-      { ref: SECOND, color: '#3063ba', label: '2' },
+      { ref: SECOND, color: '#3063ba', label: '2', faded: true },
     ])
   })
 })

@@ -304,7 +304,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .mobile-nav { display: none; }
 .board-zoom { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 3px 4px 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(248,243,232,.9); color: var(--ink); font-variant-numeric: tabular-nums; }
 .board-zoom button { padding: 3px 7px; border-radius: 999px; font-size: 10px; }
-.analysis-row.selected, .analysis-likely-gone.selected { border-color: #d8bc77; background: #fff9e9; }
+.analysis-row.current, .analysis-likely-gone.current { border-color: #d8bc77; background: #fff9e9; }
 .analysis-row-select, .analysis-touch-select { width: 100%; border: 0; background: transparent; box-shadow: none; text-align: left; }
 .analysis-row-select { grid-column: 1 / -1; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 7px; padding: 0; }
 .analysis-touch-select { padding: 0; color: inherit; font-size: inherit; line-height: inherit; }
@@ -561,8 +561,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .phone-shell .board-sea { display: none; }
   .phone-shell .board-zoom { margin-left: 0; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
-  .phone-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-  .phone-block-head h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
+  .phone-block-head, .phone-block .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .phone-block-head h2, .phone-block .panel-heading h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
   .phone-shell .analysis-context { margin: 0 0 10px; font-size: 12px; line-height: 1.5; }
   .phone-shell .analysis-context .menu-trigger { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; color: var(--ink); }
   .phone-shell .analysis-context .menu-trigger strong { border-bottom: 1.5px dotted var(--accent-dark); }
@@ -571,8 +571,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .phone-shell .analysis-likely-gone span { font-size: 10px; }
   .phone-shell .analysis-list { gap: 6px; }
   .phone-shell .analysis-row { gap: 0; padding: 0; border-radius: 13px; background: #f9f5ea; overflow: hidden; }
-  .phone-shell .analysis-row.selected, .phone-shell .analysis-row.selected:hover { border-color: var(--accent-dark); background: #fff; box-shadow: 0 4px 16px rgba(62, 45, 21, .14); }
-  .phone-shell .analysis-row:hover:not(.selected) { border-color: var(--line); background: #f9f5ea; box-shadow: none; }
+  .phone-shell .analysis-row.current, .phone-shell .analysis-row.current:hover { border-color: var(--accent-dark); background: #fff; box-shadow: 0 4px 16px rgba(62, 45, 21, .14); }
+  .phone-shell .analysis-row:hover:not(.current) { border-color: var(--line); background: #f9f5ea; box-shadow: none; }
   .phone-shell .analysis-row-select { grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 9px 10px; }
   .phone-shell .analysis-rank { width: 26px; height: 26px; border: 1.5px solid #30271f; font: 800 13px Inter, sans-serif; }
   .phone-shell .analysis-row-body { gap: 0; }

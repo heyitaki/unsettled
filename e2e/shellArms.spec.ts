@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { LISTED_PICKS } from '../src/ui/restMarks'
+import { seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
  * The two arms that must render as they did before the phone shell existed
@@ -152,6 +153,77 @@ test.describe('desktop', () => {
     await expect(sheet.locator('.menu-tail')).toBeVisible()
     await expect(sheet.getByRole('menuitem').first().locator('.menu-icon')).toBeVisible()
     await snap(page, 'desktop-menus', false)
+  })
+
+  test('an empty board offers the import and keeps the build handoff to the phone', async ({ page }) => {
+    await page.goto('')
+    const panel = page.locator('.analysis-panel')
+    await expect(panel.locator('.eyebrow')).toHaveText('Nothing to rank yet')
+    await expect(panel.locator('h2')).toHaveText('This board is empty')
+    await expect(panel.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
+    // The tools are already on screen here, so there is nothing to hand off to (spec D4).
+    await expect(panel.getByRole('button', { name: 'Build it by hand' })).toHaveCount(0)
+    await snap(page, 'desktop-empty-picks')
+  })
+
+  test('a card is claimed, selected and placed from, and hover never overrules a selection', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const panel = page.locator('.analysis-panel')
+    await expect(panel.locator('h2')).toHaveText('This board is empty')
+    await page.getByRole('button', { name: 'Randomize' }).click()
+    await expect(panel.locator('h2')).toHaveText('Best picks')
+
+    // Nobody is claimed, so the panel asks before it ranks (spec D4).
+    await expect(panel.locator('.hint')).toHaveText('Pick your colour and the ranking starts.')
+    await expect(panel.locator('.analysis-context')).toHaveCount(0)
+    const swatches = panel.locator('.claim-row button')
+    await expect(swatches).toHaveCount(UNCLAIMED_ROSTER.length)
+    await snap(page, 'desktop-claim-row')
+    await swatches.first().click()
+
+    // The context line names the seat and its picks, and nothing about whose turn it is.
+    const context = panel.locator('.analysis-context')
+    await expect(context).toHaveText(/^You are/)
+    await expect(context).toHaveText(/of 8$/)
+    await expect(context).not.toContainText('turn')
+    await expect(panel.locator('.panel-heading .turn-pill')).toHaveText('Your turn')
+
+    const cards = panel.locator('.analysis-row')
+    const marks = page.locator('.vertex-highlight')
+    // The claim left the pointer over the list the claim row became, and a card
+    // under the pointer previews; the board rests only once the pointer is off it.
+    await page.mouse.move(0, 0)
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    await cards.first().locator('.analysis-row-select').click()
+    await expect(cards.first()).toHaveClass(/\bcurrent\b/)
+    await expect(cards.first().getByRole('button', { name: 'Place settlement' })).toBeVisible()
+    // The pinned pair: the pick taken, the planned follow-up set back.
+    await expect(marks).toHaveCount(2)
+    await expect(marks.first()).not.toHaveClass(/\bfaded\b/)
+    await expect(marks.nth(1)).toHaveClass(/\bfaded\b/)
+    await snap(page, 'desktop-selected-card')
+
+    // A hover is a preview, and a pinned card outranks it (spec DB2).
+    await cards.nth(1).hover()
+    await expect(marks).toHaveCount(2)
+    await expect(cards.first()).toHaveClass(/\bcurrent\b/)
+
+    // Clearing drops back to the resting marks, and nothing was placed on the way.
+    const structures = page.locator('.tools-panel .tool-label')
+      .filter({ hasText: 'Structures' }).locator('.tool-count')
+    await expect(structures).toHaveText('0 pieces')
+    await cards.first().getByRole('button', { name: 'Clear' }).click()
+    await page.mouse.move(0, 0)
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    await expect(cards.first()).not.toHaveClass(/\bcurrent\b/)
+
+    // Placing is the button's job alone, and it ends the selection with it.
+    await cards.first().locator('.analysis-row-select').click()
+    await cards.first().getByRole('button', { name: 'Place settlement' }).click()
+    await expect(structures).toHaveText('1 pieces')
+    await expect(panel.locator('.analysis-row.current')).toHaveCount(0)
+    await snap(page, 'desktop-placed')
   })
 })
 
