@@ -202,10 +202,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 11: Robber-attraction separation reading in `diagnose`
 
-- [ ] In `simulator/crates/cli/src/expansion.rs`, add the pair's distinct producing-hex count to `PairReading`, and in `expansion_reading` add a `blockabilityByHexCount` table: for each hex count present, the pair count, the blockability quartile gap within that stratum (same `quartile_gap` construction), plus the pair-count-weighted mean gap over strata holding at least 1000 pairs, and a boolean `concentrationTermIndicated` per the condition in Context
-- [ ] Emit the table in `diagnostics.json` overall and per slot; keep the artifact byte-identical across worker counts
-- [ ] Rust test over a hand-built sample pinning the stratification, the weighting, the 1000-pair floor and the boolean in both directions
-- [ ] Both cargo profiles green
+- [x] In `simulator/crates/cli/src/expansion.rs`, add the pair's distinct producing-hex count to `PairReading`, and in `expansion_reading` add a `blockabilityByHexCount` table: for each hex count present, the pair count, the blockability quartile gap within that stratum (same `quartile_gap` construction), plus the pair-count-weighted mean gap over strata holding at least 1000 pairs, and a boolean `concentrationTermIndicated` per the condition in Context
+- [x] Emit the table in `diagnostics.json` overall and per slot; keep the artifact byte-identical across worker counts
+- [x] Rust test over a hand-built sample pinning the stratification, the weighting, the 1000-pair floor and the boolean in both directions
+- [x] Both cargo profiles green
 
 ### Task 12: Preregister M-56, the separation reading
 

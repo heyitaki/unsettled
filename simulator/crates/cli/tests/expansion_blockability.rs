@@ -16,7 +16,7 @@ use unsettled_engine::state::EMPTY;
 use unsettled_engine::topology::{Edge, Hex, Layout, Topology, Vertex};
 use unsettled_engine::wire::{Coord, TileKind, WireBoard, WireHex, WirePlayer, WirePort};
 use unsettled_sim::expansion::{
-    PairOutcome, PairReading, blockability_share, expansion_reading, game_pairs,
+    ExpansionGroup, PairOutcome, PairReading, expansion_reading, game_pairs, pair_hexes,
     reachable_expansion_sites,
 };
 
@@ -262,10 +262,9 @@ fn blockability_is_the_top_hex_share_over_the_distinct_hexes_of_the_pair() {
     let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
     vertex_owner[usize::from(vertex(&topology, SETTLEMENT))] = 0;
     vertex_owner[usize::from(vertex(&topology, RIVAL_BEHIND_ROAD))] = 0;
-    assert_eq!(
-        blockability_share(&board, &topology, &vertex_owner, 0),
-        5.0 / 14.0
-    );
+    let hexes = pair_hexes(&board, &topology, &vertex_owner, 0);
+    assert_eq!(hexes.blockability, 5.0 / 14.0);
+    assert_eq!(hexes.producing, 5);
 }
 
 #[test]
@@ -274,7 +273,9 @@ fn a_pair_with_no_producing_hexes_reports_no_concentration() {
     let board = board_with_tokens(&topology, &[]);
     let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
     vertex_owner[usize::from(vertex(&topology, SETTLEMENT))] = 0;
-    assert_eq!(blockability_share(&board, &topology, &vertex_owner, 0), 0.0);
+    let hexes = pair_hexes(&board, &topology, &vertex_owner, 0);
+    assert_eq!(hexes.blockability, 0.0);
+    assert_eq!(hexes.producing, 0);
 }
 
 fn setup_pick(
@@ -334,11 +335,14 @@ fn each_pair_is_read_at_its_own_second_pick_rather_than_at_the_end_of_setup() {
     );
     assert_eq!(pairs[0].expansion_sites, 8);
     assert_eq!(pairs[1].expansion_sites, 9);
-    assert_eq!(
-        pairs[1].blockability,
-        blockability_share(&board, &topology, &vertex_owner, 0)
-    );
+    let hexes = pair_hexes(&board, &topology, &vertex_owner, 0);
+    assert_eq!(pairs[1].blockability, hexes.blockability);
+    assert_eq!(pairs[1].producing_hexes, hexes.producing);
 }
+
+/// The hex count the pooled-gap fixtures below all share, so every one of their pairs lands in a
+/// single stratum. The stratified reading has its own fixtures further down.
+const POOLED_HEXES: u32 = 5;
 
 fn outcome(seat: u8, expansion_sites: u32, blockability: f64, seat_won: bool) -> PairOutcome {
     PairOutcome {
@@ -346,6 +350,7 @@ fn outcome(seat: u8, expansion_sites: u32, blockability: f64, seat_won: bool) ->
             seat,
             expansion_sites,
             blockability,
+            producing_hexes: POOLED_HEXES,
         },
         seat_won,
     }
@@ -496,4 +501,178 @@ fn zero_site_pairs_are_counted_alongside_the_boxing_gap() {
             .sum::<usize>(),
         reading.overall.pairs
     );
+}
+
+/// One hex-count stratum built so its quartile gap is exactly the win-rate difference asked for.
+///
+/// Half the pairs sit at blockability 1 and half at 0, so both quarter cuts land on those two
+/// values and each arm is exactly one half of the stratum. `top_wins` and `bottom_wins` are the
+/// win counts inside those halves, and every count used below divides its half into a rate a
+/// float carries exactly, so the gaps are exact.
+fn stratum(
+    producing_hexes: u32,
+    half: usize,
+    top_wins: usize,
+    bottom_wins: usize,
+) -> Vec<PairOutcome> {
+    assert!(top_wins <= half && bottom_wins <= half);
+    let mut pairs = Vec::with_capacity(half * 2);
+    for (blockability, wins) in [(1.0, top_wins), (0.0, bottom_wins)] {
+        for index in 0..half {
+            pairs.push(PairOutcome {
+                reading: PairReading {
+                    seat: 0,
+                    expansion_sites: 3,
+                    blockability,
+                    producing_hexes,
+                },
+                seat_won: index < wins,
+            });
+        }
+    }
+    pairs
+}
+
+fn gap_of(producing_hexes: u32, half: usize, top_wins: usize, bottom_wins: usize) -> f64 {
+    let pairs = stratum(producing_hexes, half, top_wins, bottom_wins);
+    let reading = expansion_reading(&pairs, SEATS);
+    let row = &reading.overall.blockability_by_hex_count.strata[0];
+    assert!(!row.blockability.degenerate);
+    row.blockability.gap
+}
+
+#[test]
+fn a_stratum_gap_is_the_win_rate_difference_between_its_two_blockability_arms() {
+    assert_eq!(gap_of(3, 500, 125, 375), -0.5);
+    assert_eq!(gap_of(4, 1000, 375, 500), -0.125);
+}
+
+/// Two counted strata of different sizes and a third under the floor. The mean weighs the counted
+/// strata by their pair counts, the thin stratum's positive gap stays out of both the mean and the
+/// sign test, and the condition passes.
+#[test]
+fn the_weighted_mean_weighs_counted_strata_by_pairs_and_ignores_the_thin_ones() {
+    let mut pairs = stratum(3, 500, 125, 375);
+    pairs.extend(stratum(4, 1000, 375, 500));
+    pairs.extend(stratum(5, 2, 2, 0));
+    let reading = expansion_reading(&pairs, SEATS);
+    let table = &reading.overall.blockability_by_hex_count;
+
+    // One row per hex count present, ascending, holding every pair.
+    assert_eq!(
+        table
+            .strata
+            .iter()
+            .map(|row| (row.producing_hexes, row.pairs, row.counted))
+            .collect::<Vec<_>>(),
+        vec![(3, 1000, true), (4, 2000, true), (5, 4, false)]
+    );
+    assert_eq!(table.strata.iter().map(|row| row.pairs).sum::<usize>(), 3004);
+    assert_eq!(table.strata[2].blockability.gap, 1.0);
+
+    // (1000 * -0.5 + 2000 * -0.125) / 3000.
+    assert_eq!(table.counted_pairs, 3000);
+    assert_eq!(table.weighted_mean_gap, -0.25);
+    assert!(table.concentration_term_indicated);
+}
+
+/// The sign test is the half the mean cannot do: a mean well past the threshold still fails when
+/// one counted stratum runs the other way.
+#[test]
+fn one_counted_stratum_running_the_other_way_fails_the_condition() {
+    let mut pairs = stratum(3, 2000, 500, 1500);
+    pairs.extend(stratum(4, 1000, 625, 500));
+    let reading = expansion_reading(&pairs, SEATS);
+    let table = &reading.overall.blockability_by_hex_count;
+
+    // (4000 * -0.5 + 2000 * 0.125) / 6000.
+    assert_eq!(table.counted_pairs, 6000);
+    assert!(table.weighted_mean_gap < -0.03);
+    assert_eq!(table.strata[1].blockability.gap, 0.125);
+    assert!(!table.concentration_term_indicated);
+}
+
+/// The magnitude half: every counted stratum negative is not enough on its own.
+#[test]
+fn a_mean_short_of_three_points_fails_the_condition() {
+    let mut pairs = stratum(3, 500, 240, 250);
+    pairs.extend(stratum(4, 500, 245, 250));
+    let reading = expansion_reading(&pairs, SEATS);
+    let table = &reading.overall.blockability_by_hex_count;
+
+    assert_eq!(table.counted_pairs, 2000);
+    assert!(table.strata.iter().all(|row| row.blockability.gap < 0.0));
+    assert!(table.weighted_mean_gap > -0.03);
+    assert!(!table.concentration_term_indicated);
+}
+
+/// A counted stratum whose blockability takes one value separates nothing, so it carries no
+/// magnitude into the mean and its neighbour cannot push the condition past it.
+#[test]
+fn a_degenerate_counted_stratum_contributes_nothing_and_fails_the_sign_test() {
+    let mut pairs = stratum(3, 1000, 250, 750);
+    pairs.extend((0..2000).map(|index| PairOutcome {
+        reading: PairReading {
+            seat: 0,
+            expansion_sites: 3,
+            blockability: 0.5,
+            producing_hexes: 4,
+        },
+        seat_won: index % 2 == 0,
+    }));
+    let reading = expansion_reading(&pairs, SEATS);
+    let table = &reading.overall.blockability_by_hex_count;
+
+    assert!(table.strata[1].counted);
+    assert!(table.strata[1].blockability.degenerate);
+    // (2000 * -0.5 + 2000 * 0) / 4000.
+    assert_eq!(table.counted_pairs, 4000);
+    assert_eq!(table.weighted_mean_gap, -0.25);
+    assert!(!table.concentration_term_indicated);
+}
+
+/// With no stratum at the floor there is nothing to average, and the condition cannot fire off an
+/// empty mean.
+#[test]
+fn no_counted_stratum_reads_a_zero_mean_and_no_indication() {
+    let pairs = stratum(3, 4, 4, 0);
+    let reading = expansion_reading(&pairs, SEATS);
+    let table = &reading.overall.blockability_by_hex_count;
+    assert_eq!(table.strata.len(), 1);
+    assert!(!table.strata[0].counted);
+    assert_eq!(table.counted_pairs, 0);
+    assert_eq!(table.weighted_mean_gap, 0.0);
+    assert!(!table.concentration_term_indicated);
+}
+
+/// The table is a per-group reading like the two pooled gaps, so a slot row stratifies only its
+/// own pairs and an empty slot reads an empty table.
+#[test]
+fn each_slot_row_stratifies_only_its_own_pairs() {
+    let pairs = vec![
+        outcome(0, 1, 0.2, true),
+        outcome(0, 2, 0.8, false),
+        PairOutcome {
+            reading: PairReading {
+                seat: 1,
+                expansion_sites: 3,
+                blockability: 0.4,
+                producing_hexes: 2,
+            },
+            seat_won: true,
+        },
+    ];
+    let reading = expansion_reading(&pairs, SEATS);
+    let counts = |group: &ExpansionGroup| {
+        group
+            .blockability_by_hex_count
+            .strata
+            .iter()
+            .map(|row| (row.producing_hexes, row.pairs))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(counts(&reading.overall), vec![(2, 1), (POOLED_HEXES, 2)]);
+    assert_eq!(counts(&reading.per_slot[0]), vec![(POOLED_HEXES, 2)]);
+    assert_eq!(counts(&reading.per_slot[1]), vec![(2, 1)]);
+    assert_eq!(counts(&reading.per_slot[3]), Vec::<(u32, usize)>::new());
 }
