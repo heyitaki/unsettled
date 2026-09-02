@@ -276,11 +276,11 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 21: Preregister M-59, the opponent-model A/B
 
-- [ ] Write `docs/plans/preregs/<today>-m59-sp5-draft-awareness.md`
-- [ ] One arm, `draft=app_formula_draft:placement/default-weights.json@placement/default-weights.json`, reference `base`. This is gap-closing work under the gap-fix rule: it lands whatever it reads, and `worse` is recorded and flagged, not reverted
-- [ ] Screen power and protocol as in Context. Preregister the timing: the 200-board extrapolation from Task 20, the background-and-poll invocation if the full run is predicted over eight minutes, and the admissibility rule that a build must not land inside the timed window
-- [ ] Prediction (positive, since the field's first-pick greedy leaves the surviving-pair value unpriced) and admissibility conditions
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m59-sp5-draft-awareness.md`
+- [x] One arm, `draft=app_formula_draft:placement/default-weights.json@placement/default-weights.json`, reference `base`. This is gap-closing work under the gap-fix rule: it lands whatever it reads, and `worse` is recorded and flagged, not reverted
+- [x] Screen power and protocol as in Context. Preregister the timing: the 200-board extrapolation from Task 20, the background-and-poll invocation if the full run is predicted over eight minutes, and the admissibility rule that a build must not land inside the timed window
+- [x] Prediction (positive, since the field's first-pick greedy leaves the surviving-pair value unpriced) and admissibility conditions
+- [x] Link check passes
 
 ### Task 22: Run M-59, record it, close `SIM-GAP-20`
 
