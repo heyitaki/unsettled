@@ -56,3 +56,30 @@ test('the window is the only scroller and nothing overflows sideways', async ({ 
   expect(scrollWidth).toBe(390)
   await snap(page, 'page')
 })
+
+test('the ribbon shows every pick and the board sits in a square sea', async ({ page }) => {
+  await open(page)
+  const players = await page.locator('.phone-dot').count()
+  const slots = page.locator('.phone-rslot')
+  await expect(slots).toHaveCount(players * 2)
+  await expect(slots.first()).toHaveClass(/\bnow\b/)
+  const frame = await page.locator('.board-canvas').boundingBox()
+  expect(frame).not.toBeNull()
+  expect(Math.abs(frame!.width - frame!.height)).toBeLessThanOrEqual(1)
+  await snap(page, 'ribbon-board')
+})
+
+test('the six-player layout gets a taller frame under an unmoved ribbon and a bare caption', async ({ page }) => {
+  await open(page)
+  const ribbonTop = (await page.locator('.phone-ribbon').boundingBox())!.y
+  await page.getByRole('button', { name: /Board layout/ }).click()
+  await page.getByRole('option', { name: '5–6 player' }).click()
+  await expect(page.locator('.board-status')).toContainText('5–6 player')
+  await expect(page.locator('.confirm-dialog')).toHaveCount(0)
+  const frame = await page.locator('.board-canvas').boundingBox()
+  expect(frame!.height).toBeGreaterThan(frame!.width)
+  expect((await page.locator('.phone-ribbon').boundingBox())!.y).toBe(ribbonTop)
+  const caption = await page.locator('.board-status').innerText()
+  expect(caption).not.toMatch(/terrain|pieces/)
+  await snap(page, 'six-player-frame')
+})

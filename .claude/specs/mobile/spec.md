@@ -151,7 +151,7 @@ Do not rebuild these; move or restyle them.
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `BoardTabs.tsx`, `commitEdit` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes an adopted game | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `App.tsx`, `global-notice` |
-| Snake draft strip | `PlayerPanel.tsx`, `draft-strip` |
+| Snake draft strip, with the slot derivation in `draftSlots.ts` shared with the phone ribbon | `PlayerPanel.tsx`, `draft-strip`; `phone/PhoneRibbon.tsx` |
 
 ## Decisions
 
@@ -185,8 +185,8 @@ One row per work item. Keep the state column current; this file is the durable c
 | M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | — | done |
 | M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
 | M4 | Board colour hash (B4) and the hex in header and both lists | — | done: `ui/boardColor.ts` and the header hex; the list hexes ride M7 |
-| M5 | Draft ribbon above the board (S2) | M2 | not started |
-| M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | not started |
+| M5 | Draft ribbon above the board (S2) | M2 | done |
+| M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | done |
 | M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | not started |
 | M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | not started |
 | M9 | Seat order drives the draft (B3) | M8 | not started |

@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react'
 import { analyzeBoardCached } from '../engine/analyze'
-import { draftIsComplete } from '../engine/draft'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
 import {
   addPlayer,
@@ -18,8 +17,9 @@ import {
   renamePlayer,
 } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
-import { PLAYER_PALETTE, RESOURCES, type Board, type Resource, type VertexId } from '../model/types'
+import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
 import { readableInk } from './colors'
+import { draftSlots } from './draftSlots'
 import { CounterGlyph, GLYPH_MUTED, ResourceGlyph, StructureGlyph } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { dropIndexFor, edgeScrollStep } from './rowDrag'
@@ -184,48 +184,7 @@ export function PlayerPanel() {
     : TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
 
   const analysis = analyzeBoardCached(board)
-  const draft = analysis.draft
-  const complete = draftIsComplete(board, draft)
-  // Slot → placed-settlement mapping: the player's k-th building in board order.
-  // Once the draft is complete count any tier, since starting settlements may
-  // have been upgraded (placeBuilding upgrades in place, so the index holds).
-  // Best-effort only — board order is insertion order for hand-placed boards,
-  // but an imported board carries the parser's top-to-bottom spatial order, and
-  // deleting then re-placing a building moves it to the end.
-  const placedByPlayer = new Map<string, VertexId[]>()
-  for (const building of board.buildings) {
-    if (!complete && building.tier !== 'settlement') continue
-    const list = placedByPlayer.get(building.playerId)
-    if (list) list.push(building.vertexId)
-    else placedByPlayer.set(building.playerId, [building.vertexId])
-  }
-  const seenSlots = new Map<string, number>()
-  const slotVertex = draft.sequence.map((playerId) => {
-    const nth = seenSlots.get(playerId) ?? 0
-    seenSlots.set(playerId, nth + 1)
-    return placedByPlayer.get(playerId)?.[nth]
-  })
-  // Predicted spots for unplaced slots: opponents before my next pick come from
-  // the modal rollout; my own picks from the top recommendation. Opponent picks
-  // past my first pick have no prediction — hovering those shows nothing.
-  const predicted = new Map<number, VertexId>()
-  const firstMine = draft.myRemainingPickIndices[0]
-  if (board.mePlayerId !== null && firstMine !== undefined) {
-    const preSlots = draft.remainingPickIndices.filter((slot) =>
-      slot >= (draft.turnIndex ?? firstMine) && slot < firstMine && draft.sequence[slot] !== board.mePlayerId)
-    analysis.takenBeforeFirstPick.forEach((taken, index) => {
-      const slot = preSlots[index]
-      if (slot !== undefined) predicted.set(slot, taken.vertexId)
-    })
-    const top = analysis.recommendations[0]
-    if (top) {
-      predicted.set(firstMine, top.firstPick)
-      const secondMine = draft.myRemainingPickIndices[1]
-      if (secondMine !== undefined && top.plannedSecond[0] !== undefined) {
-        predicted.set(secondMine, top.plannedSecond[0])
-      }
-    }
-  }
+  const slots = draftSlots(board, analysis)
   const clearHighlight = () => dispatch({ type: 'highlight', marks: null })
 
   // Native HTML5 row reorder, dragged from anywhere on the card — only a row
@@ -660,11 +619,10 @@ export function PlayerPanel() {
         style={{ '--draft-cols': board.players.length } as CSSProperties}
         onMouseLeave={coarse ? undefined : clearHighlight}
       >
-        {draft.sequence.map((playerId, slot) => {
+        {slots.map(({ playerId, placed, vertex }, slot) => {
           const player = board.players.find((candidate) => candidate.id === playerId)
           if (!player) return null
-          const pending = slotVertex[slot] === undefined
-          const vertex = slotVertex[slot] ?? predicted.get(slot)
+          const pending = !placed
           return (
             <button
               type="button"

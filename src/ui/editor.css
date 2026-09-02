@@ -534,6 +534,21 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-icon-btn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: rgba(248, 243, 232, .9); }
   .phone-icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
   .phone-page { padding: calc(46px + env(safe-area-inset-top)) 0 22px; }
+  .phone-ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; height: 38px; padding: 0 var(--gutter); }
+  .phone-rslot { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .phone-rslot.pending { opacity: .34; }
+  .phone-rslot.now { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
+  .phone-rslot.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .phone-rslot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
+  /* The frame is the SVG's own box, so the sea rect inside it goes: the box holds
+     the shape, the rect would only ever paint a smaller sea inside it. */
+  .phone-shell .board-canvas { aspect-ratio: min(1, var(--board-aspect)); width: 100%; height: auto; max-height: none; border-radius: 24px; background: #3c7fbf; box-shadow: 0 14px 24px rgba(33, 51, 67, .24); filter: none; }
+  .phone-shell .board-sea { display: none; }
+  .phone-shell .board-status { justify-content: center; gap: 8px; padding: 4px 0 0; font-size: 11px; }
+  .phone-shell .board-count { display: none; }
+  .phone-shell .board-status .menu-trigger { padding: 4px 8px; color: var(--muted); font-weight: 600; }
+  .phone-shell .board-status .menu-trigger strong { color: var(--ink); }
+  .phone-shell .board-zoom { margin-left: 0; }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; }
 }
 

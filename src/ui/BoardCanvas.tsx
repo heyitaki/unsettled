@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import {
@@ -719,7 +720,9 @@ export function BoardCanvas() {
       )
     }), [state.highlight, gridVertexSet, markedBuildings])
   return (
-    <section className="board-stage">
+    // The fitted box's proportions, for the portrait arm's sea frame (spec S3):
+    // square when the content is wider than tall, the content's own ratio otherwise.
+    <section className="board-stage" style={{ '--board-aspect': String(viewBox.width / viewBox.height) } as CSSProperties}>
       <div className="board-status">
         <MenuSelect
           ariaLabel="Board layout"
@@ -729,8 +732,8 @@ export function BoardCanvas() {
         >
           <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
         </MenuSelect>
-        <span>{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
-        <span>{board.roads.length + board.buildings.length} pieces</span>
+        <span className="board-count">{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
+        <span className="board-count">{board.roads.length + board.buildings.length} pieces</span>
         {transform.scale > 1 && (
           <span className="board-zoom">
             {transform.scale.toFixed(1)}×
@@ -794,7 +797,7 @@ export function BoardCanvas() {
           </clipPath>
         </defs>
         <g clipPath="url(#board-frame)">
-          <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} rx={SEA_RADIUS} fill={SEA_COLOR} />
+          <rect className="board-sea" x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} rx={SEA_RADIUS} fill={SEA_COLOR} />
           {hexLayer}
           {tokenLayer}
           {robberLayer}

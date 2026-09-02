@@ -3,6 +3,7 @@ import { AnalysisPanel } from '../AnalysisPanel'
 import { BoardCanvas } from '../BoardCanvas'
 import { GlobalNotice } from '../GlobalNotice'
 import { PhoneHeader } from './PhoneHeader'
+import { PhoneRibbon } from './PhoneRibbon'
 
 export type PhoneMode = 'analyze' | 'build'
 export type PhoneOverlay = 'maps' | 'players'
@@ -24,6 +25,7 @@ export function PhoneShell() {
         onOpen={setOverlay}
       />
       <main className="phone-page">
+        <PhoneRibbon />
         <BoardCanvas />
         <AnalysisPanel />
       </main>
