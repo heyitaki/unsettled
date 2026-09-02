@@ -1134,6 +1134,87 @@ mod tests {
         assert_eq!(found, expected, "the SP2 phase commits one arm per term");
     }
 
+    /// The SP3 arms, as arm file stem and the weights keys that arm moves off the live defaults.
+    /// A table of overrides rather than SP2's single key, because the phase's conditional decay
+    /// arms move two axes at once: the surviving `expansionWeight` and `expansionDecay`.
+    const SP3_ARMS: [(&str, &[(&str, f64)]); 2] = [
+        ("sp3_expansion_lo", &[("expansionWeight", 0.1)]),
+        ("sp3_expansion_hi", &[("expansionWeight", 0.3)]),
+    ];
+
+    /// Walks the committed SP3 arms (`placement/arms/sp3*.json`) as the SP2 walk above walks its
+    /// own: each is the live `default-weights.json` with only its declared keys moved, each moved
+    /// value differs from the shipped one and sits inside that axis's committed sweep-bounds
+    /// range, and no `sp3*` file nobody preregistered is sitting in the directory waiting to join
+    /// a run. Without this an edit that also moved `diversityWeight` would run and be recorded as
+    /// an isolated expansion A/B.
+    #[test]
+    fn the_sp3_arm_files_are_the_committed_expansion_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (stem, overrides) in SP3_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let mut perturbed = base.clone();
+            for (key, value) in overrides {
+                let range = &bounds["placement"][key];
+                assert!(
+                    *value >= range["min"].as_f64().expect("min")
+                        && *value <= range["max"].as_f64().expect("max"),
+                    "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+                );
+                assert_ne!(
+                    base[key].as_f64(),
+                    Some(*value),
+                    "{name}: {key} at {value} is the shipped value, so the arm perturbs nothing"
+                );
+                perturbed[key] = Value::from(*value);
+            }
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp3") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP3 phase commits one arm per preregistered value"
+        );
+    }
+
     /// Walks every committed weights-shaped file (the two shipped vectors plus the
     /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
@@ -1178,8 +1259,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 51,
-            "the committed weights arms are 51 files; a change to the set is a decision"
+            weights_arms, 53,
+            "the committed weights arms are 53 files; a change to the set is a decision"
         );
     }
 

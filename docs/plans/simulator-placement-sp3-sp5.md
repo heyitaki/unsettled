@@ -171,12 +171,12 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 7: Preregister M-54, the SP3 expansion A/B
 
-- [ ] Write `docs/plans/preregs/<today>-m54-sp3-expansion.md`
-- [ ] Two decision arms, `simulator/placement/arms/sp3_expansion_lo.json` (0.1) and `sp3_expansion_hi.json` (0.3), each the live defaults with only `expansionWeight` changed; reference `base`. Add an `SP3_ARMS` pin test in `params_file.rs` following `SP2_ARMS`, and move the weights-arm count pin by two
-- [ ] Screen power and protocol as in Context. State the power argument off M-48's smallest per-slot boxing magnitude (+5.54pp at slot 3), not the pooled row, and note that Task 1's per-seat table is where the slot pattern will be read
-- [ ] Decision rule fixed before the run: the standing disposition rule; the survivor is the better-reading arm if either reads `better`. Record only
-- [ ] Prediction and admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Write `docs/plans/preregs/<today>-m54-sp3-expansion.md`
+- [x] Two decision arms, `simulator/placement/arms/sp3_expansion_lo.json` (0.1) and `sp3_expansion_hi.json` (0.3), each the live defaults with only `expansionWeight` changed; reference `base`. Add an `SP3_ARMS` pin test in `params_file.rs` following `SP2_ARMS`, and move the weights-arm count pin by two
+- [x] Screen power and protocol as in Context. State the power argument off M-48's smallest per-slot boxing magnitude (+5.54pp at slot 3), not the pooled row, and note that Task 1's per-seat table is where the slot pattern will be read
+- [x] Decision rule fixed before the run: the standing disposition rule; the survivor is the better-reading arm if either reads `better`. Record only
+- [x] Prediction and admissibility conditions
+- [x] Both cargo profiles green, link check passes
 
 ### Task 8: Run M-54 and record it
 
