@@ -393,3 +393,17 @@ export function TrashGlyph() {
     </svg>
   )
 }
+
+/** The roster row's grip: six dots in two columns. */
+export function GripGlyph() {
+  return (
+    <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true">
+      <circle cx="1.6" cy="2" r="1.4" />
+      <circle cx="6.4" cy="2" r="1.4" />
+      <circle cx="1.6" cy="7" r="1.4" />
+      <circle cx="6.4" cy="7" r="1.4" />
+      <circle cx="1.6" cy="12" r="1.4" />
+      <circle cx="6.4" cy="12" r="1.4" />
+    </svg>
+  )
+}

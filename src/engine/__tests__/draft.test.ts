@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, placeBuilding, setMe } from '../../model/board'
+import { addPlayer, createBoard, movePlayer, placeBuilding, setMe } from '../../model/board'
 import { boardGrid } from '../../model/layouts'
 import type { Board } from '../../model/types'
 import { draftIsComplete, inferDraftState, type DraftState } from '../draft'
@@ -42,6 +42,18 @@ describe('draft-state inference', () => {
     expect(draft.myPickIndices).toEqual([3, 6])
     expect(draft.currentPlayerId).toBe('aki')
     expectInvariant(draft)
+  })
+
+  it('takes the snake from seat order, so a moved player picks from the new seat (B3)', () => {
+    let board = createBoard('standard4')
+    for (const id of ['b', 'c', 'd']) board = addPlayer(board, { id, name: id, color: '#333333' })
+    board = setMe(board, 'd')
+    expect(inferDraftState(board).myPickIndices).toEqual([3, 4])
+    const moved = inferDraftState(movePlayer(board, 'd', 0))
+    expect(moved.sequence[0]).toBe('d')
+    expect(moved.sequence).toEqual(['d', 'aki', 'b', 'c', 'c', 'b', 'aki', 'd'])
+    expect(moved.myPickIndices).toEqual([0, 7])
+    expectInvariant(moved)
   })
 
   it('recognizes complete-by-count, complete-by-city, and an overfilled sequence', () => {

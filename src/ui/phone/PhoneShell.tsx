@@ -8,6 +8,7 @@ import { MapsScreen } from './MapsScreen'
 import { PhoneBuild } from './PhoneBuild'
 import { PhoneHeader } from './PhoneHeader'
 import { PhoneRibbon } from './PhoneRibbon'
+import { PlayersScreen } from './PlayersScreen'
 
 export type PhoneMode = 'analyze' | 'build'
 export type PhoneOverlay = 'maps' | 'players'
@@ -59,6 +60,7 @@ export function PhoneShell() {
         {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel variant="phone" onBuild={enter} />}
       </main>
       {overlay === 'maps' && <MapsScreen onClose={() => setOverlay(null)} />}
+      {overlay === 'players' && <PlayersScreen onClose={() => setOverlay(null)} />}
       <GlobalNotice />
     </div>
   )

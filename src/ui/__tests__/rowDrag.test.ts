@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropIndexFor, edgeScrollStep } from '../rowDrag'
+import { dropIndexFor, edgeScrollStep, rowShift } from '../rowDrag'
 
 const rows = [
   { top: 0, bottom: 40 },
@@ -75,5 +75,16 @@ describe('edgeScrollStep', () => {
 
   it('gives up on a viewport too short to hold both margins', () => {
     expect(edgeScrollStep(50, 100)).toBe(0)
+  })
+})
+
+describe('rowShift', () => {
+  it('steps the rows between the lift and the aim aside, and no others', () => {
+    expect([0, 1, 2, 3, 4].map((index) => rowShift(index, 1, 3))).toEqual([0, 0, -1, -1, 0])
+    expect([0, 1, 2, 3, 4].map((index) => rowShift(index, 3, 1))).toEqual([0, 1, 1, 0, 0])
+  })
+
+  it('moves nothing while the row is aimed at its own slot', () => {
+    expect([0, 1, 2].map((index) => rowShift(index, 1, 1))).toEqual([0, 0, 0])
   })
 })

@@ -139,9 +139,9 @@ Do not rebuild these; move or restyle them.
 
 | Behaviour | Where |
 | --- | --- |
-| Rename a player on name click | `PlayerPanel.tsx`, `renamingId` + `player-name-input` |
-| Reorder players by drag, both mouse DnD and a coarse-pointer hold | `PlayerPanel.tsx` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP` |
-| Add and remove players | `PlayerPanel.tsx`, `addPlayer` / drag-to-trash |
+| Rename a player on name click | `PlayerPanel.tsx`, `renamingId` + `player-name-input`; the phone's text-sized field is `phone/InlineRename.tsx`, shared by `phone/MapsScreen.tsx` and `phone/PlayersScreen.tsx` |
+| Reorder players by drag, both mouse DnD and a coarse-pointer hold, plus the grip that lifts at once | `useRowReorder.ts` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP`, shared by `PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
+| Add and remove players | `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`, `addPlayer` / drag-to-trash |
 | Claim yourself | `AnalysisPanel.tsx`, `MenuSelect` → `setMe`; the phone variant of the same component adds the swatch row and the empty-board state |
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, shared by `MapsPanel.tsx` and `phone/MapsScreen.tsx` |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `ImportPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
@@ -188,8 +188,8 @@ One row per work item. Keep the state column current; this file is the durable c
 | M5 | Draft ribbon above the board (S2) | M2 | done |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | done |
 | M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | done |
-| M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | not started |
-| M9 | Seat order drives the draft (B3) | M8 | not started |
+| M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | done |
+| M9 | Seat order drives the draft (B3) | M8 | done |
 | M10 | Points ledger block in the Players overlay | — | dropped (O1) |
 | M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | done |
 | M12 | Empty-board state (B5) | M6 | done |

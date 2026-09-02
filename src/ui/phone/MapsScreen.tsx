@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { boardColor } from '../boardColor'
 import type { ContextMenuItem } from '../ContextMenu'
 import { BoardHexGlyph, PhotoGlyph, PlusGlyph, TrashGlyph, XMarkGlyph } from '../glyphs'
@@ -9,6 +9,7 @@ import { useStore } from '../store'
 import { useJsonFiles } from '../useJsonFiles'
 import { useLibrary } from '../useLibrary'
 import { useRenameTab } from '../useRenameTab'
+import { InlineRename } from './InlineRename'
 import { PhoneOverlay } from './PhoneOverlay'
 
 /**
@@ -34,53 +35,12 @@ function Row({ current, color, name, meta, selectLabel, selectDisabled, onSelect
   onCancel: () => void
   action: { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean }
 }) {
-  // Enter commits and then the field unmounts; the blur that follows must not
-  // commit a second time.
-  const settled = useRef(false)
-  const finish = (commit: boolean) => {
-    if (settled.current) return
-    settled.current = true
-    if (commit) onCommit()
-    else onCancel()
-  }
   return (
     <div className={current ? 'phone-row current' : 'phone-row'}>
       <button type="button" className="phone-row-select" aria-label={selectLabel} disabled={selectDisabled} onClick={onSelect} />
       <BoardHexGlyph color={color} className="phone-row-hex" />
       <span className="phone-row-main">
-        {draft !== null ? (
-          <input
-            className="phone-row-rename"
-            autoFocus
-            size={Math.max(draft.length, 1)}
-            value={draft}
-            aria-label={`Rename ${name}`}
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="done"
-            onChange={(event) => onDraft(event.target.value)}
-            onBlur={() => finish(true)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') finish(true)
-              else if (event.key === 'Escape') finish(false)
-            }}
-          />
-        ) : onStartRename ? (
-          <button
-            type="button"
-            className="phone-row-name"
-            aria-label={`Rename ${name}`}
-            onClick={() => {
-              settled.current = false
-              onStartRename()
-            }}
-          >
-            {name}
-          </button>
-        ) : (
-          <span className="phone-row-name plain">{name}</span>
-        )}
+        <InlineRename name={name} draft={draft} onDraft={onDraft} onStart={onStartRename} onCommit={onCommit} onCancel={onCancel} />
       </span>
       {meta !== undefined && <span className="phone-row-meta">{meta}</span>}
       <button type="button" className="phone-row-x" aria-label={action.label} disabled={action.disabled} onClick={action.onClick}>
@@ -168,7 +128,7 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
           ))}
           <button
             type="button"
-            className="phone-new-board"
+            className="phone-add"
             onClick={() => {
               dispatch({ type: 'tab-add' })
               onClose()

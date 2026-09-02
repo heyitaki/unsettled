@@ -38,3 +38,14 @@ export function edgeScrollStep(y: number, viewportHeight: number): number {
   if (fromBottom < MARGIN) return ramp(MARGIN - fromBottom)
   return 0
 }
+
+/**
+ * Which way a resting row steps aside while the row lifted from `from` is
+ * aimed at `to`: -1 up, 1 down, 0 stays. The lifted row itself, and every row
+ * outside the span between the two indices, holds still.
+ */
+export function rowShift(index: number, from: number, to: number): -1 | 0 | 1 {
+  if (to > from && index > from && index <= to) return -1
+  if (to < from && index >= to && index < from) return 1
+  return 0
+}
