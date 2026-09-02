@@ -1,6 +1,7 @@
 import { boardGrid } from '../model/layouts'
-import type { Board, VertexId } from '../model/types'
+import type { Board, EdgeId, VertexId } from '../model/types'
 import { draftIsComplete, inferDraftState, type DraftState, type DraftWarning } from './draft'
+import { expansionTerm } from './expansion'
 import {
   blockedVertices,
   blockVertex,
@@ -42,6 +43,11 @@ export interface TakenVertex {
 export interface Recommendation {
   firstPick: VertexId
   plannedSecond: VertexId[]
+  /**
+   * The setup road SP3's expansion walk would lay from `firstPick`, or null when the walk is off
+   * (`expansionWeight` 0) or the pick opens nothing. See `expansion.ts::expansionTerm`.
+   */
+  firstRoad: EdgeId | null
   survival: number
   score: number
   rankScore: number
@@ -443,6 +449,13 @@ export function rankCandidates(
       boardOccupancy,
     ),
   ]))
+  // The road the expansion walk would lay from each first pick. The scoring above already ran the
+  // walk, but the term reports only its value, so the direction is asked for separately. At the
+  // shipped `expansionWeight` of 0 the walk returns without spreading, so this costs nothing.
+  const firstRoads = new Map(candidates.map((candidate) => [
+    candidate,
+    expansionTerm(ctx, myHoldings, boardOccupancy, candidate).road,
+  ]))
   const aggregates = new Map<VertexId, CandidateAggregate>()
   const adjacency = vertexAdjacency(board.layout)
 
@@ -530,6 +543,7 @@ export function rankCandidates(
     const score = breakdownTotal(breakdown)
     recommendations.push({
       firstPick: candidate,
+      firstRoad: firstRoads.get(candidate) ?? null,
       plannedSecond: frequencyOrder(
         aggregate.plannedSecond,
         aggregate.survived,

@@ -70,6 +70,9 @@ const ROAD_CORE = 7
 // Corner rounding on the road's rectangular ends (SVG rx on the casing/core
 // rects). Small enough to read as a squared-off plank, not a capsule.
 const ROAD_RADIUS = 2.5
+// Fraction of an edge trimmed from each end of a highlighted road direction, so the stub sits
+// between the vertex circles the same recommendation draws rather than running under them.
+const MARK_EDGE_INSET = 0.26
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 1, superCity: 1.18 }
@@ -176,6 +179,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
   const highlight = state.highlight ?? restMarks ?? NO_MARKS
+  const gridEdgeSet = useMemo<ReadonlySet<string>>(() => new Set(grid.edgeIds), [grid])
   const highlightSet = useMemo(
     () => new Set(highlight.map((mark) => mark.ref)),
     [highlight],
@@ -690,8 +694,28 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }), [board.buildings, markedBuildings, playerColor])
   const markLayer = useMemo(() => highlight
-    .filter((mark) => mark.ref.startsWith('v:') && gridVertexSet.has(mark.ref))
+    .filter((mark) => (mark.ref.startsWith('e:') ? gridEdgeSet : gridVertexSet).has(mark.ref))
     .map((mark) => {
+      // An edge mark is a direction, not a place: the analysis panel's road recommendation.
+      // Draw it as a stub of road along the edge, short enough to leave both endpoints clear of
+      // the vertex circles the same recommendation puts there.
+      if (mark.ref.startsWith('e:')) {
+        const [a, b] = edgeEndpointVertexIds(mark.ref as EdgeId).map(vertexPoint)
+        const from = { x: a.x + (b.x - a.x) * MARK_EDGE_INSET, y: a.y + (b.y - a.y) * MARK_EDGE_INSET }
+        const to = { x: b.x - (b.x - a.x) * MARK_EDGE_INSET, y: b.y - (b.y - a.y) * MARK_EDGE_INSET }
+        return (
+          <g key={`hl:${mark.ref}`} pointerEvents="none">
+            <line
+              className="edge-highlight"
+              x1={from.x}
+              y1={from.y}
+              x2={to.x}
+              y2={to.y}
+              style={mark.color ? { stroke: mark.color } : undefined}
+            />
+          </g>
+        )
+      }
       const point = vertexPoint(mark.ref as VertexId)
       // A player-tinted circle names who takes the spot; a plain circle
       // (default accent) is the generic "look here". A label stamps the
@@ -731,7 +755,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           )}
         </g>
       )
-    }), [highlight, gridVertexSet, markedBuildings])
+    }), [highlight, gridEdgeSet, gridVertexSet, markedBuildings])
   return (
     // The fitted box's proportions, for the portrait arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.

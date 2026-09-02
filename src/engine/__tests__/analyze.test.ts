@@ -8,7 +8,7 @@ import {
   upsertPort,
   vertexProduction,
 } from '../../model/board'
-import { edgeEndpointVertexIds, hexVertexIds } from '../../model/coords'
+import { edgeEndpointVertexIds, hexVertexIds, vertexIncidentEdgeIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Resource, type VertexId } from '../../model/types'
 import {
@@ -20,12 +20,14 @@ import {
   type PreWindowResult,
 } from '../analyze'
 import { inferDraftState } from '../draft'
+import { expansionTerm } from '../expansion'
 import { legalSettlementVertices } from '../legality'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   computeBoardContext,
   emptyHoldings,
+  occupancyFromBoard,
   scoreCandidate,
   type Holdings,
 } from '../valuation'
@@ -361,6 +363,25 @@ describe('joint draft analysis', () => {
       .filter((index) => analysis.draft.sequence[index] === 'p3')).toEqual([3])
     expect(analysis.recommendations.length).toBeGreaterThan(0)
     expect(analysis.recommendations.every((entry) => entry.expectedTaken.length === 1)).toBe(true)
+  })
+
+  it('reports the expansion walk road only while the walk is on', () => {
+    const board = filledBoard(3, 4)
+    const shipped = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
+    expect(shipped.recommendations.length).toBeGreaterThan(0)
+    expect(shipped.recommendations.every((entry) => entry.firstRoad === null)).toBe(true)
+
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.3 }
+    const witness = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
+    const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
+    expect(withRoads.length).toBeGreaterThan(0)
+    const ctx = computeBoardContext(board, weights)
+    const occupancy = occupancyFromBoard(board, 'aki')
+    for (const entry of withRoads) {
+      expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
+      expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
+        .toBe(entry.firstRoad)
+    }
   })
 
   it('routes a per-player modifier through opponent picks', () => {

@@ -136,6 +136,7 @@ button.selected.danger { color: #fff; }
 .vertex-highlight { fill: rgba(231,37,37,.22); stroke: #e72525; stroke-width: 3; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 .vertex-highlight-label { font-size: 12px; font-weight: 800; }
 .vertex-highlight.faded, .vertex-highlight-label.faded { opacity: .55; }
+.edge-highlight { stroke: #e72525; stroke-width: 7; stroke-linecap: round; opacity: .85; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 
 /* Row metrics live here so the tally header, which sits outside the cards,
    aligns to the same values the cards use. */

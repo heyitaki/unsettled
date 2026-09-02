@@ -164,10 +164,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 6: Road direction in the app
 
-- [ ] Add `firstRoad: EdgeId | null` to `analyze.ts::Recommendation`, set from the expansion term's chosen edge for the first pick at the recommendation's own holdings; null when `expansionWeight` is 0 or no site is reachable
-- [ ] In `AnalysisPanel.tsx::recommendationMarks`, emit an edge mark `{ ref: firstRoad, color, label: 'R' }` when present, and add an edge branch to `BoardCanvas.tsx::markLayer` that draws a short stroke along the edge in the mark colour for refs starting with `e:` that are in the grid's edge set
-- [ ] Vitest for `recommendationMarks` covering present and null roads; a render test that an edge mark produces one edge stroke and no vertex circle
-- [ ] `npm run typecheck`, `npm run lint`, `npm test` green
+- [x] Add `firstRoad: EdgeId | null` to `analyze.ts::Recommendation`, set from the expansion term's chosen edge for the first pick at the recommendation's own holdings; null when `expansionWeight` is 0 or no site is reachable
+- [x] In `AnalysisPanel.tsx::recommendationMarks`, emit an edge mark `{ ref: firstRoad, color, label: 'R' }` when present, and add an edge branch to `BoardCanvas.tsx::markLayer` that draws a short stroke along the edge in the mark colour for refs starting with `e:` that are in the grid's edge set
+- [x] Vitest for `recommendationMarks` covering present and null roads; a render test that an edge mark produces one edge stroke and no vertex circle
+- [x] `npm run typecheck`, `npm run lint`, `npm test` green
 
 ### Task 7: Preregister M-54, the SP3 expansion A/B
 

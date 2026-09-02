@@ -3,6 +3,7 @@ import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
+import { recommendationMarks } from './analysisMarks'
 import { readableInk } from './colors'
 import { ChevronGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
@@ -36,19 +37,6 @@ function vertexDescription(board: Board, vertexId: VertexId): string {
       : `${RESOURCE_LABELS[port.resource]} ${port.rate}:1 port`)
   return [...hexes, ...ports].join(' · ')
 }
-
-// A recommendation draws my first pick as "1" and its planned follow-up as "2",
-// both in my colour, so hovering previews the pair I'd end the round holding.
-// The phone sets the follow-up back: it is where the second settlement would
-// go, not what the tap places (spec S5).
-const recommendationMarks = (
-  recommendation: Recommendation,
-  color: string,
-  fadedSecond = false,
-): HighlightMark[] => [
-  { ref: recommendation.firstPick, color, label: '1' },
-  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2', faded: fadedSecond })),
-]
 
 function formatFactor(value: number): string {
   const magnitude = Math.abs(value).toFixed(1)
