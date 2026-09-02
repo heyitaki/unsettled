@@ -191,7 +191,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | not started |
 | M9 | Seat order drives the draft (B3) | M8 | not started |
 | M10 | Points ledger block in the Players overlay | — | dropped (O1) |
-| M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | not started |
+| M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | done |
 | M12 | Empty-board state (B5) | M6 | done |
 | M13 | Reveal-on-select scroll (B2) | M6 | done |
 | M14 | One-word factor labels in `displayedFactors` | — | done |

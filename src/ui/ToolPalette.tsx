@@ -21,7 +21,11 @@ const keyOf = (tool: Tool): string => tool.kind === 'tile' ? `${tool.kind}:${too
   : tool.kind === 'token' ? `${tool.kind}:${tool.number}`
     : tool.kind === 'piece' ? `${tool.kind}:${tool.tier}` : tool.kind
 
-export function ToolPalette() {
+/**
+ * The three tool rows, shared by the desktop palette and the phone's build
+ * block: each tree lays them out through its own CSS.
+ */
+export function ToolGroups() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const selected = keyOf(state.tool)
@@ -37,33 +41,7 @@ export function ToolPalette() {
   const hasSuperCity = tab.game.board.buildings.some((building) => building.tier === 'superCity')
   const structures = hasSuperCity ? STRUCTURES : STRUCTURES.filter((item) => item.key !== 'superCity')
   return (
-    <section className="panel tools-panel">
-      <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Build mode</span>
-          <h2>Board tools</h2>
-        </div>
-        <div className="history-buttons">
-          <button type="button" aria-label="Randomize" onClick={() => dispatch({ type: 'commit', board: randomizeBoard(tab.game.board) })}>
-            <svg viewBox="0 0 20 20" className="btn-icon" aria-hidden="true">
-              <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="7" cy="7" r="1.35" />
-              <circle cx="13" cy="7" r="1.35" />
-              <circle cx="10" cy="10" r="1.35" />
-              <circle cx="7" cy="13" r="1.35" />
-              <circle cx="13" cy="13" r="1.35" />
-            </svg>
-          </button>
-          <button type="button" aria-label="Clear all" onClick={() => dispatch({ type: 'commit', board: clearBoard(tab.game.board) })}>
-            <svg viewBox="0 0 20 20" className="btn-icon" style={{ fill: 'none' }} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
-              <path d="M10 2.6 16.4 6.3 V13.7 L10 17.4 3.6 13.7 V6.3 Z" />
-              <path d="M6.3 13.4 13.7 6.4" />
-            </svg>
-          </button>
-          <button type="button" aria-label="Undo" onClick={() => dispatch({ type: 'undo' })} disabled={!tab.past.length}>←</button>
-          <button type="button" aria-label="Redo" onClick={() => dispatch({ type: 'redo' })} disabled={!tab.future.length}>→</button>
-        </div>
-      </div>
+    <>
       <div className="tool-group">
         <span className="tool-label">Terrain</span>
         <div className="tool-grid terrain-grid">
@@ -116,6 +94,42 @@ export function ToolPalette() {
           })}
         </div>
       </div>
+    </>
+  )
+}
+
+export function ToolPalette() {
+  const { state, dispatch } = useStore()
+  const tab = activeTab(state)
+  return (
+    <section className="panel tools-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Build mode</span>
+          <h2>Board tools</h2>
+        </div>
+        <div className="history-buttons">
+          <button type="button" aria-label="Randomize" onClick={() => dispatch({ type: 'commit', board: randomizeBoard(tab.game.board) })}>
+            <svg viewBox="0 0 20 20" className="btn-icon" aria-hidden="true">
+              <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <circle cx="7" cy="7" r="1.35" />
+              <circle cx="13" cy="7" r="1.35" />
+              <circle cx="10" cy="10" r="1.35" />
+              <circle cx="7" cy="13" r="1.35" />
+              <circle cx="13" cy="13" r="1.35" />
+            </svg>
+          </button>
+          <button type="button" aria-label="Clear all" onClick={() => dispatch({ type: 'commit', board: clearBoard(tab.game.board) })}>
+            <svg viewBox="0 0 20 20" className="btn-icon" style={{ fill: 'none' }} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+              <path d="M10 2.6 16.4 6.3 V13.7 L10 17.4 3.6 13.7 V6.3 Z" />
+              <path d="M6.3 13.4 13.7 6.4" />
+            </svg>
+          </button>
+          <button type="button" aria-label="Undo" onClick={() => dispatch({ type: 'undo' })} disabled={!tab.past.length}>←</button>
+          <button type="button" aria-label="Redo" onClick={() => dispatch({ type: 'redo' })} disabled={!tab.future.length}>→</button>
+        </div>
+      </div>
+      <ToolGroups />
     </section>
   )
 }

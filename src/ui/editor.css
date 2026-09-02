@@ -588,6 +588,17 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .analysis-touch-actions { grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 0; padding: 9px 10px; border-top: 1px solid var(--line); background: rgba(228, 216, 191, .34); }
   .phone-shell .analysis-touch-actions button { min-height: 0; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: #f9f5ea; color: var(--ink); font-size: 12px; font-weight: 700; }
   .phone-shell .analysis-touch-actions .primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+  .phone-block-flush { padding: 0; overflow: hidden; }
+  .phone-block-inner { padding: 14px; }
+  .phone-block-actions { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: rgba(228, 216, 191, .34); }
+  .phone-block-actions button { flex: 1; padding: 11px; border-radius: 10px; font-size: 13px; font-weight: 700; }
+  .phone-shell .tool-group + .tool-group { margin-top: 10px; padding-top: 10px; }
+  .phone-shell .tool-label { font-size: 10px; letter-spacing: .09em; }
+  .phone-shell .tool-grid, .phone-shell .token-tools { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
+  .phone-shell .tool-grid::-webkit-scrollbar, .phone-shell .token-tools::-webkit-scrollbar { height: 0; }
+  .phone-shell .tool-grid button, .phone-shell .token-tools button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; min-height: 0; padding: 7px 6px; border-radius: 11px; font-size: 10px; font-weight: 600; line-height: normal; overflow: visible; }
+  .phone-shell .token-tools button { min-width: 42px; border-radius: 50%; padding: 11px 0; font-size: 15px; font-weight: 700; }
+  .phone-shell .hex-swatch { width: 21px; height: 23px; }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; }
 }
 

@@ -158,10 +158,10 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 8: Build mode with the snapshot Cancel (S6, B1, M11)
 
-- [ ] Extract the three tool groups of `ToolPalette.tsx` into a `ToolGroups` component (same file or `phone/`-neutral location) used by `ToolPalette` (unchanged output) and by the phone build block.
-- [ ] Shell state `mode: 'analyze' | 'build'` with `snapshot: Game | null`. Entering build stores `activeTab(state).game`; the tools block replaces the analysis block in the same slot; terrain, number-token and structure rows scroll sideways (`overflow-x: auto`, the only horizontal scrollers); `Done` and `Cancel` sit in a footer strip on its own tint per the prototype's `.block-actions`. Cancel dispatches `commit-game` with the snapshot when the game changed. Both exit and reset the tool. The exits-as-Done default above applies.
-- [ ] e2e: pencil on, the tools block is visible, the analysis block is not, and the board's top edge is at the same `y` as before; `Randomize board` from the dots, then `Cancel`, brings back `This board is empty` and pencil off; the same with `Done` keeps the tiles (claim row visible) and `Undo` becomes enabled.
-- [ ] Ledger: M11 done.
+- [x] Extract the three tool groups of `ToolPalette.tsx` into a `ToolGroups` component (same file or `phone/`-neutral location) used by `ToolPalette` (unchanged output) and by the phone build block.
+- [x] Shell state `mode: 'analyze' | 'build'` with `snapshot: Game | null`. Entering build stores `activeTab(state).game`; the tools block replaces the analysis block in the same slot; terrain, number-token and structure rows scroll sideways (`overflow-x: auto`, the only horizontal scrollers); `Done` and `Cancel` sit in a footer strip on its own tint per the prototype's `.block-actions`. Cancel dispatches `commit-game` with the snapshot when the game changed. Both exit and reset the tool. The exits-as-Done default above applies.
+- [x] e2e: pencil on, the tools block is visible, the analysis block is not, and the board's top edge is at the same `y` as before; `Randomize board` from the dots, then `Cancel`, brings back `This board is empty` and pencil off; the same with `Done` keeps the tiles (claim row visible) and `Undo` becomes enabled.
+- [x] Ledger: M11 done.
 
 ### Task 9: Maps overlay (S7, O2, O3, M7)
 
