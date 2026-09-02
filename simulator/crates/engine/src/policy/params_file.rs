@@ -1040,6 +1040,154 @@ mod tests {
         parsed.validate().expect("zero is inside the domain");
     }
 
+    /// The term charges for a rise in the top hex's share, so a negative weight pays a pair for
+    /// concentrating its income on one blockable hex, which is the opposite of the direction M-56
+    /// read. Same hard bound, and same reason, as `genericPortFactor`.
+    #[test]
+    fn a_negative_robber_concentration_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["robberConcentrationWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("robberConcentrationWeight >= 0"), "{error}");
+
+        weights["robberConcentrationWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
+    /// The credit pays the hero for what a candidate costs the rivals picking before its second
+    /// settlement, and that cost is already floored at 0, so a negative weight pays the hero to
+    /// hand rivals the sites they want most. Same hard bound as the other placement weights.
+    #[test]
+    fn a_negative_setup_denial_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["setupDenialWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("setupDenialWeight >= 0"), "{error}");
+
+        weights["setupDenialWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
+    /// The term is `expansionWeight * top-two of the sites a candidate opens`, so a negative
+    /// weight pays a boxed-in candidate, which scores 0, more than an open one. Same hard bound,
+    /// and same reason, as `genericPortFactor`.
+    #[test]
+    fn a_negative_expansion_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["expansionWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("expansionWeight >= 0"), "{error}");
+
+        weights["expansionWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
+    /// The decay is charged once per paid road-build, so above 1 a site three roads out outscores
+    /// the same site next door, and below 0 the term's sign alternates with distance. Both ends
+    /// are closed, unlike the one-sided bounds the weights carry, so both ends are checked.
+    #[test]
+    fn an_expansion_decay_outside_the_unit_interval_fails_placement_validation() {
+        let committed: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        for outside in [-0.1, 1.1] {
+            let mut weights = committed.clone();
+            weights["expansionDecay"] = Value::from(outside);
+            let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+            let error = parsed.validate().expect_err("hard bound");
+            assert!(error.contains("expansionDecay in [0, 1]"), "{error}");
+        }
+        for inside in [0.0, 0.5, 1.0] {
+            let mut weights = committed.clone();
+            weights["expansionDecay"] = Value::from(inside);
+            let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+            parsed.validate().expect("the closed unit interval is the domain");
+        }
+    }
+
+    /// `slotScales` is keyed by seat count and slot, so a dropped or misspelled key is a silent
+    /// no-op rather than a load error unless the block is checked for exact keys: a file missing
+    /// the four-seat slot 3 entry would score the last pick of every measured run unscaled and
+    /// read as the reference arm. The scales multiply components, so a negative one flips a whole
+    /// term's sign and is outside the range `sweep-bounds.json` declares.
+    #[test]
+    fn a_malformed_slot_scales_block_fails_placement_validation() {
+        let committed: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        let parsed: EngineWeights =
+            serde_json::from_value(committed.clone()).expect("weights shape");
+        parsed.validate().expect("the shipped block is exact");
+
+        let mut missing_slot = committed.clone();
+        missing_slot["slotScales"]["4"]
+            .as_object_mut()
+            .expect("a seat row is an object")
+            .remove("3")
+            .expect("the four-seat block carries slot 3");
+        let parsed: EngineWeights =
+            serde_json::from_value(missing_slot).expect("weights shape");
+        let error = parsed.validate().expect_err("a missing slot is a load error");
+        assert!(error.contains("slotScales.4 carries slots"), "{error}");
+
+        let mut extra_seats = committed.clone();
+        extra_seats["slotScales"]["7"] = committed["slotScales"]["6"].clone();
+        let parsed: EngineWeights = serde_json::from_value(extra_seats).expect("weights shape");
+        let error = parsed
+            .validate()
+            .expect_err("an extra seat count is a load error");
+        assert!(error.contains("slotScales carries seat counts"), "{error}");
+
+        let mut negative = committed.clone();
+        negative["slotScales"]["4"]["2"]["diversity"] = Value::from(-0.5);
+        let parsed: EngineWeights = serde_json::from_value(negative).expect("weights shape");
+        let error = parsed.validate().expect_err("a negative scale is a load error");
+        assert!(
+            error.contains("slotScales.4.2.diversity >= 0 and finite"),
+            "{error}"
+        );
+
+        // The same guard's other half. JSON has no literal for it, so the field is set after the
+        // parse: a non-finite scale multiplies a whole component into NaN, which loses every
+        // comparison in the argmax instead of failing.
+        let mut not_finite: EngineWeights =
+            serde_json::from_value(committed).expect("weights shape");
+        not_finite
+            .slot_scales
+            .get_mut("4")
+            .expect("the four-seat row")
+            .get_mut("2")
+            .expect("slot 2")
+            .expansion = f64::NAN;
+        let error = not_finite
+            .validate()
+            .expect_err("a non-finite scale is a load error");
+        assert!(
+            error.contains("slotScales.4.2.expansion >= 0 and finite"),
+            "{error}"
+        );
+    }
+
     /// `robber_choice`'s joint argmax only agrees with the two-stage search it replaced where the
     /// steal term cannot go negative, and both of these scale it.
     #[test]
@@ -1134,6 +1282,276 @@ mod tests {
         assert_eq!(found, expected, "the SP2 phase commits one arm per term");
     }
 
+    /// The SP3 arms, as arm file stem and the weights keys that arm moves off the live defaults.
+    /// A table of overrides rather than SP2's single key, because the phase's conditional decay
+    /// arms would have moved two axes at once: the surviving `expansionWeight` and
+    /// `expansionDecay`. M-54 read no survivor, so they never existed, and the phase's third arm
+    /// is on the unrelated concentration axis M-56 opened.
+    const SP3_ARMS: [(&str, &[(&str, f64)]); 3] = [
+        ("sp3_expansion_lo", &[("expansionWeight", 0.1)]),
+        ("sp3_expansion_hi", &[("expansionWeight", 0.3)]),
+        ("sp3_concentration", &[("robberConcentrationWeight", 4.0)]),
+    ];
+
+    /// Walks the committed SP3 arms (`placement/arms/sp3*.json`) as the SP2 walk above walks its
+    /// own: each is the live `default-weights.json` with only its declared keys moved, each moved
+    /// value differs from the shipped one and sits inside that axis's committed sweep-bounds
+    /// range, and no `sp3*` file nobody preregistered is sitting in the directory waiting to join
+    /// a run. Without this an edit that also moved `diversityWeight` would run and be recorded as
+    /// an isolated expansion A/B.
+    #[test]
+    fn the_sp3_arm_files_are_the_committed_expansion_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (stem, overrides) in SP3_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let mut perturbed = base.clone();
+            for (key, value) in overrides {
+                let range = &bounds["placement"][key];
+                assert!(
+                    *value >= range["min"].as_f64().expect("min")
+                        && *value <= range["max"].as_f64().expect("max"),
+                    "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+                );
+                assert_ne!(
+                    base[key].as_f64(),
+                    Some(*value),
+                    "{name}: {key} at {value} is the shipped value, so the arm perturbs nothing"
+                );
+                perturbed[key] = Value::from(*value);
+            }
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp3") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP3 phase commits one arm per preregistered value"
+        );
+    }
+
+    /// The SP4 arms, as arm file stem and the four-seat `slotScales` leaves that arm moves off
+    /// the live defaults: slot key, component, scale. Only the four-seat row is measured, so an
+    /// arm that touched the 3, 5 or 6 seat rows would be scaling entries no run of this phase
+    /// exercises. Only the `diversity` component appears: `expansionWeight` ships at 0 and M-54
+    /// read no survivor, so an `expansion` scale multiplies a term that is exactly 0.
+    const SP4_ARMS: [(&str, &[(&str, &str, f64)]); 2] = [
+        (
+            "sp4_div_rise",
+            &[
+                ("0", "diversity", 0.5),
+                ("1", "diversity", 0.8),
+                ("2", "diversity", 1.25),
+                ("3", "diversity", 2.0),
+            ],
+        ),
+        (
+            "sp4_div_fall",
+            &[
+                ("0", "diversity", 2.0),
+                ("1", "diversity", 1.25),
+                ("2", "diversity", 0.8),
+                ("3", "diversity", 0.5),
+            ],
+        ),
+    ];
+
+    /// Walks the committed SP4 arms (`placement/arms/sp4*.json`) as the SP2 and SP3 walks walk
+    /// theirs. An SP4 arm is a whole profile rather than a single perturbation, so the pin is on
+    /// the shape of the profile: every leaf it moves is a four-seat `slotScales` leaf, each moved
+    /// value sits inside that leaf's committed sweep-bounds range and differs from the shipped
+    /// 1.0, and nothing else in the file moves. Without this an arm that also nudged
+    /// `diversityWeight` would run and be recorded as an isolated slot-profile A/B, which is the
+    /// one thing the profile contrast cannot survive: a global weight change and a slot-keyed
+    /// scale change are indistinguishable in the pooled estimate.
+    #[test]
+    fn the_sp4_arm_files_are_the_committed_slot_profiles() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (stem, overrides) in SP4_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let mut perturbed = base.clone();
+            for (slot, component, value) in overrides {
+                let range = &bounds["placement"]["slotScales"]["4"][slot][component];
+                assert!(
+                    *value >= range["min"].as_f64().expect("min")
+                        && *value <= range["max"].as_f64().expect("max"),
+                    "{name}: slotScales.4.{slot}.{component} at {value} must sit inside its committed sweep-bounds range"
+                );
+                assert_eq!(
+                    base["slotScales"]["4"][slot][component].as_f64(),
+                    Some(1.0),
+                    "the block ships at 1.0 everywhere, which is what makes the arm a profile"
+                );
+                perturbed["slotScales"]["4"][slot][component] = Value::from(*value);
+            }
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp4") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP4 phase commits one arm per preregistered profile"
+        );
+    }
+
+    /// The two SP5 denial arms, as weights key, arm file stem and the value the arm carries. Both
+    /// move the one key, at two values, because the phase asks how much of a term to price rather
+    /// than which term to add: `sp5_denial_lo` is the ordinary optional-term value and
+    /// `sp5_denial_hi` carries the preregistered null.
+    const SP5_ARMS: [(&str, &str, f64); 2] = [
+        ("setupDenialWeight", "sp5_denial_lo", 0.25),
+        ("setupDenialWeight", "sp5_denial_hi", 1.0),
+    ];
+
+    /// Walks the committed SP5 arms (`placement/arms/sp5*.json`) as the SP2, SP3 and SP4 walks
+    /// walk theirs: each is the live `default-weights.json` with only `setupDenialWeight` raised,
+    /// that value sits inside the axis's committed sweep-bounds range, and no `sp5*` file nobody
+    /// preregistered is sitting in the directory waiting to join a run.
+    ///
+    /// The file is the hero half of an SP5 arm and nothing more. `setupDenialWeight` is read by
+    /// `placement/draft.rs` alone, through the hero path of an `app_formula_draft:<hero>@<opponent>`
+    /// spec, and every arm in this phase pins the opponent path to `default-weights.json`, so the
+    /// weight a rival's loss is priced at never moves. Nothing in a JSON file can pin that half of
+    /// the contrast; the preregistration and the committed command are where it lives.
+    #[test]
+    fn the_sp5_arm_files_are_the_committed_denial_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (key, stem, value) in SP5_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let range = &bounds["placement"][key];
+            assert!(
+                value >= range["min"].as_f64().expect("min")
+                    && value <= range["max"].as_f64().expect("max"),
+                "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+            );
+            assert_eq!(
+                base[key].as_f64(),
+                Some(0.0),
+                "{key} ships at 0, which is what makes the arm a single-term perturbation"
+            );
+
+            let mut perturbed = base.clone();
+            perturbed[key] = Value::from(value);
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {key} at {value} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp5") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP5 phase commits one arm per preregistered value"
+        );
+    }
+
     /// Walks every committed weights-shaped file (the two shipped vectors plus the
     /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
@@ -1178,8 +1596,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 51,
-            "the committed weights arms are 51 files; a change to the set is a decision"
+            weights_arms, 58,
+            "the committed weights arms are 58 files; a change to the set is a decision"
         );
     }
 

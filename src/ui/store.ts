@@ -54,12 +54,18 @@ export type Tool =
  * number). Drives the coloured, numbered circles the AnalysisPanel draws. A
  * faded mark is a pick that sits back from the others: a planned follow-up, or
  * a lower rank shown alongside the top three.
+ *
+ * `kind: 'road'` names a direction rather than a place, and it exists because a
+ * road and a port are both keyed by the edge they sit on: without it the canvas
+ * cannot tell a recommended road from a port an import issue is pointing at, and
+ * would draw a road stub over the port and light the port up under the road.
  */
 export interface HighlightMark {
   ref: string
   color?: string
   label?: string
   faded?: boolean
+  kind?: 'road'
 }
 
 export interface TabState {

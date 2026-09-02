@@ -27,13 +27,99 @@
     "portCoverageDeficitWeight": { "min": 0.0, "max": 4.0 },
     "nearPortRadius": { "min": 1.0, "max": 3.0 },
     "nearPortDecay": { "min": 0.125, "max": 1.0 },
+    "expansionWeight": { "min": 0.0, "max": 1.2 },
+    "expansionDecay": { "min": 0.125, "max": 1.0 },
     "robberDiscount": { "min": 0.0, "max": 1.0 },
+    "robberConcentrationWeight": { "min": 0.0, "max": 16.0 },
+    "setupDenialWeight": { "min": 0.0, "max": 4.0 },
     "opponentTopK": { "min": 3.0, "max": 3.0 },
     "softmaxTemperature": { "min": 1.25, "max": 1.25 },
     "rolloutBudget": { "min": 500000.0, "max": 500000.0 },
     "rolloutsMin": { "min": 4.0, "max": 4.0 },
     "rolloutsMax": { "min": 24.0, "max": 24.0 },
-    "maxResults": { "min": 8.0, "max": 8.0 }
+    "maxResults": { "min": 8.0, "max": 8.0 },
+    "slotScales": {
+      "3": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      },
+      "4": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "3": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      },
+      "5": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "3": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "4": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      },
+      "6": {
+        "0": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "1": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "2": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "3": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "4": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        },
+        "5": {
+          "expansion": { "min": 0.25, "max": 4.0 },
+          "diversity": { "min": 0.25, "max": 4.0 }
+        }
+      }
+    }
   },
   "policy": {
     "productionWeight": { "min": 0.25, "max": 4.0 },

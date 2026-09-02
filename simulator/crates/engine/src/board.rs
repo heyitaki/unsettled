@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::placement::app_formula::AppFormulaScorer;
+use crate::placement::draft::DraftScorers;
 use crate::rules::{RESOURCE_COUNT, Resource, RuleConfig};
 use crate::state::MAX_VERTICES;
 use crate::topology::{Edge, Hex, Layout, Topology, Vertex};
@@ -64,6 +65,9 @@ pub struct SimBoard {
     /// asks "is this port on one of my edges" for every port at every vertex it weighs.
     port_vertices: Vec<u128>,
     app_formula_scorers: Vec<(u8, AppFormulaScorer)>,
+    /// One hero-and-opponent pair per registered draft arm, kept apart from the single-formula
+    /// scorers above because the two registries index independently.
+    draft_scorers: Vec<(u8, DraftScorers)>,
 }
 
 impl SimBoard {
@@ -206,6 +210,7 @@ impl SimBoard {
             resource_pips,
             port_vertices,
             app_formula_scorers: Vec::new(),
+            draft_scorers: Vec::new(),
         })
     }
 
@@ -277,6 +282,30 @@ impl SimBoard {
         if self.app_formula_scorer(index).is_none() {
             self.app_formula_scorers
                 .push((index, AppFormulaScorer::new(self, topology, weights)));
+        }
+    }
+
+    pub(crate) fn draft_scorer(&self, index: u8) -> Option<&DraftScorers> {
+        self.draft_scorers
+            .iter()
+            .find_map(|(candidate, scorers)| (*candidate == index).then_some(scorers))
+    }
+
+    pub(crate) fn prepare_app_formula_draft(
+        &mut self,
+        index: u8,
+        topology: &Topology,
+        hero: crate::placement::app_formula::EngineWeights,
+        opponent: crate::placement::app_formula::EngineWeights,
+    ) {
+        if self.draft_scorer(index).is_none() {
+            self.draft_scorers.push((
+                index,
+                DraftScorers {
+                    hero: AppFormulaScorer::new(self, topology, hero),
+                    opponent: AppFormulaScorer::new(self, topology, opponent),
+                },
+            ));
         }
     }
 }

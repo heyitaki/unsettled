@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import endgame from '../../parser/__tests__/expected/board-endgame-pieces.json'
 import { createBoard, pips, setTile, vertexProduction } from '../../model/board'
-import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../../model/coords'
+import {
+  axialKey,
+  edgeEndpointVertexIds,
+  vertexAdjacentVertexIds,
+  vertexTouchingHexes,
+} from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../../model/types'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
@@ -10,15 +16,17 @@ import {
   computeBoardContext,
   coverageValues,
   emptyHoldings,
+  emptyOccupancy,
   marginalTotal,
   marginalBreakdown,
+  occupancyFromBoard,
   scoreCandidate,
   type BoardContext,
   type Holdings,
   type PortAccess,
   type VertexStats,
 } from '../valuation'
-import { DEFAULT_WEIGHTS, type EngineWeights } from '../weights'
+import { DEFAULT_WEIGHTS, neutralSlotScales, type EngineWeights } from '../weights'
 
 const vertices = boardGrid('standard4').vertexIds
 const edgeIds = boardGrid('standard4').coastalEdgeIds
@@ -33,6 +41,9 @@ function context(
   weights: EngineWeights = DEFAULT_WEIGHTS,
   scarcity: Partial<Record<Resource, number>> = {},
   robbed: ReadonlyMap<VertexId, Partial<Record<Resource, number>>> = new Map(),
+  // Hand-set hex pips, for the concentration term: a hex key shared between two entries is the
+  // same hex, exactly as `computeBoardContext` keys them.
+  hexes: ReadonlyMap<VertexId, ReadonlyMap<string, number>> = new Map(),
 ): BoardContext {
   const stats = new Map<VertexId, VertexStats>()
   for (const [vertexId, pips, ports = []] of entries) {
@@ -42,6 +53,7 @@ function context(
       tokenPips: {},
       ports: ports.map(toAccess),
       setupGrant: {},
+      hexPips: hexes.get(vertexId) ?? new Map(),
     })
   }
   const boardScarcity = {
@@ -52,6 +64,7 @@ function context(
     ore: scarcity.ore ?? 1,
   }
   return {
+    layout: 'standard4',
     stats,
     scarcity: boardScarcity,
     coverageValue: coverageValues(weights, boardScarcity),
@@ -479,6 +492,52 @@ describe('placement valuation', () => {
     expect({ ...discounted, robber: 0 }).toEqual({ ...ignored, robber: 0 })
   })
 
+  // The holding leans on one 5-pip hex out of 6 pips, a share of 5/6. The candidate brings a
+  // 4-pip hex and the holding's own 1-pip hex back again, so the pair's distinct hexes are
+  // 5 + 1 + 4 = 10 pips with 5 on the top one: a share of 1/2. The candidate spreads the pair out,
+  // so the delta is 1/2 - 5/6 = -1/3 and the term pays 3 * 1/3 = 1. Double-counting the shared hex
+  // would make the union 11 pips and pay 1.136 instead, so the number discriminates.
+  const concentrationHexes = new Map([
+    [vertices[0], new Map([['hex-a', 5], ['hex-b', 1]])],
+    [vertices[1], new Map([['hex-b', 1], ['hex-c', 4]])],
+  ])
+
+  it('charges the robber component for the move in the top hex share', () => {
+    const weights = { ...DEFAULT_WEIGHTS, robberConcentrationWeight: 3 }
+    const ctx = context(
+      [[vertices[0], { wood: 6 }], [vertices[1], { brick: 5 }]],
+      weights,
+      {},
+      new Map(),
+      concentrationHexes,
+    )
+    const holding = addToHoldings(ctx, emptyHoldings(), vertices[0])
+    expect(marginalBreakdown(ctx, holding, vertices[1]).robber).toBeCloseTo(1, 12)
+
+    // The first pick has no holding to concentrate, so its own share is the whole of the move.
+    const first = marginalBreakdown(ctx, emptyHoldings(), vertices[0]).robber
+    expect(first).toBeCloseTo(-3 * (5 / 6), 12)
+  })
+
+  it('takes no share at all at a robberConcentrationWeight of 0', () => {
+    const entries: [VertexId, Partial<Record<Resource, number>>][] = [
+      [vertices[0], { wood: 6 }],
+      [vertices[1], { brick: 5 }],
+    ]
+    const robbed = new Map([[vertices[1], { brick: 2 }]])
+    const withHexes = context(entries, DEFAULT_WEIGHTS, {}, robbed, concentrationHexes)
+    const withoutHexes = context(entries, DEFAULT_WEIGHTS, {}, robbed)
+    const holding = addToHoldings(withHexes, emptyHoldings(), vertices[0])
+    const bare = addToHoldings(withoutHexes, emptyHoldings(), vertices[0])
+    expect(DEFAULT_WEIGHTS.robberConcentrationWeight).toBe(0)
+    expect(marginalBreakdown(withHexes, holding, vertices[1]).robber)
+      .toBe(-2 * DEFAULT_WEIGHTS.robberDiscount)
+    expect(marginalBreakdown(withHexes, holding, vertices[1]))
+      .toEqual(marginalBreakdown(withoutHexes, bare, vertices[1]))
+    expect(marginalTotal(withHexes, holding, vertices[1]))
+      .toBe(marginalTotal(withoutHexes, bare, vertices[1]))
+  })
+
   it('keeps the neutral modifier identity and lets a modifier boost brick spots', () => {
     const brick = vertices[0]
     const wood = vertices[1]
@@ -563,5 +622,150 @@ describe('placement valuation', () => {
     ])
     expect(pairScore(ctx, vertices[2], vertices[3]) - pairScore(ctx, vertices[0], vertices[1]))
       .toBeGreaterThanOrEqual(1.5)
+  })
+})
+
+describe('occupancy', () => {
+  const board = endgame as Board
+
+  it('records the buildings and roads a board carries', () => {
+    const occupancy = occupancyFromBoard(board)
+    expect(occupancy.blocked.size).toBe(board.buildings.length)
+    for (const building of board.buildings) {
+      expect(occupancy.blocked.has(building.vertexId)).toBe(true)
+    }
+    expect(occupancy.edgeOwner.size).toBe(board.roads.length)
+    for (const road of board.roads) {
+      expect(occupancy.edgeOwner.get(road.edgeId)).toBe(road.playerId)
+    }
+    // The vertices a building bars under the distance rule are not in the set: a walk has to be
+    // able to tell a settlement apart from its neighbour.
+    const neighbours = board.buildings.flatMap((building) =>
+      vertexAdjacentVertexIds(building.vertexId))
+    const occupied = new Set(board.buildings.map((building) => building.vertexId))
+    expect(neighbours.some((vertexId) => occupancy.blocked.has(vertexId) &&
+      !occupied.has(vertexId))).toBe(false)
+  })
+
+  it('empties to a shared value and memoizes its pieces per board', () => {
+    expect(emptyOccupancy().blocked.size).toBe(0)
+    expect(emptyOccupancy().edgeOwner.size).toBe(0)
+    expect(emptyOccupancy().seat).toBeNull()
+    expect(emptyOccupancy()).toBe(emptyOccupancy())
+    // The seat rides on the wrapper, so two callers naming different seats share one board's
+    // collections rather than rebuilding them.
+    expect(occupancyFromBoard(board).blocked).toBe(occupancyFromBoard(board, 'p1').blocked)
+    expect(occupancyFromBoard(board).edgeOwner).toBe(occupancyFromBoard(board, 'p1').edgeOwner)
+    expect(occupancyFromBoard(board).seat).toBeNull()
+    expect(occupancyFromBoard(board, 'p1').seat).toBe('p1')
+    expect(occupancyFromBoard({ ...board }).blocked).not.toBe(occupancyFromBoard(board).blocked)
+  })
+
+  // At the shipped `expansionWeight` of 0 no component reads occupancy, so a full one has to score
+  // bit-for-bit what an empty one scores. Bits, not toBeCloseTo: the claim is that the argument is
+  // inert.
+  it('leaves every score untouched at every scoring entry', () => {
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const occupancy = occupancyFromBoard(board)
+    const grid = boardGrid(board.layout)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const vertexId of grid.vertexIds) {
+      const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
+      expect(marginalBreakdown(ctx, holding, vertexId, hand, occupancy))
+        .toEqual(marginalBreakdown(ctx, holding, vertexId, hand))
+      expect(marginalTotal(ctx, holding, vertexId, hand, occupancy))
+        .toBe(marginalTotal(ctx, holding, vertexId, hand))
+      expect(scoreCandidate(
+        ctx,
+        holding,
+        vertexId,
+        'p1',
+        board,
+        neutralModifier,
+        hand,
+        occupancy,
+      )).toEqual(scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand))
+    }
+  })
+})
+
+describe('slot scales', () => {
+  const board = endgame as Board
+  const grid = boardGrid(board.layout)
+  // A four-seat slot 2 entry, off 1 in both directions, so a component that took the wrong one is
+  // not merely off by a sign.
+  const slot = { seats: 4, slot: 2 }
+  const scaled: EngineWeights = {
+    ...DEFAULT_WEIGHTS,
+    // Nonzero, or the expansion scale would multiply a term that is 0 whatever it is told.
+    expansionWeight: 0.3,
+    slotScales: {
+      ...neutralSlotScales(),
+      '4': { ...neutralSlotScales()['4'], '2': { expansion: 2, diversity: 0.5 } },
+    },
+  }
+  const witness: EngineWeights = { ...scaled, slotScales: neutralSlotScales() }
+
+  it('multiplies exactly the diversity and expansion components', () => {
+    const ctx = computeBoardContext(board, scaled)
+    const plainCtx = computeBoardContext(board, witness)
+    const occupancy = occupancyFromBoard(board, board.players[2].id)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    let moved = 0
+    for (const vertexId of grid.vertexIds) {
+      const plain = marginalBreakdown(plainCtx, holding, vertexId, null, occupancy)
+      const actual = marginalBreakdown(ctx, holding, vertexId, null, occupancy, slot)
+      expect(actual).toEqual({
+        ...plain,
+        diversity: plain.diversity * 0.5,
+        expansion: plain.expansion * 2,
+      })
+      // The fused total scales the same products the breakdown does, so the two entries cannot
+      // disagree about what a scaled slot is worth.
+      expect(marginalTotal(ctx, holding, vertexId, null, occupancy, slot))
+        .toBe(breakdownTotal(actual))
+      if (plain.expansion !== 0) moved += 1
+    }
+    expect(moved).toBeGreaterThan(0)
+  })
+
+  it('scores a 1.0 block bit-for-bit as an unnamed slot does', () => {
+    const ctx = computeBoardContext(board, witness)
+    const occupancy = occupancyFromBoard(board, board.players[2].id)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const vertexId of grid.vertexIds) {
+      const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
+      expect(marginalBreakdown(ctx, holding, vertexId, hand, occupancy, slot))
+        .toEqual(marginalBreakdown(ctx, holding, vertexId, hand, occupancy))
+      expect(marginalTotal(ctx, holding, vertexId, hand, occupancy, slot))
+        .toBe(marginalTotal(ctx, holding, vertexId, hand, occupancy))
+      expect(scoreCandidate(
+        ctx,
+        holding,
+        vertexId,
+        'p1',
+        board,
+        neutralModifier,
+        hand,
+        occupancy,
+        slot,
+      )).toEqual(
+        scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand, occupancy),
+      )
+    }
+  })
+
+  // A seat count the block carries no row for, and a slot past the row's last, both score
+  // unscaled: the app ranks two-player and solo boards the simulator never drafts.
+  it('leaves a slot the block does not name unscaled', () => {
+    const ctx = computeBoardContext(board, scaled)
+    const occupancy = occupancyFromBoard(board, board.players[2].id)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const absent of [{ seats: 2, slot: 0 }, { seats: 4, slot: 9 }]) {
+      for (const vertexId of grid.vertexIds) {
+        expect(marginalBreakdown(ctx, holding, vertexId, null, occupancy, absent))
+          .toEqual(marginalBreakdown(ctx, holding, vertexId, null, occupancy))
+      }
+    }
   })
 })

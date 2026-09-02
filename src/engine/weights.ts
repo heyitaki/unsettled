@@ -1,5 +1,33 @@
 import type { Resource } from '../model/types'
 
+/** How much a draft slot leans on the two position-sensitive components. */
+export interface SlotScale {
+  expansion: number
+  diversity: number
+}
+
+/**
+ * Seat count (`"3"` to `"6"`) to draft slot (`"0"` to seats minus one) to that slot's scales.
+ * Exact keys: a missing or extra seat count, or a missing or extra slot, is a load error.
+ */
+export type SlotScales = Record<string, Record<string, SlotScale>>
+
+/** Seat counts the block carries an entry for. Outside this range every scale is 1. */
+export const SLOT_SCALE_SEATS = [3, 4, 5, 6] as const
+
+/** The shipped block: every entry 1, so no slot is scaled and the formula is what it was. */
+export function neutralSlotScales(): SlotScales {
+  const scales: SlotScales = {}
+  for (const seats of SLOT_SCALE_SEATS) {
+    const bySlot: Record<string, SlotScale> = {}
+    for (let slot = 0; slot < seats; slot += 1) {
+      bySlot[String(slot)] = { expansion: 1, diversity: 1 }
+    }
+    scales[String(seats)] = bySlot
+  }
+  return scales
+}
+
 export interface EngineWeights {
   // Intrinsic worth of a pip by resource, normalized so the five average ~1.0.
   // Wheat/ore dominate win paths; sheep is least-consumed. See MEMORY roadmap.
@@ -43,13 +71,39 @@ export interface EngineWeights {
   // a hex; reach decays per road so on-port access still ranks highest.
   nearPortRadius: number
   nearPortDecay: number
+  // What the best sites a candidate *opens* are worth to it. A pair that is
+  // boxed in by rivals converts its pips into nothing, and every other
+  // component prices only the two vertices themselves. Ships at 0 until an A/B
+  // prices it, where the walk is skipped and the term is exactly 0.
+  expansionWeight: number
+  // Per paid road-build discount on a site's value. The first road is the free
+  // setup one, so a site two builds out is worth `decay ** 2` of its score. At
+  // 1 distance stops mattering; inert while expansionWeight is 0.
+  expansionDecay: number
   robberDiscount: number
+  // How much piling pips onto one hex costs. `robberDiscount` prices only the
+  // hex the robber sits on today; this prices the standing exposure of a pair
+  // whose income is concentrated on a single blockable hex, measured as the
+  // move in that hex's share of the pair's pips. Ships at 0, where the share is
+  // never computed and the robber component is exactly what it was.
+  robberConcentrationWeight: number
+  // What taking a settlement away from the rivals who pick before your second
+  // one is worth. Read only by the simulator's draft-aware setup kind, which
+  // knows the pick order and can score a rival's board twice; the app's
+  // analysis samples opponent rollouts instead and does not read this field,
+  // the mirror image of the search-control fields below that the simulator
+  // ignores. Ships at 0, where the draft kind forms no credit at all.
+  setupDenialWeight: number
   opponentTopK: number
   softmaxTemperature: number
   rolloutBudget: number
   rolloutsMin: number
   rolloutsMax: number
   maxResults: number
+  // Per-draft-slot multipliers on the two components a pick's position in the snake draft moves:
+  // what is left to complement (diversity) and what is left to open (expansion). Ships at 1
+  // everywhere, where every product is the unscaled component.
+  slotScales: SlotScales
 }
 
 export const DEFAULT_WEIGHTS: EngineWeights = {
@@ -80,11 +134,16 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   portCoverageDeficitWeight: 0,
   nearPortRadius: 2,
   nearPortDecay: 0.5,
+  expansionWeight: 0,
+  expansionDecay: 0.5,
   robberDiscount: 0.35,
+  robberConcentrationWeight: 0,
+  setupDenialWeight: 0,
   opponentTopK: 3,
   softmaxTemperature: 1.25,
   rolloutBudget: 500_000,
   rolloutsMin: 4,
   rolloutsMax: 24,
   maxResults: 8,
+  slotScales: neutralSlotScales(),
 }

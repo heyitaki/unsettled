@@ -26,11 +26,97 @@
   "portCoverageDeficitWeight": 0,
   "nearPortRadius": 3.0,
   "nearPortDecay": 0.5,
+  "expansionWeight": 0,
+  "expansionDecay": 0.5,
   "robberDiscount": 0.35,
+  "robberConcentrationWeight": 0,
+  "setupDenialWeight": 0,
   "opponentTopK": 3,
   "softmaxTemperature": 1.25,
   "rolloutBudget": 500000,
   "rolloutsMin": 4,
   "rolloutsMax": 24,
-  "maxResults": 8
+  "maxResults": 8,
+  "slotScales": {
+    "3": {
+      "0": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "1": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "2": {
+        "expansion": 1,
+        "diversity": 1
+      }
+    },
+    "4": {
+      "0": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "1": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "2": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "3": {
+        "expansion": 1,
+        "diversity": 1
+      }
+    },
+    "5": {
+      "0": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "1": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "2": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "3": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "4": {
+        "expansion": 1,
+        "diversity": 1
+      }
+    },
+    "6": {
+      "0": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "1": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "2": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "3": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "4": {
+        "expansion": 1,
+        "diversity": 1
+      },
+      "5": {
+        "expansion": 1,
+        "diversity": 1
+      }
+    }
+  }
 }

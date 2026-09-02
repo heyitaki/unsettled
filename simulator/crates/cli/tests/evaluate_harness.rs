@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use unsettled_engine::placement::app_formula::EngineWeights;
-use unsettled_engine::placement::{PlacementKind, register_app_formula};
+use unsettled_engine::placement::{PlacementKind, register_app_formula, register_app_formula_draft};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::topology::Layout;
@@ -245,6 +245,74 @@ fn a_single_arm_reports_a_marginal_without_a_reference_or_verdict() {
     );
     assert!(evaluation.pairs.is_empty());
     assert_eq!(evaluation.illegal_actions, 0);
+}
+
+#[test]
+fn the_per_hero_seat_table_partitions_the_pooled_comparison() {
+    let boards = 3;
+    let reps = 2;
+    let seats = 4;
+    let arms = vec![
+        ("base".to_string(), PlacementKind::MaxPips),
+        ("candidate".to_string(), PlacementKind::PipDiversity),
+    ];
+    let specs = vec!["max_pips".to_string(), "pip_diversity".to_string()];
+    let single = run(
+        Layout::Standard4,
+        seats,
+        "max_pips",
+        PlacementKind::MaxPips,
+        &arms,
+        &specs,
+        Some("base"),
+        boards,
+        reps,
+        1,
+        PolicyKind::HeuristicV1,
+        false,
+    );
+    let all_cores = run(
+        Layout::Standard4,
+        seats,
+        "max_pips",
+        PlacementKind::MaxPips,
+        &arms,
+        &specs,
+        Some("base"),
+        boards,
+        reps,
+        0,
+        PolicyKind::HeuristicV1,
+        false,
+    );
+
+    let pair = &single.pairs[0];
+    assert_eq!(pair.per_hero_seat.len(), seats);
+    assert_eq!(
+        pair.per_hero_seat.iter().map(|seat| seat.n).sum::<usize>(),
+        pair.stats.n
+    );
+    assert_eq!(
+        pair.per_hero_seat
+            .iter()
+            .map(|seat| seat.b + seat.c)
+            .sum::<u64>(),
+        pair.stats.b + pair.stats.c
+    );
+    // Every board contributes `reps` units to each seat, so a seat's slice keeps the
+    // full cluster count and only its cluster size shrinks.
+    assert!(
+        pair.per_hero_seat
+            .iter()
+            .all(|seat| seat.clusters == boards && seat.n == boards * reps)
+    );
+
+    assert_eq!(
+        serde_json::to_vec_pretty(&single).unwrap(),
+        serde_json::to_vec_pretty(&all_cores).unwrap()
+    );
+    assert_eq!(single.illegal_actions, 0);
+    assert_eq!(all_cores.illegal_actions, 0);
 }
 
 #[test]
@@ -525,4 +593,86 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
         })
         .collect::<Vec<_>>();
     assert_ne!(tuning_boards, evaluation_boards);
+}
+
+/// SP3's expansion term and SP5's draft kind, played rather than scored.
+///
+/// Every other placement kind reaches `GameArena::play` through some harness test; these two did
+/// not. `expansionWeight` above 0 sends `choose_app_formula` down its road-rule return instead of
+/// the far-endpoint scoring, which draws differently from the policy RNG, and the draft kind
+/// leaves that stream alone entirely. A draft arm carrying a nonzero expansion weight is also the
+/// only way `ScoreRows` takes its uncached scratch path through a whole replay. Legality and
+/// one-versus-all-threads byte identity are what a played game can say about all of that.
+#[test]
+fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
+    let shipped: EngineWeights =
+        serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
+    assert_eq!(shipped.expansion_weight, 0.0, "the shipped weight is 0");
+    let mut opened = shipped.clone();
+    opened.expansion_weight = 0.3;
+    opened.validate().expect("the witness weight is admissible");
+
+    let expansion =
+        register_app_formula("app_formula:expansion-witness".into(), opened.clone()).unwrap();
+    let draft = register_app_formula_draft(
+        "app_formula_draft:shipped@shipped".into(),
+        shipped.clone(),
+        shipped,
+    )
+    .unwrap();
+    let draft_expansion = register_app_formula_draft(
+        "app_formula_draft:expansion-witness@expansion-witness".into(),
+        opened.clone(),
+        opened,
+    )
+    .unwrap();
+    let arms = vec![
+        ("expansion".to_string(), expansion),
+        ("draft".to_string(), draft),
+        ("draft_expansion".to_string(), draft_expansion),
+    ];
+    let specs = vec![
+        "app_formula:expansion-witness".to_string(),
+        "app_formula_draft:shipped@shipped".to_string(),
+        "app_formula_draft:expansion-witness@expansion-witness".to_string(),
+    ];
+
+    let single = run(
+        Layout::Standard4,
+        4,
+        "app_formula:expansion-witness",
+        expansion,
+        &arms,
+        &specs,
+        Some("draft"),
+        2,
+        1,
+        1,
+        PolicyKind::HeuristicV1,
+        false,
+    );
+    let all_cores = run(
+        Layout::Standard4,
+        4,
+        "app_formula:expansion-witness",
+        expansion,
+        &arms,
+        &specs,
+        Some("draft"),
+        2,
+        1,
+        0,
+        PolicyKind::HeuristicV1,
+        false,
+    );
+
+    assert_eq!(single.illegal_actions, 0);
+    assert_eq!(all_cores.illegal_actions, 0);
+    assert_eq!(
+        serde_json::to_vec_pretty(&single).unwrap(),
+        serde_json::to_vec_pretty(&all_cores).unwrap()
+    );
+    for arm in ["expansion", "draft", "draft_expansion"] {
+        assert!(single.arms[arm].games > 0, "{arm} played no games");
+    }
 }

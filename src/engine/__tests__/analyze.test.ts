@@ -8,7 +8,7 @@ import {
   upsertPort,
   vertexProduction,
 } from '../../model/board'
-import { edgeEndpointVertexIds, hexVertexIds } from '../../model/coords'
+import { edgeEndpointVertexIds, hexVertexIds, vertexIncidentEdgeIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Resource, type VertexId } from '../../model/types'
 import {
@@ -20,16 +20,18 @@ import {
   type PreWindowResult,
 } from '../analyze'
 import { inferDraftState } from '../draft'
+import { expansionTerm } from '../expansion'
 import { legalSettlementVertices } from '../legality'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   computeBoardContext,
   emptyHoldings,
+  occupancyFromBoard,
   scoreCandidate,
   type Holdings,
 } from '../valuation'
-import { DEFAULT_WEIGHTS } from '../weights'
+import { DEFAULT_WEIGHTS, neutralSlotScales } from '../weights'
 
 const resources: readonly Resource[] = RESOURCES
 const tokens = [6, 8, 5, 9, 4, 10, 3, 11, 2, 12] as const
@@ -361,6 +363,55 @@ describe('joint draft analysis', () => {
       .filter((index) => analysis.draft.sequence[index] === 'p3')).toEqual([3])
     expect(analysis.recommendations.length).toBeGreaterThan(0)
     expect(analysis.recommendations.every((entry) => entry.expectedTaken.length === 1)).toBe(true)
+  })
+
+  it('reports the expansion walk road only while the walk is on', () => {
+    const board = filledBoard(3, 4)
+    const shipped = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
+    expect(shipped.recommendations.length).toBeGreaterThan(0)
+    expect(shipped.recommendations.every((entry) => entry.firstRoad === null)).toBe(true)
+
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.3 }
+    const witness = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
+    const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
+    expect(withRoads.length).toBeGreaterThan(0)
+    const ctx = computeBoardContext(board, weights)
+    const occupancy = occupancyFromBoard(board, 'aki')
+    for (const entry of withRoads) {
+      expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
+      expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
+        .toBe(entry.firstRoad)
+    }
+  })
+
+  it('scores each player at its own index in board.players as its draft slot', () => {
+    // Only one slot's diversity is zeroed, so the seat that lands on it is the only one whose
+    // recommendations come back with no diversity at all. That is the whole of the SP4 contract
+    // on the app side: the slot a seat scores from is its position in `board.players`, which is
+    // the order `draft.ts` builds the snake from.
+    const board = filledBoard(3, 4)
+    expect(board.players.map((player) => player.id)).toEqual(['aki', 'p2', 'p3'])
+    const silenced = (slot: number) => {
+      const slotScales = neutralSlotScales()
+      slotScales['3'][String(slot)] = { expansion: 1, diversity: 0 }
+      return { ...DEFAULT_WEIGHTS, slotScales }
+    }
+
+    const diversityOf = (playerId: string, slot: number): number[] =>
+      analyzeBoard(setMe(board, playerId), {
+        rollouts: 1,
+        maxResults: 54,
+        weights: silenced(slot),
+      }).recommendations.map((entry) => entry.breakdown.diversity)
+
+    for (const [index, playerId] of ['aki', 'p2', 'p3'].entries()) {
+      const own = diversityOf(playerId, index)
+      expect(own.length).toBeGreaterThan(0)
+      expect(own.every((value) => value === 0)).toBe(true)
+      // Silencing any other slot leaves this seat's diversity where it was.
+      const other = diversityOf(playerId, (index + 1) % 3)
+      expect(other.some((value) => value !== 0)).toBe(true)
+    }
   })
 
   it('routes a per-player modifier through opponent picks', () => {

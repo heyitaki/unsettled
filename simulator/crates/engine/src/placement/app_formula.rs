@@ -1,8 +1,11 @@
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
+use super::expansion;
 use crate::board::SimBoard;
 use crate::rules::{RESOURCE_COUNT, Resource};
-use crate::topology::{Topology, Vertex};
+use crate::topology::{Edge, Topology, Vertex};
 use crate::view::pips;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -25,6 +28,47 @@ impl ResourceValues {
             Resource::Ore => self.ore,
         }
     }
+}
+
+/// How much a draft slot leans on the two position-sensitive components.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SlotScale {
+    pub expansion: f64,
+    pub diversity: f64,
+}
+
+impl SlotScale {
+    /// The scales an unkeyed score uses: both components pass through untouched.
+    pub const NEUTRAL: Self = Self {
+        expansion: 1.0,
+        diversity: 1.0,
+    };
+}
+
+/// Seat counts `slotScales` carries a row for. A board outside this range is scored unscaled.
+pub const SLOT_SCALE_SEATS: [usize; 4] = [3, 4, 5, 6];
+
+/// Seat count (`"3"` to `"6"`) to draft slot (`"0"` to seats minus one) to that slot's scales.
+///
+/// A `BTreeMap` rather than a `HashMap` so `validate`'s error messages name the same key on every
+/// run: the exact-key check is the only reader, and a nondeterministic one would make a bad
+/// weights file report a different rule each time it was loaded.
+pub type SlotScales = BTreeMap<String, BTreeMap<String, SlotScale>>;
+
+/// The shipped block: every entry 1, so no slot is scaled. Mirrors `weights.ts::neutralSlotScales`.
+pub fn neutral_slot_scales() -> SlotScales {
+    SLOT_SCALE_SEATS
+        .iter()
+        .map(|seats| {
+            (
+                seats.to_string(),
+                (0..*seats)
+                    .map(|slot| (slot.to_string(), SlotScale::NEUTRAL))
+                    .collect(),
+            )
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -51,13 +95,24 @@ pub struct EngineWeights {
     pub port_coverage_deficit_weight: f64,
     pub near_port_radius: f64,
     pub near_port_decay: f64,
+    pub expansion_weight: f64,
+    pub expansion_decay: f64,
     pub robber_discount: f64,
+    pub robber_concentration_weight: f64,
+    /// What taking a settlement away from the rivals who pick before the hero's second one is
+    /// worth. Read only by `placement::draft`, which knows the pick order; `AppFormula` never
+    /// looks at it, the mirror image of the search-control fields below that only the app reads.
+    pub setup_denial_weight: f64,
     pub opponent_top_k: f64,
     pub softmax_temperature: f64,
     pub rollout_budget: f64,
     pub rollouts_min: f64,
     pub rollouts_max: f64,
     pub max_results: f64,
+    /// Per-draft-slot multipliers on the two components a pick's position in the snake draft
+    /// moves: what is left to complement (diversity) and what is left to open (expansion). Ships
+    /// at 1 everywhere, where every product is the unscaled component.
+    pub slot_scales: SlotScales,
 }
 
 impl EngineWeights {
@@ -96,7 +151,14 @@ impl EngineWeights {
             ),
             ("nearPortRadius", self.near_port_radius),
             ("nearPortDecay", self.near_port_decay),
+            ("expansionWeight", self.expansion_weight),
+            ("expansionDecay", self.expansion_decay),
             ("robberDiscount", self.robber_discount),
+            (
+                "robberConcentrationWeight",
+                self.robber_concentration_weight,
+            ),
+            ("setupDenialWeight", self.setup_denial_weight),
             ("opponentTopK", self.opponent_top_k),
             ("softmaxTemperature", self.softmax_temperature),
             ("rolloutBudget", self.rollout_budget),
@@ -119,6 +181,72 @@ impl EngineWeights {
         if self.port_coverage_deficit_weight < 0.0 {
             return Err("weights violate: portCoverageDeficitWeight >= 0".into());
         }
+        // The term is `weight * top-two of the sites the candidate opens`, so a negative weight
+        // pays a candidate for opening nothing: a boxed vertex scores 0 where an open one scores
+        // below it, which inverts what SP3 measures. `sweep-bounds.json` declares 0 to 1.2.
+        if self.expansion_weight < 0.0 {
+            return Err("weights violate: expansionWeight >= 0".into());
+        }
+        // The decay is applied once per paid road-build, so above 1 a site three roads out is
+        // worth more than the same site next door, and below 0 the sign of the term alternates
+        // with distance. Neither is a placement policy anyone would ship, and `sweep-bounds.json`
+        // declares 0.125 to 1.
+        if !(0.0..=1.0).contains(&self.expansion_decay) {
+            return Err("weights violate: expansionDecay in [0, 1]".into());
+        }
+        // The term charges for a rise in the top hex's share, so a negative weight would pay a
+        // pair for concentrating its income on one blockable hex, which is the opposite of what
+        // M-56 read. `sweep-bounds.json` declares 0 to 16.
+        if self.robber_concentration_weight < 0.0 {
+            return Err("weights violate: robberConcentrationWeight >= 0".into());
+        }
+        // The credit pays the hero for what a candidate costs the rivals who pick before its
+        // second settlement, and that cost is floored at 0, so a negative weight would pay the
+        // hero to hand rivals the sites they want most. `sweep-bounds.json` declares 0 to 4.
+        if self.setup_denial_weight < 0.0 {
+            return Err("weights violate: setupDenialWeight >= 0".into());
+        }
+        self.validate_slot_scales()?;
+        Ok(())
+    }
+
+    /// The `slotScales` block's exact-key rule and its domain.
+    ///
+    /// A missing seat count or slot cannot fall back to 1: a file that dropped the four-seat row
+    /// would silently score every measured run unscaled and read as the reference arm. An extra
+    /// key is the same failure seen from the other side, an entry nothing will ever look up. The
+    /// scales multiply components rather than adding to them, so a negative one flips the sign of
+    /// a whole term and is outside the candidate space `sweep-bounds.json` declares (0.25 to 4).
+    fn validate_slot_scales(&self) -> Result<(), String> {
+        let expected: Vec<String> = SLOT_SCALE_SEATS.iter().map(usize::to_string).collect();
+        let found: Vec<String> = self.slot_scales.keys().cloned().collect();
+        if found != expected {
+            return Err(format!(
+                "weights violate: slotScales carries seat counts {expected:?}, found {found:?}"
+            ));
+        }
+        for seats in SLOT_SCALE_SEATS {
+            let row = &self.slot_scales[&seats.to_string()];
+            let expected: Vec<String> = (0..seats).map(|slot| slot.to_string()).collect();
+            let found: Vec<String> = row.keys().cloned().collect();
+            if found != expected {
+                return Err(format!(
+                    "weights violate: slotScales.{seats} carries slots {expected:?}, found {found:?}"
+                ));
+            }
+            for (slot, scale) in row {
+                for (component, value) in [
+                    ("expansion", scale.expansion),
+                    ("diversity", scale.diversity),
+                ] {
+                    if !value.is_finite() || value < 0.0 {
+                        return Err(format!(
+                            "weights violate: slotScales.{seats}.{slot}.{component} >= 0 and finite"
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -127,15 +255,25 @@ impl EngineWeights {
 pub struct ScoreBreakdown {
     pub production: f64,
     pub scarcity: f64,
+    /// The robbed-hex discount, plus the concentration delta. See `concentration_delta`.
     pub robber: f64,
     pub diversity: f64,
     pub port: f64,
     pub hand_value: f64,
+    /// What the sites this vertex opens are worth. See `placement/expansion.rs::term`. Only the
+    /// occupancy-aware entries price it; the holdings-list entries leave it at 0.
+    pub expansion: f64,
 }
 
 impl ScoreBreakdown {
     pub fn total(self) -> f64 {
-        self.production + self.scarcity + self.robber + self.diversity + self.port + self.hand_value
+        self.production
+            + self.scarcity
+            + self.robber
+            + self.diversity
+            + self.port
+            + self.hand_value
+            + self.expansion
     }
 }
 
@@ -147,12 +285,43 @@ pub fn hand_value(weights: &EngineWeights, counts: &[f64; RESOURCE_COUNT]) -> f6
     weights.hand_value_weight * value
 }
 
+/// A vertex sits on at most three edges and three neighbouring vertices, in every layout.
+const VERTEX_FANOUT: usize = 3;
+
 #[derive(Clone, Debug)]
 pub struct AppFormulaScorer {
     weights: EngineWeights,
     scarcity: [f64; RESOURCE_COUNT],
     coverage_value: [f64; RESOURCE_COUNT],
     vertices: Vec<VertexStats>,
+    links: Vec<VertexLinks>,
+    /// Raw pips per hex index, 0 for a hex that produces nothing. The concentration term takes
+    /// its share over these, so a hex two settlements share is read once rather than twice.
+    hex_pips: Vec<f64>,
+    /// This board's row of `slotScales`, resolved once and indexed by slot, so the hot path costs
+    /// an array read rather than two keyed lookups. Empty when the board's seat count is outside
+    /// the block's 3 to 6, which scores every seat unscaled.
+    slot_scales: Vec<SlotScale>,
+}
+
+/// The scorer's own copy of the board graph around one vertex.
+///
+/// The scorer keeps no `Topology` handle after `new`, and SP3's expansion term has to walk
+/// outward from a candidate at score time, so the walk's adjacency is copied once here rather
+/// than threaded through every scoring call. The orders match `Topology`'s, so a walk over this
+/// copy visits vertices and edges in exactly the order a walk over the topology would.
+#[derive(Clone, Copy, Debug)]
+struct VertexLinks {
+    adjacent: [Vertex; VERTEX_FANOUT],
+    adjacent_len: u8,
+    /// `edge_to[slot]` joins the vertex to `adjacent[slot]`, which is `Topology::edge_between`.
+    edge_to: [Edge; VERTEX_FANOUT],
+}
+
+impl VertexLinks {
+    fn adjacent(&self) -> &[Vertex] {
+        &self.adjacent[..usize::from(self.adjacent_len)]
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -162,6 +331,9 @@ struct VertexStats {
     token_pips: [f64; 13],
     has_ports: bool,
     setup_grant: [f64; RESOURCE_COUNT],
+    /// The producing hexes this vertex touches, one bit per hex index. Mirrors
+    /// `valuation.ts::VertexStats.hexPips`, whose map keys do the same de-duplication job.
+    hex_mask: u64,
     precompute: VertexPrecompute,
 }
 
@@ -173,21 +345,26 @@ struct VertexPrecompute {
     setup_grant_value: f64,
 }
 
+/// One player's settled vertices, folded into the quantities the score reads. `pub(super)` for
+/// SP3's expansion walk, which prices every site it finds against the holdings plus the candidate.
 #[derive(Clone, Copy, Debug)]
-struct Holdings {
+pub(super) struct Holdings {
     pips: [f64; RESOURCE_COUNT],
     token_pips: [f64; 13],
     has_ports: bool,
     port_factors: [f64; RESOURCE_COUNT],
+    /// The union of the settlements' `hex_mask`es, so a shared hex is one bit either way.
+    hexes: u64,
 }
 
 impl Holdings {
-    const fn empty() -> Self {
+    pub(super) const fn empty() -> Self {
         Self {
             pips: [0.0; RESOURCE_COUNT],
             token_pips: [0.0; 13],
             has_ports: false,
             port_factors: [0.0; RESOURCE_COUNT],
+            hexes: 0,
         }
     }
 }
@@ -221,6 +398,18 @@ impl AppFormulaScorer {
                 );
         }
         let (has_ports, port_factors) = port_precompute(board, topology, &weights);
+        // One bit per hex in `Holdings::hexes` and `VertexStats::hex_mask`; `extension6` has 30.
+        // The same width `expansion.rs::pair_hexes` asserts on the diagnostics side.
+        debug_assert!(
+            topology.hex_count() <= 64,
+            "the producing-hex bitmask is 64 bits wide"
+        );
+        let mut hex_pips = vec![0.0; topology.hex_count()];
+        for (index, slot) in hex_pips.iter_mut().enumerate() {
+            if let (Some(_), Some(token)) = (board.tiles()[index], board.tokens()[index]) {
+                *slot = f64::from(pips(token));
+            }
+        }
         let mut vertices = Vec::with_capacity(topology.vertex_count());
         for vertex_index in 0..topology.vertex_count() {
             let vertex = vertex_index as Vertex;
@@ -228,6 +417,7 @@ impl AppFormulaScorer {
             let mut robbed_pips = [0.0; RESOURCE_COUNT];
             let mut setup_grant = [0.0; RESOURCE_COUNT];
             let mut token_pips = [0.0; 13];
+            let mut hex_mask = 0_u64;
             for hex in topology.vertex_hexes(vertex) {
                 let index = usize::from(*hex);
                 if let (Some(resource), Some(token)) = (board.tiles()[index], board.tokens()[index])
@@ -237,6 +427,7 @@ impl AppFormulaScorer {
                     token_pips[usize::from(token)] += amount;
                     if amount > 0.0 {
                         setup_grant[resource.index()] += 1.0;
+                        hex_mask |= 1 << index;
                     }
                 }
             }
@@ -261,6 +452,7 @@ impl AppFormulaScorer {
                 token_pips,
                 has_ports: has_ports[vertex_index],
                 setup_grant,
+                hex_mask,
                 precompute: VertexPrecompute {
                     adjusted,
                     base: production + scarcity_value + robber,
@@ -269,14 +461,83 @@ impl AppFormulaScorer {
                 },
             });
         }
+        let mut links = Vec::with_capacity(topology.vertex_count());
+        for vertex_index in 0..topology.vertex_count() {
+            let vertex = vertex_index as Vertex;
+            let adjacent = topology.vertex_adjacent(vertex);
+            let mut entry = VertexLinks {
+                adjacent: [0; VERTEX_FANOUT],
+                adjacent_len: adjacent.len() as u8,
+                edge_to: [0; VERTEX_FANOUT],
+            };
+            for (slot, neighbor) in adjacent.iter().enumerate() {
+                entry.adjacent[slot] = *neighbor;
+                entry.edge_to[slot] = topology
+                    .edge_between(vertex, *neighbor)
+                    .expect("adjacent vertices share an edge");
+            }
+            links.push(entry);
+        }
+        // `game.rs::setup_order` runs `0..seats` and then the reverse, so a seat index *is* its
+        // draft slot in both directions of the snake, which is what lets `score_for_owner` key the
+        // scales off the seat it is already given.
+        let slot_scales = weights
+            .slot_scales
+            .get(&board.seats().to_string())
+            .map(|row| {
+                (0..board.seats())
+                    .map(|slot| {
+                        row.get(&slot.to_string())
+                            .copied()
+                            .unwrap_or(SlotScale::NEUTRAL)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         Self {
             weights,
             scarcity,
             coverage_value,
             vertices,
+            links,
+            hex_pips,
+            slot_scales,
         }
     }
 
+    /// The scales this board's `slotScales` row gives a seat, or 1 everywhere for a seat count the
+    /// block carries no row for and for a seat past the row's last slot.
+    pub fn slot_scale(&self, seat: u8) -> SlotScale {
+        self.slot_scales
+            .get(usize::from(seat))
+            .copied()
+            .unwrap_or(SlotScale::NEUTRAL)
+    }
+
+    /// The scorer's copy of `Topology::vertex_adjacent`.
+    pub fn vertex_adjacent(&self, vertex: Vertex) -> &[Vertex] {
+        self.links[usize::from(vertex)].adjacent()
+    }
+
+    /// Every step out of `vertex`: the edge taken and the vertex it lands on, in adjacency order.
+    /// This and `vertex_adjacent` are the whole of the graph the expansion walk reads, so the
+    /// parity test pins both against the topology the scorer was built from.
+    pub fn steps(&self, vertex: Vertex) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
+        let links = &self.links[usize::from(vertex)];
+        links
+            .adjacent()
+            .iter()
+            .enumerate()
+            .map(move |(slot, neighbor)| (links.edge_to[slot], *neighbor))
+    }
+
+    /// The weights this scorer was built with.
+    pub(super) fn weights(&self) -> &EngineWeights {
+        &self.weights
+    }
+
+    /// The breakdown over a holdings list alone, with no board around it. The expansion component
+    /// is 0 here: pricing it needs the occupancy, which only the `_for_owner` entries carry.
     pub fn breakdown(
         &self,
         holdings: &[Vertex],
@@ -287,6 +548,8 @@ impl AppFormulaScorer {
         self.breakdown_with_holdings(holdings, candidate, receives_grant)
     }
 
+    /// `breakdown`'s total without the breakdown, and without the expansion component for the
+    /// same reason.
     pub fn marginal_total(
         &self,
         holdings: &[Vertex],
@@ -297,23 +560,91 @@ impl AppFormulaScorer {
         self.total_with_holdings(holdings, candidate, receives_grant)
     }
 
-    pub(crate) fn score_for_owner(
+    /// `breakdown` read from the engine's owner arrays rather than a holdings list: `seat`'s own
+    /// buildings are its holdings, every other seat's are the occupancy around them, and
+    /// `edge_owner` carries the roads.
+    ///
+    /// The expansion component is the one that reads that occupancy; every other component is a
+    /// function of the seat's own holdings alone, so at `expansionWeight` 0 and a neutral
+    /// `slotScales` block this agrees bit-for-bit with `breakdown` over the same holdings.
+    ///
+    /// The seat is also the draft slot SP4's scales are keyed by, which is why only the owner
+    /// entries scale: `breakdown` is handed a holdings list with no seat behind it, so it has no
+    /// slot to look one up with and scores unscaled, exactly as the TypeScript entries do when
+    /// their caller names no slot.
+    pub fn breakdown_for_owner(
         &self,
         vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> ScoreBreakdown {
+        let holdings = self.holdings_for_owner(vertex_owner, seat);
+        let scale = self.slot_scale(seat);
+        let mut breakdown = self.breakdown_with_holdings(holdings, candidate, receives_grant);
+        breakdown.diversity *= scale.diversity;
+        breakdown.expansion = scale.expansion
+            * expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value;
+        breakdown
+    }
+
+    /// `marginal_total` read from the owner arrays, which is `breakdown_for_owner`'s total taken
+    /// without building the breakdown. The two share every term, so they cannot disagree.
+    pub fn marginal_total_for_owner(
+        &self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
         seat: u8,
         candidate: Vertex,
         receives_grant: bool,
     ) -> f64 {
-        let holdings = self.build_holdings(
+        let holdings = self.holdings_for_owner(vertex_owner, seat);
+        let scale = self.slot_scale(seat);
+        self.scaled_total_with_holdings(holdings, candidate, receives_grant, scale.diversity)
+            + scale.expansion
+                * expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value
+    }
+
+    /// The setup road SP3's road rule points at: the first edge of the cheapest path to the best
+    /// site the candidate opens, or `None` when it opens nothing or the term is switched off.
+    pub(super) fn expansion_road(
+        &self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+    ) -> Option<Edge> {
+        if self.weights.expansion_weight == 0.0 {
+            return None;
+        }
+        let holdings = self.holdings_for_owner(vertex_owner, seat);
+        expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).road
+    }
+
+    pub(crate) fn score_for_owner(
+        &self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> f64 {
+        self.marginal_total_for_owner(vertex_owner, edge_owner, seat, candidate, receives_grant)
+    }
+
+    /// The seat's own buildings, folded in ascending vertex order, which is the order the
+    /// TypeScript scorer's callers list them in.
+    fn holdings_for_owner(&self, vertex_owner: &[u8], seat: u8) -> Holdings {
+        self.build_holdings(
             vertex_owner
                 .iter()
                 .enumerate()
                 .filter_map(|(vertex, owner)| (*owner == seat).then_some(vertex as Vertex)),
-        );
-        self.total_with_holdings(holdings, candidate, receives_grant)
+        )
     }
 
-    fn add_to_holdings(&self, holdings: &mut Holdings, vertex: Vertex) {
+    pub(super) fn add_to_holdings(&self, holdings: &mut Holdings, vertex: Vertex) {
         let stats = &self.vertices[usize::from(vertex)];
         for resource in Resource::ALL {
             let index = resource.index();
@@ -326,6 +657,7 @@ impl AppFormulaScorer {
             *held += amount;
         }
         holdings.has_ports |= stats.has_ports;
+        holdings.hexes |= stats.hex_mask;
         for resource in Resource::ALL {
             let index = resource.index();
             holdings.port_factors[index] = js_max(
@@ -333,6 +665,44 @@ impl AppFormulaScorer {
                 stats.precompute.port_factors[index],
             );
         }
+    }
+
+    /// The largest single hex's share of all the pips these hexes produce, which is the quantity
+    /// M-56 measured as `blockability`: 1 when every pip comes off one hex, and as low as
+    /// `1 / hexes` when they are spread evenly. 0 for an empty mask, so a pair touching nothing
+    /// is not a special case anywhere. Mirrors `valuation.ts::topHexShare`.
+    fn top_hex_share(&self, hexes: u64) -> f64 {
+        let mut total = 0.0;
+        let mut highest = 0.0;
+        let mut rest = hexes;
+        while rest != 0 {
+            let index = rest.trailing_zeros() as usize;
+            rest &= rest - 1;
+            let amount = self.hex_pips[index];
+            total += amount;
+            if amount > highest {
+                highest = amount;
+            }
+        }
+        if total == 0.0 { 0.0 } else { highest / total }
+    }
+
+    /// What adding this vertex does to the pair's exposure to one blocked hex, as a penalty on the
+    /// robber component. A candidate that piles more pips onto the hex the holding already leans
+    /// on raises the share and is charged for it; one that spreads the pair out lowers it and is
+    /// paid.
+    ///
+    /// The share is over *raw* hex pips, matching the diagnostic this term comes from, so it is a
+    /// property of the board rather than of where the robber happens to sit today, which is what
+    /// `robber_discount` already prices. At weight 0 no share is taken and the delta is exactly 0.
+    /// Mirrors `valuation.ts::concentrationDelta`.
+    fn concentration_delta(&self, holdings: &Holdings, stats: &VertexStats) -> f64 {
+        if self.weights.robber_concentration_weight == 0.0 {
+            return 0.0;
+        }
+        -self.weights.robber_concentration_weight
+            * (self.top_hex_share(holdings.hexes | stats.hex_mask)
+                - self.top_hex_share(holdings.hexes))
     }
 
     fn base_breakdown(&self, stats: &VertexStats) -> (f64, f64, f64) {
@@ -344,6 +714,9 @@ impl AppFormulaScorer {
         )
     }
 
+    /// The unscaled breakdown over a resolved holdings set. Callers holding a seat scale the
+    /// diversity component afterwards; the expansion component is always 0 here, because pricing
+    /// it needs the occupancy.
     fn breakdown_with_holdings(
         &self,
         holdings: Holdings,
@@ -356,7 +729,7 @@ impl AppFormulaScorer {
         ScoreBreakdown {
             production,
             scarcity,
-            robber,
+            robber: robber + self.concentration_delta(&holdings, stats),
             diversity: self.diversity_delta(&holdings, stats, precompute),
             port: self.port_delta(&holdings, stats, precompute),
             hand_value: if receives_grant {
@@ -364,6 +737,7 @@ impl AppFormulaScorer {
             } else {
                 0.0
             },
+            expansion: 0.0,
         }
     }
 
@@ -570,16 +944,35 @@ impl AppFormulaScorer {
                 - port_surplus(weights, ore) * held[Resource::Ore.index()] * ore_pre)
     }
 
-    fn total_with_holdings(
+    /// The formula without its expansion component, which is what SP3's walk prices a site by: a
+    /// site is worth what the rest of the formula says it is worth, and the term can never recurse
+    /// into itself. Mirrors `valuation.ts::marginalWithoutExpansion`.
+    pub(super) fn total_with_holdings(
         &self,
         holdings: Holdings,
         candidate: Vertex,
         receives_grant: bool,
     ) -> f64 {
+        self.scaled_total_with_holdings(holdings, candidate, receives_grant, 1.0)
+    }
+
+    /// `total_with_holdings` with SP4's diversity scale folded in at the one place the component
+    /// enters the sum, so the fused total and the summed breakdown scale the same product rather
+    /// than two differently rounded ones. A scale of 1 multiplies the delta by exactly 1, which
+    /// is the identity on every finite float and on NaN's payload alike, so the shipped block
+    /// leaves this path bit-identical to the unscaled one.
+    fn scaled_total_with_holdings(
+        &self,
+        holdings: Holdings,
+        candidate: Vertex,
+        receives_grant: bool,
+        diversity_scale: f64,
+    ) -> f64 {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
         precompute.base
-            + self.diversity_delta(&holdings, stats, precompute)
+            + self.concentration_delta(&holdings, stats)
+            + diversity_scale * self.diversity_delta(&holdings, stats, precompute)
             + self.port_delta(&holdings, stats, precompute)
             + if receives_grant {
                 precompute.setup_grant_value
@@ -618,7 +1011,7 @@ fn js_clamp(value: f64, min: f64, max: f64) -> f64 {
     js_max(min, js_min(max, value))
 }
 
-fn js_max(left: f64, right: f64) -> f64 {
+pub(super) fn js_max(left: f64, right: f64) -> f64 {
     if left.is_nan() || right.is_nan() {
         f64::NAN
     } else {
@@ -626,7 +1019,7 @@ fn js_max(left: f64, right: f64) -> f64 {
     }
 }
 
-fn js_min(left: f64, right: f64) -> f64 {
+pub(super) fn js_min(left: f64, right: f64) -> f64 {
     if left.is_nan() || right.is_nan() {
         f64::NAN
     } else {

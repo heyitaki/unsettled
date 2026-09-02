@@ -182,6 +182,7 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
                     request.placement,
                     &scratch.trace,
                     &mut scratch.vertex_owner,
+                    &mut scratch.edge_owner,
                     &mut scratch.comparisons,
                 );
                 game_pairs(

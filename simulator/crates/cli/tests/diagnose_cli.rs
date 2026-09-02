@@ -163,6 +163,31 @@ fn diagnostics_are_byte_identical_across_worker_counts() {
     assert_eq!(diagnostics["observations"]["setupPicks"], 96);
     // One completed pair per seat per game, which is the second half of those picks.
     assert_eq!(diagnostics["expansion"]["overall"]["pairs"], 48);
+
+    // The stratified blockability table rides both the overall row and every slot row, and its
+    // strata partition the pairs of the row they sit under.
+    let stratified_pairs = |group: &serde_json::Value| {
+        group["blockabilityByHexCount"]["strata"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|stratum| stratum["pairs"].as_u64().unwrap())
+            .sum::<u64>()
+    };
+    assert_eq!(stratified_pairs(&diagnostics["expansion"]["overall"]), 48);
+    let per_slot = diagnostics["expansion"]["perSlot"].as_array().unwrap();
+    assert_eq!(per_slot.len(), 4);
+    assert_eq!(per_slot.iter().map(stratified_pairs).sum::<u64>(), 48);
+    // Twelve games is far under the counting floor, so nothing is indicated off a run this size.
+    assert_eq!(
+        diagnostics["expansion"]["overall"]["blockabilityByHexCount"]["countedPairs"],
+        0
+    );
+    assert_eq!(
+        diagnostics["expansion"]["overall"]["blockabilityByHexCount"]
+            ["concentrationTermIndicated"],
+        false
+    );
     assert_eq!(diagnostics["illegalActions"], 0);
     assert!(
         diagnostics["config"].get("playerTrading").is_none(),

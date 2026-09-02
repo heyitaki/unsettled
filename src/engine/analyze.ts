@@ -1,6 +1,7 @@
 import { boardGrid } from '../model/layouts'
-import type { Board, VertexId } from '../model/types'
+import type { Board, EdgeId, VertexId } from '../model/types'
 import { draftIsComplete, inferDraftState, type DraftState, type DraftWarning } from './draft'
+import { expansionTerm } from './expansion'
 import {
   blockedVertices,
   blockVertex,
@@ -15,10 +16,13 @@ import {
   computeBoardContext,
   emptyHoldings,
   marginalTotal,
+  occupancyFromBoard,
   scoreCandidate,
   type BoardContext,
+  type DraftSlot,
   type HandCounts,
   type Holdings,
+  type Occupancy,
   type ScoreBreakdown,
 } from './valuation'
 import { DEFAULT_WEIGHTS, type EngineWeights } from './weights'
@@ -40,6 +44,11 @@ export interface TakenVertex {
 export interface Recommendation {
   firstPick: VertexId
   plannedSecond: VertexId[]
+  /**
+   * The setup road SP3's expansion walk would lay from `firstPick`, or null when the walk is off
+   * (`expansionWeight` 0) or the pick opens nothing. See `expansion.ts::expansionTerm`.
+   */
+  firstRoad: EdgeId | null
   survival: number
   score: number
   rankScore: number
@@ -99,6 +108,7 @@ const emptyBreakdown = (): ScoreBreakdown => ({
   diversity: 0,
   port: 0,
   handValue: 0,
+  expansion: 0,
 })
 
 const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
@@ -108,6 +118,7 @@ const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
   target.diversity += value.diversity
   target.port += value.port
   target.handValue += value.handValue
+  target.expansion += value.expansion
 }
 
 const receivesSecondSettlementGrant = (
@@ -156,6 +167,38 @@ const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holding
   return holdings
 }
 
+/**
+ * A rollout's occupancy: the board's roads, since rollouts place none, beside the window's own
+ * blocked set. The set is held by reference, so a vertex blocked mid-window is occupied for every
+ * later scan in that window.
+ *
+ * The blocked set is already closed under the distance rule, where `occupancyFromBoard` records
+ * the buildings alone, so this is the conservative reading of the two: a vertex barred by a
+ * neighbouring settlement looks occupied here, including one barred by the scoring player's own
+ * settlement, which the expansion walk then reads as a rival's dead end. That makes the second
+ * pick's expansion component no larger than the first's, which is scored on the board's pieces
+ * alone. Inert while `expansionWeight` is 0, and something to settle before it moves off 0.
+ */
+const rolloutOccupancy = (
+  board: Board,
+  blocked: ReadonlySet<VertexId>,
+  seat: string | null,
+): Occupancy => ({
+  blocked,
+  edgeOwner: occupancyFromBoard(board).edgeOwner,
+  seat,
+})
+
+/**
+ * The draft slot a player picks from: its index in `board.players`, which is what `draft.ts`
+ * builds the pick order from in both directions of the snake, beside the seat count. Null for a
+ * player the board does not list, which scores unscaled.
+ */
+const draftSlotOf = (board: Board, playerId: string): DraftSlot | null => {
+  const slot = board.players.findIndex((player) => player.id === playerId)
+  return slot < 0 ? null : { seats: board.players.length, slot }
+}
+
 const scoreForScan = (
   ctx: BoardContext,
   board: Board,
@@ -164,8 +207,17 @@ const scoreForScan = (
   playerId: string,
   modifier: PlacementModifier,
   receivesGrant: boolean,
+  occupancy: Occupancy,
+  slot: DraftSlot | null,
 ): number => modifier === neutralModifier
-  ? marginalTotal(ctx, holdings, vertexId, handForCandidate(ctx, vertexId, receivesGrant))
+  ? marginalTotal(
+      ctx,
+      holdings,
+      vertexId,
+      handForCandidate(ctx, vertexId, receivesGrant),
+      occupancy,
+      slot,
+    )
   : scoreCandidate(
       ctx,
       holdings,
@@ -174,6 +226,8 @@ const scoreForScan = (
       board,
       modifier,
       handForCandidate(ctx, vertexId, receivesGrant),
+      occupancy,
+      slot,
     ).total
 
 function bestLegalCandidate(
@@ -187,6 +241,8 @@ function bestLegalCandidate(
 ): VertexId | null {
   let best: VertexId | null = null
   let bestScore = -Infinity
+  const occupancy = rolloutOccupancy(board, blocked, playerId)
+  const slot = draftSlotOf(board, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
     const score = scoreForScan(
@@ -197,6 +253,8 @@ function bestLegalCandidate(
       playerId,
       modifier,
       receivesGrant,
+      occupancy,
+      slot,
     )
     if (score > bestScore) {
       best = vertexId
@@ -219,6 +277,8 @@ function opponentPick(
   const topVertices: VertexId[] = []
   const topScores: number[] = []
   const topK = Math.max(1, ctx.weights.opponentTopK)
+  const occupancy = rolloutOccupancy(board, blocked, playerId)
+  const slot = draftSlotOf(board, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
     const score = scoreForScan(
@@ -229,6 +289,8 @@ function opponentPick(
       playerId,
       modifier,
       receivesGrant,
+      occupancy,
+      slot,
     )
     let index = 0
     while (index < topScores.length && score <= topScores[index]) index += 1
@@ -393,6 +455,11 @@ export function rankCandidates(
   const candidates = legalSettlementVertices(board)
   const myHoldings = holdingsFromBoard(ctx, board).get(me) ?? emptyHoldings()
   const firstReceivesGrant = receivesSecondSettlementGrant(draft, firstPickIndex)
+  // Scored once, before any rollout, so the board's own pieces are the whole occupancy.
+  const boardOccupancy = occupancyFromBoard(board, me)
+  // Both of my picks come off the same slot: the snake reverses the order seats pick in, never
+  // which seat I am.
+  const mySlot = draftSlotOf(board, me)
   const firstScores = new Map(candidates.map((candidate) => [
     candidate,
     scoreCandidate(
@@ -403,6 +470,8 @@ export function rankCandidates(
       board,
       options.modifier,
       handForCandidate(ctx, candidate, firstReceivesGrant),
+      boardOccupancy,
+      mySlot,
     ),
   ]))
   const aggregates = new Map<VertexId, CandidateAggregate>()
@@ -467,6 +536,8 @@ export function rankCandidates(
           second,
           receivesSecondSettlementGrant(draft, secondPickIndex),
         ),
+        rolloutOccupancy(board, blocked, me),
+        mySlot,
       )
       addBreakdown(aggregate.breakdown, secondScore.breakdown)
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
@@ -485,11 +556,14 @@ export function rankCandidates(
       diversity: aggregate.breakdown.diversity / aggregate.survived,
       port: aggregate.breakdown.port / aggregate.survived,
       handValue: aggregate.breakdown.handValue / aggregate.survived,
+      expansion: aggregate.breakdown.expansion / aggregate.survived,
     }
     const survival = aggregate.survived / preWindows.length
     const score = breakdownTotal(breakdown)
     recommendations.push({
       firstPick: candidate,
+      // Filled in below, once the list has been cut to the results the panel shows.
+      firstRoad: null,
       plannedSecond: frequencyOrder(
         aggregate.plannedSecond,
         aggregate.survived,
@@ -509,8 +583,15 @@ export function rankCandidates(
   }
   recommendations.sort((a, b) => b.rankScore - a.rankScore ||
     (gridIndex.get(a.firstPick) ?? 0) - (gridIndex.get(b.firstPick) ?? 0))
+  // The road the expansion walk would lay from each first pick. The scoring above already ran the
+  // walk, but the term reports only its value, so the direction is asked for separately. Asked
+  // after the cut, because the walk is the expensive half of the term and every candidate the
+  // panel will not show is a walk nobody reads.
   return {
-    recommendations: recommendations.slice(0, options.maxResults),
+    recommendations: recommendations.slice(0, options.maxResults).map((recommendation) => ({
+      ...recommendation,
+      firstRoad: expansionTerm(ctx, myHoldings, boardOccupancy, recommendation.firstPick).road,
+    })),
     takenBeforeFirstPick,
   }
 }
@@ -559,6 +640,8 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
     board.players.some((player) => player.id === board.mePlayerId)
   const meDone = draft.myRemainingPickIndices.length === 0
   const me = board.mePlayerId
+  const boardOccupancy = occupancyFromBoard(board, me)
+  const mySlot = me === null ? null : draftSlotOf(board, me)
   const baseHoldings = holdingsFromBoard(ctx, board)
   const myHoldings = me === null ? emptyHoldings() : baseHoldings.get(me) ?? emptyHoldings()
   const canRank = !complete && meValid && !meDone && legal.length > 0 && me !== null
@@ -574,6 +657,8 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
       me,
       modifier,
       pendingReceivesGrant,
+      boardOccupancy,
+      mySlot,
     ) > 0)
   const shouldRank = canRank && hasPositiveScore
   let recommendations: Recommendation[] = []

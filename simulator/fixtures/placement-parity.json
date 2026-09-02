@@ -271,24 +271,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": true,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.25963787878788,
       "breakdownTotal": 15.25963787878788,
@@ -564,24 +652,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.25963787878788,
       "breakdownTotal": 15.25963787878788,
@@ -822,26 +998,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-1,-2;0,-3;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 0.8,
         "scarcity": -0.175,
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 1.92,
       "breakdownTotal": 1.92,
@@ -1080,26 +1344,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-1,-2;0,-3;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 0.75,
         "scarcity": -0.175,
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 1.8699999999999999,
       "breakdownTotal": 1.8699999999999999,
@@ -1338,26 +1690,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-1,-2;0,-3;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 1.35,
         "scarcity": -0.175,
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 2.4699999999999998,
       "breakdownTotal": 2.4699999999999998,
@@ -1596,26 +2036,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-1,-2;0,-3;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 0.8,
         "scarcity": -0.175,
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 1.92,
       "breakdownTotal": 1.92,
@@ -1854,26 +2382,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-1,-2;0,-3;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 1.3,
         "scarcity": -0.175,
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 2.42,
       "breakdownTotal": 2.42,
@@ -2147,24 +2763,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-2;0,-3;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 0.8,
         "scarcity": -0.017499999999999974,
         "robber": 0,
         "diversity": 0.15600000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 0.9385000000000001,
       "breakdownTotal": 0.9385000000000001,
@@ -2437,24 +3141,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,2;-1,3;0,2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 8.05,
         "scarcity": -0.43852941176470567,
         "robber": 0,
         "diversity": 2.5331673694447354,
         "port": 0.18333333333333332,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 10.327971291013364,
       "breakdownTotal": 10.327971291013364,
@@ -2731,24 +3523,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-2;-1,-1;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 4,
         "scarcity": 0.17850000000000021,
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0.09166666666666666,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.983266666666667,
       "breakdownTotal": 5.983266666666667,
@@ -3025,24 +3905,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,2;-1,3;0,2",
       "receivesGrant": true,
+      "slot": null,
       "components": {
         "production": 4.050000000000001,
         "scarcity": -0.05249999999999992,
         "robber": 0,
         "diversity": 1.367887125277521,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.365387125277522,
       "breakdownTotal": 5.365387125277522,
@@ -3318,24 +4286,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.28381818181818136,
         "robber": 0,
         "diversity": 3.455709090909091,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.154110606060607,
       "breakdownTotal": 15.154110606060607,
@@ -3612,24 +4668,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.28381818181818136,
         "robber": 0,
         "diversity": 3.455709090909091,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.154110606060607,
       "breakdownTotal": 15.154110606060607,
@@ -3906,24 +5050,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 8.8,
         "scarcity": -0.848,
         "robber": 0,
         "diversity": 3.7875428571428573,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 11.854126190476192,
       "breakdownTotal": 11.854126190476192,
@@ -4302,24 +5534,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 9.4,
         "scarcity": 0.09104575163398707,
         "robber": 0,
         "diversity": 2.57897535898576,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.070021110619747,
       "breakdownTotal": 12.070021110619747,
@@ -4698,24 +6018,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": true,
+      "slot": null,
       "components": {
         "production": 9.4,
         "scarcity": 0.09104575163398707,
         "robber": 0,
         "diversity": 2.57897535898576,
         "port": 0,
-        "handValue": 1.3600000000000003
+        "handValue": 1.3600000000000003,
+        "expansion": 0
       },
       "marginalTotal": 13.430021110619748,
       "breakdownTotal": 13.430021110619748,
@@ -4951,24 +6359,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": "Infinity",
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;0,-2;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 10.5,
         "scarcity": 0.24213636363636387,
         "robber": 0,
         "diversity": 3.8309181818181823,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 14.573054545454546,
       "breakdownTotal": 14.573054545454546,
@@ -5204,24 +6700,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": "Infinity",
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;0,-2;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 10.5,
         "scarcity": 0.24213636363636387,
         "robber": 0,
         "diversity": 3.8309181818181823,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 14.573054545454546,
       "breakdownTotal": 14.573054545454546,
@@ -5497,26 +7081,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 2,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-1;-1,0;0,-1"
       ],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": -0.03436363636363643,
         "robber": -8,
         "diversity": -0.88,
         "port": 0.11458333333333333,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 2.500219696969698,
       "breakdownTotal": 2.500219696969698,
@@ -5792,24 +7464,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": "NaN",
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": "NaN",
       "breakdownTotal": "NaN",
@@ -6085,24 +7845,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": "NaN",
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": "NaN",
       "breakdownTotal": "NaN",
@@ -6338,24 +8186,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-2;-1,-1;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 4,
         "scarcity": 0.17850000000000021,
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.8916,
       "breakdownTotal": 5.8916,
@@ -6592,24 +8528,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 1,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-2;-1,-1;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 4,
         "scarcity": 0.17850000000000021,
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0.09166666666666666,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.983266666666667,
       "breakdownTotal": 5.983266666666667,
@@ -6845,24 +8869,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-2;-1,-1;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 4,
         "scarcity": 0.17850000000000021,
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.8916,
       "breakdownTotal": 5.8916,
@@ -7138,24 +9250,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 0,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": 0,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 0.4722196969696972,
       "breakdownTotal": 0.4722196969696972,
@@ -7431,24 +9631,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": true,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.25963787878788,
       "breakdownTotal": 15.25963787878788,
@@ -7724,24 +10012,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": 1.3852943577577819,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 13.15751405472748,
       "breakdownTotal": 13.15751405472748,
@@ -7977,24 +10353,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-2;-1,-1;0,-2",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 4,
         "scarcity": 0.17850000000000021,
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.8916,
       "breakdownTotal": 5.8916,
@@ -8231,26 +10695,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-2,-1;-1,-2;-1,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 3.2,
         "scarcity": -0.7,
         "robber": 0,
         "diversity": -0.32,
         "port": 2.2,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 4.380000000000001,
       "breakdownTotal": 4.380000000000001,
@@ -8480,24 +11032,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.145054545454546,
       "breakdownTotal": 15.145054545454546,
@@ -8773,13 +11413,99 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-1;-1,0;0,-1",
@@ -8789,13 +11515,15 @@
       ],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 11.3,
         "scarcity": 0.35763636363636386,
         "robber": 0,
         "diversity": -0.88,
         "port": 0.25208333333333327,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 11.029719696969696,
       "breakdownTotal": 11.029719696969696,
@@ -9071,26 +11799,114 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:0,-2;0,-1;1,-2"
       ],
       "candidate": "v:-1,-1;0,-2;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 10.5,
         "scarcity": 0.24213636363636387,
         "robber": 0,
         "diversity": 1.7051647173503168,
         "port": 0.13749999999999998,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.58480108098668,
       "breakdownTotal": 12.58480108098668,
@@ -9469,24 +12285,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-2,1;-1,0;-1,1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 9.1,
         "scarcity": 0.17941160593792196,
         "robber": 0,
         "diversity": 2.776035637353016,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.055447243290939,
       "breakdownTotal": 12.055447243290939,
@@ -9865,24 +12769,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-2,1;-1,0;-1,1",
       "receivesGrant": true,
+      "slot": null,
       "components": {
         "production": 9.1,
         "scarcity": 0.17941160593792196,
         "robber": 0,
         "diversity": 2.776035637353016,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.055447243290939,
       "breakdownTotal": 12.055447243290939,
@@ -10158,24 +13150,112 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [],
       "candidate": "v:-1,-1;-1,0;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 14.15,
         "scarcity": -0.5275454545454548,
         "robber": 0,
         "diversity": 7.989853650623914,
         "port": 0.06874999999999999,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 21.68105819607846,
       "breakdownTotal": 21.68105819607846,
@@ -10411,29 +13491,2110 @@
         "portCoverageDeficitWeight": 1,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-2;-1,-1;0,-2"
       ],
       "candidate": "v:-1,-1;0,-2;0,-1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 14.5,
         "scarcity": -1.2106060606060607,
         "robber": 0,
         "diversity": 1.4123636363636363,
         "port": 8.662500000000001,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 23.364257575757577,
       "breakdownTotal": 23.364257575757577,
+      "ingestion": {
+        "outcome": "score"
+      },
+      "degenerate": false
+    },
+    {
+      "id": "expansion-sites",
+      "covers": [
+        "W13"
+      ],
+      "board": {
+        "schemaVersion": 1,
+        "layout": "standard4",
+        "hexes": [
+          {
+            "coord": {
+              "q": 0,
+              "r": -2
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -2
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -2
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": -1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": -1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -1
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 0
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 0
+            },
+            "tile": "brick",
+            "numberToken": 11
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 0
+            },
+            "tile": "ore",
+            "numberToken": 12
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 0
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": 0
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 1
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 2
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 2
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 2
+            },
+            "tile": "desert",
+            "numberToken": null
+          }
+        ],
+        "ports": [
+          {
+            "edgeId": "e:-2,-1;-2,0",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,-2;0,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,-2;2,-3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,-2;3,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,0;3,-1",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,1;1,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,3;0,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-2,2;-2,3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-3,1;-2,1",
+            "resource": null,
+            "rate": 3
+          }
+        ],
+        "robber": {
+          "q": 0,
+          "r": 2
+        },
+        "roads": [
+          {
+            "edgeId": "e:-1,0;0,-1",
+            "playerId": "p3"
+          },
+          {
+            "edgeId": "e:-1,-1;-1,0",
+            "playerId": "aki"
+          }
+        ],
+        "buildings": [
+          {
+            "vertexId": "v:-1,2;-1,3;0,2",
+            "playerId": "aki",
+            "tier": "settlement"
+          },
+          {
+            "vertexId": "v:-1,-2;-1,-1;0,-2",
+            "playerId": "p2",
+            "tier": "settlement"
+          },
+          {
+            "vertexId": "v:0,-2;0,-1;1,-2",
+            "playerId": "p2",
+            "tier": "settlement"
+          }
+        ],
+        "players": [
+          {
+            "id": "aki",
+            "name": "aki",
+            "color": "#c23f38"
+          },
+          {
+            "id": "p2",
+            "name": "P2",
+            "color": "#3063ba"
+          },
+          {
+            "id": "p3",
+            "name": "P3",
+            "color": "#e58331"
+          },
+          {
+            "id": "p4",
+            "name": "P4",
+            "color": "#ffffff"
+          }
+        ],
+        "mePlayerId": "aki"
+      },
+      "weights": {
+        "resourceValue": {
+          "wheat": 1.35,
+          "ore": 1.3,
+          "wood": 0.8,
+          "brick": 0.8,
+          "sheep": 0.75
+        },
+        "handValueWeight": 0,
+        "scarcityWeight": 0.35,
+        "scarcityClampMin": 0.5,
+        "scarcityClampMax": 2,
+        "diversityWeight": 1.6,
+        "diversityCap": 4,
+        "coverageExponent": 1.5,
+        "coverageScarcityWeight": 0.5,
+        "duplicateNumberPenalty": 0.08,
+        "recipeRoadBonus": 1.5,
+        "recipeCityBonus": 2,
+        "recipeSettlementBonus": 1,
+        "recipeDevCardBonus": 0,
+        "recipeCap": 4,
+        "portWeight": 0.55,
+        "genericPortFactor": 0.5,
+        "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
+        "nearPortRadius": 2,
+        "nearPortDecay": 0.5,
+        "expansionWeight": 0.3,
+        "expansionDecay": 0.5,
+        "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
+        "opponentTopK": 3,
+        "softmaxTemperature": 1.25,
+        "rolloutBudget": 500000,
+        "rolloutsMin": 4,
+        "rolloutsMax": 24,
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
+      },
+      "holdings": [
+        "v:-1,2;-1,3;0,2"
+      ],
+      "candidate": "v:-1,-1;-1,0;0,-1",
+      "receivesGrant": false,
+      "slot": null,
+      "components": {
+        "production": 11.3,
+        "scarcity": 0.35763636363636386,
+        "robber": 0,
+        "diversity": 4.78645628749484,
+        "port": 0.45833333333333326,
+        "handValue": 0,
+        "expansion": 6.113894861427492
+      },
+      "marginalTotal": 23.01632084589203,
+      "breakdownTotal": 23.01632084589203,
+      "ingestion": {
+        "outcome": "score"
+      },
+      "degenerate": false
+    },
+    {
+      "id": "expansion-blocked",
+      "covers": [
+        "W13"
+      ],
+      "board": {
+        "schemaVersion": 1,
+        "layout": "standard4",
+        "hexes": [
+          {
+            "coord": {
+              "q": 0,
+              "r": -2
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -2
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -2
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": -1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": -1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -1
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 0
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 0
+            },
+            "tile": "brick",
+            "numberToken": 11
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 0
+            },
+            "tile": "ore",
+            "numberToken": 12
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 0
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": 0
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 1
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 2
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 2
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 2
+            },
+            "tile": "desert",
+            "numberToken": null
+          }
+        ],
+        "ports": [
+          {
+            "edgeId": "e:-2,-1;-2,0",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,-2;0,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,-2;2,-3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,-2;3,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,0;3,-1",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,1;1,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,3;0,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-2,2;-2,3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-3,1;-2,1",
+            "resource": null,
+            "rate": 3
+          }
+        ],
+        "robber": {
+          "q": 0,
+          "r": 2
+        },
+        "roads": [
+          {
+            "edgeId": "e:-1,0;0,-1",
+            "playerId": "p3"
+          },
+          {
+            "edgeId": "e:-1,-1;-1,0",
+            "playerId": "p2"
+          }
+        ],
+        "buildings": [
+          {
+            "vertexId": "v:-1,2;-1,3;0,2",
+            "playerId": "aki",
+            "tier": "settlement"
+          },
+          {
+            "vertexId": "v:-1,-2;-1,-1;0,-2",
+            "playerId": "p2",
+            "tier": "settlement"
+          },
+          {
+            "vertexId": "v:0,-2;0,-1;1,-2",
+            "playerId": "p2",
+            "tier": "settlement"
+          }
+        ],
+        "players": [
+          {
+            "id": "aki",
+            "name": "aki",
+            "color": "#c23f38"
+          },
+          {
+            "id": "p2",
+            "name": "P2",
+            "color": "#3063ba"
+          },
+          {
+            "id": "p3",
+            "name": "P3",
+            "color": "#e58331"
+          },
+          {
+            "id": "p4",
+            "name": "P4",
+            "color": "#ffffff"
+          }
+        ],
+        "mePlayerId": "aki"
+      },
+      "weights": {
+        "resourceValue": {
+          "wheat": 1.35,
+          "ore": 1.3,
+          "wood": 0.8,
+          "brick": 0.8,
+          "sheep": 0.75
+        },
+        "handValueWeight": 0,
+        "scarcityWeight": 0.35,
+        "scarcityClampMin": 0.5,
+        "scarcityClampMax": 2,
+        "diversityWeight": 1.6,
+        "diversityCap": 4,
+        "coverageExponent": 1.5,
+        "coverageScarcityWeight": 0.5,
+        "duplicateNumberPenalty": 0.08,
+        "recipeRoadBonus": 1.5,
+        "recipeCityBonus": 2,
+        "recipeSettlementBonus": 1,
+        "recipeDevCardBonus": 0,
+        "recipeCap": 4,
+        "portWeight": 0.55,
+        "genericPortFactor": 0.5,
+        "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
+        "nearPortRadius": 2,
+        "nearPortDecay": 0.5,
+        "expansionWeight": 0.3,
+        "expansionDecay": 0.5,
+        "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
+        "opponentTopK": 3,
+        "softmaxTemperature": 1.25,
+        "rolloutBudget": 500000,
+        "rolloutsMin": 4,
+        "rolloutsMax": 24,
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
+      },
+      "holdings": [
+        "v:-1,2;-1,3;0,2"
+      ],
+      "candidate": "v:-1,-1;-1,0;0,-1",
+      "receivesGrant": false,
+      "slot": null,
+      "components": {
+        "production": 11.3,
+        "scarcity": 0.35763636363636386,
+        "robber": 0,
+        "diversity": 4.78645628749484,
+        "port": 0.45833333333333326,
+        "handValue": 0,
+        "expansion": 0
+      },
+      "marginalTotal": 16.902425984464536,
+      "breakdownTotal": 16.902425984464536,
+      "ingestion": {
+        "outcome": "score"
+      },
+      "degenerate": false
+    },
+    {
+      "id": "robber-concentration",
+      "covers": [
+        "W14"
+      ],
+      "board": {
+        "schemaVersion": 1,
+        "layout": "standard4",
+        "hexes": [
+          {
+            "coord": {
+              "q": 0,
+              "r": -2
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -2
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -2
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": -1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": -1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -1
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 0
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 0
+            },
+            "tile": "brick",
+            "numberToken": 11
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 0
+            },
+            "tile": "ore",
+            "numberToken": 12
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 0
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": 0
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 1
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 2
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 2
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 2
+            },
+            "tile": "desert",
+            "numberToken": null
+          }
+        ],
+        "ports": [
+          {
+            "edgeId": "e:-2,-1;-2,0",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,-2;0,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,-2;2,-3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,-2;3,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,0;3,-1",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,1;1,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,3;0,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-2,2;-2,3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-3,1;-2,1",
+            "resource": null,
+            "rate": 3
+          }
+        ],
+        "robber": {
+          "q": 0,
+          "r": 2
+        },
+        "roads": [],
+        "buildings": [],
+        "players": [
+          {
+            "id": "aki",
+            "name": "aki",
+            "color": "#c23f38"
+          },
+          {
+            "id": "p2",
+            "name": "P2",
+            "color": "#3063ba"
+          },
+          {
+            "id": "p3",
+            "name": "P3",
+            "color": "#e58331"
+          },
+          {
+            "id": "p4",
+            "name": "P4",
+            "color": "#ffffff"
+          }
+        ],
+        "mePlayerId": "aki"
+      },
+      "weights": {
+        "resourceValue": {
+          "wheat": 1.35,
+          "ore": 1.3,
+          "wood": 0.8,
+          "brick": 0.8,
+          "sheep": 0.75
+        },
+        "handValueWeight": 0,
+        "scarcityWeight": 0.35,
+        "scarcityClampMin": 0.5,
+        "scarcityClampMax": 2,
+        "diversityWeight": 1.6,
+        "diversityCap": 4,
+        "coverageExponent": 1.5,
+        "coverageScarcityWeight": 0.5,
+        "duplicateNumberPenalty": 0.08,
+        "recipeRoadBonus": 1.5,
+        "recipeCityBonus": 2,
+        "recipeSettlementBonus": 1,
+        "recipeDevCardBonus": 0,
+        "recipeCap": 4,
+        "portWeight": 0.55,
+        "genericPortFactor": 0.5,
+        "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
+        "nearPortRadius": 2,
+        "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
+        "robberDiscount": 0.35,
+        "robberConcentrationWeight": 4,
+        "setupDenialWeight": 0,
+        "opponentTopK": 3,
+        "softmaxTemperature": 1.25,
+        "rolloutBudget": 500000,
+        "rolloutsMin": 4,
+        "rolloutsMax": 24,
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
+      },
+      "holdings": [
+        "v:-1,-1;-1,0;0,-1"
+      ],
+      "candidate": "v:-1,1;-1,2;0,1",
+      "receivesGrant": false,
+      "slot": null,
+      "components": {
+        "production": 13.75,
+        "scarcity": 0.2071363636363639,
+        "robber": 0.9486166007905138,
+        "diversity": 1.9469252309541794,
+        "port": 0.20625,
+        "handValue": 0,
+        "expansion": 0
+      },
+      "marginalTotal": 17.058928195381057,
+      "breakdownTotal": 17.058928195381057,
+      "ingestion": {
+        "outcome": "score"
+      },
+      "degenerate": false
+    },
+    {
+      "id": "robber-concentration-shared-hex",
+      "covers": [
+        "W14"
+      ],
+      "board": {
+        "schemaVersion": 1,
+        "layout": "standard4",
+        "hexes": [
+          {
+            "coord": {
+              "q": 0,
+              "r": -2
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -2
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -2
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": -1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": -1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -1
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 0
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 0
+            },
+            "tile": "brick",
+            "numberToken": 11
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 0
+            },
+            "tile": "ore",
+            "numberToken": 12
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 0
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": 0
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 1
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 2
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 2
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 2
+            },
+            "tile": "desert",
+            "numberToken": null
+          }
+        ],
+        "ports": [
+          {
+            "edgeId": "e:-2,-1;-2,0",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,-2;0,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,-2;2,-3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,-2;3,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,0;3,-1",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,1;1,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,3;0,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-2,2;-2,3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-3,1;-2,1",
+            "resource": null,
+            "rate": 3
+          }
+        ],
+        "robber": {
+          "q": 0,
+          "r": 2
+        },
+        "roads": [],
+        "buildings": [],
+        "players": [
+          {
+            "id": "aki",
+            "name": "aki",
+            "color": "#c23f38"
+          },
+          {
+            "id": "p2",
+            "name": "P2",
+            "color": "#3063ba"
+          },
+          {
+            "id": "p3",
+            "name": "P3",
+            "color": "#e58331"
+          },
+          {
+            "id": "p4",
+            "name": "P4",
+            "color": "#ffffff"
+          }
+        ],
+        "mePlayerId": "aki"
+      },
+      "weights": {
+        "resourceValue": {
+          "wheat": 1.35,
+          "ore": 1.3,
+          "wood": 0.8,
+          "brick": 0.8,
+          "sheep": 0.75
+        },
+        "handValueWeight": 0,
+        "scarcityWeight": 0.35,
+        "scarcityClampMin": 0.5,
+        "scarcityClampMax": 2,
+        "diversityWeight": 1.6,
+        "diversityCap": 4,
+        "coverageExponent": 1.5,
+        "coverageScarcityWeight": 0.5,
+        "duplicateNumberPenalty": 0.08,
+        "recipeRoadBonus": 1.5,
+        "recipeCityBonus": 2,
+        "recipeSettlementBonus": 1,
+        "recipeDevCardBonus": 0,
+        "recipeCap": 4,
+        "portWeight": 0.55,
+        "genericPortFactor": 0.5,
+        "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
+        "nearPortRadius": 2,
+        "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
+        "robberDiscount": 0.35,
+        "robberConcentrationWeight": 4,
+        "setupDenialWeight": 0,
+        "opponentTopK": 3,
+        "softmaxTemperature": 1.25,
+        "rolloutBudget": 500000,
+        "rolloutsMin": 4,
+        "rolloutsMax": 24,
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
+      },
+      "holdings": [
+        "v:-1,-1;-1,0;0,-1"
+      ],
+      "candidate": "v:-1,0;-1,1;0,0",
+      "receivesGrant": false,
+      "slot": null,
+      "components": {
+        "production": 6.1000000000000005,
+        "scarcity": 0.30672727272727296,
+        "robber": 0.5681818181818181,
+        "diversity": -0.48,
+        "port": 0.16041666666666662,
+        "handValue": 0,
+        "expansion": 0
+      },
+      "marginalTotal": 6.655325757575758,
+      "breakdownTotal": 6.655325757575758,
+      "ingestion": {
+        "outcome": "score"
+      },
+      "degenerate": false
+    },
+    {
+      "id": "slot-scales",
+      "covers": [
+        "W15"
+      ],
+      "board": {
+        "schemaVersion": 1,
+        "layout": "standard4",
+        "hexes": [
+          {
+            "coord": {
+              "q": 0,
+              "r": -2
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -2
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -2
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": -1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": -1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": -1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": -1
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 0
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 0
+            },
+            "tile": "brick",
+            "numberToken": 11
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 0
+            },
+            "tile": "ore",
+            "numberToken": 12
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 0
+            },
+            "tile": "wood",
+            "numberToken": 2
+          },
+          {
+            "coord": {
+              "q": 2,
+              "r": 0
+            },
+            "tile": "sheep",
+            "numberToken": 3
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 1
+            },
+            "tile": "wheat",
+            "numberToken": 4
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 1
+            },
+            "tile": "brick",
+            "numberToken": 5
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 1
+            },
+            "tile": "ore",
+            "numberToken": 6
+          },
+          {
+            "coord": {
+              "q": 1,
+              "r": 1
+            },
+            "tile": "wood",
+            "numberToken": 8
+          },
+          {
+            "coord": {
+              "q": -2,
+              "r": 2
+            },
+            "tile": "sheep",
+            "numberToken": 9
+          },
+          {
+            "coord": {
+              "q": -1,
+              "r": 2
+            },
+            "tile": "wheat",
+            "numberToken": 10
+          },
+          {
+            "coord": {
+              "q": 0,
+              "r": 2
+            },
+            "tile": "desert",
+            "numberToken": null
+          }
+        ],
+        "ports": [
+          {
+            "edgeId": "e:-2,-1;-2,0",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,-2;0,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,-2;2,-3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,-2;3,-2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:2,0;3,-1",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:1,1;1,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-1,3;0,2",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-2,2;-2,3",
+            "resource": null,
+            "rate": 3
+          },
+          {
+            "edgeId": "e:-3,1;-2,1",
+            "resource": null,
+            "rate": 3
+          }
+        ],
+        "robber": {
+          "q": 0,
+          "r": 2
+        },
+        "roads": [
+          {
+            "edgeId": "e:-1,0;0,-1",
+            "playerId": "p3"
+          },
+          {
+            "edgeId": "e:-1,-1;-1,0",
+            "playerId": "aki"
+          }
+        ],
+        "buildings": [
+          {
+            "vertexId": "v:-1,2;-1,3;0,2",
+            "playerId": "aki",
+            "tier": "settlement"
+          },
+          {
+            "vertexId": "v:-1,-2;-1,-1;0,-2",
+            "playerId": "p2",
+            "tier": "settlement"
+          },
+          {
+            "vertexId": "v:0,-2;0,-1;1,-2",
+            "playerId": "p2",
+            "tier": "settlement"
+          }
+        ],
+        "players": [
+          {
+            "id": "aki",
+            "name": "aki",
+            "color": "#c23f38"
+          },
+          {
+            "id": "p2",
+            "name": "P2",
+            "color": "#3063ba"
+          },
+          {
+            "id": "p3",
+            "name": "P3",
+            "color": "#e58331"
+          },
+          {
+            "id": "p4",
+            "name": "P4",
+            "color": "#ffffff"
+          }
+        ],
+        "mePlayerId": "aki"
+      },
+      "weights": {
+        "resourceValue": {
+          "wheat": 1.35,
+          "ore": 1.3,
+          "wood": 0.8,
+          "brick": 0.8,
+          "sheep": 0.75
+        },
+        "handValueWeight": 0,
+        "scarcityWeight": 0.35,
+        "scarcityClampMin": 0.5,
+        "scarcityClampMax": 2,
+        "diversityWeight": 1.6,
+        "diversityCap": 4,
+        "coverageExponent": 1.5,
+        "coverageScarcityWeight": 0.5,
+        "duplicateNumberPenalty": 0.08,
+        "recipeRoadBonus": 1.5,
+        "recipeCityBonus": 2,
+        "recipeSettlementBonus": 1,
+        "recipeDevCardBonus": 0,
+        "recipeCap": 4,
+        "portWeight": 0.55,
+        "genericPortFactor": 0.5,
+        "portSurplusThreshold": 3,
+        "portCoverageDeficitWeight": 0,
+        "nearPortRadius": 2,
+        "nearPortDecay": 0.5,
+        "expansionWeight": 0.3,
+        "expansionDecay": 0.5,
+        "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
+        "opponentTopK": 3,
+        "softmaxTemperature": 1.25,
+        "rolloutBudget": 500000,
+        "rolloutsMin": 4,
+        "rolloutsMax": 24,
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 2,
+              "diversity": 0.5
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
+      },
+      "holdings": [
+        "v:-1,2;-1,3;0,2"
+      ],
+      "candidate": "v:-1,-1;-1,0;0,-1",
+      "receivesGrant": false,
+      "slot": {
+        "seats": 4,
+        "slot": 0
+      },
+      "components": {
+        "production": 11.3,
+        "scarcity": 0.35763636363636386,
+        "robber": 0,
+        "diversity": 2.39322814374742,
+        "port": 0.45833333333333326,
+        "handValue": 0,
+        "expansion": 12.227789722854984
+      },
+      "marginalTotal": 26.7369875635721,
+      "breakdownTotal": 26.7369875635721,
       "ingestion": {
         "outcome": "score"
       },
@@ -11058,13 +16219,99 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
+        "robberConcentrationWeight": 0,
+        "setupDenialWeight": 0,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
         "rolloutBudget": 500000,
         "rolloutsMin": 4,
         "rolloutsMax": 24,
-        "maxResults": 8
+        "maxResults": 8,
+        "slotScales": {
+          "3": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "4": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "5": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          },
+          "6": {
+            "0": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "1": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "2": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "3": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "4": {
+              "expansion": 1,
+              "diversity": 1
+            },
+            "5": {
+              "expansion": 1,
+              "diversity": 1
+            }
+          }
+        }
       },
       "holdings": [
         "v:-1,-1;-1,0;0,-1",
@@ -11073,13 +16320,15 @@
       ],
       "candidate": "v:-4,1;-3,0;-3,1",
       "receivesGrant": false,
+      "slot": null,
       "components": {
         "production": 7.2,
         "scarcity": 0.9801842105263162,
         "robber": -1.75,
         "diversity": 2.437999814372859,
         "port": 1.7645833333333332,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 10.632767358232508,
       "breakdownTotal": 10.632767358232508,

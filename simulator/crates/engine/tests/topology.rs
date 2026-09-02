@@ -42,3 +42,21 @@ fn pack_graph_invariants_hold() {
         }
     }
 }
+
+/// Edge indices rank in the same order their ids do, which SP3's road rule leans on.
+///
+/// `placement/expansion.rs::term` breaks a tie between two equally good directions on the lower
+/// edge *index*, where `src/engine/expansion.ts` breaks it on the lower edge *id*, a string
+/// comparison. The two rules are the same rule only while the pack lists its edges in id order,
+/// so a regenerated pack that reordered them would split the app's recommended road from the one
+/// the simulator lays, silently and only at a nonzero `expansionWeight`.
+#[test]
+fn pack_edges_are_listed_in_edge_id_order() {
+    for layout in [Layout::Standard4, Layout::Extension6] {
+        let pack = Topology::load(layout).unwrap();
+        let ids: Vec<&str> = (0..pack.edge_count())
+            .map(|edge| pack.edge_id(edge as u8))
+            .collect();
+        assert!(ids.is_sorted(), "{layout:?} lists edges out of id order");
+    }
+}
