@@ -6,9 +6,15 @@ import { expect, test, type Page } from '@playwright/test'
  * `Workspace` tree; only a portrait phone mounts `PhoneShell`.
  */
 
-/** A capture for the human review after the run, beside the phone shots. */
-const snap = (page: Page, name: string) =>
-  page.screenshot({ path: `test-results/phone/${name}.png`, fullPage: true })
+/**
+ * A capture for the human review after the run, beside the phone shots.
+ * `animations: 'disabled'` runs any open/fade to its end first, so a menu is
+ * never caught half faded in. A full page unless the shot is of an open
+ * `ContextMenu`: Chromium captures beyond the viewport by resizing it, and the
+ * menu closes on resize.
+ */
+const snap = (page: Page, name: string, fullPage = true) =>
+  page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 900 } })
@@ -75,6 +81,31 @@ test.describe('desktop', () => {
     await expect(rows.first().locator('.list-row-name')).toHaveText('Board 1')
     await expect(page.locator('.confirm-dialog')).toHaveCount(0)
     expect(nativeDialogs).toBe(0)
+  })
+
+  test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {
+    await page.goto('')
+    const trigger = page.getByRole('button', { name: 'Board layout' })
+    await expect(trigger.locator('svg')).toHaveCount(1)
+    await expect(trigger).not.toContainText('▾')
+
+    await trigger.click()
+    const popup = page.getByRole('listbox', { name: 'Board layout' })
+    const active = popup.locator('button.active')
+    await expect(active).toHaveCount(1)
+    await expect(active.locator('.menu-tick')).toBeVisible()
+    // Laid out on every option so the labels line up, painted on the current one only.
+    await expect(popup.locator('.menu-tick')).toHaveCount(await popup.getByRole('option').count())
+    await expect(popup.locator('button:not(.active) .menu-tick').first()).toBeHidden()
+    await page.keyboard.press('Escape')
+
+    // The dots menu is the phone's sheet, tail and all (spec D6 menus).
+    await page.getByRole('button', { name: 'Import and export files' }).click()
+    const sheet = page.getByRole('menu', { name: 'Import and export files' })
+    await expect(sheet).toHaveClass(/\bsheet-menu\b/)
+    await expect(sheet.locator('.menu-tail')).toBeVisible()
+    await expect(sheet.getByRole('menuitem').first().locator('.menu-icon')).toBeVisible()
+    await snap(page, 'desktop-menus', false)
   })
 })
 

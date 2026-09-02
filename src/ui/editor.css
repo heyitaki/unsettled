@@ -81,25 +81,45 @@ button.selected.danger { color: #fff; }
    the reservation appearing and disappearing shifts the board. */
 .board-status { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 28px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
 .menu-wrap { position: relative; display: inline-flex; align-items: center; }
-.menu-trigger { border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
-/* scaleX widens the thin ▾ glyph without growing the line box. */
-.menu-caret { display: inline-block; margin-left: .38em; font-size: 1.2em; line-height: 1; transform: scaleX(1.35); }
+.menu-trigger { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
+.menu-chevron { flex: none; width: 12px; height: 8px; color: var(--muted); }
 .menu-backdrop { position: fixed; inset: 0; z-index: 14; border: 0; border-radius: 0; padding: 0; background: transparent; }
-.menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 145px; max-height: min(60vh, 420px); max-height: min(60dvh, 420px); overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 3px; padding: 6px; border: 1px solid rgba(255,255,255,.8); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 32px rgba(55,45,32,.22), inset 0 0 0 1px var(--line); }
-.menu-popup button { border: 0; padding: 7px 9px; background: transparent; text-align: left; }
-.menu-popup button.active { color: var(--accent-dark); background: #fff9e9; font-weight: 700; }
-/* The check beside the current option; only the phone shell shows it. */
-.menu-tick { display: none; }
+/* Every dropdown is the same bordered sheet: a check on the current option, and
+   no marker for the arrow keys unless a keyboard is what opened it. */
+.menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 156px; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 0; padding: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-light); box-shadow: 0 14px 34px rgba(62, 45, 21, .24); scrollbar-width: none; animation: menu-pop .15s ease; }
+/* A fade, not a scale-in: the phone shell scrolls the window, where a transform
+   animation on the fixed popup makes Chrome smooth-scroll the page ~160px on
+   open. Opacity alone does not. */
+@keyframes menu-pop { from { opacity: 0; } }
+.menu-popup::-webkit-scrollbar { display: none; }
+.menu-popup button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 9px; padding: 9px 8px; background: transparent; text-align: left; font-size: 13px; font-weight: 500; }
+.menu-popup button.active { font-weight: 700; }
+/* Laid out on every option so the labels line up; painted on the current one. */
+.menu-tick { display: block; flex: none; width: 14px; height: 14px; color: var(--accent-dark); visibility: hidden; }
+.menu-popup button.active .menu-tick { visibility: visible; }
 /* Where the arrow keys are, which is not the same as the selected value. */
-.menu-popup button.keyboard-active { outline: 2px solid var(--accent-dark); outline-offset: -2px; border-radius: 6px; }
-/* Pinned to the pointer (ContextMenu supplies left/top), and opaque because it
-   opens over the board. */
-.context-menu { position: fixed; min-width: 216px; background: var(--paper-light); }
-.context-menu button { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-.context-menu button.separated { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 9px; }
-.context-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--muted); }
-/* Darker, not lighter: the cream the other menus use disappears on this paper. */
-.context-menu button:focus-visible { background: var(--paper-deep); color: var(--accent-dark); }
+.menu-popup button.keyboard-active { outline: 2px solid var(--accent-dark); outline-offset: -2px; }
+.menu-popup:not(:focus-visible) button.keyboard-active { outline: 0; }
+/* The dots menus (spec S1, S7, D1): a sheet hung from the button it grew out of,
+   with a tail pointing back at it, pinned to the viewport because ContextMenu
+   supplies its left/top. The board's carries undo and redo as a pair above the list. */
+.sheet-menu { position: fixed; width: 216px; min-width: 0; overflow: visible; display: flex; flex-direction: column; gap: 0; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-light); box-shadow: 0 18px 44px rgba(62, 45, 21, .26), 0 1px 0 rgba(255, 255, 255, .8) inset; }
+.sheet-menu .menu-tail { position: absolute; top: -5px; right: 16px; width: 10px; height: 10px; border: 1px solid var(--line); border-width: 1px 0 0 1px; background: var(--paper-light); transform: rotate(45deg); }
+.sheet-menu .menu-history { position: relative; display: flex; gap: 4px; margin-bottom: 11px; padding: 3px; border-radius: 12px; background: var(--paper-deep); }
+.sheet-menu .menu-history::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; border-top: 1px solid var(--line); }
+.sheet-menu .menu-history button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border-radius: 9px; font-size: 12px; font-weight: 700; }
+.sheet-menu .menu-history button:disabled { opacity: .38; }
+.sheet-menu .menu-history button + button { box-shadow: -1px 0 0 var(--line); }
+.sheet-menu .menu-history button:hover:not(:disabled), .sheet-menu .menu-history button:focus-visible { color: inherit; background: rgba(255, 255, 255, .74); }
+.sheet-menu .menu-history .menu-icon { width: 15px; height: 15px; color: inherit; }
+.sheet-menu > button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 9px 8px; border-radius: 10px; font-size: 13px; font-weight: 500; }
+.sheet-menu > button.separated { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 11px; }
+.sheet-menu > button:hover:not(:disabled), .sheet-menu > button:focus-visible { color: var(--ink); background: var(--paper-deep); }
+.sheet-menu > button.danger, .sheet-menu > button.danger:hover:not(:disabled), .sheet-menu > button.danger:focus-visible { color: #a33428; }
+.sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--muted); }
+.sheet-menu > button.danger .menu-icon { color: #a33428; }
+.sheet-menu-narrow { width: 186px; }
+.sheet-menu-narrow .menu-tail { right: 15px; }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay
    even. Never an oldstyle-figure serif here (Georgia, Palatino, Athelas). */
@@ -300,8 +320,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .list-add:hover:not(:disabled) { transform: none; box-shadow: none; border-style: solid; color: var(--ink); }
   .list-row-name:not(.plain):hover { transform: none; box-shadow: none; text-decoration-color: var(--accent-dark); }
   .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
-  .menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: #fff9e9; }
-  .context-menu button:hover:not(:disabled) { background: var(--paper-deep); color: var(--accent-dark); }
+  .menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--paper-deep); }
   .placement-slot:hover { fill: #fffdf7; }
   .player-name:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; text-decoration: underline dotted; text-underline-offset: 2px; }
   .tally-header > span:hover::after { opacity: 1; }
@@ -332,8 +351,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .draft-slot { min-width: 46px; }
   .slot-circle { width: 24px; height: 24px; }
   .global-notice-close { min-width: 34px; min-height: 34px; }
-  .menu-popup button { padding: 12px; font-size: 15px; }
-  .context-menu { min-width: 240px; }
   .analysis-row { padding: 12px; }
   .analysis-row-select { gap: 7px; }
   .analysis-factors span { padding: 3px 8px; font-size: 11px; }
@@ -552,22 +569,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .board-status .menu-trigger strong { color: var(--ink); }
   .phone-shell .board-status .menu-chevron { width: 10px; height: 7px; }
   .phone-shell .board-zoom { margin-left: 0; }
-  .phone-shell .menu-chevron { flex: none; width: 12px; height: 8px; color: var(--muted); }
-  /* The dropdowns of this shell: a plain bordered sheet with a check on the
-     current option, and no marker for the arrow keys unless a keyboard is what
-     opened it. */
-  .phone-shell .menu-popup { min-width: 156px; max-height: none; gap: 0; padding: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-light); box-shadow: 0 14px 34px rgba(62, 45, 21, .24); scrollbar-width: none; animation: phone-pop .15s ease; }
-  /* A fade, not the mock's scale-in: the mock scrolls an inner element, but this
-     shell scrolls the window, where a transform animation on the fixed popup
-     makes Chrome smooth-scroll the page ~160px on open. Opacity alone does not. */
-  @keyframes phone-pop { from { opacity: 0; } }
-  .phone-shell .menu-popup::-webkit-scrollbar { display: none; }
-  .phone-shell .menu-popup button { display: flex; align-items: center; gap: 8px; padding: 9px 8px; border-radius: 9px; font-size: 13px; font-weight: 500; }
-  .phone-shell .menu-popup button.active { color: inherit; background: transparent; font-weight: 700; }
-  .phone-shell .menu-popup button:hover:not(:disabled) { background: var(--paper-deep); }
-  .phone-shell .menu-popup:not(:focus-visible) button.keyboard-active { outline: 0; }
-  .phone-shell .menu-tick { display: block; flex: none; width: 14px; height: 14px; color: var(--accent-dark); visibility: hidden; }
-  .phone-shell .menu-popup button.active .menu-tick { visibility: visible; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
   .phone-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .phone-block-head h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
@@ -612,26 +613,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .global-notice { animation: phone-toast-in .2s ease; }
   .phone-shell .eyebrow { font-size: 11px; }
   .phone-shell .hex-swatch { filter: none; }
-  /* The dots menus (spec S1, S7): a sheet hung from the button it grew out of,
-     with a tail pointing back at it. The board's carries undo and redo as a
-     pair above the list, each with the depth of its stack. */
-  .phone-menu { width: 216px; min-width: 0; max-height: none; overflow: visible; display: flex; flex-direction: column; gap: 0; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-light); box-shadow: 0 18px 44px rgba(62, 45, 21, .26), 0 1px 0 rgba(255, 255, 255, .8) inset; }
-  .phone-menu .menu-tail { position: absolute; top: -5px; right: 16px; width: 10px; height: 10px; border: 1px solid var(--line); border-width: 1px 0 0 1px; background: var(--paper-light); transform: rotate(45deg); }
-  .phone-menu .menu-history { position: relative; display: flex; gap: 4px; margin-bottom: 11px; padding: 3px; border-radius: 12px; background: var(--paper-deep); }
-  .phone-menu .menu-history::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; border-top: 1px solid var(--line); }
-  .phone-menu .menu-history button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border-radius: 9px; font-size: 12px; font-weight: 700; }
-  .phone-menu .menu-history button:disabled { opacity: .38; }
-  .phone-menu .menu-history button + button { box-shadow: -1px 0 0 var(--line); }
-  .phone-menu .menu-history button:hover:not(:disabled), .phone-menu .menu-history button:focus-visible { color: inherit; background: rgba(255, 255, 255, .74); }
-  .phone-menu .menu-history .menu-icon { width: 15px; height: 15px; color: inherit; }
-  .phone-menu .menu-count { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .phone-menu > button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 9px 8px; border-radius: 10px; font-size: 13px; font-weight: 500; }
-  .phone-menu > button:hover:not(:disabled), .phone-menu > button:focus-visible { color: var(--ink); background: var(--paper-deep); }
-  .phone-menu > button.danger, .phone-menu > button.danger:hover:not(:disabled), .phone-menu > button.danger:focus-visible { color: #a33428; }
-  .phone-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--muted); }
-  .phone-menu > button.danger .menu-icon { color: #a33428; }
-  .phone-omenu { width: 186px; }
-  .phone-omenu .menu-tail { right: 15px; }
   .phone-overlay { position: fixed; inset: 0; z-index: 22; display: flex; flex-direction: column; background: var(--paper-light); outline: 0; animation: phone-overlay-in .28s cubic-bezier(.32, .72, 0, 1); }
   @keyframes phone-overlay-in { from { transform: translateX(100%); } to { transform: none; } }
   /* Leaves the way it came; PhoneShell keeps it mounted for the ride (OVERLAY_EXIT_MS). */

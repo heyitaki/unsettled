@@ -41,6 +41,12 @@ test('the dots menu holds undo, redo and the board actions', async ({ page }) =>
   ])
   await expect(menu.getByRole('menuitem', { name: 'Undo' })).toBeDisabled()
   await snap(page, 'dots-menu')
+
+  // The history pair names the action and nothing else: no stack depth (spec D3).
+  await menu.getByRole('menuitem', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Board options' }).click()
+  await expect(page.getByRole('menu', { name: 'Board options' })
+    .getByRole('menuitem', { name: 'Undo' })).toHaveText('Undo')
 })
 
 test('the window is the only scroller and nothing overflows sideways', async ({ page }) => {

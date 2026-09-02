@@ -64,7 +64,7 @@ export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
           y={menuAt.y}
           align="right"
           tail
-          className="phone-menu phone-omenu"
+          className="sheet-menu-narrow"
           items={menu}
           onClose={() => setMenuAt(null)}
         />

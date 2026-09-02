@@ -46,14 +46,12 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
     {
       label: 'Undo',
       icon: <UndoGlyph />,
-      count: tab.past.length,
       disabled: tab.past.length === 0,
       onClick: () => dispatch({ type: 'undo' }),
     },
     {
       label: 'Redo',
       icon: <RedoGlyph />,
-      count: tab.future.length,
       disabled: tab.future.length === 0,
       onClick: () => dispatch({ type: 'redo' }),
     },
@@ -125,7 +123,6 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
           y={menuAt.y}
           align="right"
           tail
-          className="phone-menu"
           history={history}
           items={items}
           onClose={() => setMenuAt(null)}

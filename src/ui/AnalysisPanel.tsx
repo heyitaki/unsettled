@@ -5,7 +5,7 @@ import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/c
 import type { Board, Resource, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { readableInk } from './colors'
-import { ChevronGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
+import { PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
@@ -406,7 +406,6 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
                 value={board.mePlayerId}
                 options={board.players.map((player) => ({ value: player.id, label: player.name }))}
                 onSelect={claim}
-                caret={<ChevronGlyph className="menu-chevron" />}
               >
                 <strong>{me.name}</strong>
               </MenuSelect>

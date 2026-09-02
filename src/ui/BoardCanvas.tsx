@@ -32,7 +32,7 @@ import {
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
-import { ChevronGlyph, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
+import { ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
@@ -772,7 +772,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           options={LAYOUT_OPTIONS}
           onSelect={choose}
           align={phone ? 'center' : 'start'}
-          caret={phone ? <ChevronGlyph className="menu-chevron" /> : undefined}
         >
           <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
         </MenuSelect>

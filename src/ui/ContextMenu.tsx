@@ -6,8 +6,6 @@ export interface ContextMenuItem {
   onClick(): void
   /** A glyph before the label. */
   icon?: ReactNode
-  /** Printed after the label when above zero: the depth of the stack this item acts on. */
-  count?: number
   disabled?: boolean
   /** Draws a rule above this item, opening a group. */
   separated?: boolean
@@ -31,9 +29,9 @@ const FOCUS_KEYS: Record<string, FocusStep> = {
 }
 
 /**
- * A menu pinned to a point: the same popup as MenuSelect's, positioned in
- * viewport coordinates and clamped so a right-click near an edge still opens
- * fully on screen. `align: 'right'` hangs the menu from its top-right corner
+ * A menu pinned to a point: the shared sheet, positioned in viewport
+ * coordinates and clamped so a right-click near an edge still opens fully on
+ * screen. `align: 'right'` hangs the menu from its top-right corner
  * instead, for a menu that grows out of a button at the edge of the screen.
  * `history` is an optional row of side-by-side items above the list (undo and
  * redo as a pair), walked by the same arrow keys. It follows the menu keyboard
@@ -135,7 +133,6 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
     >
       {item.icon !== undefined && <span className="menu-icon" aria-hidden="true">{item.icon}</span>}
       <span>{item.label}</span>
-      {item.count !== undefined && item.count > 0 && <b className="menu-count">{item.count}</b>}
     </button>
   )
   return (
@@ -155,7 +152,7 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
       />
       <div
         ref={menuRef}
-        className={className ? `menu-popup context-menu ${className}` : 'menu-popup context-menu'}
+        className={className ? `menu-popup sheet-menu ${className}` : 'menu-popup sheet-menu'}
         role="menu"
         aria-label={ariaLabel}
         style={{ left: at.left, top: at.top }}

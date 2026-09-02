@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import { TickGlyph } from './glyphs'
+import { ChevronGlyph, TickGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 
 /** How long a typed prefix keeps accumulating before the next key starts over. */
@@ -35,7 +35,7 @@ export function MenuSelect<T extends string>({
   options,
   onSelect,
   align = 'start',
-  caret = <span className="menu-caret" aria-hidden="true">▾</span>,
+  caret = <ChevronGlyph className="menu-chevron" />,
   children,
 }: {
   ariaLabel: string
@@ -44,7 +44,7 @@ export function MenuSelect<T extends string>({
   onSelect: (value: T) => void
   /** Which edge of the trigger the popup lines up with: its left edge, or its centre. */
   align?: 'start' | 'center'
-  /** The open affordance after the trigger content; the ▾ glyph unless a caller draws its own. */
+  /** The open affordance after the trigger content; the chevron unless a caller draws its own. */
   caret?: ReactNode
   /** Trigger content; the caret is appended by this component. */
   children: ReactNode
@@ -290,7 +290,7 @@ export function MenuSelect<T extends string>({
                   onSelect(option.value)
                 }}
               >
-                {/* Marks the current option where a shell shows it; hidden by default. */}
+                {/* Marks the current option; laid out on every one so the labels line up. */}
                 <TickGlyph className="menu-tick" />
                 {option.label}
               </button>
