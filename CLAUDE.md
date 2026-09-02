@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Unsettled: an offline, browser-only Catan starting-position analyzer (React 19 + TS + Vite). No backend — all state lives in `localStorage`. Three phases:
+Unsettled: an offline, browser-only Catan starting-position analyzer (React 19 + TS + Vite). No backend: all state lives in `localStorage`. Three phases:
 
 - **Phase 1 (done):** board editor + screenshot import.
 - **Phase 2 (done):** rank the best placements for your pick(s) in a snake draft, accounting for intermediate picks (not just raw pip strength).
@@ -37,5 +37,5 @@ Data flows **`parser/` → `model/Board` → `engine/` + `ui/store` → `persist
 - Simulator seed domains are spend-once: screen freely on `tuning`. `eval` and `gate` are both spent; never run an `eval`- or `gate`-domain command. Why, the spend ledger, and the phase order, in [`programme.md`](.claude/specs/simulator/programme.md).
 - A draft-aware placement arm is spelled `app_formula_draft:<hero weights>@<opponent weights>`, and its opponent path is pinned to the field's weights so an A/B moves the hero's formula alone. Why, in [`contracts.md`](.claude/specs/simulator/contracts.md).
 - Parser correctness is guarded by fixture snapshots: `fixtures/*.png` → `src/parser/__tests__/expected/*.json`. Regenerating expected output means re-verifying it by hand.
-- Cross-window sync (`ui/workspaceSync.ts`) is timing-sensitive, so a test for it is worthless until it has been shown to fail against the code it was written for. Two paces matter: a close pace under the 500ms autosave debounce coalesces into one write and races nothing, and a second window that is merely open — rather than also being written in — never answers mid-sequence. Both make a green run meaningless.
+- Cross-window sync (`ui/workspaceSync.ts`) is timing-sensitive, so a test for it is worthless until it has been shown to fail against the code it was written for. Two paces matter: a close pace under the 500ms autosave debounce coalesces into one write and races nothing, and a second window that is merely open (rather than also being written in) never answers mid-sequence. Both make a green run meaningless.
 - `.claude/worktrees` holds full repo copies; `vite.config.ts` excludes it from vitest so tests don't double-run.
