@@ -8,7 +8,7 @@ import {
   setNumberToken,
   setRobber,
 } from '../../model/board'
-import { vertexIncidentEdgeIds } from '../../model/coords'
+import { edgeEndpointVertexIds, vertexIncidentEdgeIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type EdgeId, type VertexId } from '../../model/types'
 import { expansionSites, expansionSitesByEdge, expansionTerm } from '../expansion'
@@ -129,8 +129,16 @@ describe('expansion term', () => {
       board,
     )
     const ownRoads = occupancyFromBoard(mine, 'me')
-    expect(expansionSites('standard4', ownRoads, new Set([CANDIDATE]), CANDIDATE).length)
-      .toBeGreaterThanOrEqual(openSites.length)
+    const owned = expansionSites('standard4', ownRoads, new Set([CANDIDATE]), CANDIDATE)
+    // Strictly more, not merely no fewer: the free setup road is still in hand after travelling
+    // an own road, so the horizon reaches one ring further than it does off the bare board. A
+    // walk that spent the road on every first step would tie here, not lose.
+    expect(owned.length).toBeGreaterThan(openSites.length)
+    // And the sites the bare board already reached are reached for no more than they cost there.
+    for (const site of openSites) {
+      const same = owned.find((reached) => reached.vertexId === site.vertexId)
+      expect(same?.paidBuilds).toBeLessThanOrEqual(site.paidBuilds)
+    }
     // Named as somebody else, the very same roads close the candidate in.
     expect(expansionSites(
       'standard4',
@@ -138,6 +146,64 @@ describe('expansion term', () => {
       new Set([CANDIDATE]),
       CANDIDATE,
     )).toEqual([])
+  })
+
+  it('folds a site to its cheapest first edge and lists sites in vertex order', () => {
+    const board = completeBoard()
+    const occupancy = occupancyFromBoard(board, 'me')
+    const own = new Set([CANDIDATE])
+    const byEdge = expansionSitesByEdge('standard4', occupancy, own, CANDIDATE)
+    const folded = expansionSites('standard4', occupancy, own, CANDIDATE)
+
+    expect([...folded].sort((left, right) =>
+      left.vertexId < right.vertexId ? -1 : left.vertexId > right.vertexId ? 1 : 0))
+      .toEqual(folded)
+    expect(new Set(folded.map((site) => site.vertexId)).size).toBe(folded.length)
+
+    // Every kept site is the cheapest reading of that vertex anywhere in the walk, and among the
+    // cheapest readings it is the one through the lower edge id.
+    const reached = new Map<VertexId, { paidBuilds: number; firstEdge: EdgeId }[]>()
+    for (const sites of byEdge.values()) {
+      for (const site of sites) {
+        reached.set(site.vertexId, [...(reached.get(site.vertexId) ?? []), site])
+      }
+    }
+    expect(folded.length).toBe(reached.size)
+    for (const site of folded) {
+      const all = reached.get(site.vertexId) ?? []
+      const cheapest = Math.min(...all.map((one) => one.paidBuilds))
+      expect(site.paidBuilds).toBe(cheapest)
+      expect(site.firstEdge).toBe(
+        all.filter((one) => one.paidBuilds === cheapest)
+          .map((one) => one.firstEdge)
+          .sort()[0],
+      )
+    }
+    // A vertex reachable through more than one direction is what makes the rule bite.
+    expect([...reached.values()].some((all) => new Set(all.map((one) => one.firstEdge)).size > 1))
+      .toBe(true)
+  })
+
+  it('records a site once per first edge when both road-spent lanes reach it', () => {
+    // A chain of the seat's own roads out of the candidate leaves both lanes live: the far end is
+    // reached over own roads with the setup road still in hand, and again a ring around with the
+    // road spent. The two lanes settle separately, so without a per-vertex guard the walk would
+    // list that one site twice, at two costs, and `topTwo` would pair it with itself.
+    const near = incidentEdges(CANDIDATE)[0]
+    const neighbour = edgeEndpointVertexIds(near).find((vertexId) => vertexId !== CANDIDATE)!
+    const far = incidentEdges(neighbour).find((edgeId) => edgeId !== near)!
+    const farEnd = edgeEndpointVertexIds(far).find((vertexId) => vertexId !== neighbour)!
+    const board = placeRoad(placeRoad(completeBoard(), near, 'me'), far, 'me')
+    const occupancy = occupancyFromBoard(board, 'me')
+    const byEdge = expansionSitesByEdge('standard4', occupancy, new Set([CANDIDATE]), CANDIDATE)
+
+    const sites = byEdge.get(near) ?? []
+    expect(sites.filter((site) => site.vertexId === farEnd))
+      .toEqual([{ vertexId: farEnd, paidBuilds: 0, firstEdge: near }])
+    for (const [edgeId, listed] of byEdge) {
+      expect(new Set(listed.map((site) => site.vertexId)).size).toBe(listed.length)
+      expect(listed.every((site) => site.firstEdge === edgeId)).toBe(true)
+    }
   })
 
   it('is exactly inert at the shipped weight of 0', () => {

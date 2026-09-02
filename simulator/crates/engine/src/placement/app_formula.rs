@@ -181,6 +181,12 @@ impl EngineWeights {
         if self.port_coverage_deficit_weight < 0.0 {
             return Err("weights violate: portCoverageDeficitWeight >= 0".into());
         }
+        // The term is `weight * top-two of the sites the candidate opens`, so a negative weight
+        // pays a candidate for opening nothing: a boxed vertex scores 0 where an open one scores
+        // below it, which inverts what SP3 measures. `sweep-bounds.json` declares 0 to 1.2.
+        if self.expansion_weight < 0.0 {
+            return Err("weights violate: expansionWeight >= 0".into());
+        }
         // The decay is applied once per paid road-build, so above 1 a site three roads out is
         // worth more than the same site next door, and below 0 the sign of the term alternates
         // with distance. Neither is a placement policy anyone would ship, and `sweep-bounds.json`
@@ -308,8 +314,6 @@ pub struct AppFormulaScorer {
 struct VertexLinks {
     adjacent: [Vertex; VERTEX_FANOUT],
     adjacent_len: u8,
-    edges: [Edge; VERTEX_FANOUT],
-    edges_len: u8,
     /// `edge_to[slot]` joins the vertex to `adjacent[slot]`, which is `Topology::edge_between`.
     edge_to: [Edge; VERTEX_FANOUT],
 }
@@ -317,10 +321,6 @@ struct VertexLinks {
 impl VertexLinks {
     fn adjacent(&self) -> &[Vertex] {
         &self.adjacent[..usize::from(self.adjacent_len)]
-    }
-
-    fn edges(&self) -> &[Edge] {
-        &self.edges[..usize::from(self.edges_len)]
     }
 }
 
@@ -358,7 +358,7 @@ pub(super) struct Holdings {
 }
 
 impl Holdings {
-    const fn empty() -> Self {
+    pub(super) const fn empty() -> Self {
         Self {
             pips: [0.0; RESOURCE_COUNT],
             token_pips: [0.0; 13],
@@ -465,12 +465,9 @@ impl AppFormulaScorer {
         for vertex_index in 0..topology.vertex_count() {
             let vertex = vertex_index as Vertex;
             let adjacent = topology.vertex_adjacent(vertex);
-            let edges = topology.vertex_edges(vertex);
             let mut entry = VertexLinks {
                 adjacent: [0; VERTEX_FANOUT],
                 adjacent_len: adjacent.len() as u8,
-                edges: [0; VERTEX_FANOUT],
-                edges_len: edges.len() as u8,
                 edge_to: [0; VERTEX_FANOUT],
             };
             for (slot, neighbor) in adjacent.iter().enumerate() {
@@ -478,9 +475,6 @@ impl AppFormulaScorer {
                 entry.edge_to[slot] = topology
                     .edge_between(vertex, *neighbor)
                     .expect("adjacent vertices share an edge");
-            }
-            for (slot, edge) in edges.iter().enumerate() {
-                entry.edges[slot] = *edge;
             }
             links.push(entry);
         }
@@ -525,31 +519,16 @@ impl AppFormulaScorer {
         self.links[usize::from(vertex)].adjacent()
     }
 
-    /// The scorer's copy of `Topology::vertex_edges`.
-    pub fn vertex_edges(&self, vertex: Vertex) -> &[Edge] {
-        self.links[usize::from(vertex)].edges()
-    }
-
     /// Every step out of `vertex`: the edge taken and the vertex it lands on, in adjacency order.
-    pub(super) fn steps(&self, vertex: Vertex) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
+    /// This and `vertex_adjacent` are the whole of the graph the expansion walk reads, so the
+    /// parity test pins both against the topology the scorer was built from.
+    pub fn steps(&self, vertex: Vertex) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
         let links = &self.links[usize::from(vertex)];
         links
             .adjacent()
             .iter()
             .enumerate()
             .map(move |(slot, neighbor)| (links.edge_to[slot], *neighbor))
-    }
-
-    /// The scorer's copy of `Topology::edge_between`: the edge joining two adjacent vertices,
-    /// `None` when they are not adjacent. This is an adjacency lookup, so a vertex asked against
-    /// itself answers `None`, where `Topology` scans incident edges and hands back the first one.
-    pub fn edge_between(&self, a: Vertex, b: Vertex) -> Option<Edge> {
-        let links = &self.links[usize::from(a)];
-        links
-            .adjacent()
-            .iter()
-            .position(|vertex| *vertex == b)
-            .map(|slot| links.edge_to[slot])
     }
 
     /// The weights this scorer was built with.

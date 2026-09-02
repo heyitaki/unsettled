@@ -65,10 +65,10 @@ The block below the caption, and the reason the page exists.
 - Heading `Draft analysis` / `Best picks`, with a `Your turn` pill on the right when it is your turn.
 - Context line: `You are <name> · picking 3 and 6 of 8`. `<name>` is a picker, so claiming yourself is reachable here as well as from the roster.
 - Ranked recommendation cards. Each card shows the triple, the score, the survival line, the planned follow-up, and the factor pills.
-- Tapping a card draws its marks on the board **in the claimed player's colour**, with the planned second pick faded behind the first. If the board has been scrolled past, tapping a card scrolls the page back to it (B2).
+- Tapping a card draws its marks on the board **in the claimed player's colour**, with the planned second pick faded behind the first. A card may also carry a third mark, a stub of road along the edge its first pick opens; it is absent whenever `expansionWeight` is 0, which is the shipped default. If the board has been scrolled past, tapping a card scrolls the page back to it (B2).
 - When nothing is selected, all recommendations are marked at once, ranks four and up faded.
 
-**Factor pills are one word each.** `Diversity+recipes+numbers` becomes **`Balance`** and `Starting cards` becomes **`Hand`**; `Production`, `Scarcity`, `Port` and `Robber` are already one word. This is a change to `displayedFactors` in `src/ui/AnalysisPanel.tsx` and applies on desktop too.
+**Factor pills are one word each.** `Diversity+recipes+numbers` becomes **`Balance`** and `Starting cards` becomes **`Hand`**; `Production`, `Scarcity`, `Port`, `Robber` and `Expansion` are already one word. This is a change to `displayedFactors` in `src/ui/AnalysisPanel.tsx` and applies on desktop too.
 
 **Empty board (B5).** When no hex on the board carries a tile, this block is replaced entirely: heading becomes `Nothing to rank yet` / `This board is empty`, followed by one line of copy and two stacked buttons, `Import screenshot` (filled) and `Build it by hand` (outline, enters build mode). The trigger is "no tiles", not "wrong layout", so an emptied standard board gets it too. A partly-filled board keeps the existing `no-production` message.
 

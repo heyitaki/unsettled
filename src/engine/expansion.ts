@@ -93,11 +93,15 @@ export function expansionSitesByEdge(
   const neighbours = new Set(adjacency.get(candidate) ?? [])
   const rival = (vertexId: VertexId): boolean =>
     occupancy.blocked.has(vertexId) && !own.has(vertexId)
+  // Occupied means blocked or the seat's own, on the vertex and on each of its neighbours alike.
+  // `Occupancy.blocked` covers a rival's buildings and `own` the seat's, and the neighbour test
+  // has to read both: `placement/expansion.rs` reads one owner array that already holds each.
+  const occupied = (vertexId: VertexId): boolean =>
+    occupancy.blocked.has(vertexId) || own.has(vertexId)
   const isSite = (vertexId: VertexId): boolean =>
-    !occupancy.blocked.has(vertexId) &&
-    !own.has(vertexId) &&
+    !occupied(vertexId) &&
     !neighbours.has(vertexId) &&
-    (adjacency.get(vertexId) ?? []).every((neighbour) => !occupancy.blocked.has(neighbour))
+    (adjacency.get(vertexId) ?? []).every((neighbour) => !occupied(neighbour))
 
   for (const first of start) {
     const firstOwner = occupancy.edgeOwner.get(first.edgeId)
@@ -109,6 +113,11 @@ export function expansionSitesByEdge(
     // keeps it in hand for later on the same path.
     bands[0].push({ vertexId: first.to, roadUsed: firstOwner === undefined })
     const settled = new Set<string>()
+    // The two road-spent lanes settle a vertex separately, so one site can be popped twice: once
+    // over the seat's own roads and once over the free setup road. Bands drain cheapest-first, so
+    // the first pop is the cheapest one; recording the repeat would let `topTwo` pair a site with
+    // itself. Keyed by vertex alone, unlike `settled`.
+    const recorded = new Set<VertexId>()
     const sites: ExpansionSite[] = []
     for (let cost = 0; cost <= MAX_PAID_BUILDS; cost += 1) {
       const band = bands[cost]
@@ -119,7 +128,8 @@ export function expansionSitesByEdge(
         settled.add(key)
         // Every vertex past the first step is at least two edges out; the adjacency test in
         // `isSite` drops the ones that are two edges out but still touch the candidate.
-        if (state.vertexId !== first.to && isSite(state.vertexId)) {
+        if (state.vertexId !== first.to && !recorded.has(state.vertexId) && isSite(state.vertexId)) {
+          recorded.add(state.vertexId)
           sites.push({ vertexId: state.vertexId, paidBuilds: cost, firstEdge: first.edgeId })
         }
         if (rival(state.vertexId)) continue
@@ -239,7 +249,11 @@ export function expansionTerm(
   let road: EdgeId | null = null
   let bestSite = -Infinity
   let bestPair = -Infinity
-  const cheapest = new Map<VertexId, number>()
+  // Each site at the cheapest paid-build count any first edge reaches it for, matching
+  // `expansionSites` and `ExpansionSite`'s own definition. Folding on the larger *value* instead
+  // would pick the dearest path for a site the pair scores below zero, decay shrinking a negative
+  // toward 0. `placement/expansion.rs::term` folds the same way.
+  const cheapest = new Map<VertexId, { paidBuilds: number; value: number }>()
   for (const [firstEdge, sites] of byEdge) {
     const values = sites.map(discounted)
     const best = Math.max(...values)
@@ -255,12 +269,13 @@ export function expansionTerm(
       bestPair = pair
     }
     for (let index = 0; index < sites.length; index += 1) {
-      const held = cheapest.get(sites[index].vertexId)
-      // The cheapest path is the most valuable one, decay being at most 1 per build.
-      if (held === undefined || values[index] > held) {
-        cheapest.set(sites[index].vertexId, values[index])
+      const site = sites[index]
+      const held = cheapest.get(site.vertexId)
+      if (held === undefined || site.paidBuilds < held.paidBuilds) {
+        cheapest.set(site.vertexId, { paidBuilds: site.paidBuilds, value: values[index] })
       }
     }
   }
-  return { value: weights.expansionWeight * topTwo([...cheapest.values()]), road }
+  const reached = [...cheapest.values()].map((site) => site.value)
+  return { value: weights.expansionWeight * topTwo(reached), road }
 }

@@ -31,7 +31,7 @@ import {
   scoreCandidate,
   type Holdings,
 } from '../valuation'
-import { DEFAULT_WEIGHTS } from '../weights'
+import { DEFAULT_WEIGHTS, neutralSlotScales } from '../weights'
 
 const resources: readonly Resource[] = RESOURCES
 const tokens = [6, 8, 5, 9, 4, 10, 3, 11, 2, 12] as const
@@ -381,6 +381,36 @@ describe('joint draft analysis', () => {
       expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
       expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
         .toBe(entry.firstRoad)
+    }
+  })
+
+  it('scores each player at its own index in board.players as its draft slot', () => {
+    // Only one slot's diversity is zeroed, so the seat that lands on it is the only one whose
+    // recommendations come back with no diversity at all. That is the whole of the SP4 contract
+    // on the app side: the slot a seat scores from is its position in `board.players`, which is
+    // the order `draft.ts` builds the snake from.
+    const board = filledBoard(3, 4)
+    expect(board.players.map((player) => player.id)).toEqual(['aki', 'p2', 'p3'])
+    const silenced = (slot: number) => {
+      const slotScales = neutralSlotScales()
+      slotScales['3'][String(slot)] = { expansion: 1, diversity: 0 }
+      return { ...DEFAULT_WEIGHTS, slotScales }
+    }
+
+    const diversityOf = (playerId: string, slot: number): number[] =>
+      analyzeBoard(setMe(board, playerId), {
+        rollouts: 1,
+        maxResults: 54,
+        weights: silenced(slot),
+      }).recommendations.map((entry) => entry.breakdown.diversity)
+
+    for (const [index, playerId] of ['aki', 'p2', 'p3'].entries()) {
+      const own = diversityOf(playerId, index)
+      expect(own.length).toBeGreaterThan(0)
+      expect(own.every((value) => value === 0)).toBe(true)
+      // Silencing any other slot leaves this seat's diversity where it was.
+      const other = diversityOf(playerId, (index + 1) % 3)
+      expect(other.some((value) => value !== 0)).toBe(true)
     }
   })
 

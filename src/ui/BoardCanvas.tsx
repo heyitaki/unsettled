@@ -180,8 +180,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
   const highlight = state.highlight ?? restMarks ?? NO_MARKS
   const gridEdgeSet = useMemo<ReadonlySet<string>>(() => new Set(grid.edgeIds), [grid])
+  // Road marks are left out: they share the edge-id namespace with ports, and a recommended road
+  // that happens to run along a port edge must not light the port up.
   const highlightSet = useMemo(
-    () => new Set(highlight.map((mark) => mark.ref)),
+    () => new Set(highlight
+      .filter((mark) => mark.kind !== 'road')
+      .map((mark) => mark.ref)),
     [highlight],
   )
   // Marks that land on a vertex someone has already built on. The piece itself
@@ -694,12 +698,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }), [board.buildings, markedBuildings, playerColor])
   const markLayer = useMemo(() => highlight
-    .filter((mark) => (mark.ref.startsWith('e:') ? gridEdgeSet : gridVertexSet).has(mark.ref))
+    .filter((mark) => (mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
     .map((mark) => {
-      // An edge mark is a direction, not a place: the analysis panel's road recommendation.
+      // A road mark is a direction, not a place: the analysis panel's road recommendation.
       // Draw it as a stub of road along the edge, short enough to leave both endpoints clear of
-      // the vertex circles the same recommendation puts there.
-      if (mark.ref.startsWith('e:')) {
+      // the vertex circles the same recommendation puts there. Every other mark is a place, and
+      // an edge ref among them names a port, which `portLayer` lights up instead.
+      if (mark.kind === 'road') {
         const [a, b] = edgeEndpointVertexIds(mark.ref as EdgeId).map(vertexPoint)
         const from = { x: a.x + (b.x - a.x) * MARK_EDGE_INSET, y: a.y + (b.y - a.y) * MARK_EDGE_INSET }
         const to = { x: b.x - (b.x - a.x) * MARK_EDGE_INSET, y: b.y - (b.y - a.y) * MARK_EDGE_INSET }

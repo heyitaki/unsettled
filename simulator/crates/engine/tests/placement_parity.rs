@@ -300,26 +300,23 @@ fn the_scorer_adjacency_copy_matches_the_topology_it_was_built_from() {
                 topology.vertex_adjacent(vertex),
                 "vertex {index} adjacency"
             );
-            assert_eq!(
-                scorer.vertex_edges(vertex),
-                topology.vertex_edges(vertex),
-                "vertex {index} edges"
-            );
-            // Distinct vertices only. `Topology::edge_between` scans incident edges for one
-            // holding `b` as an endpoint, so asked for a vertex against itself it answers with
-            // that vertex's first incident edge; the scorer answers `None`, because a vertex is
-            // not adjacent to itself. No walk asks, since neighbours come out of the adjacency
-            // list, and the scorer's contract is the documented one.
-            for other in 0..topology.vertex_count() {
-                if other == index {
-                    continue;
-                }
-                assert_eq!(
-                    scorer.edge_between(vertex, other as u8),
-                    topology.edge_between(vertex, other as u8),
-                    "edge between {index} and {other}"
-                );
-            }
+            // The walk steps by `(edge, vertex)` pairs, so the pairing is what has to match, not
+            // just the two lists side by side: a copy that kept the right edges against the wrong
+            // neighbours would walk the board along edges that do not join what it thinks.
+            let steps: Vec<(u8, u8)> = scorer.steps(vertex).collect();
+            let expected: Vec<(u8, u8)> = topology
+                .vertex_adjacent(vertex)
+                .iter()
+                .map(|neighbour| {
+                    (
+                        topology
+                            .edge_between(vertex, *neighbour)
+                            .expect("adjacent vertices share an edge"),
+                        *neighbour,
+                    )
+                })
+                .collect();
+            assert_eq!(steps, expected, "vertex {index} steps");
         }
     }
     assert_eq!(
@@ -376,6 +373,7 @@ fn occupancy_moves_the_expansion_component_and_nothing_else() {
         // The main parity test above drives the case's own scales.
         let mut weights = parse_weights(&case.weights);
         weights.slot_scales = neutral_slot_scales();
+        let concentration_weight = weights.robber_concentration_weight;
         let scorer = AppFormulaScorer::new(&board, &topology, weights);
 
         let candidate = topology.vertex_by_id(&case.candidate).unwrap();
@@ -413,8 +411,15 @@ fn occupancy_moves_the_expansion_component_and_nothing_else() {
             case.id
         );
         // The fused total is what `score_for_owner` runs in every game, and the summed breakdown is
-        // what the fixture's `breakdownTotal` pins, so the two have to be the same number down to
-        // the bit or the measured formula is not the reported one.
+        // what the fixture's `breakdownTotal` pins, so the two have to be the same number or the
+        // measured formula is not the reported one.
+        //
+        // Bit-exact only while `robberConcentrationWeight` is 0, which is every shipped run: the
+        // breakdown folds the concentration delta into its `robber` component and sums
+        // `(production + scarcity) + (robber + delta)`, where the fused path adds the delta to the
+        // precomputed `production + scarcity + robber`. Same addends, different association, so a
+        // nonzero delta may leave the two an ulp apart. `valuation.ts` groups them the same two
+        // ways, so the languages stay in step either way.
         let fused = scorer.marginal_total_for_owner(
             &occupancy.vertex_owner,
             &occupancy.edge_owner,
@@ -423,8 +428,13 @@ fn occupancy_moves_the_expansion_component_and_nothing_else() {
             case.receives_grant,
         );
         let summed = actual.total();
+        let agree = if concentration_weight == 0.0 {
+            fused.to_bits() == summed.to_bits()
+        } else {
+            (fused - summed).abs() <= TOLERANCE * summed.abs().max(1.0)
+        };
         assert!(
-            fused.to_bits() == summed.to_bits() || (fused.is_nan() && summed.is_nan()),
+            agree || (fused.is_nan() && summed.is_nan()),
             "case {}: the fused total gave {fused:.17e}, the summed breakdown gave {summed:.17e}",
             case.id
         );

@@ -151,9 +151,14 @@ fn slot_index(owner_slots: usize, seat: u8, held: Option<Vertex>, grant: bool) -
 
 /// The best-scoring legal vertex in a row, ties to the lowest vertex index.
 ///
-/// `vacated` names a vertex to treat as unoccupied for legality alone. That is how the same row
-/// answers what a seat could have taken had another seat not taken that vertex: the scores in the
-/// row do not move, only which of them are still reachable.
+/// `vacated` names a vertex to treat as unoccupied for legality alone, which is the denial
+/// credit's preregistered counterfactual: the same row answers what a seat could have taken had
+/// another seat not taken that vertex, by reopening the vertex and everything its distance ring
+/// barred. Only reachability moves, never a score. That is exact while `expansionWeight` is 0,
+/// where no component reads the board beyond the scoring seat's own holdings. Above 0 the row
+/// still prices every vertex with the candidate standing, because a settlement is a dead end for
+/// the expansion walk, so the counterfactual stays a legality one by definition rather than
+/// becoming a full re-score.
 fn best_legal(
     topology: &Topology,
     vertex_owner: &[u8],
@@ -662,8 +667,12 @@ mod tests {
     }
 
     /// The row cache is keyed by seat, holdings and grant, so a hit must carry the same numbers a
-    /// direct score would. Only the `expansion` component reads anything else, and it is off at
-    /// the shipped weights this test loads.
+    /// direct score would.
+    ///
+    /// Both ways round. `reusable` is false whenever either formula carries a nonzero
+    /// `expansionWeight`, which is the one component that reads the board beyond the scoring
+    /// seat's own holdings; that path recomputes into a shared scratch buffer instead, and a
+    /// scratch left stale from the previous call would answer with another seat's numbers.
     #[test]
     fn a_cached_row_matches_a_direct_score() {
         let (topology, board) = fixture();
@@ -671,23 +680,77 @@ mod tests {
         let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
         vertex_owner[7] = 1;
         let edge_owner = vec![EMPTY; topology.edge_count()];
-        let mut rows = ScoreRows::new(6, topology.vertex_count(), vertex_owner.len(), true);
 
-        for _ in 0..2 {
-            let row = rows
-                .row(&scorers.opponent, &vertex_owner, &edge_owner, 1, true)
-                .to_vec();
-            for (vertex, score) in row.iter().enumerate() {
-                let direct = scorers.opponent.score_for_owner(
-                    &vertex_owner,
-                    &edge_owner,
-                    1,
-                    vertex as Vertex,
-                    true,
-                );
-                assert_eq!(*score, direct, "vertex {vertex}");
+        for reusable in [true, false] {
+            let mut rows =
+                ScoreRows::new(6, topology.vertex_count(), vertex_owner.len(), reusable);
+            for seat in [1, 2] {
+                for _ in 0..2 {
+                    let row = rows
+                        .row(&scorers.opponent, &vertex_owner, &edge_owner, seat, true)
+                        .to_vec();
+                    for (vertex, score) in row.iter().enumerate() {
+                        let direct = scorers.opponent.score_for_owner(
+                            &vertex_owner,
+                            &edge_owner,
+                            seat,
+                            vertex as Vertex,
+                            true,
+                        );
+                        assert_eq!(*score, direct, "reusable {reusable} seat {seat} vertex {vertex}");
+                    }
+                }
             }
         }
+    }
+
+    /// The lookahead with SP3's expansion term switched on, which is the combination no committed
+    /// arm carries and the one that turns the row cache off.
+    ///
+    /// The candidate's value must still be its own marginal plus the best second settlement the
+    /// replay leaves standing, computed the long way round here. This is also the only test that
+    /// drives `ScoreRows`' scratch path through a whole replay rather than a single row.
+    #[test]
+    fn the_lookahead_holds_up_with_the_expansion_term_on() {
+        let (topology, board) = fixture();
+        let mut weights = default_weights();
+        weights.expansion_weight = 0.3;
+        let scorers = DraftScorers {
+            hero: AppFormulaScorer::new(&board, &topology, weights.clone()),
+            opponent: AppFormulaScorer::new(&board, &topology, weights),
+        };
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+
+        let mut lookahead =
+            Lookahead::new(&scorers, &topology, SEATS, HERO, &vertex_owner, &edge_owner)
+                .expect("the hero picks twice");
+        let candidate: Vertex = 24;
+        let value = lookahead.value(&vertex_owner, &edge_owner, candidate);
+
+        let marginal =
+            scorers
+                .hero
+                .score_for_owner(&vertex_owner, &edge_owner, HERO, candidate, false);
+        // The replay is deterministic, so running it again leaves `owners` and `edges` exactly as
+        // `value` left them, and the best surviving second settlement can be scanned off them.
+        lookahead.replay(&vertex_owner, &edge_owner, candidate, None);
+        assert_eq!(lookahead.owners[usize::from(candidate)], HERO);
+        let second = (0..topology.vertex_count())
+            .map(|index| index as Vertex)
+            .filter(|vertex| can_place_settlement(&topology, &lookahead.owners, *vertex))
+            .map(|vertex| {
+                scorers.hero.score_for_owner(
+                    &lookahead.owners,
+                    &lookahead.edges,
+                    HERO,
+                    vertex,
+                    true,
+                )
+            })
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(second.is_finite(), "the hero must have somewhere to go");
+        assert_eq!(value, marginal + second);
     }
 
     /// The credit a candidate earns is the weight times what the intervening rivals lose to it,

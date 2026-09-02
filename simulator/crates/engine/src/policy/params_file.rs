@@ -1080,6 +1080,50 @@ mod tests {
         parsed.validate().expect("zero is inside the domain");
     }
 
+    /// The term is `expansionWeight * top-two of the sites a candidate opens`, so a negative
+    /// weight pays a boxed-in candidate, which scores 0, more than an open one. Same hard bound,
+    /// and same reason, as `genericPortFactor`.
+    #[test]
+    fn a_negative_expansion_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["expansionWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("expansionWeight >= 0"), "{error}");
+
+        weights["expansionWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
+    /// The decay is charged once per paid road-build, so above 1 a site three roads out outscores
+    /// the same site next door, and below 0 the term's sign alternates with distance. Both ends
+    /// are closed, unlike the one-sided bounds the weights carry, so both ends are checked.
+    #[test]
+    fn an_expansion_decay_outside_the_unit_interval_fails_placement_validation() {
+        let committed: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        for outside in [-0.1, 1.1] {
+            let mut weights = committed.clone();
+            weights["expansionDecay"] = Value::from(outside);
+            let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+            let error = parsed.validate().expect_err("hard bound");
+            assert!(error.contains("expansionDecay in [0, 1]"), "{error}");
+        }
+        for inside in [0.0, 0.5, 1.0] {
+            let mut weights = committed.clone();
+            weights["expansionDecay"] = Value::from(inside);
+            let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+            parsed.validate().expect("the closed unit interval is the domain");
+        }
+    }
+
     /// `slotScales` is keyed by seat count and slot, so a dropped or misspelled key is a silent
     /// no-op rather than a load error unless the block is checked for exact keys: a file missing
     /// the four-seat slot 3 entry would score the last pick of every measured run unscaled and
@@ -1114,12 +1158,32 @@ mod tests {
             .expect_err("an extra seat count is a load error");
         assert!(error.contains("slotScales carries seat counts"), "{error}");
 
-        let mut negative = committed;
+        let mut negative = committed.clone();
         negative["slotScales"]["4"]["2"]["diversity"] = Value::from(-0.5);
         let parsed: EngineWeights = serde_json::from_value(negative).expect("weights shape");
         let error = parsed.validate().expect_err("a negative scale is a load error");
         assert!(
             error.contains("slotScales.4.2.diversity >= 0 and finite"),
+            "{error}"
+        );
+
+        // The same guard's other half. JSON has no literal for it, so the field is set after the
+        // parse: a non-finite scale multiplies a whole component into NaN, which loses every
+        // comparison in the argmax instead of failing.
+        let mut not_finite: EngineWeights =
+            serde_json::from_value(committed).expect("weights shape");
+        not_finite
+            .slot_scales
+            .get_mut("4")
+            .expect("the four-seat row")
+            .get_mut("2")
+            .expect("slot 2")
+            .expansion = f64::NAN;
+        let error = not_finite
+            .validate()
+            .expect_err("a non-finite scale is a load error");
+        assert!(
+            error.contains("slotScales.4.2.expansion >= 0 and finite"),
             "{error}"
         );
     }

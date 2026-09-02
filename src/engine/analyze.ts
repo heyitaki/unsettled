@@ -174,7 +174,10 @@ const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holding
  *
  * The blocked set is already closed under the distance rule, where `occupancyFromBoard` records
  * the buildings alone, so this is the conservative reading of the two: a vertex barred by a
- * neighbouring settlement looks occupied here.
+ * neighbouring settlement looks occupied here, including one barred by the scoring player's own
+ * settlement, which the expansion walk then reads as a rival's dead end. That makes the second
+ * pick's expansion component no larger than the first's, which is scored on the board's pieces
+ * alone. Inert while `expansionWeight` is 0, and something to settle before it moves off 0.
  */
 const rolloutOccupancy = (
   board: Board,
@@ -471,13 +474,6 @@ export function rankCandidates(
       mySlot,
     ),
   ]))
-  // The road the expansion walk would lay from each first pick. The scoring above already ran the
-  // walk, but the term reports only its value, so the direction is asked for separately. At the
-  // shipped `expansionWeight` of 0 the walk returns without spreading, so this costs nothing.
-  const firstRoads = new Map(candidates.map((candidate) => [
-    candidate,
-    expansionTerm(ctx, myHoldings, boardOccupancy, candidate).road,
-  ]))
   const aggregates = new Map<VertexId, CandidateAggregate>()
   const adjacency = vertexAdjacency(board.layout)
 
@@ -566,7 +562,8 @@ export function rankCandidates(
     const score = breakdownTotal(breakdown)
     recommendations.push({
       firstPick: candidate,
-      firstRoad: firstRoads.get(candidate) ?? null,
+      // Filled in below, once the list has been cut to the results the panel shows.
+      firstRoad: null,
       plannedSecond: frequencyOrder(
         aggregate.plannedSecond,
         aggregate.survived,
@@ -586,8 +583,15 @@ export function rankCandidates(
   }
   recommendations.sort((a, b) => b.rankScore - a.rankScore ||
     (gridIndex.get(a.firstPick) ?? 0) - (gridIndex.get(b.firstPick) ?? 0))
+  // The road the expansion walk would lay from each first pick. The scoring above already ran the
+  // walk, but the term reports only its value, so the direction is asked for separately. Asked
+  // after the cut, because the walk is the expensive half of the term and every candidate the
+  // panel will not show is a walk nobody reads.
   return {
-    recommendations: recommendations.slice(0, options.maxResults),
+    recommendations: recommendations.slice(0, options.maxResults).map((recommendation) => ({
+      ...recommendation,
+      firstRoad: expansionTerm(ctx, myHoldings, boardOccupancy, recommendation.firstPick).road,
+    })),
     takenBeforeFirstPick,
   }
 }

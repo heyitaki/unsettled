@@ -31,7 +31,7 @@ describe('recommendationMarks', () => {
     expect(recommendationMarks(recommendation(ROAD), '#3063ba')).toEqual([
       { ref: FIRST, color: '#3063ba', label: '1' },
       { ref: SECOND, color: '#3063ba', label: '2' },
-      { ref: ROAD, color: '#3063ba', label: 'R' },
+      { ref: ROAD, color: '#3063ba', label: 'R', kind: 'road' },
     ])
   })
 

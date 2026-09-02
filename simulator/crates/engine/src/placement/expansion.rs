@@ -118,6 +118,11 @@ pub(super) fn sites_by_edge(
             "the expansion walk's state bitmask is 128 bits wide"
         );
         let mut settled = [0_u128; 2];
+        // The two road-spent lanes settle a vertex separately, so one site can be popped twice:
+        // once over the seat's own roads and once over the free setup road. Bands drain
+        // cheapest-first, so the first pop is the cheapest one; recording the repeat would let
+        // `top_two` pair a site with itself. One bit per vertex, unlike `settled`'s two lanes.
+        let mut recorded = 0_u128;
         let mut sites = Vec::new();
         for cost in 0..=MAX_PAID_BUILDS {
             let mut head = 0;
@@ -132,7 +137,8 @@ pub(super) fn sites_by_edge(
                 settled[lane] |= bit;
                 // Every vertex past the first step is at least two edges out; the adjacency test
                 // in `is_site` drops the ones that are two edges out but still touch the candidate.
-                if state.vertex != first_vertex && is_site(state.vertex) {
+                if state.vertex != first_vertex && recorded & bit == 0 && is_site(state.vertex) {
+                    recorded |= bit;
                     sites.push(ExpansionSite {
                         vertex: state.vertex,
                         paid_builds: cost as u32,
@@ -200,7 +206,11 @@ pub(super) fn term(
     // One score per site, shared by every first edge that reaches it: a site's worth depends on
     // the site and the pair, never on the road taken to get there.
     let mut scores: Vec<Option<f64>> = vec![None; vertex_owner.len()];
-    let mut cheapest: Vec<Option<f64>> = vec![None; vertex_owner.len()];
+    // Each site at the cheapest paid-build count any first edge reaches it for, matching
+    // `ExpansionSite`'s own definition. Folding on the larger *value* instead would pick the
+    // dearest path for a site the pair scores below zero, decay shrinking a negative toward 0.
+    // `expansion.ts::expansionTerm` folds the same way.
+    let mut cheapest: Vec<Option<(u32, f64)>> = vec![None; vertex_owner.len()];
     let mut road: Option<Edge> = None;
     let mut best_site = f64::NEG_INFINITY;
     let mut best_pair = f64::NEG_INFINITY;
@@ -240,13 +250,16 @@ pub(super) fn term(
         }
         for (site, value) in sites.iter().zip(&values) {
             let held = &mut cheapest[usize::from(site.vertex)];
-            // The cheapest path is the most valuable one, decay being at most 1 per build.
-            if held.is_none_or(|held| *value > held) {
-                *held = Some(*value);
+            if held.is_none_or(|(paid_builds, _)| site.paid_builds < paid_builds) {
+                *held = Some((site.paid_builds, *value));
             }
         }
     }
-    let reached: Vec<f64> = cheapest.into_iter().flatten().collect();
+    let reached: Vec<f64> = cheapest
+        .into_iter()
+        .flatten()
+        .map(|(_, value)| value)
+        .collect();
     ExpansionValue {
         value: weights.expansion_weight * top_two(&reached),
         road,
@@ -283,7 +296,7 @@ mod tests {
 
     use super::*;
     use crate::board::{ConversionOptions, SimBoard};
-    use crate::placement::app_formula::EngineWeights;
+    use crate::placement::app_formula::{EngineWeights, ResourceValues};
     use crate::rules::RuleConfig;
     use crate::topology::{Layout, Topology};
     use crate::wire::WireBoard;
@@ -395,6 +408,188 @@ mod tests {
             walked.iter().all(|vertex| open.contains(vertex)) && walked.len() < open.len(),
             "the rivals must close sites the open board offers"
         );
+    }
+
+    /// The road is the first edge of the cheapest path to the best site, ties on the larger
+    /// top-two sum and then on the lower edge index.
+    ///
+    /// Recomputed here from the per-edge walk on every candidate the board offers, which is what
+    /// `src/engine/__tests__/expansion.test.ts` does to the TypeScript rule. The parity fixture
+    /// pins the term's *value* across the two languages and nothing pins its direction, so an
+    /// arm at a nonzero weight could lay a road the app would not recommend with no test failing.
+    #[test]
+    fn the_road_goes_to_the_best_site_and_ties_fall_to_the_lower_edge() {
+        let (topology, board) = fixture();
+        let mut weights = default_weights();
+        weights.expansion_weight = 0.3;
+        let decay = weights.expansion_decay;
+        let scorer = AppFormulaScorer::new(&board, &topology, weights);
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+        let holdings = Holdings::empty();
+
+        let mut roads = 0;
+        for vertex in 0..topology.vertex_count() {
+            let candidate = vertex as Vertex;
+            let by_edge = sites_by_edge(&scorer, &vertex_owner, &edge_owner, 0, candidate);
+            let road = term(&scorer, &holdings, &vertex_owner, &edge_owner, 0, candidate).road;
+            if by_edge.is_empty() {
+                assert_eq!(road, None, "vertex {vertex} opens nothing");
+                continue;
+            }
+            let mut with_candidate = holdings;
+            scorer.add_to_holdings(&mut with_candidate, candidate);
+            // (best, pair, edge), ranked the way the rule ranks them: best and pair descending,
+            // edge ascending. `f64::total_cmp` only orders the keys here; the rule's own
+            // comparisons are the ones under test.
+            let mut ranked: Vec<(f64, f64, Edge)> = by_edge
+                .iter()
+                .map(|(first_edge, sites)| {
+                    let mut values: Vec<f64> = sites
+                        .iter()
+                        .map(|site| {
+                            scorer.total_with_holdings(with_candidate, site.vertex, false)
+                                * decay.powf(f64::from(site.paid_builds))
+                        })
+                        .collect();
+                    values.sort_by(|left, right| right.total_cmp(left));
+                    // `top_two` of one value is that value, not the value plus negative infinity.
+                    let best = values[0];
+                    let pair = values.get(1).map_or(best, |second| best + second);
+                    (best, pair, *first_edge)
+                })
+                .collect();
+            ranked.sort_by(|left, right| {
+                right
+                    .0
+                    .total_cmp(&left.0)
+                    .then(right.1.total_cmp(&left.1))
+                    .then(left.2.cmp(&right.2))
+            });
+            assert_eq!(road, Some(ranked[0].2), "vertex {vertex} road");
+            roads += 1;
+        }
+        assert!(roads > 0, "no candidate on the fixture board opens a site");
+    }
+
+    /// A site is listed once per first edge, at the cheapest cost the walk reaches it for.
+    ///
+    /// A chain of the seat's own roads out of the candidate leaves both road-spent lanes live: the
+    /// far end is reached over own roads with the setup road still in hand, and again a ring around
+    /// with the road spent. The lanes settle separately, so without the per-vertex guard the walk
+    /// lists that one site twice, at two costs, and `top_two` pairs it with itself. Mirrors
+    /// `src/engine/__tests__/expansion.test.ts`.
+    #[test]
+    fn a_site_is_listed_once_per_first_edge() {
+        let (topology, board) = fixture();
+        let mut weights = default_weights();
+        weights.expansion_weight = 0.3;
+        let scorer = AppFormulaScorer::new(&board, &topology, weights);
+        let candidate: Vertex = 24;
+        let near = topology.vertex_edges(candidate)[0];
+        let neighbour = topology
+            .edge_endpoints(near)
+            .into_iter()
+            .find(|vertex| *vertex != candidate)
+            .unwrap();
+        let far = *topology
+            .vertex_edges(neighbour)
+            .iter()
+            .find(|edge| **edge != near)
+            .unwrap();
+        let far_end = topology
+            .edge_endpoints(far)
+            .into_iter()
+            .find(|vertex| *vertex != neighbour)
+            .unwrap();
+
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let mut edge_owner = vec![EMPTY; topology.edge_count()];
+        edge_owner[usize::from(near)] = 0;
+        edge_owner[usize::from(far)] = 0;
+
+        let by_edge = sites_by_edge(&scorer, &vertex_owner, &edge_owner, 0, candidate);
+        let sites = by_edge
+            .iter()
+            .find(|(edge, _)| *edge == near)
+            .map(|(_, sites)| sites)
+            .expect("the own-road direction must open sites");
+        let listed: Vec<&ExpansionSite> =
+            sites.iter().filter(|site| site.vertex == far_end).collect();
+        assert_eq!(
+            listed,
+            vec![&ExpansionSite {
+                vertex: far_end,
+                paid_builds: 0
+            }],
+            "the far end of the own-road chain is one site, reached free"
+        );
+        for (edge, sites) in &by_edge {
+            let mut seen: Vec<Vertex> = sites.iter().map(|site| site.vertex).collect();
+            let listed = seen.len();
+            seen.sort_unstable();
+            seen.dedup();
+            assert_eq!(seen.len(), listed, "edge {edge} listed a site twice");
+        }
+    }
+
+    /// With every direction worth the same, the rule has nothing left but the edge index, and it
+    /// must take the lower one.
+    ///
+    /// The tie is built by flattening the site scores rather than the board: every weight that
+    /// feeds a vertex's value is zeroed, so each site is worth exactly 0 and each edge out of a
+    /// candidate reaches the same best and the same pair. `expansion.ts` breaks the same tie on
+    /// the lower edge *id*, a string comparison, and `topology.rs::pack_edges_are_listed_in_edge_id_order`
+    /// is what keeps the two rules the same rule.
+    #[test]
+    fn equal_directions_fall_to_the_lower_edge() {
+        let (topology, board) = fixture();
+        let mut weights = default_weights();
+        weights.expansion_weight = 0.3;
+        weights.expansion_decay = 1.0;
+        weights.resource_value = ResourceValues {
+            wood: 0.0,
+            sheep: 0.0,
+            wheat: 0.0,
+            brick: 0.0,
+            ore: 0.0,
+        };
+        weights.hand_value_weight = 0.0;
+        weights.scarcity_weight = 0.0;
+        weights.diversity_weight = 0.0;
+        weights.coverage_scarcity_weight = 0.0;
+        weights.duplicate_number_penalty = 0.0;
+        weights.recipe_road_bonus = 0.0;
+        weights.recipe_city_bonus = 0.0;
+        weights.recipe_settlement_bonus = 0.0;
+        weights.recipe_dev_card_bonus = 0.0;
+        weights.port_weight = 0.0;
+        weights.port_coverage_deficit_weight = 0.0;
+        weights.robber_discount = 0.0;
+        weights.robber_concentration_weight = 0.0;
+        let scorer = AppFormulaScorer::new(&board, &topology, weights);
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+        let holdings = Holdings::empty();
+
+        let mut ties = 0;
+        for vertex in 0..topology.vertex_count() {
+            let candidate = vertex as Vertex;
+            assert_eq!(
+                scorer.total_with_holdings(holdings, candidate, false),
+                0.0,
+                "vertex {vertex} must be worth nothing, or the directions are not tied"
+            );
+            let by_edge = sites_by_edge(&scorer, &vertex_owner, &edge_owner, 0, candidate);
+            if by_edge.len() < 2 {
+                continue;
+            }
+            let road = term(&scorer, &holdings, &vertex_owner, &edge_owner, 0, candidate).road;
+            let lowest = by_edge.iter().map(|(edge, _)| *edge).min();
+            assert_eq!(road, lowest, "vertex {vertex} must fall to the lower edge");
+            ties += 1;
+        }
+        assert!(ties > 0, "no candidate reached the edge tie-break");
     }
 
     /// `cli::expansion::reachable_expansion_sites` as a set rather than a count. The CLI crate
