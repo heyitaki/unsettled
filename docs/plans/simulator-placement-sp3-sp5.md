@@ -187,18 +187,18 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 9: Preregister M-55, the expansion decay sweep, conditional on M-54
 
-- [ ] Read M-54. If no expansion arm read `better`, skip this task and Task 10 with the note "skipped: expansionWeight did not read better in M-54" and append a dated one-paragraph note to `placement-programme.md` recording that the decay axis was never swept and why
-- [ ] Otherwise write `docs/plans/preregs/<today>-m55-sp3-expansion-decay.md`: two arms at the surviving weight with `expansionDecay` 0.25 and 1.0 (`sp3_decay_lo`, `sp3_decay_hi`), reference `sp3_decay_ref` = the surviving weight at decay 0.5; extend the `SP3_ARMS` pin and the count
-- [ ] Screen power and protocol as in Context; the standing disposition rule applies to the decay axis, whose survivor is the better-reading decay or 0.5 if neither reads `better`
-- [ ] Prediction and admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Read M-54. If no expansion arm read `better`, skip this task and Task 10 with the note "skipped: expansionWeight did not read better in M-54" and append a dated one-paragraph note to `placement-programme.md` recording that the decay axis was never swept and why (skipped: expansionWeight did not read better in M-54)
+- [x] Otherwise write `docs/plans/preregs/<today>-m55-sp3-expansion-decay.md`: two arms at the surviving weight with `expansionDecay` 0.25 and 1.0 (`sp3_decay_lo`, `sp3_decay_hi`), reference `sp3_decay_ref` = the surviving weight at decay 0.5; extend the `SP3_ARMS` pin and the count (skipped: expansionWeight did not read better in M-54)
+- [x] Screen power and protocol as in Context; the standing disposition rule applies to the decay axis, whose survivor is the better-reading decay or 0.5 if neither reads `better` (skipped: expansionWeight did not read better in M-54)
+- [x] Prediction and admissibility conditions (skipped: expansionWeight did not read better in M-54)
+- [x] Both cargo profiles green, link check passes (skipped: expansionWeight did not read better in M-54)
 
 ### Task 10: Run M-55 and record it, conditional on M-54
 
-- [ ] If Task 9 recorded the skip, tick these boxes with the same note and stop
-- [ ] Record `uptime`, run the preregistered command, record `uptime` again
-- [ ] Append `## M-55: SP3 expansion decay` with full provenance, both tables per arm, and the disposition; record the surviving `(expansionWeight, expansionDecay)` pair explicitly
-- [ ] Link check passes
+- [x] If Task 9 recorded the skip, tick these boxes with the same note and stop (skipped: expansionWeight did not read better in M-54)
+- [x] Record `uptime`, run the preregistered command, record `uptime` again (skipped: expansionWeight did not read better in M-54)
+- [x] Append `## M-55: SP3 expansion decay` with full provenance, both tables per arm, and the disposition; record the surviving `(expansionWeight, expansionDecay)` pair explicitly (skipped: expansionWeight did not read better in M-54)
+- [x] Link check passes (skipped: expansionWeight did not read better in M-54)
 
 ### Task 11: Robber-attraction separation reading in `diagnose`
 
