@@ -235,9 +235,9 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 16: Run M-57 and record it, conditional on M-56
 
-- [ ] If Task 14 recorded the skip, tick these boxes with the same note and stop
-- [ ] Record `uptime`, run, record `uptime` again; append `## M-57: robber concentration term` with full provenance, both tables, and the disposition including the single retry
-- [ ] Link check passes
+- [x] If Task 14 recorded the skip, tick these boxes with the same note and stop (Task 14 recorded no skip: M-56 read `concentrationTermIndicated` true and the term is built, so this run executed in full)
+- [x] Record `uptime`, run, record `uptime` again; append `## M-57: robber concentration term` with full provenance, both tables, and the disposition including the single retry (the arm read `equivalent`, which buys no retry: the single retry is bought by `inconclusive` alone)
+- [x] Link check passes
 
 ### Task 17: SP4 `slotScales` block and slot plumbing, behaviour-neutral
 
