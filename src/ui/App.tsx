@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { analyzeBoardCached } from '../engine/analyze'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
+import { DraftRibbon } from './DraftRibbon'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
 import { MobileNav } from './MobileNav'
 import { PANES, type PaneId } from './mobilePanes'
 import { PhoneShell } from './phone/PhoneShell'
 import { PlayerPanel } from './PlayerPanel'
-import { StoreProvider } from './store'
+import { restingMarks } from './restMarks'
+import { activeTab, StoreProvider, useStore } from './store'
 import { ToolPalette } from './ToolPalette'
 import { usePortraitPhone } from './useMediaQuery'
 import './editor.css'
@@ -27,9 +30,14 @@ function pickSubtitle(): string {
 }
 
 function Workspace() {
+  const { state } = useStore()
   // Chosen once per page load, so the tagline rotates between visits.
   const [subtitle] = useState(pickSubtitle)
   const [pane, setPane] = useState<PaneId>(PANES[0].id)
+  // What the board wears while nothing is selected (spec D4), the same ranked
+  // picks the phone rests on.
+  const { board } = activeTab(state).game
+  const restMarks = useMemo(() => restingMarks(board, analyzeBoardCached(board)), [board])
   // The mobile shell scrolls the document, so switching panes has to rewind the
   // page rather than a pane-local scroller.
   useEffect(() => { window.scrollTo({ top: 0 }) }, [pane])
@@ -61,7 +69,8 @@ function Workspace() {
           </div>
         </aside>
         <div className="center-column">
-          <BoardCanvas />
+          <DraftRibbon />
+          <BoardCanvas restMarks={restMarks} />
         </div>
         <aside className="right-rail">
           <div className="mobile-pane" id="pane-players" data-pane={PANES[1].id}>
@@ -73,9 +82,6 @@ function Workspace() {
         </aside>
       </main>
       <MobileNav pane={pane} onSelect={selectPane} />
-      <footer>
-        <span>Phase 2 · draft analysis</span>
-      </footer>
     </div>
   )
 }

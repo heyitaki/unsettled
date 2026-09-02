@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { LISTED_PICKS } from '../src/ui/restMarks'
 
 /**
  * The two arms that must render as they did before the phone shell existed
@@ -83,6 +84,33 @@ test.describe('desktop', () => {
     expect(nativeDialogs).toBe(0)
   })
 
+  test('draws the draft ribbon over a board wearing the resting marks, under a bare caption', async ({ page }) => {
+    await page.goto('')
+    await expect(page.locator('footer')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Randomize' }).click()
+
+    // Two picks per player, the first one up (spec D4).
+    const players = await page.locator('.player-list .player-card').count()
+    const slots = page.locator('.draft-ribbon .draft-ribbon-slot')
+    await expect(slots).toHaveCount(players * 2)
+    await expect(slots.first()).toHaveClass(/\bnow\b/)
+
+    // The board rests on the ranked picks, the lower ranks faded (spec D4).
+    const marks = page.locator('.vertex-highlight')
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    await expect(marks.nth(3)).toHaveClass(/\bfaded\b/)
+    await expect(marks.nth(4)).toHaveClass(/\bfaded\b/)
+
+    // The counts moved to the tool labels, so the caption is the layout alone.
+    const caption = await page.locator('.board-status').innerText()
+    expect(caption).not.toMatch(/terrain|pieces/)
+    await snap(page, 'desktop-ribbon')
+
+    // Nothing is hovered, so the slot's own mark is all the board carries.
+    await slots.first().click()
+    await expect(marks).toHaveCount(1)
+  })
+
   test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {
     await page.goto('')
     const trigger = page.getByRole('button', { name: 'Board layout' })
@@ -119,6 +147,9 @@ test.describe('landscape phone', () => {
     await expect(nav.getByRole('tab')).toHaveText(['Board', 'Players', 'Picks', 'Library'])
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.board-tabs')).toHaveCount(0)
+    // The ribbon needs a row this arm has no height for (spec D4).
+    await expect(page.locator('.draft-ribbon')).toBeHidden()
+    await expect(page.locator('footer')).toHaveCount(0)
     await snap(page, 'landscape')
   })
 

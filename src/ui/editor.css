@@ -76,10 +76,18 @@ button.selected.danger { color: #fff; }
 .token-tools .hot { color: #b12620; }
 .token-tools .selected.hot { color: white; }
 
+.draft-ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; height: 38px; padding: 0 var(--gutter, 0); }
+.draft-ribbon-slot { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.draft-ribbon-slot.pending { opacity: .34; }
+.draft-ribbon-slot.now { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
+.draft-ribbon-slot.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+.draft-ribbon-slot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
+
 .board-stage { position: static; overflow: hidden; padding: 12px; background: var(--paper-board); }
-/* min-height reserves the zoom chip's row: it only exists above 1x, and without
-   the reservation appearing and disappearing shifts the board. */
-.board-status { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 28px; padding: 2px 8px 10px; color: var(--muted); font-size: 11px; }
+.board-status { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 0; padding: 4px 0 0; color: var(--muted); font-size: 11px; }
+.board-status .menu-trigger { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 600; }
+.board-status .menu-trigger strong { color: var(--ink); }
+.board-status .menu-chevron { width: 10px; height: 7px; }
 .menu-wrap { position: relative; display: inline-flex; align-items: center; }
 .menu-trigger { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 0; padding: 0; background: transparent; color: inherit; cursor: pointer; }
 .menu-chevron { flex: none; width: 12px; height: 8px; color: var(--muted); }
@@ -133,8 +141,8 @@ button.selected.danger { color: #fff; }
 .placement-remove { fill: transparent; stroke: transparent; pointer-events: all; cursor: default; }
 .placement-remove:not(circle) { stroke-width: 14; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
-.vertex-highlight { fill: rgba(231,37,37,.22); stroke: #e72525; stroke-width: 3; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
-.vertex-highlight-label { font-size: 12px; font-weight: 800; }
+.vertex-highlight { r: 12px; fill: rgba(187,76,50,.22); stroke: var(--accent-dark); stroke-width: 2.4; }
+.vertex-highlight-label { font-size: 13px; font-weight: 800; }
 .vertex-highlight.faded, .vertex-highlight-label.faded { opacity: .55; }
 .edge-highlight { stroke: #e72525; stroke-width: 7; stroke-linecap: round; opacity: .85; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 
@@ -291,7 +299,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .global-notice { position: fixed; z-index: 30; right: 20px; top: 18px; max-width: min(440px, calc(100vw - 40px)); display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; color: white; background: #3c3b34; box-shadow: 0 12px 35px rgba(0,0,0,.25); }
 .global-notice-text { flex: 1; font-size: 13px; line-height: 1.4; user-select: text; -webkit-user-select: text; }
 .global-notice-close { flex: none; margin-top: -1px; padding: 0 3px; border: 0; border-radius: 6px; background: transparent; color: rgba(255,255,255,.65); font-size: 15px; line-height: 1.3; }
-footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content: space-between; color: rgba(45,41,36,.65); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 
 .mobile-pane { display: contents; }
 .mobile-nav { display: none; }
@@ -438,7 +445,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   /* A held row must not raise iOS's selection callout on the way to a drag. */
   .player-card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   .player-card.dragging { opacity: .5; }
-  .board-status { gap: 10px; padding: 0 4px 6px; font-size: 10px; flex-wrap: wrap; }
   /* Clear of the fixed bottom nav, which the toast must not cover or take touches from.
      :where() keeps the specificity the landscape block's override was written against. */
   :where(.app-shell) .global-notice { top: auto; bottom: calc(96px + env(safe-area-inset-bottom)); left: 12px; right: 12px; max-width: none; }
@@ -463,7 +469,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .mobile-nav-icon { position: relative; display: inline-flex; }
   .turn-badge { position: absolute; top: -1px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
   .app-shell:has(.mobile-pane :is(input, textarea):focus) .mobile-nav { transform: translateY(100%); }
-  footer { display: none; }
 }
 
 @media (max-width: 760px) and (orientation: portrait) {
@@ -479,7 +484,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   /* overflow: visible because the status line moves below the board, so its
      dropdown now opens downward and the stage's clip would eat it. */
   .board-stage { display: flex; flex-direction: column; padding: 0 var(--gutter); border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
-  .board-status { order: 1; padding: 0; }
+  .board-status { order: 1; }
   /* The cap has to go, not just grow: the SVG scales to fit, so any height
      limit shrinks the board away from the gutters it should meet. */
   .board-canvas { width: 100%; height: auto; max-height: none; }
@@ -528,7 +533,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   @media (hover: hover) {
     .phone-shell button:hover:not(:disabled) { transform: none; border-color: var(--line); box-shadow: none; }
     .phone-shell .phone-title:hover { box-shadow: 0 2px 8px rgba(62, 45, 21, .07); }
-    .phone-shell .phone-rslot.now:hover { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
+    .phone-shell .draft-ribbon-slot.now:hover { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
     .phone-shell .phone-icon-btn[aria-pressed="true"]:hover, .phone-shell button.selected:hover, .phone-shell .player-grid button[aria-pressed="true"]:hover { border-color: var(--accent-dark); }
     .phone-shell .primary:hover:not(:disabled), .phone-shell .hero-import:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
     .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover { color: var(--ink); background: var(--paper-deep); }
@@ -549,25 +554,11 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-icon-btn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: rgba(248, 243, 232, .9); }
   .phone-icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
   .phone-page { padding: calc(50px + env(safe-area-inset-top)) 0 22px; }
-  .phone-ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; height: 38px; padding: 0 var(--gutter); }
-  .phone-rslot { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .phone-rslot.pending { opacity: .34; }
-  .phone-rslot.now { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
-  .phone-rslot.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .phone-rslot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
   /* The frame is the SVG's own box, so the sea rect inside it goes: the box holds
      the shape, the rect would only ever paint a smaller sea inside it. */
   .phone-shell .board-stage { padding: 4px var(--gutter) 0; }
   .phone-shell .board-canvas { aspect-ratio: min(1, var(--board-aspect)); width: 100%; height: auto; max-height: none; padding: 5px; border-radius: 24px; background: #3c7fbf; box-shadow: 0 14px 24px rgba(33, 51, 67, .24); filter: none; }
   .phone-shell .board-sea { display: none; }
-  /* The marks as the mock draws them: a touch larger and flat, with no cast shadow. */
-  .phone-shell .vertex-highlight { r: 12px; stroke-width: 2.4; filter: none; }
-  .phone-shell .vertex-highlight-label { font-size: 13px; }
-  .phone-shell .board-status { justify-content: center; gap: 8px; min-height: 0; padding: 4px 0 0; font-size: 11px; }
-  .phone-shell .board-count { display: none; }
-  .phone-shell .board-status .menu-trigger { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 600; }
-  .phone-shell .board-status .menu-trigger strong { color: var(--ink); }
-  .phone-shell .board-status .menu-chevron { width: 10px; height: 7px; }
   .phone-shell .board-zoom { margin-left: 0; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
   .phone-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
@@ -666,6 +657,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .site-header > div:last-child { display: none; }
   .workspace { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 52fr) minmax(0, 48fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
   .center-column { grid-column: 1; grid-row: 1; min-height: 0; align-self: start; }
+  .draft-ribbon { display: none; }
   /* Room for everything stacked above the canvas in this arm: the shell's own
      padding twice over, the shrunken header, the column gap, and the status
      line. A viewport-height fraction instead would overflow the column. */

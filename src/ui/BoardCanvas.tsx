@@ -46,7 +46,7 @@ import {
   zoomAbout,
   type ViewTransform,
 } from './boardViewport'
-import { useCoarsePointer, usePortraitPhone } from './useMediaQuery'
+import { useCoarsePointer } from './useMediaQuery'
 
 const SIZE = 58
 // How far the port bubble sits beyond its coastal edge, along the outward
@@ -140,7 +140,7 @@ interface PortLayout {
 
 /**
  * `restMarks` is what the board wears while nothing has been selected: the
- * phone's ranked picks (spec S5). A selection in the store always wins, and a
+ * ranked picks (spec S5, D4). A selection in the store always wins, and a
  * clear (`highlight: null`) falls back to them, so no panel has to reinstate
  * them after another panel's clear.
  */
@@ -149,9 +149,6 @@ const NO_MARKS: readonly HighlightMark[] = []
 export function BoardCanvas({ restMarks = null }: { restMarks?: readonly HighlightMark[] | null } = {}) {
   const { state, dispatch } = useStore()
   const coarse = useCoarsePointer()
-  // The phone centres the layout caption under the board, so its menu opens
-  // centred too, with the chevron the rest of that shell draws.
-  const phone = usePortraitPhone()
   const tab = activeTab(state)
   const { board } = tab.game
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
@@ -771,12 +768,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           value={board.layout}
           options={LAYOUT_OPTIONS}
           onSelect={choose}
-          align={phone ? 'center' : 'start'}
+          align="center"
         >
           <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
         </MenuSelect>
-        <span className="board-count">{board.hexes.filter((hex) => hex.tile).length}/{board.hexes.length} terrain</span>
-        <span className="board-count">{board.roads.length + board.buildings.length} pieces</span>
         {transform.scale > 1 && (
           <span className="board-zoom">
             {transform.scale.toFixed(1)}×

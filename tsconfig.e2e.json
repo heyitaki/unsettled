@@ -6,9 +6,11 @@
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Bundler mode */
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    /* Bundler mode, matching the app project: the specs import app modules
+       (constants the assertions must stay tied to) and resolve them the way
+       Vite and Playwright's own loader do. */
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,

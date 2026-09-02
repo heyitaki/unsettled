@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { analyzeBoardCached } from '../../engine/analyze'
-import { readableInk } from '../colors'
-import { draftSlots } from '../draftSlots'
-import { activeTab, useStore, type HighlightMark } from '../store'
+import { analyzeBoardCached } from '../engine/analyze'
+import { readableInk } from './colors'
+import { draftSlots } from './draftSlots'
+import { activeTab, useStore, type HighlightMark } from './store'
 
 /**
- * The snake draft above the board (spec S2): one circle per pick, tinted to the
- * player who takes it. Taken picks are solid, later ones faded, the current one
- * ringed, and each of the claimed player's own picks carries a dot beneath it.
- * A tap marks the pick's settlement, or where the analysis expects it, on the
- * board, the way the desktop draft strip does on a coarse pointer.
+ * The snake draft above the board (spec S2, D4): one circle per pick, tinted to
+ * the player who takes it. Taken picks are solid, later ones faded, the current
+ * one ringed, and each of the claimed player's own picks carries a dot beneath
+ * it. A click marks the pick's settlement, or where the analysis expects it, on
+ * the board.
  */
-export function PhoneRibbon() {
+export function DraftRibbon() {
   const { state, dispatch } = useStore()
   const { board } = activeTab(state).game
   const slots = draftSlots(board, analyzeBoardCached(board))
@@ -27,11 +27,11 @@ export function PhoneRibbon() {
     if (state.highlight !== own.current) setSelected(null)
   }, [state.highlight])
   return (
-    <div className="phone-ribbon" aria-label="Snake draft order">
+    <div className="draft-ribbon" aria-label="Snake draft order">
       {slots.map((slot, index) => {
         const player = board.players.find((candidate) => candidate.id === slot.playerId)
         if (!player) return null
-        const classes = ['phone-rslot']
+        const classes = ['draft-ribbon-slot']
         if (!slot.placed && !slot.current) classes.push('pending')
         if (slot.current) classes.push('now')
         if (slot.mine) classes.push('mine')
