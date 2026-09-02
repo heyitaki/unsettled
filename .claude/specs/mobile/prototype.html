@@ -1,0 +1,1426 @@
+<title>Unsettled Phone Shell</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --page-ground: #d3c7ad;
+    --page-ground-deep: #b3a488;
+    --page-ink: #2f2a23;
+    --page-muted: #6c6456;
+    --page-line: rgba(50, 40, 26, .2);
+    --page-card: rgba(252, 248, 239, .66);
+    --page-accent: #8f3425;
+    --page-shadow: rgba(50, 36, 16, .3);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page-ground: #211c16;
+      --page-ground-deep: #14110d;
+      --page-ink: #ece3d2;
+      --page-muted: #a2988a;
+      --page-line: rgba(233, 220, 196, .18);
+      --page-card: rgba(60, 51, 40, .5);
+      --page-accent: #e08a6a;
+      --page-shadow: rgba(0, 0, 0, .55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --page-ground: #211c16;
+    --page-ground-deep: #14110d;
+    --page-ink: #ece3d2;
+    --page-muted: #a2988a;
+    --page-line: rgba(233, 220, 196, .18);
+    --page-card: rgba(60, 51, 40, .5);
+    --page-accent: #e08a6a;
+    --page-shadow: rgba(0, 0, 0, .55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--page-ink);
+    background: var(--page-ground);
+    background-image: radial-gradient(circle at 50% -12%, color-mix(in srgb, var(--page-ground) 78%, white) 0, var(--page-ground) 48%, var(--page-ground-deep) 100%);
+    background-attachment: fixed;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; margin: 0; text-wrap: balance; }
+
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 20px 72px; display: flex; flex-direction: column; gap: 30px; }
+  .page-head { display: flex; flex-direction: column; gap: 10px; max-width: 62ch; }
+  .eyebrow { color: var(--page-accent); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+  .page-head h1 { font-size: clamp(30px, 4.5vw, 44px); letter-spacing: -.03em; line-height: 1.02; }
+  .lede { margin: 0; color: var(--page-muted); font-size: 15px; line-height: 1.6; }
+
+  .stage { display: grid; grid-template-columns: auto minmax(280px, 1fr); gap: 40px; align-items: start; }
+  @media (max-width: 860px) { .stage { grid-template-columns: 1fr; justify-items: center; } }
+
+  .rig { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .moments { display: flex; gap: 6px; padding: 5px; border: 1px solid var(--page-line); border-radius: 999px; background: var(--page-card); }
+  .moments button {
+    border: 0; border-radius: 999px; padding: 7px 13px; background: transparent;
+    color: var(--page-muted); font: 600 12px/1 Inter, sans-serif; cursor: pointer; transition: .16s ease;
+  }
+  .moments button[aria-pressed="true"] { color: #fbf4df; background: var(--page-accent); }
+  .moments button:focus-visible { outline: 2px solid var(--page-accent); outline-offset: 2px; }
+
+  .phone {
+    position: relative;
+    width: min(392px, 94vw);
+    height: min(788px, 82vh);
+    min-height: 620px;
+    padding: 11px;
+    border-radius: 50px;
+    background: linear-gradient(160deg, #494037, #241e18 60%, #3a332b);
+    box-shadow: 0 40px 80px -24px var(--page-shadow), 0 0 0 1px rgba(255, 255, 255, .09) inset;
+  }
+  .phone::after {
+    content: ""; position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+    width: 96px; height: 26px; border-radius: 999px; background: #16120e; z-index: 40;
+  }
+
+  /* The app's own tokens. Deliberately single-theme: Unsettled is a paper board. */
+  .screen {
+    --paper: #f1ead9; --paper-deep: #e4d8bf; --paper-board: #e9dfca; --paper-light: #f8f3e8;
+    --ink: #2d2924; --muted: #776f64; --line: rgba(55, 45, 32, .16);
+    --accent: #bb4c32; --accent-dark: #8f3425;
+    --gutter: 10px;
+    position: relative; width: 100%; height: 100%; overflow: hidden;
+    border-radius: 40px; color: var(--ink);
+    background: radial-gradient(circle at 50% -10%, #f8f1e2 0, #e9dfca 54%, #dccfb4 100%);
+    font-size: 14px;
+    isolation: isolate;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .screen button:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
+
+  /* Chrome sits above the one scroller; nothing else is pinned. */
+  .chrome {
+    position: absolute; inset: 0 0 auto; z-index: 20; height: 80px;
+    background: #f3ecdd;
+    transition: box-shadow .18s ease;
+  }
+  .chrome.scrolled { box-shadow: 0 1px 0 rgba(55, 45, 32, .22), 0 10px 18px -6px rgba(62, 45, 21, .18); }
+  .statusbar {
+    height: 34px; display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 26px 0; font-size: 12px; font-weight: 700; pointer-events: none;
+  }
+  .statusbar .glyphs { display: flex; gap: 5px; align-items: flex-end; }
+  .statusbar .bar { width: 3px; border-radius: 1px; background: var(--ink); }
+
+  .app-head { height: 46px; display: flex; align-items: center; gap: 7px; padding: 0 12px; }
+  .map-title {
+    min-width: 0; height: 34px; display: flex; align-items: center; gap: 6px;
+    padding: 0 10px 0 8px; border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(248, 243, 232, .9); box-shadow: 0 2px 8px rgba(62, 45, 21, .07);
+  }
+  .map-title .name { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 14px/1.1 Georgia, serif; }
+  .chev { flex: none; width: 12px; height: 8px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
+  .brand-hex { flex: none; width: 15px; height: 17px; }
+  .head-spacer { flex: 1; }
+  .dot-cluster { height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: rgba(248, 243, 232, .9); }
+  .dot-cluster .pdot { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .5); }
+  .dot-cluster .pdot.me { border-color: var(--ink); box-shadow: 0 0 0 2px var(--paper-light), 0 0 0 3.5px var(--ink); }
+  .dot-cluster.unclaimed { animation: nudge 2.6s ease-in-out infinite; }
+  @keyframes nudge { 0%, 82%, 100% { box-shadow: 0 0 0 0 rgba(187, 76, 50, 0); } 88% { box-shadow: 0 0 0 5px rgba(187, 76, 50, .22); } }
+    .icon-btn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: rgba(248, 243, 232, .9); }
+  .icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+  .icon-btn .dots3 { display: block; }
+
+  /* The document is the only scroller. */
+  .doc {
+    position: absolute; inset: 0; z-index: 5; overflow-y: auto; overscroll-behavior: contain;
+    padding: 84px 0 22px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+  }
+  .doc::-webkit-scrollbar { width: 0; }
+
+  .ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; height: 38px; padding: 0 var(--gutter); }
+  .ribbon .rslot { position: relative; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 800 10px Inter, sans-serif; }
+  .ribbon .rslot.pending { opacity: .34; }
+  .ribbon .rslot.now { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
+  .ribbon .rslot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
+
+  /* Full size: the board takes the pane's width at its own aspect, no cap. */
+  .board-block { padding: 4px var(--gutter) 0; }
+  .sea { padding: 5px; border-radius: 24px; background: #3c7fbf; box-shadow: 0 14px 24px rgba(33, 51, 67, .24); }
+  .sea svg { width: 100%; height: 100%; display: block; }
+  .token-text { font: 700 20px Charter, "Bitstream Charter", Cambria, "Noto Serif", Georgia, serif; font-variant-numeric: lining-nums tabular-nums; fill: #2d2924; }
+  .token-text.hot { fill: #af2020; }
+  .mark-label { font: 800 13px Inter, sans-serif; }
+  .port-text { font: 700 8.5px Inter, sans-serif; fill: #3a2c1c; }
+
+  .board-status { position: relative; z-index: 8; display: flex; justify-content: center; padding: 4px var(--gutter) 0; }
+  .layout-select { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; }
+  .layout-select strong { color: var(--ink); }
+  .layout-menu {
+    position: absolute; top: calc(100% + 4px); left: 50%; width: 156px; padding: 5px;
+    border: 1px solid var(--line); border-radius: 13px; background: var(--paper-light);
+    box-shadow: 0 14px 34px rgba(62, 45, 21, .24);
+    transform: translateX(-50%) scale(.94); transform-origin: top center; opacity: 0; pointer-events: none;
+    transition: transform .15s cubic-bezier(.32, .72, 0, 1), opacity .12s ease;
+  }
+  .layout-menu.on { transform: translateX(-50%); opacity: 1; pointer-events: auto; }
+  .layout-menu button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 8px; border: 0; border-radius: 9px; background: transparent; font-size: 13px; font-weight: 500; text-align: left; }
+  .layout-menu button:hover { background: var(--paper-deep); }
+  .layout-menu .tick { flex: none; width: 14px; height: 14px; color: var(--accent-dark); visibility: hidden; }
+  .layout-menu button[aria-checked="true"] .tick { visibility: visible; }
+  .layout-menu button[aria-checked="true"] { font-weight: 700; }
+
+  .block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
+  .block[hidden] { display: none; }
+  .block-flush { padding: 0; overflow: hidden; }
+  .block-inner { padding: 14px; }
+  .block-actions { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: rgba(228, 216, 191, .34); }
+  .block-actions button { flex: 1; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #f9f5ea; font-size: 13px; font-weight: 700; }
+  .block-actions button.primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+  .block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .block-head .eyebrow { color: var(--accent-dark); }
+  .block-head h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
+  .turn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(187, 76, 50, .13); color: var(--accent-dark); font-size: 11px; font-weight: 700; }
+  .turn-pill[hidden] { display: none; }
+  .turn-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); font-style: normal; }
+
+  .context { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .context strong { color: var(--ink); }
+  .context .picker { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: var(--ink); vertical-align: -2px; }
+  .context .picker strong { border-bottom: 1.5px dotted var(--accent-dark); }
+  .context .picker .chev { color: var(--accent-dark); }
+
+  .claim { display: flex; flex-direction: column; gap: 10px; }
+  .claim .hint { color: var(--muted); font: 400 12.5px/1.55 Inter, sans-serif; }
+  .claim-row { display: flex; gap: 8px; }
+  .claim-row button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 11px; font-weight: 600; }
+  .claim-row .swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .55); }
+  .empty-actions { display: flex; flex-direction: column; gap: 6px; }
+  .empty-actions button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 13.5px; font-weight: 700; }
+  .empty-actions button.primary { border-color: var(--accent-dark); background: var(--accent); color: #fff; }
+  .empty-actions button.primary:hover { background: var(--accent-dark); }
+  .empty-actions button:not(.primary):hover { background: var(--paper-deep); }
+
+  .picks { display: flex; flex-direction: column; gap: 6px; }
+  .pick { border: 1px solid var(--line); border-radius: 13px; background: #f9f5ea; overflow: hidden; }
+  .pick.selected { border-color: var(--accent-dark); background: #fff; box-shadow: 0 4px 16px rgba(62, 45, 21, .14); }
+  .pick-select {
+    width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start;
+    padding: 9px 10px; border: 0; background: transparent; text-align: left;
+  }
+  .rank { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid #30271f; font: 800 13px Inter, sans-serif; }
+  .pick-line { display: flex; align-items: baseline; gap: 8px; }
+  .pick-line strong { flex: 1; font-size: 13px; font-weight: 700; line-height: 1.25; }
+  .score { font: 800 15px Inter, sans-serif; font-variant-numeric: tabular-nums; }
+  .avail { display: block; margin-top: 3px; color: var(--accent-dark); font-size: 11px; font-weight: 600; }
+  .then { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+  .factors { display: flex; flex-wrap: wrap; gap: 3px 6px; margin-top: 6px; }
+  .factors span { padding: 2px 6px; border-radius: 5px; background: var(--paper-deep); color: var(--muted); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pick-actions { display: flex; gap: 6px; padding: 9px 10px; border-top: 1px solid var(--line); background: rgba(228, 216, 191, .34); }
+  .pick-actions button { flex: 1; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: #f9f5ea; font-size: 12px; font-weight: 700; }
+  .pick-actions button.primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+
+  .tool-row + .tool-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .tool-label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  /* Sideways scrolling keeps a full row of chips one thumb-width tall. */
+  .chips { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { height: 0; }
+  .chips button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; padding: 7px 6px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; font-size: 10px; font-weight: 600; text-transform: capitalize; }
+  .chips button.selected { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+  .chips.numbers button { min-width: 42px; border-radius: 50%; padding: 11px 0; font: 700 15px Charter, Cambria, Georgia, serif; font-variant-numeric: tabular-nums; }
+  .chips.numbers button.hot { color: #b12620; }
+  .chips.numbers button.selected, .chips.numbers button.selected.hot { color: #fff; }
+  .chips .hexsw { width: 21px; height: 23px; }
+  .chips button.selected .hexsw polygon { stroke: #fff; stroke-width: 2; }
+
+
+  /* Library and roster are screens you go to and come back from, not drawers. */
+  .overlay {
+    position: absolute; inset: 34px 0 0; z-index: 22;
+    display: flex; flex-direction: column;
+    background: var(--paper-light);
+    transform: translateX(100%); transition: transform .28s cubic-bezier(.32, .72, 0, 1);
+  }
+  .overlay.on { transform: none; }
+  .overlay-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .overlay-title { flex: 1; min-width: 0; font: 700 19px/1 Georgia, serif; }
+  .ohead-btn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+  .ohead-btn:hover { background: var(--paper-deep); color: var(--ink); }
+  .ohead-btn.back { margin-left: -6px; color: var(--ink); }
+  .ohead-btn.invisible { visibility: hidden; pointer-events: none; }
+  .overlay-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 28px; display: flex; flex-direction: column; gap: 16px; }
+  .group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  .group-label .count { font-weight: 600; opacity: .72; }
+  .sort-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px 3px 8px; margin-right: -6px; border: 0; border-radius: 7px; background: transparent; }
+  .sort-btn:hover { background: var(--paper-deep); color: var(--ink); }
+  .sortglyph { flex: none; margin-left: -1px; }
+
+  .hero-import { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border: 1px solid var(--accent-dark); border-radius: 13px; background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 700; }
+  .hero-import:hover { background: var(--accent-dark); }
+  .list { display: flex; flex-direction: column; gap: 5px; }
+  .list-row { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 11px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; }
+  .list-row.current { border-color: var(--accent-dark); background: #fff; }
+  .map-hex { flex: none; width: 17px; height: 19px; }
+  .list-row .rowname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+  .list-row .meta { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .row-x { flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: rgba(119, 111, 100, .8); }
+  .row-x:hover { background: var(--paper-deep); color: var(--ink); }
+  .new-board { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; padding: 0; border: 1px dashed rgba(55, 45, 32, .26); border-radius: 12px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .new-board:hover { border-style: solid; color: var(--ink); }
+
+  .proster { display: flex; flex-direction: column; gap: 5px; }
+  .proster.reordering { touch-action: none; }
+  .prow { display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; padding: 9px 11px 9px 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; text-align: left; width: 100%; user-select: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
+  .prow.me { border-color: var(--ink); background: #fff; }
+  /* The lifted row must not lag its own finger, so it opts out of the shuffle easing. */
+  .prow.dragging { position: relative; z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
+  .prow .handle { display: grid; place-items: center; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
+  .prow.dragging .handle { cursor: grabbing; }
+  .prow .swatch { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .55); }
+  /* Only as wide as the name it holds, so the rest of the row stays a claim target. */
+  .prow .pname { justify-self: start; max-width: 100%; min-width: 30px; overflow: hidden; padding: 3px 5px; margin: -3px -5px; border: 0; background: transparent; text-align: left; }
+  .prow .pn { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.5; font-weight: 600; text-decoration: underline dotted rgba(55, 45, 32, .45); text-decoration-thickness: 1.4px; text-underline-offset: 2.5px; }
+  .prow .pname:hover .pn { text-decoration-color: var(--accent-dark); }
+  .prow .pname-edit { justify-self: start; max-width: 100%; padding: 3px 7px; margin: -4px -7px; border: 1px solid var(--accent-dark); border-radius: 8px; background: #fff; color: var(--ink); font: 600 14px Inter, sans-serif; }
+  .prow .pname-edit:focus { outline: 2px solid rgba(187, 76, 50, .3); outline-offset: 0; }
+  .prow .youchip { padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; background: var(--ink); color: var(--paper-light); }
+  /* Held in place rather than dropped so the score column lines up on every row. */
+  .prow .youchip.none { visibility: hidden; }
+  .prow .vp { font: 800 14px Inter, sans-serif; font-variant-numeric: tabular-nums; }
+  .draft-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .slot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 3px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; font-size: 10px; }
+  .slot.pending { border-style: dashed; opacity: .78; }
+  .slot.now { border-color: var(--accent-dark); background: #fff; box-shadow: 0 0 0 1px var(--accent-dark); }
+  .slot .circle { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font: 800 11px Inter, sans-serif; }
+  .slot .sname { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+  /* Board options: a popover that grows out of the button it belongs to. */
+  .menu {
+    position: absolute; z-index: 26; top: 74px; right: 12px; width: 216px; padding: 6px;
+    border: 1px solid var(--line); border-radius: 16px; background: var(--paper-light);
+    box-shadow: 0 18px 44px rgba(62, 45, 21, .26), 0 1px 0 rgba(255, 255, 255, .8) inset;
+    transform-origin: top right; transform: scale(.92); opacity: 0; pointer-events: none;
+    transition: transform .15s cubic-bezier(.32, .72, 0, 1), opacity .12s ease;
+  }
+  .menu.on { transform: none; opacity: 1; pointer-events: auto; }
+  .menu-tail { position: absolute; top: -5px; right: 16px; width: 10px; height: 10px; border: 1px solid var(--line); border-width: 1px 0 0 1px; background: var(--paper-light); transform: rotate(45deg); }
+  .menu-history { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: var(--paper-deep); }
+  .menu-history button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border: 0; border-radius: 9px; background: transparent; font-size: 12px; font-weight: 700; }
+  .menu-history button:not(:disabled):hover { background: rgba(255, 255, 255, .74); }
+  .menu-history button:disabled { opacity: .38; cursor: default; }
+  .menu-history button + button { box-shadow: -1px 0 0 var(--line); }
+  .menu-history b { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .menu-list { display: flex; flex-direction: column; padding-top: 5px; margin-top: 5px; border-top: 1px solid var(--line); }
+  .menu-list button { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 10px; background: transparent; font-size: 13px; font-weight: 500; text-align: left; }
+  .menu-list button:hover { background: var(--paper-deep); }
+  .menu-list button.danger { color: #a33428; }
+  .menu-list .mi { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--muted); }
+  .menu-list button.danger .mi { color: #a33428; }
+  .omenu { top: 46px; right: 10px; width: 186px; transform-origin: top right; }
+  .omenu .menu-tail { right: 15px; }
+  .omenu .menu-list { padding-top: 0; margin-top: 0; border-top: 0; }
+
+  .toast { position: absolute; z-index: 28; left: 14px; right: 14px; bottom: 16px; padding: 11px 13px; border-radius: 12px; background: rgba(45, 41, 36, .94); color: #f6efdd; font-size: 12px; font-weight: 600; opacity: 0; transform: translateY(8px); pointer-events: none; transition: .2s ease; }
+  .toast.on { opacity: 1; transform: none; }
+
+  .notes { display: flex; flex-direction: column; gap: 22px; max-width: 46ch; padding-top: 6px; }
+  .note h2 { font-size: 19px; letter-spacing: -.01em; margin-bottom: 9px; }
+  .note ul { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .note li { position: relative; padding-left: 17px; color: var(--page-muted); font-size: 13.5px; line-height: 1.55; }
+  .note li::before { content: ""; position: absolute; left: 0; top: .58em; width: 7px; height: 8px; background: var(--page-accent); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); opacity: .75; }
+  .note li strong { color: var(--page-ink); font-weight: 650; }
+  .flag { padding: 14px 16px; border: 1px solid var(--page-line); border-left: 3px solid var(--page-accent); border-radius: 4px 12px 12px 4px; background: var(--page-card); }
+  .flag h3 { font-size: 15px; margin-bottom: 6px; }
+  .flag p { margin: 0; color: var(--page-muted); font-size: 13px; line-height: 1.6; }
+  .flag code { padding: 1px 4px; border-radius: 4px; background: var(--page-card); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    .doc { scroll-behavior: auto; }
+  }
+</style>
+
+<div class="page">
+  <header class="page-head">
+    <span class="eyebrow">Unsettled &middot; portrait phone</span>
+    <h1>One board, one scroll</h1>
+    <p class="lede">A working mockup of the proposed phone shell. No tab bar and no drawer: the board fills a square frame at the top of a single scrolling page, the map title opens the library, the player dots open the roster, and the pencil swaps the analysis for the board tools.</p>
+  </header>
+
+  <div class="stage">
+    <div class="rig">
+      <div class="moments" role="group" aria-label="Jump to a moment">
+        <button type="button" data-moment="imported" aria-pressed="false">Just imported</button>
+        <button type="button" data-moment="turn" aria-pressed="true">My turn</button>
+      </div>
+
+      <div class="phone">
+        <div class="screen" id="screen">
+          <div class="chrome" id="chrome">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="glyphs" aria-hidden="true">
+                <span class="bar" style="height:5px"></span>
+                <span class="bar" style="height:7px"></span>
+                <span class="bar" style="height:9px"></span>
+                <span class="bar" style="height:11px"></span>
+                <span style="margin-left:4px">86%</span>
+              </span>
+            </div>
+            <header class="app-head">
+              <button type="button" class="map-title" id="mapTitle" aria-haspopup="dialog">
+                <svg class="brand-hex" viewBox="0 0 20 22" aria-hidden="true">
+                  <polygon id="titleHex" points="10,1 18.7,6 18.7,16 10,21 1.3,16 1.3,6" stroke="#30271f" stroke-width="1.4" stroke-linejoin="round"></polygon>
+                </svg>
+                <span class="name" id="mapName">IMG_4821</span>
+                <svg class="chev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.4 2 6 6.2 10.6 2"></path></svg>
+              </button>
+              <span class="head-spacer"></span>
+              <button type="button" class="dot-cluster" id="dotCluster" aria-label="Players" aria-haspopup="dialog"></button>
+              <button type="button" class="icon-btn" id="buildBtn" aria-label="Edit the board" aria-pressed="false">
+                <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M13.2 3.4a1.9 1.9 0 0 1 2.7 2.7L7 15l-3.6.9.9-3.6 8.9-8.9Z"></path>
+                  <path d="M11.9 4.7 14.6 7.4"></path>
+                </svg>
+              </button>
+              <button type="button" class="icon-btn" id="moreBtn" aria-label="Board options" aria-haspopup="menu">
+                <svg class="dots3" width="17" height="5" viewBox="0 0 17 5" aria-hidden="true" fill="currentColor">
+                  <circle cx="2.4" cy="2.5" r="1.7"></circle><circle cx="8.5" cy="2.5" r="1.7"></circle><circle cx="14.6" cy="2.5" r="1.7"></circle>
+                </svg>
+              </button>
+            </header>
+          </div>
+
+          <div class="doc" id="doc">
+            <div class="ribbon" id="ribbon" aria-label="Snake draft order"></div>
+            <div class="board-block" id="boardBlock"></div>
+            <div class="board-status">
+              <button type="button" class="layout-select" id="layoutBtn" aria-haspopup="menu" aria-expanded="false">
+                <strong id="layoutName">4 player</strong> layout
+                <svg class="chev" viewBox="0 0 12 8" style="width:10px;height:7px" aria-hidden="true"><path d="M1.4 2 6 6.2 10.6 2"></path></svg>
+              </button>
+              <div class="layout-menu" id="layoutMenu" role="menu">
+                <button type="button" role="menuitemradio" data-layout="standard4" aria-checked="true">
+                  <svg class="tick" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 7.4 5.6 11 12 3.4"></path></svg>
+                  4 player
+                </button>
+                <button type="button" role="menuitemradio" data-layout="extension6" aria-checked="false">
+                  <svg class="tick" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 7.4 5.6 11 12 3.4"></path></svg>
+                  5&ndash;6 player
+                </button>
+              </div>
+            </div>
+
+            <section class="block" id="analyzeBlock">
+              <div class="block-head">
+                <div>
+                  <span class="eyebrow" id="analyzeEyebrow">Draft analysis</span>
+                  <h2 id="analyzeTitle">Best picks</h2>
+                </div>
+                <span class="turn-pill" id="turnPill" hidden><i></i>Your turn</span>
+              </div>
+              <div id="picksBody"></div>
+            </section>
+
+            <section class="block block-flush" id="buildBlock" hidden>
+              <div class="block-inner">
+                <div class="block-head">
+                  <div>
+                    <span class="eyebrow">Build mode</span>
+                    <h2>Board tools</h2>
+                  </div>
+                </div>
+                <div id="toolsBody"></div>
+              </div>
+              <div class="block-actions">
+                <button type="button" class="primary" id="buildDone">Done</button>
+                <button type="button" id="buildCancel">Cancel</button>
+              </div>
+            </section>
+
+          </div>
+
+          <section class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Maps">
+            <div class="overlay-head">
+              <button type="button" class="ohead-btn back" id="overlayDone" aria-label="Back to the board">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.2 3.4 5.6 9l5.6 5.6"></path></svg>
+              </button>
+              <span class="overlay-title" id="overlayTitle">Maps</span>
+              <button type="button" class="ohead-btn" id="mapsMore" aria-label="Import and export files" aria-haspopup="menu" aria-expanded="false">
+                <svg width="15" height="5" viewBox="0 0 17 5" aria-hidden="true" fill="currentColor">
+                  <circle cx="2.4" cy="2.5" r="1.7"></circle><circle cx="8.5" cy="2.5" r="1.7"></circle><circle cx="14.6" cy="2.5" r="1.7"></circle>
+                </svg>
+              </button>
+            </div>
+            <div class="menu omenu" id="mapsMenu" role="menu" aria-label="Import and export files">
+              <span class="menu-tail" aria-hidden="true"></span>
+              <div class="menu-list">
+                <button type="button" role="menuitem" data-toast="Loaded board.json &middot; 19 terrain, 4 players">
+                  <span class="mi">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M10 11.5V3 M6.4 6.6 10 3 13.6 6.6 M4 15.5H16"></path>
+                    </svg>
+                  </span>
+                  Import JSON
+                </button>
+                <button type="button" role="menuitem" data-toast="Saved IMG_4821.json to Files.">
+                  <span class="mi">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M10 3V11.5 M6.4 7.9 10 11.5 13.6 7.9 M4 15.5H16"></path>
+                    </svg>
+                  </span>
+                  Export JSON
+                </button>
+              </div>
+            </div>
+            <div class="overlay-body" id="overlayBody"></div>
+          </section>
+
+          <div class="menu" id="menu" role="menu" aria-label="Board options">
+            <span class="menu-tail" aria-hidden="true"></span>
+            <div class="menu-history">
+              <button type="button" role="menuitem">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 8h8a4 4 0 0 1 0 8H8"></path><path d="M7 5 4 8l3 3"></path>
+                </svg>
+                Undo <b>3</b>
+              </button>
+              <button type="button" role="menuitem" disabled>
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M16 8H8a4 4 0 0 0 0 8h4"></path><path d="M13 5l3 3-3 3"></path>
+                </svg>
+                Redo
+              </button>
+            </div>
+            <div class="menu-list">
+              <button type="button" role="menuitem">
+                <span class="mi">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+                    <circle cx="7" cy="7" r="1.35"></circle><circle cx="13" cy="7" r="1.35"></circle><circle cx="10" cy="10" r="1.35"></circle>
+                    <circle cx="7" cy="13" r="1.35"></circle><circle cx="13" cy="13" r="1.35"></circle>
+                  </svg>
+                </span>
+                Randomize board
+              </button>
+              <button type="button" role="menuitem">
+                <span class="mi">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 3 V11.5 M6.4 7.9 10 11.5 13.6 7.9 M4 15.5 H16"></path>
+                  </svg>
+                </span>
+                Export JSON
+              </button>
+              <button type="button" role="menuitem" class="danger">
+                <span class="mi">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 2.6 16.4 6.3 V13.7 L10 17.4 3.6 13.7 V6.3 Z"></path><path d="M6.3 13.4 13.7 6.4"></path>
+                  </svg>
+                </span>
+                Clear board
+              </button>
+            </div>
+          </div>
+
+          <div class="toast" id="toast" role="status"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="notes">
+      <div class="note">
+        <h2>What changed</h2>
+        <ul>
+          <li><strong>No tab bar, no drawer.</strong> One scrolling document, the way the app already works in portrait. The board takes the full width of the pane, in a square frame when it is wider than it is tall and a taller one when it is not, scaled up until only a thin margin of sea is left. The sections below extend the page rather than scrolling inside themselves.</li>
+          <li><strong>The map title is the library.</strong> Import, saved maps, and your other open boards all live behind it. That also gives phones back the board switcher, which the current build hides outright.</li>
+          <li><strong>Import comes first on that screen.</strong> It is the reason you opened it, so it sits at the top as the one filled button. Import and export JSON, which you touch once a month, moved into the dots at the top left. Saved maps sort newest first and the label cycles through oldest and A&ndash;Z.</li>
+          <li><strong>The dots are the roster.</strong> Claiming yourself is one tap from wherever you are, because the header stays put while the page moves under it.</li>
+          <li><strong>An empty board says so.</strong> With no tiles on it there is nothing to rank, so the block below stops offering a ranking and offers the two ways out instead: import a screenshot, or place the tiles by hand.</li>
+          <li><strong>A roster row does three things.</strong> Tap it to claim that seat, tap the name to rename in place, press and hold to drag it to a new seat. The claim chips are gone: four rows each carrying the same button repeated what the label above them already said, and it left nothing to tell the claimed row apart but a border.</li>
+          <li><strong>Every map gets a colour.</strong> The hex beside a board name is derived from the name itself, so the same board wears the same colour in the header and in both lists, and two open boards are told apart before you read them.</li>
+          <li><strong>Board tools live behind a pencil.</strong> Parked at the foot of the page, nothing told you they were there. The pencil in the header now swaps the analysis block for build mode, with Done and Cancel to leave. Terrain, numbers and structures each get one sideways-scrolling row.</li>
+        </ul>
+      </div>
+      <div class="note">
+        <h2>Try it</h2>
+        <ul>
+          <li>Scroll the phone. The board leaves with the page; only the title, the dots and the options button stay. The options button holds undo and redo as a pair, plus randomize, export and clear.</li>
+          <li>Tap a pick. It draws your spot in your own colour and the planned follow-up faded behind it, and pulls the board back into view if you have scrolled past it.</li>
+          <li>Open the layout dropdown under the board and switch to 5&ndash;6 player. The board really is replaced: empty, with its own eleven harbours, in a frame taller than it is wide. Below it the ranking gives way to the two ways to fill it.</li>
+          <li>Tap the pencil. Build mode takes over the block below the board; everything above it stays put, so nothing jumps.</li>
+          <li>Hit <em>Just imported</em>: nobody is claimed yet, so the analysis block asks for that first instead of showing an empty list.</li>
+          <li>On the Maps screen, tap <em>Newest</em> under Saved maps to cycle the sort, and the dots in the corner for the JSON files.</li>
+          <li>On the Players screen, drag a row by its grip or press and hold anywhere on it. The snake draft below and the strip above the board both follow the new seat order. Tap a name to rename it; Enter keeps it, Escape puts it back.</li>
+        </ul>
+      </div>
+      <div class="flag">
+        <h3>The factor labels are renamed</h3>
+        <p>The score pills read Production, Scarcity, Balance, Port and Robber, one word each. Balance stands in for "Diversity+recipes+numbers", which packed three ideas into a label too long to scan; the sixth factor, "Starting cards", would become Hand. That is a change to <code>displayedFactors</code> in AnalysisPanel.tsx, not just to this page.</p>
+      </div>
+      <div class="flag">
+        <h3>Seat order is draft order</h3>
+        <p>Dragging a row here does not just tidy a list: the snake is derived from it, so the line that reads "picking 3 and 6 of 8" changes with the drag. That means the roster order has to be the real source of the draft in the app, and a reorder has to re-run the analysis rather than only repaint the roster.</p>
+      </div>
+      <div class="flag">
+        <h3>No timestamp on open boards</h3>
+        <p>Saved maps show when they were last touched because that is how you decide whether to open or delete one. Open boards are the two or three you have open right now, all equally current, so the same column would say nothing. Leaving it off is also what keeps the two lists visibly different jobs rather than one list with two icons.</p>
+      </div>
+      <div class="flag">
+        <h3>Cancel needs a snapshot</h3>
+        <p>Board edits commit straight away today, with undo as the way back. For Cancel to mean anything, entering build mode has to snapshot the board and leaving by Cancel has to restore it. Small, but it is real work rather than a label.</p>
+      </div>
+      <div class="flag">
+        <h3>The one cost</h3>
+        <p>Tapping a low-ranked pick moves markers on a board that is off screen, so the page scrolls back up to show you. It is the honest trade for having no drawer, and it only bites on picks four and five.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  var TILE = { wood: '#1e7a3a', sheep: '#9bd06b', wheat: '#e3b23c', brick: '#b84a2a', ore: '#7a7f86', desert: '#e1c88a' };
+  var LABEL = { wood: 'Wood', sheep: 'Sheep', wheat: 'Wheat', brick: 'Brick', ore: 'Ore', desert: 'Desert' };
+  var TOKEN = '#f4eacf', PIECE_INK = '#30271f';
+  var SIZE = 58, MARGIN = 4;
+
+  var PLAYERS = [
+    { id: 'ben', name: 'Ben', color: '#3063ba', vp: 2 },
+    { id: 'cal', name: 'Cal', color: '#e58331', vp: 2 },
+    { id: 'ana', name: 'Ana', color: '#c23f38', vp: 2 },
+    { id: 'dee', name: 'Dee', color: '#5d9e52', vp: 1 }
+  ];
+  var playerById = function (id) { for (var i = 0; i < PLAYERS.length; i++) if (PLAYERS[i].id === id) return PLAYERS[i]; return null; };
+
+  // Standard 4-player board, rows r = -2 .. 2. A real distribution, so every
+  // recommendation below is describable from the board actually drawn.
+  var HEXES = [
+    { q: 0, r: -2, tile: 'ore', n: 10 }, { q: 1, r: -2, tile: 'sheep', n: 2 }, { q: 2, r: -2, tile: 'wood', n: 9 },
+    { q: -1, r: -1, tile: 'wheat', n: 12 }, { q: 0, r: -1, tile: 'brick', n: 6 }, { q: 1, r: -1, tile: 'sheep', n: 4 }, { q: 2, r: -1, tile: 'brick', n: 10 },
+    { q: -2, r: 0, tile: 'wheat', n: 9 }, { q: -1, r: 0, tile: 'wood', n: 11 }, { q: 0, r: 0, tile: 'desert', n: null }, { q: 1, r: 0, tile: 'wood', n: 3 }, { q: 2, r: 0, tile: 'ore', n: 8 },
+    { q: -2, r: 1, tile: 'sheep', n: 8 }, { q: -1, r: 1, tile: 'ore', n: 3 }, { q: 0, r: 1, tile: 'wheat', n: 4 }, { q: 1, r: 1, tile: 'sheep', n: 5 },
+    { q: -2, r: 2, tile: 'brick', n: 5 }, { q: -1, r: 2, tile: 'wheat', n: 6 }, { q: 0, r: 2, tile: 'wood', n: 11 }
+  ];
+  var ROBBER = { q: 0, r: 0 };
+
+  var ROWS_EXTENSION6 = [[-3, 0, 3], [-2, -1, 4], [-1, -2, 5], [0, -3, 6], [1, -3, 5], [2, -3, 4], [3, -3, 3]];
+  var EXT_HEXES = (function () {
+    var out = [];
+    ROWS_EXTENSION6.forEach(function (row) {
+      for (var i = 0; i < row[2]; i++) out.push({ q: row[1] + i, r: row[0], tile: null, n: null });
+    });
+    return out;
+  })();
+  var LAYOUT_LABEL = { standard4: '4 player', extension6: '5&ndash;6 player' };
+
+  // Corner i of a hex is shared with neighbours DIR[i] and DIR[i+1].
+  var DIR = [[0, -1], [1, -1], [1, 0], [0, 1], [-1, 1], [-1, 0]];
+  function center(q, r) { return { x: SIZE * Math.sqrt(3) * (q + r / 2), y: SIZE * 1.5 * r }; }
+  function cornerTriple(q, r, i) {
+    var a = DIR[i], b = DIR[(i + 1) % 6];
+    return [[q, r], [q + a[0], r + a[1]], [q + b[0], r + b[1]]];
+  }
+  function vertexPoint(triple) {
+    var sx = 0, sy = 0;
+    triple.forEach(function (c) { var p = center(c[0], c[1]); sx += p.x; sy += p.y; });
+    return { x: sx / 3, y: sy / 3 };
+  }
+  // Same shape as the app's vertexDescription: on-board hexes only, in board order.
+  function describe(triple) {
+    var keys = {}; triple.forEach(function (c) { keys[c[0] + ',' + c[1]] = true; });
+    var parts = [];
+    HEXES.forEach(function (h) {
+      if (!keys[h.q + ',' + h.r]) return;
+      parts.push(h.tile === 'desert' ? 'Desert' : LABEL[h.tile] + ' ' + h.n);
+    });
+    return parts.join(' &middot; ');
+  }
+
+  var V = function (a, b, c) { return [a, b, c]; };
+  var PLACED = [
+    { triple: V([2, -2], [2, -1], [1, -1]), player: 'ben', roadTo: V([2, -1], [1, -1], [1, 0]) },
+    { triple: V([-1, 1], [0, 1], [-1, 2]), player: 'cal', roadTo: V([0, 1], [-1, 2], [0, 2]) }
+  ];
+
+  var RECS = [
+    { triple: V([-2, 0], [-1, 0], [-2, 1]), score: 12.4, survival: .78, then: V([1, 0], [2, 0], [1, 1]),
+      factors: [['Production', 8.6], ['Scarcity', 2.1], ['Balance', 1.9], ['Robber', -0.2]] },
+    { triple: V([1, 0], [2, 0], [1, 1]), score: 11.8, survival: .64, then: V([-2, 1], [-2, 2], [-1, 1]),
+      factors: [['Production', 8.1], ['Scarcity', 2.4], ['Balance', 1.3]] },
+    { triple: V([-2, 1], [-2, 2], [-1, 1]), score: 11.2, survival: .91, then: V([0, 1], [1, 1], [0, 2]),
+      factors: [['Production', 7.4], ['Scarcity', 1.8], ['Balance', 1.6], ['Port', 0.4]] },
+    { triple: V([0, 1], [1, 1], [0, 2]), score: 10.6, survival: .55, then: V([0, -2], [1, -2], [0, -1]),
+      factors: [['Production', 7.2], ['Balance', 2.1], ['Scarcity', 1.3]] },
+    { triple: V([0, -2], [1, -2], [0, -1]), score: 10.2, survival: .83, then: V([-2, 0], [-1, 0], [-2, 1]),
+      factors: [['Production', 6.9], ['Scarcity', 2.0], ['Balance', 1.5], ['Robber', -0.2]] }
+  ];
+
+  // Ports as {hex, cornerA, cornerB} on sea-facing outer edges.
+  var PORTS = [
+    { q: 0, r: -2, a: 5, b: 0, text: '3:1' },
+    { q: 2, r: -2, a: 0, b: 1, text: 'Ore 2:1' },
+    { q: 2, r: 0, a: 1, b: 2, text: '3:1' },
+    { q: -2, r: 2, a: 3, b: 4, text: 'Wheat 2:1' },
+    { q: -2, r: 0, a: 4, b: 5, text: '3:1' }
+  ];
+
+  var EXT_PORTS = [
+    { q: 0, r: -3, a: 5, b: 0, text: '3:1' },
+    { q: -1, r: -2, a: 4, b: 5, text: 'Wood 2:1' },
+    { q: 2, r: -2, a: 1, b: 2, text: '3:1' },
+    { q: -3, r: 0, a: 5, b: 0, text: 'Brick 2:1' },
+    { q: 2, r: 0, a: 0, b: 1, text: 'Sheep 2:1' },
+    { q: -3, r: 1, a: 4, b: 5, text: '3:1' },
+    { q: 1, r: 1, a: 1, b: 2, text: 'Ore 2:1' },
+    { q: -3, r: 2, a: 3, b: 4, text: '3:1' },
+    { q: -3, r: 3, a: 2, b: 3, text: 'Wheat 2:1' },
+    { q: -1, r: 3, a: 3, b: 4, text: 'Sheep 2:1' },
+    { q: 0, r: 2, a: 2, b: 3, text: '3:1' }
+  ];
+
+  var MAP_COLORS = ['#1e7a3a', '#9bd06b', '#e3b23c', '#b84a2a', '#7a7f86', '#e1c88a', '#3d7cb7', '#7a5230', '#c23f38', '#e58331'];
+  function mapColor(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return MAP_COLORS[h % MAP_COLORS.length];
+  }
+  function mapHex(name) {
+    return '<svg class="map-hex" viewBox="0 0 20 22" aria-hidden="true">' +
+      '<polygon points="10,1 18.7,6 18.7,16 10,21 1.3,16 1.3,6" fill="' + mapColor(name) +
+      '" stroke="#30271f" stroke-width="1.4" stroke-linejoin="round"></polygon></svg>';
+  }
+  var XMARK = '<svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 2 10 10M10 2 2 10"></path></svg>';
+  var PLUS = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 1.4V10.6M1.4 6H10.6"></path></svg>';
+  var PENCIL = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M13.2 3.4a1.9 1.9 0 0 1 2.7 2.7L7 15l-3.6.9.9-3.6 8.9-8.9Z"></path><path d="M11.9 4.7 14.6 7.4"></path></svg>';
+  var PHOTO = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<rect x="1.9" y="2.9" width="12.2" height="10.2" rx="2.1"></rect><circle cx="5.5" cy="6.4" r="1.1"></circle>' +
+    '<path d="M2.3 11.3 5.7 8.3l2.9 2.5 2-1.6 2.8 2.3"></path></svg>';
+  // Cycles rather than opening a menu, so the affordance is two arrows, not a caret.
+  var SORTGLYPH = '<svg class="sortglyph" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M3.4 1.9v8.2M1.5 8.2 3.4 10.1 5.3 8.2"></path><path d="M8.6 10.1V1.9M6.7 3.8 8.6 1.9 10.5 3.8"></path></svg>';
+
+  var GRIP = '<svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true" fill="currentColor">' +
+    '<circle cx="1.6" cy="2" r="1.4"></circle><circle cx="6.4" cy="2" r="1.4"></circle>' +
+    '<circle cx="1.6" cy="7" r="1.4"></circle><circle cx="6.4" cy="7" r="1.4"></circle>' +
+    '<circle cx="1.6" cy="12" r="1.4"></circle><circle cx="6.4" cy="12" r="1.4"></circle></svg>';
+  var TRASH = '<svg width="14" height="15" viewBox="3 2.7 14 15.1" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3.6 5.6H16.4"></path><path d="M8 5.6V4.4a1.1 1.1 0 0 1 1.1-1.1h1.8a1.1 1.1 0 0 1 1.1 1.1V5.6"></path>' +
+    '<path d="M5.4 5.6 6.2 16.1a1.3 1.3 0 0 0 1.3 1.2h5a1.3 1.3 0 0 0 1.3-1.2L14.6 5.6"></path></svg>';
+
+  var TILE_ORDER = ['wood', 'sheep', 'wheat', 'brick', 'ore', 'desert'];
+  var NUMBERS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
+  var PIECES = ['road', 'settlement', 'city', 'robber', 'port', 'erase'];
+  function draftOrder() {
+    var ids = PLAYERS.map(function (p) { return p.id; });
+    return ids.concat(ids.slice().reverse());
+  }
+  function mySlots() {
+    var out = [];
+    draftOrder().forEach(function (id, i) { if (id === S.me) out.push(i + 1); });
+    return out;
+  }
+  function esc(text) { return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  var SAVED = [
+    { name: 'Fjord night', when: '2h ago', hours: 2 },
+    { name: 'Tuesday league R3', when: 'yesterday', hours: 26 },
+    { name: 'Ore corner test', when: '4 days ago', hours: 96 }
+  ];
+  var SORTS = [
+    { key: 'newest', label: 'Newest' },
+    { key: 'oldest', label: 'Oldest' },
+    { key: 'name', label: 'A&ndash;Z' }
+  ];
+  function sortEntry() {
+    for (var i = 0; i < SORTS.length; i++) if (SORTS[i].key === S.sort) return { i: i, label: SORTS[i].label };
+    return { i: 0, label: SORTS[0].label };
+  }
+  function sortedSaved() {
+    var list = SAVED.slice();
+    if (S.sort === 'name') return list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return list.sort(function (a, b) { return S.sort === 'oldest' ? b.hours - a.hours : a.hours - b.hours; });
+  }
+  var OPEN_BOARDS = [{ name: 'IMG_4821', current: true }, { name: 'Fjord night', current: false }];
+
+  function readableInk(hex) {
+    var v = hex.replace('#', '');
+    var lum = (0.299 * parseInt(v.slice(0, 2), 16) + 0.587 * parseInt(v.slice(2, 4), 16) + 0.114 * parseInt(v.slice(4, 6), 16)) / 255;
+    return lum > 0.6 ? '#3a2c1c' : '#fbf4df';
+  }
+
+  var S = { me: 'ana', selected: null, overlay: null, tool: 'tile:wheat', layout: 'standard4', mode: 'analyze', sort: 'newest' };
+
+  var screenEl = document.getElementById('screen');
+  var doc = document.getElementById('doc');
+  var chrome = document.getElementById('chrome');
+  var boardBlock = document.getElementById('boardBlock');
+  var layoutBtn = document.getElementById('layoutBtn');
+  var layoutMenu = document.getElementById('layoutMenu');
+  var layoutName = document.getElementById('layoutName');
+  var buildBtn = document.getElementById('buildBtn');
+  var analyzeBlock = document.getElementById('analyzeBlock');
+  var buildBlock = document.getElementById('buildBlock');
+  var ribbon = document.getElementById('ribbon');
+  var picksBody = document.getElementById('picksBody');
+  var toolsBody = document.getElementById('toolsBody');
+  var overlay = document.getElementById('overlay');
+  var overlayBody = document.getElementById('overlayBody');
+  var overlayTitle = document.getElementById('overlayTitle');
+  var analyzeEyebrow = document.getElementById('analyzeEyebrow');
+  var analyzeTitle = document.getElementById('analyzeTitle');
+  var mapsMore = document.getElementById('mapsMore');
+  var mapsMenu = document.getElementById('mapsMenu');
+  var menu = document.getElementById('menu');
+  var toast = document.getElementById('toast');
+  var dotCluster = document.getElementById('dotCluster');
+  var turnPill = document.getElementById('turnPill');
+
+  /* ---------- board ---------- */
+  function hexPoints(q, r) {
+    var p = center(q, r), out = [];
+    for (var i = 0; i < 6; i++) {
+      var a = (-90 + i * 60) * Math.PI / 180;
+      out.push((p.x + SIZE * Math.cos(a)).toFixed(2) + ',' + (p.y + SIZE * Math.sin(a)).toFixed(2));
+    }
+    return out.join(' ');
+  }
+  function pips(n, x, y) {
+    var count = 6 - Math.abs(7 - n);
+    var fill = (n === 6 || n === 8) ? '#af2020' : '#3a2c1c';
+    var out = '';
+    for (var i = 0; i < count; i++) {
+      out += '<circle cx="' + (x + (i - (count - 1) / 2) * 4.2).toFixed(2) + '" cy="' + (y + 12) + '" r="1.6" fill="' + fill + '"></circle>';
+    }
+    return out;
+  }
+  function portWidthOf(p) { return p.text.length > 4 ? 46 : 30; }
+  function portGeometry(p) {
+    var pa = vertexPoint(cornerTriple(p.q, p.r, p.a));
+    var pb = vertexPoint(cornerTriple(p.q, p.r, p.b));
+    var mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+    var c = center(p.q, p.r);
+    var vx = mid.x - c.x, vy = mid.y - c.y;
+    var len = Math.max(1, Math.hypot(vx, vy));
+    return { mid: mid, at: { x: mid.x + (vx / len) * 24, y: mid.y + (vy / len) * 24 } };
+  }
+
+  function myColor() { return (playerById(S.me) || { color: '#8a7a63' }).color; }
+
+  function boardHexes() { return S.layout === 'standard4' ? HEXES : EXT_HEXES; }
+  function boardPorts() { return S.layout === 'standard4' ? PORTS : EXT_PORTS; }
+  function boardIsEmpty() { return boardHexes().every(function (h) { return !h.tile; }); }
+  function boardPieces() { return S.layout === 'standard4' ? PLACED : []; }
+
+  function marks() {
+    if (!S.me || S.layout !== 'standard4' || S.mode === 'build') return [];
+    if (S.selected === null) {
+      return RECS.map(function (rec, i) {
+        return { triple: rec.triple, label: String(i + 1), color: myColor(), fade: i > 2 ? 0.55 : 1 };
+      });
+    }
+    var rec = RECS[S.selected];
+    // The follow-up is where the second settlement would go, not what this tap
+    // places, so it sits back from the pick itself.
+    return [
+      { triple: rec.triple, label: '1', color: myColor(), fade: 1 },
+      { triple: rec.then, label: '2', color: myColor(), fade: 0.55 }
+    ];
+  }
+
+  function drawBoard() {
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    function include(x, y) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+    var hexes = boardHexes(), ports = boardPorts(), pieces = boardPieces();
+    hexes.forEach(function (h) {
+      var p = center(h.q, h.r);
+      for (var i = 0; i < 6; i++) {
+        var a = (-90 + i * 60) * Math.PI / 180;
+        include(p.x + SIZE * Math.cos(a), p.y + SIZE * Math.sin(a));
+      }
+    });
+    ports.forEach(function (p) {
+      var g = portGeometry(p), half = portWidthOf(p) / 2;
+      include(g.at.x - half, g.at.y - 10); include(g.at.x + half, g.at.y + 10);
+    });
+    var vb = { x: minX - MARGIN, y: minY - MARGIN, w: maxX - minX + MARGIN * 2, h: maxY - minY + MARGIN * 2 };
+
+    var svg = '<svg viewBox="' + [vb.x, vb.y, vb.w, vb.h].map(function (v) { return v.toFixed(1); }).join(' ') +
+      '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Catan board with ranked placements">';
+
+    hexes.forEach(function (h) {
+      svg += '<polygon points="' + hexPoints(h.q, h.r) + '" fill="' + (h.tile ? TILE[h.tile] : '#d8d7cc') + '" stroke="#f8f1dc" stroke-width="4"></polygon>';
+    });
+
+    ports.forEach(function (p) {
+      var g = portGeometry(p);
+      svg += '<line x1="' + g.mid.x.toFixed(1) + '" y1="' + g.mid.y.toFixed(1) + '" x2="' + g.at.x.toFixed(1) + '" y2="' + g.at.y.toFixed(1) + '" stroke="#e7dcc0" stroke-width="3.5" stroke-linecap="round"></line>';
+      var w = portWidthOf(p);
+      svg += '<rect x="' + (g.at.x - w / 2).toFixed(1) + '" y="' + (g.at.y - 10).toFixed(1) + '" width="' + w + '" height="20" rx="7" fill="#f4eacf" stroke="#3a2c1c" stroke-width="1.8"></rect>';
+      svg += '<text class="port-text" x="' + g.at.x.toFixed(1) + '" y="' + (g.at.y + 3).toFixed(1) + '" text-anchor="middle">' + p.text + '</text>';
+    });
+
+    hexes.forEach(function (h) {
+      if (h.n === null) return;
+      var p = center(h.q, h.r);
+      var under = (h.q === ROBBER.q && h.r === ROBBER.r);
+      svg += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="23" fill="' + TOKEN + '" stroke="#3a2c1c" stroke-width="2.5"></circle>';
+      if (!under) {
+        svg += '<text class="token-text' + ((h.n === 6 || h.n === 8) ? ' hot' : '') + '" x="' + p.x.toFixed(1) + '" y="' + (p.y + 6).toFixed(1) + '" text-anchor="middle">' + h.n + '</text>';
+        svg += pips(h.n, p.x, p.y);
+      }
+    });
+
+    if (S.layout === 'standard4') {
+    var rp = center(ROBBER.q, ROBBER.r);
+    svg += '<g transform="translate(' + rp.x.toFixed(1) + ' ' + rp.y.toFixed(1) + ')" fill="#1c1c1c">' +
+      '<circle cy="-10.5" r="10"></circle>' +
+      '<path d="M0,-5.5 C10,-5.5 15.5,5 14.5,17.85 A23,23 0 0 1 -14.5,17.85 C-15.5,5 -10,-5.5 0,-5.5 Z"></path></g>';
+    }
+
+    pieces.forEach(function (piece) {
+      var color = playerById(piece.player).color;
+      var a = vertexPoint(piece.triple), b = vertexPoint(piece.roadTo);
+      var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var sx = mx + (a.x - mx) * 0.68, sy = my + (a.y - my) * 0.68;
+      var ex = mx + (b.x - mx) * 0.68, ey = my + (b.y - my) * 0.68;
+      svg += '<line x1="' + sx.toFixed(1) + '" y1="' + sy.toFixed(1) + '" x2="' + ex.toFixed(1) + '" y2="' + ey.toFixed(1) + '" stroke="' + PIECE_INK + '" stroke-width="11" stroke-linecap="round"></line>';
+      svg += '<line x1="' + sx.toFixed(1) + '" y1="' + sy.toFixed(1) + '" x2="' + ex.toFixed(1) + '" y2="' + ey.toFixed(1) + '" stroke="' + color + '" stroke-width="7" stroke-linecap="round"></line>';
+    });
+    pieces.forEach(function (piece) {
+      var color = playerById(piece.player).color;
+      var p = vertexPoint(piece.triple);
+      svg += '<g transform="translate(' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ') scale(0.8)">' +
+        '<path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" fill="' + color + '" stroke="' + PIECE_INK + '" stroke-width="2.5" stroke-linejoin="round"></path></g>';
+    });
+
+    marks().forEach(function (m) {
+      var p = vertexPoint(m.triple);
+      svg += '<g opacity="' + m.fade + '">' +
+        '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="12" fill="' + m.color + '" stroke="' + PIECE_INK + '" stroke-width="2.4"></circle>' +
+        '<text class="mark-label" x="' + p.x.toFixed(1) + '" y="' + (p.y + 4.6).toFixed(1) + '" text-anchor="middle" fill="' + readableInk(m.color) + '">' + m.label + '</text></g>';
+    });
+
+    svg += '</svg>';
+    var ratio = Math.min(1, vb.w / vb.h);
+    boardBlock.innerHTML = '<div class="sea" style="aspect-ratio:' + ratio.toFixed(4) + '">' + svg + '</div>';
+  }
+
+  /* ---------- page sections ---------- */
+  function factorPill(f) {
+    var v = f[1];
+    return '<span>' + f[0] + ' ' + (v < 0 ? '&minus;' : '+') + Math.abs(v).toFixed(1) + '</span>';
+  }
+
+  function renderPicks() {
+    var empty = boardIsEmpty();
+    analyzeEyebrow.textContent = empty ? 'Nothing to rank yet' : 'Draft analysis';
+    analyzeTitle.textContent = empty ? 'This board is empty' : 'Best picks';
+    if (empty) {
+      picksBody.innerHTML = '<div class="claim">' +
+        '<span class="hint">Nothing has been laid out yet. Import a screenshot and the parser reads the tiles, numbers and players off it, or place them yourself.</span>' +
+        '<div class="empty-actions">' +
+        '<button type="button" class="primary" data-fill>' + PHOTO + 'Import screenshot</button>' +
+        '<button type="button" data-buildmode>' + PENCIL + 'Build it by hand</button>' +
+        '</div></div>';
+      return;
+    }
+    if (!S.me) {
+      picksBody.innerHTML = '<div class="claim">' +
+        '<span class="hint">Four players came off the screenshot. Tap your colour and the ranking starts.</span>' +
+        '<div class="claim-row">' + PLAYERS.map(function (p) {
+          return '<button type="button" data-claim="' + p.id + '"><span class="swatch" style="background:' + p.color + '"></span>' + p.name + '</button>';
+        }).join('') + '</div></div>';
+      return;
+    }
+    var me = playerById(S.me);
+    var slots = mySlots();
+    var head = '<p class="context">You are <button type="button" class="picker"><strong>' + esc(me.name) + '</strong>' +
+      '<svg class="chev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.4 2 6 6.2 10.6 2"></path></svg>' + '</button> &middot; picking ' + slots.join(' and ') + ' of ' + draftOrder().length + '</p>';
+
+    var list = RECS.map(function (rec, i) {
+      var sel = S.selected === i;
+      var badge = me.color;
+      return '<div class="pick' + (sel ? ' selected' : '') + '">' +
+        '<button type="button" class="pick-select" data-pick="' + i + '">' +
+        '<span class="rank" style="background:' + badge + ';color:' + readableInk(badge) + '">' + (i + 1) + '</span>' +
+        '<span><span class="pick-line"><strong>' + describe(rec.triple) + '</strong>' +
+        '<span class="score">' + rec.score.toFixed(1) + '</span></span>' +
+        '<span class="avail">' + Math.round(rec.survival * 100) + '% likely available</span>' +
+        '<span class="then">then: ' + describe(rec.then) + '</span>' +
+        '<span class="factors">' + rec.factors.map(factorPill).join('') + '</span></span></button>' +
+        (sel ? '<div class="pick-actions"><button type="button" class="primary" data-place="' + i + '">Place settlement</button>' +
+          '<button type="button" data-clear="1">Clear</button></div>' : '') + '</div>';
+    }).join('');
+
+    picksBody.innerHTML = head + '<div class="picks">' + list + '</div>';
+  }
+
+  // Silhouettes, viewBoxes and stroke widths copied from the app's glyphs.tsx,
+  // so a chip in the mockup is the same shape the board draws.
+  var GEO = {
+    road: { view: '1.05 2.24 17.9 15.52', aspect: 17.9 / 15.52 },
+    settlement: { view: '-16 -16 32 30', aspect: 32 / 30 },
+    city: { view: '-14.03 -15.13 35.06 28.36', aspect: 35.06 / 28.36 },
+    robber: { view: '-14.7 -20.5 29.4 43.5', aspect: 29.4 / 43.5 },
+    port: { view: '4 3.2 12 12.4', aspect: 12 / 12.4 },
+    erase: { view: '3.04 2.74 13.92 15.12', aspect: 13.92 / 15.12 }
+  };
+  var LINE_STROKE = 2 / 36 * 20;
+
+  function pieceGlyph(kind) {
+    var color = (playerById(S.me) || { color: '#c2ae8c' }).color;
+    var g = GEO[kind];
+    var h = 18, w = (h * g.aspect).toFixed(1);
+    var open = '<svg width="' + w + '" height="' + h + '" viewBox="' + g.view + '" aria-hidden="true">';
+    if (kind === 'settlement') {
+      return open + '<path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" fill="' + color + '" stroke="' + PIECE_INK +
+        '" stroke-width="2" stroke-linejoin="round"></path></svg>';
+    }
+    if (kind === 'city') {
+      return open + '<path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" fill="' + color + '" stroke="' + PIECE_INK +
+        '" stroke-width="2.06" stroke-linejoin="round"></path></svg>';
+    }
+    if (kind === 'road') {
+      // The board draws an ink casing around a coloured core, not a stroked bar.
+      return open + '<g transform="rotate(-38 10 10)">' +
+        '<rect x="0.6" y="7.5" width="18.8" height="5" rx="2.1" fill="' + PIECE_INK + '"></rect>' +
+        '<rect x="' + (0.6 + LINE_STROKE) + '" y="' + (7.5 + LINE_STROKE) + '" width="' + (18.8 - LINE_STROKE * 2) +
+        '" height="' + (5 - LINE_STROKE * 2) + '" rx="' + (2.1 - LINE_STROKE) + '" fill="' + color + '"></rect></g></svg>';
+    }
+    if (kind === 'robber') {
+      return open + '<g fill="#1c1c1c"><circle cy="-10.5" r="10"></circle>' +
+        '<path d="M0,-5.5 C10,-5.5 15.5,5 14.5,17.85 A23,23 0 0 1 -14.5,17.85 C-15.5,5 -10,-5.5 0,-5.5 Z"></path></g></svg>';
+    }
+    if (kind === 'port') {
+      return open + '<g fill="' + PIECE_INK + '"><path d="M4 11h12l-1.9 4.6H5.9z"></path>' +
+        '<path d="M10.7 3.2 14.6 9.4H10.7z"></path><rect x="9.7" y="3.4" width="1" height="8"></rect></g></svg>';
+    }
+    return open + '<g fill="none" stroke="#a33428" stroke-width="' + LINE_STROKE +
+      '" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M3.6 5.6H16.4"></path><path d="M8 5.6V4.4a1.1 1.1 0 0 1 1.1-1.1h1.8a1.1 1.1 0 0 1 1.1 1.1V5.6"></path>' +
+      '<path d="M5.4 5.6 6.2 16.1a1.3 1.3 0 0 0 1.3 1.2h5a1.3 1.3 0 0 0 1.3-1.2L14.6 5.6"></path>' +
+      '<path d="M8.4 8.7V14.3M11.6 8.7V14.3"></path></g></svg>';
+  }
+
+  function renderTools() {
+    var terrain = TILE_ORDER.map(function (t) {
+      return '<button type="button" class="' + (S.tool === 'tile:' + t ? 'selected' : '') + '" data-tool="tile:' + t + '">' +
+        '<svg class="hexsw" viewBox="0 0 20 22" aria-hidden="true"><polygon points="10,1.2 18.8,6.1 18.8,15.9 10,20.8 1.2,15.9 1.2,6.1" fill="' + TILE[t] + '" stroke="rgba(0,0,0,.18)"></polygon></svg>' + t + '</button>';
+    }).join('');
+    var nums = NUMBERS.map(function (n) {
+      var cls = (n === 6 || n === 8 ? 'hot ' : '') + (S.tool === 'num:' + n ? 'selected' : '');
+      return '<button type="button" class="' + cls.trim() + '" data-tool="num:' + n + '">' + n + '</button>';
+    }).join('');
+    var pieces = PIECES.map(function (p) {
+      return '<button type="button" class="' + (S.tool === 'piece:' + p ? 'selected' : '') + '" data-tool="piece:' + p + '">' +
+        pieceGlyph(p) + p + '</button>';
+    }).join('');
+    toolsBody.innerHTML =
+      '<div class="tool-row"><span class="tool-label">Terrain</span><div class="chips">' + terrain + '</div></div>' +
+      '<div class="tool-row"><span class="tool-label">Number token</span><div class="chips numbers">' + nums + '</div></div>' +
+      '<div class="tool-row"><span class="tool-label">Structures</span><div class="chips">' + pieces + '</div></div>';
+  }
+
+  /* ---------- overlays ---------- */
+  function libraryBody() {
+    var open = OPEN_BOARDS.map(function (b) {
+      return '<div class="list-row' + (b.current ? ' current' : '') + '">' + mapHex(b.name) +
+        '<span class="rowname">' + b.name + '</span>' +
+        '<button type="button" class="row-x" aria-label="Close ' + b.name + '">' + XMARK + '</button></div>';
+    }).join('');
+    var saved = sortedSaved().map(function (m) {
+      return '<div class="list-row">' + mapHex(m.name) +
+        '<span class="rowname">' + m.name + '</span><span class="meta">' + m.when + '</span>' +
+        '<button type="button" class="row-x" aria-label="Delete ' + m.name + '">' + TRASH + '</button></div>';
+    }).join('');
+    return '<button type="button" class="hero-import" data-toast="Imported IMG_4822.PNG &middot; 19 terrain, 4 players">' + PHOTO + 'Import screenshot</button>' +
+      '<div><div class="group-label"><span>Open boards <span class="count">(' + OPEN_BOARDS.length + ')</span></span></div><div class="list">' + open +
+      '<button type="button" class="new-board">' + PLUS + 'New board</button></div></div>' +
+      '<div><div class="group-label"><span>Saved maps <span class="count">(' + SAVED.length + ')</span></span>' +
+      '<button type="button" class="sort-btn" data-sort>' + sortEntry().label + SORTGLYPH + '</button></div>' +
+      '<div class="list">' + saved + '</div></div>';
+  }
+
+  var SPARE_COLORS = ['#eae3d2', '#7a5230'];
+  function addPlayer() {
+    if (PLAYERS.length >= 6) { showToast('Six seats is the limit.'); return; }
+    var index = PLAYERS.length;
+    PLAYERS.push({ id: 'p' + index, name: 'Player ' + (index + 1), color: SPARE_COLORS[index - 4] || '#8a7a63', vp: 0 });
+    overlayBody.innerHTML = playersBody();
+    render();
+    var fresh = overlayBody.querySelector('[data-rename="' + index + '"]');
+    if (fresh) startRename(index, fresh);
+  }
+
+  function playersBody() {
+    var rows = PLAYERS.map(function (p, i) {
+      var isMe = S.me === p.id;
+      return '<div class="prow' + (isMe ? ' me' : '') + '" role="button" tabindex="0" data-row="' + i + '" data-claim="' + p.id + '">' +
+        '<span class="handle" aria-hidden="true">' + GRIP + '</span>' +
+        '<span class="swatch" style="background:' + p.color + '"></span>' +
+        '<button type="button" class="pname" data-rename="' + i + '"><span class="pn">' + esc(p.name) + '</span></button>' +
+        '<span class="youchip' + (isMe ? '' : ' none') + '">You</span>' +
+        '<span class="vp">' + p.vp + '</span></div>';
+    }).join('');
+    var slots = draftOrder().map(function (id, i) {
+      var p = playerById(id);
+      var now = i === 2;
+      return '<div class="slot' + (i > 2 ? ' pending' : '') + (now ? ' now' : '') + '">' +
+        '<span class="circle" style="background:' + p.color + ';color:' + readableInk(p.color) + '">' + (i + 1) + '</span>' +
+        '<span class="sname">' + esc(p.name) + '</span></div>';
+    }).join('');
+    return '<div><div class="group-label"><span>Roster</span></div><div class="proster">' + rows +
+      '<button type="button" class="new-board" data-addplayer>' + PLUS + 'Add player</button></div></div>' +
+      '<div><div class="group-label"><span>Snake draft</span><span>pick 3 of ' + draftOrder().length + '</span></div><div class="draft-strip">' + slots + '</div></div>';
+  }
+
+  /* ---------- render ---------- */
+  function renderDots() {
+    dotCluster.className = 'dot-cluster' + (S.me ? '' : ' unclaimed');
+    dotCluster.innerHTML = PLAYERS.map(function (p) {
+      return '<span class="pdot' + (S.me === p.id ? ' me' : '') + '" style="background:' + p.color + '"></span>';
+    }).join('');
+  }
+
+  function renderRibbon() {
+    var html = draftOrder().map(function (id, i) {
+      var p = playerById(id);
+      var cls = 'rslot' + (i > 2 ? ' pending' : '') + (i === 2 ? ' now' : '') + (S.me === id ? ' mine' : '');
+      return '<span class="' + cls + '" style="background:' + p.color + ';color:' + readableInk(p.color) +
+        '" title="Pick ' + (i + 1) + ': ' + p.name + '">' + (i + 1) + '</span>';
+    }).join('');
+    ribbon.innerHTML = html;
+  }
+
+  function renderTitleHex() {
+    document.getElementById('titleHex').setAttribute('fill', mapColor(document.getElementById('mapName').textContent));
+  }
+
+  function renderLayout() {
+    layoutName.innerHTML = LAYOUT_LABEL[S.layout];
+    layoutMenu.querySelectorAll('[data-layout]').forEach(function (b) {
+      b.setAttribute('aria-checked', String(b.dataset.layout === S.layout));
+    });
+  }
+
+  function closeLayoutMenu() {
+    layoutMenu.classList.remove('on');
+    layoutBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function render() {
+    var building = S.mode === 'build';
+    buildBtn.setAttribute('aria-pressed', String(building));
+    analyzeBlock.hidden = building;
+    buildBlock.hidden = !building;
+    turnPill.hidden = !S.me || boardIsEmpty();
+    renderDots();
+    renderRibbon();
+    renderTitleHex();
+    renderLayout();
+    drawBoard();
+    renderPicks();
+    renderTools();
+  }
+
+  function showToast(text) {
+    toast.innerHTML = text;
+    toast.classList.add('on');
+    window.clearTimeout(showToast.t);
+    showToast.t = window.setTimeout(function () { toast.classList.remove('on'); }, 2400);
+  }
+
+  function openOverlay(kind) {
+    S.overlay = kind;
+    overlayTitle.textContent = kind === 'library' ? 'Maps' : 'Players';
+    overlay.setAttribute('aria-label', overlayTitle.textContent);
+    overlayBody.innerHTML = kind === 'library' ? libraryBody() : playersBody();
+    mapsMore.classList.toggle('invisible', kind !== 'library');
+    closeMapsMenu();
+    overlay.classList.add('on');
+  }
+  function closeOverlay() {
+    S.overlay = null;
+    closeMapsMenu();
+    overlay.classList.remove('on');
+  }
+  function closeMapsMenu() {
+    mapsMenu.classList.remove('on');
+    mapsMore.setAttribute('aria-expanded', 'false');
+  }
+
+  // A marker moved on a board you have scrolled past is a change you cannot see,
+  // so the page comes back to it, and only then.
+  function revealBoard() {
+    var board = boardBlock.getBoundingClientRect();
+    var frame = doc.getBoundingClientRect();
+    if (board.bottom > frame.top + 120) return;
+    doc.scrollTop = 0;
+  }
+
+  /* ---------- events ---------- */
+  doc.addEventListener('scroll', function () {
+    chrome.classList.toggle('scrolled', doc.scrollTop > 4);
+  });
+
+  document.getElementById('mapTitle').addEventListener('click', function () { menu.classList.remove('on'); openOverlay('library'); });
+  dotCluster.addEventListener('click', function () { menu.classList.remove('on'); openOverlay('players'); });
+  document.getElementById('overlayDone').addEventListener('click', closeOverlay);
+  mapsMore.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = !mapsMenu.classList.contains('on');
+    mapsMenu.classList.toggle('on', open);
+    mapsMore.setAttribute('aria-expanded', String(open));
+  });
+  mapsMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var item = e.target.closest('[data-toast]');
+    closeMapsMenu();
+    if (item) { closeOverlay(); showToast(item.dataset.toast); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (mapsMenu.classList.contains('on')) { closeMapsMenu(); return; }
+    if (S.overlay) closeOverlay();
+  });
+  document.getElementById('moreBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    closeLayoutMenu();
+    menu.classList.toggle('on');
+  });
+  function setMode(mode) {
+    S.mode = mode;
+    S.selected = null;
+    closeLayoutMenu();
+    menu.classList.remove('on');
+    render();
+    doc.scrollTop = 0;
+  }
+  buildBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    setMode(S.mode === 'build' ? 'analyze' : 'build');
+  });
+  document.getElementById('buildDone').addEventListener('click', function () {
+    setMode('analyze');
+    showToast('Board saved.');
+  });
+  document.getElementById('buildCancel').addEventListener('click', function () {
+    setMode('analyze');
+    showToast('Edits discarded.');
+  });
+
+  layoutBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    menu.classList.remove('on');
+    var open = !layoutMenu.classList.contains('on');
+    layoutMenu.classList.toggle('on', open);
+    layoutBtn.setAttribute('aria-expanded', String(open));
+  });
+  layoutMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var choice = e.target.closest('[data-layout]');
+    closeLayoutMenu();
+    if (!choice || choice.dataset.layout === S.layout) return;
+    S.layout = choice.dataset.layout;
+    S.selected = null;
+    render();
+    doc.scrollTop = 0;
+    showToast(S.layout === 'standard4'
+      ? 'Back to the 4 player board.'
+      : 'Switched to the 5&ndash;6 player layout. The board starts empty.');
+  });
+  screenEl.addEventListener('click', function () { menu.classList.remove('on'); closeLayoutMenu(); closeMapsMenu(); });
+  menu.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (e.target.closest('button')) menu.classList.remove('on');
+  });
+
+  overlayBody.addEventListener('click', function (e) {
+    if (Date.now() - lastDragEnd < 250) return;
+    var sort = e.target.closest('[data-sort]');
+    if (sort) {
+      S.sort = SORTS[(sortEntry().i + 1) % SORTS.length].key;
+      overlayBody.innerHTML = libraryBody();
+      return;
+    }
+    var rename = e.target.closest('[data-rename]');
+    if (rename) { startRename(Number(rename.dataset.rename), rename); return; }
+    if (e.target.closest('[data-addplayer]')) { addPlayer(); return; }
+    var claim = e.target.closest('[data-claim]');
+    if (claim) {
+      S.me = claim.dataset.claim;
+      overlayBody.innerHTML = playersBody();
+      render();
+      showToast('You are ' + playerById(S.me).name + '. Recommendations updated.');
+      return;
+    }
+    var t = e.target.closest('[data-toast]');
+    if (t) { closeOverlay(); showToast(t.dataset.toast); }
+  });
+  overlayBody.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var row = e.target.closest('.prow');
+    if (!row || e.target.closest('.pname')) return;
+    e.preventDefault();
+    row.click();
+  });
+
+  /* ---------- roster: rename in place, hold to reorder ---------- */
+  function startRename(index, nameEl) {
+    var player = PLAYERS[index];
+    var input = document.createElement('input');
+    var settled = false;
+    input.type = 'text';
+    input.className = 'pname-edit';
+    input.maxLength = 16;
+    input.value = player.name;
+    // Grows with what is typed instead of claiming the whole column.
+    function fit() { input.size = Math.min(16, Math.max(4, input.value.length + 1)); }
+    fit();
+    input.addEventListener('input', fit);
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+    function finish(commit) {
+      if (settled) return;
+      settled = true;
+      var next = input.value.trim();
+      var changed = commit && next && next !== player.name;
+      if (changed) player.name = next;
+      overlayBody.innerHTML = playersBody();
+      render();
+      if (changed) showToast('Renamed to ' + next + '.');
+    }
+    input.addEventListener('keydown', function (ev) {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', function () { finish(true); });
+  }
+
+  var drag = null;
+  var press = null;
+  var lastDragEnd = 0;
+
+  function beginDrag(row, pointerY, pointerId) {
+    var rows = [].slice.call(overlayBody.querySelectorAll('.prow'));
+    var box = rows.length > 1 ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top : 0;
+    drag = { rows: rows, el: row, from: rows.indexOf(row), to: rows.indexOf(row), y: pointerY, step: box };
+    try { row.setPointerCapture(pointerId); } catch (err) { /* synthetic pointers have no capture */ }
+    row.classList.add('dragging');
+    overlayBody.querySelector('.proster').classList.add('reordering');
+  }
+
+  function moveDrag(pointerY) {
+    var dy = pointerY - drag.y;
+    drag.el.style.transform = 'translateY(' + dy + 'px)';
+    var target = drag.step ? drag.from + Math.round(dy / drag.step) : drag.from;
+    drag.to = Math.max(0, Math.min(drag.rows.length - 1, target));
+    drag.rows.forEach(function (row, i) {
+      if (row === drag.el) return;
+      var shift = 0;
+      if (drag.to > drag.from && i > drag.from && i <= drag.to) shift = -drag.step;
+      else if (drag.to < drag.from && i >= drag.to && i < drag.from) shift = drag.step;
+      row.style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+    });
+  }
+
+  function endDrag() {
+    var d = drag;
+    drag = null;
+    d.rows.forEach(function (row) { row.style.transform = ''; });
+    d.el.classList.remove('dragging');
+    var roster = overlayBody.querySelector('.proster');
+    if (roster) roster.classList.remove('reordering');
+    if (d.to === d.from) return;
+    var moved = PLAYERS.splice(d.from, 1)[0];
+    PLAYERS.splice(d.to, 0, moved);
+    overlayBody.innerHTML = playersBody();
+    render();
+    var seat = S.me === moved.id ? mySlots() : null;
+    showToast(seat
+      ? 'Seat ' + (d.to + 1) + '. You now pick ' + seat.join(' and ') + '.'
+      : moved.name + ' moved to seat ' + (d.to + 1) + '.');
+  }
+
+  overlayBody.addEventListener('pointerdown', function (e) {
+    var row = e.target.closest('.prow');
+    if (!row || e.target.closest('.pname')) return;
+    var onHandle = !!e.target.closest('.handle');
+    press = { row: row, y: e.clientY, id: e.pointerId, timer: null };
+    if (onHandle) beginDrag(row, e.clientY, e.pointerId);
+    else press.timer = window.setTimeout(function () { if (press) beginDrag(press.row, press.y, press.id); }, 320);
+  });
+
+  overlayBody.addEventListener('pointermove', function (e) {
+    if (drag) { e.preventDefault(); moveDrag(e.clientY); return; }
+    // A finger that travels before the hold lands is a scroll, not a drag.
+    if (press && Math.abs(e.clientY - press.y) > 8) { window.clearTimeout(press.timer); press = null; }
+  });
+
+  function releasePointer(e) {
+    if (press) { window.clearTimeout(press.timer); press = null; }
+    if (!drag) return;
+    lastDragEnd = Date.now();
+    endDrag();
+  }
+  overlayBody.addEventListener('pointerup', releasePointer);
+  overlayBody.addEventListener('pointercancel', releasePointer);
+
+  picksBody.addEventListener('click', function (e) {
+    var claim = e.target.closest('[data-claim]');
+    if (claim) { S.me = claim.dataset.claim; render(); showToast('You are ' + playerById(S.me).name + '.'); return; }
+    var pick = e.target.closest('[data-pick]');
+    if (pick) {
+      var i = Number(pick.dataset.pick);
+      S.selected = S.selected === i ? null : i;
+      renderPicks();
+      drawBoard();
+      if (S.selected !== null) revealBoard();
+      return;
+    }
+    var place = e.target.closest('[data-place]');
+    if (place) {
+      var rec = RECS[Number(place.dataset.place)];
+      S.selected = null;
+      renderPicks();
+      drawBoard();
+      showToast('Placed on ' + describe(rec.triple));
+      return;
+    }
+    if (e.target.closest('[data-buildmode]')) { setMode('build'); return; }
+    if (e.target.closest('[data-fill]')) {
+      S.layout = 'standard4';
+      S.selected = null;
+      render();
+      doc.scrollTop = 0;
+      showToast('Imported IMG_4822.PNG &middot; 19 terrain, 4 players');
+      return;
+    }
+    if (e.target.closest('[data-clear]')) { S.selected = null; renderPicks(); drawBoard(); }
+  });
+
+  toolsBody.addEventListener('click', function (e) {
+    var tool = e.target.closest('[data-tool]');
+    if (!tool) return;
+    S.tool = S.tool === tool.dataset.tool ? null : tool.dataset.tool;
+    renderTools();
+  });
+
+  document.querySelector('.moments').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-moment]');
+    if (!b) return;
+    document.querySelectorAll('[data-moment]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    closeOverlay();
+    menu.classList.remove('on');
+    S.selected = null;
+    S.layout = 'standard4';
+    S.mode = 'analyze';
+    S.me = b.dataset.moment === 'imported' ? null : 'ana';
+    render();
+    doc.scrollTop = 0;
+  });
+
+  render();
+})();
+</script>
