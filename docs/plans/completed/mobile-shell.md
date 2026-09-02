@@ -2,7 +2,7 @@
 
 ## Overview
 
-Rebuild the portrait-phone UI to [`.claude/specs/mobile/spec.md`](../../.claude/specs/mobile/spec.md). Read that file in full before the first task, including its Decisions section and its B7 and B8 rows; it is the normative design and this plan never restates its rationale. Where the spec is silent, copy [`.claude/specs/mobile/prototype.html`](../../.claude/specs/mobile/prototype.html): its `<style>` block (lines 4-339) carries every size, tint and radius, and its script (lines 578-1426) carries every interaction. Read both before the first shell task.
+Rebuild the portrait-phone UI to [`.claude/specs/mobile/spec.md`](../../../.claude/specs/mobile/spec.md). Read that file in full before the first task, including its Decisions section and its B7 and B8 rows; it is the normative design and this plan never restates its rationale. Where the spec is silent, copy [`.claude/specs/mobile/prototype.html`](../../../.claude/specs/mobile/prototype.html): its `<style>` block (lines 4-339) carries every size, tint and radius, and its script (lines 578-1426) carries every interaction. Read both before the first shell task.
 
 When this run is done:
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Execute phases **SP0**, **SP1** and **SP2** of [`.claude/specs/simulator/placement-programme.md`](../../.claude/specs/simulator/placement-programme.md). Read that file in full before the first task; it is the normative decision record for everything below and this plan never restates its rationale.
+Execute phases **SP0**, **SP1** and **SP2** of [`.claude/specs/simulator/placement-programme.md`](../../../.claude/specs/simulator/placement-programme.md). Read that file in full before the first task; it is the normative decision record for everything below and this plan never restates its rationale.
 
 When this run is done:
 

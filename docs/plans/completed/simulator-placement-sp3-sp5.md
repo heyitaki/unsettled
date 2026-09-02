@@ -2,7 +2,7 @@
 
 ## Overview
 
-Execute phases **SP3**, **SP4** and **SP5** of [`.claude/specs/simulator/placement-programme.md`](../../.claude/specs/simulator/placement-programme.md). Read that file in full before the first task, including its dated SP0 through SP2 notes at the end; it is the normative decision record and this plan never restates its rationale. The previous run's plan, [`completed/simulator-placement-sp0-sp2.md`](completed/simulator-placement-sp0-sp2.md), shows the task shape and the measurement protocol this plan continues.
+Execute phases **SP3**, **SP4** and **SP5** of [`.claude/specs/simulator/placement-programme.md`](../../../.claude/specs/simulator/placement-programme.md). Read that file in full before the first task, including its dated SP0 through SP2 notes at the end; it is the normative decision record and this plan never restates its rationale. The previous run's plan, [`completed/simulator-placement-sp0-sp2.md`](simulator-placement-sp0-sp2.md), shows the task shape and the measurement protocol this plan continues.
 
 When this run is done:
 

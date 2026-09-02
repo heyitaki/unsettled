@@ -2,7 +2,7 @@
 
 > **Operator's guide.** This file covers what you type: build, run, flags, config schema, which files a run writes, and how to extend the study.
 >
-> **The specification lives in [`.claude/specs/simulator/`](../.claude/specs/simulator/spec.md)** — invariants and guarantees in `contracts.md`, phase order and decisions in `programme.md`, unmodelled scoring surfaces in `gaps.md`, and the append-only measurement log in `measurements.md`. If a claim here and a claim there disagree, the spec wins.
+> **The specification lives in [`.claude/specs/simulator/`](../.claude/specs/simulator/spec.md)**: invariants and guarantees in `contracts.md`, phase order and decisions in `programme.md` and `placement-programme.md`, unmodelled scoring surfaces in `gaps.md`, and the append-only measurement log in `measurements.md`. If a claim here and a claim there disagree, the spec wins.
 
 The authoritative rosters of placement heuristics and policies are in [`contracts.md`](../.claude/specs/simulator/contracts.md).
 
@@ -56,7 +56,7 @@ cargo run --release -p unsettled-sim -- evaluate \
 
 `--domain tuning|eval|gate` is required and has no default.
 
-Each comparison in `evaluation.json` carries a `perHeroSeat` table beside its pooled numbers: the same estimator and both intervals run over one hero seat's units at a time, indexed by seat. It is record only and has no verdict of its own, because the verdict belongs to the pooled comparison the run preregistered.
+Each comparison in `evaluation.json` carries a `perHeroSeat` table beside its pooled numbers, indexed by seat. What it holds, and why it is record only, is in [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Paired statistics".
 
 Observe one placement and policy playing every seat, and read setup-time diagnostics off the games:
 
