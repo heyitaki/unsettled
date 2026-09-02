@@ -182,7 +182,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | — | done |
 | M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | — | not started |
 | M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | not started |
-| M4 | Board colour hash (B4) and the hex in header and both lists | — | not started |
+| M4 | Board colour hash (B4) and the hex in header and both lists | — | half done: `ui/boardColor.ts` module landed; the hex glyph waits on M3 and M7 |
 | M5 | Draft ribbon above the board (S2) | M2 | not started |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | not started |
 | M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | not started |
@@ -192,7 +192,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | not started |
 | M12 | Empty-board state (B5) | M6 | not started |
 | M13 | Reveal-on-select scroll (B2) | M6 | not started |
-| M14 | One-word factor labels in `displayedFactors` | — | not started |
+| M14 | One-word factor labels in `displayedFactors` | — | done |
 | M15 | Landscape and desktop regression pass | all | not started |
 | M16 | Library autosave in the store (B7) | — | not started |
 | M17 | Retire the explicit save UI on desktop: tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row (B7) | M16 | not started |

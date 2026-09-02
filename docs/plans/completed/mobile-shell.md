@@ -101,10 +101,10 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 1: One-word factor labels and the board colour hash
 
-- [ ] In `src/ui/AnalysisPanel.tsx` `displayedFactors`, rename `Diversity+recipes+numbers` to `Balance` and `Starting cards` to `Hand`; the other four labels stay.
-- [ ] Add `src/ui/boardColor.ts` exporting `BOARD_PALETTE` (the prototype's ten `MAP_COLORS`, line 679, in that order) and `boardColor(name: string): string`, the prototype's hash (`h = (h * 31 + charCode) >>> 0`, then `h % BOARD_PALETTE.length`).
-- [ ] Add `src/ui/__tests__/boardColor.test.ts`: same name gives the same colour; the palette has ten distinct entries; `boardColor` of an empty string is `BOARD_PALETTE[0]`; two fixed names that hash to different indices give different colours.
-- [ ] Ledger: M14 done; M4 half done (module), noted as such.
+- [x] In `src/ui/AnalysisPanel.tsx` `displayedFactors`, rename `Diversity+recipes+numbers` to `Balance` and `Starting cards` to `Hand`; the other four labels stay.
+- [x] Add `src/ui/boardColor.ts` exporting `BOARD_PALETTE` (the prototype's ten `MAP_COLORS`, line 679, in that order) and `boardColor(name: string): string`, the prototype's hash (`h = (h * 31 + charCode) >>> 0`, then `h % BOARD_PALETTE.length`).
+- [x] Add `src/ui/__tests__/boardColor.test.ts`: same name gives the same colour; the palette has ten distinct entries; `boardColor` of an empty string is `BOARD_PALETTE[0]`; two fixed names that hash to different indices give different colours.
+- [x] Ledger: M14 done; M4 half done (module), noted as such.
 
 ### Task 2: Library autosave in the store (B7, M16)
 
