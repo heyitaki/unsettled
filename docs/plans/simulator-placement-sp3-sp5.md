@@ -252,12 +252,12 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 18: Preregister M-58, the SP4 profile sweep
 
-- [ ] Write `docs/plans/preregs/<today>-m58-sp4-slot-profiles.md`
-- [ ] Arms per Context: `sp4_div_rise`, `sp4_div_fall`, and, only if M-54 or M-55 recorded a surviving `expansionWeight`, `sp4_exp_rise` and `sp4_exp_fall` carrying the surviving weight and decay. State plainly which set applies and why the expansion pair is absent if it is. Reference `base`. Add an `SP4_ARMS` pin test that checks each arm differs from the live defaults only in the four-seat `slotScales` entries (plus the surviving expansion pair where applicable) and move the count
-- [ ] Screen power and protocol as in Context; state that the per-hero-seat table is the reading of record for which slots drive an arm, while the pooled verdict decides
-- [ ] Decision rule fixed before the run: the standing disposition rule per arm; a surviving profile is an SP6 candidate as a whole block. Record only
-- [ ] Prediction (the diversity axis should read near zero at slot 0's first pick since there is nothing to complement yet, so `div_rise` is the favoured direction) and admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Write `docs/plans/preregs/<today>-m58-sp4-slot-profiles.md`
+- [x] Arms per Context: `sp4_div_rise`, `sp4_div_fall`, and, only if M-54 or M-55 recorded a surviving `expansionWeight`, `sp4_exp_rise` and `sp4_exp_fall` carrying the surviving weight and decay. State plainly which set applies and why the expansion pair is absent if it is. Reference `base`. Add an `SP4_ARMS` pin test that checks each arm differs from the live defaults only in the four-seat `slotScales` entries (plus the surviving expansion pair where applicable) and move the count
+- [x] Screen power and protocol as in Context; state that the per-hero-seat table is the reading of record for which slots drive an arm, while the pooled verdict decides
+- [x] Decision rule fixed before the run: the standing disposition rule per arm; a surviving profile is an SP6 candidate as a whole block. Record only
+- [x] Prediction (the diversity axis should read near zero at slot 0's first pick since there is nothing to complement yet, so `div_rise` is the favoured direction) and admissibility conditions
+- [x] Both cargo profiles green, link check passes
 
 ### Task 19: Run M-58 and record it
 

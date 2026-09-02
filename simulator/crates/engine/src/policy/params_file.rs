@@ -1282,6 +1282,107 @@ mod tests {
         );
     }
 
+    /// The SP4 arms, as arm file stem and the four-seat `slotScales` leaves that arm moves off
+    /// the live defaults: slot key, component, scale. Only the four-seat row is measured, so an
+    /// arm that touched the 3, 5 or 6 seat rows would be scaling entries no run of this phase
+    /// exercises. Only the `diversity` component appears: `expansionWeight` ships at 0 and M-54
+    /// read no survivor, so an `expansion` scale multiplies a term that is exactly 0.
+    const SP4_ARMS: [(&str, &[(&str, &str, f64)]); 2] = [
+        (
+            "sp4_div_rise",
+            &[
+                ("0", "diversity", 0.5),
+                ("1", "diversity", 0.8),
+                ("2", "diversity", 1.25),
+                ("3", "diversity", 2.0),
+            ],
+        ),
+        (
+            "sp4_div_fall",
+            &[
+                ("0", "diversity", 2.0),
+                ("1", "diversity", 1.25),
+                ("2", "diversity", 0.8),
+                ("3", "diversity", 0.5),
+            ],
+        ),
+    ];
+
+    /// Walks the committed SP4 arms (`placement/arms/sp4*.json`) as the SP2 and SP3 walks walk
+    /// theirs. An SP4 arm is a whole profile rather than a single perturbation, so the pin is on
+    /// the shape of the profile: every leaf it moves is a four-seat `slotScales` leaf, each moved
+    /// value sits inside that leaf's committed sweep-bounds range and differs from the shipped
+    /// 1.0, and nothing else in the file moves. Without this an arm that also nudged
+    /// `diversityWeight` would run and be recorded as an isolated slot-profile A/B, which is the
+    /// one thing the profile contrast cannot survive: a global weight change and a slot-keyed
+    /// scale change are indistinguishable in the pooled estimate.
+    #[test]
+    fn the_sp4_arm_files_are_the_committed_slot_profiles() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (stem, overrides) in SP4_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let mut perturbed = base.clone();
+            for (slot, component, value) in overrides {
+                let range = &bounds["placement"]["slotScales"]["4"][slot][component];
+                assert!(
+                    *value >= range["min"].as_f64().expect("min")
+                        && *value <= range["max"].as_f64().expect("max"),
+                    "{name}: slotScales.4.{slot}.{component} at {value} must sit inside its committed sweep-bounds range"
+                );
+                assert_eq!(
+                    base["slotScales"]["4"][slot][component].as_f64(),
+                    Some(1.0),
+                    "the block ships at 1.0 everywhere, which is what makes the arm a profile"
+                );
+                perturbed["slotScales"]["4"][slot][component] = Value::from(*value);
+            }
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp4") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP4 phase commits one arm per preregistered profile"
+        );
+    }
+
     /// Walks every committed weights-shaped file (the two shipped vectors plus the
     /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
@@ -1326,8 +1427,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 54,
-            "the committed weights arms are 54 files; a change to the set is a decision"
+            weights_arms, 56,
+            "the committed weights arms are 56 files; a change to the set is a decision"
         );
     }
 
