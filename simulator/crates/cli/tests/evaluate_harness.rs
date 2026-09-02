@@ -248,6 +248,74 @@ fn a_single_arm_reports_a_marginal_without_a_reference_or_verdict() {
 }
 
 #[test]
+fn the_per_hero_seat_table_partitions_the_pooled_comparison() {
+    let boards = 3;
+    let reps = 2;
+    let seats = 4;
+    let arms = vec![
+        ("base".to_string(), PlacementKind::MaxPips),
+        ("candidate".to_string(), PlacementKind::PipDiversity),
+    ];
+    let specs = vec!["max_pips".to_string(), "pip_diversity".to_string()];
+    let single = run(
+        Layout::Standard4,
+        seats,
+        "max_pips",
+        PlacementKind::MaxPips,
+        &arms,
+        &specs,
+        Some("base"),
+        boards,
+        reps,
+        1,
+        PolicyKind::HeuristicV1,
+        false,
+    );
+    let all_cores = run(
+        Layout::Standard4,
+        seats,
+        "max_pips",
+        PlacementKind::MaxPips,
+        &arms,
+        &specs,
+        Some("base"),
+        boards,
+        reps,
+        0,
+        PolicyKind::HeuristicV1,
+        false,
+    );
+
+    let pair = &single.pairs[0];
+    assert_eq!(pair.per_hero_seat.len(), seats);
+    assert_eq!(
+        pair.per_hero_seat.iter().map(|seat| seat.n).sum::<usize>(),
+        pair.stats.n
+    );
+    assert_eq!(
+        pair.per_hero_seat
+            .iter()
+            .map(|seat| seat.b + seat.c)
+            .sum::<u64>(),
+        pair.stats.b + pair.stats.c
+    );
+    // Every board contributes `reps` units to each seat, so a seat's slice keeps the
+    // full cluster count and only its cluster size shrinks.
+    assert!(
+        pair.per_hero_seat
+            .iter()
+            .all(|seat| seat.clusters == boards && seat.n == boards * reps)
+    );
+
+    assert_eq!(
+        serde_json::to_vec_pretty(&single).unwrap(),
+        serde_json::to_vec_pretty(&all_cores).unwrap()
+    );
+    assert_eq!(single.illegal_actions, 0);
+    assert_eq!(all_cores.illegal_actions, 0);
+}
+
+#[test]
 fn evaluation_json_is_byte_identical_at_one_and_all_threads() {
     let arms = vec![
         ("base".to_string(), PlacementKind::MaxPips),

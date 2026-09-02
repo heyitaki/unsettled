@@ -124,6 +124,9 @@ pub struct ArmStats {
     pub draws: u64,
 }
 
+/// The numbers of one paired comparison: the discordant counts, the point estimate,
+/// both intervals, and which of the two was selected. It carries no verdict, so the
+/// same estimator serves the pooled comparison and the per-hero-seat table.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairStats {
@@ -137,7 +140,6 @@ pub struct PairStats {
     pub clustered_degenerate: bool,
     pub interval_used: String,
     pub interval: [f64; 2],
-    pub verdict: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -147,6 +149,20 @@ pub struct PairComparison {
     pub reference: String,
     #[serde(flatten)]
     pub stats: PairStats,
+    /// One verdict per comparison, computed on the pooled units. There is no per-seat
+    /// verdict: the disposition rule a run preregisters is stated once, for the whole
+    /// comparison, and applying it again inside each seat would be a second test the
+    /// run never declared.
+    pub verdict: String,
+    /// Indexed by hero seat, over that seat's units alone, through the same estimator
+    /// and both intervals as the pooled table. Seat equals draft slot by
+    /// `game.rs::setup_order`, so this is the slot breakdown.
+    ///
+    /// Record only. It exists because a slot-keyed weight is diluted in the pooled
+    /// estimate by the slots it does not touch, so a term that moves one slot can
+    /// read `equivalent` pooled. A pattern read here is a hypothesis for a later
+    /// preregistered run, never a disposition on this one.
+    pub per_hero_seat: Vec<PairStats>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -349,17 +365,27 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
             .collect::<Vec<_>>();
         arm_indices.sort_by(|left, right| request.arms[*left].0.cmp(&request.arms[*right].0));
         for arm_index in arm_indices {
+            let stats = try_paired_stats(
+                &indicators[arm_index],
+                &indicators[reference_index],
+                &board_of_unit,
+                request.boards,
+                z,
+            )?;
+            let verdict = pair_verdict(stats.interval, request.threshold).to_string();
             pairs.push(PairComparison {
                 arm: request.arms[arm_index].0.clone(),
                 reference: reference_label.to_string(),
-                stats: try_paired_stats(
+                per_hero_seat: per_hero_seat_stats(
+                    &schedule,
                     &indicators[arm_index],
                     &indicators[reference_index],
-                    &board_of_unit,
+                    request.seats,
                     request.boards,
                     z,
-                    request.threshold,
                 )?,
+                stats,
+                verdict,
             });
         }
     }
@@ -435,10 +461,52 @@ pub fn paired_stats(
     board_of_unit: &[usize],
     boards: usize,
     z: f64,
-    threshold: f64,
 ) -> PairStats {
-    try_paired_stats(arm, reference, board_of_unit, boards, z, threshold)
+    try_paired_stats(arm, reference, board_of_unit, boards, z)
         .expect("paired statistics require a valid balanced schedule")
+}
+
+/// The preregistered verdict rule applied to the selected interval. It sits beside the
+/// estimator rather than inside it because a verdict belongs to a run's registration,
+/// and only the pooled comparison has one.
+pub fn pair_verdict(interval: [f64; 2], threshold: f64) -> &'static str {
+    if interval[0] > threshold {
+        "better"
+    } else if interval[1] < -threshold {
+        "worse"
+    } else if interval[0] > -threshold && interval[1] < threshold {
+        "equivalent"
+    } else {
+        "inconclusive"
+    }
+}
+
+/// Slices a paired comparison by hero seat. Each slice keeps every board, so its
+/// cluster size is `reps` and the balanced-schedule requirement still holds.
+fn per_hero_seat_stats(
+    schedule: &[EvaluationUnit],
+    arm: &[bool],
+    reference: &[bool],
+    seats: usize,
+    boards: usize,
+    z: f64,
+) -> Result<Vec<PairStats>, String> {
+    (0..seats)
+        .map(|hero_seat| {
+            let mut arm_units = Vec::new();
+            let mut reference_units = Vec::new();
+            let mut board_of_unit = Vec::new();
+            for (unit_index, unit) in schedule.iter().enumerate() {
+                if unit.hero_seat != hero_seat {
+                    continue;
+                }
+                arm_units.push(arm[unit_index]);
+                reference_units.push(reference[unit_index]);
+                board_of_unit.push(unit.board);
+            }
+            try_paired_stats(&arm_units, &reference_units, &board_of_unit, boards, z)
+        })
+        .collect()
 }
 
 pub fn try_paired_stats(
@@ -447,7 +515,6 @@ pub fn try_paired_stats(
     board_of_unit: &[usize],
     boards: usize,
     z: f64,
-    threshold: f64,
 ) -> Result<PairStats, String> {
     if arm.len() != reference.len() || arm.len() != board_of_unit.len() {
         return Err("paired statistics vectors must have equal lengths".into());
@@ -520,15 +587,6 @@ pub fn try_paired_stats(
     } else {
         ("clustered", clustered)
     };
-    let verdict = if interval[0] > threshold {
-        "better"
-    } else if interval[1] < -threshold {
-        "worse"
-    } else if interval[0] > -threshold && interval[1] < threshold {
-        "equivalent"
-    } else {
-        "inconclusive"
-    };
     Ok(PairStats {
         n,
         b,
@@ -540,7 +598,6 @@ pub fn try_paired_stats(
         clustered_degenerate,
         interval_used: interval_used.to_string(),
         interval,
-        verdict: verdict.to_string(),
     })
 }
 

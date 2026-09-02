@@ -120,11 +120,11 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 1: Per-hero-seat paired table in `evaluate`
 
-- [ ] In `simulator/crates/cli/src/evaluate.rs`, compute for each arm a `perHeroSeat: Vec<PairStats>` (index = hero seat) over the units whose `hero_seat` matches, through the same `paired_stats` estimator, both intervals, same `clustered_degenerate` handling, and write it beside the pooled stats in `evaluation.json`
-- [ ] No per-slot verdict: the verdict field stays pooled. Document in the struct comment that the table is record-only and why (a slot-keyed weight is diluted in the pooled estimate by the slots it does not touch)
-- [ ] Add a CLI test that the per-seat `n` values sum to the pooled `n`, that each seat's `b + c` sums to the pooled `b + c`, and that two runs at different `--threads` produce byte-identical `evaluation.json`
-- [ ] Update the `evaluate` section of `simulator/README.md` and the "Paired statistics" section of `.claude/specs/simulator/contracts.md` with one sentence each
-- [ ] Both cargo profiles green, link check passes
+- [x] In `simulator/crates/cli/src/evaluate.rs`, compute for each arm a `perHeroSeat: Vec<PairStats>` (index = hero seat) over the units whose `hero_seat` matches, through the same `paired_stats` estimator, both intervals, same `clustered_degenerate` handling, and write it beside the pooled stats in `evaluation.json`
+- [x] No per-slot verdict: the verdict field stays pooled. Document in the struct comment that the table is record-only and why (a slot-keyed weight is diluted in the pooled estimate by the slots it does not touch)
+- [x] Add a CLI test that the per-seat `n` values sum to the pooled `n`, that each seat's `b + c` sums to the pooled `b + c`, and that two runs at different `--threads` produce byte-identical `evaluation.json`
+- [x] Update the `evaluate` section of `simulator/README.md` and the "Paired statistics" section of `.claude/specs/simulator/contracts.md` with one sentence each
+- [x] Both cargo profiles green, link check passes
 
 ### Task 2: Occupancy reaches the Rust scorer, behaviour-neutral
 

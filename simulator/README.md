@@ -56,6 +56,8 @@ cargo run --release -p unsettled-sim -- evaluate \
 
 `--domain tuning|eval|gate` is required and has no default.
 
+Each comparison in `evaluation.json` carries a `perHeroSeat` table beside its pooled numbers: the same estimator and both intervals run over one hero seat's units at a time, indexed by seat. It is record only and has no verdict of its own, because the verdict belongs to the pooled comparison the run preregistered.
+
 Observe one placement and policy playing every seat, and read setup-time diagnostics off the games:
 
 ```sh
