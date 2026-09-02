@@ -76,8 +76,8 @@ export interface TabState {
   future: Game[]
   /**
    * Whose pieces board edits place, or null when nobody is selected: clicking
-   * the selected player's dot deselects, which parks the piece tools the same
-   * way clicking the selected tool does.
+   * the selected player's swatch deselects, which parks the piece tools the
+   * same way clicking the selected tool does.
    */
   activePlayerId: string | null
   /**
@@ -115,9 +115,7 @@ export type StoreAction =
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
   | { type: 'highlight'; marks: readonly HighlightMark[] | null }
-  // `after` places the new tab beside an existing one (a duplicate belongs next
-  // to its source) rather than at the end of the strip.
-  | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string; after?: string }
+  | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
   | { type: 'tab-close'; id: string }
@@ -217,8 +215,8 @@ export function adoptLegacyLinks(tabs: TabState[], library: LibraryView): TabSta
  * Which board this window opens on: the one it was looking at before the
  * reload, else whatever the last window to write the old shared field was
  * looking at, else the first tab. A window opened fresh has no session of its
- * own and so starts at the front of the strip rather than inheriting another
- * window's place.
+ * own and so starts at the front of the open-boards list rather than
+ * inheriting another window's place.
  */
 export function bootActiveTab(tabs: readonly TabState[], legacy: string | undefined): string {
   const resolves = (id: string | null | undefined): id is string =>
@@ -359,7 +357,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
       return { ...state, notice: action.message, noticeSeq: state.noticeSeq + 1 }
     case 'highlight':
       // Marks are rebuilt per hover, so only the identical value — null → null,
-      // most of all — is a no-op; sweeping the draft strip clears an already
+      // most of all — is a no-op; sweeping the draft ribbon clears an already
       // empty highlight once per slot, and each of those would otherwise
       // re-render every consumer of the store.
       return action.marks === state.highlight ? state : { ...state, highlight: action.marks }
@@ -370,16 +368,9 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         id: action.id,
         mapId: action.mapId,
       })
-      const tabs = [...state.tabs]
-      // An anchor that is no longer open (closed in this window or another)
-      // appends, which is where a tab with no anchor goes anyway.
-      const anchor = action.after === undefined
-        ? -1
-        : tabs.findIndex((candidate) => candidate.id === action.after)
-      tabs.splice(anchor < 0 ? tabs.length : anchor + 1, 0, tab)
       return {
         ...state,
-        tabs,
+        tabs: [...state.tabs, tab],
         activeTabId: tab.id,
       }
     }

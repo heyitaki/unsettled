@@ -2,13 +2,6 @@ import type { ListedMap } from '../persistence/localStorage'
 
 export type SortKey = 'name' | 'modifiedAt' | 'createdAt' | 'openedAt'
 
-/** The stamp a row shows under each sort, as a short word. */
-export const SORT_LABEL: Record<Exclude<SortKey, 'name'>, string> = {
-  modifiedAt: 'Modified',
-  createdAt: 'Created',
-  openedAt: 'Opened',
-}
-
 // The menu's own labels, keyed by every SortKey so adding a key is a compile
 // error rather than a blank sort trigger at runtime. Declaration order is menu
 // order.

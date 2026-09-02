@@ -98,7 +98,12 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     own.current = marks
     dispatch({ type: 'highlight', marks })
   }
-  const pinned = selectedPick !== null || selectedLikelyGone
+  // Marks put up by anyone else (a ribbon slot) count as pinned too: both write
+  // the one highlight slot, so a hover here would otherwise take the ribbon's
+  // selection with it.
+  const pinned = selectedPick !== null
+    || selectedLikelyGone
+    || (state.highlight !== null && state.highlight !== own.current)
   // A hover is a preview, not a choice: it paints only while no card is pinned,
   // and a coarse pointer never fires it at all (spec DB2).
   const preview = (marks: HighlightMark[] | null) => {

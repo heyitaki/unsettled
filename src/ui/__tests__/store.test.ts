@@ -162,18 +162,13 @@ describe('workspace tabs', () => {
     expect(activeTab(added).title).toBe('Game with ben')
   })
 
-  it('inserts a tab after its anchor, and appends when the anchor is gone', () => {
+  it('appends a new tab to the end of the open boards and opens it', () => {
     const start = state([tab('t1'), tab('t2'), tab('t3')], 't1')
     const game = newGame(createBoard('extension6'))
 
-    // A duplicate belongs beside the board it came from, not at the far end of
-    // a strip the user may have to scroll to reach.
-    const beside = reducer(start, { type: 'tab-add', game, title: 't1 (1)', id: 'dup', after: 't1' })
-    expect(beside.tabs.map((entry) => entry.id)).toEqual(['t1', 'dup', 't2', 't3'])
-    expect(beside.activeTabId).toBe('dup')
-
-    const appended = reducer(start, { type: 'tab-add', game, id: 'dup', after: 'closed-already' })
-    expect(appended.tabs.map((entry) => entry.id)).toEqual(['t1', 't2', 't3', 'dup'])
+    const added = reducer(start, { type: 'tab-add', game, title: 'Harbour', id: 'new' })
+    expect(added.tabs.map((entry) => entry.id)).toEqual(['t1', 't2', 't3', 'new'])
+    expect(added.activeTabId).toBe('new')
   })
 
   it('selects known tabs and ignores unknown ids', () => {
@@ -580,7 +575,7 @@ describe('highlight', () => {
   })
 
   it('returns the same state when clearing an already empty highlight', () => {
-    // Identity is the whole point: sweeping the draft strip clears nothing once
+    // Identity is the whole point: sweeping the draft ribbon clears nothing once
     // per slot, and a fresh state object would re-render every store consumer.
     const start = state([tab('t1')])
     expect(reducer(start, { type: 'highlight', marks: null })).toBe(start)

@@ -45,8 +45,6 @@ export function MapsPanel() {
           ariaLabel="Import and export files"
           x={menuAt.x}
           y={menuAt.y}
-          align="right"
-          tail
           items={items}
           onClose={() => setMenuAt(null)}
         />

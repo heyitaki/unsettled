@@ -2,7 +2,7 @@ import type { DraftAnalysis } from '../engine/analyze'
 import { draftIsComplete } from '../engine/draft'
 import type { Board, VertexId } from '../model/types'
 
-/** One pick of the snake draft, as the draft strip and the phone ribbon draw it. */
+/** One pick of the snake draft, as the draft grid and the ribbon draw it. */
 export interface DraftSlot {
   playerId: string
   /** The pick has been taken; `vertex` is then the settlement standing for it. */

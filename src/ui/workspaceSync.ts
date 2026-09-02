@@ -209,7 +209,7 @@ export function createWorkspaceSync(dispatch: (action: StoreAction) => void) {
   return {
     /**
      * The tabs this document is showing, and the workspace it now owes storage.
-     * Called on every commit, so `open` tracks the strip even while no write is
+     * Called on every commit, so `open` tracks the open boards even while no write is
      * outstanding.
      */
     arm(workspace: PersistedWorkspace) {

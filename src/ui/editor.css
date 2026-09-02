@@ -83,7 +83,10 @@ button.selected.danger { color: #fff; }
 .draft-ribbon-slot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
 
 .board-stage { position: static; overflow: hidden; padding: 12px; background: var(--paper-board); }
-.board-status { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 0; padding: 4px 0 0; color: var(--muted); font-size: 11px; }
+/* min-height reserves the zoom chip's row: it only exists above 1x, and above
+   the board (everywhere but the portrait arm) its appearing would shift the
+   board down. */
+.board-status { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 0 0; color: var(--muted); font-size: 11px; }
 .board-status .menu-trigger { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 600; }
 .board-status .menu-trigger strong { color: var(--ink); }
 .board-status .menu-chevron { width: 10px; height: 7px; }
@@ -120,7 +123,6 @@ button.selected.danger { color: #fff; }
 .sheet-menu .menu-history button:hover:not(:disabled), .sheet-menu .menu-history button:focus-visible { color: inherit; background: rgba(255, 255, 255, .74); }
 .sheet-menu .menu-history .menu-icon { width: 15px; height: 15px; color: inherit; }
 .sheet-menu > button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 9px 8px; border-radius: 10px; font-size: 13px; font-weight: 500; }
-.sheet-menu > button.separated { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 11px; }
 .sheet-menu > button:hover:not(:disabled), .sheet-menu > button:focus-visible { color: var(--ink); background: var(--paper-deep); }
 .sheet-menu > button.danger, .sheet-menu > button.danger:hover:not(:disabled), .sheet-menu > button.danger:focus-visible { color: #a33428; }
 .sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--muted); }
@@ -165,7 +167,9 @@ button.selected.danger { color: #fff; }
 .tally-header > span, .player-tally > span { display: inline-flex; justify-content: center; }
 .tally-bar { display: flex; align-items: end; justify-content: end; gap: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
 .tally-bar .menu-trigger { color: var(--muted); font-size: 11px; }
-.tally-header { justify-content: end; padding-right: var(--card-pad); }
+/* The row's 1px border insets its cells by one more pixel than the header,
+   which has none, so the header gives that pixel back. */
+.tally-header { justify-content: end; padding-right: calc(var(--card-pad) + 1px); }
 .player-tally { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .player-tally .zero { opacity: .32; }
 .player-tally .strong { color: var(--ink); font-weight: 800; }
@@ -231,14 +235,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
    two cells the desktop adds before the right edge. */
 .roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
 .roster-row.me { border-color: var(--ink); background: #fff; }
-/* One row plus the list's gap, so a row steps exactly into its neighbour's place. */
-.roster { --roster-row-step: 49px; }
-.player-list.roster { --roster-row-step: 47px; }
 .roster.reordering { touch-action: none; }
 .roster-row.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
 .roster-row.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
-.roster-row.shift-up { transform: translateY(calc(-1 * var(--roster-row-step))); }
-.roster-row.shift-down { transform: translateY(var(--roster-row-step)); }
 .roster-row.dragging .roster-grip { cursor: grabbing; }
 .roster-grip { position: relative; display: grid; place-items: center; height: 100%; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
 .roster-row .swatch { width: 24px; height: 24px; padding: 0; }
@@ -476,7 +475,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   /* overflow: visible because the status line moves below the board, so its
      dropdown now opens downward and the stage's clip would eat it. */
   .board-stage { display: flex; flex-direction: column; padding: 0 var(--gutter); border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
-  .board-status { order: 1; }
+  /* Below the board here, so the reservation would only pad the page's foot. */
+  .board-status { order: 1; min-height: 0; }
   /* The cap has to go, not just grow: the SVG scales to fit, so any height
      limit shrinks the board away from the gutters it should meet. */
   .board-canvas { width: 100%; height: auto; max-height: none; }

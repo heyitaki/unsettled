@@ -88,7 +88,7 @@ export function ToolGroups() {
         </div>
       </div>
       <div className="tool-group">
-        <span className="tool-label">Structures<span className="tool-count">{pieces} pieces</span></span>
+        <span className="tool-label">Structures<span className="tool-count">{pieces} {pieces === 1 ? 'piece' : 'pieces'}</span></span>
         <div className="tool-grid structure-grid">
           {structures.map((item) => {
             const active = selected === keyOf(item.tool)

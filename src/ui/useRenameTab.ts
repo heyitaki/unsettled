@@ -2,7 +2,7 @@ import { readLibrary, renameMap } from '../persistence/localStorage'
 import { type StoreAction, type TabState, useStore } from './store'
 
 /**
- * The board rename rule, shared by the tab strip and the phone's Maps screen.
+ * The board rename rule, shared by both trees through the library's open-boards list.
  * Returns the title the tab carries afterwards, or null when the rename was
  * refused and said so, so a caller never reports a success over that message.
  */

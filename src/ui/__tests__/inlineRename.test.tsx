@@ -32,12 +32,24 @@ const draw = (props: Partial<Props> = {}): void => {
   })
 }
 
-const press = (key: string): void => {
+const field = (): HTMLInputElement => {
   const input = container.querySelector('input')
   if (!input) throw new Error('no rename field')
+  return input
+}
+
+const press = (key: string): void => {
+  const input = field()
   act(() => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
   })
+}
+
+// The real gesture: React listens for the focusout that blurring a focused
+// field fires, not for a synthesised blur.
+const blur = (): void => {
+  const input = field()
+  act(() => input.blur())
 }
 
 describe('InlineRename', () => {
@@ -88,6 +100,39 @@ describe('InlineRename', () => {
 
     expect(onCommit).toHaveBeenCalledTimes(1)
     expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('commits on blur, which is how a rename ends when the row is clicked away from', () => {
+    const onCommit = vi.fn()
+    const onCancel = vi.fn()
+    draw({ draft: 'Harbour', onCommit, onCancel })
+
+    blur()
+
+    expect(onCommit).toHaveBeenCalledTimes(1)
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('commits once when Enter is followed by the blur the unmount fires', () => {
+    const onCommit = vi.fn()
+    draw({ draft: 'Harbour', onCommit })
+
+    press('Enter')
+    blur()
+
+    expect(onCommit).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not commit the blur that follows an Escape', () => {
+    const onCommit = vi.fn()
+    const onCancel = vi.fn()
+    draw({ draft: 'Harbour', onCommit, onCancel })
+
+    press('Escape')
+    blur()
+
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(onCommit).not.toHaveBeenCalled()
   })
 
   it('reverts on Escape', () => {

@@ -47,7 +47,16 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
     const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1
     setFades((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }))
   }, [])
-  useLayoutEffect(syncFades, [syncFades, maps.length])
+  // maps.length covers the rows the scroller holds; the observer covers its
+  // height, which moves with the open-boards list sharing the rail above it.
+  useLayoutEffect(() => {
+    syncFades()
+    const el = scrollerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(syncFades)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [syncFades, maps.length])
   return (
     <>
       <button

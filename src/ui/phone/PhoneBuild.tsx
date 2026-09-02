@@ -5,7 +5,7 @@ import { ToolGroups } from '../ToolPalette'
  * The board tools in the analysis block's slot (spec S6). Randomize, clear,
  * undo and redo are not repeated here; the header's dots menu holds them.
  *
- * The Player row is the phone's stand-in for the desktop roster's dots: the
+ * The Player row is the phone's stand-in for the desktop roster's swatches: the
  * canvas places every road and building for the tab's active player, and the
  * only other way to move that brush is `PlayerPanel`, which this tree never
  * mounts. Without it a phone could hand-build pieces for the first seat only.

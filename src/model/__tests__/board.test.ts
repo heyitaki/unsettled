@@ -48,7 +48,7 @@ describe('board operations', () => {
   })
 
   it('upgrades a building in place, keeping array order', () => {
-    // The draft strip maps a player's k-th building to their k-th pick.
+    // The draft views map a player's k-th building to their k-th pick.
     const vertices = boardGrid('standard4').vertexIds
     let board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
     board = placeBuilding(board, vertices[0], 'aki', 'settlement')

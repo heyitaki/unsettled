@@ -233,7 +233,7 @@ export function placeBuilding(
   if (!boardGrid(board.layout).vertexIds.includes(vertexId)) throw new RangeError(`Unknown vertex ${vertexId}`)
   const next = { vertexId, playerId, tier }
   const occupied = board.buildings.findIndex((building) => building.vertexId === vertexId)
-  // Upgrading your own building keeps its index, because the draft strip maps a
+  // Upgrading your own building keeps its index, because the draft views map a
   // player's k-th building to their k-th pick. Taking over another player's
   // vertex is a first placement for the new owner, so it appends instead.
   if (occupied !== -1 && board.buildings[occupied].playerId === playerId) {

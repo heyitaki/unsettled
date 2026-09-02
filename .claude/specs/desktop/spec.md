@@ -64,7 +64,7 @@ The roster is the phone's roster (S8) plus the tally the desktop keeps (mobile O
 
 ### D6 · Vocabulary
 
-- **Menus.** `MenuSelect`'s default caret is `ChevronGlyph`; the `▾` text caret and `.menu-caret` go. Every popup is the phone's bordered sheet with a check on the current option (`.menu-tick` shown everywhere) and no gold highlight. `ContextMenu` always renders the phone's sheet (radius, shadow, icons, optional tail); its `shortcut` and `shortcutKeys` fields and the `.menu-shortcut` rule go with the chords.
+- **Menus.** `MenuSelect`'s default caret is `ChevronGlyph`; the `▾` text caret and `.menu-caret` go. Every popup is the phone's bordered sheet with a check on the current option (`.menu-tick` shown everywhere) and no gold highlight. `ContextMenu` always renders the phone's sheet (radius, shadow, icons), hung from its top-right corner with a tail, since every caller is a dots button near the right edge; its `shortcut`, `shortcutKeys` and `separated` fields, the `align`/`tail` props and the `.menu-shortcut` and `.separated` rules go with the chords and the tab menu.
 - **Rows and cards** share one set of states: `current` (accent-dark border, white ground) for the open board, the selected card and the current draft slot; `me` (ink border, white ground) for the claimed player. The gold pair (`#d8bc77` with `#fff9e9`), the `#c77c63` tab border and the `#fff9e9` menu highlight leave the stylesheet.
 - **Text controls.** The claim picker in the context line is the ink name with a dotted accent underline and a chevron on both trees. Group labels are the phone's (`10px`, `.09em`, uppercase, count in parentheses).
 - The desktop keeps its hover lift on generic buttons; the phone's `transition: none` and hover resets stay portrait-only.

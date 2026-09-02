@@ -39,11 +39,14 @@ const actEnvironment = (on: boolean): void => {
 
 const draw = (board: Board): void => {
   act(() => {
-    root.render(<DraftGrid board={board} analysis={analyzeBoardCached(board)} />)
+    root.render(<DraftGrid board={board} />)
   })
 }
 
 const slots = (): HTMLElement[] => [...container.querySelectorAll<HTMLElement>('.draft-grid-slot')]
+// A taken pick is the slot's plain state: dashed is still to come, outlined is next.
+const taken = (slot: HTMLElement): boolean =>
+  !slot.classList.contains('pending') && !slot.classList.contains('now')
 const counter = (): string | undefined =>
   container.querySelectorAll('.group-label span')[1]?.textContent ?? undefined
 
@@ -65,9 +68,9 @@ describe('DraftGrid', () => {
     draw(playDraft(fourPlayers(), 2))
 
     expect(slots()).toHaveLength(8)
-    expect(slots().filter((slot) => slot.classList.contains('placed'))).toHaveLength(2)
-    expect(slots()[0].classList.contains('placed')).toBe(true)
-    expect(slots()[1].classList.contains('placed')).toBe(true)
+    expect(slots().filter(taken)).toHaveLength(2)
+    expect(taken(slots()[0])).toBe(true)
+    expect(taken(slots()[1])).toBe(true)
     expect(slots().flatMap((slot, index) => slot.classList.contains('now') ? [index] : [])).toEqual([2])
     expect(counter()).toBe('pick 3 of 8')
   })
@@ -84,7 +87,7 @@ describe('DraftGrid', () => {
   it('reads as complete once every pick is taken', () => {
     draw(playDraft(fourPlayers(), 8))
 
-    expect(slots().every((slot) => slot.classList.contains('placed'))).toBe(true)
+    expect(slots().every(taken)).toBe(true)
     expect(slots().some((slot) => slot.classList.contains('now'))).toBe(false)
     expect(counter()).toBe('draft complete')
   })

@@ -1,5 +1,4 @@
 import { Fragment, useState, type ReactNode } from 'react'
-import { analyzeBoardCached } from '../engine/analyze'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
 import {
   addPlayer,
@@ -14,7 +13,6 @@ import { DraftGrid } from './DraftGrid'
 import { CounterGlyph, GLYPH_MUTED, GripGlyph, PlusGlyph, ResourceGlyph, StructureGlyph, TrashGlyph } from './glyphs'
 import { InlineRename } from './InlineRename'
 import { MenuSelect } from './MenuSelect'
-import { rowShift, SHIFT_CLASS } from './rowDrag'
 import { activeTab, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 import { useRowReorder } from './useRowReorder'
@@ -159,14 +157,12 @@ export function PlayerPanel() {
     ? RESOURCE_COLUMNS
     : TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
 
-  const analysis = analyzeBoardCached(board)
-
   // Dragged from anywhere on the row; only a row being renamed is undraggable,
   // so the input keeps its text selection. Dropping on the trash row (which only
   // exists mid-drag) removes the player.
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
   const ids = board.players.map((player) => player.id)
-  const { listRef, dragId, dragOffset, dropTarget, rowProps, startImmediately, trashProps } = useRowReorder({
+  const { listRef, dragId, dragOffset, dropTarget, shiftFor, rowProps, startImmediately, trashProps } = useRowReorder({
     coarse,
     ids,
     rowSelector: '.roster-row',
@@ -175,8 +171,6 @@ export function PlayerPanel() {
     onMove: (playerId, index) => commit(movePlayer(board, playerId, index)),
     onRemove: (playerId) => commit(removePlayer(board, playerId)),
   })
-  const from = dragId === null ? -1 : ids.indexOf(dragId)
-  const aimed = dropTarget?.kind === 'row' ? dropTarget.index : from
   // Committed on Enter or blur rather than on every keystroke, so a rename is
   // one undo entry.
   const commitRename = () => {
@@ -255,19 +249,22 @@ export function PlayerPanel() {
           const active = tab.activePlayerId === player.id
           const isMe = board.mePlayerId === player.id
           const lifted = dragId === player.id
+          const shift = lifted ? 0 : shiftFor(index)
           const classes = ['roster-row']
           if (isMe) classes.push('me')
           if (lifted) classes.push('dragging')
-          else if (dragId !== null) {
-            classes.push(SHIFT_CLASS[rowShift(index, from, aimed)])
-            if (dropTarget?.kind === 'row' && dropTarget.index === index) classes.push('drag-over')
+          else if (dragId !== null && dropTarget?.kind === 'row' && dropTarget.index === index) {
+            classes.push('drag-over')
           }
           return (
             <Fragment key={player.id}>
               <div
-                className={classes.join(' ').trim()}
-                // The lifted row tracks the pointer; the others ease through CSS.
-                style={lifted ? { transform: `translateY(${dragOffset}px)` } : undefined}
+                className={classes.join(' ')}
+                // The lifted row tracks the pointer; the others ease into the
+                // slot they stand in for, over the row's own transition.
+                style={lifted || shift !== 0
+                  ? { transform: `translateY(${lifted ? dragOffset : shift}px)` }
+                  : undefined}
                 {...rowProps(player.id)}
                 onClick={() => commit(setMe(board, player.id))}
               >
@@ -419,7 +416,7 @@ export function PlayerPanel() {
           Add player
         </button>
       </div>
-      <DraftGrid board={board} analysis={analysis} />
+      <DraftGrid board={board} />
     </section>
   )
 }

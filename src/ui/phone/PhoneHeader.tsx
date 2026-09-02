@@ -121,8 +121,6 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
           ariaLabel="Board options"
           x={menuAt.x}
           y={menuAt.y}
-          align="right"
-          tail
           history={history}
           items={items}
           onClose={() => setMenuAt(null)}

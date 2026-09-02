@@ -8,14 +8,14 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
  * 500ms autosave debounce, and both are real here.
  */
 
-const strip = (page: Page) => page.locator('.open-boards .list-row')
-const titles = (page: Page) => strip(page).locator('.list-row-name')
+const openBoards = (page: Page) => page.locator('.open-boards .list-row')
+const titles = (page: Page) => openBoards(page).locator('.list-row-name')
 const active = (page: Page) => page.locator('.open-boards .list-row.current .list-row-name')
 
 async function open(context: BrowserContext): Promise<Page> {
   const page = await context.newPage()
   await page.goto('')
-  await expect(strip(page)).not.toHaveCount(0)
+  await expect(openBoards(page)).not.toHaveCount(0)
   return page
 }
 
@@ -49,31 +49,31 @@ const settle = (page: Page) => page.waitForTimeout(2_000)
 test('closing every board while the other window is in use leaves one blank board', async ({ context }) => {
   const a = await open(context)
   await addBoards(a, 3)
-  await expect(strip(a)).toHaveCount(4)
+  await expect(openBoards(a)).toHaveCount(4)
   await a.waitForTimeout(800)
 
   const b = await open(context)
-  await expect(strip(b)).toHaveCount(4)
+  await expect(openBoards(b)).toHaveCount(4)
   // A second window merely being open is not enough to race anything: with no
   // writes of its own it has nothing to answer with, and the closes converge
   // even on code that has none of the protections here. It takes a window that
   // is also being used, whose own pending write still describes the workspace
   // as it was before the close.
   await b.getByRole('button', { name: 'New board' }).click()
-  await expect(strip(a)).toHaveCount(5)
+  await expect(openBoards(a)).toHaveCount(5)
 
   await closeLeftmost(a, 5)
   await settle(a)
 
   // Closing the last board mints a blank one; nothing else may come back with
   // it. This is the reported symptom, verbatim.
-  await expect(strip(a)).toHaveCount(1)
-  await expect(strip(b)).toHaveCount(1)
+  await expect(openBoards(a)).toHaveCount(1)
+  await expect(openBoards(b)).toHaveCount(1)
 
   // And it has to still be true after a reload, or the blob kept what the
-  // strip did not.
+  // open-boards list did not.
   await a.reload()
-  await expect(strip(a)).toHaveCount(1)
+  await expect(openBoards(a)).toHaveCount(1)
 })
 
 test('closes made while the other window is writing stay closed', async ({ context }) => {
@@ -82,11 +82,11 @@ test('closes made while the other window is writing stay closed', async ({ conte
   await a.waitForTimeout(800)
 
   const b = await open(context)
-  await expect(strip(b)).toHaveCount(4)
+  await expect(openBoards(b)).toHaveCount(4)
   // Give B something of its own to write, so its debounce is running while A
   // closes — the collision that used to resurrect a tab one write later.
   await b.getByRole('button', { name: 'New board' }).click()
-  await expect(strip(a)).toHaveCount(5)
+  await expect(openBoards(a)).toHaveCount(5)
 
   await closeLeftmost(a, 2)
   await settle(a)
@@ -95,7 +95,7 @@ test('closes made while the other window is writing stay closed', async ({ conte
   await expect(titles(b)).toHaveText(['Board 3', 'Board 4', 'Board 5'])
 })
 
-test('each window keeps its own place in the strip', async ({ context }) => {
+test('each window keeps its own place in the open boards', async ({ context }) => {
   // The active board is per-window now. Two windows disagreeing about it must
   // not be a difference either of them tries to write away.
   const a = await open(context)
@@ -104,10 +104,10 @@ test('each window keeps its own place in the strip', async ({ context }) => {
   // Adding a board selects it, so A is on the last one.
   await expect(active(a)).toHaveText('Board 3')
 
-  // A window with no session of its own starts at the front of the strip
+  // A window with no session of its own starts at the front of the list
   // rather than inheriting where another window happens to be looking.
   const b = await open(context)
-  await expect(strip(b)).toHaveCount(3)
+  await expect(openBoards(b)).toHaveCount(3)
   await expect(active(b)).toHaveText('Board 1')
 
   // Selecting in one window must not move the other. (The row selects; its

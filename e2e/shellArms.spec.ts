@@ -109,7 +109,24 @@ test.describe('desktop', () => {
 
     // Nothing is hovered, so the slot's own mark is all the board carries.
     await slots.first().click()
+    await expect(slots.first()).toHaveClass(/\bselected\b/)
     await expect(marks).toHaveCount(1)
+
+    // Clicking the same slot again drops the mark back to the resting ones.
+    await slots.first().click()
+    await expect(slots.first()).not.toHaveClass(/\bselected\b/)
+    await expect(marks).toHaveCount(LISTED_PICKS)
+
+    // A card selected in Best picks owns the board's marks, so the ribbon's
+    // outline goes with them; a hover over a card must not take them (spec DB2).
+    await slots.first().click()
+    await expect(slots.first()).toHaveClass(/\bselected\b/)
+    await page.locator('.analysis-row').first().hover()
+    await expect(slots.first()).toHaveClass(/\bselected\b/)
+    await expect(marks).toHaveCount(1)
+    await page.locator('.analysis-row').first().locator('.analysis-row-select').click()
+    await expect(slots.first()).not.toHaveClass(/\bselected\b/)
+    await expect(marks).toHaveCount(2)
   })
 
   test('the tool heading is glyphs alone and the labels carry the counts the caption lost', async ({ page }) => {
@@ -125,9 +142,16 @@ test.describe('desktop', () => {
 
     await heading.getByRole('button', { name: 'Randomize' }).click()
     const labels = page.locator('.tools-panel .tool-label')
-    await expect(labels.filter({ hasText: 'Terrain' }).locator('.tool-count')).toHaveText('19/19')
+    const terrain = labels.filter({ hasText: 'Terrain' }).locator('.tool-count')
+    await expect(terrain).toHaveText('19/19')
     await expect(labels.filter({ hasText: 'Structures' }).locator('.tool-count')).toHaveText('0 pieces')
     await snap(page, 'desktop-tools')
+
+    // The chords are gone, so these buttons are the only way back (spec D3).
+    await heading.getByRole('button', { name: 'Undo' }).click()
+    await expect(terrain).toHaveText('0/19')
+    await heading.getByRole('button', { name: 'Redo' }).click()
+    await expect(terrain).toHaveText('19/19')
   })
 
   test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {
@@ -142,8 +166,11 @@ test.describe('desktop', () => {
     await expect(active).toHaveCount(1)
     await expect(active.locator('.menu-tick')).toBeVisible()
     // Laid out on every option so the labels line up, painted on the current one only.
-    await expect(popup.locator('.menu-tick')).toHaveCount(await popup.getByRole('option').count())
-    await expect(popup.locator('button:not(.active) .menu-tick').first()).toBeHidden()
+    await expect(popup.getByRole('option')).toHaveCount(2)
+    await expect(popup.locator('.menu-tick')).toHaveCount(2)
+    const others = popup.locator('button:not(.active) .menu-tick')
+    await expect(others).toHaveCount(1)
+    await expect(others).toBeHidden()
     await page.keyboard.press('Escape')
 
     // The dots menu is the phone's sheet, tail and all (spec D6 menus).
@@ -209,7 +236,7 @@ test.describe('desktop', () => {
     await expect(cards.first()).toHaveClass(/\bcurrent\b/)
 
     // The pointer parks off the rails before the shot: a full-page capture
-    // resizes the viewport, and the draft strip sliding under a live pointer
+    // resizes the viewport, and the draft ribbon sliding under a live pointer
     // would repaint the board marks and drop the selection with them.
     await page.mouse.move(0, 0)
     await snap(page, 'desktop-selected-card')
@@ -226,7 +253,7 @@ test.describe('desktop', () => {
     // Placing is the button's job alone, and it ends the selection with it.
     await cards.first().locator('.analysis-row-select').click()
     await cards.first().getByRole('button', { name: 'Place settlement' }).click()
-    await expect(structures).toHaveText('1 pieces')
+    await expect(structures).toHaveText('1 piece')
     await expect(panel.locator('.analysis-row.current')).toHaveCount(0)
     await snap(page, 'desktop-placed')
   })
@@ -340,6 +367,21 @@ test.describe('desktop', () => {
     await expect(grid.locator('.draft-grid-name').first()).toHaveText('Blue')
     await expect(page.locator('.draft-ribbon-slot').first())
       .toHaveCSS('background-color', 'rgb(48, 99, 186)')
+
+    // The trash row only exists mid-drag, so the drag has to be driven by hand:
+    // dragTo resolves its target before the drop zone the drag creates exists.
+    await expect(panel.locator('.roster-trash')).toHaveCount(0)
+    await rows.first().locator('.roster-grip').hover()
+    await page.mouse.down()
+    const second = (await rows.nth(1).boundingBox())!
+    await page.mouse.move(second.x + second.width / 2, second.y + second.height / 2, { steps: 8 })
+    const trash = panel.locator('.roster-trash')
+    await expect(trash).toBeVisible()
+    await trash.hover()
+    await page.mouse.up()
+    await expect(rows.locator('.list-row-name')).toHaveText(['Orange', 'Red', 'White'])
+    await expect(cells).toHaveCount(6)
+    await expect(panel.locator('.roster-trash')).toHaveCount(0)
   })
 })
 

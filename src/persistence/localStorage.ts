@@ -289,7 +289,7 @@ export function renameMap(id: string, newName: string): WriteResult {
   return writeMaps(maps)
 }
 
-// Parsed games, keyed by the exact blob they came from. The tab strip compares
+// Parsed games, keyed by the exact blob they came from. The autosave compares
 // every linked tab against its saved map on each render, and parseGame runs a
 // full board validation — without this, editing a board re-validates the whole
 // library per keystroke. Every write goes through writeMaps, so a changed blob

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { DraftAnalysis } from '../engine/analyze'
+import { analyzeBoardCached } from '../engine/analyze'
 import type { Board } from '../model/types'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
@@ -10,7 +10,8 @@ import { draftSlots } from './draftSlots'
  * outlined and the rest dashed. Static on purpose: marking a pick on the board
  * is the ribbon's job.
  */
-export function DraftGrid({ board, analysis }: { board: Board; analysis: DraftAnalysis }) {
+export function DraftGrid({ board }: { board: Board }) {
+  const analysis = analyzeBoardCached(board)
   const slots = draftSlots(board, analysis)
   const { turnIndex, sequence } = analysis.draft
   return (
@@ -24,8 +25,7 @@ export function DraftGrid({ board, analysis }: { board: Board; analysis: DraftAn
           const player = board.players.find((candidate) => candidate.id === slot.playerId)
           if (!player) return null
           const classes = ['draft-grid-slot']
-          if (slot.placed) classes.push('placed')
-          else if (!slot.current) classes.push('pending')
+          if (!slot.placed && !slot.current) classes.push('pending')
           if (slot.current) classes.push('now')
           return (
             <div key={`${slot.playerId}:${index}`} className={classes.join(' ')}>

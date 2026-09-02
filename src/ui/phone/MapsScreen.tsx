@@ -5,7 +5,7 @@ import { useJsonFiles } from '../useJsonFiles'
 import { PhoneOverlay } from './PhoneOverlay'
 
 /**
- * The phone's replacement for the tab strip and the library panel (spec S7):
+ * The desktop Library panel's body in a full-screen overlay (spec S7):
  * the shared library body in a full-screen overlay. Selecting, opening,
  * importing and New board act and close the screen; rename, close, delete and
  * sort keep it open.

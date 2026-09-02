@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
 import { newGame } from '../../model/game'
-import { inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
+import { firstFreeName, inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
 
 const pristine = (layout: 'standard4' | 'extension6' = 'standard4') => newGame(createBoard(layout))
 
@@ -11,6 +11,20 @@ const edited = () => {
 }
 
 const unlinked = { linked: false } as const
+
+describe('firstFreeName', () => {
+  it('keeps the base name when nothing has claimed it', () => {
+    expect(firstFreeName('Thursday game', new Set())).toBe('Thursday game')
+    expect(firstFreeName('Thursday game', new Set(['Friday game']))).toBe('Thursday game')
+  })
+
+  it('counts past every suffix already taken', () => {
+    expect(firstFreeName('Board', new Set(['Board']))).toBe('Board (1)')
+    expect(firstFreeName('Board', new Set(['Board', 'Board (1)']))).toBe('Board (2)')
+    // A gap in the run is still a free name: the count stops at the first one.
+    expect(firstFreeName('Board', new Set(['Board', 'Board (2)']))).toBe('Board (1)')
+  })
+})
 
 describe('tabIsDirty', () => {
   it('treats an unlinked tab as clean only while it is a fresh board', () => {

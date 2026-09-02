@@ -507,7 +507,11 @@ test.describe('players screen', () => {
     await expect(rows.nth(3)).toHaveClass(/\bdragging\b/)
     await expect(screen.locator('.roster-trash')).toBeVisible()
     await page.mouse.move(x, top.y + top.height / 2, { steps: 12 })
-    await expect(rows.nth(0)).toHaveClass(/\bshift-down\b/)
+    // The resting row slides a whole slot down: the distance is measured off the
+    // neighbour it stands in for, so it is read here rather than named. Polled
+    // because the row eases into place over its own transition.
+    await expect.poll(() => rows.nth(0).evaluate((el) =>
+      new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)).toBeGreaterThan(top.height)
     await snap(page, 'players-drag')
     await page.mouse.up()
     await expect(rows.locator('.list-row-name')).toHaveText(['White', 'Red', 'Bea', 'Orange'])

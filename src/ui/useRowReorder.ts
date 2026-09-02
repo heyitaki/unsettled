@@ -8,7 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react'
-import { dropIndexFor, edgeScrollStep, type RowBox } from './rowDrag'
+import { dropIndexFor, edgeScrollStep, rowShift, type RowBox } from './rowDrag'
 
 /** How long a finger must rest on a row before it becomes a drag. */
 export const HOLD_MS = 380
@@ -63,6 +63,13 @@ export interface RowReorder {
   dropTarget: DropTarget | null
   /** How far the pointer has travelled since the lift, for a row that follows it. */
   dragOffset: number
+  /**
+   * How far a resting row slides while the drag is live, in pixels: the offset
+   * to the neighbour whose slot it stands in for, or 0 for a row that holds
+   * still. Measured rather than assumed, because a list can put a block (the
+   * brush player's steppers) between two rows and space them unevenly.
+   */
+  shiftFor: (index: number) => number
   rowProps: (id: string) => RowHandlers
   /** A grip's pointer down: lifts the row at once, with no hold. */
   startImmediately: (event: ReactPointerEvent<HTMLElement>, id: string) => void
@@ -104,9 +111,10 @@ function scrollParent(node: Element | null): Element | null {
  * drag never fires on touch), then aim by pointer position, with the page
  * scrolling at the edges so a drop target below the fold can be reached.
  *
- * The rows' geometry is measured at the lift and kept: a row that is drawn
- * following the pointer, or easing out of its way, has moved on screen but not
- * in the list, and aiming must read the list.
+ * The rows' geometry is measured as the drag starts and kept: a row that is
+ * drawn following the pointer, or easing out of its way, has moved on screen
+ * but not in the list, and both aiming and the easing distance must read the
+ * list as it was.
  */
 export function useRowReorder({
   coarse,
@@ -159,18 +167,19 @@ export function useRowReorder({
     setDropTarget({ kind: 'row', index: dropIndexFor(rows, y) })
   }, [trashSelector])
 
-  const liftRow = (row: HTMLElement, id: string, pointerId: number, y: number) => {
+  // The rows as they sit right now, relative to the list's top.
+  const measureRows = (): RowBox[] => {
     const list = listRef.current
-    const listTop = list?.getBoundingClientRect().top ?? 0
-    lift.current = {
-      y,
-      layout: list
-        ? [...list.querySelectorAll(rowSelector)].map((element) => {
-          const box = element.getBoundingClientRect()
-          return { top: box.top - listTop, bottom: box.bottom - listTop }
-        })
-        : [],
-    }
+    if (!list) return []
+    const listTop = list.getBoundingClientRect().top
+    return [...list.querySelectorAll(rowSelector)].map((element) => {
+      const box = element.getBoundingClientRect()
+      return { top: box.top - listTop, bottom: box.bottom - listTop }
+    })
+  }
+
+  const liftRow = (row: HTMLElement, id: string, pointerId: number, y: number) => {
+    lift.current = { y, layout: measureRows() }
     draggedRef.current = true
     row.setPointerCapture(pointerId)
     setDragId(id)
@@ -294,6 +303,9 @@ export function useRowReorder({
       draggable: !coarse && lockedId !== id,
       onDragStart: (event) => {
         event.dataTransfer.effectAllowed = 'move'
+        // The HTML5 path never lifts, but the resting rows still animate, and
+        // that needs the same measurement the hold path takes.
+        lift.current = { y: event.clientY, layout: measureRows() }
         setDragId(id)
       },
       onDragEnd: endDrag,
@@ -337,5 +349,18 @@ export function useRowReorder({
     },
   }
 
-  return { listRef, dragId, dropTarget, dragOffset, rowProps, startImmediately, trashProps }
+  const shiftFor = (index: number): number => {
+    if (dragId === null) return 0
+    const from = ids.indexOf(dragId)
+    const to = dropTarget?.kind === 'row' ? dropTarget.index : from
+    const direction = rowShift(index, from, to)
+    if (direction === 0) return 0
+    const layout = lift.current?.layout ?? []
+    const own = layout[index]
+    const neighbour = layout[index + direction]
+    if (!own || !neighbour) return 0
+    return neighbour.top - own.top
+  }
+
+  return { listRef, dragId, dropTarget, dragOffset, shiftFor, rowProps, startImmediately, trashProps }
 }

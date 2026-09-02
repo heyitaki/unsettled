@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { analyzeBoardCached } from '../../engine/analyze'
 import { computeStandings } from '../../engine/stats'
 import { addPlayer, movePlayer, removePlayer, renamePlayer, setMe } from '../../model/board'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { DraftGrid } from '../DraftGrid'
 import { GripGlyph, PlusGlyph, TrashGlyph } from '../glyphs'
 import { InlineRename } from '../InlineRename'
-import { rowShift, SHIFT_CLASS } from '../rowDrag'
 import { activeTab, useStore } from '../store'
 import { useCoarsePointer } from '../useMediaQuery'
 import { useRowReorder } from '../useRowReorder'
@@ -25,7 +23,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const { board } = game
   const commit = (next: Board) => dispatch({ type: 'commit', board: next })
   const standings = computeStandings(game)
-  const analysis = analyzeBoardCached(board)
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
   const ids = board.players.map((player) => player.id)
   const reorder = useRowReorder({
@@ -37,8 +34,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
     onMove: (id, index) => commit(movePlayer(board, id, index)),
     onRemove: (id) => commit(removePlayer(board, id)),
   })
-  const from = reorder.dragId === null ? -1 : ids.indexOf(reorder.dragId)
-  const aimed = reorder.dropTarget?.kind === 'row' ? reorder.dropTarget.index : from
   const commitRename = () => {
     if (!editing) return
     const next = editing.draft.trim()
@@ -63,19 +58,23 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           {board.players.map((player, index) => {
             const me = board.mePlayerId === player.id
             const lifted = reorder.dragId === player.id
+            const shift = lifted ? 0 : reorder.shiftFor(index)
             const classes = ['roster-row']
             if (me) classes.push('me')
             if (lifted) classes.push('dragging')
-            else if (reorder.dragId !== null) {
-              classes.push(SHIFT_CLASS[rowShift(index, from, aimed)])
-              if (reorder.dropTarget?.kind === 'row' && reorder.dropTarget.index === index) classes.push('drag-over')
+            else if (reorder.dragId !== null
+              && reorder.dropTarget?.kind === 'row' && reorder.dropTarget.index === index) {
+              classes.push('drag-over')
             }
             return (
               <div
                 key={player.id}
-                className={classes.join(' ').trim()}
-                // The lifted row tracks the pointer; the others ease through CSS.
-                style={lifted ? { transform: `translateY(${reorder.dragOffset}px)` } : undefined}
+                className={classes.join(' ')}
+                // The lifted row tracks the pointer; the others ease into the
+                // slot they stand in for, over the row's own transition.
+                style={lifted || shift !== 0
+                  ? { transform: `translateY(${lifted ? reorder.dragOffset : shift}px)` }
+                  : undefined}
                 {...reorder.rowProps(player.id)}
               >
                 <button
@@ -127,7 +126,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-      <DraftGrid board={board} analysis={analysis} />
+      <DraftGrid board={board} />
     </PhoneOverlay>
   )
 }

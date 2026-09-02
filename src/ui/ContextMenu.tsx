@@ -7,8 +7,6 @@ export interface ContextMenuItem {
   /** A glyph before the label. */
   icon?: ReactNode
   disabled?: boolean
-  /** Draws a rule above this item, opening a group. */
-  separated?: boolean
   /** Styled as destructive, for the actions that throw board work away. */
   danger?: boolean
 }
@@ -29,26 +27,23 @@ const FOCUS_KEYS: Record<string, FocusStep> = {
 }
 
 /**
- * A menu pinned to a point: the shared sheet, positioned in viewport
- * coordinates and clamped so a right-click near an edge still opens fully on
- * screen. `align: 'right'` hangs the menu from its top-right corner
- * instead, for a menu that grows out of a button at the edge of the screen.
+ * A menu pinned to a point: the shared sheet, hung from its top-right corner
+ * (every menu grows out of a dots button near the right edge), positioned in
+ * viewport coordinates and clamped so one opened near an edge still opens
+ * fully on screen. A tail on the top edge points back at that button.
  * `history` is an optional row of side-by-side items above the list (undo and
  * redo as a pair), walked by the same arrow keys. It follows the menu keyboard
  * pattern its role promises — arrows and Home/End move, Escape and Tab leave —
  * and closes on any outside click, on a second right-click, and on the scroll
  * or resize that would otherwise leave it floating away from what it belongs to.
  */
-export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', className, tail = false, onClose }: {
+export function ContextMenu({ ariaLabel, x, y, items, history, className, onClose }: {
   ariaLabel: string
   x: number
   y: number
   items: readonly ContextMenuItem[]
   history?: readonly ContextMenuItem[]
-  align?: 'left' | 'right'
   className?: string
-  /** A small pointer on the top edge, aimed at the button the menu grew from. */
-  tail?: boolean
   onClose: () => void
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -68,12 +63,12 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
     // clientWidth, not innerWidth: the latter counts a classic scrollbar as
     // usable, which parks the menu underneath it.
     const { clientWidth, clientHeight } = document.documentElement
-    const next = clampToViewport(align === 'right' ? x - width : x, y, { width, height }, {
+    const next = clampToViewport(x - width, y, { width, height }, {
       width: clientWidth,
       height: clientHeight,
     })
     setAt((prev) => (prev.left === next.left && prev.top === next.top ? prev : next))
-  }, [x, y, align])
+  }, [x, y])
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Bound to the window rather than the menu: a backdrop click leaves focus
@@ -124,7 +119,7 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
       // Roving focus: the menu decides who holds it, so no item is a Tab
       // stop of its own.
       tabIndex={-1}
-      className={[item.separated && 'separated', item.danger && 'danger'].filter(Boolean).join(' ') || undefined}
+      className={item.danger ? 'danger' : undefined}
       disabled={item.disabled}
       onClick={() => {
         onClose()
@@ -171,7 +166,7 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
           }
         }}
       >
-        {tail && <span className="menu-tail" aria-hidden="true" />}
+        <span className="menu-tail" aria-hidden="true" />
         {history && <div className="menu-history">{history.map(renderItem)}</div>}
         {items.map(renderItem)}
       </div>

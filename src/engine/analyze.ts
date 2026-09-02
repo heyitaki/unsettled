@@ -737,7 +737,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
 }
 
 // Default-options analysis memoized on board identity, so the panels that all
-// need it per render (best picks, draft strip) share one rollout pass. Boards
+// need it per render (best picks, draft views) share one rollout pass. Boards
 // are immutable — every edit is a new object — so identity is a safe key.
 const analysisCache = new WeakMap<Board, DraftAnalysis>()
 

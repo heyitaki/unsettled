@@ -49,6 +49,3 @@ export function rowShift(index: number, from: number, to: number): -1 | 0 | 1 {
   if (to < from && index >= to && index < from) return 1
   return 0
 }
-
-/** The class each `rowShift` result draws as, shared by every list that reorders. */
-export const SHIFT_CLASS = { [-1]: 'shift-up', 0: '', 1: 'shift-down' } as const
