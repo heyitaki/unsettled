@@ -1,6 +1,6 @@
 // Shared board-file helpers: title derivation for the import/export panel and
-// the map library, the comparison behind "this tab has unsaved work", and the
-// one-shot save behind the tab strip's close prompt.
+// the map library, the comparison behind "this tab holds work the library does
+// not", and the no-prompt save behind the autosave.
 
 import { createBoard, validateBoard } from '../model/board'
 import { newGame, type Game } from '../model/game'
@@ -103,31 +103,15 @@ export function tabIsDirty(game: Game, saved: SavedMap): boolean {
   return saved.game === null || signature(saved.game) !== signature(game)
 }
 
-// Computed for the whole strip in one pass, because every linked tab needs its
-// saved counterpart and the library is one blob to parse.
-export function dirtyTabIds(
-  tabs: readonly { id: string; game: Game; mapId: string | null }[],
-  saved: ReadonlyMap<string, ParseGameResult>,
-): Set<string> {
-  return new Set(
-    tabs
-      .filter((tab) => tabIsDirty(
-        tab.game,
-        tab.mapId === null ? { linked: false } : savedMap(saved.get(tab.mapId)),
-      ))
-      .map((tab) => tab.id),
-  )
-}
-
 export type SaveTabResult =
   | { ok: true; id: string; name: string }
   | { ok: false; error: string }
 
 /**
- * Save a tab into the library, with no prompt: the tab strip saves a board on
- * the way out, where there is no name field to answer with and nowhere to put
- * the answer. It writes back into the tab's own map where there is one, and
- * otherwise adds an entry — never over one that already holds the name.
+ * Save a tab into the library, with no prompt: the autosave has no name field
+ * to answer with and nowhere to put the answer. It writes back into the tab's
+ * own map where there is one, and otherwise adds an entry — never over one
+ * that already holds the name.
  */
 export function saveTab(
   tab: { title: string; game: Game; mapId: string | null },

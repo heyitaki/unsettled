@@ -90,7 +90,6 @@ button.selected.danger { color: #fff; }
 .board-tab.active .board-tab-select { color: var(--accent-dark); font-weight: 700; }
 /* Same box as .board-tab-select, so entering rename mode doesn't shift the strip. */
 .board-tab-rename { min-width: 0; flex: 1; padding: 7px 5px 7px 9px; border: 0; background: transparent; color: var(--accent-dark); font-weight: 700; outline: none; }
-.board-tab-dirty { margin-left: 4px; color: var(--accent-dark); font-weight: 700; }
 .board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
 .board-tab-add, .player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
 
@@ -191,10 +190,6 @@ button.selected.danger { color: #fff; }
 .slot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
-/* One segmented control: the button's -1px pulls its edge over the input's. */
-.map-save-row { display: flex; }
-.map-save-row input { min-width: 0; width: 100%; border-top-right-radius: 0; border-bottom-right-radius: 0; font-size: 13px; }
-.map-save-row .primary { flex: none; margin-left: -1px; padding: 0 14px; border-top-left-radius: 0; border-bottom-left-radius: 0; font-size: 12px; font-weight: 600; }
 .library-io { display: grid; gap: 7px; margin-top: 11px; }
 .io-primary { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1px dashed #b1936a; border-radius: 11px; background: #f8f0de; color: var(--accent-dark); font-size: 12.5px; font-weight: 700; }
 .io-json { display: flex; gap: 7px; }
@@ -358,10 +353,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .analysis-second { font-size: 11px; }
   .io-json button { padding: 12px 8px; font-size: 12px; }
   input, select, .board-tab-rename, .player-name-input { font-size: 16px; }
-  /* Sized to the panel rather than to iOS's 16px no-zoom threshold, so focusing
-     the field zooms the page in Safari. Deliberate: it reads as a caption. */
-  .map-save-row input { min-height: 40px; font-size: 13px; }
-  .map-save-row .primary { min-height: 40px; padding: 0 13px; font-size: 13px; }
   .io-primary { padding: 12px; font-size: 12px; }
   .saved-map-name { font-size: 12.5px; }
   .tally-header button { align-items: flex-end; }

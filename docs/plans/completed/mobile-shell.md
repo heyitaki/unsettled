@@ -115,12 +115,12 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 3: Retire the explicit save UI (M17)
 
-- [ ] `BoardTabs.tsx`: remove the `Save to library` menu item, the `board-tab-dirty` dot, `dirty`/`dirtyTabs`, `closing`, `requestClose`, `saveAndClose` and their `ConfirmDialog`; a close closes. Remove the `save` chord from `shortcuts.ts` and its printed shortcut, and update `shortcuts.test.ts` if it lists it.
-- [ ] `MapsPanel.tsx`: remove the name field, the `Save to library` button, `typed`, `submitSave`, `performSave`, `dupPrompt` and its `ConfirmDialog`; the empty-state copy becomes `No saved maps yet. Boards save themselves as you edit them.`
-- [ ] Delete `dirtyTabIds` and any other helper in `boardFiles.ts` that is now unreferenced, with its tests; `tabIsDirty`, `inPlaceTarget`, `firstFreeName`, `nextCopyName` and `copyTitle` stay while `saveTab`, the autosave blank guard and `duplicate` use them. Delete the `.map-save-row` and `.board-tab-dirty` CSS.
-- [ ] `CLAUDE.md`: the `persistence/localStorage.ts` bullet says boards autosave into the library and names `ui/libraryAutosave.ts`.
-- [ ] Update the spec's `What already exists` table: the save row entry is gone; add the rename rule and the autosave as rows.
-- [ ] Ledger: M17 done.
+- [x] `BoardTabs.tsx`: remove the `Save to library` menu item, the `board-tab-dirty` dot, `dirty`/`dirtyTabs`, `closing`, `requestClose`, `saveAndClose` and their `ConfirmDialog`; a close closes. Remove the `save` chord from `shortcuts.ts` and its printed shortcut, and update `shortcuts.test.ts` if it lists it.
+- [x] `MapsPanel.tsx`: remove the name field, the `Save to library` button, `typed`, `submitSave`, `performSave`, `dupPrompt` and its `ConfirmDialog`; the empty-state copy becomes `No saved maps yet. Boards save themselves as you edit them.`
+- [x] Delete `dirtyTabIds` and any other helper in `boardFiles.ts` that is now unreferenced, with its tests; `tabIsDirty`, `inPlaceTarget`, `firstFreeName`, `nextCopyName` and `copyTitle` stay while `saveTab`, the autosave blank guard and `duplicate` use them. Delete the `.map-save-row` and `.board-tab-dirty` CSS.
+- [x] `CLAUDE.md`: the `persistence/localStorage.ts` bullet says boards autosave into the library and names `ui/libraryAutosave.ts`.
+- [x] Update the spec's `What already exists` table: the save row entry is gone; add the rename rule and the autosave as rows.
+- [x] Ledger: M17 done.
 
 ### Task 4: PhoneShell skeleton, header, toast, e2e harness (B8, M2, M3, S1, S9)
 

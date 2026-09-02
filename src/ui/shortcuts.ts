@@ -17,11 +17,11 @@ export interface Shortcut {
 /**
  * Chords are picked around what the browser and the OS already own. ⌘W is
  * deliberately not here: it closes the browser tab, and a board editor is not
- * worth taking that away. ⌘S is taken (the Save Page dialog has no use over a
- * board), as is ⌘D (bookmarking, which every drawing app already overrides for
- * duplicate). Backspace carries the closes because ⇧⌘⌫ and ⌃⌥⌦ — the chords a
- * Shift or Alt variant on Delete would collide with — are Chrome's clear-data
- * dialog and the Windows secure attention sequence.
+ * worth taking that away. ⌘D is taken (bookmarking, which every drawing app
+ * already overrides for duplicate). There is no ⌘S: boards save themselves.
+ * Backspace carries the closes because ⇧⌘⌫ and ⌃⌥⌦ — the chords a Shift or
+ * Alt variant on Delete would collide with — are Chrome's clear-data dialog
+ * and the Windows secure attention sequence.
  *
  * No Alt chord may use a letter: Option+letter on a Mac rewrites `event.key`
  * into the character it types, so such a chord would never match.
@@ -29,7 +29,6 @@ export interface Shortcut {
 export const TAB_SHORTCUTS = {
   rename: { key: 'F2' },
   duplicate: { key: 'd', primary: true },
-  save: { key: 's', primary: true },
   close: { key: 'Backspace', primary: true },
   closeOthers: { key: 'Backspace', primary: true, alt: true },
 } as const satisfies Record<string, Shortcut>

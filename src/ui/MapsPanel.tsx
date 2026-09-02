@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { Game } from '../model/game'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   deleteMap,
   type ListedMap,
@@ -8,11 +7,8 @@ import {
   markMapOpened,
   migrateMapIds,
   readLibrary,
-  saveMap,
-  updateMap,
 } from '../persistence/localStorage'
-import { inPlaceTarget, loadedNotice, nextCopyName } from './boardFiles'
-import { ConfirmDialog } from './ConfirmDialog'
+import { loadedNotice } from './boardFiles'
 import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 
@@ -59,27 +55,8 @@ function relativeTime(ts: number): string {
 
 export function MapsPanel() {
   const { state, dispatch } = useStore()
-  const { id, title, game, mapId } = activeTab(state)
-  const [name, setName] = useState(title)
-  // Whether the name in the field is one the user typed rather than the tab's
-  // title following along. It decides two things: whether a retitle may
-  // overwrite the field, and whether a save means "this map, under its current
-  // name" or "a map called this".
-  const typed = useRef(false)
-  // A different tab means a different intent — whatever was half-typed for the
-  // old one is not a name for this board.
-  useEffect(() => { typed.current = false }, [id])
-  // The save name follows the active tab's title (updating when you switch tabs
-  // or rename one), but never overwrites a name being typed: the title also
-  // moves when another window renames the map, and that must not reach in and
-  // rewrite the field mid-edit.
-  useEffect(() => { if (!typed.current) setName(title) }, [id, title])
+  const { mapId } = activeTab(state)
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
-  // Capture the game + tab the save targets when the prompt opens, so a tab
-  // switch underneath the dialog can't redirect the save to a different board.
-  const [dupPrompt, setDupPrompt] = useState<
-    { name: string; copyName: string; game: Game; tabId: string } | null
-  >(null)
   // Listing validates every stored board, so it is re-read only when the
   // library actually changed rather than on every render of every panel. The
   // revision is the cache key for a localStorage read React cannot observe.
@@ -134,55 +111,6 @@ export function MapsPanel() {
   }, [])
   useLayoutEffect(syncFades, [syncFades, sortedMaps.length])
   const notice = (message: string) => dispatch({ type: 'notice', message })
-  /** `into` is the map id to write back into, or null to address by name. */
-  const performSave = (
-    saveName: string,
-    target: Game,
-    targetTabId: string,
-    into: string | null,
-    overwrite = false,
-  ) => {
-    const result = into === null
-      ? saveMap(saveName, target, overwrite)
-      : updateMap(into, saveName, target)
-    if (!result.ok) {
-      notice(result.error)
-      refresh()
-      return
-    }
-    // Attach the saved tab to the map it landed in, by id. Overwriting reuses
-    // the existing map's id, so re-saving keeps the same link.
-    typed.current = false
-    dispatch({ type: 'tab-link', id: targetTabId, mapId: result.id, title: saveName })
-    notice(`Saved "${saveName}"`)
-    refresh()
-  }
-  const submitSave = () => {
-    // saveMap allows whitespace-only names, but a blank tab title reads as a
-    // broken tab — reject here rather than storing one.
-    if (name.trim().length === 0) {
-      notice('Map name cannot be empty')
-      return
-    }
-    // Only real stored names collide with saveMap; synthetic placeholders for
-    // malformed entries are not addressable, so exclude them.
-    const named = listMaps().maps.filter((map) => !map.synthetic)
-    // Saving a linked tab back into its own map is the ordinary case, not a
-    // collision: overwrite it without asking. The prompt is there to stop a
-    // save from clobbering some *other* map that happens to share the name.
-    const inPlace = inPlaceTarget(named, mapId, typed.current ? name : null)
-    if (inPlace !== null) {
-      performSave(inPlace.name, game, id, inPlace.id)
-      return
-    }
-    const taken = new Set(named.map((map) => map.name))
-    if (taken.has(name)) {
-      // A copy must dodge both saved maps and open tab titles: names no longer
-      // carry identity, but a duplicate title is still confusing to read.
-      const reserved = new Set([...taken, ...state.tabs.map((tab) => tab.title)])
-      setDupPrompt({ name, copyName: nextCopyName(name, reserved), game, tabId: id })
-    } else performSave(name, game, id, null)
-  }
   const openMap = (map: ListedMap) => {
     const mapKey = addressable(map)
     if (mapKey === null) return
@@ -212,23 +140,6 @@ export function MapsPanel() {
           <h2>Saved maps</h2>
         </div>
       </div>
-      <div className="map-save-row">
-        <input
-          value={name}
-          onChange={(event) => {
-            typed.current = true
-            setName(event.target.value)
-          }}
-          onKeyDown={(event) => { if (event.key === 'Enter') submitSave() }}
-          placeholder="Map name"
-          aria-label="Map name"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          enterKeyHint="done"
-        />
-        <button type="button" className="primary" onClick={submitSave}>Save to library</button>
-      </div>
       {listed.warning && <p className="notice warning">{listed.warning}</p>}
       <div className="library-list-head">
         <span>{listed.maps.length} {listed.maps.length === 1 ? 'map' : 'maps'}</span>
@@ -253,7 +164,7 @@ export function MapsPanel() {
         onScroll={syncFades}
       >
         {listed.maps.length === 0 && (
-          <p className="empty-state">No saved maps yet. Name the board above and hit Save.</p>
+          <p className="empty-state">No saved maps yet. Boards save themselves as you edit them.</p>
         )}
         {sortedMaps.map((map, index) => {
           const stamp = sortKey === 'name' ? map.modifiedAt : map[sortKey]
@@ -308,30 +219,6 @@ export function MapsPanel() {
           )
         })}
       </div>
-      {dupPrompt && (
-        <ConfirmDialog
-          title={`A map named "${dupPrompt.name}" already exists`}
-          actions={[
-            {
-              label: 'Replace',
-              variant: 'danger',
-              onClick: () => {
-                performSave(dupPrompt.name, dupPrompt.game, dupPrompt.tabId, null, true)
-                setDupPrompt(null)
-              },
-            },
-            {
-              label: 'Save as copy',
-              onClick: () => {
-                performSave(dupPrompt.copyName, dupPrompt.game, dupPrompt.tabId, null)
-                setDupPrompt(null)
-              },
-            },
-            { label: 'Cancel', onClick: () => setDupPrompt(null) },
-          ]}
-          onCancel={() => setDupPrompt(null)}
-        />
-      )}
     </section>
   )
 }

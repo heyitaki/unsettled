@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { loadMaps, readLibrary, renameMap } from '../persistence/localStorage'
-import { copyTitle, dirtyTabIds, saveTab } from './boardFiles'
-import { ConfirmDialog } from './ConfirmDialog'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { readLibrary, renameMap } from '../persistence/localStorage'
+import { copyTitle } from './boardFiles'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import {
   TAB_SHORTCUTS,
@@ -36,21 +35,6 @@ function menuOrigin(event: React.MouseEvent<HTMLElement>): { x: number; y: numbe
   return { x: box.left, y: box.bottom }
 }
 
-const dirtyTabs = (tabs: readonly TabState[]): Set<string> => dirtyTabIds(
-  tabs,
-  loadMaps(tabs.map((tab) => tab.mapId).filter((id): id is string => id !== null)),
-)
-
-/**
- * The boards a close gesture targets, and which of them held unsaved work when
- * it was made — a snapshot, so the prompt keeps describing what it asked about
- * even if a save lands in another window while it is up.
- */
-interface ClosePrompt {
-  ids: readonly string[]
-  dirtyIds: readonly string[]
-}
-
 export function BoardTabs() {
   const { state, dispatch } = useStore()
   const coarse = useCoarsePointer()
@@ -59,7 +43,6 @@ export function BoardTabs() {
   const [apple] = useState(applePlatform)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [closing, setClosing] = useState<ClosePrompt | null>(null)
   const [menu, setMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const longPress = useRef<{
     timer: number
@@ -102,8 +85,8 @@ export function BoardTabs() {
   }, [syncEdges])
   /**
    * Closes the inline rename, returning the title the tab carries afterwards —
-   * or null when the rename was refused and said so, which is the one case
-   * where a caller must not go on to report a success over that message.
+   * or null when the rename was refused and said so, so a caller never reports
+   * a success over that message.
    */
   const commitEdit = (): string | null => {
     const id = editingId
@@ -134,74 +117,11 @@ export function BoardTabs() {
     dispatch({ type: 'tab-rename', id, title: next })
     return next
   }
-  // dirtyTabs reads the library from localStorage, which React cannot observe;
-  // the revision is the cache key for that read, so it belongs in the deps and
-  // is read here to say so. Nothing else should be `void`-read this way.
-  const dirty = useMemo(() => {
-    void state.mapsRevision
-    return dirtyTabs(state.tabs)
-  }, [state.tabs, state.mapsRevision])
   // One dispatch per board rather than a bulk action: the reducer folds them in
   // order, so each close re-picks the active tab exactly as a lone close does.
+  // No confirmation: boards save themselves, so a close never loses work.
   const closeTabs = (ids: readonly string[]) => {
     for (const id of ids) dispatch({ type: 'tab-close', id })
-  }
-  // Closing boards that hold nothing unsaved needs no confirmation, however
-  // many of them the gesture named.
-  const requestClose = (ids: readonly string[]) => {
-    const dirtyIds = ids.filter((id) => dirty.has(id))
-    if (dirtyIds.length === 0) closeTabs(ids)
-    else setClosing({ ids, dirtyIds })
-  }
-  /**
-   * Store every unsaved board the close targets, then close the ones that
-   * landed. A board whose save failed stays open holding the only copy of its
-   * work — closing it anyway is the data loss the prompt exists to prevent.
-   */
-  const saveAndClose = ({ ids, dirtyIds }: ClosePrompt) => {
-    const stuck = new Set<string>()
-    const failures: string[] = []
-    const saved: string[] = []
-    for (const id of dirtyIds) {
-      // A board closed in another window while the prompt was up is nothing to
-      // save; the close below is a no-op for it too.
-      const tab = state.tabs.find((candidate) => candidate.id === id)
-      if (tab === undefined) continue
-      const result = saveTab(tab)
-      if (result.ok) saved.push(result.name)
-      else {
-        stuck.add(id)
-        failures.push(`"${tab.title}": ${result.error}`)
-      }
-    }
-    closeTabs(ids.filter((id) => !stuck.has(id)))
-    // The saves landed in localStorage, which React cannot observe; the library
-    // panel and the strip's dirty dots re-read off the revision this bumps. Only
-    // when something was actually written — the re-read revalidates every board
-    // the library holds.
-    if (saved.length > 0) dispatch({ type: 'maps-changed', library: readLibrary() })
-    // A failure is what needs saying; the boards that did save say so by being
-    // gone. Nothing at all to report leaves whatever notice is up alone.
-    const message = failures.length > 0
-      ? `Could not save ${failures.join('; ')}`
-      : saved.length === 1
-        ? `Saved "${saved[0]}"`
-        : saved.length > 1 ? `Saved ${saved.length} boards` : null
-    if (message !== null) dispatch({ type: 'notice', message })
-    setClosing(null)
-  }
-  const saveToLibrary = (tab: TabState) => {
-    const result = saveTab(tab)
-    if (result.ok) {
-      // Attach the tab to the map it landed in, so the next save writes back
-      // into that entry rather than making a second copy beside it. The library
-      // is re-read after the write, which React cannot observe: every panel
-      // reading it re-renders off the revision this bumps. A refused save wrote
-      // nothing, and re-reading then costs the whole library a revalidation.
-      dispatch({ type: 'tab-link', id: tab.id, mapId: result.id, title: result.name })
-      dispatch({ type: 'maps-changed', library: readLibrary() })
-    }
-    dispatch({ type: 'notice', message: result.ok ? `Saved "${result.name}"` : result.error })
   }
   const duplicate = (tab: TabState) => {
     // The copy dodges saved map names as well as open tab titles, the way the
@@ -213,8 +133,8 @@ export function BoardTabs() {
       ...(library.readable ? library.maps.map((map) => map.name) : []),
     ])
     // Games are immutable and replaced wholesale by every edit, so the copy can
-    // share this one. It gets a fresh undo stack and no library link — which is
-    // what makes closing it ask to be saved.
+    // share this one. It gets a fresh undo stack and no library link, so its
+    // first edit autosaves into a map of its own.
     dispatch({
       type: 'tab-add',
       game: tab.game,
@@ -248,30 +168,23 @@ export function BoardTabs() {
       { label: 'Rename', ...chord(TAB_SHORTCUTS.rename), onClick: () => rename(tab) },
       { label: 'Duplicate', ...chord(TAB_SHORTCUTS.duplicate), onClick: () => duplicate(tab) },
       {
-        label: 'Save to library',
-        ...chord(TAB_SHORTCUTS.save),
-        // Nothing to write when the board already matches its saved map.
-        disabled: !dirty.has(tab.id),
-        onClick: () => saveToLibrary(tab),
-      },
-      {
         label: 'Close',
         ...chord(TAB_SHORTCUTS.close),
         separated: true,
-        onClick: () => requestClose([tab.id]),
+        onClick: () => closeTabs([tab.id]),
       },
       {
         label: 'Close others',
         ...chord(TAB_SHORTCUTS.closeOthers),
         disabled: others.length === 0,
-        onClick: () => requestClose(others),
+        onClick: () => closeTabs(others),
       },
       // No chord: every combination left is one the browser or the OS owns, and
       // a mis-typed one here closes boards.
       {
         label: 'Close to the right',
         disabled: toTheRight.length === 0,
-        onClick: () => requestClose(toTheRight),
+        onClick: () => closeTabs(toTheRight),
       },
     ]
   }
@@ -288,31 +201,11 @@ export function BoardTabs() {
    */
   const onShortcut = (event: KeyboardEvent) => {
     const tab = activeTab(state)
-    if (matchesShortcut(event, TAB_SHORTCUTS.save, apple)) {
-      // Claimed even while typing, and even behind a dialog: the browser's Save
-      // Page dialog has no use over a board.
-      event.preventDefault()
-      if (overlayOpen()) return
-      // A rename in flight is part of what ⌘S means, so commit it first and
-      // save under the title that produced — but never over its refusal, which
-      // has already been reported and would otherwise be replaced by "Saved".
-      const renamed = editingId === tab.id ? commitEdit() : tab.title
-      if (renamed === null) return
-      // Nothing to write when the board already matches its saved map — the
-      // same condition that greys the menu row this chord is printed on. A
-      // rename is not board content and has already been persisted by itself.
-      if (!dirty.has(tab.id)) {
-        dispatch({ type: 'notice', message: `"${renamed}" has no unsaved changes` })
-        return
-      }
-      saveToLibrary({ ...tab, title: renamed })
-      return
-    }
     const chord = ([
       [TAB_SHORTCUTS.rename, () => rename(tab)],
       [TAB_SHORTCUTS.duplicate, () => duplicate(tab)],
-      [TAB_SHORTCUTS.close, () => requestClose([tab.id])],
-      [TAB_SHORTCUTS.closeOthers, () => requestClose(otherTabIds(tab))],
+      [TAB_SHORTCUTS.close, () => closeTabs([tab.id])],
+      [TAB_SHORTCUTS.closeOthers, () => closeTabs(otherTabIds(tab))],
     ] as const).find(([shortcut]) => matchesShortcut(event, shortcut, apple))
     if (chord === undefined) return
     // Out of the way of a field — F2 and ⌘D would otherwise fire while a board
@@ -328,9 +221,6 @@ export function BoardTabs() {
     window.addEventListener('keydown', listener)
     return () => window.removeEventListener('keydown', listener)
   }, [])
-  const closingTitle = closing === null
-    ? ''
-    : state.tabs.find((tab) => tab.id === closing.ids[0])?.title ?? ''
   return (
     <>
       <div className="board-tabs">
@@ -415,16 +305,13 @@ export function BoardTabs() {
                 }}
               >
                 {tab.title}
-                {tab.mapId !== null && dirty.has(tab.id) && (
-                  <span className="board-tab-dirty" aria-label="Unsaved changes" title="Unsaved changes">•</span>
-                )}
               </button>
             )}
             <button
               type="button"
               className="board-tab-close"
               aria-label={`Close ${tab.title}`}
-              onClick={() => requestClose([tab.id])}
+              onClick={() => closeTabs([tab.id])}
             >
               ×
             </button>
@@ -447,33 +334,6 @@ export function BoardTabs() {
           y={menu.y}
           items={menuItems(menuTab)}
           onClose={() => setMenu(null)}
-        />
-      )}
-      {closing && (
-        <ConfirmDialog
-          title={closing.ids.length === 1
-            ? `Close "${closingTitle}"?`
-            : `Close ${closing.ids.length} boards?`}
-          message={closing.ids.length === 1
-            ? 'This board has unsaved changes.'
-            : `${closing.dirtyIds.length} of them ${closing.dirtyIds.length === 1 ? 'has' : 'have'} unsaved changes.`}
-          actions={[
-            {
-              label: closing.dirtyIds.length === 1 ? 'Save and close' : 'Save all and close',
-              variant: 'primary',
-              onClick: () => saveAndClose(closing),
-            },
-            {
-              label: 'Discard and close',
-              variant: 'danger',
-              onClick: () => {
-                closeTabs(closing.ids)
-                setClosing(null)
-              },
-            },
-            { label: 'Cancel', onClick: () => setClosing(null) },
-          ]}
-          onCancel={() => setClosing(null)}
         />
       )}
     </>

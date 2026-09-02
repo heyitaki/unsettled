@@ -148,6 +148,8 @@ Do not rebuild these; move or restyle them.
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
 | Undo, redo, randomize, clear | `ToolPalette.tsx` heading |
 | Open, close, select, rename boards | `BoardTabs.tsx` and `store.ts` (`tab-*` actions) |
+| Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `BoardTabs.tsx`, `commitEdit` |
+| Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes an adopted game | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `App.tsx`, `global-notice` |
 | Snake draft strip | `PlayerPanel.tsx`, `draft-strip` |
 
@@ -195,7 +197,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M14 | One-word factor labels in `displayedFactors` | — | done |
 | M15 | Landscape and desktop regression pass | all | not started |
 | M16 | Library autosave in the store (B7) | — | done |
-| M17 | Retire the explicit save UI on desktop: tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row (B7) | M16 | not started |
+| M17 | Retire the explicit save UI on desktop: tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row (B7) | M16 | done |
 
 ## Out of scope
 

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
-import { newGame, type Game } from '../../model/game'
-import type { ParseGameResult } from '../../model/serialization'
-import { copyTitle, dirtyTabIds, inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
+import { newGame } from '../../model/game'
+import { copyTitle, inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
 
 const pristine = (layout: 'standard4' | 'extension6' = 'standard4') => newGame(createBoard(layout))
 
@@ -103,33 +102,5 @@ describe('copyTitle', () => {
     // A title that is *only* a suffix has no base to count up from, so it keeps
     // the whole thing — stripping would leave nothing to name the copy after.
     expect(copyTitle(' (1)', new Set())).toBe(' (1) (1)')
-  })
-})
-
-describe('dirtyTabIds', () => {
-  const tab = (id: string, game: Game, mapId: string | null = null) => ({ id, game, mapId })
-
-  it('picks out exactly the tabs holding unsaved work', () => {
-    const drifted = edited()
-    const tabs = [
-      tab('clean-unlinked', pristine()),
-      tab('edited-unlinked', drifted),
-      tab('clean-linked', drifted, 'map-1'),
-      tab('drifted-linked', drifted, 'map-2'),
-      tab('orphaned-linked', pristine(), 'map-3'),
-    ]
-    const saved = new Map<string, ParseGameResult>([
-      ['map-1', { ok: true, game: drifted }],
-      ['map-2', { ok: true, game: pristine() }],
-      ['map-3', { ok: false, errors: ['gone'] }],
-    ])
-    expect(dirtyTabIds(tabs, saved)).toEqual(
-      new Set(['edited-unlinked', 'drifted-linked', 'orphaned-linked']),
-    )
-  })
-
-  it('treats a link with no answer as a map that is no longer there', () => {
-    const tabs = [tab('t1', pristine(), 'map-1')]
-    expect(dirtyTabIds(tabs, new Map())).toEqual(new Set(['t1']))
   })
 })

@@ -33,26 +33,26 @@ describe('isApplePlatform', () => {
 })
 
 describe('matchesShortcut', () => {
-  const save = TAB_SHORTCUTS.save
+  const duplicate = TAB_SHORTCUTS.duplicate
 
   it('takes ⌘ on Apple platforms and Ctrl everywhere else', () => {
-    expect(matchesShortcut(press('s', { metaKey: true }), save, true)).toBe(true)
-    expect(matchesShortcut(press('s', { ctrlKey: true }), save, false)).toBe(true)
-    // The other modifier is not a synonym: ⌃S on a Mac is not a save, and it
+    expect(matchesShortcut(press('d', { metaKey: true }), duplicate, true)).toBe(true)
+    expect(matchesShortcut(press('d', { ctrlKey: true }), duplicate, false)).toBe(true)
+    // The other modifier is not a synonym: ⌃D on a Mac is not a duplicate, and it
     // would swallow a keystroke the platform means for something else.
-    expect(matchesShortcut(press('s', { ctrlKey: true }), save, true)).toBe(false)
-    expect(matchesShortcut(press('s', { metaKey: true }), save, false)).toBe(false)
-    // Nor is it ignorable once the right one is down: ⌃⌘S holds a modifier the
+    expect(matchesShortcut(press('d', { ctrlKey: true }), duplicate, true)).toBe(false)
+    expect(matchesShortcut(press('d', { metaKey: true }), duplicate, false)).toBe(false)
+    // Nor is it ignorable once the right one is down: ⌃⌘D holds a modifier the
     // chord does not name, and this is the only case where that check decides.
-    const both = press('s', { metaKey: true, ctrlKey: true })
-    expect(matchesShortcut(both, save, true)).toBe(false)
-    expect(matchesShortcut(both, save, false)).toBe(false)
+    const both = press('d', { metaKey: true, ctrlKey: true })
+    expect(matchesShortcut(both, duplicate, true)).toBe(false)
+    expect(matchesShortcut(both, duplicate, false)).toBe(false)
   })
 
   it('rejects a chord carrying modifiers the shortcut does not name', () => {
-    expect(matchesShortcut(press('s', { metaKey: true, shiftKey: true }), save, true)).toBe(false)
-    expect(matchesShortcut(press('s', { metaKey: true, altKey: true }), save, true)).toBe(false)
-    expect(matchesShortcut(press('s'), save, true)).toBe(false)
+    expect(matchesShortcut(press('d', { metaKey: true, shiftKey: true }), duplicate, true)).toBe(false)
+    expect(matchesShortcut(press('d', { metaKey: true, altKey: true }), duplicate, true)).toBe(false)
+    expect(matchesShortcut(press('d'), duplicate, true)).toBe(false)
   })
 
   it('separates the two Backspace chords by their Alt key', () => {
@@ -76,14 +76,14 @@ describe('matchesShortcut', () => {
 
 describe('shortcutLabel', () => {
   it('writes Apple chords as glyphs in the platform’s modifier order', () => {
-    expect(shortcutLabel(TAB_SHORTCUTS.save, true)).toBe('⌘S')
+    expect(shortcutLabel(TAB_SHORTCUTS.duplicate, true)).toBe('⌘D')
     expect(shortcutLabel(TAB_SHORTCUTS.close, true)).toBe('⌘⌫')
     expect(shortcutLabel(TAB_SHORTCUTS.closeOthers, true)).toBe('⌥⌘⌫')
     expect(shortcutLabel(TAB_SHORTCUTS.rename, true)).toBe('F2')
   })
 
   it('writes the same chords as named keys everywhere else', () => {
-    expect(shortcutLabel(TAB_SHORTCUTS.save, false)).toBe('Ctrl+S')
+    expect(shortcutLabel(TAB_SHORTCUTS.duplicate, false)).toBe('Ctrl+D')
     expect(shortcutLabel(TAB_SHORTCUTS.close, false)).toBe('Ctrl+Backspace')
     expect(shortcutLabel(TAB_SHORTCUTS.closeOthers, false)).toBe('Ctrl+Alt+Backspace')
     expect(shortcutLabel(TAB_SHORTCUTS.rename, false)).toBe('F2')
@@ -98,8 +98,8 @@ describe('shortcutLabel', () => {
 
 describe('ariaKeyShortcut', () => {
   it('names the platform’s primary modifier the way ARIA spells it', () => {
-    expect(ariaKeyShortcut(TAB_SHORTCUTS.save, true)).toBe('Meta+S')
-    expect(ariaKeyShortcut(TAB_SHORTCUTS.save, false)).toBe('Control+S')
+    expect(ariaKeyShortcut(TAB_SHORTCUTS.duplicate, true)).toBe('Meta+D')
+    expect(ariaKeyShortcut(TAB_SHORTCUTS.duplicate, false)).toBe('Control+D')
     // Never the glyphs: a screen reader reads ⌘ as "place of interest sign".
     expect(ariaKeyShortcut(TAB_SHORTCUTS.closeOthers, true)).toBe('Alt+Meta+Backspace')
     expect(ariaKeyShortcut(TAB_SHORTCUTS.closeOthers, false)).toBe('Alt+Control+Backspace')
