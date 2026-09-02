@@ -395,7 +395,6 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
                 Build it by hand
               </button>
             </div>
-            {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
           </div>
         ) : !me ? (
           <div className="phone-claim">
@@ -427,6 +426,10 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
             {body}
           </>
         )}
+        {/* Outside the empty branch: a successful import replaces the board
+            and drops that branch, and the dialog must outlive it to show any
+            parse issues. */}
+        {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
       </section>
     )
   }

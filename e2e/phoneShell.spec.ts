@@ -138,6 +138,28 @@ test('an empty board offers the two ways to fill it', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Import screenshot' })).toBeVisible()
 })
 
+test('an import with parse issues keeps its dialog over the new board, and closes for good', async ({ page }) => {
+  await open(page)
+  const block = page.locator('.phone-analysis')
+  const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
+  await block.getByRole('button', { name: 'Import screenshot' }).click()
+  // The robber hides a token on this fixture, so the parse lands with a
+  // warning. The board fills, the empty state goes, and the dialog must
+  // survive that to show the warning.
+  await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
+  await expect(page.locator('.phone-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
+  await expect(block.locator('h2')).toHaveText('Best picks')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('.issue-list button.warning')).not.toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Done' }).click()
+  await expect(dialog).toHaveCount(0)
+  // Emptying the board again must not bring the dialog back on its own.
+  await page.getByRole('button', { name: 'Board options' }).click()
+  await page.getByRole('menuitem', { name: 'Clear board' }).click()
+  await expect(block.locator('h2')).toHaveText('This board is empty')
+  await expect(dialog).toHaveCount(0)
+})
+
 test('a filled board asks who you are, and a tapped swatch claims that seat', async ({ page }) => {
   await open(page)
   await seedUnclaimedRoster(page)
