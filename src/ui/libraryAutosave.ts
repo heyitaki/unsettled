@@ -38,15 +38,19 @@ export function createLibraryAutosave(
   // imported and duplicated boards out of the library until they are edited.
   const baseline = new Map<string, Game>(initialTabs.map((tab) => [tab.id, tab.game]))
   // The game each tab last failed to save. Not retried until the tab holds a
-  // different game: a write to the same library that just refused this one
-  // would only repeat the toast.
+  // different game, closes, or the document unloads: a write to the same
+  // library that just refused this one would only repeat the toast, but a
+  // close or unload is the last chance before the tab's copy is gone.
   const failed = new Map<string, Game>()
   const timers = new Map<string, number>()
   // Links made by the current flush, for the tab set it returns.
   const flushed = new Map<string, { mapId: string; title: string }>()
   let latest: readonly TabState[] = initialTabs
 
-  const save = (tab: TabState) => {
+  // `closing` names the failure for what it is: the tab is gone once the
+  // dispatch renders, so "could not save" would suggest a retry that cannot
+  // happen.
+  const save = (tab: TabState, closing = false) => {
     const { id } = tab
     timers.delete(id)
     // Nothing to write for a blank unlinked board, or for a linked one whose
@@ -62,7 +66,12 @@ export function createLibraryAutosave(
       // Once per attempt: the debounce has already folded a burst of edits into
       // this one write, and the next edit is what retries it.
       failed.set(id, tab.game)
-      dispatch({ type: 'notice', message: `Could not save "${tab.title}": ${result.error}` })
+      dispatch({
+        type: 'notice',
+        message: closing
+          ? `Closed "${tab.title}" without its latest changes: ${result.error}`
+          : `Could not save "${tab.title}": ${result.error}`,
+      })
       return
     }
     // Before dispatching: the commits below call back into arm with this game.
@@ -84,23 +93,28 @@ export function createLibraryAutosave(
     }, delay))
   }
 
-  // Fires a pending timer now, writing the tab as `tabs` last held it.
-  const fire = (id: string, timer: number, tabs: readonly TabState[]) => {
-    window.clearTimeout(timer)
+  // Writes a tab now, as `tabs` last held it, cancelling any pending timer.
+  const fire = (id: string, tabs: readonly TabState[], closing = false) => {
+    const timer = timers.get(id)
+    if (timer !== undefined) window.clearTimeout(timer)
     const tab = tabs.find((candidate) => candidate.id === id)
-    if (tab !== undefined) save(tab)
+    if (tab !== undefined) save(tab, closing)
     else timers.delete(id)
   }
+  // Every tab owing a write: one inside its debounce, or one whose last save
+  // failed and has not been edited since.
+  const owing = () => new Set([...timers.keys(), ...failed.keys()])
 
   return {
     arm(tabs) {
       const open = new Set(tabs.map((tab) => tab.id))
       const previous = latest
       latest = tabs
-      // A tab closed inside the debounce still gets its last edit written: the
-      // close prompt that used to catch this is gone.
-      for (const [id, timer] of [...timers]) {
-        if (!open.has(id)) fire(id, timer, previous)
+      // A tab closed inside the debounce, or after a save that failed, still
+      // gets its last edit written: the close prompt that used to catch both
+      // is gone, and the closing tab holds the only copy.
+      for (const id of owing()) {
+        if (!open.has(id)) fire(id, previous, true)
       }
       for (const id of [...baseline.keys()]) {
         if (!open.has(id)) {
@@ -116,7 +130,7 @@ export function createLibraryAutosave(
     },
     flush() {
       flushed.clear()
-      for (const [id, timer] of [...timers]) fire(id, timer, latest)
+      for (const id of owing()) fire(id, latest)
       if (flushed.size === 0) return null
       return latest.map((tab) => {
         const link = flushed.get(tab.id)

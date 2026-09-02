@@ -279,4 +279,55 @@ describe('library autosave', () => {
     vi.advanceTimersByTime(2000)
     expect(setItem).not.toHaveBeenCalled()
   })
+
+  it('retries a failed save when the tab closes, and lands it when the library has room', () => {
+    const store = harness(state([tab('t1'), tab('t2')]))
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    const game = painted(store.active().game)
+    store.edit(game)
+    vi.advanceTimersByTime(1000)
+    expect(store.notices()).toHaveLength(1)
+    setItem.mockRestore()
+    store.dispatch({ type: 'tab-close', id: 't1' })
+    expect(mapNames()).toEqual(['t1'])
+    expect(loaded(listMaps().maps[0].id as string)).toEqual(game)
+    expect(store.notices()).toHaveLength(1)
+  })
+
+  it('says so when a closed tab could not be saved on the way out', () => {
+    // The close is the last chance: the closed tab held the only copy.
+    const store = harness(state([tab('t1'), tab('t2')]))
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    store.edit(painted(store.active().game))
+    vi.advanceTimersByTime(1000)
+    store.dispatch({ type: 'tab-close', id: 't1' })
+    expect(store.notices().map((action) => action.message)).toEqual([
+      'Could not save "t1": QuotaExceededError',
+      'Closed "t1" without its latest changes: QuotaExceededError',
+    ])
+    setItem.mockRestore()
+    expect(mapNames()).toEqual([])
+    // Nothing lingers for a tab that is gone.
+    vi.advanceTimersByTime(5000)
+    expect(store.notices()).toHaveLength(2)
+  })
+
+  it('retries a failed save on flush', () => {
+    const store = harness(state([tab('t1')]))
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    const game = painted(store.active().game)
+    store.edit(game)
+    vi.advanceTimersByTime(1000)
+    setItem.mockRestore()
+    const flushed = store.autosave.flush()
+    expect(mapNames()).toEqual(['t1'])
+    expect(flushed?.[0].mapId).toBe(listMaps().maps[0].id)
+    expect(loaded(listMaps().maps[0].id as string)).toEqual(game)
+  })
 })
