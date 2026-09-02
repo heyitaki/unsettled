@@ -18,6 +18,7 @@ import type { EngineWeights } from './weights'
 export interface ScoreBreakdown {
   production: number
   scarcity: number
+  /** The robbed-hex discount, plus the concentration delta. See `concentrationDelta`. */
   robber: number
   diversity: number
   port: number
@@ -63,6 +64,12 @@ export interface VertexStats {
   ports: PortAccess[]
   /** Cards granted when this vertex is built as a second setup settlement. */
   setupGrant: HandCounts
+  /**
+   * The producing hexes this vertex touches, keyed by `axialKey` so two settlements sharing a hex
+   * count it once. Values are the hex's raw pips, which is what the concentration term's share is
+   * taken over. Empty for a vertex touching nothing that produces.
+   */
+  hexPips: ReadonlyMap<string, number>
 }
 
 export interface BoardContext {
@@ -82,6 +89,12 @@ export interface Holdings {
   ports: PortAccess[]
   /** Derived from `ports` at the single write point, for hot-path lookups. */
   portFactors: Record<Resource, number>
+  /**
+   * The distinct producing hexes these settlements touch, keyed as in `VertexStats.hexPips`. The
+   * union, not the sum: a hex two of the holdings share is one hex, which is what makes the
+   * concentration share a property of the pair rather than of its vertices.
+   */
+  hexPips: ReadonlyMap<string, number>
 }
 
 /**
@@ -296,12 +309,14 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
     const robbedPips: Partial<Record<Resource, number>> = {}
     const setupGrant = zeroResources()
     const tokenPips: Partial<Record<number, number>> = {}
+    const hexPips = new Map<string, number>()
     for (const key of touching) {
       const hex = hexesByKey.get(key)
       if (!hex || hex.tile === null || hex.tile === 'desert') continue
       const amount = pips(hex.numberToken)
       if (amount <= 0) continue
       setupGrant[hex.tile] += 1
+      hexPips.set(key, amount)
       if (hex.numberToken !== null) {
         tokenPips[hex.numberToken] = (tokenPips[hex.numberToken] ?? 0) + amount
       }
@@ -316,6 +331,7 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
       tokenPips,
       ports: portsByVertex.get(vertexId) ?? [],
       setupGrant,
+      hexPips,
     })
   }
   const ctx: BoardContext = {
@@ -363,6 +379,7 @@ export const emptyHoldings = (): Holdings => ({
   tokenPips: {},
   ports: [],
   portFactors: zeroResources(),
+  hexPips: new Map(),
 })
 
 export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: VertexId): Holdings {
@@ -386,13 +403,53 @@ export function addToHoldings(ctx: BoardContext, holdings: Holdings, vertexId: V
     if (index === -1) ports.push(access)
     else if (access.reach > ports[index].reach) ports[index] = access
   }
+  const hexPips = new Map(holdings.hexPips)
+  for (const [key, amount] of stats.hexPips) hexPips.set(key, amount)
   return {
     vertices: [...holdings.vertices, vertexId],
     pips: nextPips,
     tokenPips,
     ports,
     portFactors: foldPortFactors(ports, ctx.weights.genericPortFactor),
+    hexPips,
   }
+}
+
+/**
+ * The largest single hex's share of all the pips these hexes produce, which is the quantity M-56
+ * measured as `blockability`: 1 when every pip comes off one hex, and as low as `1 / hexes` when
+ * they are spread evenly. 0 for a holding touching nothing, so an empty pair's share is not a
+ * special case anywhere.
+ */
+const topHexShare = (hexPips: ReadonlyMap<string, number>): number => {
+  let total = 0
+  let highest = 0
+  for (const amount of hexPips.values()) {
+    total += amount
+    if (amount > highest) highest = amount
+  }
+  return total === 0 ? 0 : highest / total
+}
+
+/**
+ * What adding this vertex does to the pair's exposure to one blocked hex, as a penalty on the
+ * robber component. A candidate that piles more pips onto the hex the holding already leans on
+ * raises the share and is charged for it; one that spreads the pair out lowers it and is paid.
+ *
+ * The share is over *raw* hex pips, matching the diagnostic this term comes from, so it is a
+ * property of the board rather than of where the robber happens to sit today, which is what
+ * `robberDiscount` already prices. At weight 0 no share is taken and the delta is exactly 0.
+ */
+function concentrationDelta(
+  weights: EngineWeights,
+  holdings: Holdings,
+  stats: VertexStats,
+): number {
+  if (weights.robberConcentrationWeight === 0) return 0
+  const withCandidate = new Map(holdings.hexPips)
+  for (const [key, amount] of stats.hexPips) withCandidate.set(key, amount)
+  return -weights.robberConcentrationWeight *
+    (topHexShare(withCandidate) - topHexShare(holdings.hexPips))
 }
 
 // Fraction of "real coverage" a resource earns at `pips`, gated so a lone
@@ -624,7 +681,7 @@ export function marginalBreakdown(
   return {
     production,
     scarcity,
-    robber,
+    robber: robber + concentrationDelta(ctx.weights, holdings, stats),
     diversity: diversityDelta(ctx, holdings, stats, precompute),
     port: portDelta(ctx, holdings, stats, precompute),
     handValue: hand === null ? 0 : handValue(ctx.weights, hand),
@@ -666,6 +723,7 @@ export function marginalWithoutExpansion(
   if (!stats) return 0
   const precompute = precomputeFor(ctx, candidate, stats)
   return precompute.base +
+    concentrationDelta(ctx.weights, holdings, stats) +
     diversityDelta(ctx, holdings, stats, precompute) +
     portDelta(ctx, holdings, stats, precompute) +
     (hand === null

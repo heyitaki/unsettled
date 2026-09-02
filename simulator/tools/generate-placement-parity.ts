@@ -1,6 +1,7 @@
 import {
   addPlayer,
   createBoard,
+  pips,
   placeBuilding,
   placeRoad,
   setHexTile,
@@ -303,6 +304,54 @@ const expansionBlockedBoard = placeRoad(
   'p2',
 )
 
+// The robber concentration term. Its share is over the *distinct* producing hexes a pair touches,
+// so the case that pins it is one where the candidate brings a hex the holding already has: a hex
+// counted twice would move the share the wrong way, and both scorers dedupe it through different
+// machinery (a keyed map on one side, a bitmask on the other). Both pairs are three-hex vertices,
+// so both are interior, which is why a one-hex overlap cannot come from adjacency.
+const producingHexKeys = (vertex: VertexId): string[] =>
+  landHexesOf(vertex)
+    .map(axialKey)
+    .filter((key) => {
+      const hex = standard.hexes.find((entry) => axialKey(entry.coord) === key)
+      return hex !== undefined && hex.tile !== null && hex.tile !== 'desert' &&
+        pips(hex.numberToken) > 0
+    })
+
+const topHexShare = (vertices: VertexId[]): number => {
+  const hexes = new Map<string, number>()
+  for (const vertex of vertices) {
+    for (const key of producingHexKeys(vertex)) {
+      const hex = standard.hexes.find((entry) => axialKey(entry.coord) === key)
+      if (hex) hexes.set(key, pips(hex.numberToken))
+    }
+  }
+  const amounts = [...hexes.values()]
+  const total = amounts.reduce((sum, amount) => sum + amount, 0)
+  return total === 0 ? 0 : Math.max(...amounts) / total
+}
+
+// The first pair of three-hex vertices overlapping in exactly `shared` hexes whose top-hex share
+// actually moves when the candidate joins, so the case cannot silently pin a delta of 0.
+function concentrationPair(shared: number): [VertexId, VertexId] {
+  for (const holding of standardGrid.vertexIds) {
+    const held = producingHexKeys(holding)
+    if (held.length !== 3) continue
+    for (const candidate of standardGrid.vertexIds) {
+      if (candidate === holding) continue
+      const keys = producingHexKeys(candidate)
+      if (keys.length !== 3) continue
+      if (keys.filter((key) => held.includes(key)).length !== shared) continue
+      if (topHexShare([holding, candidate]) === topHexShare([holding])) continue
+      return [holding, candidate]
+    }
+  }
+  throw new Error(`No three-hex pair sharing ${shared} hexes moves the top-hex share`)
+}
+
+const [concentrationHolding, concentrationCandidate] = concentrationPair(0)
+const [sharedHexHolding, sharedHexCandidate] = concentrationPair(1)
+
 const draftEmpty = readBoardFixture('board-draft-empty.json')
 const endgame = readBoardFixture('board-endgame-pieces.json')
 
@@ -558,6 +607,24 @@ const cases: CaseInput[] = [
     weights: cloneWeights({ expansionWeight: 0.3 }),
     holdings: [expansionHolding],
     candidate: expansionCandidate,
+  },
+  {
+    id: 'robber-concentration',
+    covers: ['W14'],
+    board: standard,
+    // The shipped weight is 0 and takes no share at all, so without a witness value here the term
+    // would leave the parity fixture uncovered. 4.0 is the arm M-57 measures.
+    weights: cloneWeights({ robberConcentrationWeight: 4 }),
+    holdings: [concentrationHolding],
+    candidate: concentrationCandidate,
+  },
+  {
+    id: 'robber-concentration-shared-hex',
+    covers: ['W14'],
+    board: standard,
+    weights: cloneWeights({ robberConcentrationWeight: 4 }),
+    holdings: [sharedHexHolding],
+    candidate: sharedHexCandidate,
   },
   {
     id: 'real-endgame-pieces',

@@ -223,9 +223,9 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 14: Robber concentration term, conditional on M-56
 
-- [ ] Read M-56. If `concentrationTermIndicated` is false, skip this task and Tasks 15 and 16 with the note "skipped: M-56 did not separate blockability from hex count" and stop
-- [ ] Otherwise add `robberConcentrationWeight` (0) to both `EngineWeights`, `DEFAULT_WEIGHTS`, `validate` (non-negative), sweep bounds 0.0 to 16.0, every weights-shaped file; implement the delta term from Context in both scorers inside the `robber` component; vitest with hand-derived expected values at a witness weight and a 0 pin; parity class `W14`, case `robber-concentration`, regenerated fixture
-- [ ] All six validation commands green
+- [x] Read M-56. If `concentrationTermIndicated` is false, skip this task and Tasks 15 and 16 with the note "skipped: M-56 did not separate blockability from hex count" and stop (M-56 read `concentrationTermIndicated` true: weighted mean gap `-6.65pp` over both counted strata, each strictly negative, so the term is built and Tasks 15 and 16 stand)
+- [x] Otherwise add `robberConcentrationWeight` (0) to both `EngineWeights`, `DEFAULT_WEIGHTS`, `validate` (non-negative), sweep bounds 0.0 to 16.0, every weights-shaped file; implement the delta term from Context in both scorers inside the `robber` component; vitest with hand-derived expected values at a witness weight and a 0 pin; parity class `W14`, case `robber-concentration`, regenerated fixture
+- [x] All six validation commands green
 
 ### Task 15: Preregister M-57, the concentration A/B, conditional on M-56
 

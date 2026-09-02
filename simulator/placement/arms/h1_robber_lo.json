@@ -29,6 +29,7 @@
   "expansionWeight": 0,
   "expansionDecay": 0.5,
   "robberDiscount": 0.175,
+  "robberConcentrationWeight": 0,
   "opponentTopK": 3,
   "softmaxTemperature": 1.25,
   "rolloutBudget": 500000,

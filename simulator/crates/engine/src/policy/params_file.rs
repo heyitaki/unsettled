@@ -1040,6 +1040,26 @@ mod tests {
         parsed.validate().expect("zero is inside the domain");
     }
 
+    /// The term charges for a rise in the top hex's share, so a negative weight pays a pair for
+    /// concentrating its income on one blockable hex, which is the opposite of the direction M-56
+    /// read. Same hard bound, and same reason, as `genericPortFactor`.
+    #[test]
+    fn a_negative_robber_concentration_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["robberConcentrationWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("robberConcentrationWeight >= 0"), "{error}");
+
+        weights["robberConcentrationWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
     /// `robber_choice`'s joint argmax only agrees with the two-stage search it replaced where the
     /// steal term cannot go negative, and both of these scale it.
     #[test]

@@ -53,6 +53,12 @@ export interface EngineWeights {
   // 1 distance stops mattering; inert while expansionWeight is 0.
   expansionDecay: number
   robberDiscount: number
+  // How much piling pips onto one hex costs. `robberDiscount` prices only the
+  // hex the robber sits on today; this prices the standing exposure of a pair
+  // whose income is concentrated on a single blockable hex, measured as the
+  // move in that hex's share of the pair's pips. Ships at 0, where the share is
+  // never computed and the robber component is exactly what it was.
+  robberConcentrationWeight: number
   opponentTopK: number
   softmaxTemperature: number
   rolloutBudget: number
@@ -92,6 +98,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   expansionWeight: 0,
   expansionDecay: 0.5,
   robberDiscount: 0.35,
+  robberConcentrationWeight: 0,
   opponentTopK: 3,
   softmaxTemperature: 1.25,
   rolloutBudget: 500_000,

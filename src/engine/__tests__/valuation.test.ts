@@ -41,6 +41,9 @@ function context(
   weights: EngineWeights = DEFAULT_WEIGHTS,
   scarcity: Partial<Record<Resource, number>> = {},
   robbed: ReadonlyMap<VertexId, Partial<Record<Resource, number>>> = new Map(),
+  // Hand-set hex pips, for the concentration term: a hex key shared between two entries is the
+  // same hex, exactly as `computeBoardContext` keys them.
+  hexes: ReadonlyMap<VertexId, ReadonlyMap<string, number>> = new Map(),
 ): BoardContext {
   const stats = new Map<VertexId, VertexStats>()
   for (const [vertexId, pips, ports = []] of entries) {
@@ -50,6 +53,7 @@ function context(
       tokenPips: {},
       ports: ports.map(toAccess),
       setupGrant: {},
+      hexPips: hexes.get(vertexId) ?? new Map(),
     })
   }
   const boardScarcity = {
@@ -486,6 +490,52 @@ describe('placement valuation', () => {
     expect(discounted.robber).toBe(-5 * DEFAULT_WEIGHTS.robberDiscount)
     expect(ignored.robber).toBe(0)
     expect({ ...discounted, robber: 0 }).toEqual({ ...ignored, robber: 0 })
+  })
+
+  // The holding leans on one 5-pip hex out of 6 pips, a share of 5/6. The candidate brings a
+  // 4-pip hex and the holding's own 1-pip hex back again, so the pair's distinct hexes are
+  // 5 + 1 + 4 = 10 pips with 5 on the top one: a share of 1/2. The candidate spreads the pair out,
+  // so the delta is 1/2 - 5/6 = -1/3 and the term pays 3 * 1/3 = 1. Double-counting the shared hex
+  // would make the union 11 pips and pay 1.136 instead, so the number discriminates.
+  const concentrationHexes = new Map([
+    [vertices[0], new Map([['hex-a', 5], ['hex-b', 1]])],
+    [vertices[1], new Map([['hex-b', 1], ['hex-c', 4]])],
+  ])
+
+  it('charges the robber component for the move in the top hex share', () => {
+    const weights = { ...DEFAULT_WEIGHTS, robberConcentrationWeight: 3 }
+    const ctx = context(
+      [[vertices[0], { wood: 6 }], [vertices[1], { brick: 5 }]],
+      weights,
+      {},
+      new Map(),
+      concentrationHexes,
+    )
+    const holding = addToHoldings(ctx, emptyHoldings(), vertices[0])
+    expect(marginalBreakdown(ctx, holding, vertices[1]).robber).toBeCloseTo(1, 12)
+
+    // The first pick has no holding to concentrate, so its own share is the whole of the move.
+    const first = marginalBreakdown(ctx, emptyHoldings(), vertices[0]).robber
+    expect(first).toBeCloseTo(-3 * (5 / 6), 12)
+  })
+
+  it('takes no share at all at a robberConcentrationWeight of 0', () => {
+    const entries: [VertexId, Partial<Record<Resource, number>>][] = [
+      [vertices[0], { wood: 6 }],
+      [vertices[1], { brick: 5 }],
+    ]
+    const robbed = new Map([[vertices[1], { brick: 2 }]])
+    const withHexes = context(entries, DEFAULT_WEIGHTS, {}, robbed, concentrationHexes)
+    const withoutHexes = context(entries, DEFAULT_WEIGHTS, {}, robbed)
+    const holding = addToHoldings(withHexes, emptyHoldings(), vertices[0])
+    const bare = addToHoldings(withoutHexes, emptyHoldings(), vertices[0])
+    expect(DEFAULT_WEIGHTS.robberConcentrationWeight).toBe(0)
+    expect(marginalBreakdown(withHexes, holding, vertices[1]).robber)
+      .toBe(-2 * DEFAULT_WEIGHTS.robberDiscount)
+    expect(marginalBreakdown(withHexes, holding, vertices[1]))
+      .toEqual(marginalBreakdown(withoutHexes, bare, vertices[1]))
+    expect(marginalTotal(withHexes, holding, vertices[1]))
+      .toBe(marginalTotal(withoutHexes, bare, vertices[1]))
   })
 
   it('keeps the neutral modifier identity and lets a modifier boost brick spots', () => {

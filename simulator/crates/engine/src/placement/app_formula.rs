@@ -55,6 +55,7 @@ pub struct EngineWeights {
     pub expansion_weight: f64,
     pub expansion_decay: f64,
     pub robber_discount: f64,
+    pub robber_concentration_weight: f64,
     pub opponent_top_k: f64,
     pub softmax_temperature: f64,
     pub rollout_budget: f64,
@@ -102,6 +103,10 @@ impl EngineWeights {
             ("expansionWeight", self.expansion_weight),
             ("expansionDecay", self.expansion_decay),
             ("robberDiscount", self.robber_discount),
+            (
+                "robberConcentrationWeight",
+                self.robber_concentration_weight,
+            ),
             ("opponentTopK", self.opponent_top_k),
             ("softmaxTemperature", self.softmax_temperature),
             ("rolloutBudget", self.rollout_budget),
@@ -131,6 +136,12 @@ impl EngineWeights {
         if !(0.0..=1.0).contains(&self.expansion_decay) {
             return Err("weights violate: expansionDecay in [0, 1]".into());
         }
+        // The term charges for a rise in the top hex's share, so a negative weight would pay a
+        // pair for concentrating its income on one blockable hex, which is the opposite of what
+        // M-56 read. `sweep-bounds.json` declares 0 to 16.
+        if self.robber_concentration_weight < 0.0 {
+            return Err("weights violate: robberConcentrationWeight >= 0".into());
+        }
         Ok(())
     }
 }
@@ -139,6 +150,7 @@ impl EngineWeights {
 pub struct ScoreBreakdown {
     pub production: f64,
     pub scarcity: f64,
+    /// The robbed-hex discount, plus the concentration delta. See `concentration_delta`.
     pub robber: f64,
     pub diversity: f64,
     pub port: f64,
@@ -178,6 +190,9 @@ pub struct AppFormulaScorer {
     coverage_value: [f64; RESOURCE_COUNT],
     vertices: Vec<VertexStats>,
     links: Vec<VertexLinks>,
+    /// Raw pips per hex index, 0 for a hex that produces nothing. The concentration term takes
+    /// its share over these, so a hex two settlements share is read once rather than twice.
+    hex_pips: Vec<f64>,
 }
 
 /// The scorer's own copy of the board graph around one vertex.
@@ -213,6 +228,9 @@ struct VertexStats {
     token_pips: [f64; 13],
     has_ports: bool,
     setup_grant: [f64; RESOURCE_COUNT],
+    /// The producing hexes this vertex touches, one bit per hex index. Mirrors
+    /// `valuation.ts::VertexStats.hexPips`, whose map keys do the same de-duplication job.
+    hex_mask: u64,
     precompute: VertexPrecompute,
 }
 
@@ -232,6 +250,8 @@ pub(super) struct Holdings {
     token_pips: [f64; 13],
     has_ports: bool,
     port_factors: [f64; RESOURCE_COUNT],
+    /// The union of the settlements' `hex_mask`es, so a shared hex is one bit either way.
+    hexes: u64,
 }
 
 impl Holdings {
@@ -241,6 +261,7 @@ impl Holdings {
             token_pips: [0.0; 13],
             has_ports: false,
             port_factors: [0.0; RESOURCE_COUNT],
+            hexes: 0,
         }
     }
 }
@@ -274,6 +295,18 @@ impl AppFormulaScorer {
                 );
         }
         let (has_ports, port_factors) = port_precompute(board, topology, &weights);
+        // One bit per hex in `Holdings::hexes` and `VertexStats::hex_mask`; `extension6` has 30.
+        // The same width `expansion.rs::pair_hexes` asserts on the diagnostics side.
+        debug_assert!(
+            topology.hex_count() <= 64,
+            "the producing-hex bitmask is 64 bits wide"
+        );
+        let mut hex_pips = vec![0.0; topology.hex_count()];
+        for (index, slot) in hex_pips.iter_mut().enumerate() {
+            if let (Some(_), Some(token)) = (board.tiles()[index], board.tokens()[index]) {
+                *slot = f64::from(pips(token));
+            }
+        }
         let mut vertices = Vec::with_capacity(topology.vertex_count());
         for vertex_index in 0..topology.vertex_count() {
             let vertex = vertex_index as Vertex;
@@ -281,6 +314,7 @@ impl AppFormulaScorer {
             let mut robbed_pips = [0.0; RESOURCE_COUNT];
             let mut setup_grant = [0.0; RESOURCE_COUNT];
             let mut token_pips = [0.0; 13];
+            let mut hex_mask = 0_u64;
             for hex in topology.vertex_hexes(vertex) {
                 let index = usize::from(*hex);
                 if let (Some(resource), Some(token)) = (board.tiles()[index], board.tokens()[index])
@@ -290,6 +324,7 @@ impl AppFormulaScorer {
                     token_pips[usize::from(token)] += amount;
                     if amount > 0.0 {
                         setup_grant[resource.index()] += 1.0;
+                        hex_mask |= 1 << index;
                     }
                 }
             }
@@ -314,6 +349,7 @@ impl AppFormulaScorer {
                 token_pips,
                 has_ports: has_ports[vertex_index],
                 setup_grant,
+                hex_mask,
                 precompute: VertexPrecompute {
                     adjusted,
                     base: production + scarcity_value + robber,
@@ -351,6 +387,7 @@ impl AppFormulaScorer {
             coverage_value,
             vertices,
             links,
+            hex_pips,
         }
     }
 
@@ -503,6 +540,7 @@ impl AppFormulaScorer {
             *held += amount;
         }
         holdings.has_ports |= stats.has_ports;
+        holdings.hexes |= stats.hex_mask;
         for resource in Resource::ALL {
             let index = resource.index();
             holdings.port_factors[index] = js_max(
@@ -510,6 +548,44 @@ impl AppFormulaScorer {
                 stats.precompute.port_factors[index],
             );
         }
+    }
+
+    /// The largest single hex's share of all the pips these hexes produce, which is the quantity
+    /// M-56 measured as `blockability`: 1 when every pip comes off one hex, and as low as
+    /// `1 / hexes` when they are spread evenly. 0 for an empty mask, so a pair touching nothing
+    /// is not a special case anywhere. Mirrors `valuation.ts::topHexShare`.
+    fn top_hex_share(&self, hexes: u64) -> f64 {
+        let mut total = 0.0;
+        let mut highest = 0.0;
+        let mut rest = hexes;
+        while rest != 0 {
+            let index = rest.trailing_zeros() as usize;
+            rest &= rest - 1;
+            let amount = self.hex_pips[index];
+            total += amount;
+            if amount > highest {
+                highest = amount;
+            }
+        }
+        if total == 0.0 { 0.0 } else { highest / total }
+    }
+
+    /// What adding this vertex does to the pair's exposure to one blocked hex, as a penalty on the
+    /// robber component. A candidate that piles more pips onto the hex the holding already leans
+    /// on raises the share and is charged for it; one that spreads the pair out lowers it and is
+    /// paid.
+    ///
+    /// The share is over *raw* hex pips, matching the diagnostic this term comes from, so it is a
+    /// property of the board rather than of where the robber happens to sit today, which is what
+    /// `robber_discount` already prices. At weight 0 no share is taken and the delta is exactly 0.
+    /// Mirrors `valuation.ts::concentrationDelta`.
+    fn concentration_delta(&self, holdings: &Holdings, stats: &VertexStats) -> f64 {
+        if self.weights.robber_concentration_weight == 0.0 {
+            return 0.0;
+        }
+        -self.weights.robber_concentration_weight
+            * (self.top_hex_share(holdings.hexes | stats.hex_mask)
+                - self.top_hex_share(holdings.hexes))
     }
 
     fn base_breakdown(&self, stats: &VertexStats) -> (f64, f64, f64) {
@@ -533,7 +609,7 @@ impl AppFormulaScorer {
         ScoreBreakdown {
             production,
             scarcity,
-            robber,
+            robber: robber + self.concentration_delta(&holdings, stats),
             diversity: self.diversity_delta(&holdings, stats, precompute),
             port: self.port_delta(&holdings, stats, precompute),
             hand_value: if receives_grant {
@@ -760,6 +836,7 @@ impl AppFormulaScorer {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
         precompute.base
+            + self.concentration_delta(&holdings, stats)
             + self.diversity_delta(&holdings, stats, precompute)
             + self.port_delta(&holdings, stats, precompute)
             + if receives_grant {
