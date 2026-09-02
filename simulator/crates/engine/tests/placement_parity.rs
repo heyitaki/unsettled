@@ -8,7 +8,7 @@ use unsettled_engine::placement::app_formula::{
 };
 use unsettled_engine::rules::RuleConfig;
 use unsettled_engine::state::EMPTY;
-use unsettled_engine::topology::Topology;
+use unsettled_engine::topology::{Topology, Vertex};
 use unsettled_engine::wire::WireBoard;
 
 const TOLERANCE: f64 = 1e-9;
@@ -78,6 +78,70 @@ enum Ingestion {
     Reject { error: String },
 }
 
+/// The owner arrays a fixture case's board stands for, and the seat whose holdings it lists.
+struct CaseOccupancy {
+    vertex_owner: Vec<u8>,
+    edge_owner: Vec<u8>,
+    seat: u8,
+}
+
+/// A case's occupancy, built from the ingested board's own buildings and roads.
+///
+/// The seat is the owner of the case's first holding, so that player's roads on the board are the
+/// seat's own roads and SP3's expansion walk starts from real stubs; a case with no holdings, or
+/// whose first holding sits on an empty vertex, gets a fresh seat past every player on the board.
+/// Either way the case's `holdings` list is the seat's whole holding, so any *other* building the
+/// board records for that player goes to a spare seat: it stays occupied, exactly as the
+/// TypeScript side's `occupancyFromBoard` leaves it, without joining the holdings the case pins.
+/// `generate-placement-parity.ts::scoreCase` carries the same rule.
+fn case_occupancy(wire: &WireBoard, topology: &Topology, holdings: &[Vertex]) -> CaseOccupancy {
+    let owner_of = |id: &str| {
+        let index = wire
+            .players
+            .iter()
+            .position(|player| player.id == id)
+            .expect("a piece's player is on the board");
+        u8::try_from(index).expect("board player count fits a seat index")
+    };
+    let fresh = u8::try_from(wire.players.len()).expect("board player count fits a seat index");
+    let spare = fresh + 1;
+    let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
+    let mut edge_owner = vec![EMPTY; topology.edge_count()];
+    for building in &wire.buildings {
+        let vertex = topology
+            .vertex_by_id(&building.vertex_id)
+            .expect("fixture vertex");
+        vertex_owner[usize::from(vertex)] = owner_of(&building.player_id);
+    }
+    for road in &wire.roads {
+        let edge = topology.edge_by_id(&road.edge_id).expect("fixture edge");
+        edge_owner[usize::from(edge)] = owner_of(&road.player_id);
+    }
+    let seat = holdings
+        .first()
+        .map(|vertex| vertex_owner[usize::from(*vertex)])
+        .filter(|owner| *owner != EMPTY)
+        .unwrap_or(fresh);
+    for owner in vertex_owner.iter_mut() {
+        if *owner == seat {
+            *owner = spare;
+        }
+    }
+    for vertex in holdings {
+        vertex_owner[usize::from(*vertex)] = seat;
+    }
+    CaseOccupancy {
+        vertex_owner,
+        edge_owner,
+        seat,
+    }
+}
+
+/// Every number the TypeScript scorer wrote into the fixture, read back out of the Rust scorer.
+///
+/// The breakdown comes from `breakdown_for_owner`, the occupancy-aware entry, so a component that
+/// reads the board around the candidate is covered by every class in the fixture rather than by
+/// nothing. `marginal_total` stays on the holdings entry, which is the fixture field it pins.
 #[test]
 fn typescript_and_rust_placement_formulas_match() {
     let fixture: FixturePack =
@@ -98,6 +162,12 @@ fn typescript_and_rust_placement_formulas_match() {
     for case in fixture.cases {
         let wire = WireBoard::parse_value(case.board.clone()).unwrap();
         let topology = Topology::load(wire.layout).unwrap();
+        let holdings = case
+            .holdings
+            .iter()
+            .map(|vertex| topology.vertex_by_id(vertex).unwrap())
+            .collect::<Vec<_>>();
+        let occupancy = case_occupancy(&wire, &topology, &holdings);
         let conversion = SimBoard::try_from_wire(
             wire,
             &topology,
@@ -123,13 +193,14 @@ fn typescript_and_rust_placement_formulas_match() {
                 let board = conversion.expect("fixture expected successful conversion");
                 let weights = parse_weights(&case.weights);
                 let scorer = AppFormulaScorer::new(&board, &topology, weights);
-                let holdings = case
-                    .holdings
-                    .iter()
-                    .map(|vertex| topology.vertex_by_id(vertex).unwrap())
-                    .collect::<Vec<_>>();
                 let candidate = topology.vertex_by_id(&case.candidate).unwrap();
-                let actual = scorer.breakdown(&holdings, candidate, case.receives_grant);
+                let actual = scorer.breakdown_for_owner(
+                    &occupancy.vertex_owner,
+                    &occupancy.edge_owner,
+                    occupancy.seat,
+                    candidate,
+                    case.receives_grant,
+                );
                 compare_breakdown(&case, actual, &mut maximum);
                 compare(
                     &case.id,
@@ -223,14 +294,12 @@ fn the_scorer_adjacency_copy_matches_the_topology_it_was_built_from() {
 /// The occupancy-aware entry reads the same numbers as `breakdown` on every fixture case, with
 /// the case board's own buildings and roads standing around the holdings.
 ///
-/// Owner arrays come from the case board, one seat per player in board order, and the scoring
-/// seat is a fresh index past every player on the board, so the vertices it owns are exactly the
-/// case's `holdings` list and nothing the board happens to carry leaks into them. Every rival
-/// building and every road stays where the board put it, which is the occupancy SP3's expansion
-/// term will read; today not one of them may move a number. The comparison is on raw bits rather
-/// than the fixture's tolerance because the two entries run the same arithmetic in the same
-/// order: `breakdown` folds the holdings list left to right and the owner walk folds them in
-/// ascending vertex order, which the assertion below pins as the same sequence.
+/// Owner arrays come from `case_occupancy`, so the seat holds exactly the case's `holdings` list
+/// while every rival building and every road stays where the board put it, which is the occupancy
+/// SP3's expansion term will read; today not one of them may move a number. The comparison is on
+/// raw bits rather than the fixture's tolerance because the two entries run the same arithmetic
+/// in the same order: `breakdown` folds the holdings list left to right and the owner walk folds
+/// them in ascending vertex order, which the assertion below pins as the same sequence.
 #[test]
 fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
     let fixture: FixturePack =
@@ -242,17 +311,17 @@ fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
         }
         let wire = WireBoard::parse_value(case.board.clone()).unwrap();
         let topology = Topology::load(wire.layout).unwrap();
-        let players: Vec<String> = wire.players.iter().map(|player| player.id.clone()).collect();
-        let buildings: Vec<(String, String)> = wire
-            .buildings
+        let holdings: Vec<_> = case
+            .holdings
             .iter()
-            .map(|building| (building.vertex_id.clone(), building.player_id.clone()))
+            .map(|vertex| topology.vertex_by_id(vertex).unwrap())
             .collect();
-        let roads: Vec<(String, String)> = wire
-            .roads
-            .iter()
-            .map(|road| (road.edge_id.clone(), road.player_id.clone()))
-            .collect();
+        assert!(
+            holdings.is_sorted(),
+            "case {} lists holdings out of vertex order, which would fold the two entries' floats in different orders",
+            case.id
+        );
+        let occupancy = case_occupancy(&wire, &topology, &holdings);
         let board = SimBoard::try_from_wire(
             wire,
             &topology,
@@ -264,44 +333,12 @@ fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
         .expect("fixture expected successful conversion");
         let scorer = AppFormulaScorer::new(&board, &topology, parse_weights(&case.weights));
 
-        let seat = u8::try_from(players.len()).expect("board player count fits a seat index");
-        let owner_of = |id: &String| {
-            let index = players
-                .iter()
-                .position(|player| player == id)
-                .expect("a piece's player is on the board");
-            u8::try_from(index).expect("board player count fits a seat index")
-        };
-        let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
-        let mut edge_owner = vec![EMPTY; topology.edge_count()];
-        for (vertex_id, player_id) in &buildings {
-            let vertex = topology.vertex_by_id(vertex_id).expect("fixture vertex");
-            vertex_owner[usize::from(vertex)] = owner_of(player_id);
-        }
-        for (edge_id, player_id) in &roads {
-            let edge = topology.edge_by_id(edge_id).expect("fixture edge");
-            edge_owner[usize::from(edge)] = owner_of(player_id);
-        }
-        let holdings: Vec<_> = case
-            .holdings
-            .iter()
-            .map(|vertex| topology.vertex_by_id(vertex).unwrap())
-            .collect();
-        assert!(
-            holdings.is_sorted(),
-            "case {} lists holdings out of vertex order, which would fold the two entries' floats in different orders",
-            case.id
-        );
-        for vertex in &holdings {
-            vertex_owner[usize::from(*vertex)] = seat;
-        }
-
         let candidate = topology.vertex_by_id(&case.candidate).unwrap();
         let expected = scorer.breakdown(&holdings, candidate, case.receives_grant);
         let actual = scorer.breakdown_for_owner(
-            &vertex_owner,
-            &edge_owner,
-            seat,
+            &occupancy.vertex_owner,
+            &occupancy.edge_owner,
+            occupancy.seat,
             candidate,
             case.receives_grant,
         );
@@ -324,6 +361,116 @@ fn the_occupancy_aware_entry_matches_breakdown_on_every_fixture_case() {
         scored += 1;
     }
     assert!(scored > 0, "no fixture case reached the scorer");
+}
+
+/// Both branches of the seat rule, on the two fixture cases that exercise them.
+///
+/// `real-endgame-pieces` lists holdings on a board whose pieces are already placed, and its first
+/// holding belongs to a player holding three more buildings and a stack of roads: the seat has to
+/// be that player, so its roads are its own, while its three other buildings stay occupied under
+/// the spare seat instead of joining the holdings. `all-resources-held` holds vertices on a bare
+/// board, where no player owns anything, so the seat is the fresh index.
+#[test]
+fn the_case_seat_is_the_owner_of_the_first_holding_and_owns_only_the_listed_holdings() {
+    let fixture: FixturePack =
+        serde_json::from_str(include_str!("../../../fixtures/placement-parity.json")).unwrap();
+    let mut seen = BTreeSet::new();
+    for case in fixture.cases {
+        if !matches!(case.id.as_str(), "real-endgame-pieces" | "all-resources-held") {
+            continue;
+        }
+        seen.insert(case.id.clone());
+        let wire = WireBoard::parse_value(case.board.clone()).unwrap();
+        let topology = Topology::load(wire.layout).unwrap();
+        let players = wire.players.len();
+        let buildings = wire.buildings.len();
+        let roads = wire.roads.len();
+        let holdings: Vec<_> = case
+            .holdings
+            .iter()
+            .map(|vertex| topology.vertex_by_id(vertex).unwrap())
+            .collect();
+        let occupancy = case_occupancy(&wire, &topology, &holdings);
+
+        let owned: Vec<_> = occupancy
+            .vertex_owner
+            .iter()
+            .enumerate()
+            .filter_map(|(vertex, owner)| (*owner == occupancy.seat).then_some(vertex as Vertex))
+            .collect();
+        assert_eq!(owned, holdings, "case {} seat holdings", case.id);
+        let occupied = occupancy
+            .vertex_owner
+            .iter()
+            .filter(|owner| **owner != EMPTY)
+            .count();
+        let held_and_placed = holdings
+            .iter()
+            .filter(|vertex| {
+                wire.buildings.iter().any(|building| {
+                    topology.vertex_by_id(&building.vertex_id) == Some(**vertex)
+                })
+            })
+            .count();
+        assert_eq!(
+            occupied,
+            buildings + holdings.len() - held_and_placed,
+            "case {}: every board building stays occupied and each holding is occupied once",
+            case.id
+        );
+        assert_eq!(
+            occupancy
+                .edge_owner
+                .iter()
+                .filter(|owner| **owner != EMPTY)
+                .count(),
+            roads,
+            "case {} roads",
+            case.id
+        );
+
+        if case.id == "all-resources-held" {
+            assert_eq!(buildings, 0, "the bare-board case must carry no buildings");
+            assert_eq!(
+                occupancy.seat,
+                u8::try_from(players).unwrap(),
+                "an unowned first holding takes the fresh seat"
+            );
+        } else {
+            let first = wire
+                .buildings
+                .iter()
+                .find(|building| {
+                    topology.vertex_by_id(&building.vertex_id) == Some(holdings[0])
+                })
+                .expect("the endgame case's first holding carries a building");
+            let expected = wire
+                .players
+                .iter()
+                .position(|player| player.id == first.player_id)
+                .unwrap();
+            assert_eq!(
+                occupancy.seat,
+                u8::try_from(expected).unwrap(),
+                "an owned first holding takes its owner's seat"
+            );
+            assert!(
+                occupancy
+                    .edge_owner
+                    .iter()
+                    .any(|owner| *owner == occupancy.seat),
+                "the seat keeps the roads that player laid"
+            );
+        }
+    }
+    assert_eq!(
+        seen,
+        ["all-resources-held", "real-endgame-pieces"]
+            .into_iter()
+            .map(String::from)
+            .collect(),
+        "both seat-rule cases must be in the fixture"
+    );
 }
 
 fn compare(

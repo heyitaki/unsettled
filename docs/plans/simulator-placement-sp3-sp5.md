@@ -137,11 +137,11 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 3: Occupancy reaches the TypeScript scorer and the parity harness, behaviour-neutral
 
-- [ ] Add `Occupancy { blocked: ReadonlySet<VertexId>; edgeOwner: ReadonlyMap<EdgeId, string> }` to `src/engine/valuation.ts` with an `emptyOccupancy()` and an `occupancyFromBoard(board)` built from `board.buildings` and `board.roads`; add it as an optional trailing parameter of `marginalBreakdown`, `marginalTotal` and `scoreCandidate`, default empty
-- [ ] In `analyze.ts`, build the rollout's occupancy from the board plus the rollout's `blocked` set and pass it through `scoreForScan`; rollouts place no roads, so the edge map is the board's
-- [ ] Make `simulator/tools/generate-placement-parity.ts::scoreCase` pass `occupancyFromBoard(input.board)` and make `placement_parity.rs` drive the Rust occupancy-aware entry with owner arrays built from the ingested board's buildings and roads (the seat is the owner of the first holding, or a fresh seat when there are none; record the rule in a comment on both sides)
-- [ ] Regenerate the fixture and assert every existing case's numbers are unchanged (diff the JSON: only formatting may move, and it should not)
-- [ ] All six validation commands green
+- [x] Add `Occupancy { blocked: ReadonlySet<VertexId>; edgeOwner: ReadonlyMap<EdgeId, string> }` to `src/engine/valuation.ts` with an `emptyOccupancy()` and an `occupancyFromBoard(board)` built from `board.buildings` and `board.roads`; add it as an optional trailing parameter of `marginalBreakdown`, `marginalTotal` and `scoreCandidate`, default empty
+- [x] In `analyze.ts`, build the rollout's occupancy from the board plus the rollout's `blocked` set and pass it through `scoreForScan`; rollouts place no roads, so the edge map is the board's
+- [x] Make `simulator/tools/generate-placement-parity.ts::scoreCase` pass `occupancyFromBoard(input.board)` and make `placement_parity.rs` drive the Rust occupancy-aware entry with owner arrays built from the ingested board's buildings and roads (the seat is the owner of the first holding, or a fresh seat when there are none; record the rule in a comment on both sides)
+- [x] Regenerate the fixture and assert every existing case's numbers are unchanged (diff the JSON: only formatting may move, and it should not)
+- [x] All six validation commands green
 
 ### Task 4: SP3 expansion term in TypeScript
 

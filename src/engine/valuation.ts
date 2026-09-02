@@ -1,7 +1,14 @@
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import { pips, vertexProduction } from '../model/board'
 import { boardGrid } from '../model/layouts'
-import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../model/types'
+import {
+  RESOURCES,
+  type Board,
+  type EdgeId,
+  type Port,
+  type Resource,
+  type VertexId,
+} from '../model/types'
 import { vertexAdjacency } from './legality'
 import type { PlacementModifier } from './modifiers'
 import type { EngineWeights } from './weights'
@@ -68,6 +75,48 @@ export interface Holdings {
   ports: PortAccess[]
   /** Derived from `ports` at the single write point, for hot-path lookups. */
   portFactors: Record<Resource, number>
+}
+
+/**
+ * Where everyone else's pieces stand at score time: the vertices carrying a building, and the
+ * player holding each road. Neither is derivable from `Holdings`, which knows only the scoring
+ * player's own settlements, and `BoardContext` is built once per board and weights and so cannot
+ * carry a state that moves pick by pick.
+ *
+ * Nothing reads it yet. Every component today is a function of the scoring player's own holdings
+ * alone, so an empty occupancy scores bit-for-bit what a full one does; SP3's expansion term is
+ * the first to make the rest of the board matter.
+ */
+export interface Occupancy {
+  blocked: ReadonlySet<VertexId>
+  edgeOwner: ReadonlyMap<EdgeId, string>
+}
+
+// One shared value rather than a fresh pair of empty collections per call: this is the default of
+// three scoring entries the rollout scans call millions of times.
+const EMPTY_OCCUPANCY: Occupancy = { blocked: new Set(), edgeOwner: new Map() }
+
+export const emptyOccupancy = (): Occupancy => EMPTY_OCCUPANCY
+
+const boardOccupancies = new WeakMap<Board, Occupancy>()
+
+/**
+ * The occupancy a board stands for: its buildings' vertices and its roads' owners, exactly as
+ * placed. `blocked` holds the occupied vertices themselves, not the ones the distance rule bars
+ * building on, so a walk can tell a settlement apart from its neighbour.
+ *
+ * Memoized on board identity, the same key `analyzeBoardCached` uses: boards are immutable, every
+ * edit is a new object, and a rollout asks the same board for this once per window.
+ */
+export function occupancyFromBoard(board: Board): Occupancy {
+  const hit = boardOccupancies.get(board)
+  if (hit) return hit
+  const occupancy: Occupancy = {
+    blocked: new Set(board.buildings.map((building) => building.vertexId)),
+    edgeOwner: new Map(board.roads.map((road) => [road.edgeId, road.playerId])),
+  }
+  boardOccupancies.set(board, occupancy)
+  return occupancy
 }
 
 /**
@@ -539,7 +588,10 @@ export function marginalBreakdown(
   holdings: Holdings,
   candidate: VertexId,
   hand: HandCounts | null = null,
+  occupancy: Occupancy = emptyOccupancy(),
 ): ScoreBreakdown {
+  // Accepted and discarded: no component reads occupancy until SP3's expansion term does.
+  void occupancy
   const stats = ctx.stats.get(candidate)
   if (!stats) {
     return { production: 0, scarcity: 0, robber: 0, diversity: 0, port: 0, handValue: 0 }
@@ -567,7 +619,10 @@ export function marginalTotal(
   holdings: Holdings,
   candidate: VertexId,
   hand: HandCounts | null = null,
+  occupancy: Occupancy = emptyOccupancy(),
 ): number {
+  // Accepted and discarded, as in `marginalBreakdown`.
+  void occupancy
   const stats = ctx.stats.get(candidate)
   if (!stats) return 0
   const precompute = precomputeFor(ctx, candidate, stats)
@@ -591,8 +646,10 @@ export function scoreCandidate(
   board: Board,
   modifier: PlacementModifier,
   hand: HandCounts | null = null,
+  occupancy: Occupancy = emptyOccupancy(),
 ): { breakdown: ScoreBreakdown; total: number } {
-  const breakdown = modifier(playerId, marginalBreakdown(ctx, holdings, candidate, hand), {
+  const marginal = marginalBreakdown(ctx, holdings, candidate, hand, occupancy)
+  const breakdown = modifier(playerId, marginal, {
     board,
     vertexId: candidate,
     held: holdings.vertices,

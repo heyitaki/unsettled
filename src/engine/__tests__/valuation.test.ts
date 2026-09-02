@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import endgame from '../../parser/__tests__/expected/board-endgame-pieces.json'
 import { createBoard, pips, setTile, vertexProduction } from '../../model/board'
-import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../../model/coords'
+import {
+  axialKey,
+  edgeEndpointVertexIds,
+  vertexAdjacentVertexIds,
+  vertexTouchingHexes,
+} from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../../model/types'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
@@ -10,8 +16,10 @@ import {
   computeBoardContext,
   coverageValues,
   emptyHoldings,
+  emptyOccupancy,
   marginalTotal,
   marginalBreakdown,
+  occupancyFromBoard,
   scoreCandidate,
   type BoardContext,
   type Holdings,
@@ -563,5 +571,62 @@ describe('placement valuation', () => {
     ])
     expect(pairScore(ctx, vertices[2], vertices[3]) - pairScore(ctx, vertices[0], vertices[1]))
       .toBeGreaterThanOrEqual(1.5)
+  })
+})
+
+describe('occupancy', () => {
+  const board = endgame as Board
+
+  it('records the buildings and roads a board carries', () => {
+    const occupancy = occupancyFromBoard(board)
+    expect(occupancy.blocked.size).toBe(board.buildings.length)
+    for (const building of board.buildings) {
+      expect(occupancy.blocked.has(building.vertexId)).toBe(true)
+    }
+    expect(occupancy.edgeOwner.size).toBe(board.roads.length)
+    for (const road of board.roads) {
+      expect(occupancy.edgeOwner.get(road.edgeId)).toBe(road.playerId)
+    }
+    // The vertices a building bars under the distance rule are not in the set: a walk has to be
+    // able to tell a settlement apart from its neighbour.
+    const neighbours = board.buildings.flatMap((building) =>
+      vertexAdjacentVertexIds(building.vertexId))
+    const occupied = new Set(board.buildings.map((building) => building.vertexId))
+    expect(neighbours.some((vertexId) => occupancy.blocked.has(vertexId) &&
+      !occupied.has(vertexId))).toBe(false)
+  })
+
+  it('empties to a shared value and memoizes per board', () => {
+    expect(emptyOccupancy().blocked.size).toBe(0)
+    expect(emptyOccupancy().edgeOwner.size).toBe(0)
+    expect(emptyOccupancy()).toBe(emptyOccupancy())
+    expect(occupancyFromBoard(board)).toBe(occupancyFromBoard(board))
+    expect(occupancyFromBoard({ ...board })).not.toBe(occupancyFromBoard(board))
+  })
+
+  // Nothing reads occupancy until SP3's expansion term does, so a full one has to score bit-for-bit
+  // what an empty one scores. Bits, not toBeCloseTo: the claim is that the argument is inert.
+  it('leaves every score untouched at every scoring entry', () => {
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const occupancy = occupancyFromBoard(board)
+    const grid = boardGrid(board.layout)
+    const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const vertexId of grid.vertexIds) {
+      const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
+      expect(marginalBreakdown(ctx, holding, vertexId, hand, occupancy))
+        .toEqual(marginalBreakdown(ctx, holding, vertexId, hand))
+      expect(marginalTotal(ctx, holding, vertexId, hand, occupancy))
+        .toBe(marginalTotal(ctx, holding, vertexId, hand))
+      expect(scoreCandidate(
+        ctx,
+        holding,
+        vertexId,
+        'p1',
+        board,
+        neutralModifier,
+        hand,
+        occupancy,
+      )).toEqual(scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand))
+    }
   })
 })

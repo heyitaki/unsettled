@@ -14,6 +14,7 @@ import {
   emptyHoldings,
   marginalBreakdown,
   marginalTotal,
+  occupancyFromBoard,
 } from '../../src/engine/valuation.ts'
 import { DEFAULT_WEIGHTS, type EngineWeights } from '../../src/engine/weights.ts'
 import {
@@ -133,9 +134,19 @@ function holdingsCoveringAllResources(board: Board): VertexId[] {
   throw new Error('Board does not expose all five resources')
 }
 
+/**
+ * A case scores one seat's candidate with the case board's own pieces standing around it.
+ *
+ * The seat is whoever owns the case's first holding, so that player's roads on the board are the
+ * seat's own roads, and a seat of its own when the case has no holdings or its first holding sits
+ * on an empty vertex. `holdings` is the seat's whole holding either way: any *other* building the
+ * board records for that player stays occupied without joining it, which on the Rust side means a
+ * spare seat owns it. `placement_parity.rs::case_occupancy` is the mirror of this rule.
+ */
 function scoreCase(input: CaseInput) {
   const weights = input.weights ?? cloneWeights()
   const ctx = computeBoardContext(input.board, weights)
+  const occupancy = occupancyFromBoard(input.board)
   const holdings = (input.holdings ?? []).reduce(
     (held, vertex) => addToHoldings(ctx, held, vertex),
     emptyHoldings(),
@@ -143,7 +154,7 @@ function scoreCase(input: CaseInput) {
   const hand = input.receivesGrant
     ? ctx.stats.get(input.candidate)?.setupGrant ?? null
     : null
-  const components = marginalBreakdown(ctx, holdings, input.candidate, hand)
+  const components = marginalBreakdown(ctx, holdings, input.candidate, hand, occupancy)
   return {
     id: input.id,
     covers: input.covers,
@@ -153,7 +164,7 @@ function scoreCase(input: CaseInput) {
     candidate: input.candidate,
     receivesGrant: input.receivesGrant ?? false,
     components,
-    marginalTotal: marginalTotal(ctx, holdings, input.candidate, hand),
+    marginalTotal: marginalTotal(ctx, holdings, input.candidate, hand, occupancy),
     breakdownTotal: breakdownTotal(components),
     ingestion: input.ingestion ?? { outcome: 'score' as const },
     degenerate: input.degenerate ?? false,
