@@ -18,7 +18,7 @@ export const recommendationMarks = (
   fadedSecond = false,
 ): HighlightMark[] => [
   { ref: recommendation.firstPick, color, label: '1' },
-  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2', faded: fadedSecond })),
+  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2', ...(fadedSecond ? { faded: true } : {}) })),
   ...(recommendation.firstRoad === null
     ? []
     : [{ ref: recommendation.firstRoad, color, label: 'R', kind: 'road' as const }]),
