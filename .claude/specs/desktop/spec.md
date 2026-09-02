@@ -126,7 +126,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | D6 | Analysis behaviour: one code path, select on click, hover preview, pill, context line, claim row, empty state (D4 surface, DB2) | D1 | done |
 | D7 | Analysis card styling promoted; desktop card rules deleted (D4 cards) | D6 | done |
 | D8 | Roster rows: grip, swatch brush, rename on name, YOU chip, claim on row, dashed Add player (D5 surface, DB3, DB4) | D1 | done |
-| D9 | Drag feel and the draft grid on desktop (D5 dragging and snake draft) | D8, D4 | not started |
+| D9 | Drag feel and the draft grid on desktop (D5 dragging and snake draft) | D8, D4 | done |
 | D10 | Vocabulary sweep: `current` and `me` states everywhere, gold pair gone, DB7 grep clean | D2, D3, D7, D9 | not started |
 | D11 | Docs: `CLAUDE.md` ui bullet, the mobile spec's `What already exists` paths, this ledger | D10 | not started |
 | D12 | Regression screenshots and acceptance verification | all | not started |

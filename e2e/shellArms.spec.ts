@@ -319,6 +319,28 @@ test.describe('desktop', () => {
     await expect(rows).toHaveCount(6)
     await expect(add).toBeDisabled()
   })
+
+  test('the snake draft is the phone grid, and a grip drag reseats it', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const panel = page.locator('.player-panel')
+    const grid = panel.locator('.draft-grid')
+    const cells = grid.locator('.draft-grid-slot')
+
+    // The grid is the phone's, two picks per player (spec D5).
+    await expect(cells).toHaveCount(UNCLAIMED_ROSTER.length * 2)
+    await expect(grid.locator('.draft-grid-slot.now')).toHaveCount(1)
+    await expect(panel.locator('.group-label')).toContainText('pick 1 of 8')
+    await snap(page, 'desktop-draft-grid')
+
+    // Seat order is draft order, so a reorder repaints the grid and the ribbon.
+    const rows = panel.locator('.roster-row')
+    await rows.first().locator('.roster-grip').dragTo(rows.nth(2))
+    await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
+    await expect(grid.locator('.draft-grid-name').first()).toHaveText('Blue')
+    await expect(page.locator('.draft-ribbon-slot').first())
+      .toHaveCSS('background-color', 'rgb(48, 99, 186)')
+  })
 })
 
 test.describe('landscape phone', () => {

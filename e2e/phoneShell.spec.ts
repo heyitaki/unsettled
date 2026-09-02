@@ -474,8 +474,8 @@ test.describe('players screen', () => {
     await expect(rows).toHaveCount(4)
     await expect(rows.locator('.list-row-name')).toHaveText(['Red', 'Blue', 'Orange', 'White'])
     await expect(screen.locator('.roster-row.me')).toHaveCount(0)
-    await expect(screen.locator('.phone-dslot')).toHaveCount(8)
-    await expect(screen.locator('.phone-dslot.now')).toHaveCount(1)
+    await expect(screen.locator('.draft-grid-slot')).toHaveCount(8)
+    await expect(screen.locator('.draft-grid-slot.now')).toHaveCount(1)
     await expect(screen.locator('.group-label').nth(1)).toContainText('pick 1 of 8')
     await snap(page, 'players-screen')
 
@@ -515,7 +515,7 @@ test.describe('players screen', () => {
     await expect(rows.nth(2)).toHaveClass(/\bme\b/)
     await expect(page.locator('.draft-ribbon-slot').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)')
     await expect(context).toHaveText(/picking 3 and 6 of 8/)
-    await expect(screen.locator('.phone-dslot-name').first()).toHaveText('White')
+    await expect(screen.locator('.draft-grid-name').first()).toHaveText('White')
     await snap(page, 'players-reordered')
 
     await screen.getByRole('button', { name: 'Add player' }).click()

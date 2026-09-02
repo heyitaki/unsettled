@@ -100,7 +100,7 @@ export interface EngineWeights {
   rolloutsMin: number
   rolloutsMax: number
   maxResults: number
-  // Per-draft-slot multipliers on the two components a pick's position in the snake draft moves:
+  // Per-slot multipliers on the two components a pick's position in the snake draft moves:
   // what is left to complement (diversity) and what is left to open (expansion). Ships at 1
   // everywhere, where every product is the unscaled component.
   slotScales: SlotScales

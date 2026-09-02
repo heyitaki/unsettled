@@ -1,19 +1,16 @@
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import { analyzeBoardCached } from '../../engine/analyze'
 import { computeStandings } from '../../engine/stats'
 import { addPlayer, movePlayer, removePlayer, renamePlayer, setMe } from '../../model/board'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
-import { readableInk } from '../colors'
-import { draftSlots } from '../draftSlots'
+import { DraftGrid } from '../DraftGrid'
 import { GripGlyph, PlusGlyph, TrashGlyph } from '../glyphs'
 import { InlineRename } from '../InlineRename'
-import { rowShift } from '../rowDrag'
+import { rowShift, SHIFT_CLASS } from '../rowDrag'
 import { activeTab, useStore } from '../store'
 import { useCoarsePointer } from '../useMediaQuery'
 import { useRowReorder } from '../useRowReorder'
 import { PhoneOverlay } from './PhoneOverlay'
-
-const SHIFT_CLASS = { [-1]: 'shift-up', 0: '', 1: 'shift-down' } as const
 
 /**
  * The roster and the snake draft (spec S8). A row claims on tap, renames on
@@ -29,7 +26,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const commit = (next: Board) => dispatch({ type: 'commit', board: next })
   const standings = computeStandings(game)
   const analysis = analyzeBoardCached(board)
-  const slots = draftSlots(board, analysis)
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
   const ids = board.players.map((player) => player.id)
   const reorder = useRowReorder({
@@ -54,7 +50,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
     const colors = Object.values(PLAYER_PALETTE)
     commit(addPlayer(board, { name: `Player ${index + 1}`, color: colors[index % colors.length] }))
   }
-  const { turnIndex, sequence } = analysis.draft
   return (
     <PhoneOverlay title="Players" onClose={onClose}>
       <div>
@@ -132,32 +127,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-      <div>
-        <div className="group-label">
-          <span>Snake draft</span>
-          <span>{turnIndex === null ? 'draft complete' : `pick ${turnIndex + 1} of ${sequence.length}`}</span>
-        </div>
-        <div className="phone-draft-grid" style={{ '--draft-cols': board.players.length } as CSSProperties}>
-          {slots.map((slot, index) => {
-            const player = board.players.find((candidate) => candidate.id === slot.playerId)
-            if (!player) return null
-            const classes = ['phone-dslot']
-            if (!slot.placed && !slot.current) classes.push('pending')
-            if (slot.current) classes.push('now')
-            return (
-              <div key={`${slot.playerId}:${index}`} className={classes.join(' ')}>
-                <span
-                  className="phone-dslot-circle"
-                  style={{ background: player.color, color: readableInk(player.color) }}
-                >
-                  {index + 1}
-                </span>
-                <span className="phone-dslot-name">{player.name}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <DraftGrid board={board} analysis={analysis} />
     </PhoneOverlay>
   )
 }

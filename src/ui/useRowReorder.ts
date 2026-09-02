@@ -206,11 +206,13 @@ export function useRowReorder({
     frame = window.requestAnimationFrame(tick)
     return () => window.cancelAnimationFrame(frame)
   }, [coarse, dragId, aimDrag])
-  // Last resort: a release the row never sees would strand dragId, and with it
-  // both the scroll-swallowing listener and the loop above. Bubble phase, so
-  // the row's own handler has already committed the drop by the time this runs.
+  // Last resort for the hold path: a release the row never sees would strand
+  // dragId, and with it both the scroll-swallowing listener and the loop above.
+  // Bubble phase, so the row's own handler has already committed the drop by the
+  // time this runs. Never on the HTML5 path, where Chromium fires pointercancel
+  // as the native drag takes over the gesture; dragend ends that drag instead.
   useEffect(() => {
-    if (dragId === null) return
+    if (!coarse || dragId === null) return
     const rescue = (event: PointerEvent) => {
       if (press.current && press.current.pointerId !== event.pointerId) return
       endPress()
@@ -222,7 +224,7 @@ export function useRowReorder({
       window.removeEventListener('pointerup', rescue)
       window.removeEventListener('pointercancel', rescue)
     }
-  }, [dragId])
+  }, [coarse, dragId])
 
   const canLift = (id: string) => coarse && lockedId !== id && ids.length >= 2
 

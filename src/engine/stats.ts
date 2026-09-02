@@ -82,8 +82,8 @@ function runLength(edges: readonly EdgeId[], blocked: ReadonlySet<VertexId>): nu
  * first player to reach the minimum takes the card and keeps it until someone
  * else *beats* their run — matching it is not enough. Board order is placement
  * order for boards built in the editor; an imported board carries the parser's
- * spatial order, so its holder is best-effort, the same caveat the draft-slot
- * mapping carries.
+ * spatial order, so its holder is best-effort, the same caveat the draft
+ * slot mapping carries.
  *
  * Blocking uses the final buildings rather than replaying those too: the board
  * records no placement order across piece types, and a settlement dropped on an

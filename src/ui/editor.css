@@ -182,11 +182,13 @@ button.selected.danger { color: #fff; }
 .stat-icon { flex: none; width: 13px; height: 13px; }
 .tally-header .stat-icon { width: 15px; height: 15px; }
 .award .stat-icon { width: 12px; height: 12px; }
-.draft-strip { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; gap: 3px; overflow-x: auto; }
-.draft-slot { flex: 0 1 auto; min-width: 32px; max-width: 56px; display: grid; justify-items: center; gap: 2px; padding: 2px 1px; border: 0; background: transparent; color: var(--muted); font-size: 9px; }
-.slot-circle { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.3); font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.draft-slot.pending .slot-circle { opacity: .5; }
-.slot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-panel .draft-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.draft-grid { display: grid; grid-template-columns: repeat(var(--draft-cols, 4), minmax(0, 1fr)); gap: 6px; }
+.draft-grid-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 3px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; font-size: 10px; }
+.draft-grid-slot.pending { border-style: dashed; opacity: .78; }
+.draft-grid-slot.now { border-color: var(--accent-dark); background: #fff; box-shadow: 0 0 0 1px var(--accent-dark); }
+.draft-grid-circle { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font: 800 11px Inter, sans-serif; }
+.draft-grid-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
 .notice.warning { margin: 10px 0 0; padding: 7px 9px; border-radius: 8px; background: #fff0e5; color: var(--accent-dark); font-size: 11px; }
@@ -228,8 +230,17 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .you-chip.none { visibility: hidden; }
 /* The roster row (spec D5): the phone's row, with the tally and the VP in the
    two cells the desktop adds before the right edge. */
-.roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
 .roster-row.me { border-color: var(--ink); background: #fff; }
+/* One row plus the list's gap, so a row steps exactly into its neighbour's place. */
+.roster { --roster-row-step: 49px; }
+.player-list.roster { --roster-row-step: 47px; }
+.roster.reordering { touch-action: none; }
+.roster-row.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
+.roster-row.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
+.roster-row.shift-up { transform: translateY(calc(-1 * var(--roster-row-step))); }
+.roster-row.shift-down { transform: translateY(var(--roster-row-step)); }
+.roster-row.dragging .roster-grip { cursor: grabbing; }
 .roster-grip { position: relative; display: grid; place-items: center; height: 100%; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
 .roster-row .swatch { width: 24px; height: 24px; padding: 0; }
 .roster-row .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper-light), 0 0 0 3.5px var(--accent); }
@@ -314,7 +325,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .analysis-touch-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 9px 10px; border-top: 1px solid var(--line); background: rgba(228, 216, 191, .34); }
 .analysis-touch-actions button { min-height: 0; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: #f9f5ea; color: var(--ink); font-size: 12px; font-weight: 700; }
 .analysis-touch-actions .primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
-.draft-slot.selected .slot-circle { box-shadow: inset 0 0 0 1px rgba(0,0,0,.3), 0 0 0 3px var(--accent); }
 .tally-caption { margin: 0 0 5px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 .tally-header button { border: 0; background: transparent; box-shadow: none; }
 .tally-header button { display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); }
@@ -335,7 +345,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .stat-chip button:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--accent-dark); }
   /* A lift would jitter a 24px dot inside its row; the brush ring outranks the generic hover shadow on its own. */
   .roster-row .swatch:hover { transform: none; }
-  .draft-slot:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--ink); }
   .analysis-row:hover:not(.current) { border-color: rgba(48, 39, 31, .38); box-shadow: 0 4px 12px rgba(62, 45, 21, .08); }
   .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
   .global-notice-close:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; color: #fff; background: rgba(255,255,255,.12); }
@@ -353,8 +362,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .structure-grid button { grid-template-rows: 28px auto; font-size: 12px; }
   .token-tools button { min-height: 48px; font-size: 17px; }
   .history-buttons button { width: 40px; height: 40px; font-size: 19px; }
-  .draft-slot { min-width: 46px; }
-  .slot-circle { width: 24px; height: 24px; }
   .global-notice-close { min-width: 34px; min-height: 34px; }
   input, select { font-size: 16px; }
   .tally-header button { align-items: flex-end; }
@@ -372,7 +379,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 }
 
 .saved-maps, .issue-list, .mobile-pane { overscroll-behavior: contain; }
-.board-canvas, .tool-grid button, .token-tools button, .mobile-nav, .draft-slot {
+.board-canvas, .tool-grid button, .token-tools button, .mobile-nav {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -506,8 +513,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .stat-chip { display: flex; justify-content: space-between; }
   .stat-chip button { flex: none; width: 26px; padding: 7px 0; font-size: 14px; }
   .stat-face { min-width: 22px; font-size: 12px; }
-  .draft-strip { display: grid; grid-template-columns: repeat(var(--draft-cols, 4), minmax(0, 1fr)); gap: 6px; overflow: visible; }
-  .draft-slot { min-width: 0; max-width: none; }
 
   .phone-shell { --gutter: max(10px, env(safe-area-inset-left), env(safe-area-inset-right)); position: relative; isolation: isolate; min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
   /* The paper gradient stays put while the page scrolls over it, so it is a fixed
@@ -583,23 +588,10 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .phone-ohead-btn.invisible { visibility: hidden; pointer-events: none; }
   .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .phone-overlay-body::-webkit-scrollbar { display: none; }
-  .roster { --roster-row-step: 49px; }
-  .roster.reordering { touch-action: none; }
   /* No tally here, so the row drops the desktop's two trailing cells. */
-  .roster-row { grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
-  .roster-row.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
-  .roster-row.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
-  .roster-row.shift-up { transform: translateY(calc(-1 * var(--roster-row-step))); }
-  .roster-row.shift-down { transform: translateY(var(--roster-row-step)); }
-  .roster-row.dragging .roster-grip { cursor: grabbing; }
+  .roster-row { grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; }
   .roster-row .swatch { pointer-events: none; }
   .roster-vp { font-size: 14px; pointer-events: none; }
-  .phone-draft-grid { display: grid; grid-template-columns: repeat(var(--draft-cols, 4), minmax(0, 1fr)); gap: 6px; }
-  .phone-dslot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 3px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; font-size: 10px; }
-  .phone-dslot.pending { border-style: dashed; opacity: .78; }
-  .phone-dslot.now { border-color: var(--accent-dark); background: #fff; box-shadow: 0 0 0 1px var(--accent-dark); }
-  .phone-dslot-circle { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font: 800 11px Inter, sans-serif; }
-  .phone-dslot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 }
 
 /* Landscape phone keeps a fixed viewport, unlike portrait: at 342px tall there

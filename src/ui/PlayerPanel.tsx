@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { analyzeBoardCached } from '../engine/analyze'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
 import {
@@ -10,11 +10,11 @@ import {
 } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
-import { readableInk } from './colors'
-import { draftSlots } from './draftSlots'
+import { DraftGrid } from './DraftGrid'
 import { CounterGlyph, GLYPH_MUTED, GripGlyph, PlusGlyph, ResourceGlyph, StructureGlyph, TrashGlyph } from './glyphs'
 import { InlineRename } from './InlineRename'
 import { MenuSelect } from './MenuSelect'
+import { rowShift, SHIFT_CLASS } from './rowDrag'
 import { activeTab, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 import { useRowReorder } from './useRowReorder'
@@ -155,31 +155,28 @@ export function PlayerPanel() {
   const showSuperCities = standings.some((standing) => standing.superCities > 0)
   const [view, setView] = useState<TallyView>('pieces')
   const [caption, setCaption] = useState<{ key: string; text: string } | null>(null)
-  const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
-  useEffect(() => {
-    setSelectedSlot(null)
-  }, [board])
   const columns = view === 'resources'
     ? RESOURCE_COLUMNS
     : TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
 
   const analysis = analyzeBoardCached(board)
-  const slots = draftSlots(board, analysis)
-  const clearHighlight = () => dispatch({ type: 'highlight', marks: null })
 
   // Dragged from anywhere on the row; only a row being renamed is undraggable,
   // so the input keeps its text selection. Dropping on the trash row (which only
   // exists mid-drag) removes the player.
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
-  const { listRef, dragId, dropTarget, rowProps, startImmediately, trashProps } = useRowReorder({
+  const ids = board.players.map((player) => player.id)
+  const { listRef, dragId, dragOffset, dropTarget, rowProps, startImmediately, trashProps } = useRowReorder({
     coarse,
-    ids: board.players.map((player) => player.id),
+    ids,
     rowSelector: '.roster-row',
     trashSelector: '.roster-trash',
     lockedId: editing?.id,
     onMove: (playerId, index) => commit(movePlayer(board, playerId, index)),
     onRemove: (playerId) => commit(removePlayer(board, playerId)),
   })
+  const from = dragId === null ? -1 : ids.indexOf(dragId)
+  const aimed = dropTarget?.kind === 'row' ? dropTarget.index : from
   // Committed on Enter or blur rather than on every keystroke, so a rename is
   // one undo entry.
   const commitRename = () => {
@@ -204,7 +201,10 @@ export function PlayerPanel() {
           <h2>Players</h2>
         </div>
       </div>
-      <div className="player-list roster" ref={listRef}>
+      <div
+        className={dragId !== null ? 'player-list roster reordering' : 'player-list roster'}
+        ref={listRef}
+      >
         {/* Column headings, with the view switch on their left. Each player's
             numbers carry their own aria-label, so the icon strip is decorative
             for assistive tech. The label rides in data-label: a CSS tooltip
@@ -254,15 +254,20 @@ export function PlayerPanel() {
           const stats = game.stats[player.id]
           const active = tab.activePlayerId === player.id
           const isMe = board.mePlayerId === player.id
+          const lifted = dragId === player.id
+          const classes = ['roster-row']
+          if (isMe) classes.push('me')
+          if (lifted) classes.push('dragging')
+          else if (dragId !== null) {
+            classes.push(SHIFT_CLASS[rowShift(index, from, aimed)])
+            if (dropTarget?.kind === 'row' && dropTarget.index === index) classes.push('drag-over')
+          }
           return (
             <Fragment key={player.id}>
               <div
-                className={[
-                  'roster-row',
-                  isMe ? 'me' : '',
-                  dragId === player.id ? 'dragging' : '',
-                  dragId !== null && dropTarget?.kind === 'row' && dropTarget.index === index ? 'drag-over' : '',
-                ].join(' ').trim()}
+                className={classes.join(' ').trim()}
+                // The lifted row tracks the pointer; the others ease through CSS.
+                style={lifted ? { transform: `translateY(${dragOffset}px)` } : undefined}
                 {...rowProps(player.id)}
                 onClick={() => commit(setMe(board, player.id))}
               >
@@ -414,57 +419,7 @@ export function PlayerPanel() {
           Add player
         </button>
       </div>
-      <div
-        className="draft-strip"
-        aria-label="Snake draft order"
-        // One column per player, so the two snake rounds read as two rows.
-        style={{ '--draft-cols': board.players.length } as CSSProperties}
-        onMouseLeave={coarse ? undefined : clearHighlight}
-      >
-        {slots.map(({ playerId, placed, vertex }, slot) => {
-          const player = board.players.find((candidate) => candidate.id === playerId)
-          if (!player) return null
-          const pending = !placed
-          return (
-            <button
-              type="button"
-              key={`${playerId}:${slot}`}
-              className={`draft-slot ${pending ? 'pending' : ''} ${selectedSlot === slot ? 'selected' : ''}`}
-              title={`Pick ${slot + 1}: ${player.name}${
-                pending ? (vertex ? ' — predicted spot' : ' — not placed yet') : ''
-              }`}
-              onMouseEnter={() => {
-                if (coarse) return
-                if (vertex) {
-                  dispatch({
-                    type: 'highlight',
-                    marks: [{ ref: vertex, color: player.color, label: String(slot + 1) }],
-                  })
-                } else clearHighlight()
-              }}
-              onClick={() => {
-                if (!coarse) return
-                const next = selectedSlot === slot ? null : slot
-                setSelectedSlot(next)
-                if (next !== null && vertex) {
-                  dispatch({
-                    type: 'highlight',
-                    marks: [{ ref: vertex, color: player.color, label: String(slot + 1) }],
-                  })
-                } else clearHighlight()
-              }}
-            >
-              <span
-                className="slot-circle"
-                style={{ background: player.color, color: readableInk(player.color) }}
-              >
-                {slot + 1}
-              </span>
-              <span className="slot-name">{player.name}</span>
-            </button>
-          )
-        })}
-      </div>
+      <DraftGrid board={board} analysis={analysis} />
     </section>
   )
 }
