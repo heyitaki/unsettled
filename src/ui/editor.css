@@ -228,6 +228,32 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .saved-map:focus-within .saved-map-delete { opacity: 1; }
 .empty-state { margin: 4px 0; padding: 14px 12px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font: italic 12px/1.5 Georgia, serif; text-align: center; }
 
+/* Lists */
+.group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.group-label .count { font-weight: 600; opacity: .72; }
+/* inherit, because the button UA styles reset both; it reads like the label it sits in. */
+.group-label .menu-trigger { display: inline-flex; align-items: center; gap: 5px; margin-right: -6px; padding: 3px 6px 3px 8px; border-radius: 7px; letter-spacing: inherit; text-transform: inherit; }
+.group-label .menu-sort-glyph { flex: none; margin-left: -1px; }
+.hero-import { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border: 1px solid var(--accent-dark); border-radius: 13px; background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 700; }
+.list { display: flex; flex-direction: column; gap: 5px; }
+.list-row { position: relative; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 11px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; }
+.list-row.current { border-color: var(--accent-dark); background: #fff; }
+.list-row-select { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; }
+.list-row-hex { flex: none; width: 17px; height: 19px; pointer-events: none; }
+.list-row-main { flex: 1; min-width: 0; display: flex; align-items: center; pointer-events: none; }
+.list-row-name { position: relative; min-width: 30px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.5; text-decoration: underline dotted rgba(55, 45, 32, .45); text-decoration-thickness: 1.4px; text-underline-offset: 2.5px; pointer-events: auto; }
+.list-row-name.plain { color: var(--muted); text-decoration: none; }
+/* Stays 16px (the coarse-pointer input rule) rather than the mock's 14px: any smaller and iOS zooms the page on focus. */
+.list-row-rename { position: relative; width: auto; min-width: 30px; max-width: 100%; height: 30px; padding: 0 7px; border: 1px solid var(--accent-dark); border-radius: 8px; background: #fff; color: var(--ink); font-weight: 600; pointer-events: auto; }
+.list-row-rename:focus { outline: 2px solid rgba(187, 76, 50, .3); outline-offset: 0; }
+.list-row-meta { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.list-row-x { position: relative; flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: rgba(119, 111, 100, .8); }
+.list-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; padding: 0; border: 1px dashed rgba(55, 45, 32, .26); border-radius: 12px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .55); }
+.you-chip { padding: 3px 8px; border-radius: 999px; background: var(--ink); color: var(--paper-light); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; pointer-events: none; }
+.you-chip.none { visibility: hidden; }
+
 /* Analysis */
 .analysis-context { margin: -2px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .analysis-context .menu-trigger { color: var(--accent-dark); }
@@ -248,6 +274,15 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .analysis-placeholder { display: grid; justify-items: center; gap: 8px; padding: 28px 18px; text-align: center; border: 1px dashed rgba(60,127,191,.42); border-radius: 14px; background: rgba(60,127,191,.05); }
 .analysis-placeholder p { margin: 2px 0 0; font: 700 15px Georgia, serif; }
 .analysis-placeholder > span { max-width: 250px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.turn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(187, 76, 50, .13); color: var(--accent-dark); font-size: 11px; font-weight: 700; }
+.turn-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.claim { display: flex; flex-direction: column; gap: 10px; }
+.claim-row { display: flex; gap: 8px; }
+.claim-row button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 11px; font-weight: 600; }
+.empty-actions { display: flex; flex-direction: column; gap: 6px; }
+.empty-actions button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 13.5px; font-weight: 700; }
+.empty-actions button.primary { border-color: var(--accent-dark); background: var(--accent); color: #fff; }
+.empty-actions button svg { width: 15px; height: 15px; }
 
 .drop-zone { display: grid; gap: 4px; padding: 18px 12px; border: 1px dashed #9c8364; border-radius: 12px; background: #f8f0de; text-align: center; cursor: pointer; }
 .drop-zone input { display: none; }
@@ -539,10 +574,10 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
     .phone-shell .phone-title:hover { box-shadow: 0 2px 8px rgba(62, 45, 21, .07); }
     .phone-shell .phone-rslot.now:hover { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
     .phone-shell .phone-icon-btn[aria-pressed="true"]:hover, .phone-shell button.selected:hover, .phone-shell .player-grid button[aria-pressed="true"]:hover { border-color: var(--accent-dark); }
-    .phone-shell .primary:hover:not(:disabled), .phone-shell .phone-hero-import:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
-    .phone-shell .phone-empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover, .phone-shell .phone-row-x:hover, .phone-shell .phone-group-label .menu-trigger:hover { color: var(--ink); background: var(--paper-deep); }
-    .phone-shell .phone-add:hover { border-style: solid; color: var(--ink); }
-    .phone-shell .phone-row-name:not(.plain):hover { text-decoration-color: var(--accent-dark); }
+    .phone-shell .primary:hover:not(:disabled), .phone-shell .hero-import:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
+    .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover, .phone-shell .list-row-x:hover, .phone-shell .group-label .menu-trigger:hover { color: var(--ink); background: var(--paper-deep); }
+    .phone-shell .list-add:hover { border-style: solid; color: var(--ink); }
+    .phone-shell .list-row-name:not(.plain):hover { text-decoration-color: var(--accent-dark); }
   }
   /* No ground of its own until the page moves under it; then it takes one and casts a shadow. */
   .phone-head { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: calc(46px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 7px; padding: env(safe-area-inset-top) 12px 0; background: transparent; transition: background-color .18s ease, box-shadow .18s ease; }
@@ -599,20 +634,10 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
   .phone-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .phone-block-head h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
-  .phone-turn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(187, 76, 50, .13); color: var(--accent-dark); font-size: 11px; font-weight: 700; }
-  .phone-turn-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .phone-shell .analysis-context { margin: 0 0 10px; font-size: 12px; line-height: 1.5; }
   .phone-shell .analysis-context .menu-trigger { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; color: var(--ink); }
   .phone-shell .analysis-context .menu-trigger strong { border-bottom: 1.5px dotted var(--accent-dark); }
   .phone-shell .analysis-context .menu-chevron { color: var(--accent-dark); }
-  .phone-claim { display: flex; flex-direction: column; gap: 10px; }
-  .phone-hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
-  .phone-claim-row { display: flex; gap: 8px; }
-  .phone-claim-row button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 11px; font-weight: 600; }
-  .phone-swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .55); }
-  .phone-empty-actions { display: flex; flex-direction: column; gap: 6px; }
-  .phone-empty-actions button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 13.5px; font-weight: 700; }
-  .phone-empty-actions button.primary { border-color: var(--accent-dark); background: var(--accent); color: #fff; }
   .phone-shell .analysis-likely-gone { font-size: 11px; }
   .phone-shell .analysis-likely-gone span { font-size: 10px; }
   .phone-shell .analysis-list { gap: 6px; }
@@ -650,7 +675,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-shell .global-notice { animation: phone-toast-in .2s ease; }
   .phone-shell .eyebrow { font-size: 11px; }
   .phone-shell .hex-swatch { filter: none; }
-  .phone-empty-actions button svg { width: 15px; height: 15px; }
   /* The dots menus (spec S1, S7): a sheet hung from the button it grew out of,
      with a tail pointing back at it. The board's carries undo and redo as a
      pair above the list, each with the depth of its stack. */
@@ -685,41 +709,19 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .phone-ohead-btn.invisible { visibility: hidden; pointer-events: none; }
   .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .phone-overlay-body::-webkit-scrollbar { display: none; }
-  .phone-group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-  .phone-group-label .count { font-weight: 600; opacity: .72; }
-  /* inherit, because the button UA styles reset both; it reads like the label it sits in. */
-  .phone-group-label .menu-trigger { display: inline-flex; align-items: center; gap: 5px; margin-right: -6px; padding: 3px 6px 3px 8px; border-radius: 7px; letter-spacing: inherit; text-transform: inherit; }
-  .phone-group-label .menu-sort-glyph { flex: none; margin-left: -1px; }
-  .phone-hero-import { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border: 1px solid var(--accent-dark); border-radius: 13px; background: var(--accent); color: #fff; font-size: 14.5px; font-weight: 700; }
-  .phone-list { display: flex; flex-direction: column; gap: 5px; }
-  .phone-row { position: relative; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 11px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; }
-  .phone-row.current { border-color: var(--accent-dark); background: #fff; }
-  .phone-row-select { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: transparent; }
-  .phone-row-hex { flex: none; width: 17px; height: 19px; pointer-events: none; }
-  .phone-row-main { flex: 1; min-width: 0; display: flex; align-items: center; pointer-events: none; }
-  .phone-row-name { position: relative; min-width: 30px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.5; text-decoration: underline dotted rgba(55, 45, 32, .45); text-decoration-thickness: 1.4px; text-underline-offset: 2.5px; pointer-events: auto; }
-  .phone-row-name.plain { color: var(--muted); text-decoration: none; }
-  /* Stays 16px (the coarse-pointer input rule) rather than the mock's 14px: any smaller and iOS zooms the page on focus. */
-  .phone-row-rename { position: relative; width: auto; min-width: 30px; max-width: 100%; height: 30px; padding: 0 7px; border: 1px solid var(--accent-dark); border-radius: 8px; background: #fff; color: var(--ink); font-weight: 600; pointer-events: auto; }
-  .phone-row-rename:focus { outline: 2px solid rgba(187, 76, 50, .3); outline-offset: 0; }
-  .phone-row-meta { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
-  .phone-row-x { position: relative; flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: rgba(119, 111, 100, .8); }
-  .phone-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; padding: 0; border: 1px dashed rgba(55, 45, 32, .26); border-radius: 12px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; }
-  .phone-roster { --phone-row-step: 49px; }
+  .phone-roster { --roster-row-step: 49px; }
   .phone-roster.reordering { touch-action: none; }
   .phone-prow { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
   .phone-prow.me { border-color: var(--ink); background: #fff; }
   .phone-prow.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
   .phone-prow.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
-  .phone-prow.shift-up { transform: translateY(calc(-1 * var(--phone-row-step))); }
-  .phone-prow.shift-down { transform: translateY(var(--phone-row-step)); }
+  .phone-prow.shift-up { transform: translateY(calc(-1 * var(--roster-row-step))); }
+  .phone-prow.shift-down { transform: translateY(var(--roster-row-step)); }
   .phone-grip { position: relative; display: grid; place-items: center; height: 100%; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
   .phone-prow.dragging .phone-grip { cursor: grabbing; }
-  .phone-prow .phone-swatch { width: 24px; height: 24px; pointer-events: none; }
-  .phone-prow .phone-row-name { font-size: 14px; }
-  .phone-prow .phone-row-rename { user-select: text; -webkit-user-select: text; }
-  .phone-you { padding: 3px 8px; border-radius: 999px; background: var(--ink); color: var(--paper-light); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; pointer-events: none; }
-  .phone-you.none { visibility: hidden; }
+  .phone-prow .swatch { width: 24px; height: 24px; pointer-events: none; }
+  .phone-prow .list-row-name { font-size: 14px; }
+  .phone-prow .list-row-rename { user-select: text; -webkit-user-select: text; }
   .phone-vp { font: 800 14px Inter, sans-serif; font-variant-numeric: tabular-nums; pointer-events: none; }
   .phone-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border: 1px dashed rgba(163, 52, 40, .5); border-radius: 12px; color: #a33428; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
   .phone-trash.over { border-style: solid; background: rgba(163, 52, 40, .12); }

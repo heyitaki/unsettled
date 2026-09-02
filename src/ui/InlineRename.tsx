@@ -28,7 +28,7 @@ export function InlineRename({ name, draft, onDraft, onStart, onCommit, onCancel
   if (draft !== null) {
     return (
       <input
-        className="phone-row-rename"
+        className="list-row-rename"
         autoFocus
         size={Math.max(draft.length, 1)}
         value={draft}
@@ -46,11 +46,11 @@ export function InlineRename({ name, draft, onDraft, onStart, onCommit, onCancel
       />
     )
   }
-  if (!onStart) return <span className="phone-row-name plain">{name}</span>
+  if (!onStart) return <span className="list-row-name plain">{name}</span>
   return (
     <button
       type="button"
-      className="phone-row-name"
+      className="list-row-name"
       aria-label={`Rename ${name}`}
       onClick={() => {
         settled.current = false

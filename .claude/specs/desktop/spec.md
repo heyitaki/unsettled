@@ -118,7 +118,7 @@ One row per work item. Keep the state column current; this file is the durable c
 
 | id | Item | Depends on | State |
 | --- | --- | --- | --- |
-| D1 | Promote the list vocabulary: `InlineRename`, `ListRow`, group labels, hero import, swatch, YOU chip, hint; phone e2e follows | | not started |
+| D1 | Promote the list vocabulary: `InlineRename`, `ListRow`, group labels, hero import, swatch, YOU chip, hint; phone e2e follows | | done |
 | D2 | Library panel replaces the tab strip and the import panel (D1 surface, DB5) | D1 | not started |
 | D3 | Menus: chevron caret, tick everywhere, sheet context menu, chords and counts deleted (D6 menus, D3 count) | D2 | not started |
 | D4 | Board area: ribbon promoted and mounted, resting marks, flat marks, caption trimmed, footer deleted (D2 surface, D7, DB1, DB6) | | not started |

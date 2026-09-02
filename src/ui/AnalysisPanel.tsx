@@ -366,15 +366,15 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
             <span className="eyebrow">{empty ? 'Nothing to rank yet' : 'Draft analysis'}</span>
             <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
           </div>
-          {!empty && yourTurn && <span className="phone-turn-pill"><i />Your turn</span>}
+          {!empty && yourTurn && <span className="turn-pill"><i />Your turn</span>}
         </div>
         {empty ? (
-          <div className="phone-claim">
-            <p className="phone-hint">
+          <div className="claim">
+            <p className="hint">
               Nothing has been laid out yet. Import a screenshot and the parser reads the tiles,
               numbers and players off it, or place them yourself.
             </p>
-            <div className="phone-empty-actions">
+            <div className="empty-actions">
               <button type="button" className="primary" onClick={() => setImportOpen(true)}>
                 <PhotoGlyph />
                 Import screenshot
@@ -386,12 +386,12 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
             </div>
           </div>
         ) : !me ? (
-          <div className="phone-claim">
-            <p className="phone-hint">Tap your colour and the ranking starts.</p>
-            <div className="phone-claim-row">
+          <div className="claim">
+            <p className="hint">Tap your colour and the ranking starts.</p>
+            <div className="claim-row">
               {board.players.map((player) => (
                 <button type="button" key={player.id} onClick={() => claim(player.id)}>
-                  <span className="phone-swatch" style={{ background: player.color }} />
+                  <span className="swatch" style={{ background: player.color }} />
                   {player.name}
                 </button>
               ))}

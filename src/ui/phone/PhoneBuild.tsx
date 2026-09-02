@@ -33,7 +33,7 @@ export function PhoneBuild({ onDone, onCancel }: { onDone: () => void; onCancel:
                 aria-pressed={tab.activePlayerId === player.id}
                 onClick={() => dispatch({ type: 'active-player', playerId: player.id })}
               >
-                <span className="phone-swatch" style={{ background: player.color }} />
+                <span className="swatch" style={{ background: player.color }} />
                 {player.name}
               </button>
             ))}

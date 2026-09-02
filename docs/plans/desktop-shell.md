@@ -99,11 +99,11 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 1: Promote the list vocabulary (D1)
 
-- [ ] Move `src/ui/phone/InlineRename.tsx` to `src/ui/InlineRename.tsx` and extract `Row` from `src/ui/phone/MapsScreen.tsx` into `src/ui/ListRow.tsx` as `ListRow`, props unchanged; `MapsScreen` and `PlayersScreen` import both from `../`.
-- [ ] Rename the list, row, add, group-label, hero-import, hint, swatch, YOU-chip, claim, empty-actions and turn-pill classes per `Names this plan fixes`, in the components (`MapsScreen`, `PlayersScreen`, `PhoneBuild`, `AnalysisPanel`, `ListRow`, `InlineRename`) and in `editor.css`; move their rules out of the portrait arm into the base rules, unscoped, deleting the `.phone-shell` prefix where one was in front; keep in the portrait arm only the hover resets that name them.
-- [ ] Update every selector in `e2e/phoneShell.spec.ts` that named a renamed class. `grep -rn 'phone-row\|phone-list\|phone-add\|phone-group-label\|phone-hero-import\|phone-hint\|phone-swatch\|phone-you\|phone-claim\|phone-empty-actions\|phone-turn-pill' src/ e2e/` is empty.
-- [ ] Add `src/ui/__tests__/inlineRename.test.tsx` (jsdom, `@testing-library`-free: render with `react-dom/client` into a container as `boardMarks.test.tsx` does) covering: at rest the name renders as a button; `onStart` absent renders plain text; with `draft` set the input is focused, Enter calls `onCommit`, Escape calls `onCancel`.
-- [ ] Phone e2e green with unchanged screenshots. Ledger: D1 done.
+- [x] Move `src/ui/phone/InlineRename.tsx` to `src/ui/InlineRename.tsx` and extract `Row` from `src/ui/phone/MapsScreen.tsx` into `src/ui/ListRow.tsx` as `ListRow`, props unchanged; `MapsScreen` and `PlayersScreen` import both from `../`.
+- [x] Rename the list, row, add, group-label, hero-import, hint, swatch, YOU-chip, claim, empty-actions and turn-pill classes per `Names this plan fixes`, in the components (`MapsScreen`, `PlayersScreen`, `PhoneBuild`, `AnalysisPanel`, `ListRow`, `InlineRename`) and in `editor.css`; move their rules out of the portrait arm into the base rules, unscoped, deleting the `.phone-shell` prefix where one was in front; keep in the portrait arm only the hover resets that name them.
+- [x] Update every selector in `e2e/phoneShell.spec.ts` that named a renamed class. `grep -rn 'phone-row\|phone-list\|phone-add\|phone-group-label\|phone-hero-import\|phone-hint\|phone-swatch\|phone-you\|phone-claim\|phone-empty-actions\|phone-turn-pill' src/ e2e/` is empty.
+- [x] Add `src/ui/__tests__/inlineRename.test.tsx` (jsdom, `@testing-library`-free: render with `react-dom/client` into a container as `boardMarks.test.tsx` does) covering: at rest the name renders as a button; `onStart` absent renders plain text; with `draft` set the input is focused, Enter calls `onCommit`, Escape calls `onCancel`.
+- [x] Phone e2e green with unchanged screenshots. Ledger: D1 done.
 
 ### Task 2: The Library panel replaces the tab strip and the import panel (D2, DB5)
 

@@ -6,11 +6,11 @@ import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { readableInk } from '../colors'
 import { draftSlots } from '../draftSlots'
 import { GripGlyph, PlusGlyph, TrashGlyph } from '../glyphs'
+import { InlineRename } from '../InlineRename'
 import { rowShift } from '../rowDrag'
 import { activeTab, useStore } from '../store'
 import { useCoarsePointer } from '../useMediaQuery'
 import { useRowReorder } from '../useRowReorder'
-import { InlineRename } from './InlineRename'
 import { PhoneOverlay } from './PhoneOverlay'
 
 const SHIFT_CLASS = { [-1]: 'shift-up', 0: '', 1: 'shift-down' } as const
@@ -58,11 +58,11 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   return (
     <PhoneOverlay title="Players" onClose={onClose}>
       <div>
-        <div className="phone-group-label">
+        <div className="group-label">
           <span>Roster</span>
         </div>
         <div
-          className={reorder.dragId !== null ? 'phone-list phone-roster reordering' : 'phone-list phone-roster'}
+          className={reorder.dragId !== null ? 'list phone-roster reordering' : 'list phone-roster'}
           ref={reorder.listRef}
         >
           {board.players.map((player, index) => {
@@ -85,7 +85,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
               >
                 <button
                   type="button"
-                  className="phone-row-select"
+                  className="list-row-select"
                   aria-label={`Claim ${player.name}`}
                   aria-pressed={me}
                   onClick={() => commit(setMe(board, player.id))}
@@ -97,8 +97,8 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
                 >
                   <GripGlyph />
                 </span>
-                <span className="phone-swatch" style={{ background: player.color }} />
-                <span className="phone-row-main">
+                <span className="swatch" style={{ background: player.color }} />
+                <span className="list-row-main">
                   <InlineRename
                     name={player.name}
                     draft={editing?.id === player.id ? editing.draft : null}
@@ -108,7 +108,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
                     onCancel={() => setEditing(null)}
                   />
                 </span>
-                <span className={me ? 'phone-you' : 'phone-you none'}>You</span>
+                <span className={me ? 'you-chip' : 'you-chip none'}>You</span>
                 <span className="phone-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
                   {standings[index].victoryPoints}
                 </span>
@@ -126,14 +126,14 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
               Drop here to remove
             </div>
           )}
-          <button type="button" className="phone-add" disabled={board.players.length >= 6} onClick={add}>
+          <button type="button" className="list-add" disabled={board.players.length >= 6} onClick={add}>
             <PlusGlyph />
             Add player
           </button>
         </div>
       </div>
       <div>
-        <div className="phone-group-label">
+        <div className="group-label">
           <span>Snake draft</span>
           <span>{turnIndex === null ? 'draft complete' : `pick ${turnIndex + 1} of ${sequence.length}`}</span>
         </div>
