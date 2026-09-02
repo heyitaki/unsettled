@@ -35,8 +35,8 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const reorder = useRowReorder({
     coarse,
     ids,
-    rowSelector: '.phone-prow',
-    trashSelector: '.phone-trash',
+    rowSelector: '.roster-row',
+    trashSelector: '.roster-trash',
     lockedId: editing?.id,
     onMove: (id, index) => commit(movePlayer(board, id, index)),
     onRemove: (id) => commit(removePlayer(board, id)),
@@ -62,13 +62,13 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           <span>Roster</span>
         </div>
         <div
-          className={reorder.dragId !== null ? 'list phone-roster reordering' : 'list phone-roster'}
+          className={reorder.dragId !== null ? 'list roster reordering' : 'list roster'}
           ref={reorder.listRef}
         >
           {board.players.map((player, index) => {
             const me = board.mePlayerId === player.id
             const lifted = reorder.dragId === player.id
-            const classes = ['phone-prow']
+            const classes = ['roster-row']
             if (me) classes.push('me')
             if (lifted) classes.push('dragging')
             else if (reorder.dragId !== null) {
@@ -91,7 +91,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
                   onClick={() => commit(setMe(board, player.id))}
                 />
                 <span
-                  className="phone-grip"
+                  className="roster-grip"
                   aria-hidden="true"
                   onPointerDown={(event) => reorder.startImmediately(event, player.id)}
                 >
@@ -109,7 +109,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
                   />
                 </span>
                 <span className={me ? 'you-chip' : 'you-chip none'}>You</span>
-                <span className="phone-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
+                <span className="roster-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
                   {standings[index].victoryPoints}
                 </span>
               </div>
@@ -119,7 +119,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
               not deserve permanent UI, and the drag is already in the hand. */}
           {reorder.dragId !== null && board.players.length > 1 && (
             <div
-              className={reorder.dropTarget?.kind === 'trash' ? 'phone-trash over' : 'phone-trash'}
+              className={reorder.dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}
               {...reorder.trashProps}
             >
               <TrashGlyph />

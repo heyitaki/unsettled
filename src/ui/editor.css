@@ -54,8 +54,8 @@ button.selected.danger { color: #fff; }
 .history-buttons { display: flex; gap: 6px; }
 .history-buttons button { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; line-height: 1; }
 /* Hover label from aria-label, replacing the native tooltip and its delay. */
-.history-buttons button, .player-add { position: relative; }
-.history-buttons button::after, .player-add::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 9px; font-weight: 400; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 6; }
+.history-buttons button { position: relative; }
+.history-buttons button::after { content: attr(aria-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 9px; font-weight: 400; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 6; }
 .tool-group + .tool-group { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
 .tool-label { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .tool-count { margin-left: auto; font-variant-numeric: tabular-nums; letter-spacing: .02em; text-transform: none; }
@@ -146,30 +146,15 @@ button.selected.danger { color: #fff; }
 .vertex-highlight.faded, .vertex-highlight-label.faded { opacity: .55; }
 .edge-highlight { stroke: #e72525; stroke-width: 7; stroke-linecap: round; opacity: .85; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 
-/* Row metrics live here so the tally header, which sits outside the cards,
-   aligns to the same values the cards use. */
-.player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
-.player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 4px; --card-pad: 6px; --name-indent: 33px; }
-.player-card { padding: 2px var(--card-pad) 3px; border: 1px solid transparent; border-radius: 10px; cursor: grab; }
-.player-card.active { background: #fff9e9; border-color: #d8bc77; }
-.player-card.dragging { opacity: .45; }
-.player-card.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
-/* handle, dot, name, awards, tally. Only the name flexes, so the tally keeps a
-   fixed offset from the row's right edge for the header strip to line up with. */
-.player-row { display: grid; grid-template-columns: 12px 17px minmax(28px, 1fr) auto auto; gap: var(--row-gap); align-items: center; }
-.drag-handle { color: var(--muted); font-size: 12px; line-height: 1; cursor: grab; user-select: none; }
-.player-card .player-name, .player-card .player-dot, .player-card button { cursor: pointer; }
-.player-card.dragging .drag-handle { cursor: grabbing; }
-.player-dot { width: 17px; height: 17px; padding: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
-.player-name { min-width: 0; overflow: hidden; padding: 3px 2px; border: 0; background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.player-name-input { min-width: 0; width: 100%; padding: 2px 3px; border-radius: 6px; outline: none; }
-.player-name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(187, 76, 50, .18); }
-.player-vp { color: var(--ink); font-weight: 800; }
-.player-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px; border: 1px dashed rgba(163, 52, 40, .5); border-radius: 10px; color: #a33428; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.player-trash.over { border-style: solid; background: rgba(163, 52, 40, .12); }
-/* Children would otherwise swallow the dragleave/drop events as the pointer
-   crosses them, making the row flicker out from under the drop. */
-.player-trash > * { pointer-events: none; }
+/* Row metrics live here so the tally header, which sits outside the rows,
+   aligns to the same values the rows use. Only the name flexes, so the tally
+   keeps a fixed offset from the row's right edge for the header to meet. */
+.player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 6px; --card-pad: 6px; --stepper-indent: 22px; }
+.player-list .roster-row { gap: var(--row-gap); padding: 0 var(--card-pad) 0 4px; cursor: pointer; }
+/* The VP pulls back over the row's gap, so the tally and the VP read as one
+   unbroken run of columns: which is exactly what the header strip is. On a
+   coarse pointer it is a button, so it also sheds the button chrome. */
+.player-list .roster-vp { width: var(--tally-col); margin-left: calc(-1 * var(--row-gap)); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 /* The header strip and every player's row share this definition and put one
    cell in each column, so grid-auto-columns keeps them aligned without either
    side knowing the column count. */
@@ -185,10 +170,11 @@ button.selected.danger { color: #fff; }
 .player-tally { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .player-tally .zero { opacity: .32; }
 .player-tally .strong { color: var(--ink); font-weight: 800; }
-.player-awards { display: inline-flex; align-items: center; gap: 3px; }
+/* The name cell takes no pointer (the row is the claim), so the pill claims one back for its tooltip. */
+.player-awards { display: inline-flex; align-items: center; gap: 3px; pointer-events: auto; }
 .player-awards:not(:empty) { margin-right: 4px; }
 .award { display: inline-flex; padding: 1px 3px; border-radius: 5px; background: var(--accent); color: #fff; }
-.player-steppers { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0 2px var(--name-indent); }
+.player-steppers { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0 2px var(--stepper-indent); }
 .stat-chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; background: #f9f5ea; }
 .stat-chip button { width: 17px; padding: 2px 0; border: 0; background: transparent; font-size: 11px; line-height: 1.2; }
 .stat-face { display: inline-flex; align-items: center; gap: 3px; min-width: 20px; justify-content: center; font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -240,6 +226,21 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid rgba(48, 39, 31, .55); }
 .you-chip { padding: 3px 8px; border-radius: 999px; background: var(--ink); color: var(--paper-light); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; pointer-events: none; }
 .you-chip.none { visibility: hidden; }
+/* The roster row (spec D5): the phone's row, with the tally and the VP in the
+   two cells the desktop adds before the right edge. */
+.roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.roster-row.me { border-color: var(--ink); background: #fff; }
+.roster-grip { position: relative; display: grid; place-items: center; height: 100%; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
+.roster-row .swatch { width: 24px; height: 24px; padding: 0; }
+.roster-row .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper-light), 0 0 0 3.5px var(--accent); }
+.roster-row .list-row-name { font-size: 14px; }
+.roster-row .list-row-rename { user-select: text; -webkit-user-select: text; }
+.roster-vp { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.roster-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border: 1px dashed rgba(163, 52, 40, .5); border-radius: 12px; color: #a33428; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.roster-trash.over { border-style: solid; background: rgba(163, 52, 40, .12); }
+/* Children would otherwise swallow the dragleave/drop events as the pointer
+   crosses them, making the row flicker out from under the drop. */
+.roster-trash > * { pointer-events: none; }
 
 /* Analysis */
 .analysis-context { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
@@ -315,15 +316,14 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .analysis-touch-actions .primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
 .draft-slot.selected .slot-circle { box-shadow: inset 0 0 0 1px rgba(0,0,0,.3), 0 0 0 3px var(--accent); }
 .tally-caption { margin: 0 0 5px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
-.tally-header button, .player-vp { border: 0; background: transparent; box-shadow: none; }
+.tally-header button { border: 0; background: transparent; box-shadow: none; }
 .tally-header button { display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); }
 .tally-header button.active { color: var(--accent); }
-.player-vp { padding: 0; border-radius: 0; }
 .nav-icon { width: 22px; height: 22px; }
 
 @media (hover: hover) {
   button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55,45,32,.35); box-shadow: 0 4px 10px rgba(55,45,32,.08); }
-  .history-buttons button:hover::after, .player-add:hover:not(:disabled)::after { opacity: 1; }
+  .history-buttons button:hover::after { opacity: 1; }
   .menu-trigger:hover:not(:disabled), .panel-dots:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
   .list-row-x:hover:not(:disabled), .group-label .menu-trigger:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--ink); background: var(--paper-deep); }
   .list-add:hover:not(:disabled) { transform: none; box-shadow: none; border-style: solid; color: var(--ink); }
@@ -331,9 +331,10 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
   .menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--paper-deep); }
   .placement-slot:hover { fill: #fffdf7; }
-  .player-name:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; text-decoration: underline dotted; text-underline-offset: 2px; }
   .tally-header > span:hover::after { opacity: 1; }
   .stat-chip button:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--accent-dark); }
+  /* A lift would jitter a 24px dot inside its row; the brush ring outranks the generic hover shadow on its own. */
+  .roster-row .swatch:hover { transform: none; }
   .draft-slot:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--ink); }
   .analysis-row:hover:not(.current) { border-color: rgba(48, 39, 31, .38); box-shadow: 0 4px 12px rgba(62, 45, 21, .08); }
   .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
@@ -351,17 +352,11 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .structure-grid { grid-template-columns: repeat(3, 1fr); }
   .structure-grid button { grid-template-rows: 28px auto; font-size: 12px; }
   .token-tools button { min-height: 48px; font-size: 17px; }
-  .player-row { grid-template-columns: 20px 26px minmax(28px, 1fr) auto auto; }
-  /* Decoration, not a target: the drag starts from anywhere on the card, so the
-     grip claims no more width than the glyph needs. */
-  .drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 20px; }
-  .player-dot { width: 26px; height: 26px; }
   .history-buttons button { width: 40px; height: 40px; font-size: 19px; }
-  .player-add { width: 40px; height: 40px; }
   .draft-slot { min-width: 46px; }
   .slot-circle { width: 24px; height: 24px; }
   .global-notice-close { min-width: 34px; min-height: 34px; }
-  input, select, .player-name-input { font-size: 16px; }
+  input, select { font-size: 16px; }
   .tally-header button { align-items: flex-end; }
   /* The dropdown triggers are inline text ("You are aki"), so they cannot grow
      their line box without pushing the paragraph around. The hit area grows
@@ -373,7 +368,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .board-zoom button { position: relative; }
   /* Hit area only, so the chip stays inside the status row's reserved height. */
   .board-zoom button::before { content: ''; position: absolute; inset: -11px -9px; }
-  .tally-header button, .player-vp { min-height: 44px; }
+  .tally-header button, .player-list .roster-vp { min-height: 44px; }
 }
 
 .saved-maps, .issue-list, .mobile-pane { overscroll-behavior: contain; }
@@ -434,16 +429,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .panel-heading h2 { font-size: 18px; }
 
   /* Both phone arms: landscape's pane is ~240px, narrower than portrait's. */
-  .player-list { --tally-col: 26px; --row-gap: 4px; --card-pad: 4px; gap: 1px; }
-  .player-row { grid-template-columns: 12px 20px minmax(0, 1fr) auto auto; }
-  .drag-handle { width: 12px; }
-  .player-dot { width: 20px; height: 20px; }
-  .player-name { font-size: 13px; }
-  .tally-header button, .player-vp { min-height: 38px; }
+  .player-list { --tally-col: 26px; --card-pad: 4px; gap: 1px; }
+  .tally-header button, .player-list .roster-vp { min-height: 38px; }
   .tally-header .stat-icon { width: 17px; height: 17px; }
-  /* A held row must not raise iOS's selection callout on the way to a drag. */
-  .player-card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-  .player-card.dragging { opacity: .5; }
   /* Clear of the fixed bottom nav, which the toast must not cover or take touches from.
      :where() keeps the specificity the landscape block's override was written against. */
   :where(.app-shell) .global-notice { top: auto; bottom: calc(96px + env(safe-area-inset-bottom)); left: 12px; right: 12px; max-width: none; }
@@ -595,23 +583,17 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .phone-ohead-btn.invisible { visibility: hidden; pointer-events: none; }
   .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .phone-overlay-body::-webkit-scrollbar { display: none; }
-  .phone-roster { --roster-row-step: 49px; }
-  .phone-roster.reordering { touch-action: none; }
-  .phone-prow { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
-  .phone-prow.me { border-color: var(--ink); background: #fff; }
-  .phone-prow.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
-  .phone-prow.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
-  .phone-prow.shift-up { transform: translateY(calc(-1 * var(--roster-row-step))); }
-  .phone-prow.shift-down { transform: translateY(var(--roster-row-step)); }
-  .phone-grip { position: relative; display: grid; place-items: center; height: 100%; color: rgba(55, 45, 32, .32); cursor: grab; touch-action: none; }
-  .phone-prow.dragging .phone-grip { cursor: grabbing; }
-  .phone-prow .swatch { width: 24px; height: 24px; pointer-events: none; }
-  .phone-prow .list-row-name { font-size: 14px; }
-  .phone-prow .list-row-rename { user-select: text; -webkit-user-select: text; }
-  .phone-vp { font: 800 14px Inter, sans-serif; font-variant-numeric: tabular-nums; pointer-events: none; }
-  .phone-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border: 1px dashed rgba(163, 52, 40, .5); border-radius: 12px; color: #a33428; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-  .phone-trash.over { border-style: solid; background: rgba(163, 52, 40, .12); }
-  .phone-trash > * { pointer-events: none; }
+  .roster { --roster-row-step: 49px; }
+  .roster.reordering { touch-action: none; }
+  /* No tally here, so the row drops the desktop's two trailing cells. */
+  .roster-row { grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
+  .roster-row.dragging { z-index: 2; transition: none; border-color: var(--ink); background: #fff; box-shadow: 0 12px 26px rgba(62, 45, 21, .24); }
+  .roster-row.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
+  .roster-row.shift-up { transform: translateY(calc(-1 * var(--roster-row-step))); }
+  .roster-row.shift-down { transform: translateY(var(--roster-row-step)); }
+  .roster-row.dragging .roster-grip { cursor: grabbing; }
+  .roster-row .swatch { pointer-events: none; }
+  .roster-vp { font-size: 14px; pointer-events: none; }
   .phone-draft-grid { display: grid; grid-template-columns: repeat(var(--draft-cols, 4), minmax(0, 1fr)); gap: 6px; }
   .phone-dslot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 3px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; font-size: 10px; }
   .phone-dslot.pending { border-style: dashed; opacity: .78; }

@@ -38,6 +38,9 @@ export function InlineRename({ name, draft, onDraft, onStart, onCommit, onCancel
         spellCheck={false}
         enterKeyHint="done"
         onChange={(event) => onDraft(event.target.value)}
+        // The row around the field may select or claim on click (spec DB4); a
+        // caret placed inside the text must not also fire it.
+        onClick={(event) => event.stopPropagation()}
         onBlur={() => finish(true)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') finish(true)
@@ -52,7 +55,8 @@ export function InlineRename({ name, draft, onDraft, onStart, onCommit, onCancel
       type="button"
       className="list-row-name"
       aria-label={`Rename ${name}`}
-      onClick={() => {
+      onClick={(event) => {
+        event.stopPropagation()
         settled.current = false
         onStart()
       }}

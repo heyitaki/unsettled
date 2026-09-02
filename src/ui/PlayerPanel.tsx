@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { analyzeBoardCached } from '../engine/analyze'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
 import {
@@ -6,12 +6,14 @@ import {
   movePlayer,
   removePlayer,
   renamePlayer,
+  setMe,
 } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
-import { CounterGlyph, GLYPH_MUTED, ResourceGlyph, StructureGlyph } from './glyphs'
+import { CounterGlyph, GLYPH_MUTED, GripGlyph, PlusGlyph, ResourceGlyph, StructureGlyph, TrashGlyph } from './glyphs'
+import { InlineRename } from './InlineRename'
 import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
@@ -165,19 +167,34 @@ export function PlayerPanel() {
   const slots = draftSlots(board, analysis)
   const clearHighlight = () => dispatch({ type: 'highlight', marks: null })
 
-  // Dragged from anywhere on the card; only a row being renamed is undraggable,
+  // Dragged from anywhere on the row; only a row being renamed is undraggable,
   // so the input keeps its text selection. Dropping on the trash row (which only
   // exists mid-drag) removes the player.
-  const [renamingId, setRenamingId] = useState<string | null>(null)
-  const { listRef, dragId, dropTarget, rowProps, trashProps } = useRowReorder({
+  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
+  const { listRef, dragId, dropTarget, rowProps, startImmediately, trashProps } = useRowReorder({
     coarse,
     ids: board.players.map((player) => player.id),
-    rowSelector: '.player-card',
-    trashSelector: '.player-trash',
-    lockedId: renamingId,
+    rowSelector: '.roster-row',
+    trashSelector: '.roster-trash',
+    lockedId: editing?.id,
     onMove: (playerId, index) => commit(movePlayer(board, playerId, index)),
     onRemove: (playerId) => commit(removePlayer(board, playerId)),
   })
+  // Committed on Enter or blur rather than on every keystroke, so a rename is
+  // one undo entry.
+  const commitRename = () => {
+    if (!editing) return
+    const next = editing.draft.trim()
+    setEditing(null)
+    if (next) commit(renamePlayer(board, editing.id, next))
+  }
+  const addSeat = () => {
+    const index = board.players.length
+    const colors = Object.values(PLAYER_PALETTE)
+    const nextBoard = addPlayer(board, { name: `Player ${index + 1}`, color: colors[index % colors.length] })
+    commit(nextBoard)
+    dispatch({ type: 'active-player', playerId: nextBoard.players.at(-1)?.id ?? tab.activePlayerId })
+  }
 
   return (
     <section className="panel player-panel">
@@ -186,21 +203,8 @@ export function PlayerPanel() {
           <span className="eyebrow">Points ledger</span>
           <h2>Players</h2>
         </div>
-        <button
-          type="button"
-          className="player-add"
-          aria-label="Add player"
-          disabled={board.players.length >= 6}
-          onClick={() => {
-            const index = board.players.length
-            const colors = Object.values(PLAYER_PALETTE)
-            const nextBoard = addPlayer(board, { name: `Player ${index + 1}`, color: colors[index % colors.length] })
-            commit(nextBoard)
-            dispatch({ type: 'active-player', playerId: nextBoard.players.at(-1)?.id ?? tab.activePlayerId })
-          }}
-        >+</button>
       </div>
-      <div className="player-list" ref={listRef}>
+      <div className="player-list roster" ref={listRef}>
         {/* Column headings, with the view switch on their left. Each player's
             numbers carry their own aria-label, so the icon strip is decorative
             for assistive tech. The label rides in data-label: a CSS tooltip
@@ -251,75 +255,67 @@ export function PlayerPanel() {
           const active = tab.activePlayerId === player.id
           const isMe = board.mePlayerId === player.id
           return (
-            <div
-              className={[
-                'player-card',
-                active ? 'active' : '',
-                dragId === player.id ? 'dragging' : '',
-                dragId !== null && dropTarget?.kind === 'row' && dropTarget.index === index ? 'drag-over' : '',
-              ].join(' ')}
-              key={player.id}
-              {...rowProps(player.id)}
-              onClick={() => dispatch({ type: 'active-player', playerId: player.id })}
-            >
-              <div className="player-row">
-                <span className="drag-handle" title="Hold to reorder, or drag onto the trash to remove" aria-hidden="true">⠿</span>
+            <Fragment key={player.id}>
+              <div
+                className={[
+                  'roster-row',
+                  isMe ? 'me' : '',
+                  dragId === player.id ? 'dragging' : '',
+                  dragId !== null && dropTarget?.kind === 'row' && dropTarget.index === index ? 'drag-over' : '',
+                ].join(' ').trim()}
+                {...rowProps(player.id)}
+                onClick={() => commit(setMe(board, player.id))}
+              >
+                <span
+                  className="roster-grip"
+                  aria-hidden="true"
+                  onPointerDown={(event) => startImmediately(event, player.id)}
+                >
+                  <GripGlyph />
+                </span>
                 <button
-                  className="player-dot"
+                  className="swatch"
                   type="button"
                   title={active ? 'Deselect this player' : 'Use this player for new pieces'}
+                  aria-label={`Use ${player.name} for new pieces`}
                   aria-pressed={active}
                   style={{ background: player.color }}
                   onClick={(event) => {
-                    // Toggles like the tool palette: clicking the selected
-                    // player's dot deselects, so board clicks place nothing.
-                    // stopPropagation or the card's own handler re-selects.
+                    // The brush is not the claim (spec DB3): this picks the
+                    // player new pieces are painted with, and stopPropagation
+                    // keeps the row's own claim out of it. It toggles like the
+                    // tool palette, so board clicks can place nothing.
                     event.stopPropagation()
                     dispatch({ type: 'active-player', playerId: active ? null : player.id })
                   }}
                 />
-                {/* The name is plain text until clicked: a permanent input ate
-                    the row's width, which the tally columns now need. */}
-                {renamingId === player.id ? (
-                  <input
-                    className="player-name-input"
-                    autoFocus
-                    aria-label={`Name for player ${index + 1}`}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    enterKeyHint="done"
-                    value={player.name}
-                    onChange={(event) => commit(renamePlayer(board, player.id, event.target.value))}
-                    onBlur={() => setRenamingId(null)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === 'Escape') setRenamingId(null)
-                    }}
+                <span className="list-row-main">
+                  <InlineRename
+                    name={player.name}
+                    draft={editing?.id === player.id ? editing.draft : null}
+                    onDraft={(draft) => setEditing({ id: player.id, draft })}
+                    onStart={() => setEditing({ id: player.id, draft: player.name })}
+                    onCommit={commitRename}
+                    onCancel={() => setEditing(null)}
                   />
-                ) : (
-                  <button
-                    type="button"
-                    className="player-name"
-                    title={`${player.name} — click to rename`}
-                    onClick={() => setRenamingId(player.id)}
-                  >{player.name}</button>
-                )}
-                {/* Awards sit beside the name, not in the tally columns: they
-                    are worth +2 VP each and would otherwise break the table's
-                    alignment on the rows that hold them. */}
-                {/* No badge for longest road: the bolded run in its column says
-                    who holds it, and the pill's road glyph read as a slash. */}
-                <span className="player-awards">
-                  {standing.hasLargestArmy && (
-                    <span
-                      className="award"
-                      title={`Largest army (${stats.knights}) · +2 VP`}
-                      aria-label={`Largest army: ${stats.knights} knights, +2 victory points`}
-                    >
-                      <CounterGlyph shape="knight" color="#fff" />
-                    </span>
-                  )}
+                  {/* Awards sit beside the name, not in the tally columns: they
+                      are worth +2 VP each and would otherwise break the table's
+                      alignment on the rows that hold them. */}
+                  {/* No badge for longest road: the bolded run in its column says
+                      who holds it, and the pill's road glyph read as a slash. */}
+                  <span className="player-awards">
+                    {standing.hasLargestArmy && (
+                      <span
+                        className="award"
+                        title={`Largest army (${stats.knights}) · +2 VP`}
+                        aria-label={`Largest army: ${stats.knights} knights, +2 victory points`}
+                      >
+                        <CounterGlyph shape="knight" color="#fff" />
+                      </span>
+                    )}
+                  </span>
                 </span>
+                <span className={isMe ? 'you-chip' : 'you-chip none'}>You</span>
                 <div className="player-tally">
                   {columns.map((column) => {
                     const count = column.value(standing, stats)
@@ -338,30 +334,30 @@ export function PlayerPanel() {
                       </span>
                     )
                   })}
-                  {coarse ? (
-                    <button
-                      type="button"
-                      className="player-vp"
-                      aria-label={`Victory points: ${standing.victoryPoints}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        const text = vpBreakdown(standing, stats.vpCards)
-                        setCaption((current) =>
-                          current?.key === `vp:${player.id}` ? null : { key: `vp:${player.id}`, text })
-                      }}
-                    >
-                      {standing.victoryPoints}
-                    </button>
-                  ) : (
-                    <span
-                      className="player-vp"
-                      title={`Victory points: ${vpBreakdown(standing, stats.vpCards)}`}
-                      aria-label={`Victory points: ${standing.victoryPoints}`}
-                    >
-                      {standing.victoryPoints}
-                    </span>
-                  )}
                 </div>
+                {coarse ? (
+                  <button
+                    type="button"
+                    className="roster-vp"
+                    aria-label={`Victory points: ${standing.victoryPoints}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      const text = vpBreakdown(standing, stats.vpCards)
+                      setCaption((current) =>
+                        current?.key === `vp:${player.id}` ? null : { key: `vp:${player.id}`, text })
+                    }}
+                  >
+                    {standing.victoryPoints}
+                  </button>
+                ) : (
+                  <span
+                    className="roster-vp"
+                    title={`Victory points: ${vpBreakdown(standing, stats.vpCards)}`}
+                    aria-label={`Victory points: ${standing.victoryPoints}`}
+                  >
+                    {standing.victoryPoints}
+                  </span>
+                )}
               </div>
               {active && (
                 <div className="player-steppers">
@@ -399,20 +395,24 @@ export function PlayerPanel() {
                   )}
                 </div>
               )}
-            </div>
+            </Fragment>
           )
         })}
         {/* Only exists mid-drag: removing a player is rare enough that it does
             not deserve permanent UI, and the drag is already in the hand. */}
         {dragId !== null && board.players.length > 1 && (
           <div
-            className={`player-trash ${dropTarget?.kind === 'trash' ? 'over' : ''}`}
+            className={dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}
             {...trashProps}
           >
-            <StructureGlyph shape="erase" color="currentColor" size={15} />
+            <TrashGlyph />
             Drop here to remove
           </div>
         )}
+        <button type="button" className="list-add" disabled={board.players.length >= 6} onClick={addSeat}>
+          <PlusGlyph />
+          Add player
+        </button>
       </div>
       <div
         className="draft-strip"

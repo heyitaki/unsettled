@@ -91,7 +91,7 @@ test.describe('desktop', () => {
     await page.getByRole('button', { name: 'Randomize' }).click()
 
     // Two picks per player, the first one up (spec D4).
-    const players = await page.locator('.player-list .player-card').count()
+    const players = await page.locator('.player-list .roster-row').count()
     const slots = page.locator('.draft-ribbon .draft-ribbon-slot')
     await expect(slots).toHaveCount(players * 2)
     await expect(slots.first()).toHaveClass(/\bnow\b/)
@@ -269,6 +269,55 @@ test.describe('desktop', () => {
     expect(survival.color).toBe(survival.accentDark)
 
     await snap(page, 'desktop-cards')
+  })
+
+  test('the roster claims on the row, brushes on the swatch and renames on the name', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const panel = page.locator('.player-panel')
+    const rows = panel.locator('.roster-row')
+    await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
+    await expect(panel.locator('.roster-row.me')).toHaveCount(0)
+    // The heading's + moved to the dashed row under the roster (spec D5).
+    await expect(panel.locator('.panel-heading button')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Randomize' }).click()
+
+    await rows.nth(1).click()
+    await expect(rows.nth(1)).toHaveClass(/\bme\b/)
+    await expect(rows.nth(1).locator('.you-chip')).toBeVisible()
+    await expect(rows.nth(0).locator('.you-chip')).toBeHidden()
+    await expect(page.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
+
+    // The swatch sets the brush and leaves the claim where it is (spec DB3).
+    const swatch = rows.nth(2).locator('.swatch')
+    await swatch.click()
+    await expect(swatch).toHaveAttribute('aria-pressed', 'true')
+    const steppers = panel.locator('.player-steppers')
+    await expect(steppers).toHaveCount(1)
+    const brushed = await steppers.evaluate((el) =>
+      el.previousElementSibling?.querySelector('.list-row-name')?.textContent)
+    expect(brushed).toBe('Orange')
+    await expect(rows.nth(1)).toHaveClass(/\bme\b/)
+    await expect(rows.nth(2)).not.toHaveClass(/\bme\b/)
+    await snap(page, 'desktop-roster')
+
+    // The name is the rename target; the rest of the row is still the claim (spec DB4).
+    await rows.nth(0).getByRole('button', { name: 'Rename Red', exact: true }).click()
+    const field = panel.locator('.list-row-rename')
+    await expect(field).toBeFocused()
+    await field.fill('Mara')
+    await field.press('Enter')
+    await expect(field).toHaveCount(0)
+    await expect(rows.nth(0).locator('.list-row-name')).toHaveText('Mara')
+    await expect(rows.nth(1)).toHaveClass(/\bme\b/)
+    await expect(page.locator('.draft-ribbon-slot').first()).toHaveAttribute('title', /Mara/)
+
+    // The dashed row is the only way to add, and it stops at six seats.
+    const add = panel.getByRole('button', { name: 'Add player' })
+    await add.click()
+    await add.click()
+    await expect(rows).toHaveCount(6)
+    await expect(add).toBeDisabled()
   })
 })
 
