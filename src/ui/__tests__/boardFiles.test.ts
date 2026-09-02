@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
 import { newGame } from '../../model/game'
-import { copyTitle, inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
+import { inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
 
 const pristine = (layout: 'standard4' | 'extension6' = 'standard4') => newGame(createBoard(layout))
 
@@ -69,28 +69,5 @@ describe('inPlaceTarget', () => {
 
   it('resolves nothing when the link points at a map that is gone', () => {
     expect(inPlaceTarget(maps, 'deleted')).toBeNull()
-  })
-})
-
-describe('copyTitle', () => {
-  it('names a copy after its source, skipping titles already on the strip', () => {
-    expect(copyTitle('Board 1', new Set(['Board 1']))).toBe('Board 1 (1)')
-    expect(copyTitle('Board 1', new Set(['Board 1', 'Board 1 (1)']))).toBe('Board 1 (2)')
-  })
-
-  it('counts up from an existing copy rather than nesting suffixes', () => {
-    // Duplicating a duplicate is "Board 1 (2)", not "Board 1 (1) (1)".
-    expect(copyTitle('Board 1 (1)', new Set(['Board 1', 'Board 1 (1)']))).toBe('Board 1 (2)')
-    expect(copyTitle('Board 1 (2)', new Set(['Board 1 (2)']))).toBe('Board 1 (1)')
-  })
-
-  it('only strips a suffix that is exactly a trailing copy number', () => {
-    expect(copyTitle('Game (ben)', new Set())).toBe('Game (ben) (1)')
-    expect(copyTitle('Round (2) rematch', new Set())).toBe('Round (2) rematch (1)')
-    // No leading space, so this is a name in its own right, not a copy suffix.
-    expect(copyTitle('(1)', new Set())).toBe('(1) (1)')
-    // A title that is *only* a suffix has no base to count up from, so it keeps
-    // the whole thing — stripping would leave nothing to name the copy after.
-    expect(copyTitle(' (1)', new Set())).toBe(' (1) (1)')
   })
 })

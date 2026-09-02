@@ -8,10 +8,6 @@ export interface ContextMenuItem {
   icon?: ReactNode
   /** Printed after the label when above zero: the depth of the stack this item acts on. */
   count?: number
-  /** The chord that runs this item, as this platform writes it; see shortcuts.ts. */
-  shortcut?: string
-  /** The same chord in ARIA's canonical key names, for `aria-keyshortcuts`. */
-  shortcutKeys?: string
   disabled?: boolean
   /** Draws a rule above this item, opening a group. */
   separated?: boolean
@@ -59,7 +55,7 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
   // Held in a ref so the window listeners below bind once: the caller passes a
-  // fresh closure on every render of the strip.
+  // fresh closure on every render.
   const close = useRef(onClose)
   useLayoutEffect(() => { close.current = onClose })
   // Starts at the pointer and settles once measured; a menu is small enough
@@ -132,7 +128,6 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
       tabIndex={-1}
       className={[item.separated && 'separated', item.danger && 'danger'].filter(Boolean).join(' ') || undefined}
       disabled={item.disabled}
-      aria-keyshortcuts={item.shortcutKeys}
       onClick={() => {
         onClose()
         item.onClick()
@@ -141,11 +136,6 @@ export function ContextMenu({ ariaLabel, x, y, items, history, align = 'left', c
       {item.icon !== undefined && <span className="menu-icon" aria-hidden="true">{item.icon}</span>}
       <span>{item.label}</span>
       {item.count !== undefined && item.count > 0 && <b className="menu-count">{item.count}</b>}
-      {/* Hidden from the name: read aloud, the glyphs are "place of
-          interest sign, erase to the left". aria-keyshortcuts carries it. */}
-      {item.shortcut !== undefined && (
-        <span className="menu-shortcut" aria-hidden="true">{item.shortcut}</span>
-      )}
     </button>
   )
   return (

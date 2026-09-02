@@ -36,8 +36,10 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .left-rail, .right-rail { display: grid; gap: 12px; }
 .left-rail { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
 .left-rail > *, .mobile-pane > * { flex: none; }
-.maps-panel { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-.maps-panel > :not(.saved-maps) { flex: none; }
+.maps-panel { display: flex; flex-direction: column; gap: 14px; flex: 0 1 auto; min-height: 0; }
+.maps-panel > :not(.library-saved) { flex: none; }
+.maps-panel .panel-heading { margin-bottom: 0; }
+.panel-dots { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel, .board-stage { background: rgba(248, 243, 232, .93); /* var(--paper-light), let through */ border: 1px solid rgba(255,255,255,.65); border-radius: 18px; box-shadow: 0 18px 50px rgba(62, 45, 21, .12), inset 0 0 0 1px var(--line); }
 .panel { padding: 17px; }
@@ -74,25 +76,6 @@ button.selected.danger { color: #fff; }
 .token-tools .hot { color: #b12620; }
 .token-tools .selected.hot { color: white; }
 
-.board-tabs { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 7px; border: 1px solid rgba(255,255,255,.65); border-radius: 14px; background: rgba(238, 229, 209, .96); box-shadow: 0 10px 28px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
-/* Grow 0 keeps the strip content-width while tabs fit, so the add button sits
-   right after the last tab; it shrinks and scrolls only once they overflow.
-   The fade classes are toggled from JS. */
-.board-tabs-scroll { min-width: 0; flex: 0 1 auto; display: flex; align-items: center; gap: 5px; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; }
-.board-tabs-scroll::-webkit-scrollbar { display: none; }
-.board-tabs-scroll.fade-left { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px); mask-image: linear-gradient(90deg, transparent 0, #000 28px); }
-.board-tabs-scroll.fade-right { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
-.board-tabs-scroll.fade-left.fade-right { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent); }
-.board-tab { min-width: 112px; max-width: 210px; flex: 0 1 168px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; background: #f5eddb; }
-.board-tab.active { border-color: #c77c63; background: #fffaf0; box-shadow: inset 0 -2px 0 var(--accent); }
-.board-tab button { border: 0; background: transparent; box-shadow: none; }
-.board-tab-select { min-width: 0; flex: 1; overflow: hidden; padding: 7px 5px 7px 9px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-.board-tab.active .board-tab-select { color: var(--accent-dark); font-weight: 700; }
-/* Same box as .board-tab-select, so entering rename mode doesn't shift the strip. */
-.board-tab-rename { min-width: 0; flex: 1; padding: 7px 5px 7px 9px; border: 0; background: transparent; color: var(--accent-dark); font-weight: 700; outline: none; }
-.board-tab-close { flex: none; padding: 5px 8px; color: var(--muted); }
-.board-tab-add, .player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
-
 .board-stage { position: static; overflow: hidden; padding: 12px; background: var(--paper-board); }
 /* min-height reserves the zoom chip's row: it only exists above 1x, and without
    the reservation appearing and disappearing shifts the board. */
@@ -110,16 +93,13 @@ button.selected.danger { color: #fff; }
 /* Where the arrow keys are, which is not the same as the selected value. */
 .menu-popup button.keyboard-active { outline: 2px solid var(--accent-dark); outline-offset: -2px; border-radius: 6px; }
 /* Pinned to the pointer (ContextMenu supplies left/top), and opaque because it
-   opens over the board. Rendered as a sibling of the tab strip, never inside
-   it: .board-tabs-scroll's mask would become its containing block and clip it. */
+   opens over the board. */
 .context-menu { position: fixed; min-width: 216px; background: var(--paper-light); }
-.context-menu button { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; white-space: nowrap; }
+.context-menu button { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .context-menu button.separated { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 9px; }
-/* Its own tone: --muted lands at 4.47:1 on this paper, under AA at this size. */
-.menu-shortcut { flex: none; color: #665f55; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+.context-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--muted); }
 /* Darker, not lighter: the cream the other menus use disappears on this paper. */
 .context-menu button:focus-visible { background: var(--paper-deep); color: var(--accent-dark); }
-.context-menu button:focus-visible .menu-shortcut { color: var(--accent-dark); }
 .board-canvas { width: 100%; display: block; max-height: calc(100vh - 170px); filter: drop-shadow(0 14px 18px rgba(33,51,67,.18)); }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay
    even. Never an oldstyle-figure serif here (Georgia, Palatino, Athelas). */
@@ -140,6 +120,7 @@ button.selected.danger { color: #fff; }
 
 /* Row metrics live here so the tally header, which sits outside the cards,
    aligns to the same values the cards use. */
+.player-add { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--accent-dark); font-size: 19px; line-height: 1; }
 .player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 4px; --card-pad: 6px; --name-indent: 33px; }
 .player-card { padding: 2px var(--card-pad) 3px; border: 1px solid transparent; border-radius: 10px; cursor: grab; }
 .player-card.active { background: #fff9e9; border-color: #d8bc77; }
@@ -194,39 +175,17 @@ button.selected.danger { color: #fff; }
 .slot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
-.library-io { display: grid; gap: 7px; margin-top: 11px; }
-.io-primary { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border: 1px dashed #b1936a; border-radius: 11px; background: #f8f0de; color: var(--accent-dark); font-size: 12.5px; font-weight: 700; }
-.io-json { display: flex; gap: 7px; }
-.io-json button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; font-size: 11px; color: var(--muted); }
-.io-icon { flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.io-primary .io-icon { width: 17px; height: 17px; }
 .notice.warning { margin: 10px 0 0; padding: 7px 9px; border-radius: 8px; background: #fff0e5; color: var(--accent-dark); font-size: 11px; }
 
-/* Library */
-.library-list-head { display: flex; align-items: center; justify-content: space-between; margin: 15px 0 8px; }
-.library-list-head > span { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; }
-.map-sort { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
-.map-sort .menu-trigger { color: var(--ink); font-size: 11px; }
-/* Fade classes are toggled from JS, like the tab strip's. */
-.saved-maps { display: grid; grid-auto-rows: max-content; gap: 6px; flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+/* Library. The saved-map list is the panel's one scroller; the group above it
+   and everything before that keep their height. Fade classes are set from JS. */
+.library-saved { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.library-saved > :not(.saved-maps) { flex: none; }
+.saved-maps { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .saved-maps::-webkit-scrollbar { display: none; }
 .saved-maps.fade-top { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
 .saved-maps.fade-bottom { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
 .saved-maps.fade-top.fade-bottom { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); }
-.saved-map { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: #fbf6ea; overflow: hidden; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
-.saved-map.open { border-color: #d8bc77; background: #fff9e9; }
-.saved-map.invalid { background: #f7ece6; }
-.saved-map-open { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 8px 11px; border: 0; border-radius: 0; background: transparent; text-align: left; }
-.saved-map-open:disabled { opacity: 1; cursor: default; }
-.saved-map-name { overflow: hidden; font-size: 13px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
-.saved-map.open .saved-map-name { color: var(--accent-dark); }
-.saved-map.invalid .saved-map-name { color: var(--muted); }
-.saved-map-meta { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.saved-map.open .saved-map-meta { color: var(--accent); }
-.saved-map.invalid .saved-map-meta { color: #a33428; }
-.saved-map-delete { flex: none; width: 30px; border: 0; border-radius: 0; border-left: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 15px; line-height: 1; opacity: .4; transition: opacity .16s ease, color .16s ease, background .16s ease; }
-.saved-map:focus-within .saved-map-delete { opacity: 1; }
-.empty-state { margin: 4px 0; padding: 14px 12px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font: italic 12px/1.5 Georgia, serif; text-align: center; }
 
 /* Lists */
 .group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
@@ -336,24 +295,18 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
 @media (hover: hover) {
   button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55,45,32,.35); box-shadow: 0 4px 10px rgba(55,45,32,.08); }
   .history-buttons button:hover::after, .player-add:hover:not(:disabled)::after { opacity: 1; }
-  .board-tab button:hover:not(:disabled) { box-shadow: none; }
-  .board-tab-close:hover { color: #a33428; }
-  .menu-trigger:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
+  .menu-trigger:hover:not(:disabled), .panel-dots:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
+  .list-row-x:hover:not(:disabled), .group-label .menu-trigger:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--ink); background: var(--paper-deep); }
+  .list-add:hover:not(:disabled) { transform: none; box-shadow: none; border-style: solid; color: var(--ink); }
+  .list-row-name:not(.plain):hover { transform: none; box-shadow: none; text-decoration-color: var(--accent-dark); }
   .menu-backdrop:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; }
   .menu-popup button:hover:not(:disabled) { transform: none; box-shadow: none; background: #fff9e9; }
   .context-menu button:hover:not(:disabled) { background: var(--paper-deep); color: var(--accent-dark); }
-  .context-menu button:hover:not(:disabled) .menu-shortcut { color: var(--accent-dark); }
   .placement-slot:hover { fill: #fffdf7; }
   .player-name:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; text-decoration: underline dotted; text-underline-offset: 2px; }
   .tally-header > span:hover::after { opacity: 1; }
   .stat-chip button:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--accent-dark); }
   .draft-slot:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--ink); }
-  .io-primary:hover:not(:disabled) { transform: none; border-color: var(--accent); background: #fdf5e4; box-shadow: none; }
-  .io-json button:hover:not(:disabled) { color: var(--ink); }
-  .saved-map:hover { border-color: rgba(55,45,32,.3); box-shadow: 0 4px 12px rgba(55,45,32,.09); }
-  .saved-map-open:hover:not(:disabled) { transform: none; box-shadow: none; background: rgba(255,255,255,.55); }
-  .saved-map:hover .saved-map-delete { opacity: 1; }
-  .saved-map-delete:hover { transform: none; box-shadow: none; color: #a33428; background: rgba(163,52,40,.09); }
   .analysis-row:hover:not(:disabled) { transform: none; border-color: #d8bc77; background: #fff9e9; box-shadow: 0 4px 12px rgba(55,45,32,.08); }
   .global-notice-close:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; color: #fff; background: rgba(255,255,255,.12); }
 }
@@ -375,12 +328,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 20px; }
   .player-dot { width: 26px; height: 26px; }
   .history-buttons button { width: 40px; height: 40px; font-size: 19px; }
-  .board-tab { min-width: 132px; }
-  .board-tab-select, .board-tab-rename { padding: 11px 6px 11px 12px; }
-  .board-tab-close { padding: 11px 12px; }
-  .board-tab-add, .player-add { width: 40px; height: 40px; }
-  .saved-map-delete { width: 46px; opacity: .75; }
-  .saved-map-open { padding: 12px; }
+  .player-add { width: 40px; height: 40px; }
   .draft-slot { min-width: 46px; }
   .slot-circle { width: 24px; height: 24px; }
   .global-notice-close { min-width: 34px; min-height: 34px; }
@@ -390,10 +338,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .analysis-row-select { gap: 7px; }
   .analysis-factors span { padding: 3px 8px; font-size: 11px; }
   .analysis-second { font-size: 11px; }
-  .io-json button { padding: 12px 8px; font-size: 12px; }
-  input, select, .board-tab-rename, .player-name-input { font-size: 16px; }
-  .io-primary { padding: 12px; font-size: 12px; }
-  .saved-map-name { font-size: 12.5px; }
+  input, select, .player-name-input { font-size: 16px; }
   .tally-header button { align-items: flex-end; }
   /* The dropdown triggers are inline text ("You are aki"), so they cannot grow
      their line box without pushing the paragraph around. The hit area grows
@@ -408,15 +353,11 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .tally-header button, .player-vp { min-height: 44px; }
 }
 
-.saved-maps, .board-tabs-scroll, .issue-list, .mobile-pane { overscroll-behavior: contain; }
-.board-canvas, .tool-grid button, .token-tools button, .board-tab, .mobile-nav, .draft-slot {
+.saved-maps, .issue-list, .mobile-pane { overscroll-behavior: contain; }
+.board-canvas, .tool-grid button, .token-tools button, .mobile-nav, .draft-slot {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-}
-.board-tab-rename {
-  -webkit-user-select: text;
-  user-select: text;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -447,8 +388,6 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
   .brand-mark span { width: 19px; height: 22px; }
   .brand-mark span:nth-child(2) { left: 15px; }
   .brand-mark span:nth-child(3) { left: 7px; top: 11px; }
-  /* No tab strip in the landscape arm; the portrait shell switches boards from its Maps screen. */
-  .board-tabs { display: none; }
   /* The desktop grid's `align-items: start` would shrink every stacked row to
      its content width once the workspace becomes a flex column. */
   .workspace { flex: none; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
@@ -531,10 +470,10 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
 
   /* Nothing below the board keeps its own scroller: a thumb cannot tell a nested
      one apart from the page. Panels extend the document instead. */
+  .library-saved { flex: none; }
   .saved-maps { flex: none; max-height: none; overflow: visible; }
   .saved-maps.fade-top, .saved-maps.fade-bottom { -webkit-mask-image: none; mask-image: none; }
   .issue-list { max-height: none; overflow: visible; }
-  .maps-panel { display: block; }
 
   .terrain-grid, .structure-grid, .token-tools {
     grid-template-columns: none;
@@ -575,9 +514,7 @@ footer { max-width: 1580px; margin: 15px auto 0; display: flex; justify-content:
     .phone-shell .phone-rslot.now:hover { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
     .phone-shell .phone-icon-btn[aria-pressed="true"]:hover, .phone-shell button.selected:hover, .phone-shell .player-grid button[aria-pressed="true"]:hover { border-color: var(--accent-dark); }
     .phone-shell .primary:hover:not(:disabled), .phone-shell .hero-import:hover { border-color: var(--accent-dark); background: var(--accent-dark); }
-    .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover, .phone-shell .list-row-x:hover, .phone-shell .group-label .menu-trigger:hover { color: var(--ink); background: var(--paper-deep); }
-    .phone-shell .list-add:hover { border-style: solid; color: var(--ink); }
-    .phone-shell .list-row-name:not(.plain):hover { text-decoration-color: var(--accent-dark); }
+    .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover { color: var(--ink); background: var(--paper-deep); }
   }
   /* No ground of its own until the page moves under it; then it takes one and casts a shadow. */
   .phone-head { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: calc(46px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 7px; padding: env(safe-area-inset-top) 12px 0; background: transparent; transition: background-color .18s ease, box-shadow .18s ease; }

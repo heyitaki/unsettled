@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
-import { BoardTabs } from './BoardTabs'
 import { GlobalNotice } from './GlobalNotice'
-import { ImportPanel } from './ImportPanel'
 import { MapsPanel } from './MapsPanel'
 import { MobileNav } from './MobileNav'
 import { PANES, type PaneId } from './mobilePanes'
@@ -55,16 +53,14 @@ function Workspace() {
       <GlobalNotice />
       <main className="workspace">
         <aside className="left-rail">
+          <div className="mobile-pane" id="pane-library" data-pane={PANES[3].id}>
+            <MapsPanel />
+          </div>
           <div className="mobile-pane" id="pane-board" data-pane={PANES[0].id}>
             <ToolPalette />
           </div>
-          <div className="mobile-pane" id="pane-library" data-pane={PANES[3].id}>
-            <ImportPanel />
-            <MapsPanel />
-          </div>
         </aside>
         <div className="center-column">
-          <BoardTabs />
           <BoardCanvas />
         </div>
         <aside className="right-rail">

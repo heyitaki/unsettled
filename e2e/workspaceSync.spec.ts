@@ -8,9 +8,9 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
  * 500ms autosave debounce, and both are real here.
  */
 
-const strip = (page: Page) => page.locator('.board-tab')
-const titles = (page: Page) => strip(page).locator('.board-tab-select')
-const active = (page: Page) => page.locator('.board-tab.active .board-tab-select')
+const strip = (page: Page) => page.locator('.open-boards .list-row')
+const titles = (page: Page) => strip(page).locator('.list-row-name')
+const active = (page: Page) => page.locator('.open-boards .list-row.current .list-row-name')
 
 async function open(context: BrowserContext): Promise<Page> {
   const page = await context.newPage()
@@ -21,7 +21,7 @@ async function open(context: BrowserContext): Promise<Page> {
 
 async function addBoards(page: Page, count: number) {
   for (let index = 0; index < count; index += 1) {
-    await page.getByRole('button', { name: 'Add board' }).click()
+    await page.getByRole('button', { name: 'New board' }).click()
   }
 }
 
@@ -37,7 +37,7 @@ const CLOSE_PACE_MS = 700
 
 async function closeLeftmost(page: Page, count: number) {
   for (let index = 0; index < count; index += 1) {
-    await page.locator('.board-tab-close').first().click()
+    await page.locator('.open-boards .list-row-x').first().click()
     await page.waitForTimeout(CLOSE_PACE_MS)
   }
 }
@@ -59,7 +59,7 @@ test('closing every board while the other window is in use leaves one blank boar
   // even on code that has none of the protections here. It takes a window that
   // is also being used, whose own pending write still describes the workspace
   // as it was before the close.
-  await b.getByRole('button', { name: 'Add board' }).click()
+  await b.getByRole('button', { name: 'New board' }).click()
   await expect(strip(a)).toHaveCount(5)
 
   await closeLeftmost(a, 5)
@@ -85,7 +85,7 @@ test('closes made while the other window is writing stay closed', async ({ conte
   await expect(strip(b)).toHaveCount(4)
   // Give B something of its own to write, so its debounce is running while A
   // closes — the collision that used to resurrect a tab one write later.
-  await b.getByRole('button', { name: 'Add board' }).click()
+  await b.getByRole('button', { name: 'New board' }).click()
   await expect(strip(a)).toHaveCount(5)
 
   await closeLeftmost(a, 2)
@@ -110,9 +110,9 @@ test('each window keeps its own place in the strip', async ({ context }) => {
   await expect(strip(b)).toHaveCount(3)
   await expect(active(b)).toHaveText('Board 1')
 
-  // Selecting in one window must not move the other. (Never click the active
-  // tab: that is the inline rename gesture, not a selection.)
-  await b.getByRole('tab', { name: 'Board 2' }).click()
+  // Selecting in one window must not move the other. (The row selects; its
+  // name is the rename gesture, not a selection.)
+  await b.getByRole('button', { name: 'Switch to Board 2', exact: true }).click()
   await settle(a)
   await expect(active(b)).toHaveText('Board 2')
   await expect(active(a)).toHaveText('Board 3')

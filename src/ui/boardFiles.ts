@@ -1,4 +1,4 @@
-// Shared board-file helpers: title derivation for the import/export panel and
+// Shared board-file helpers: title derivation for JSON import and export and
 // the map library, the comparison behind "this tab holds work the library does
 // not", and the no-prompt save behind the autosave.
 
@@ -12,28 +12,13 @@ export function fileTitle(name: string): string {
   return name.replace(/\.[^/.]+$/, '') || name
 }
 
-// First unused "base (n)" name, so a copy never clobbers an existing map.
-export function nextCopyName(base: string, taken: Set<string>): string {
+// `base` if free, else the first unused "base (n)", so two open boards never
+// read as the same board. Cosmetic only: links are ids, not titles.
+export function firstFreeName(base: string, taken: Set<string>): string {
+  if (!taken.has(base)) return base
   let index = 1
   while (taken.has(`${base} (${index})`)) index += 1
   return `${base} (${index})`
-}
-
-// `base` if free, else the first unused "base (n)", so two open boards never
-// read as the same board. Cosmetic only — links are ids, not titles.
-export function firstFreeName(base: string, taken: Set<string>): string {
-  return taken.has(base) ? nextCopyName(base, taken) : base
-}
-
-/**
- * What to call a copy of `title`: the first free "title (n)". A title that is
- * already a copy counts up from what it was copied from — duplicating
- * "Board 1 (1)" gives "Board 1 (2)", not "Board 1 (1) (1)" — but only when
- * stripping the suffix leaves an actual name behind.
- */
-export function copyTitle(title: string, taken: Set<string>): string {
-  const stripped = title.replace(/ \(\d+\)$/, '')
-  return nextCopyName(stripped.length === 0 ? title : stripped, taken)
 }
 
 /**
@@ -65,8 +50,8 @@ export const savedMap = (result: ParseGameResult | undefined): SavedMap =>
   ({ linked: true, game: result?.ok === true ? result.game : null })
 
 // Serialized games, keyed by game identity. Games are immutable and replaced
-// wholesale by the reducer, so this is exact — and it keeps the tab strip from
-// re-serializing every open board on every edit.
+// wholesale by the reducer, so this is exact, and it keeps the open-boards list
+// from re-serializing every board on every edit.
 const signatures = new WeakMap<Game, string>()
 
 function signature(game: Game): string {
