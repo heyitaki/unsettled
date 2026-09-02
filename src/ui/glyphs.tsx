@@ -304,3 +304,47 @@ export function NavigationGlyph({ pane }: { pane: PaneId }) {
       )
   }
 }
+
+/** The colour hex that stands for a board wherever it is named; see boardColor.ts. */
+export function BoardHexGlyph({ color, className }: { color: string; className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 22" aria-hidden="true">
+      <polygon points="10,1 18.7,6 18.7,16 10,21 1.3,16 1.3,6" fill={color} stroke={PIECE_INK} strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+const LINE_ART = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+}
+
+export function ChevronGlyph({ className }: { className?: string }) {
+  return (
+    <svg {...LINE_ART} className={className} viewBox="0 0 12 8" strokeWidth="2">
+      <path d="M1.4 2 6 6.2 10.6 2" />
+    </svg>
+  )
+}
+
+export function PencilGlyph() {
+  return (
+    <svg {...LINE_ART} width="17" height="17" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M13.2 3.4a1.9 1.9 0 0 1 2.7 2.7L7 15l-3.6.9.9-3.6 8.9-8.9Z" />
+      <path d="M11.9 4.7 14.6 7.4" />
+    </svg>
+  )
+}
+
+export function DotsGlyph() {
+  return (
+    <svg width="17" height="5" viewBox="0 0 17 5" fill="currentColor" aria-hidden="true">
+      <circle cx="2.4" cy="2.5" r="1.7" />
+      <circle cx="8.5" cy="2.5" r="1.7" />
+      <circle cx="14.6" cy="2.5" r="1.7" />
+    </svg>
+  )
+}

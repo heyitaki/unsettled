@@ -182,9 +182,9 @@ One row per work item. Keep the state column current; this file is the durable c
 | id | Item | Depends on | State |
 | --- | --- | --- | --- |
 | M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | — | done |
-| M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | — | not started |
-| M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | not started |
-| M4 | Board colour hash (B4) and the hex in header and both lists | — | half done: `ui/boardColor.ts` module landed; the hex glyph waits on M3 and M7 |
+| M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | — | done |
+| M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
+| M4 | Board colour hash (B4) and the hex in header and both lists | — | done: `ui/boardColor.ts` and the header hex; the list hexes ride M7 |
 | M5 | Draft ribbon above the board (S2) | M2 | not started |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | not started |
 | M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | not started |

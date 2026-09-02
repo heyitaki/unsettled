@@ -11,6 +11,8 @@ export interface ContextMenuItem {
   disabled?: boolean
   /** Draws a rule above this item, opening a group. */
   separated?: boolean
+  /** Styled as destructive, for the actions that throw board work away. */
+  danger?: boolean
 }
 
 /** Where the arrow keys can put focus: every item that is not disabled. */
@@ -148,7 +150,7 @@ export function ContextMenu({ ariaLabel, x, y, items, onClose }: {
             // Roving focus: the menu decides who holds it, so no item is a Tab
             // stop of its own.
             tabIndex={-1}
-            className={item.separated ? 'separated' : undefined}
+            className={[item.separated && 'separated', item.danger && 'danger'].filter(Boolean).join(' ') || undefined}
             disabled={item.disabled}
             aria-keyshortcuts={item.shortcutKeys}
             onClick={() => {

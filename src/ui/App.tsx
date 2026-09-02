@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
 import { BoardTabs } from './BoardTabs'
+import { GlobalNotice } from './GlobalNotice'
 import { ImportPanel } from './ImportPanel'
 import { MapsPanel } from './MapsPanel'
 import { MobileNav } from './MobileNav'
 import { PANES, type PaneId } from './mobilePanes'
+import { PhoneShell } from './phone/PhoneShell'
 import { PlayerPanel } from './PlayerPanel'
-import { StoreProvider, useStore } from './store'
+import { StoreProvider } from './store'
 import { ToolPalette } from './ToolPalette'
+import { usePortraitPhone } from './useMediaQuery'
 import './editor.css'
 
 const SUBTITLES = [
@@ -26,28 +29,9 @@ function pickSubtitle(): string {
 }
 
 function Workspace() {
-  const { state, dispatch } = useStore()
   // Chosen once per page load, so the tagline rotates between visits.
   const [subtitle] = useState(pickSubtitle)
-  // Pause auto-dismiss while the pointer is over the toast, so it can be read,
-  // clicked, and text-selected; the timer restarts fresh once the pointer leaves.
-  const [noticeHover, setNoticeHover] = useState(false)
   const [pane, setPane] = useState<PaneId>(PANES[0].id)
-  // Notices are transient toasts — auto-dismiss so they don't linger. Keyed on
-  // noticeSeq so an identical repeat message still restarts the timer.
-  useEffect(() => {
-    if (!state.notice || noticeHover) return
-    const timeout = window.setTimeout(() => dispatch({ type: 'notice', message: null }), 3500)
-    return () => window.clearTimeout(timeout)
-  }, [state.notice, state.noticeSeq, noticeHover, dispatch])
-  useEffect(() => {
-    const showNotice = (event: Event) => {
-      if (!(event instanceof CustomEvent) || typeof event.detail !== 'string') return
-      dispatch({ type: 'notice', message: event.detail })
-    }
-    window.addEventListener('unsettled:notice', showNotice)
-    return () => window.removeEventListener('unsettled:notice', showNotice)
-  }, [dispatch])
   // The mobile shell scrolls the document, so switching panes has to rewind the
   // page rather than a pane-local scroller.
   useEffect(() => { window.scrollTo({ top: 0 }) }, [pane])
@@ -68,29 +52,7 @@ function Workspace() {
           <h1>Unsettled</h1>
         </div>
       </header>
-      {state.notice && (
-        <div
-          className="global-notice"
-          role="status"
-          onMouseEnter={() => setNoticeHover(true)}
-          onMouseLeave={() => setNoticeHover(false)}
-        >
-          <span className="global-notice-text">{state.notice}</span>
-          <button
-            type="button"
-            className="global-notice-close"
-            aria-label="Dismiss notification"
-            // Closing unmounts the toast without firing onMouseLeave, so clear the
-            // hover flag here or the next notice would never auto-dismiss.
-            onClick={() => {
-              setNoticeHover(false)
-              dispatch({ type: 'notice', message: null })
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      <GlobalNotice />
       <main className="workspace">
         <aside className="left-rail">
           <div className="mobile-pane" id="pane-board" data-pane={PANES[0].id}>
@@ -122,6 +84,12 @@ function Workspace() {
   )
 }
 
+// Two React trees over one store (spec B8): a portrait phone gets the shell
+// built for it, everything else keeps the workspace with its rails and panes.
+function Shell() {
+  return usePortraitPhone() ? <PhoneShell /> : <Workspace />
+}
+
 export function App() {
-  return <StoreProvider><Workspace /></StoreProvider>
+  return <StoreProvider><Shell /></StoreProvider>
 }
