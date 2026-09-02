@@ -284,10 +284,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 22: Run M-59, record it, close `SIM-GAP-20`
 
-- [ ] Record `uptime`, run the preregistered invocation from `simulator/` (background and poll if preregistered so), record `uptime` again
-- [ ] Append `## M-59: SP5 setup draft awareness` with full provenance including games per second, both tables, and the disposition under the gap-fix rule; flag a `worse` reading for the user
-- [ ] Delete the `SIM-GAP-20` entry from `.claude/specs/simulator/gaps.md`, update the "How to read the gap inventory" sentence in `.claude/specs/simulator/programme.md` that names it, and say so in the commit message
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered invocation from `simulator/` (background and poll if preregistered so), record `uptime` again (the screen read `inconclusive`, which bought the single preregistered retry at 8000 boards; both ran in the foreground, the 60 second background trigger never firing at 4.99s and 19.06s)
+- [x] Append `## M-59: SP5 setup draft awareness` with full provenance including games per second, both tables, and the disposition under the gap-fix rule; flag a `worse` reading for the user (the retry read `better` at `+1.6484pp`, clustered `[+1.31pp, +1.99pp]`, so there is no `worse` reading to flag)
+- [x] Delete the `SIM-GAP-20` entry from `.claude/specs/simulator/gaps.md`, update the "How to read the gap inventory" sentence in `.claude/specs/simulator/programme.md` that names it, and say so in the commit message
+- [x] Link check passes
 
 ### Task 23: SP5 setup denial credit
 
