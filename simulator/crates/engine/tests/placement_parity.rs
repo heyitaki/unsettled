@@ -669,6 +669,7 @@ fn parse_weights(value: &Value) -> EngineWeights {
         expansion_decay: number("expansionDecay"),
         robber_discount: number("robberDiscount"),
         robber_concentration_weight: number("robberConcentrationWeight"),
+        setup_denial_weight: number("setupDenialWeight"),
         opponent_top_k: number("opponentTopK"),
         softmax_temperature: number("softmaxTemperature"),
         rollout_budget: number("rolloutBudget"),

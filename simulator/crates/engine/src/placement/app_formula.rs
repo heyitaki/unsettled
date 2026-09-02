@@ -99,6 +99,10 @@ pub struct EngineWeights {
     pub expansion_decay: f64,
     pub robber_discount: f64,
     pub robber_concentration_weight: f64,
+    /// What taking a settlement away from the rivals who pick before the hero's second one is
+    /// worth. Read only by `placement::draft`, which knows the pick order; `AppFormula` never
+    /// looks at it, the mirror image of the search-control fields below that only the app reads.
+    pub setup_denial_weight: f64,
     pub opponent_top_k: f64,
     pub softmax_temperature: f64,
     pub rollout_budget: f64,
@@ -154,6 +158,7 @@ impl EngineWeights {
                 "robberConcentrationWeight",
                 self.robber_concentration_weight,
             ),
+            ("setupDenialWeight", self.setup_denial_weight),
             ("opponentTopK", self.opponent_top_k),
             ("softmaxTemperature", self.softmax_temperature),
             ("rolloutBudget", self.rollout_budget),
@@ -188,6 +193,12 @@ impl EngineWeights {
         // M-56 read. `sweep-bounds.json` declares 0 to 16.
         if self.robber_concentration_weight < 0.0 {
             return Err("weights violate: robberConcentrationWeight >= 0".into());
+        }
+        // The credit pays the hero for what a candidate costs the rivals who pick before its
+        // second settlement, and that cost is floored at 0, so a negative weight would pay the
+        // hero to hand rivals the sites they want most. `sweep-bounds.json` declares 0 to 4.
+        if self.setup_denial_weight < 0.0 {
+            return Err("weights violate: setupDenialWeight >= 0".into());
         }
         self.validate_slot_scales()?;
         Ok(())

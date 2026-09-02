@@ -291,10 +291,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 23: SP5 setup denial credit
 
-- [ ] Add `setupDenialWeight` (0) to both `EngineWeights` per Context: TypeScript declares it with the not-read-by-the-app comment, Rust validates it non-negative, sweep bounds 0.0 to 4.0, every weights-shaped file gains it at 0
-- [ ] Implement the credit in `placement/draft.rs` per Context; `AppFormula` never reads it. At 0 the lookahead's choices are bit-identical to Task 20's (pin with a test over the same traced games)
-- [ ] Rust test on a hand-built state: a candidate that is the next rival's unique best gains exactly `weight * (rival best with c free - rival best with c taken)`; a candidate no rival wants gains 0; the credit floors at 0
-- [ ] Both cargo profiles green
+- [x] Add `setupDenialWeight` (0) to both `EngineWeights` per Context: TypeScript declares it with the not-read-by-the-app comment, Rust validates it non-negative, sweep bounds 0.0 to 4.0, every weights-shaped file gains it at 0
+- [x] Implement the credit in `placement/draft.rs` per Context; `AppFormula` never reads it. At 0 the lookahead's choices are bit-identical to Task 20's (pin with a test over the same traced games)
+- [x] Rust test on a hand-built state: a candidate that is the next rival's unique best gains exactly `weight * (rival best with c free - rival best with c taken)`; a candidate no rival wants gains 0; the credit floors at 0
+- [x] Both cargo profiles green
 
 ### Task 24: Preregister M-60, the denial A/B
 

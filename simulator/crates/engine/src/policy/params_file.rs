@@ -1060,6 +1060,26 @@ mod tests {
         parsed.validate().expect("zero is inside the domain");
     }
 
+    /// The credit pays the hero for what a candidate costs the rivals picking before its second
+    /// settlement, and that cost is already floored at 0, so a negative weight pays the hero to
+    /// hand rivals the sites they want most. Same hard bound as the other placement weights.
+    #[test]
+    fn a_negative_setup_denial_weight_fails_placement_validation() {
+        let mut weights: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+        weights["setupDenialWeight"] = Value::from(-0.1);
+        let parsed: EngineWeights =
+            serde_json::from_value(weights.clone()).expect("weights shape");
+        let error = parsed.validate().expect_err("hard bound");
+        assert!(error.contains("setupDenialWeight >= 0"), "{error}");
+
+        weights["setupDenialWeight"] = Value::from(0.0);
+        let parsed: EngineWeights = serde_json::from_value(weights).expect("weights shape");
+        parsed.validate().expect("zero is inside the domain");
+    }
+
     /// `slotScales` is keyed by seat count and slot, so a dropped or misspelled key is a silent
     /// no-op rather than a load error unless the block is checked for exact keys: a file missing
     /// the four-seat slot 3 entry would score the last pick of every measured run unscaled and

@@ -87,6 +87,13 @@ export interface EngineWeights {
   // move in that hex's share of the pair's pips. Ships at 0, where the share is
   // never computed and the robber component is exactly what it was.
   robberConcentrationWeight: number
+  // What taking a settlement away from the rivals who pick before your second
+  // one is worth. Read only by the simulator's draft-aware setup kind, which
+  // knows the pick order and can score a rival's board twice; the app's
+  // analysis samples opponent rollouts instead and does not read this field,
+  // the mirror image of the search-control fields below that the simulator
+  // ignores. Ships at 0, where the draft kind forms no credit at all.
+  setupDenialWeight: number
   opponentTopK: number
   softmaxTemperature: number
   rolloutBudget: number
@@ -131,6 +138,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   expansionDecay: 0.5,
   robberDiscount: 0.35,
   robberConcentrationWeight: 0,
+  setupDenialWeight: 0,
   opponentTopK: 3,
   softmaxTemperature: 1.25,
   rolloutBudget: 500_000,

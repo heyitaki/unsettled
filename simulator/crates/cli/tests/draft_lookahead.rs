@@ -121,14 +121,16 @@ fn tie_free_states(
 /// Every tie-free traced game the first `BOARD_LIMIT` tuning boards yield, with its board.
 fn tie_free_games(
     field: PlacementKind,
-    draft: PlacementKind,
+    drafts: &[PlacementKind],
 ) -> Vec<(Topology, SimBoard, Vec<SetupPick>, Vec<(Vec<u8>, Vec<u8>)>)> {
+    let mut prepared = vec![field];
+    prepared.extend_from_slice(drafts);
     let mut games = Vec::new();
     for board_index in 0..BOARD_LIMIT {
         if games.len() == TIE_FREE_GAMES {
             break;
         }
-        let (topology, board) = prepared_board(board_index, &[field, draft]);
+        let (topology, board) = prepared_board(board_index, &prepared);
         let trace = traced_game(&topology, &board, field, board_index);
         if trace.len() != 2 * SEATS {
             continue;
@@ -153,7 +155,7 @@ fn the_lookahead_predicts_the_picks_the_field_actually_made() {
     let (field, draft) = kinds("replay");
     let order = setup_order(SEATS);
     let mut checked = 0;
-    for (topology, board, trace, states) in tie_free_games(field, draft) {
+    for (topology, board, trace, states) in tie_free_games(field, &[draft]) {
         for hero in 0..SEATS as u8 {
             let first = order
                 .iter()
@@ -191,7 +193,7 @@ fn the_second_pick_is_the_plain_formula_argmax() {
     let (field, draft) = kinds("second");
     let order = setup_order(SEATS);
     let mut checked = 0;
-    for (topology, board, trace, states) in tie_free_games(field, draft) {
+    for (topology, board, trace, states) in tie_free_games(field, &[draft]) {
         for hero in 0..SEATS as u8 {
             let last = order
                 .iter()
@@ -260,5 +262,115 @@ fn a_standard4_first_pick_stays_within_its_budget() {
     assert!(
         fastest < 50.0,
         "a standard4 first pick took {fastest:.1}ms, over the 50ms budget"
+    );
+}
+
+/// The shipped `setupDenialWeight` of 0 leaves the lookahead ranking exactly what it ranked before
+/// the credit existed: a candidate is worth its own marginal plus the best second settlement that
+/// survives the replay, and nothing else is added.
+///
+/// The comparison is rebuilt here from the field formula and the replayed picks rather than read
+/// from a remembered number, so it holds whatever these boards happen to score. A second kind at a
+/// weight of 1 is registered to show the pin bites: a credit that is switched on has to move the
+/// value the pin says is untouched at 0.
+#[test]
+fn the_shipped_weight_adds_no_denial_credit() {
+    let (field, draft) = kinds("denial");
+    let mut hero = default_weights();
+    hero.setup_denial_weight = 1.0;
+    let credited = register_app_formula_draft(
+        "app_formula_draft:denial-credited@denial-opponent".to_string(),
+        hero,
+        default_weights(),
+    )
+    .expect("registry has room");
+    let order = setup_order(SEATS);
+    let mut checked = 0;
+    let mut moved = 0;
+    for (topology, board, trace, states) in tie_free_games(field, &[draft, credited]) {
+        for hero in 0..SEATS as u8 {
+            let first = order
+                .iter()
+                .position(|seat| *seat == hero)
+                .expect("every seat picks");
+            let (vertex_owner, edge_owner) = &states[first];
+            let candidate = trace[first].vertex;
+
+            // The replayed board carries no roads, which the second settlement's score cannot
+            // tell: only the `expansion` component reads edges and the committed weights ship it
+            // at 0.
+            let mut replayed = vertex_owner.clone();
+            replayed[usize::from(candidate)] = hero;
+            for (seat, vertex) in draft_replay(
+                draft,
+                &board,
+                &topology,
+                vertex_owner,
+                edge_owner,
+                hero,
+                candidate,
+            ) {
+                replayed[usize::from(vertex)] = seat;
+            }
+            let mut second: Option<f64> = None;
+            for vertex_index in 0..topology.vertex_count() {
+                let vertex = vertex_index as Vertex;
+                if !can_place_settlement(&topology, &replayed, vertex) {
+                    continue;
+                }
+                let score = setup_candidate_score(
+                    field, &board, &topology, &replayed, edge_owner, hero, vertex, true,
+                );
+                if second.is_none_or(|held| score > held) {
+                    second = Some(score);
+                }
+            }
+            let expected = setup_candidate_score(
+                field,
+                &board,
+                &topology,
+                vertex_owner,
+                edge_owner,
+                hero,
+                candidate,
+                false,
+            ) + second.unwrap_or(0.0);
+
+            let scored = setup_candidate_score(
+                draft,
+                &board,
+                &topology,
+                vertex_owner,
+                edge_owner,
+                hero,
+                candidate,
+                false,
+            );
+            assert_eq!(scored, expected, "hero seat {hero}");
+
+            let paid = setup_candidate_score(
+                credited,
+                &board,
+                &topology,
+                vertex_owner,
+                edge_owner,
+                hero,
+                candidate,
+                false,
+            );
+            assert!(
+                paid >= scored,
+                "the credit is never a charge, hero seat {hero}"
+            );
+            if paid > scored {
+                moved += 1;
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, TIE_FREE_GAMES * SEATS);
+    assert!(
+        moved > 0,
+        "a weight of 1 must move some candidate, or the pin at 0 proves nothing"
     );
 }

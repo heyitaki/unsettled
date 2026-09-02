@@ -6,6 +6,10 @@
 //! the argmax the same formula would take, and scores the candidate by its own worth plus the
 //! best second settlement still standing once the rivals have had their turn.
 //!
+//! Knowing what each rival would have taken is also what makes a denial credit possible, so
+//! `setupDenialWeight` rides this kind and no other: at a nonzero weight a candidate is paid for
+//! what taking it costs the rivals who pick before the hero's second settlement. It ships at 0.
+//!
 //! Deterministic by construction, so it never draws on the policy RNG stream: settlement ties go
 //! to the lowest vertex index and road ties to the lowest edge id, where the field draws at
 //! random. Exactness against the field is the model's point, so the lookahead scores every legal
@@ -13,7 +17,7 @@
 
 use std::ops::Range;
 
-use super::app_formula::AppFormulaScorer;
+use super::app_formula::{AppFormulaScorer, js_max};
 use crate::game::{can_place_settlement, setup_order};
 use crate::state::EMPTY;
 use crate::topology::{Edge, Topology, Vertex};
@@ -227,6 +231,22 @@ fn setup_road(
     selected
 }
 
+/// What one rival loses to the hero's candidate: its best had the candidate stayed free, less its
+/// best with the candidate taken, floored at 0.
+///
+/// The floor is what makes this a credit and never a charge. Vacating a vertex only widens what a
+/// seat may legally take, so the difference is non-negative on any board; the floor is the guard
+/// for a degenerate weights vector, where a score can come back `NaN` and `js_max` propagates it
+/// rather than silently reading as 0. A rival with no legal vertex on one side of the comparison
+/// has no best to difference and is charged nothing, which setup never reaches: twelve
+/// settlements cannot block every vertex of a supported layout.
+fn denial_gain(free: Option<(Vertex, f64)>, taken: Option<(Vertex, f64)>) -> f64 {
+    match (free, taken) {
+        (Some((_, free)), Some((_, taken))) => js_max(0.0, free - taken),
+        _ => 0.0,
+    }
+}
+
 /// The plain formula argmax over the legal candidates, ties to the lowest vertex index.
 fn best_direct(
     scorer: &AppFormulaScorer,
@@ -264,6 +284,12 @@ struct Lookahead<'a> {
     rows: ScoreRows,
     owners: Vec<u8>,
     edges: Vec<u8>,
+    /// The hero's `setupDenialWeight`. An arm sweeps the hero's formula, so the price the hero
+    /// puts on a rival's loss is the hero's own, while the loss itself is scored at the rival's.
+    denial_weight: f64,
+    /// What the candidate `replay` last placed cost the intervening rivals, summed over them and
+    /// before the weight. Stays 0 while `denial_weight` is 0, where `replay` never scans for it.
+    denial: f64,
 }
 
 impl<'a> Lookahead<'a> {
@@ -290,12 +316,15 @@ impl<'a> Lookahead<'a> {
             rows: ScoreRows::new(seats, topology.vertex_count(), vertex_owner.len(), reusable),
             owners: vertex_owner.to_vec(),
             edges: edge_owner.to_vec(),
+            denial_weight: scorers.hero.weights().setup_denial_weight,
+            denial: 0.0,
         })
     }
 
     /// What the candidate is worth once the intervening picks are taken into account: its own
-    /// marginal score plus the best second settlement still legal after the replay. A candidate
-    /// whose replay leaves the hero nowhere to go is worth its own marginal alone.
+    /// marginal score plus the best second settlement still legal after the replay, plus the
+    /// setup denial credit. A candidate whose replay leaves the hero nowhere to go is worth its
+    /// own marginal alone.
     fn value(&mut self, vertex_owner: &[u8], edge_owner: &[u8], candidate: Vertex) -> f64 {
         let marginal = self.scorers.hero.score_for_owner(
             vertex_owner,
@@ -315,15 +344,24 @@ impl<'a> Lookahead<'a> {
             );
             best_legal(self.topology, &self.owners, None, row).map_or(0.0, |(_, score)| score)
         };
-        marginal + second
+        // At the shipped weight the credit is not merely zero but never formed: `replay` skips
+        // its second scan and the value is exactly the one the kind carried before SP5's denial
+        // term existed.
+        if self.denial_weight == 0.0 {
+            return marginal + second;
+        }
+        marginal + second + self.denial_weight * self.denial
     }
 
     /// Places the candidate for the hero and lets every intervening seat take its argmax, in
     /// `setup_order` order, leaving the replayed state in `owners` and `edges`.
     ///
     /// Each rival's argmax score here is its best with the hero's candidate taken. The same row
-    /// scanned with `Some(candidate)` vacated is its best had the candidate still been free,
-    /// which is the pair of quantities SP5's setup denial credit is the difference of.
+    /// scanned with `Some(candidate)` vacated is its best had the candidate still been free, and
+    /// SP5's setup denial credit is the difference of the two, floored at 0 and summed over the
+    /// intervening rivals into `denial`. A rival is charged at the position it actually picks
+    /// from, so its loss is measured against the board the replay has reached, not the board the
+    /// hero picked from.
     fn replay(
         &mut self,
         vertex_owner: &[u8],
@@ -333,6 +371,7 @@ impl<'a> Lookahead<'a> {
     ) {
         self.owners.copy_from_slice(vertex_owner);
         self.edges.copy_from_slice(edge_owner);
+        self.denial = 0.0;
         let road = setup_road(
             &self.scorers.hero,
             self.topology,
@@ -356,7 +395,12 @@ impl<'a> Lookahead<'a> {
                     seat,
                     grant,
                 );
-                best_legal(self.topology, &self.owners, None, row)
+                let taken = best_legal(self.topology, &self.owners, None, row);
+                if self.denial_weight != 0.0 {
+                    let free = best_legal(self.topology, &self.owners, Some(candidate), row);
+                    self.denial += denial_gain(free, taken);
+                }
+                taken
             };
             let Some((pick, _)) = pick else {
                 continue;
@@ -521,10 +565,72 @@ mod tests {
     }
 
     fn scorers(topology: &Topology, board: &SimBoard) -> DraftScorers {
+        scorers_at_denial(topology, board, 0.0)
+    }
+
+    /// The pairing an SP5 denial arm runs: the weight moves on the hero's side alone, and the
+    /// opponent model stays on the committed vector.
+    fn scorers_at_denial(topology: &Topology, board: &SimBoard, weight: f64) -> DraftScorers {
+        let mut hero = default_weights();
+        hero.setup_denial_weight = weight;
         DraftScorers {
-            hero: AppFormulaScorer::new(board, topology, default_weights()),
+            hero: AppFormulaScorer::new(board, topology, hero),
             opponent: AppFormulaScorer::new(board, topology, default_weights()),
         }
+    }
+
+    /// Seats and hero of the denial tests. At six seats the hero picking fifth is followed by the
+    /// last seat's two picks and nothing else, so the credit sums exactly one rival's two losses.
+    const SEATS: usize = 6;
+    const HERO: u8 = 4;
+    const RIVAL: u8 = 5;
+
+    /// What each intervening rival loses to the hero's candidate, computed without the lookahead:
+    /// a full legality scan per rival per position, once with the candidate taken and once with
+    /// the vertex genuinely empty rather than merely vacated for legality.
+    ///
+    /// Roads are left off the replayed board. Only the `expansion` component reads edges and the
+    /// committed weights ship it at 0, which is the same condition `ScoreRows` reuses rows under.
+    fn rival_losses(
+        scorers: &DraftScorers,
+        topology: &Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        candidate: Vertex,
+    ) -> Vec<f64> {
+        let order = setup_order(SEATS);
+        let first = order.iter().position(|seat| *seat == HERO).unwrap();
+        let last = order.iter().rposition(|seat| *seat == HERO).unwrap();
+        let mut owners = vertex_owner.to_vec();
+        owners[usize::from(candidate)] = HERO;
+        let mut losses = Vec::new();
+        for position in first + 1..last {
+            let seat = order[position];
+            let grant = position >= SEATS;
+            let best = |owners: &[u8]| {
+                let mut best: Option<(Vertex, f64)> = None;
+                for index in 0..topology.vertex_count() {
+                    let vertex = index as Vertex;
+                    if !can_place_settlement(topology, owners, vertex) {
+                        continue;
+                    }
+                    let score = scorers
+                        .opponent
+                        .score_for_owner(owners, edge_owner, seat, vertex, grant);
+                    if best.is_none_or(|(_, held)| score > held) {
+                        best = Some((vertex, score));
+                    }
+                }
+                best.expect("a rival always has somewhere legal to go during setup")
+            };
+            let (pick, taken) = best(&owners);
+            let mut free_board = owners.clone();
+            free_board[usize::from(candidate)] = EMPTY;
+            let (_, free) = best(&free_board);
+            losses.push((free - taken).max(0.0));
+            owners[usize::from(pick)] = seat;
+        }
+        losses
     }
 
     /// The two halves of SP5's denial credit come off one row: putting a vertex back can only
@@ -582,5 +688,120 @@ mod tests {
                 assert_eq!(*score, direct, "vertex {vertex}");
             }
         }
+    }
+
+    /// The credit a candidate earns is the weight times what the intervening rivals lose to it,
+    /// and taking the next rival's own first choice is the case that costs it most.
+    ///
+    /// The state is an empty board with the hero at the fifth position, which no real draft
+    /// reaches: the lookahead reads no history, only what stands and who picks next, so the
+    /// arrangement is the whole input. The losses are recomputed here the long way round, so the
+    /// two agree only if a rival's scores really are independent of what the hero owns.
+    #[test]
+    fn the_denial_credit_is_what_the_intervening_rivals_lose() {
+        const WEIGHT: f64 = 0.75;
+        let (topology, board) = fixture();
+        let plain = scorers(&topology, &board);
+        let credited = scorers_at_denial(&topology, &board, WEIGHT);
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+
+        let mut row = Vec::new();
+        score_row(
+            &plain.opponent,
+            topology.vertex_count(),
+            &vertex_owner,
+            &edge_owner,
+            RIVAL,
+            false,
+            &mut row,
+        );
+        let (candidate, _) = best_legal(&topology, &vertex_owner, None, &row)
+            .expect("an empty board has a best opening");
+
+        let losses = rival_losses(&plain, &topology, &vertex_owner, &edge_owner, candidate);
+        assert_eq!(losses.len(), 2, "seat {RIVAL} picks twice between the hero's picks");
+        assert!(
+            losses[0] > 0.0,
+            "taking the rival's own first choice must cost it something"
+        );
+
+        let mut uncredited = Lookahead::new(
+            &plain,
+            &topology,
+            SEATS,
+            HERO,
+            &vertex_owner,
+            &edge_owner,
+        )
+        .expect("the hero picks twice");
+        let base = uncredited.value(&vertex_owner, &edge_owner, candidate);
+        let mut lookahead = Lookahead::new(
+            &credited,
+            &topology,
+            SEATS,
+            HERO,
+            &vertex_owner,
+            &edge_owner,
+        )
+        .expect("the hero picks twice");
+        let paid = lookahead.value(&vertex_owner, &edge_owner, candidate);
+
+        let expected: f64 = losses.iter().sum();
+        assert_eq!(lookahead.denial, expected);
+        assert_eq!(paid, base + WEIGHT * expected);
+    }
+
+    /// A candidate the rivals would have passed over at every pick of theirs costs them nothing,
+    /// so it earns nothing, and its value is the one it carries at the shipped weight.
+    #[test]
+    fn a_candidate_no_rival_would_have_taken_earns_no_credit() {
+        let (topology, board) = fixture();
+        let plain = scorers(&topology, &board);
+        let credited = scorers_at_denial(&topology, &board, 1.5);
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+
+        let candidate = (0..topology.vertex_count() as Vertex)
+            .find(|candidate| {
+                can_place_settlement(&topology, &vertex_owner, *candidate)
+                    && rival_losses(&plain, &topology, &vertex_owner, &edge_owner, *candidate)
+                        .iter()
+                        .all(|loss| *loss == 0.0)
+            })
+            .expect("some opening leaves both of the rival's picks where they were");
+
+        let mut uncredited = Lookahead::new(
+            &plain,
+            &topology,
+            SEATS,
+            HERO,
+            &vertex_owner,
+            &edge_owner,
+        )
+        .expect("the hero picks twice");
+        let base = uncredited.value(&vertex_owner, &edge_owner, candidate);
+        let mut lookahead = Lookahead::new(
+            &credited,
+            &topology,
+            SEATS,
+            HERO,
+            &vertex_owner,
+            &edge_owner,
+        )
+        .expect("the hero picks twice");
+
+        assert_eq!(lookahead.value(&vertex_owner, &edge_owner, candidate), base);
+        assert_eq!(lookahead.denial, 0.0);
+    }
+
+    /// The credit is a credit and never a charge: a rival that comes out ahead pays the hero
+    /// nothing back, and a rival with no best on one side of the comparison is not differenced.
+    #[test]
+    fn the_denial_gain_floors_at_zero() {
+        assert_eq!(denial_gain(Some((3, 2.0)), Some((7, 0.5))), 1.5);
+        assert_eq!(denial_gain(Some((3, 0.5)), Some((7, 2.0))), 0.0);
+        assert_eq!(denial_gain(None, Some((7, 2.0))), 0.0);
+        assert_eq!(denial_gain(Some((3, 2.0)), None), 0.0);
     }
 }
