@@ -307,9 +307,9 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 25: Run M-60 and record it
 
-- [ ] Record `uptime`, run every preregistered invocation, record `uptime` again
-- [ ] Append `## M-60: SP5 setup denial` with full provenance, both tables per arm, the disposition per arm including the single retry, and whether the preregistered null held
-- [ ] Link check passes
+- [x] Record `uptime`, run every preregistered invocation, record `uptime` again
+- [x] Append `## M-60: SP5 setup denial` with full provenance, both tables per arm, the disposition per arm including the single retry, and whether the preregistered null held
+- [x] Link check passes
 
 ### Task 26: SP3 through SP5 completion note
 
