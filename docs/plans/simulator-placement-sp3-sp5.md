@@ -319,19 +319,19 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 27: Verify acceptance criteria
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` clean (the pre-existing `src/ui/glyphs.tsx` fast-refresh warning is the only permitted warning and must not have grown)
-- [ ] `npm test` fully green
-- [ ] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green
-- [ ] `git status` is clean apart from gitignored run artifacts
-- [ ] `gaps.md` no longer contains `SIM-GAP-20` and still contains `SIM-GAP-34` through `SIM-GAP-37` and `SIM-GAP-41`
-- [ ] `measurements.md` contains M-54, M-56, M-58, M-59 and M-60, plus M-55 and M-57 unless their conditions skipped them, each with a date, a commit, a domain, an exact command, load before and after, a games count, an illegal-action count, and an admissibility statement; grep the new entries and preregs for `--domain eval` and `--domain gate` and confirm neither appears
-- [ ] `simulator/placement/default-weights.json` matches `DEFAULT_WEIGHTS` (the vitest mirror test proves it); against the pre-run tree its only differences are `expansionWeight` 0, `expansionDecay` 0.5, `slotScales` all 1.0, `setupDenialWeight` 0, and `robberConcentrationWeight` 0 if Task 14 built it
-- [ ] Every weights-shaped file under `simulator/placement/arms/` loads through the exact-key walk test and the count pin equals 51 plus the arms this run added
-- [ ] `placement-programme.md` carries the M-56 decision note and the completion note, each appended
-- [ ] Write a run summary at the end of `.ralphex/progress/progress-simulator-placement-sp3-sp5.txt` listing every M entry produced, its verdict, and the survivors carried to SP6
+- [x] `npm run typecheck` clean (verified 2026-09-02: `tsc -b` exits 0)
+- [x] `npm run lint` clean (the pre-existing `src/ui/glyphs.tsx` fast-refresh warning is the only permitted warning and must not have grown) (verified 2026-09-02: one warning, the permitted `glyphs.tsx` one, unchanged)
+- [x] `npm test` fully green (verified 2026-09-02: 386 tests over 35 files, all passing)
+- [x] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references (verified 2026-09-02: 0 bad references in 45 files)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green (verified 2026-09-02)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green (verified 2026-09-02)
+- [x] `git status` is clean apart from gitignored run artifacts (verified 2026-09-02: `git status --porcelain` was empty before this task's own edits)
+- [x] `gaps.md` no longer contains `SIM-GAP-20` and still contains `SIM-GAP-34` through `SIM-GAP-37` and `SIM-GAP-41` (verified 2026-09-02)
+- [x] `measurements.md` contains M-54, M-56, M-58, M-59 and M-60, plus M-55 and M-57 unless their conditions skipped them, each with a date, a commit, a domain, an exact command, load before and after, a games count, an illegal-action count, and an admissibility statement; grep the new entries and preregs for `--domain eval` and `--domain gate` and confirm neither appears (verified 2026-09-02: M-55 skipped per Task 10's branch; M-56's provenance paragraph relabelled "Provenance and admissibility" in this task so every entry names it; the only `--domain eval`/`--domain gate` hits in the tree are the M-45 and M-46 preregs from earlier runs)
+- [x] `simulator/placement/default-weights.json` matches `DEFAULT_WEIGHTS` (the vitest mirror test proves it); against the pre-run tree its only differences are `expansionWeight` 0, `expansionDecay` 0.5, `slotScales` all 1.0, `setupDenialWeight` 0, and `robberConcentrationWeight` 0 if Task 14 built it (verified 2026-09-02: the diff against `a9e1373d` is exactly those five keys, `robberConcentrationWeight` included since Task 14 built it)
+- [x] Every weights-shaped file under `simulator/placement/arms/` loads through the exact-key walk test and the count pin equals 51 plus the arms this run added (verified 2026-09-02: the pin reads 58 = 51 + the 7 arms this run added)
+- [x] `placement-programme.md` carries the M-56 decision note and the completion note, each appended (verified 2026-09-02: "Robber concentration branch, 2026-09-02" and "SP3 through SP5 completion, 2026-09-02")
+- [x] Write a run summary at the end of `.ralphex/progress/progress-simulator-placement-sp3-sp5.txt` listing every M entry produced, its verdict, and the survivors carried to SP6 (verified 2026-09-02)
 
 ## Post-Completion
 
