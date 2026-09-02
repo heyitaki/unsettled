@@ -271,6 +271,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -288,7 +290,8 @@
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.25963787878788,
       "breakdownTotal": 15.25963787878788,
@@ -564,6 +567,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -581,7 +586,8 @@
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.25963787878788,
       "breakdownTotal": 15.25963787878788,
@@ -822,6 +828,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -841,7 +849,8 @@
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 1.92,
       "breakdownTotal": 1.92,
@@ -1080,6 +1089,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -1099,7 +1110,8 @@
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 1.8699999999999999,
       "breakdownTotal": 1.8699999999999999,
@@ -1338,6 +1350,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -1357,7 +1371,8 @@
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 2.4699999999999998,
       "breakdownTotal": 2.4699999999999998,
@@ -1596,6 +1611,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -1615,7 +1632,8 @@
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 1.92,
       "breakdownTotal": 1.92,
@@ -1854,6 +1872,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -1873,7 +1893,8 @@
         "robber": 0,
         "diversity": -0.08,
         "port": 1.375,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 2.42,
       "breakdownTotal": 2.42,
@@ -2147,6 +2168,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -2164,7 +2187,8 @@
         "robber": 0,
         "diversity": 0.15600000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 0.9385000000000001,
       "breakdownTotal": 0.9385000000000001,
@@ -2437,6 +2461,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -2454,7 +2480,8 @@
         "robber": 0,
         "diversity": 2.5331673694447354,
         "port": 0.18333333333333332,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 10.327971291013364,
       "breakdownTotal": 10.327971291013364,
@@ -2731,6 +2758,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -2748,7 +2777,8 @@
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0.09166666666666666,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.983266666666667,
       "breakdownTotal": 5.983266666666667,
@@ -3025,6 +3055,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -3042,7 +3074,8 @@
         "robber": 0,
         "diversity": 1.367887125277521,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.365387125277522,
       "breakdownTotal": 5.365387125277522,
@@ -3318,6 +3351,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -3335,7 +3370,8 @@
         "robber": 0,
         "diversity": 3.455709090909091,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.154110606060607,
       "breakdownTotal": 15.154110606060607,
@@ -3612,6 +3648,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -3629,7 +3667,8 @@
         "robber": 0,
         "diversity": 3.455709090909091,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.154110606060607,
       "breakdownTotal": 15.154110606060607,
@@ -3906,6 +3945,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -3923,7 +3964,8 @@
         "robber": 0,
         "diversity": 3.7875428571428573,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 11.854126190476192,
       "breakdownTotal": 11.854126190476192,
@@ -4302,6 +4344,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -4319,7 +4363,8 @@
         "robber": 0,
         "diversity": 2.57897535898576,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.070021110619747,
       "breakdownTotal": 12.070021110619747,
@@ -4698,6 +4743,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -4715,7 +4762,8 @@
         "robber": 0,
         "diversity": 2.57897535898576,
         "port": 0,
-        "handValue": 1.3600000000000003
+        "handValue": 1.3600000000000003,
+        "expansion": 0
       },
       "marginalTotal": 13.430021110619748,
       "breakdownTotal": 13.430021110619748,
@@ -4951,6 +4999,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": "Infinity",
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -4968,7 +5018,8 @@
         "robber": 0,
         "diversity": 3.8309181818181823,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 14.573054545454546,
       "breakdownTotal": 14.573054545454546,
@@ -5204,6 +5255,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": "Infinity",
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -5221,7 +5274,8 @@
         "robber": 0,
         "diversity": 3.8309181818181823,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 14.573054545454546,
       "breakdownTotal": 14.573054545454546,
@@ -5497,6 +5551,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 2,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -5516,7 +5572,8 @@
         "robber": -8,
         "diversity": -0.88,
         "port": 0.11458333333333333,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 2.500219696969698,
       "breakdownTotal": 2.500219696969698,
@@ -5792,6 +5849,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -5809,7 +5868,8 @@
         "robber": 0,
         "diversity": "NaN",
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": "NaN",
       "breakdownTotal": "NaN",
@@ -6085,6 +6145,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -6102,7 +6164,8 @@
         "robber": 0,
         "diversity": "NaN",
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": "NaN",
       "breakdownTotal": "NaN",
@@ -6338,6 +6401,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -6355,7 +6420,8 @@
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.8916,
       "breakdownTotal": 5.8916,
@@ -6592,6 +6658,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 1,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -6609,7 +6677,8 @@
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0.09166666666666666,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.983266666666667,
       "breakdownTotal": 5.983266666666667,
@@ -6845,6 +6914,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -6862,7 +6933,8 @@
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.8916,
       "breakdownTotal": 5.8916,
@@ -7138,6 +7210,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -7155,7 +7229,8 @@
         "robber": 0,
         "diversity": 0,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 0.4722196969696972,
       "breakdownTotal": 0.4722196969696972,
@@ -7431,6 +7506,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -7448,7 +7525,8 @@
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.25963787878788,
       "breakdownTotal": 15.25963787878788,
@@ -7724,6 +7802,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -7741,7 +7821,8 @@
         "robber": 0,
         "diversity": 1.3852943577577819,
         "port": 0.11458333333333331,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 13.15751405472748,
       "breakdownTotal": 13.15751405472748,
@@ -7977,6 +8058,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -7994,7 +8077,8 @@
         "robber": 0,
         "diversity": 1.7131000000000003,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 5.8916,
       "breakdownTotal": 5.8916,
@@ -8231,6 +8315,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -8250,7 +8336,8 @@
         "robber": 0,
         "diversity": -0.32,
         "port": 2.2,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 4.380000000000001,
       "breakdownTotal": 4.380000000000001,
@@ -8480,6 +8567,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -8497,7 +8586,8 @@
         "robber": 0,
         "diversity": 3.4874181818181818,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 15.145054545454546,
       "breakdownTotal": 15.145054545454546,
@@ -8773,6 +8863,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -8795,7 +8887,8 @@
         "robber": 0,
         "diversity": -0.88,
         "port": 0.25208333333333327,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 11.029719696969696,
       "breakdownTotal": 11.029719696969696,
@@ -9071,6 +9164,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -9090,7 +9185,8 @@
         "robber": 0,
         "diversity": 1.7051647173503168,
         "port": 0.13749999999999998,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.58480108098668,
       "breakdownTotal": 12.58480108098668,
@@ -9469,6 +9565,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -9486,7 +9584,8 @@
         "robber": 0,
         "diversity": 2.776035637353016,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.055447243290939,
       "breakdownTotal": 12.055447243290939,
@@ -9865,6 +9964,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -9882,7 +9983,8 @@
         "robber": 0,
         "diversity": 2.776035637353016,
         "port": 0,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 12.055447243290939,
       "breakdownTotal": 12.055447243290939,
@@ -10158,6 +10260,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -10175,7 +10279,8 @@
         "robber": 0,
         "diversity": 7.989853650623914,
         "port": 0.06874999999999999,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 21.68105819607846,
       "breakdownTotal": 21.68105819607846,
@@ -10411,6 +10516,8 @@
         "portCoverageDeficitWeight": 1,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -10430,7 +10537,8 @@
         "robber": 0,
         "diversity": 1.4123636363636363,
         "port": 8.662500000000001,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 23.364257575757577,
       "breakdownTotal": 23.364257575757577,
@@ -11058,6 +11166,8 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
+        "expansionWeight": 0,
+        "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "opponentTopK": 3,
         "softmaxTemperature": 1.25,
@@ -11079,7 +11189,8 @@
         "robber": -1.75,
         "diversity": 2.437999814372859,
         "port": 1.7645833333333332,
-        "handValue": 0
+        "handValue": 0,
+        "expansion": 0
       },
       "marginalTotal": 10.632767358232508,
       "breakdownTotal": 10.632767358232508,

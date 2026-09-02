@@ -27,6 +27,8 @@
     "portCoverageDeficitWeight": { "min": 0.0, "max": 4.0 },
     "nearPortRadius": { "min": 1.0, "max": 3.0 },
     "nearPortDecay": { "min": 0.125, "max": 1.0 },
+    "expansionWeight": { "min": 0.0, "max": 1.2 },
+    "expansionDecay": { "min": 0.125, "max": 1.0 },
     "robberDiscount": { "min": 0.0, "max": 1.0 },
     "opponentTopK": { "min": 3.0, "max": 3.0 },
     "softmaxTemperature": { "min": 1.25, "max": 1.25 },

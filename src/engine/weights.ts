@@ -43,6 +43,15 @@ export interface EngineWeights {
   // a hex; reach decays per road so on-port access still ranks highest.
   nearPortRadius: number
   nearPortDecay: number
+  // What the best sites a candidate *opens* are worth to it. A pair that is
+  // boxed in by rivals converts its pips into nothing, and every other
+  // component prices only the two vertices themselves. Ships at 0 until an A/B
+  // prices it, where the walk is skipped and the term is exactly 0.
+  expansionWeight: number
+  // Per paid road-build discount on a site's value. The first road is the free
+  // setup one, so a site two builds out is worth `decay ** 2` of its score. At
+  // 1 distance stops mattering; inert while expansionWeight is 0.
+  expansionDecay: number
   robberDiscount: number
   opponentTopK: number
   softmaxTemperature: number
@@ -80,6 +89,8 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   portCoverageDeficitWeight: 0,
   nearPortRadius: 2,
   nearPortDecay: 0.5,
+  expansionWeight: 0,
+  expansionDecay: 0.5,
   robberDiscount: 0.35,
   opponentTopK: 3,
   softmaxTemperature: 1.25,

@@ -60,6 +60,7 @@ function context(
     ore: scarcity.ore ?? 1,
   }
   return {
+    layout: 'standard4',
     stats,
     scarcity: boardScarcity,
     coverageValue: coverageValues(weights, boardScarcity),
@@ -596,16 +597,23 @@ describe('occupancy', () => {
       !occupied.has(vertexId))).toBe(false)
   })
 
-  it('empties to a shared value and memoizes per board', () => {
+  it('empties to a shared value and memoizes its pieces per board', () => {
     expect(emptyOccupancy().blocked.size).toBe(0)
     expect(emptyOccupancy().edgeOwner.size).toBe(0)
+    expect(emptyOccupancy().seat).toBeNull()
     expect(emptyOccupancy()).toBe(emptyOccupancy())
-    expect(occupancyFromBoard(board)).toBe(occupancyFromBoard(board))
-    expect(occupancyFromBoard({ ...board })).not.toBe(occupancyFromBoard(board))
+    // The seat rides on the wrapper, so two callers naming different seats share one board's
+    // collections rather than rebuilding them.
+    expect(occupancyFromBoard(board).blocked).toBe(occupancyFromBoard(board, 'p1').blocked)
+    expect(occupancyFromBoard(board).edgeOwner).toBe(occupancyFromBoard(board, 'p1').edgeOwner)
+    expect(occupancyFromBoard(board).seat).toBeNull()
+    expect(occupancyFromBoard(board, 'p1').seat).toBe('p1')
+    expect(occupancyFromBoard({ ...board }).blocked).not.toBe(occupancyFromBoard(board).blocked)
   })
 
-  // Nothing reads occupancy until SP3's expansion term does, so a full one has to score bit-for-bit
-  // what an empty one scores. Bits, not toBeCloseTo: the claim is that the argument is inert.
+  // At the shipped `expansionWeight` of 0 no component reads occupancy, so a full one has to score
+  // bit-for-bit what an empty one scores. Bits, not toBeCloseTo: the claim is that the argument is
+  // inert.
   it('leaves every score untouched at every scoring entry', () => {
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
     const occupancy = occupancyFromBoard(board)

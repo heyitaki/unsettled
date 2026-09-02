@@ -5,10 +5,12 @@ import {
   RESOURCES,
   type Board,
   type EdgeId,
+  type LayoutId,
   type Port,
   type Resource,
   type VertexId,
 } from '../model/types'
+import { expansionTerm } from './expansion'
 import { vertexAdjacency } from './legality'
 import type { PlacementModifier } from './modifiers'
 import type { EngineWeights } from './weights'
@@ -20,6 +22,8 @@ export interface ScoreBreakdown {
   diversity: number
   port: number
   handValue: number
+  /** What the sites this vertex opens are worth. See `expansion.ts::expansionTerm`. */
+  expansion: number
 }
 
 export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
@@ -28,7 +32,8 @@ export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
   breakdown.robber +
   breakdown.diversity +
   breakdown.port +
-  breakdown.handValue
+  breakdown.handValue +
+  breakdown.expansion
 
 export type HandCounts = Readonly<Partial<Record<Resource, number>>>
 
@@ -61,6 +66,8 @@ export interface VertexStats {
 }
 
 export interface BoardContext {
+  /** The board's layout, which is the grid SP3's expansion walk spreads over. */
+  layout: LayoutId
   stats: ReadonlyMap<VertexId, VertexStats>
   scarcity: Record<Resource, number>
   /** What *missing* each resource costs on this board. See `coverageValues`. */
@@ -83,40 +90,49 @@ export interface Holdings {
  * player's own settlements, and `BoardContext` is built once per board and weights and so cannot
  * carry a state that moves pick by pick.
  *
- * Nothing reads it yet. Every component today is a function of the scoring player's own holdings
- * alone, so an empty occupancy scores bit-for-bit what a full one does; SP3's expansion term is
- * the first to make the rest of the board matter.
+ * The expansion term is the only component that reads it. Every other one is a function of the
+ * scoring player's own holdings alone, so at `expansionWeight` 0 an empty occupancy scores
+ * bit-for-bit what a full one does.
+ *
+ * `seat` is who is being scored, which the walk needs to tell its own roads (free to travel) from
+ * a rival's (impassable). The vertex half of the same question comes from `Holdings`, which is the
+ * seat's own by construction. Null names no one, so every road on the board reads as a rival's.
  */
 export interface Occupancy {
   blocked: ReadonlySet<VertexId>
   edgeOwner: ReadonlyMap<EdgeId, string>
+  seat: string | null
 }
 
 // One shared value rather than a fresh pair of empty collections per call: this is the default of
 // three scoring entries the rollout scans call millions of times.
-const EMPTY_OCCUPANCY: Occupancy = { blocked: new Set(), edgeOwner: new Map() }
+const EMPTY_OCCUPANCY: Occupancy = { blocked: new Set(), edgeOwner: new Map(), seat: null }
 
 export const emptyOccupancy = (): Occupancy => EMPTY_OCCUPANCY
 
-const boardOccupancies = new WeakMap<Board, Occupancy>()
+type BoardPieces = Pick<Occupancy, 'blocked' | 'edgeOwner'>
+
+const boardOccupancies = new WeakMap<Board, BoardPieces>()
 
 /**
  * The occupancy a board stands for: its buildings' vertices and its roads' owners, exactly as
  * placed. `blocked` holds the occupied vertices themselves, not the ones the distance rule bars
  * building on, so a walk can tell a settlement apart from its neighbour.
  *
- * Memoized on board identity, the same key `analyzeBoardCached` uses: boards are immutable, every
- * edit is a new object, and a rollout asks the same board for this once per window.
+ * The pieces are memoized on board identity, the same key `analyzeBoardCached` uses: boards are
+ * immutable, every edit is a new object, and a rollout asks the same board for this once per
+ * window. Only the seat wrapper around them is rebuilt per caller.
  */
-export function occupancyFromBoard(board: Board): Occupancy {
-  const hit = boardOccupancies.get(board)
-  if (hit) return hit
-  const occupancy: Occupancy = {
-    blocked: new Set(board.buildings.map((building) => building.vertexId)),
-    edgeOwner: new Map(board.roads.map((road) => [road.edgeId, road.playerId])),
+export function occupancyFromBoard(board: Board, seat: string | null = null): Occupancy {
+  let pieces = boardOccupancies.get(board)
+  if (!pieces) {
+    pieces = {
+      blocked: new Set(board.buildings.map((building) => building.vertexId)),
+      edgeOwner: new Map(board.roads.map((road) => [road.edgeId, road.playerId])),
+    }
+    boardOccupancies.set(board, pieces)
   }
-  boardOccupancies.set(board, occupancy)
-  return occupancy
+  return { ...pieces, seat }
 }
 
 /**
@@ -303,6 +319,7 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
     })
   }
   const ctx: BoardContext = {
+    layout: board.layout,
     stats,
     scarcity,
     coverageValue: coverageValues(weights, scarcity),
@@ -590,11 +607,17 @@ export function marginalBreakdown(
   hand: HandCounts | null = null,
   occupancy: Occupancy = emptyOccupancy(),
 ): ScoreBreakdown {
-  // Accepted and discarded: no component reads occupancy until SP3's expansion term does.
-  void occupancy
   const stats = ctx.stats.get(candidate)
   if (!stats) {
-    return { production: 0, scarcity: 0, robber: 0, diversity: 0, port: 0, handValue: 0 }
+    return {
+      production: 0,
+      scarcity: 0,
+      robber: 0,
+      diversity: 0,
+      port: 0,
+      handValue: 0,
+      expansion: 0,
+    }
   }
   const precompute = precomputeFor(ctx, candidate, stats)
   const [production, scarcity, robber] = baseParts(ctx.weights, ctx.scarcity, stats)
@@ -605,6 +628,9 @@ export function marginalBreakdown(
     diversity: diversityDelta(ctx, holdings, stats, precompute),
     port: portDelta(ctx, holdings, stats, precompute),
     handValue: hand === null ? 0 : handValue(ctx.weights, hand),
+    // `expansionTerm` returns 0 at weight 0 without walking, which is the shipped default and
+    // every rollout scan.
+    expansion: expansionTerm(ctx, holdings, occupancy, candidate).value,
   }
 }
 
@@ -621,8 +647,21 @@ export function marginalTotal(
   hand: HandCounts | null = null,
   occupancy: Occupancy = emptyOccupancy(),
 ): number {
-  // Accepted and discarded, as in `marginalBreakdown`.
-  void occupancy
+  return marginalWithoutExpansion(ctx, holdings, candidate, hand) +
+    expansionTerm(ctx, holdings, occupancy, candidate).value
+}
+
+/**
+ * `marginalTotal` without its expansion component, which is what the expansion walk prices every
+ * site it finds through: a site is worth what the rest of the formula says it is worth, and the
+ * term can never recurse into itself.
+ */
+export function marginalWithoutExpansion(
+  ctx: BoardContext,
+  holdings: Holdings,
+  candidate: VertexId,
+  hand: HandCounts | null = null,
+): number {
   const stats = ctx.stats.get(candidate)
   if (!stats) return 0
   const precompute = precomputeFor(ctx, candidate, stats)

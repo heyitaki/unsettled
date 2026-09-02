@@ -101,6 +101,7 @@ const emptyBreakdown = (): ScoreBreakdown => ({
   diversity: 0,
   port: 0,
   handValue: 0,
+  expansion: 0,
 })
 
 const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
@@ -110,6 +111,7 @@ const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
   target.diversity += value.diversity
   target.port += value.port
   target.handValue += value.handValue
+  target.expansion += value.expansion
 }
 
 const receivesSecondSettlementGrant = (
@@ -167,9 +169,14 @@ const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holding
  * the buildings alone, so this is the conservative reading of the two: a vertex barred by a
  * neighbouring settlement looks occupied here.
  */
-const rolloutOccupancy = (board: Board, blocked: ReadonlySet<VertexId>): Occupancy => ({
+const rolloutOccupancy = (
+  board: Board,
+  blocked: ReadonlySet<VertexId>,
+  seat: string | null,
+): Occupancy => ({
   blocked,
   edgeOwner: occupancyFromBoard(board).edgeOwner,
+  seat,
 })
 
 const scoreForScan = (
@@ -211,7 +218,7 @@ function bestLegalCandidate(
 ): VertexId | null {
   let best: VertexId | null = null
   let bestScore = -Infinity
-  const occupancy = rolloutOccupancy(board, blocked)
+  const occupancy = rolloutOccupancy(board, blocked, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
     const score = scoreForScan(
@@ -245,7 +252,7 @@ function opponentPick(
   const topVertices: VertexId[] = []
   const topScores: number[] = []
   const topK = Math.max(1, ctx.weights.opponentTopK)
-  const occupancy = rolloutOccupancy(board, blocked)
+  const occupancy = rolloutOccupancy(board, blocked, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
     const score = scoreForScan(
@@ -422,7 +429,7 @@ export function rankCandidates(
   const myHoldings = holdingsFromBoard(ctx, board).get(me) ?? emptyHoldings()
   const firstReceivesGrant = receivesSecondSettlementGrant(draft, firstPickIndex)
   // Scored once, before any rollout, so the board's own pieces are the whole occupancy.
-  const boardOccupancy = occupancyFromBoard(board)
+  const boardOccupancy = occupancyFromBoard(board, me)
   const firstScores = new Map(candidates.map((candidate) => [
     candidate,
     scoreCandidate(
@@ -498,7 +505,7 @@ export function rankCandidates(
           second,
           receivesSecondSettlementGrant(draft, secondPickIndex),
         ),
-        rolloutOccupancy(board, blocked),
+        rolloutOccupancy(board, blocked, me),
       )
       addBreakdown(aggregate.breakdown, secondScore.breakdown)
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
@@ -517,6 +524,7 @@ export function rankCandidates(
       diversity: aggregate.breakdown.diversity / aggregate.survived,
       port: aggregate.breakdown.port / aggregate.survived,
       handValue: aggregate.breakdown.handValue / aggregate.survived,
+      expansion: aggregate.breakdown.expansion / aggregate.survived,
     }
     const survival = aggregate.survived / preWindows.length
     const score = breakdownTotal(breakdown)
@@ -591,7 +599,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
     board.players.some((player) => player.id === board.mePlayerId)
   const meDone = draft.myRemainingPickIndices.length === 0
   const me = board.mePlayerId
-  const boardOccupancy = occupancyFromBoard(board)
+  const boardOccupancy = occupancyFromBoard(board, me)
   const baseHoldings = holdingsFromBoard(ctx, board)
   const myHoldings = me === null ? emptyHoldings() : baseHoldings.get(me) ?? emptyHoldings()
   const canRank = !complete && meValid && !meDone && legal.length > 0 && me !== null

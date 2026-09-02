@@ -1,0 +1,217 @@
+import { describe, expect, it } from 'vitest'
+import {
+  addPlayer,
+  createBoard,
+  placeBuilding,
+  placeRoad,
+  setHexTile,
+  setNumberToken,
+  setRobber,
+} from '../../model/board'
+import { vertexIncidentEdgeIds } from '../../model/coords'
+import { boardGrid } from '../../model/layouts'
+import { RESOURCES, type Board, type EdgeId, type VertexId } from '../../model/types'
+import { expansionSites, expansionSitesByEdge, expansionTerm } from '../expansion'
+import { vertexAdjacency } from '../legality'
+import {
+  addToHoldings,
+  breakdownTotal,
+  computeBoardContext,
+  emptyHoldings,
+  emptyOccupancy,
+  marginalBreakdown,
+  marginalTotal,
+  marginalWithoutExpansion,
+  occupancyFromBoard,
+} from '../valuation'
+import { DEFAULT_WEIGHTS, type EngineWeights } from '../weights'
+
+const grid = boardGrid('standard4')
+const adjacency = vertexAdjacency('standard4')
+const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
+
+/** Every hex tiled and numbered, two seats, so the only thing a case varies is the pieces. */
+function completeBoard(uniform = false): Board {
+  let board = createBoard('standard4')
+  grid.landCoords.forEach((coord, index) => {
+    board = setHexTile(board, coord, uniform ? 'wheat' : RESOURCES[index % RESOURCES.length])
+    board = setNumberToken(board, coord, uniform ? 6 : TOKENS[index % TOKENS.length])
+  })
+  board = setRobber(board, null)
+  board = addPlayer(board, { id: 'me', name: 'Me', color: '#111111' })
+  return addPlayer(board, { id: 'foe', name: 'Foe', color: '#222222' })
+}
+
+const withWeights = (changes: Partial<EngineWeights>): EngineWeights => ({
+  ...DEFAULT_WEIGHTS,
+  ...changes,
+})
+
+const incidentEdges = (vertexId: VertexId): EdgeId[] =>
+  vertexIncidentEdgeIds(vertexId).filter((edgeId) => grid.edgeIds.includes(edgeId)).sort()
+
+// An interior vertex on three hexes, so every direction out of it is open board.
+const CANDIDATE: VertexId = 'v:-1,0;-1,1;0,0'
+
+/** The vertices two steps out, which ring the candidate without touching it. */
+const secondRing = (vertexId: VertexId): VertexId[] => {
+  const first = adjacency.get(vertexId) ?? []
+  return [...new Set(first.flatMap((neighbour) => adjacency.get(neighbour) ?? []))]
+    .filter((candidate) => candidate !== vertexId && !first.includes(candidate))
+}
+
+describe('expansion term', () => {
+  const witness = withWeights({ expansionWeight: 0.3 })
+
+  it('prices the two best sites the candidate opens', () => {
+    const open = completeBoard()
+    // Rivals on the whole second ring: every path out of the candidate dies on a settlement
+    // before it reaches a legal site, while the candidate's own production is untouched.
+    const boxed = secondRing(CANDIDATE).reduce(
+      (board, vertexId) => placeBuilding(board, vertexId, 'foe', 'settlement'),
+      open,
+    )
+    const openCtx = computeBoardContext(open, witness)
+    const boxedCtx = computeBoardContext(boxed, witness)
+    const openOccupancy = occupancyFromBoard(open, 'me')
+    const boxedOccupancy = occupancyFromBoard(boxed, 'me')
+
+    const sites = expansionSites('standard4', openOccupancy, new Set([CANDIDATE]), CANDIDATE)
+    expect(sites.length).toBeGreaterThan(1)
+    const held = addToHoldings(openCtx, emptyHoldings(), CANDIDATE)
+    const discounted = sites
+      .map((site) =>
+        marginalWithoutExpansion(openCtx, held, site.vertexId) *
+          witness.expansionDecay ** site.paidBuilds)
+      .sort((left, right) => right - left)
+    const expected = witness.expansionWeight * (discounted[0] + discounted[1])
+
+    const openScore = marginalBreakdown(openCtx, emptyHoldings(), CANDIDATE, null, openOccupancy)
+    const boxedScore = marginalBreakdown(boxedCtx, emptyHoldings(), CANDIDATE, null, boxedOccupancy)
+    expect(openScore.expansion).toBe(expected)
+    expect(expansionSites('standard4', boxedOccupancy, new Set([CANDIDATE]), CANDIDATE)).toEqual([])
+    expect(boxedScore.expansion).toBe(0)
+    // The two boards differ only in the rivals' pieces, so every other component is untouched and
+    // the whole gap is the term.
+    expect({ ...openScore, expansion: 0 }).toEqual(boxedScore)
+    expect(breakdownTotal(openScore)).toBeGreaterThan(breakdownTotal(boxedScore))
+  })
+
+  it("treats a rival road as impassable and the seat's own as free", () => {
+    const board = completeBoard()
+    const [first, second, third] = incidentEdges(CANDIDATE)
+    const ctx = computeBoardContext(board, witness)
+    const openSites = expansionSites(
+      'standard4',
+      occupancyFromBoard(board, 'me'),
+      new Set([CANDIDATE]),
+      CANDIDATE,
+    )
+
+    const twoClosed = placeRoad(placeRoad(board, first, 'foe'), second, 'foe')
+    const throughThird = occupancyFromBoard(twoClosed, 'me')
+    const narrowed = expansionSites('standard4', throughThird, new Set([CANDIDATE]), CANDIDATE)
+    expect(narrowed.length).toBeGreaterThan(0)
+    expect(narrowed.length).toBeLessThan(openSites.length)
+    expect(narrowed.every((site) => site.firstEdge === third)).toBe(true)
+    expect(expansionTerm(ctx, emptyHoldings(), throughThird, CANDIDATE).road).toBe(third)
+
+    const allClosed = placeRoad(twoClosed, third, 'foe')
+    const closed = occupancyFromBoard(allClosed, 'me')
+    expect(expansionSites('standard4', closed, new Set([CANDIDATE]), CANDIDATE)).toEqual([])
+    expect(expansionTerm(computeBoardContext(allClosed, witness), emptyHoldings(), closed, CANDIDATE))
+      .toEqual({ value: 0, road: null })
+
+    // The same three roads in the seat's own name cost it nothing: they are its network, not a
+    // rival's wall.
+    const mine = incidentEdges(CANDIDATE).reduce(
+      (next, edgeId) => placeRoad(next, edgeId, 'me'),
+      board,
+    )
+    const ownRoads = occupancyFromBoard(mine, 'me')
+    expect(expansionSites('standard4', ownRoads, new Set([CANDIDATE]), CANDIDATE).length)
+      .toBeGreaterThanOrEqual(openSites.length)
+    // Named as somebody else, the very same roads close the candidate in.
+    expect(expansionSites(
+      'standard4',
+      occupancyFromBoard(mine, 'foe'),
+      new Set([CANDIDATE]),
+      CANDIDATE,
+    )).toEqual([])
+  })
+
+  it('is exactly inert at the shipped weight of 0', () => {
+    expect(DEFAULT_WEIGHTS.expansionWeight).toBe(0)
+    const board = secondRing(CANDIDATE).reduce(
+      (next, vertexId) => placeBuilding(next, vertexId, 'foe', 'settlement'),
+      placeRoad(completeBoard(), incidentEdges(CANDIDATE)[0], 'foe'),
+    )
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const occupancy = occupancyFromBoard(board, 'me')
+    const held = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    for (const vertexId of grid.vertexIds) {
+      const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
+      const breakdown = marginalBreakdown(ctx, held, vertexId, hand, occupancy)
+      // Bits, not toBeCloseTo: the claim is that the shipped default cannot move a number.
+      expect(breakdown.expansion).toBe(0)
+      expect(breakdown).toEqual(marginalBreakdown(ctx, held, vertexId, hand, emptyOccupancy()))
+      expect(marginalTotal(ctx, held, vertexId, hand, occupancy))
+        .toBe(marginalWithoutExpansion(ctx, held, vertexId, hand))
+    }
+  })
+
+  it('lays the road toward the best site, breaking ties on the pair then the edge id', () => {
+    const board = completeBoard()
+    const ctx = computeBoardContext(board, witness)
+    const occupancy = occupancyFromBoard(board, 'me')
+    const holdings = emptyHoldings()
+    // Recompute the whole rule from the per-edge walk, on every candidate the board offers.
+    for (const candidate of grid.vertexIds) {
+      const byEdge = expansionSitesByEdge('standard4', occupancy, new Set([candidate]), candidate)
+      const term = expansionTerm(ctx, holdings, occupancy, candidate)
+      if (byEdge.size === 0) {
+        expect(term).toEqual({ value: 0, road: null })
+        continue
+      }
+      const held = addToHoldings(ctx, holdings, candidate)
+      const ranked = [...byEdge].map(([edgeId, sites]) => {
+        const values = sites
+          .map((site) =>
+            marginalWithoutExpansion(ctx, held, site.vertexId) *
+              witness.expansionDecay ** site.paidBuilds)
+          .sort((left, right) => right - left)
+        return { edgeId, best: values[0], pair: values[0] + (values[1] ?? 0) }
+      }).sort((left, right) =>
+        right.best - left.best ||
+        right.pair - left.pair ||
+        (left.edgeId < right.edgeId ? -1 : 1))
+      expect(term.road).toBe(ranked[0].edgeId)
+    }
+  })
+
+  it('falls to the lowest edge id when every direction is worth the same', () => {
+    // One tile and one token everywhere, and no decay, so distance costs nothing and every edge
+    // out of an interior vertex reaches the same best site and the same best pair.
+    const board = completeBoard(true)
+    const weights = withWeights({ expansionWeight: 0.3, expansionDecay: 1 })
+    const ctx = computeBoardContext(board, weights)
+    const occupancy = occupancyFromBoard(board, 'me')
+    const byEdge = expansionSitesByEdge('standard4', occupancy, new Set([CANDIDATE]), CANDIDATE)
+    const edges = incidentEdges(CANDIDATE)
+    expect([...byEdge.keys()].sort()).toEqual(edges)
+    const held = addToHoldings(ctx, emptyHoldings(), CANDIDATE)
+    const values = edges.map((edgeId) =>
+      (byEdge.get(edgeId) ?? [])
+        .map((site) => marginalWithoutExpansion(ctx, held, site.vertexId))
+        .sort((left, right) => right - left)
+        .slice(0, 2))
+    // The tie is real, not an artefact of one edge happening to win.
+    expect(values[1]).toEqual(values[0])
+    expect(values[2]).toEqual(values[0])
+    expect(expansionTerm(ctx, emptyHoldings(), occupancy, CANDIDATE).road).toBe(edges[0])
+    // At the shipped decay the directions separate again, so the pin above is not vacuous.
+    const decayed = computeBoardContext(board, withWeights({ expansionWeight: 0.3 }))
+    expect(expansionTerm(decayed, emptyHoldings(), occupancy, 'v:0,-1;0,0;1,-1').road)
+      .not.toBe(incidentEdges('v:0,-1;0,0;1,-1')[0])
+  })
+})
