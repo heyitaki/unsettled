@@ -180,10 +180,10 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 8: Run M-54 and record it
 
-- [ ] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
-- [ ] Append `## M-54: SP3 expansion term` with full provenance, the pooled paired table and the per-hero-seat table for each arm
-- [ ] Record the disposition under the standing rule, including the single retry if it read `inconclusive`. Name the survivor, if any, as an SP6 candidate and record the surviving value in the entry's last paragraph, since Tasks 9 and 15 read it. Adopt nothing
-- [ ] Link check passes
+- [x] Record `uptime`, run the preregistered command from `simulator/`, record `uptime` again
+- [x] Append `## M-54: SP3 expansion term` with full provenance, the pooled paired table and the per-hero-seat table for each arm
+- [x] Record the disposition under the standing rule, including the single retry if it read `inconclusive`. Name the survivor, if any, as an SP6 candidate and record the surviving value in the entry's last paragraph, since Tasks 9 and 15 read it. Adopt nothing
+- [x] Link check passes
 
 ### Task 9: Preregister M-55, the expansion decay sweep, conditional on M-54
 
