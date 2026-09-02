@@ -1156,10 +1156,13 @@ mod tests {
 
     /// The SP3 arms, as arm file stem and the weights keys that arm moves off the live defaults.
     /// A table of overrides rather than SP2's single key, because the phase's conditional decay
-    /// arms move two axes at once: the surviving `expansionWeight` and `expansionDecay`.
-    const SP3_ARMS: [(&str, &[(&str, f64)]); 2] = [
+    /// arms would have moved two axes at once: the surviving `expansionWeight` and
+    /// `expansionDecay`. M-54 read no survivor, so they never existed, and the phase's third arm
+    /// is on the unrelated concentration axis M-56 opened.
+    const SP3_ARMS: [(&str, &[(&str, f64)]); 3] = [
         ("sp3_expansion_lo", &[("expansionWeight", 0.1)]),
         ("sp3_expansion_hi", &[("expansionWeight", 0.3)]),
+        ("sp3_concentration", &[("robberConcentrationWeight", 4.0)]),
     ];
 
     /// Walks the committed SP3 arms (`placement/arms/sp3*.json`) as the SP2 walk above walks its
@@ -1279,8 +1282,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 53,
-            "the committed weights arms are 53 files; a change to the set is a decision"
+            weights_arms, 54,
+            "the committed weights arms are 54 files; a change to the set is a decision"
         );
     }
 

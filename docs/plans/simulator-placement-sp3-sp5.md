@@ -229,9 +229,9 @@ A task that touches only Rust may skip the three npm commands; a task that touch
 
 ### Task 15: Preregister M-57, the concentration A/B, conditional on M-56
 
-- [ ] If Task 14 recorded the skip, tick these boxes with the same note and stop
-- [ ] Write `docs/plans/preregs/<today>-m57-robber-concentration.md`: one arm `sp3_concentration.json` at 4.0, reference `base`; extend `SP3_ARMS` and the count; screen power and protocol as in Context; standing disposition rule; prediction and admissibility
-- [ ] Both cargo profiles green, link check passes
+- [x] If Task 14 recorded the skip, tick these boxes with the same note and stop (Task 14 recorded no skip: M-56 read `concentrationTermIndicated` true and the term is built, so this task runs in full)
+- [x] Write `docs/plans/preregs/<today>-m57-robber-concentration.md`: one arm `sp3_concentration.json` at 4.0, reference `base`; extend `SP3_ARMS` and the count; screen power and protocol as in Context; standing disposition rule; prediction and admissibility
+- [x] Both cargo profiles green, link check passes
 
 ### Task 16: Run M-57 and record it, conditional on M-56
 
