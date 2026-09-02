@@ -87,20 +87,20 @@ The roster is the phone's roster (S8) plus the tally the desktop keeps (mobile O
 
 ## What already exists
 
-Reuse by moving, never by copying.
+Every row below has been moved; the paths are where each piece lives now.
 
 | Behaviour | Where |
 | --- | --- |
-| Name-bounded in-place rename | `phone/InlineRename.tsx` → `ui/InlineRename.tsx` |
-| The two-list row | `Row` inside `phone/MapsScreen.tsx` → `ui/ListRow.tsx` |
-| Draft ribbon | `phone/PhoneRibbon.tsx` → `ui/DraftRibbon.tsx` |
-| Snake draft grid | the grid inside `phone/PlayersScreen.tsx` → `ui/DraftGrid.tsx` |
+| Name-bounded in-place rename | `ui/InlineRename.tsx` |
+| The two-list row, and the two lists around it | `ui/ListRow.tsx` inside `ui/LibraryLists.tsx`, rendered by `ui/MapsPanel.tsx` and `phone/MapsScreen.tsx` |
+| Draft ribbon | `ui/DraftRibbon.tsx`, mounted by `ui/App.tsx` and `phone/PhoneShell.tsx` |
+| Snake draft grid | `ui/DraftGrid.tsx`, mounted by `ui/PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
 | Resting marks | `ui/restMarks.ts` |
 | Board colour | `ui/boardColor.ts` |
-| Tab rename rule, library sort/open/delete/rename, JSON import and export | `useRenameTab.ts`, `useLibrary.ts`, `useJsonFiles.tsx` |
+| Board rename rule, library sort/open/delete/rename, JSON import and export | `useRenameTab.ts`, `useLibrary.ts`, `useJsonFiles.tsx` |
 | Reorder with hold and grip, row shift | `useRowReorder.ts`, `rowDrag.ts` |
 | Menus | `MenuSelect.tsx`, `ContextMenu.tsx`, glyphs in `glyphs.tsx` |
-| Claim, empty state, cards | `AnalysisPanel.tsx` (the phone variant is the design) |
+| Claim row, empty state, select-on-click cards | `AnalysisPanel.tsx`, one code path for both trees |
 | Undo, redo, randomize, clear | `ToolPalette.tsx` heading; `phone/PhoneHeader.tsx` menu |
 
 ## Decisions
@@ -128,7 +128,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | D8 | Roster rows: grip, swatch brush, rename on name, YOU chip, claim on row, dashed Add player (D5 surface, DB3, DB4) | D1 | done |
 | D9 | Drag feel and the draft grid on desktop (D5 dragging and snake draft) | D8, D4 | done |
 | D10 | Vocabulary sweep: `current` and `me` states everywhere, gold pair gone, DB7 grep clean | D2, D3, D7, D9 | done |
-| D11 | Docs: `CLAUDE.md` ui bullet, the mobile spec's `What already exists` paths, this ledger | D10 | not started |
+| D11 | Docs: `CLAUDE.md` ui bullet, the mobile spec's `What already exists` paths, this ledger | D10 | done |
 | D12 | Regression screenshots and acceptance verification | all | not started |
 
 ## Out of scope

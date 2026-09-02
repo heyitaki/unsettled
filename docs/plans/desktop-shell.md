@@ -168,9 +168,9 @@ Run from the repo root, each on its own, in this order.
 
 ### Task 11: Docs and the specs (D11)
 
-- [ ] `CLAUDE.md` `ui/` bullet describes the panels as they now are (`MapsPanel` as the Library, `DraftRibbon`, `DraftGrid`, `ListRow`, `InlineRename`, `PlayerPanel` claim-on-row, `AnalysisPanel` select-on-click) and names both spec files; nothing in it still mentions `BoardTabs`, `ImportPanel`, `shortcuts.ts` or the tab strip.
-- [ ] `.claude/specs/mobile/spec.md`: every path in `What already exists` points at the promoted file; the `Out of scope` line about desktop layout notes that the desktop now follows `.claude/specs/desktop/spec.md`.
-- [ ] `.claude/specs/desktop/spec.md`: `What already exists` paths current; ledger D11 done.
+- [x] `CLAUDE.md` `ui/` bullet describes the panels as they now are (`MapsPanel` as the Library, `DraftRibbon`, `DraftGrid`, `ListRow`, `InlineRename`, `PlayerPanel` claim-on-row, `AnalysisPanel` select-on-click) and names both spec files; nothing in it still mentions `BoardTabs`, `ImportPanel`, `shortcuts.ts` or the tab strip.
+- [x] `.claude/specs/mobile/spec.md`: every path in `What already exists` points at the promoted file; the `Out of scope` line about desktop layout notes that the desktop now follows `.claude/specs/desktop/spec.md`.
+- [x] `.claude/specs/desktop/spec.md`: `What already exists` paths current; ledger D11 done.
 
 ### Task 12: Verify acceptance criteria
 

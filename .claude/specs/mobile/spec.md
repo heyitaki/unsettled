@@ -31,7 +31,7 @@ This restores the layout contract already recorded for this arm (one scroller, o
 
 Fixed, opaque (not frosted: scrolled content read through the blur as smudge), sitting above the document. Four things, left to right:
 
-1. **Board title** — the active tab's `title`, preceded by a hex in that board's colour (see B4) and followed by a chevron. The whole thing is one button that opens the Maps screen. This is the phone's document switcher; the tab strip stays hidden.
+1. **Board title** — the active tab's `title`, preceded by a hex in that board's colour (see B4) and followed by a chevron. The whole thing is one button that opens the Maps screen. This is the phone's document switcher.
 2. **Player dots** — one dot per player in roster order, the claimed player ringed. One button; opens the Players screen.
 3. **Pencil** — toggles build mode (S6). `aria-pressed` reflects the mode.
 4. **Dots menu** — undo, redo, randomize board, export JSON, clear board. Undo and redo sit together as a pair at the top of the menu, the rest below a rule. Clear board is styled as destructive.
@@ -96,7 +96,7 @@ Open boards carry no timestamp. They are the two or three you have open right no
 
 There is no save control anywhere on this screen: boards save themselves (O2). In both lists the **name is a rename target**: tapping it opens an in-place field bounded to the name's own width, the way the roster name works (S8, B6), so a tap anywhere else on the row still selects or opens the board (O3).
 
-This screen is the phone's replacement for the tab strip, so it must reach `tab-select`, `tab-close`, `tab-add`, `tab-rename`, `renameMap` and `openMap`.
+This screen is the phone's document switcher, so it must reach `tab-select`, `tab-close`, `tab-add`, `tab-rename`, `renameMap` and `openMap`.
 
 ### S8 · Players screen
 
@@ -139,19 +139,19 @@ Do not rebuild these; move or restyle them.
 
 | Behaviour | Where |
 | --- | --- |
-| Rename a player on name click | `PlayerPanel.tsx`, `renamingId` + `player-name-input`; the phone's text-sized field is `phone/InlineRename.tsx`, shared by `phone/MapsScreen.tsx` and `phone/PlayersScreen.tsx` |
+| Rename a player on name click | the name-bounded field is `InlineRename.tsx`, shared by `PlayerPanel.tsx`, `ListRow.tsx` and `phone/PlayersScreen.tsx` |
 | Reorder players by drag, both mouse DnD and a coarse-pointer hold, plus the grip that lifts at once | `useRowReorder.ts` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP`, shared by `PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
 | Add and remove players | `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`, `addPlayer` / drag-to-trash |
-| Claim yourself | `AnalysisPanel.tsx`, `MenuSelect` → `setMe`; the phone variant of the same component adds the swatch row and the empty-board state |
-| Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, shared by `MapsPanel.tsx` and `phone/MapsScreen.tsx` |
-| Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `ImportPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
+| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row and empty-board state, and a click on a roster row in `PlayerPanel.tsx` or `phone/PlayersScreen.tsx`, all through `setMe` |
+| Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, under the `LibraryLists.tsx` body that `MapsPanel.tsx` and `phone/MapsScreen.tsx` both render |
+| Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
 | Undo, redo, randomize, clear | `ToolPalette.tsx` heading; on the phone the header's dots menu in `phone/PhoneHeader.tsx`, with the tool rows shared as `ToolGroups` |
-| Open, close, select, rename boards | `BoardTabs.tsx` and `store.ts` (`tab-*` actions) |
-| Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, shared by `BoardTabs.tsx` and `phone/MapsScreen.tsx` |
+| Open, close, select, rename boards | the open-boards list in `LibraryLists.tsx` (rows are `ListRow.tsx`) and `store.ts` (`tab-*` actions) |
+| Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `GlobalNotice.tsx`, rendered by both `Workspace` and `PhoneShell` |
-| Snake draft strip, with the slot derivation in `draftSlots.ts` shared with the phone ribbon | `PlayerPanel.tsx`, `draft-strip`; `phone/PhoneRibbon.tsx` |
+| Snake draft grid and the ribbon over the board, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` under `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` under `App.tsx` and `phone/PhoneShell.tsx` |
 
 ## Decisions
 
@@ -163,7 +163,7 @@ Resolved 2026-09-02; the open questions they close are kept for the record.
 
 **O3 · Renaming: tap the name, in both lists.** On the Maps screen the name in an open-boards row and in a saved-maps row is a rename target bounded to its own width, exactly like the roster name (B6). The rest of the row selects or opens. An open board's rename goes through `tab-rename` plus `renameMap` when linked; a saved map's rename goes through `renameMap` and the library refresh retitles any tab linked to it.
 
-**M2 · `MobileNav` stays (B8).** Landscape phone uses it as a side rail with the same pane gating, so nothing is deleted. The portrait shell is its own tree that never mounts `MobileNav`, `BoardTabs` or the site header.
+**M2 · `MobileNav` stays (B8).** Landscape phone uses it as a side rail with the same pane gating, so nothing is deleted. The portrait shell is its own tree that never mounts `MobileNav` or the site header.
 
 ## Open questions
 
@@ -201,4 +201,4 @@ One row per work item. Keep the state column current; this file is the durable c
 
 ## Out of scope
 
-Landscape phone. Desktop layout (B7 and the S5 factor labels change desktop behaviour deliberately). Phase 3 boons and curses. The random header subtitle, which the phone header drops along with the rest of the site header.
+Landscape phone. Desktop layout, which now follows [`.claude/specs/desktop/spec.md`](../desktop/spec.md) (B7 and the S5 factor labels change desktop behaviour deliberately). Phase 3 boons and curses. The random header subtitle, which the phone header drops along with the rest of the site header.
