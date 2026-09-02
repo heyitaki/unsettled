@@ -2,12 +2,22 @@ import { useEffect, useState } from 'react'
 import { clearBoard, randomizeBoard } from '../../model/board'
 import { boardColor } from '../boardColor'
 import { ContextMenu, type ContextMenuItem } from '../ContextMenu'
-import { BoardHexGlyph, ChevronGlyph, DotsGlyph, PencilGlyph } from '../glyphs'
+import {
+  BoardHexGlyph,
+  ChevronGlyph,
+  ClearBoardGlyph,
+  DiceGlyph,
+  DotsGlyph,
+  ExportGlyph,
+  PencilGlyph,
+  RedoGlyph,
+  UndoGlyph,
+} from '../glyphs'
 import { activeTab, useStore } from '../store'
 import { useJsonFiles } from '../useJsonFiles'
 import type { PhoneOverlay } from './PhoneShell'
 
-/** Past this much scroll the header casts a shadow on the page sliding under it. */
+/** Past this much scroll the header takes a ground and casts a shadow on the page sliding under it. */
 const SCROLLED_AT = 4
 
 /**
@@ -32,17 +42,32 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+  const history: ContextMenuItem[] = [
+    {
+      label: 'Undo',
+      icon: <UndoGlyph />,
+      count: tab.past.length,
+      disabled: tab.past.length === 0,
+      onClick: () => dispatch({ type: 'undo' }),
+    },
+    {
+      label: 'Redo',
+      icon: <RedoGlyph />,
+      count: tab.future.length,
+      disabled: tab.future.length === 0,
+      onClick: () => dispatch({ type: 'redo' }),
+    },
+  ]
   const items: ContextMenuItem[] = [
-    { label: 'Undo', disabled: tab.past.length === 0, onClick: () => dispatch({ type: 'undo' }) },
-    { label: 'Redo', disabled: tab.future.length === 0, onClick: () => dispatch({ type: 'redo' }) },
     {
       label: 'Randomize board',
-      separated: true,
+      icon: <DiceGlyph />,
       onClick: () => dispatch({ type: 'commit', board: randomizeBoard(board) }),
     },
-    { label: 'Export JSON', onClick: exportJson },
+    { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
     {
       label: 'Clear board',
+      icon: <ClearBoardGlyph />,
       danger: true,
       onClick: () => dispatch({ type: 'commit', board: clearBoard(board) }),
     },
@@ -86,8 +111,9 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
         aria-haspopup="menu"
         aria-expanded={menuAt !== null}
         onClick={(event) => {
+          // Hung from the button's bottom-right corner, its tail pointing back up at it.
           const rect = event.currentTarget.getBoundingClientRect()
-          setMenuAt({ x: rect.right, y: rect.bottom + 4 })
+          setMenuAt({ x: rect.right, y: rect.bottom })
         }}
       >
         <DotsGlyph />
@@ -97,6 +123,10 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
           ariaLabel="Board options"
           x={menuAt.x}
           y={menuAt.y}
+          align="right"
+          tail
+          className="phone-menu"
+          history={history}
           items={items}
           onClose={() => setMenuAt(null)}
         />

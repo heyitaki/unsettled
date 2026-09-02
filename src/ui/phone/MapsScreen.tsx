@@ -1,7 +1,16 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { boardColor } from '../boardColor'
 import type { ContextMenuItem } from '../ContextMenu'
-import { BoardHexGlyph, PhotoGlyph, PlusGlyph, TrashGlyph, XMarkGlyph } from '../glyphs'
+import {
+  BoardHexGlyph,
+  ExportGlyph,
+  ImportGlyph,
+  PhotoGlyph,
+  PlusGlyph,
+  SortGlyph,
+  TrashGlyph,
+  XMarkGlyph,
+} from '../glyphs'
 import { ImportDialog } from '../ImportDialog'
 import { SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, sortMaps, stampFor } from '../library'
 import { MenuSelect } from '../MenuSelect'
@@ -71,8 +80,8 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
   const [importOpen, setImportOpen] = useState(false)
   const imported = useRef(false)
   const menu: ContextMenuItem[] = [
-    { label: 'Import JSON', onClick: importJson },
-    { label: 'Export JSON', onClick: exportJson },
+    { label: 'Import JSON', icon: <ImportGlyph />, onClick: importJson },
+    { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
   ]
   const draftFor = (key: string) => (editing?.key === key ? editing.draft : null)
   const rename = (key: string) => ({
@@ -140,7 +149,13 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
       <div>
         <div className="phone-group-label">
           <span>Saved maps <span className="count">({listed.maps.length})</span></span>
-          <MenuSelect ariaLabel="Sort saved maps" value={sortKey} options={SORT_OPTIONS} onSelect={setSortKey}>
+          <MenuSelect
+            ariaLabel="Sort saved maps"
+            value={sortKey}
+            options={SORT_OPTIONS}
+            onSelect={setSortKey}
+            caret={<SortGlyph className="menu-sort-glyph" />}
+          >
             <strong>{SORT_MENU_LABEL[sortKey]}</strong>
           </MenuSelect>
         </div>

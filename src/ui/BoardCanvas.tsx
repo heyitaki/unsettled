@@ -32,7 +32,7 @@ import {
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
-import { ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
+import { ChevronGlyph, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
@@ -46,7 +46,7 @@ import {
   zoomAbout,
   type ViewTransform,
 } from './boardViewport'
-import { useCoarsePointer } from './useMediaQuery'
+import { useCoarsePointer, usePortraitPhone } from './useMediaQuery'
 
 const SIZE = 58
 // How far the port bubble sits beyond its coastal edge, along the outward
@@ -146,6 +146,9 @@ const NO_MARKS: readonly HighlightMark[] = []
 export function BoardCanvas({ restMarks = null }: { restMarks?: readonly HighlightMark[] | null } = {}) {
   const { state, dispatch } = useStore()
   const coarse = useCoarsePointer()
+  // The phone centres the layout caption under the board, so its menu opens
+  // centred too, with the chevron the rest of that shell draws.
+  const phone = usePortraitPhone()
   const tab = activeTab(state)
   const { board } = tab.game
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
@@ -739,6 +742,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           value={board.layout}
           options={LAYOUT_OPTIONS}
           onSelect={choose}
+          align={phone ? 'center' : 'start'}
+          caret={phone ? <ChevronGlyph className="menu-chevron" /> : undefined}
         >
           <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
         </MenuSelect>

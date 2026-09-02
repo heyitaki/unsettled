@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { TickGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 
 /** How long a typed prefix keeps accumulating before the next key starts over. */
@@ -28,12 +29,24 @@ const optionId = (baseId: string, index: number) => `${baseId}-option-${index}`
  * a native `<select>` does; only typeahead wraps, since a prefix search that
  * stopped at the last option would be unable to find half the list.
  */
-export function MenuSelect<T extends string>({ ariaLabel, value, options, onSelect, children }: {
+export function MenuSelect<T extends string>({
+  ariaLabel,
+  value,
+  options,
+  onSelect,
+  align = 'start',
+  caret = <span className="menu-caret" aria-hidden="true">▾</span>,
+  children,
+}: {
   ariaLabel: string
   value: T | null
   options: readonly { value: T; label: string }[]
   onSelect: (value: T) => void
-  /** Trigger content; the ▾ affordance is appended by this component. */
+  /** Which edge of the trigger the popup lines up with: its left edge, or its centre. */
+  align?: 'start' | 'center'
+  /** The open affordance after the trigger content; the ▾ glyph unless a caller draws its own. */
+  caret?: ReactNode
+  /** Trigger content; the caret is appended by this component. */
   children: ReactNode
 }) {
   const [open, setOpen] = useState(false)
@@ -58,11 +71,15 @@ export function MenuSelect<T extends string>({ ariaLabel, value, options, onSele
     if (!wrap || !trigger || !popup) return
     const wrapBox = wrap.getBoundingClientRect()
     const triggerBox = trigger.getBoundingClientRect()
-    const popupBox = popup.getBoundingClientRect()
+    // Offsets, not a client rect: the phone's popup is mid-scale on its first frame.
+    const popupBox = { width: popup.offsetWidth, height: popup.offsetHeight }
     // clientWidth excludes a classic scrollbar, which is not usable popup space.
     const { clientWidth, clientHeight } = document.documentElement
+    const left = align === 'center'
+      ? triggerBox.left + (triggerBox.width - popupBox.width) / 2
+      : triggerBox.left
     const placed = placeBelow({
-      left: triggerBox.left,
+      left,
       top: triggerBox.top - 6,
       bottom: triggerBox.bottom + 6,
     }, popupBox, {
@@ -70,7 +87,7 @@ export function MenuSelect<T extends string>({ ariaLabel, value, options, onSele
       height: clientHeight,
     })
     setAt({ left: placed.left - wrapBox.left, top: placed.top - wrapBox.top })
-  }, [open, options.length])
+  }, [open, options.length, align])
   // preventScroll: the popup is already beside its trigger, and letting focus
   // scroll to the not-yet-positioned first paint would jolt the page.
   useEffect(() => {
@@ -227,7 +244,7 @@ export function MenuSelect<T extends string>({ ariaLabel, value, options, onSele
         }}
       >
         {children}
-        <span className="menu-caret" aria-hidden="true">▾</span>
+        {caret}
       </button>
       {open && (
         <>
@@ -273,6 +290,8 @@ export function MenuSelect<T extends string>({ ariaLabel, value, options, onSele
                   onSelect(option.value)
                 }}
               >
+                {/* Marks the current option where a shell shows it; hidden by default. */}
+                <TickGlyph className="menu-tick" />
                 {option.label}
               </button>
             ))}

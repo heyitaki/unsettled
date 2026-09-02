@@ -48,8 +48,9 @@ export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
           aria-haspopup="menu"
           aria-expanded={menuAt !== null}
           onClick={(event) => {
+            // Hung from the button's bottom-right corner, clear of its round hit area.
             const rect = event.currentTarget.getBoundingClientRect()
-            setMenuAt({ x: rect.right, y: rect.bottom + 4 })
+            setMenuAt({ x: rect.right + 2, y: rect.bottom + 4 })
           }}
         >
           <DotsGlyph />
@@ -61,6 +62,9 @@ export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
           ariaLabel={menuLabel}
           x={menuAt.x}
           y={menuAt.y}
+          align="right"
+          tail
+          className="phone-menu phone-omenu"
           items={menu}
           onClose={() => setMenuAt(null)}
         />

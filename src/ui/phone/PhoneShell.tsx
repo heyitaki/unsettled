@@ -14,6 +14,11 @@ import { PlayersScreen } from './PlayersScreen'
 
 export type PhoneOverlay = 'maps' | 'players'
 
+/** How long a closing overlay stays mounted for its slide out; matches the CSS animation. */
+const OVERLAY_EXIT_MS = 280
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 /**
  * The portrait-phone tree (spec B8): one fixed header over one document that
  * the window scrolls. Maps and Players are full-screen overlays over it; build
@@ -25,6 +30,25 @@ export function PhoneShell() {
   const tab = activeTab(state)
   const [session, setSession] = useState<BuildSession | null>(null)
   const [overlay, setOverlay] = useState<PhoneOverlay | null>(null)
+  // An overlay leaves the way it came: it stays mounted, sliding out, until the
+  // timer unmounts it. Opening another during that ride cancels the exit.
+  const [closing, setClosing] = useState(false)
+  const openOverlay = (next: PhoneOverlay) => {
+    setClosing(false)
+    setOverlay(next)
+  }
+  const closeOverlay = () => {
+    if (reducedMotion()) setOverlay(null)
+    else setClosing(true)
+  }
+  useEffect(() => {
+    if (!closing) return
+    const timer = window.setTimeout(() => {
+      setOverlay(null)
+      setClosing(false)
+    }, OVERLAY_EXIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [closing])
   const building = session !== null && !buildSessionEnded(session, tab)
   // What the board shows while nothing is selected (spec S5); bare in build
   // mode, where the analysis block is not on the page.
@@ -56,15 +80,15 @@ export function PhoneShell() {
     done()
   }
   return (
-    <div className="phone-shell" data-overlay={overlay ?? undefined}>
-      <PhoneHeader building={building} onToggleMode={building ? done : enter} onOpen={setOverlay} />
+    <div className="phone-shell" data-overlay={overlay ?? undefined} data-closing={closing || undefined}>
+      <PhoneHeader building={building} onToggleMode={building ? done : enter} onOpen={openOverlay} />
       <main className="phone-page">
         <PhoneRibbon />
         <BoardCanvas restMarks={restMarks} />
         {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel variant="phone" onBuild={enter} />}
       </main>
-      {overlay === 'maps' && <MapsScreen onClose={() => setOverlay(null)} />}
-      {overlay === 'players' && <PlayersScreen onClose={() => setOverlay(null)} />}
+      {overlay === 'maps' && <MapsScreen onClose={closeOverlay} />}
+      {overlay === 'players' && <PlayersScreen onClose={closeOverlay} />}
       <GlobalNotice />
     </div>
   )

@@ -408,3 +408,82 @@ export function GripGlyph() {
     </svg>
   )
 }
+
+/** The check beside a dropdown's current option. */
+export function TickGlyph({ className }: { className?: string }) {
+  return (
+    <svg {...LINE_ART} className={className} viewBox="0 0 14 14" strokeWidth="2.2">
+      <path d="M2 7.4 5.6 11 12 3.4" />
+    </svg>
+  )
+}
+
+/** The sort control's two opposed arrows. */
+export function SortGlyph({ className }: { className?: string }) {
+  return (
+    <svg {...LINE_ART} className={className} width="10" height="10" viewBox="0 0 12 12" strokeWidth="1.6">
+      <path d="M3.4 1.9v8.2M1.5 8.2 3.4 10.1 5.3 8.2" />
+      <path d="M8.6 10.1V1.9M6.7 3.8 8.6 1.9 10.5 3.8" />
+    </svg>
+  )
+}
+
+export function UndoGlyph() {
+  return (
+    <svg {...LINE_ART} width="15" height="15" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M4 8h8a4 4 0 0 1 0 8H8" />
+      <path d="M7 5 4 8l3 3" />
+    </svg>
+  )
+}
+
+export function RedoGlyph() {
+  return (
+    <svg {...LINE_ART} width="15" height="15" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M16 8H8a4 4 0 0 0 0 8h4" />
+      <path d="M13 5l3 3-3 3" />
+    </svg>
+  )
+}
+
+/** A die face, for the randomize action. */
+export function DiceGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="7" cy="7" r="1.35" />
+      <circle cx="13" cy="7" r="1.35" />
+      <circle cx="10" cy="10" r="1.35" />
+      <circle cx="7" cy="13" r="1.35" />
+      <circle cx="13" cy="13" r="1.35" />
+    </svg>
+  )
+}
+
+/** An arrow down onto a line: a file leaving for the device. */
+export function ExportGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.6">
+      <path d="M10 3V11.5 M6.4 7.9 10 11.5 13.6 7.9 M4 15.5H16" />
+    </svg>
+  )
+}
+
+/** An arrow up off a line: a file arriving from the device. */
+export function ImportGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.6">
+      <path d="M10 11.5V3 M6.4 6.6 10 3 13.6 6.6 M4 15.5H16" />
+    </svg>
+  )
+}
+
+/** A hex struck through, for clearing the board. */
+export function ClearBoardGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.6">
+      <path d="M10 2.6 16.4 6.3V13.7L10 17.4 3.6 13.7V6.3Z" />
+      <path d="M6.3 13.4 13.7 6.4" />
+    </svg>
+  )
+}
