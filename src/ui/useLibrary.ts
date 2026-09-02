@@ -50,7 +50,7 @@ export function useLibrary() {
     // rendered, sliding that position onto a different map. Refuse rather than
     // address the wrong one; the refresh above re-renders the row with its id.
     if (stamped === undefined || stamped.name !== map.name) {
-      notice('The library changed in another window — open it again')
+      notice('The library changed in another window; open it again')
       return null
     }
     if (stamped.id === null) notice('This map entry is malformed and cannot be opened or deleted')

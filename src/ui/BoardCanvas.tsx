@@ -32,7 +32,7 @@ import {
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
-import { ROBBER_BODY, ROBBER_HEAD } from './glyphs'
+import { ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
@@ -561,7 +561,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     const point = center(board.robber)
     return (
       <g transform={`translate(${point.x} ${point.y})`}>
-        <circle cy={ROBBER_HEAD.cy} r={ROBBER_HEAD.r} fill="#1c1c1c" />
+        <circle cy={ROBBER_HEAD_CY} r={ROBBER_HEAD_R} fill="#1c1c1c" />
         <path d={ROBBER_BODY} fill="#1c1c1c" />
       </g>
     )

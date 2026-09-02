@@ -181,22 +181,22 @@ One row per work item. Keep the state column current; this file is the durable c
 
 | id | Item | Depends on | State |
 | --- | --- | --- | --- |
-| M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | — | done |
-| M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | — | done |
+| M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | | done |
+| M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | | done |
 | M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
-| M4 | Board colour hash (B4) and the hex in header and both lists | — | done |
+| M4 | Board colour hash (B4) and the hex in header and both lists | | done |
 | M5 | Draft ribbon above the board (S2) | M2 | done |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | done |
 | M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | done |
 | M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | done |
 | M9 | Seat order drives the draft (B3) | M8 | done |
-| M10 | Points ledger block in the Players overlay | — | dropped (O1) |
+| M10 | Points ledger block in the Players overlay | | dropped (O1) |
 | M11 | Build mode replaces the analysis block (S6), with the snapshot Cancel (B1) | M3 | done |
 | M12 | Empty-board state (B5) | M6 | done |
 | M13 | Reveal-on-select scroll (B2) | M6 | done |
-| M14 | One-word factor labels in `displayedFactors` | — | done |
+| M14 | One-word factor labels in `displayedFactors` | | done |
 | M15 | Landscape and desktop regression pass | all | done |
-| M16 | Library autosave in the store (B7) | — | done |
+| M16 | Library autosave in the store (B7) | | done |
 | M17 | Retire the explicit save UI on desktop: tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row (B7) | M16 | done |
 
 ## Out of scope

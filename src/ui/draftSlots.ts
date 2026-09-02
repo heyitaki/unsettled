@@ -17,7 +17,7 @@ export interface DraftSlot {
  * Slot → placed-settlement mapping: the player's k-th building in board order.
  * Once the draft is complete count any tier, since starting settlements may
  * have been upgraded (placeBuilding upgrades in place, so the index holds).
- * Best-effort only — board order is insertion order for hand-placed boards,
+ * Best-effort only: board order is insertion order for hand-placed boards,
  * but an imported board carries the parser's top-to-bottom spatial order, and
  * deleting then re-placing a building moves it to the end.
  */
@@ -39,7 +39,7 @@ export function draftSlots(board: Board, analysis: DraftAnalysis): DraftSlot[] {
   })
   // Predicted spots for unplaced slots: opponents before my next pick come from
   // the modal rollout; my own picks from the top recommendation. Opponent picks
-  // past my first pick have no prediction — hovering those shows nothing.
+  // past my first pick have no prediction, so hovering those shows nothing.
   const predicted = new Map<number, VertexId>()
   const firstMine = draft.myRemainingPickIndices[0]
   if (board.mePlayerId !== null && firstMine !== undefined) {

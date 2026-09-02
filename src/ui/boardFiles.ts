@@ -107,7 +107,7 @@ export type SaveTabResult =
 /**
  * Save a tab into the library, with no prompt: the autosave has no name field
  * to answer with and nowhere to put the answer. It writes back into the tab's
- * own map where there is one, and otherwise adds an entry — never over one
+ * own map where there is one, and otherwise adds an entry, never over one
  * that already holds the name.
  */
 export function saveTab(

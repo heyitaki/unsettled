@@ -113,7 +113,7 @@ export function AnalysisPanel({ variant = 'desktop', onBuild }: {
   const me = board.players.find((player) => player.id === board.mePlayerId)
   const myColor = me?.color ?? '#8a7a63'
 
-  // Reset the board marks whenever the board changes — after a click places
+  // Reset the board marks whenever the board changes: after a click places
   // settlements, the previous window's circles are stale. On the phone the
   // shell's resting marks show through the cleared highlight (spec S5).
   useEffect(() => {

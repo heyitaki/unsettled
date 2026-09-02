@@ -534,7 +534,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // document; written straight out rather than debounced because it is one
   // short string and losing it costs the user their place.
   useEffect(() => saveActiveTab(state.activeTabId), [state.activeTabId])
-  useEffect(() => autosave.arm(state.tabs), [autosave, state.tabs])
+  // Layout as well: the unload flush below drains whatever the autosave last
+  // saw, and a page hidden between this commit and a passive effect would flush
+  // a set without the edit. The workspace still keeps it, but a reload
+  // baselines the tab as already saved, so an unlinked board never reaches the
+  // library and closing it loses the only copy.
+  useLayoutEffect(() => autosave.arm(state.tabs), [autosave, state.tabs])
   // Layout, for the same reason as the arming above and because this effect is
   // declared after it: a write landing between the first commit and a passive
   // listener would never be delivered at all, leaving `seen` stale from birth.

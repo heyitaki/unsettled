@@ -30,7 +30,8 @@ export type StructureShape =
  * disc rim, baked into the path rather than clipped, so the icon keeps the same
  * silhouette without a disc behind it.
  */
-export const ROBBER_HEAD = { cy: -10.5, r: 10 }
+export const ROBBER_HEAD_CY = -10.5
+export const ROBBER_HEAD_R = 10
 export const ROBBER_BODY =
   'M0,-5.5 C10,-5.5 15.5,5 14.5,17.85 A23,23 0 0 1 -14.5,17.85 C-15.5,5 -10,-5.5 0,-5.5 Z'
 
@@ -118,7 +119,7 @@ export function StructureGlyph({ shape, color, size = 16 }: {
       // robber tile is selected, instead of staying black on the accent fill.
       return (
         <svg className="tool-icon" style={style} viewBox={view} aria-hidden="true">
-          <circle cy={ROBBER_HEAD.cy} r={ROBBER_HEAD.r} />
+          <circle cy={ROBBER_HEAD_CY} r={ROBBER_HEAD_R} />
           <path d={ROBBER_BODY} />
         </svg>
       )

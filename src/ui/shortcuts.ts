@@ -19,8 +19,8 @@ export interface Shortcut {
  * deliberately not here: it closes the browser tab, and a board editor is not
  * worth taking that away. ⌘D is taken (bookmarking, which every drawing app
  * already overrides for duplicate). There is no ⌘S: boards save themselves.
- * Backspace carries the closes because ⇧⌘⌫ and ⌃⌥⌦ — the chords a Shift or
- * Alt variant on Delete would collide with — are Chrome's clear-data dialog
+ * Backspace carries the closes because ⇧⌘⌫ and ⌃⌥⌦ (the chords a Shift or
+ * Alt variant on Delete would collide with) are Chrome's clear-data dialog
  * and the Windows secure attention sequence.
  *
  * No Alt chord may use a letter: Option+letter on a Mac rewrites `event.key`
