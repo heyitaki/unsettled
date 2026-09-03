@@ -759,7 +759,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       )
     }), [highlight, gridEdgeSet, gridVertexSet, markedBuildings])
   return (
-    // The fitted box's proportions, for the portrait arm's sea frame (spec S3):
+    // The fitted box's proportions, for the phone arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.
     <section className="board-stage" style={{ '--board-aspect': String(viewBox.width / viewBox.height) } as CSSProperties}>
       {/* The board covers most of the phone viewport, so it must never be the

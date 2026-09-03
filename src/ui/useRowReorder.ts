@@ -94,8 +94,8 @@ interface Lift {
 
 /**
  * The nearest ancestor that scrolls on its own, or null when the window is the
- * scroller. A landscape pane and the phone overlay each own their scroll, and
- * the overlay's page must not move underneath it.
+ * scroller. The phone overlay owns its scroll and its page must not move
+ * underneath it, while the workspace roster rides the window.
  */
 function scrollParent(node: Element | null): Element | null {
   for (let element = node?.parentElement ?? null; element; element = element.parentElement) {

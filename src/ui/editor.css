@@ -84,7 +84,7 @@ button.selected.danger { color: #fff; }
 
 .board-stage { position: static; padding: 12px; background: var(--paper-board); }
 /* min-height reserves the zoom chip's row: it only exists above 1x, and above
-   the board (everywhere but the portrait arm) its appearing would shift the
+   the board (everywhere but the phone arm) its appearing would shift the
    board down. */
 .board-status { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 6px 0 0; color: var(--muted); font-size: 11px; }
 .board-status .menu-trigger { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 600; }

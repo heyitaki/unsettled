@@ -1,7 +1,7 @@
 /**
  * Reveal-on-select (spec B2): a mark moved on a board the page has scrolled
  * past is a change the reader cannot see, so selecting a recommendation brings
- * the window back to the board, and only then. The scroll rides the portrait
+ * the window back to the board, and only then. The scroll rides the phone
  * arm's `html { scroll-behavior: smooth }`, which a plain `scrollTop` assignment
  * honours where `scrollTo({ behavior })` would not on every scroller.
  */

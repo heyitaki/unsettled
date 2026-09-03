@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bring the desktop workspace (and, through the shared `Workspace` tree, landscape phone) in line with the decisions the portrait phone shell settled, to [`.claude/specs/desktop/spec.md`](../../.claude/specs/desktop/spec.md). Read that file in full before the first task, then [`.claude/specs/mobile/spec.md`](../../.claude/specs/mobile/spec.md), whose Surfaces, Behaviours and Decisions are the underlying design; this plan never restates either. Where both are silent, the phone's rendering is the reference: run `npx playwright test e2e/phoneShell.spec.ts --reporter=list` once before the first task and look at the screenshots it drops in `test-results/phone/`.
+Bring the desktop workspace (and, through the shared `Workspace` tree, landscape phone) in line with the decisions the portrait phone shell settled, to [`.claude/specs/desktop/spec.md`](../../../.claude/specs/desktop/spec.md). Read that file in full before the first task, then [`.claude/specs/mobile/spec.md`](../../../.claude/specs/mobile/spec.md), whose Surfaces, Behaviours and Decisions are the underlying design; this plan never restates either. Where both are silent, the phone's rendering is the reference: run `npx playwright test e2e/phoneShell.spec.ts --reporter=list` once before the first task and look at the screenshots it drops in `test-results/phone/`.
 
 When this run is done:
 

@@ -19,7 +19,7 @@ const OVERLAY_EXIT_MS = 280
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
- * The portrait-phone tree (spec B8): one sticky header over one document that
+ * The phone tree (spec B8): one sticky header over one document that
  * the window scrolls. Maps and Players are full-screen overlays over it; build
  * mode swaps the block under the board for the tools, holding the game it
  * entered on so Cancel has something to restore (B1).
