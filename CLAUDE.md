@@ -33,6 +33,7 @@ Data flows **`parser/` → `model/Board` → `engine/` + `ui/store` → `persist
 ## Conventions
 
 - Tesseract is self-hosted in `public/tesseract` + `public/tessdata` (offline). Don't switch to a CDN.
+- `analyzeBoard` runs synchronously during render and a full six-player board costs it about a second and a half, since the SP6 adoption put the expansion walk in the shipped weights. Every board edit makes a new `Board` and re-runs the whole thing, so nothing may add work per rollout scan casually. `src/engine/__tests__/perf.test.ts` is the guard.
 - Simulator changes run `cargo test` in BOTH profiles from `simulator/`. Never let `HashMap` iteration or float accumulation order reach an output. Why, in [`contracts.md`](.claude/specs/simulator/contracts.md).
 - Simulator seed domains are spend-once, and all six are now spent: `tuning`, `eval`, `gate`, `eval2` and `gate2` are used up, and `tuning2` was SP6's screening domain. Never run a command carrying any of them; a future placement phase must mint a third generation first. Why, the spend ledger, and the phase order, in [`programme.md`](.claude/specs/simulator/programme.md).
 - A draft-aware placement arm is spelled `app_formula_draft:<hero weights>@<opponent weights>`, and its opponent path is pinned to the field's weights so an A/B moves the hero's formula alone. Why, in [`contracts.md`](.claude/specs/simulator/contracts.md).

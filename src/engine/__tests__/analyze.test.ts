@@ -300,6 +300,18 @@ describe('joint draft analysis', () => {
     expect(analysis.status).toBe('ready')
     expect(analysis.recommendations.every((entry) => entry.plannedSecond.length === 0)).toBe(true)
     const existingHoldings = addToHoldings(ctx, emptyHoldings(), existing)
+    // Seats pick ahead of this last one, so the settlements standing when it is made are the
+    // board's own beside the ones the rollout took, and that is what it has to be scored against.
+    expect(analysis.takenBeforeFirstPick.length).toBeGreaterThan(0)
+    const pieces = occupancyFromBoard(board)
+    const standing = {
+      ...pieces,
+      blocked: new Set([
+        ...pieces.blocked,
+        ...analysis.takenBeforeFirstPick.map((entry) => entry.vertexId),
+      ]),
+      seat: 'aki',
+    }
     expect(analysis.recommendations[0].score).toBeCloseTo(
       scoreCandidate(
         ctx,
@@ -309,6 +321,7 @@ describe('joint draft analysis', () => {
         board,
         neutralModifier,
         ctx.stats.get(analysis.recommendations[0].firstPick)?.setupGrant ?? null,
+        standing,
       ).total,
     )
   })
@@ -379,7 +392,17 @@ describe('joint draft analysis', () => {
       const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
       expect(withRoads.length).toBeGreaterThan(0)
       const ctx = computeBoardContext(board, weights)
-      const occupancy = occupancyFromBoard(board, 'aki')
+      // The reported road comes off the modal rollout, the same one `takenBeforeFirstPick` is
+      // drawn from, so the drawn road and the drawn losses cannot contradict each other.
+      const pieces = occupancyFromBoard(board)
+      const occupancy = {
+        ...pieces,
+        blocked: new Set([
+          ...pieces.blocked,
+          ...witness.takenBeforeFirstPick.map((taken) => taken.vertexId),
+        ]),
+        seat: 'aki',
+      }
       for (const entry of withRoads) {
         expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
         expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
@@ -452,6 +475,88 @@ describe('joint draft analysis', () => {
     expect(firstTerm).toBeGreaterThan(0)
     expect(asFirstPick!.breakdown.expansion).toBeGreaterThan(0)
     expect(top.breakdown.expansion).toBeCloseTo(firstTerm + asFirstPick!.breakdown.expansion, 10)
+  })
+
+  // Both of these boards have more than one seat, which is where the two occupancy readings can
+  // actually part: a solo roster takes nothing between the two picks, so every set is the same set.
+  it('prices the first pick against the settlements the rollout took before it', () => {
+    const board = filledBoard(2)
+    const draft = inferDraftState(board)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 1 }
+    const ctx = computeBoardContext(board, weights)
+    expect(board.buildings).toEqual([])
+    // Two vertices a road apart on the same hex ring: legal together, and the take sits inside the
+    // candidate's expansion range, so the walk has to see it.
+    const candidate = 'v:-1,-1;-1,0;0,-1' as VertexId
+    const taken = 'v:-1,0;-1,1;0,0' as VertexId
+    // Everything else barred, so the pick has no legal second and its score is the first alone.
+    const blocked = new Set(boardGrid(board.layout).vertexIds)
+    blocked.delete(candidate)
+
+    const pieces = occupancyFromBoard(board)
+    const seated = (occupied: ReadonlySet<VertexId>) => ({ ...pieces, blocked: occupied, seat: 'aki' })
+    const under = (occupied: ReadonlySet<VertexId>) => scoreCandidate(
+      ctx,
+      emptyHoldings(),
+      candidate,
+      'aki',
+      board,
+      neutralModifier,
+      null,
+      seated(occupied),
+    ).total
+    expect(under(new Set([taken]))).toBeLessThan(under(new Set()))
+
+    const result = rankCandidates(ctx, board, draft, [{ blocked, taken: [taken] }], requiredOptions({
+      maxResults: 54,
+      weights,
+    }))
+    const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
+    expect(entry).toBeDefined()
+    expect(entry!.plannedSecond).toEqual([])
+    expect(entry!.score).toBeCloseTo(under(new Set([taken])))
+  })
+
+  // A rollout bars a vertex by the distance rule but occupies only the vertex itself, and the two
+  // sets are what the scan hands the walk. Reading the barred set as the occupancy would make a
+  // rival's neighbours look like rivals; forgetting to occupy a pick would let the next seat in the
+  // window walk straight through it.
+  it('scans each rollout pick against the settlements standing, not the vertices the rule bars', () => {
+    const board = filledBoard(3)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 1 }
+    const ctx = computeBoardContext(board, weights)
+    expect(board.buildings).toEqual([])
+    const pieces = occupancyFromBoard(board)
+    const vertexIds = boardGrid(board.layout).vertexIds
+    const argmax = (seat: string, blocked: ReadonlySet<VertexId>, occupied: ReadonlySet<VertexId>) => {
+      let best: VertexId | null = null
+      let bestScore = -Infinity
+      for (const vertexId of vertexIds) {
+        if (blocked.has(vertexId)) continue
+        const total = scoreCandidate(ctx, emptyHoldings(), vertexId, seat, board, neutralModifier,
+          null, { ...pieces, blocked: occupied, seat }).total
+        if (total > bestScore) {
+          best = vertexId
+          bestScore = total
+        }
+      }
+      return best
+    }
+
+    const barred = blockedVertices(board.layout, ['v:0,0;1,-1;1,0' as VertexId])
+    const taken = simulateOpponentWindow(ctx, board, ['p2', 'p3'], new Map<string, Holdings>(),
+      new Set(barred), () => 0, neutralModifier)
+    expect(taken).toHaveLength(2)
+
+    // The first seat scans against an empty occupancy: nothing is settled yet, however much the
+    // distance rule has barred.
+    expect(taken[0]).toBe(argmax('p2', barred, new Set()))
+    expect(argmax('p2', barred, barred)).not.toBe(taken[0])
+
+    // The second seat scans against the first seat's settlement, and only that one vertex.
+    const barredAfter = blockedVertices(board.layout, ['v:0,0;1,-1;1,0' as VertexId, taken[0]])
+    expect(taken[1]).toBe(argmax('p3', barredAfter, new Set([taken[0]])))
+    expect(argmax('p3', barredAfter, new Set())).not.toBe(taken[1])
   })
 
   it('scores each player at its own index in board.players as its draft slot', () => {

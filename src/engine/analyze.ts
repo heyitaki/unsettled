@@ -173,13 +173,13 @@ const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holding
  * actually took. The set is held by reference, so a vertex settled mid-window is occupied for
  * every later scan in that window.
  *
- * It records the settlements themselves, exactly as `occupancyFromBoard` does for the first pick,
- * never the wider set the distance rule bars building on. Those two readings are not
- * interchangeable: the walk in `expansion.ts` applies the distance rule itself, and treats an
- * occupied vertex as a rival's dead end unless the seat's own holdings claim it. Feeding it the
- * distance-closed set made a vertex barred only by the scoring player's own settlement stop the
- * walk, so the same board read a smaller expansion component on the second pick than on the
- * first. Inert while `expansionWeight` is 0.
+ * It records the settlements themselves, never the wider set the distance rule bars building on.
+ * Those two readings are not interchangeable: the walk in `expansion.ts` applies the distance rule
+ * itself, and treats an occupied vertex as a rival's dead end unless the seat's own holdings claim
+ * it. Feeding it the distance-closed set made a vertex barred only by the scoring player's own
+ * settlement stop the walk, so the same board read a smaller expansion component on the second
+ * pick than on the first. Every scan in the analysis reads this, both of my picks included, so no
+ * two of them disagree about what is standing. Inert while `expansionWeight` is 0.
  */
 const rolloutOccupancy = (
   board: Board,
@@ -466,25 +466,9 @@ export function rankCandidates(
   const candidates = legalSettlementVertices(board)
   const myHoldings = holdingsFromBoard(ctx, board).get(me) ?? emptyHoldings()
   const firstReceivesGrant = receivesSecondSettlementGrant(draft, firstPickIndex)
-  // Scored once, before any rollout, so the board's own pieces are the whole occupancy.
-  const boardOccupancy = occupancyFromBoard(board, me)
   // Both of my picks come off the same slot: the snake reverses the order seats pick in, never
   // which seat I am.
   const mySlot = draftSlotOf(board, me)
-  const firstScores = new Map(candidates.map((candidate) => [
-    candidate,
-    scoreCandidate(
-      ctx,
-      myHoldings,
-      candidate,
-      me,
-      board,
-      options.modifier,
-      handForCandidate(ctx, candidate, firstReceivesGrant),
-      boardOccupancy,
-      mySlot,
-    ),
-  ]))
   const aggregates = new Map<VertexId, CandidateAggregate>()
   const adjacency = vertexAdjacency(board.layout)
   // The settlements standing once each pre-window has run: the board's own beside the vertices
@@ -493,6 +477,9 @@ export function rankCandidates(
   const settled = boardSettlements(board)
   const preWindowOccupied = preWindows.map((preWindow) =>
     new Set<VertexId>([...settled, ...preWindow.taken]))
+  // One occupancy per window, shared by every candidate scored against it.
+  const preWindowOccupancy = preWindowOccupied.map((occupied) =>
+    rolloutOccupancy(board, occupied, me))
 
   for (const candidate of candidates) {
     const aggregate: CandidateAggregate = {
@@ -501,11 +488,25 @@ export function rankCandidates(
       plannedSecond: new Map(),
       survived: 0,
     }
-    const firstScore = firstScores.get(candidate)
-    if (!firstScore) continue
+    const firstHand = handForCandidate(ctx, candidate, firstReceivesGrant)
     for (const [windowIndex, preWindow] of preWindows.entries()) {
       if (preWindow.blocked.has(candidate)) continue
       aggregate.survived += 1
+      // Scored per window rather than once against the bare board: by the time I pick, the seats
+      // ahead of me have taken the vertices this window records, and the expansion walk reads
+      // those as occupied. Expansion is the only component that moves between windows; the other
+      // six are recomputed alongside it so a modifier still sees one whole breakdown.
+      const firstScore = scoreCandidate(
+        ctx,
+        myHoldings,
+        candidate,
+        me,
+        board,
+        options.modifier,
+        firstHand,
+        preWindowOccupancy[windowIndex],
+        mySlot,
+      )
       addBreakdown(aggregate.breakdown, firstScore.breakdown)
       for (const vertexId of preWindow.taken) {
         aggregate.expectedTaken.set(vertexId, (aggregate.expectedTaken.get(vertexId) ?? 0) + 1)
@@ -609,11 +610,18 @@ export function rankCandidates(
   // The road the expansion walk would lay from each first pick. The scoring above already ran the
   // walk, but the term reports only its value, so the direction is asked for separately. Asked
   // after the cut, because the walk is the expensive half of the term and every candidate the
-  // panel will not show is a walk nobody reads.
+  // panel will not show is a walk nobody reads. Read off the modal window, the same rollout
+  // `takenBeforeFirstPick` draws its "likely gone" spots from, so the drawn road and the drawn
+  // losses agree.
   return {
     recommendations: recommendations.slice(0, options.maxResults).map((recommendation) => ({
       ...recommendation,
-      firstRoad: expansionTerm(ctx, myHoldings, boardOccupancy, recommendation.firstPick).road,
+      firstRoad: expansionTerm(
+        ctx,
+        myHoldings,
+        preWindowOccupancy[0],
+        recommendation.firstPick,
+      ).road,
     })),
     takenBeforeFirstPick,
   }

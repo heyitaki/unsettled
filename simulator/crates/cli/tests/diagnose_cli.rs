@@ -188,6 +188,15 @@ fn diagnostics_are_byte_identical_across_worker_counts() {
             ["concentrationTermIndicated"],
         false
     );
+    // `max_pips` has no formula to replay, so every first pick is skipped and the block reads
+    // empty rather than going missing.
+    assert_eq!(diagnostics["lookahead"]["overall"]["firstPicks"], 0);
+    assert_eq!(diagnostics["lookahead"]["overall"]["pickShare"], 0.0);
+    assert_eq!(
+        diagnostics["lookahead"]["perSlot"].as_array().unwrap().len(),
+        4
+    );
+
     assert_eq!(diagnostics["illegalActions"], 0);
     assert!(
         diagnostics["config"].get("playerTrading").is_none(),
@@ -196,5 +205,53 @@ fn diagnostics_are_byte_identical_across_worker_counts() {
     assert!(
         fs::read(single.join("meta.json")).is_ok(),
         "meta.json is written alongside diagnostics.json"
+    );
+}
+
+/// M-61 was read off this block, and nothing else asserts that `diagnose` reaches `lookahead.rs`
+/// at all: the arithmetic is pinned in `draft_lookahead.rs` over a hand-built trace, the wiring
+/// only here. One reading per completed pair, the same pairs the expansion block counts.
+#[test]
+fn the_lookahead_block_fills_for_a_placement_that_has_a_formula() {
+    let out = output_dir("diagnose-cli-lookahead");
+    let mut arguments = valid_arguments(&out);
+    arguments[3] = "app_formula:placement/default-weights.json".into();
+    let output = run(&arguments);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8(output.stderr).unwrap()
+    );
+    let diagnostics: serde_json::Value =
+        serde_json::from_slice(&fs::read(out.join("diagnostics.json")).unwrap()).unwrap();
+
+    let overall = &diagnostics["lookahead"]["overall"];
+    assert_eq!(overall["firstPicks"], 48);
+    let intervening = overall["interveningPicks"].as_u64().unwrap();
+    let matched = overall["matchedPicks"].as_u64().unwrap();
+    assert!(intervening > 0, "four seats leave picks between each pair");
+    assert!(matched <= intervening);
+    assert_eq!(
+        overall["pickShare"].as_f64().unwrap(),
+        matched as f64 / intervening as f64
+    );
+
+    // The slot rows partition the overall row, which is what makes a per-slot reading comparable
+    // to it.
+    let per_slot = diagnostics["lookahead"]["perSlot"].as_array().unwrap();
+    assert_eq!(per_slot.len(), 4);
+    assert_eq!(
+        per_slot
+            .iter()
+            .map(|group| group["firstPicks"].as_u64().unwrap())
+            .sum::<u64>(),
+        48
+    );
+    assert_eq!(
+        per_slot
+            .iter()
+            .map(|group| group["matchedPicks"].as_u64().unwrap())
+            .sum::<u64>(),
+        matched
     );
 }

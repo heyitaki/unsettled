@@ -263,6 +263,8 @@ One tempting mitigation is deliberately absent: the search is *not* gated on `cu
 
 Elsewhere, `DecisionView` memoises what it derives from the borrowed `GameState` -- production pips, legal settlements and roads as bitsets -- because the scoring passes ask for those board-wide within a single decision. Board and topology constants (resource pips, port incidence, edge neighbours) are computed at load. Policies score into a buffer owned by `PolicyScratch` rather than a fresh one per decision.
 
+The setup placement path carries the same requirement since the SP6 adoption put the expansion walk in the field. `simulator/crates/engine/src/placement/expansion.rs` keeps its bands, site buffers and per-vertex score memos in a thread-local scratch reused across calls, thread-local because workers play games in parallel. `alloc.rs` plays its second block on an `app_formula` placement over the live defaults, so at a nonzero `expansionWeight` the walk runs inside the counted region where at 0 it was skipped: a walk that allocates per call fails the zero-allocation assertion.
+
 The allocator test warms 50 games and then observes zero allocations across 200 games through the buffer-based scoring path.
 
 ## Benchmark reporting

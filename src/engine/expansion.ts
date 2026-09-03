@@ -124,8 +124,6 @@ interface WalkOutput {
   /** Site vertex indices and their paid-build counts, grouped by edge in `edgeIds` order. */
   siteVertex: number[]
   sitePaid: number[]
-  /** Filled by `expansionTerm` alone: each site's discounted value, parallel to `siteVertex`. */
-  siteValue: number[]
 }
 
 const scratches = new Map<LayoutId, Scratch>()
@@ -142,7 +140,7 @@ function scratchFor(layout: LayoutId, size: number): Scratch {
     settled: new Float64Array(size * 2),
     recorded: new Float64Array(size),
     bands: [[], [], []],
-    output: { edgeIds: [], edgeStart: [], edgeEnd: [], siteVertex: [], sitePaid: [], siteValue: [] },
+    output: { edgeIds: [], edgeStart: [], edgeEnd: [], siteVertex: [], sitePaid: [] },
     scoreStamp: new Float64Array(size),
     score: new Float64Array(size),
     cheapStamp: new Float64Array(size),
@@ -295,6 +293,10 @@ function walkSites(
 /**
  * Every site the candidate opens through one of its own incident edges, keyed by that edge. See
  * `walkSites` for the walk; this is its public shape, one object per site.
+ *
+ * This and `expansionSites` exist so the tests can read the walk's site set. `expansionTerm` reads
+ * the flat scratch directly and no longer goes through either, so neither is on the scoring path.
+ * `placement/expansion.rs::sites_by_edge` is the same shape behind `#[cfg(test)]`.
  */
 export function expansionSitesByEdge(
   layout: LayoutId,
@@ -393,7 +395,6 @@ export function expansionTerm(
   scratch.term += 1
   const term = scratch.term
   scratch.touched.length = 0
-  out.siteValue.length = 0
 
   // One score per site, shared by every first edge that reaches it: a site's worth depends on the
   // site and the pair, never on the road taken to get there.
@@ -413,23 +414,42 @@ export function expansionTerm(
   let bestPair = -Infinity
   for (let edge = 0; edge < out.edgeIds.length; edge += 1) {
     const firstEdge = out.edgeIds[edge]
-    const spanStart = out.edgeStart[edge]
     const spanEnd = out.edgeEnd[edge]
-    // The two best values this edge reaches, folded in one pass. The span is never empty: an edge
-    // only reaches `edgeIds` once it has a site.
-    let best = -Infinity
+    // One pass folds both readings of this edge's span: the two best values it reaches, and each
+    // site at the cheapest paid-build count any first edge reaches it for. Cheapest reach rather
+    // than largest value matches `expansionSites` and `ExpansionSite`'s own definition; folding on
+    // the value would pick the dearest path for a site the pair scores below zero, decay shrinking
+    // a negative toward 0. `placement/expansion.rs::term` folds both the same way.
+    let first = -Infinity
     let second = -Infinity
-    for (let index = spanStart; index < spanEnd; index += 1) {
-      const value = discounted(out.siteVertex[index], out.sitePaid[index])
-      out.siteValue.push(value)
-      if (value > best) {
-        second = best
-        best = value
+    let sawNaN = false
+    for (let index = out.edgeStart[edge]; index < spanEnd; index += 1) {
+      const vertex = out.siteVertex[index]
+      const paidBuilds = out.sitePaid[index]
+      const value = discounted(vertex, paidBuilds)
+      if (value > first) {
+        second = first
+        first = value
       } else if (value > second) {
         second = value
+      } else if (Number.isNaN(value)) {
+        sawNaN = true
+      }
+      if (scratch.cheapStamp[vertex] !== term) {
+        scratch.cheapStamp[vertex] = term
+        scratch.cheapPaid[vertex] = paidBuilds
+        scratch.cheapValue[vertex] = value
+        scratch.touched.push(vertex)
+      } else if (paidBuilds < scratch.cheapPaid[vertex]) {
+        scratch.cheapPaid[vertex] = paidBuilds
+        scratch.cheapValue[vertex] = value
       }
     }
-    const pair = second === -Infinity ? best : best + second
+    // The site reading is a `Math.max`, which a NaN poisons, while the pair skips it. The two
+    // differ only there, and `placement/expansion.rs` splits them the same way, `js_max` against
+    // `top_two`. The span is never empty: an edge only reaches `edgeIds` once it has a site.
+    const best = sawNaN ? NaN : first
+    const pair = first === -Infinity ? 0 : second === -Infinity ? first : first + second
     if (
       road === null ||
       best > bestSite ||
@@ -439,23 +459,6 @@ export function expansionTerm(
       road = firstEdge
       bestSite = best
       bestPair = pair
-    }
-    // Each site at the cheapest paid-build count any first edge reaches it for, matching
-    // `expansionSites` and `ExpansionSite`'s own definition. Folding on the larger *value* instead
-    // would pick the dearest path for a site the pair scores below zero, decay shrinking a negative
-    // toward 0. `placement/expansion.rs::term` folds the same way.
-    for (let index = spanStart; index < spanEnd; index += 1) {
-      const vertex = out.siteVertex[index]
-      const paidBuilds = out.sitePaid[index]
-      if (scratch.cheapStamp[vertex] !== term) {
-        scratch.cheapStamp[vertex] = term
-        scratch.cheapPaid[vertex] = paidBuilds
-        scratch.cheapValue[vertex] = out.siteValue[index]
-        scratch.touched.push(vertex)
-      } else if (paidBuilds < scratch.cheapPaid[vertex]) {
-        scratch.cheapPaid[vertex] = paidBuilds
-        scratch.cheapValue[vertex] = out.siteValue[index]
-      }
     }
   }
 
