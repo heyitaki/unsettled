@@ -403,8 +403,12 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   button { transform: none !important; }
 }
 
+/* The two-column arm: the right rail wraps under the board, and the board stops
+   sticking. Chromium bounds a sticky grid item by the grid, not its own row, so a
+   pinned board would ride over the rail as the page scrolls. */
 @media (max-width: 1120px) {
   .workspace { grid-template-columns: 250px 1fr; }
+  .center-column { position: static; }
   /* The page scrolls here, so a short viewport (a landscape phone) gets a board
      worth looking at rather than a strip capped to what fits beside the header. */
   .board-canvas { max-height: max(320px, calc(100dvh - 130px)); }
