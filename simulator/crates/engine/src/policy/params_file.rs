@@ -1730,6 +1730,11 @@ mod tests {
     /// the arm M-62 read against `base`, and no coordinate pass was run because a single axis
     /// cannot stack with anything. That equality is asserted so the adopted vector and the
     /// arm the record cites cannot drift apart.
+    ///
+    /// Named `the_sp6_candidate_file_records_the_combined_vector` until adoption, which is the
+    /// name the M-63 through M-66 entries in `measurements.md` and the M-64, M-65 and M-66
+    /// preregistrations cite. Those records are append-only, so the former name is kept here
+    /// for a grep out of them to land.
     #[test]
     fn the_sp6_candidate_file_records_the_adopted_vector() {
         let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");

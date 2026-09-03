@@ -707,6 +707,47 @@ describe('hostile states and simulator seams', () => {
     ).total)
   })
 
+  // A recommendation only needs one surviving window to be listed, and the modal window need not
+  // be it. Walking such a candidate against the modal occupancy would draw a road out of a vertex
+  // a rival holds in that window, which is a placement the window made illegal.
+  it('draws the first road from a window the recommendation is placeable in', () => {
+    const board = filledBoard(2)
+    const draft = inferDraftState(board)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 1 }
+    const ctx = computeBoardContext(board, weights)
+    const candidate = 'v:-1,-1;-1,0;0,-1' as VertexId
+    const pieces = occupancyFromBoard(board)
+    const roadUnder = (occupied: ReadonlySet<VertexId>) =>
+      expansionTerm(ctx, emptyHoldings(), { ...pieces, blocked: occupied, seat: 'aki' }, candidate).road
+
+    // The modal window takes the far end of the road an unobstructed walk would lay. That bars the
+    // candidate by the distance rule and makes a rival settlement of the very site the road went
+    // to, so the modal reading is both illegal and a different answer.
+    const openRoad = roadUnder(new Set())
+    expect(openRoad).not.toBeNull()
+    const takenBySeat = edgeEndpointVertexIds(openRoad!).find((vertexId) => vertexId !== candidate)!
+    const modalBlocked = blockedVertices(board.layout, [takenBySeat])
+    expect(modalBlocked.has(candidate)).toBe(true)
+    // The second window takes nothing and leaves the candidate the only vertex open, so the pick
+    // survives there and nowhere else.
+    const survivable = new Set(boardGrid(board.layout).vertexIds)
+    survivable.delete(candidate)
+    const preWindows: PreWindowResult[] = [
+      { blocked: modalBlocked, taken: [takenBySeat] },
+      { blocked: survivable, taken: [] },
+    ]
+
+    const result = rankCandidates(ctx, board, draft, preWindows, requiredOptions({
+      maxResults: 54,
+      weights,
+    }))
+    const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
+    expect(entry).toBeDefined()
+    expect(entry!.survival).toBe(0.5)
+    expect(entry!.firstRoad).toBe(openRoad)
+    expect(roadUnder(new Set([takenBySeat]))).not.toBe(openRoad)
+  })
+
   it('preserves structured pre-window take frequencies when all survival is zero', () => {
     const board = filledBoard(2)
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)

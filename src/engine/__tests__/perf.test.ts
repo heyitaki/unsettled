@@ -61,8 +61,10 @@ describe('rollout performance', () => {
   // SP6 gate, adopted the term at 0.1, and the walk prices every site a candidate opens with the
   // full marginal formula: about sixteen extra scorings per scored candidate, which on this board
   // is 5.8 million of them. That is what an analysis of the largest board now costs, and no
-  // rewrite of the walk closes a gap that size. It is the slowest shape the app analyzes; a
-  // four-seat `standard4` opening measures about a tenth under it.
+  // rewrite of the walk closes a gap that size. It is the slowest shape the app analyzes, but only
+  // just: a four-seat `standard4` opening measures about a tenth under it, because `rolloutCount`
+  // spends a fixed budget and the smaller board buys more rollouts with it. Every filled board
+  // costs about this much, not only the six-player one.
   //
   // The bound is under twice the measured cost, which one sample cannot carry: vitest runs this
   // file alongside forty others, and a single run has come in over 3000ms on a loaded machine

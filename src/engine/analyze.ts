@@ -425,6 +425,15 @@ function replayPreWindowHoldings(
 }
 
 /**
+ * The lowest-index pre-window the candidate is placeable in. Every listed recommendation survived
+ * at least one, so the fallback to the modal window is unreachable from `rankCandidates`.
+ */
+const firstSurvivingWindow = (
+  preWindows: readonly PreWindowResult[],
+  candidate: VertexId,
+): number => Math.max(0, preWindows.findIndex((preWindow) => !preWindow.blocked.has(candidate)))
+
+/**
  * Exported for tests: exercises defensive branches unreachable from valid boards.
  */
 export function rankCandidates(
@@ -610,16 +619,20 @@ export function rankCandidates(
   // The road the expansion walk would lay from each first pick. The scoring above already ran the
   // walk, but the term reports only its value, so the direction is asked for separately. Asked
   // after the cut, because the walk is the expensive half of the term and every candidate the
-  // panel will not show is a walk nobody reads. Read off the modal window, the same rollout
-  // `takenBeforeFirstPick` draws its "likely gone" spots from, so the drawn road and the drawn
-  // losses agree.
+  // panel will not show is a walk nobody reads. Read off the lowest-index window the candidate
+  // survived, which for all but a blocked-in-the-modal-window candidate is the modal window
+  // itself, the same rollout `takenBeforeFirstPick` draws its "likely gone" spots from, so the
+  // drawn road and the drawn losses agree. A recommendation the modal window blocked has to read
+  // some other window: its score already averages only the windows it survived, and walking it
+  // against an occupancy that holds a rival on or beside the vertex would draw a road out of a
+  // placement that window made illegal.
   return {
     recommendations: recommendations.slice(0, options.maxResults).map((recommendation) => ({
       ...recommendation,
       firstRoad: expansionTerm(
         ctx,
         myHoldings,
-        preWindowOccupancy[0],
+        preWindowOccupancy[firstSurvivingWindow(preWindows, recommendation.firstPick)],
         recommendation.firstPick,
       ).road,
     })),
