@@ -196,11 +196,11 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 11: Preregister M-64, the `eval2` confirmation, conditional on M-63
 
-- [ ] If Task 9 recorded the no-survivor skip, tick with the same note and stop
-- [ ] Write `docs/plans/preregs/<today>-m64-sp6-eval2-confirmation.md`: one arm, `candidate=app_formula_draft:placement/sp6-candidate-weights.json@placement/default-weights.json`, against `base`, on **`eval2`**, 8000 x 2, `--threshold 0.005`; state that `eval2` is spent by this run for these parameters and that it is not re-run whatever it reads
-- [ ] Decision rule: `better` proceeds to the gate; anything else rejects the package, records it, and leaves `gate2` unspent
-- [ ] Prediction and admissibility
-- [ ] Link check passes
+- [x] If Task 9 recorded the no-survivor skip, tick with the same note and stop (the condition did not fire: Task 9 took the one-survivor branch, not the no-survivor skip, since M-62 recorded exactly one survivor, `(expansionWeight, 0.1)`. Tasks 11 through 17 therefore stand and this preregistration was written)
+- [x] Write `docs/plans/preregs/<today>-m64-sp6-eval2-confirmation.md`: one arm, `candidate=app_formula_draft:placement/sp6-candidate-weights.json@placement/default-weights.json`, against `base`, on **`eval2`**, 8000 x 2, `--threshold 0.005`; state that `eval2` is spent by this run for these parameters and that it is not re-run whatever it reads (`docs/plans/preregs/2026-09-03-m64-sp6-eval2-confirmation.md`, which opens on the authorization from the `## SP6 decisions, 2026-09-02` note and states the spend-once condition, that no retry may be bought, and that no further `eval2` command may ever run)
+- [x] Decision rule: `better` proceeds to the gate; anything else rejects the package, records it, and leaves `gate2` unspent (fixed before the run, with `worse`, `equivalent` and `inconclusive` named as rejections regardless of point estimate, no partial adoption and no second invocation)
+- [x] Prediction and admissibility (a point estimate near `+0.85pp` with `better` and `inconclusive` at close to even odds, plus the power paragraph naming the run's one hazard: a `better` verdict at 64,000 units and a `+/-0.35pp` half-width needs an estimate above about `+0.85pp`, which is where M-62's two readings sit, so the run is close to a coin flip even if the effect reproduces exactly and the retry that would resolve it is forbidden. Admissibility fixes the `eval2` seed `16691007541528103170`, zero illegal actions, the `base` corner check, both `uptime` readings, and that `base` must not be compared with M-62's `tuning2` figure)
+- [x] Link check passes
 
 ### Task 12: Run M-64 and record it, conditional on M-63
 
