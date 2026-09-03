@@ -48,7 +48,7 @@ Official simulation-ready combinations are three or four seats on `standard4` an
 
 ## Seed domains and seed derivation
 
-The three seed domains are the committed tuning (`0x7a11_1e5e_ed20_2607`), held-out evaluation (`0xe7a1_5eed_2026_0724`), and adoption-gate (`0x6a7e_5eed_2026_0725`) domains. `policy_strength.rs` asserts all three are pairwise disjoint in both their seed streams and their generated boards.
+The six seed domains are the first-generation committed tuning (`0x7a11_1e5e_ed20_2607`), held-out evaluation (`0xe7a1_5eed_2026_0724`) and adoption-gate (`0x6a7e_5eed_2026_0725`) domains, and the second-generation `tuning2` (`0x7a12_5eed_2026_0902`), `eval2` (`0xe7a2_5eed_2026_0902`) and `gate2` (`0x6a72_5eed_2026_0902`), minted for SP6 because the first three are spent. `policy_strength.rs` and `evaluate_harness.rs` both assert all six are pairwise disjoint in their seed streams and in the boards they generate on either layout, and `evaluate_harness.rs` pins each CLI spelling to its own constant. Which domains are spent, and on what, is the ledger in [programme.md](programme.md) under "Seed-domain discipline".
 
 The domain seed drives both board generation and each game's dice, deck, chance, and policy streams. On a given unit, the game seed depends only on `(domain seed, board, rep, hero seat)`, never the arm, so paired arms use common random numbers.
 

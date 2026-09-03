@@ -18,17 +18,29 @@ use crate::stats::{normal_quantile, wilson};
 
 pub const TUNING_SEED: u64 = 0x7a11_1e5e_ed20_2607;
 pub const EVAL_SEED: u64 = 0xe7a1_5eed_2026_0724;
-/// Third domain, deliberately unspent. `eval` was burned for the `resourceValue`
-/// spread question, and a domain cannot be un-spent: once a parameter has been
-/// screened against it, its estimate for *that* parameter is no longer unbiased.
-/// Reserve this one for the final adoption gate and screen nothing against it.
+/// Third domain, held for the final adoption gate and spent there by M-46. A domain
+/// cannot be un-spent: once a parameter has been screened against it, its estimate for
+/// *that* parameter is no longer unbiased. The spend ledger is in `programme.md` under
+/// "Seed-domain discipline".
 pub const GATE_SEED: u64 = 0x6a7e_5eed_2026_0725;
+
+/// Second-generation domains, minted for the placement programme's SP6 phase because
+/// the first three are all spent: `tuning` screened SP1 through SP5, `eval` confirmed
+/// twice and `gate` decided the Phase-I adoption. SP6 changes the field to the
+/// draft-aware kind, which re-opens every question on seeds no parameter has seen.
+/// Same recipe as the three above: a readable tag and the date the domain was minted.
+pub const TUNING2_SEED: u64 = 0x7a12_5eed_2026_0902;
+pub const EVAL2_SEED: u64 = 0xe7a2_5eed_2026_0902;
+pub const GATE2_SEED: u64 = 0x6a72_5eed_2026_0902;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EvaluationDomain {
     Tuning,
     Eval,
     Gate,
+    Tuning2,
+    Eval2,
+    Gate2,
 }
 
 impl EvaluationDomain {
@@ -37,6 +49,9 @@ impl EvaluationDomain {
             "tuning" => Ok(Self::Tuning),
             "eval" => Ok(Self::Eval),
             "gate" => Ok(Self::Gate),
+            "tuning2" => Ok(Self::Tuning2),
+            "eval2" => Ok(Self::Eval2),
+            "gate2" => Ok(Self::Gate2),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
     }
@@ -46,6 +61,9 @@ impl EvaluationDomain {
             Self::Tuning => "tuning",
             Self::Eval => "eval",
             Self::Gate => "gate",
+            Self::Tuning2 => "tuning2",
+            Self::Eval2 => "eval2",
+            Self::Gate2 => "gate2",
         }
     }
 
@@ -54,6 +72,9 @@ impl EvaluationDomain {
             Self::Tuning => TUNING_SEED,
             Self::Eval => EVAL_SEED,
             Self::Gate => GATE_SEED,
+            Self::Tuning2 => TUNING2_SEED,
+            Self::Eval2 => EVAL2_SEED,
+            Self::Gate2 => GATE2_SEED,
         }
     }
 }

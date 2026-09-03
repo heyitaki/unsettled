@@ -54,7 +54,7 @@ cargo run --release -p unsettled-sim -- evaluate \
 
 `--layout` defaults to `standard4`; the corresponding default seat counts are four for `standard4` and six for `extension6`. `--policy`, `--threshold`, `--alpha`, and `--threads` default to `heuristic-v1`, `0.01`, `0.05`, and all logical cores, respectively; `--arm-policy` defaults every arm to `--policy`. As with tournament, non-official seat counts require `--allow-unofficial`.
 
-`--domain tuning|eval|gate` is required and has no default.
+`--domain tuning|eval|gate|tuning2|eval2|gate2` is required and has no default. The first three are spent; the second generation was minted for the placement programme's SP6 phase, where `tuning2` screens and `eval2` and `gate2` are each spent once. The spend ledger is in [`programme.md`](../.claude/specs/simulator/programme.md) under "Seed-domain discipline", and the constants are in [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Seed domains and seed derivation".
 
 Each comparison in `evaluation.json` carries a `perHeroSeat` table beside its pooled numbers, indexed by seat. What it holds, and why it is record only, is in [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Paired statistics".
 

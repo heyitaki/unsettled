@@ -99,6 +99,35 @@ fn domain_is_required_by_the_command_line_parser() {
     assert_named_error(&arguments, "--domain <DOMAIN>");
 }
 
+/// The SP6 domains reach the binary, and a near miss does not.
+///
+/// `EvaluationDomain::parse` is unit-pinned beside the seed constants; this checks the
+/// spelling survives the command line, since a domain the parser accepts but the CLI
+/// rejects would be discovered only by a failed measurement run.
+#[test]
+fn the_second_generation_domains_are_accepted_and_a_typo_is_not() {
+    for domain in ["tuning2", "eval2", "gate2"] {
+        let out = output_dir(&format!("evaluate-cli-domain-{domain}"));
+        let mut arguments = valid_arguments(&out);
+        arguments[1] = domain.into();
+        let arguments = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+        let output = evaluate(&arguments);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8(output.stderr).unwrap()
+        );
+        let artifact: serde_json::Value =
+            serde_json::from_slice(&fs::read(out.join("evaluation.json")).unwrap()).unwrap();
+        assert_eq!(artifact["config"]["domain"], domain);
+    }
+
+    let out = output_dir("evaluate-cli-domain-typo");
+    let mut arguments = valid_arguments(&out);
+    arguments[1] = "tuning3".into();
+    assert_named_error(&arguments, "unknown evaluation domain tuning3");
+}
+
 #[test]
 fn alpha_endpoints_are_rejected() {
     for alpha in ["0", "1"] {

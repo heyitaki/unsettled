@@ -125,13 +125,13 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 2: Mint `tuning2`, `eval2` and `gate2`
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Add `TUNING2_SEED`, `EVAL2_SEED`, `GATE2_SEED` to `simulator/crates/cli/src/evaluate.rs` in the existing recipe, with `EvaluationDomain::{Tuning2, Eval2, Gate2}` parsed from `tuning2`, `eval2`, `gate2` and named the same way
-- [ ] Extend `policy_strength.rs::tuning_and_evaluation_seed_domains_are_disjoint` and `evaluate_harness.rs::tuning_and_evaluation_domains_have_disjoint_seeds_and_boards` to assert all six domains pairwise disjoint in seeds, and the boards test to cover every pair that shares a layout
-- [ ] Add a CLI test that `--domain tuning2` is accepted and `--domain tuning3` is rejected with the existing error shape
-- [ ] Update `contracts.md` "Seed domains and seed derivation" with the three constants, `programme.md` "Seed-domain discipline" with the new ledger (`tuning2` screening, `eval2` and `gate2` unspent until SP6's Tasks 12 and 17), `simulator/README.md` where domains are listed, and the repo `CLAUDE.md` spend-once rule to name all six and say `eval2` and `gate2` are SP6's to spend once
-- [ ] Recapture and assert the corpus diff is empty; state it in the commit
-- [ ] Both cargo profiles green, link check passes
+- [x] Capture `runs/corpus-pre`
+- [x] Add `TUNING2_SEED`, `EVAL2_SEED`, `GATE2_SEED` to `simulator/crates/cli/src/evaluate.rs` in the existing recipe, with `EvaluationDomain::{Tuning2, Eval2, Gate2}` parsed from `tuning2`, `eval2`, `gate2` and named the same way
+- [x] Extend `policy_strength.rs::tuning_and_evaluation_seed_domains_are_disjoint` and `evaluate_harness.rs::tuning_and_evaluation_domains_have_disjoint_seeds_and_boards` to assert all six domains pairwise disjoint in seeds, and the boards test to cover every pair that shares a layout
+- [x] Add a CLI test that `--domain tuning2` is accepted and `--domain tuning3` is rejected with the existing error shape
+- [x] Update `contracts.md` "Seed domains and seed derivation" with the three constants, `programme.md` "Seed-domain discipline" with the new ledger (`tuning2` screening, `eval2` and `gate2` unspent until SP6's Tasks 12 and 17), `simulator/README.md` where domains are listed, and the repo `CLAUDE.md` spend-once rule to name all six and say `eval2` and `gate2` are SP6's to spend once
+- [x] Recapture and assert the corpus diff is empty; state it in the commit
+- [x] Both cargo profiles green, link check passes
 
 ### Task 3: Fix the rollout occupancy in the app
 
