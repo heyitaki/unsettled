@@ -253,9 +253,9 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 18: SP6 completion note
 
-- [ ] Append a dated `## SP6 completion` note to `placement-programme.md`: every M entry from M-61 on with its verdict, the final decision (adopted vector or rejection), the field switch, the spend state of all six domains, the still-open gaps, and that the placement programme is closed
-- [ ] Update the programme's opening paragraphs only where they say a phase is pending
-- [ ] Link check passes
+- [x] Append a dated `## SP6 completion` note to `placement-programme.md`: every M entry from M-61 on with its verdict, the final decision (adopted vector or rejection), the field switch, the spend state of all six domains, the still-open gaps, and that the placement programme is closed (appended as `## SP6 completion, 2026-09-03`: the six entries with their verdicts, including M-61 as the diagnostic that carries none and M-63 as the record of a decision that forbade its own run; the one-member adoption of `expansionWeight` at 0.1 with the adoption note left to own its mechanics; the field switch as something the gate did not touch, carrying its two permanent limits; all six domains spent with both second-generation spends named; the four gaps still open against the six this programme closed and deleted; and what closure means for a successor, which is a new programme number, a third domain generation and three unscheduled follow-ups)
+- [x] Update the programme's opening paragraphs only where they say a phase is pending (three edits: the intro's "a decision SP6 has to make" now says SP6 made it against the prior and names M-62's `+0.302pp` `equivalent` on `diversityWeight`; the phase-numbering paragraph says every phase has run, that each description below is a record rather than a plan, and that `SIM-GAP-20` and `SIM-GAP-34` are closed and deleted leaving `SIM-GAP-35` through `SIM-GAP-37`; and the SP6 phase bullet records that the re-screen left one survivor so no combined arm or coordinate pass existed. The dated decision notes were not edited, per the review bounds, and the "Seed domains: open decision" section was left standing because its own note already supersedes it, which the completion note says in terms)
+- [x] Link check passes (0 bad references in 50 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 19: Verify acceptance criteria
 
