@@ -161,16 +161,18 @@ export function ResourceGlyph({ resource }: { resource: Resource }) {
     case 'brick': // two courses in a running bond
       return (
         <svg {...shell}>
-          <rect x="2.8" y="5.4" width="14.4" height="4.4" rx=".8" fill={fill} />
-          <rect x="2.8" y="10.8" width="6.2" height="4.4" rx=".8" fill={fill} />
-          <rect x="11" y="10.8" width="6.2" height="4.4" rx=".8" fill={fill} />
+          <rect x="3.5" y="5.9" width="13" height="4" rx=".7" fill={fill} />
+          <rect x="3.5" y="10.8" width="5.6" height="4" rx=".7" fill={fill} />
+          <rect x="10.9" y="10.8" width="5.6" height="4" rx=".7" fill={fill} />
         </svg>
       )
-    default: // ore — a faceted gem, the facets cut through to the paper
+    default: // ore — a pickaxe, ore-coloured head on a dark handle
       return (
         <svg {...shell}>
-          <path d="M6.2 4.4h7.6l3.2 4.6L10 17 3 9Z" fill={fill} />
-          <path d="M3 9h14M6.2 4.4 10 9l3.8-4.6M10 9v8" fill="none" stroke={PAPER} strokeWidth="1.1" strokeLinejoin="round" />
+          <g transform="rotate(-40 10 10)">
+            <rect x="9" y="7.2" width="2" height="11" rx=".7" fill={PIECE_INK} />
+            <path d="M2.6 9C6 3.8 14 3.8 17.4 9 13.6 6.6 6.4 6.6 2.6 9Z" fill={fill} stroke={fill} strokeWidth="1.4" strokeLinejoin="round" />
+          </g>
         </svg>
       )
   }
