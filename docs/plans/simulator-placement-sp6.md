@@ -211,11 +211,11 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 13: Preregister M-65, the extension-board reading, conditional on M-63
 
-- [ ] If Task 9 recorded the no-survivor skip, tick with the same note and stop
-- [ ] Write `docs/plans/preregs/<today>-m65-sp6-extension6.md`: the candidate against `base` on `tuning2`, **`extension6`, 6 seats**, 2000 boards x 2 reps, composite policy with `--player-trading`, `--threshold 0.005`, record-only, cannot block adoption; a `worse` reading is flagged for the user
-- [ ] Preregister the timing: time a 200-board run first, extrapolate, and name the background-and-poll invocation if it is predicted over eight minutes
-- [ ] Prediction and admissibility
-- [ ] Link check passes
+- [x] If Task 9 recorded the no-survivor skip, tick with the same note and stop (the condition did not fire: M-62 left exactly one survivor, so Task 9 took its one-survivor branch and not the no-survivor skip. Tasks 13 and 14 therefore stand and this preregistration was written)
+- [x] Write `docs/plans/preregs/2026-09-03-m65-sp6-extension6.md`: the candidate against `base` on `tuning2`, **`extension6`, 6 seats**, 2000 boards x 2 reps, composite policy with `--player-trading`, `--threshold 0.005`, record-only, cannot block adoption; a `worse` reading is flagged for the user (written as `docs/plans/preregs/2026-09-03-m65-sp6-extension6.md`, which fixes the run at 24,000 paired units over 2,000 clusters, since `evaluate.rs::evaluation_schedule` gives six seats 12 units per board, and checks `base` against the symmetric 1/6 corner rather than the 0.25 corner every four-seat SP6 entry used)
+- [x] Preregister the timing: time a 200-board run first, extrapolate, and name the background-and-poll invocation if it is predicted over eight minutes (the pilot ran before the prereg was written: 4,800 games in 5.477s at 18 workers, zero illegal actions, load `3.01 4.52 5.21` before and `5.48 5.00 5.37` after, so a six-seat extension game costs about 2.45 times a four-seat standard one and the full run extrapolates to about 55 seconds. That is under the eight-minute bar, so the prereg registers a foreground invocation and no background-and-poll form. The pilot's `evaluation.json` was deliberately left unread, because its boards are exactly boards 0 through 199 of the full run and reading its estimate would have been a peek before the prediction was written)
+- [x] Prediction and admissibility (a point estimate between `0pp` and `+1.0pp` centred near `+0.6pp` with `inconclusive` predicted at about four in five, plus the power paragraph naming the design's chief limitation: a quarter of M-64's cluster count means a half-width near `+/-0.7pp` to `+/-0.9pp`, which puts `better` out of reach below about `+1.2pp` and makes `equivalent` structurally unreachable, so `inconclusive` is the modal outcome by construction and is not a null. Admissibility fixes the `tuning2` seed 8796197394747623682, zero illegal actions, the `base` check against the 1/6 corner, both `uptime` readings, and that `base` must not be compared with any four-seat reference)
+- [x] Link check passes (0 bad references in 49 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 14: Run M-65 and record it, conditional on M-63
 
