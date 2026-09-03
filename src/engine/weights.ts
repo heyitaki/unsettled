@@ -78,7 +78,8 @@ export interface EngineWeights {
   expansionWeight: number
   // Per paid road-build discount on a site's value. The first road is the free
   // setup one, so a site two builds out is worth `decay ** 2` of its score. At
-  // 1 distance stops mattering; inert while expansionWeight is 0.
+  // 1 distance stops mattering. Live since M-66 adopted expansionWeight at 0.1;
+  // M-62 read 0.25 and 1.0 beside that weight as equivalent, so 0.5 stands.
   expansionDecay: number
   robberDiscount: number
   // How much piling pips onto one hex costs. `robberDiscount` prices only the

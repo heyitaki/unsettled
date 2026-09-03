@@ -259,18 +259,18 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 19: Verify acceptance criteria
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` clean (the pre-existing `src/ui/glyphs.tsx` fast-refresh warning is the only permitted warning)
-- [ ] `npm test` fully green
-- [ ] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green
-- [ ] `git status` is clean apart from gitignored run artifacts
-- [ ] `measurements.md` contains M-61 and M-62, plus M-63 through M-66 unless a condition skipped them, each with a date, commit, domain, exact command, load before and after, games, illegal actions and an admissibility statement; grep the new entries and preregs and confirm no `--domain tuning`, `--domain eval` or `--domain gate` appears, and that `--domain eval2` and `--domain gate2` each appear in at most one M entry
-- [ ] Every SP6 prereg and M entry carries `--threshold 0.005`
-- [ ] If Task 17 adopted: `simulator/placement/default-weights.json` matches `DEFAULT_WEIGHTS`, differs from `sp6-pre-adoption-weights.json` exactly on the adopted axes, `SIM-GAP-34` is gone from `gaps.md`, and the parity fixture was regenerated in the adoption commit. If it did not: `default-weights.json` is byte-identical to its state at Task 1, and `gaps.md` still carries `SIM-GAP-34`
-- [ ] `placement-programme.md` carries the SP6 decisions note, the field-switch note, and the completion note, each appended
-- [ ] Write a run summary at the end of `.ralphex/progress/progress-simulator-placement-sp6.txt` listing every M entry, its verdict, the final decision, and the domain spend state
+- [x] `npm run typecheck` clean
+- [x] `npm run lint` clean (oxlint exits 0 with no diagnostics at all; the glyphs.tsx fast-refresh warning the plan permitted is not emitted by this config)
+- [x] `npm test` fully green (44 files, 442 tests, re-run after the one code edit this task made)
+- [x] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references (0 in 50 files)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green (every test binary reports `test result: ok`, zero failures)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green (55 test binaries, every one `test result: ok`, zero failures)
+- [x] `git status` is clean apart from gitignored run artifacts (`git status --porcelain` empty before this task's own edits)
+- [x] `measurements.md` contains M-61 through M-66. M-61, M-62, M-64, M-65 and M-66 each carry a date, a commit, a domain, the exact command, load before and after, a game count, an illegal-action count and an admissibility statement. M-63 is the condition-skipped entry: it carries its date and commit and states in terms that there is no domain, no command, no load reading, no game count and no illegal-action count because no run was made, and that admissibility does not arise. No `--domain tuning`, `--domain eval` or `--domain gate` appears in any SP6 entry or in any SP6 prereg. `--domain eval2` appears in M-64 only and `--domain gate2` in M-66 only
+- [x] Every SP6 prereg and M entry carries `--threshold 0.005`: the M-62, M-64, M-65 and M-66 preregs and entries all do. M-61 carries none because `diagnose` has no equivalence threshold by construction (`simulator/crates/cli/src/main.rs` documents the diagnostic as having no field, arm, reference or threshold), and the M-61 entry says so and states that the 0.5pp bar governs the A/B verdicts and not it. M-63 has no prereg, by the standing rule that a prereg for a run a condition already forbade must not be written
+- [x] Task 17 adopted, and the adopted branch holds. `simulator/placement/default-weights.json` carries `expansionWeight` 0.1, matching `src/engine/weights.ts::DEFAULT_WEIGHTS`, and the two are pinned against each other by the parity fixture. It differs from `sp6-pre-adoption-weights.json` on exactly one leaf, `expansionWeight` 0 to 0.1, and equals `sp6-candidate-weights.json`. `SIM-GAP-34` is gone from `gaps.md`, which now opens at `SIM-GAP-35`. The adoption commit `9ec55e2a` regenerated `simulator/fixtures/placement-parity.json` alongside `default-weights.json`, `src/engine/weights.ts` and the `gaps.md` deletion
+- [x] `placement-programme.md` carries all three appended notes plus the adoption note: `## SP6 decisions, 2026-09-02`, `## The reference field is the draft-aware kind, 2026-09-02`, `## SP6 adoption, 2026-09-03` and `## SP6 completion, 2026-09-03`
+- [x] Run summary appended to `.ralphex/progress/progress-simulator-placement-sp6.txt`: M-61 through M-66 with each verdict (M-61 a diagnostic carrying none, M-62 one survivor out of six contrasts, M-63 not run by its own condition, M-64 `better` on `eval2`, M-65 `inconclusive` on `extension6` with no flag, M-66 `better` on `gate2`), the adoption of `expansionWeight` at 0.1 as the final decision, all six domains spent, the Task 19 validation and record-audit results, and the human items left in Post-Completion
 
 ## Post-Completion
 
