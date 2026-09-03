@@ -104,8 +104,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const pinned = selectedPick !== null
     || selectedLikelyGone
     || (state.highlight !== null && state.highlight !== own.current)
-  // A hover is a preview, not a choice: it paints only while no card is pinned,
-  // and a coarse pointer never fires it at all (spec DB2).
+  // A hover is a preview, not a choice: it paints only while nothing is pinned
+  // (spec DB2). A tap's compatibility mouseenter is harmless, since the click
+  // that follows selects the very card the preview just painted.
   const preview = (marks: HighlightMark[] | null) => {
     if (!pinned) mark(marks)
   }

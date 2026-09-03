@@ -435,6 +435,41 @@ test.describe('desktop', () => {
       .evaluate((el) => el.getBoundingClientRect().top)
     expect(toolsTop).toBeLessThan(viewport.height)
   })
+
+  /* The narrowest three-column width, where every workspace track sits on its
+     floor and the roster row has the least to give. The name shares the row
+     with a grip, a swatch, the YOU column, the tally and the VP, and it is the
+     only cell that flexes, so this is where it gets squeezed out. */
+  test.describe('at the narrowest three-column width', () => {
+    test.use({ viewport: { width: 1121, height: 900 } })
+
+    test('leaves the roster name a cell of its own instead of running it under the YOU chip', async ({ page }) => {
+      await page.goto('')
+      await seedUnclaimedRoster(page)
+      const rows = page.locator('.player-list .roster-row')
+      await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
+      // One claimed row, so the chip is measured where it is actually drawn.
+      await rows.first().click()
+      await expect(rows.first()).toHaveClass(/\bme\b/)
+
+      // Both views, since the resources view carries a sixth tally column.
+      for (const view of ['Pieces', 'Resources']) {
+        await page.locator('.tally-bar .menu-trigger').click()
+        await page.getByRole('option', { name: view }).click()
+        const boxes = await rows.evaluateAll((elements) => elements.map((row) => ({
+          cell: row.querySelector('.list-row-main')!.getBoundingClientRect().width,
+          nameRight: row.querySelector('.list-row-name')!.getBoundingClientRect().right,
+          chipLeft: row.querySelector('.you-chip')!.getBoundingClientRect().left,
+        })))
+        expect(boxes.length).toBeGreaterThan(1)
+        for (const box of boxes) {
+          expect(box.cell).toBeGreaterThan(0)
+          expect(box.nameRight).toBeLessThanOrEqual(box.chipLeft)
+        }
+      }
+      await snap(page, 'desktop-narrow')
+    })
+  })
 })
 
 test.describe('landscape phone', () => {

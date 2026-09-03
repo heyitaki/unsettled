@@ -32,7 +32,11 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .brand-mark span:nth-child(3) { left: 11px; top: 16px; background: #d2a13d; }
 .eyebrow { display: block; color: var(--accent-dark); font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
 
-.workspace { max-width: 1580px; margin: auto; display: grid; grid-template-columns: minmax(248px, 320px) minmax(520px, 1fr) minmax(262px, 336px); gap: 16px; align-items: start; }
+/* Both of the right rail's bounds pay for the roster's YOU column: the row now
+   spends 47px on the chip that the player's name used to have. The ceiling comes
+   out of the board's slack, and at the narrowest desktop width, where every
+   track sits on its floor, the floors trade the same 26px straight across. */
+.workspace { max-width: 1580px; margin: auto; display: grid; grid-template-columns: minmax(248px, 320px) minmax(494px, 1fr) minmax(288px, 372px); gap: 16px; align-items: start; }
 .left-rail, .right-rail { display: grid; gap: 12px; }
 .left-rail { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
 .left-rail > *, .mobile-pane > * { flex: none; }
@@ -152,6 +156,12 @@ button.selected.danger { color: #fff; }
    keeps a fixed offset from the row's right edge for the header to meet. */
 .player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 6px; --card-pad: 6px; --stepper-indent: 22px; }
 .player-list .roster-row { gap: var(--row-gap); padding: 0 var(--card-pad) 0 4px; cursor: pointer; }
+/* The phone's 30px floor keeps a name tappable in a cell that is never tight.
+   Here the fixed columns can starve the name cell outright, and the floor would
+   make the name overflow it and paint over the YOU chip instead of clipping. */
+.player-list .roster-row .list-row-name, .player-list .roster-row .list-row-rename { min-width: 0; }
+/* Tighter than the phone's chip: every pixel here comes straight off the name. */
+.player-list .you-chip { padding: 3px 6px; letter-spacing: .03em; }
 /* The VP pulls back over the row's gap, so the tally and the VP read as one
    unbroken run of columns: which is exactly what the header strip is. On a
    coarse pointer it is a button, so it also sheds the button chrome. */
@@ -398,6 +408,13 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 @media (max-width: 1120px) {
   .workspace { grid-template-columns: 250px 1fr; }
   .right-rail { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+}
+
+/* Just above the two-column arm the right rail is pinned at its floor, and the
+   roster row's fixed cells leave the name nothing. The tally and the row's own
+   gaps give some of it back until the rail can grow to its ceiling. */
+@media (min-width: 1121px) and (max-width: 1339px) {
+  .player-list { --tally-col: 18px; --row-gap: 4px; }
 }
 
 /* The landscape arm is gated on a coarse pointer so a merely short desktop

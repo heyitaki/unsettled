@@ -288,10 +288,14 @@ export function useRowReorder({
     if (!current || current.pointerId !== event.pointerId) return
     if (current.held && !cancelled) {
       const from = ids.indexOf(current.id)
-      if (dropTarget?.kind === 'trash') onRemove(current.id)
+      // Read off the release point rather than the last aim, for the same reason
+      // the native drop does: pointermove is a continuous event and pointerup a
+      // discrete one, so a move React has not flushed would land a slot behind.
+      const target = targetFor(event.clientY)
+      if (target?.kind === 'trash') onRemove(current.id)
       // A row released where it started is a cancelled drag, not an edit worth
       // an undo entry.
-      else if (dropTarget?.kind === 'row' && dropTarget.index !== from) onMove(current.id, dropTarget.index)
+      else if (target?.kind === 'row' && target.index !== from) onMove(current.id, target.index)
     }
     endPress()
     endDrag()
