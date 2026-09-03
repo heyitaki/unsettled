@@ -256,6 +256,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .roster-row .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper-light), 0 0 0 3.5px var(--accent); }
 .roster-row .list-row-name { font-size: 14px; }
 .roster-row .list-row-rename { user-select: text; -webkit-user-select: text; }
+/* The claim button covers the whole row, so the controls and tooltips that sit
+   over it have to be positioned to paint above it, the way the name already is. */
+.roster-row .swatch, .roster-row .player-tally, .roster-row .roster-vp { position: relative; }
 .roster-vp { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 .roster-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border: 1px dashed rgba(163, 52, 40, .5); border-radius: 12px; color: #a33428; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .roster-trash.over { border-style: solid; background: rgba(163, 52, 40, .12); }
@@ -410,10 +413,13 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .right-rail { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
 }
 
-/* Just above the two-column arm the right rail is pinned at its floor, and the
-   roster row's fixed cells leave the name nothing. The tally and the row's own
-   gaps give some of it back until the rail can grow to its ceiling. */
-@media (min-width: 1121px) and (max-width: 1339px) {
+/* Across the whole three-column arm the roster row's fixed cells leave the name
+   almost nothing, and the rail cannot make it up: it is already at its 372px
+   ceiling by about 1300px, and the workspace caps at 1580px. So the tally and
+   the row's own gaps give the name those pixels at every width here, rather
+   than handing them back at some threshold and narrowing the name as the
+   window grows. */
+@media (min-width: 1121px) {
   .player-list { --tally-col: 18px; --row-gap: 4px; }
 }
 
@@ -629,6 +635,13 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   }
   .site-header { height: 32px; }
   .site-header > div:last-child { display: none; }
+  /* The pane is the scroller in this arm, so the saved-map list must not be a
+     second one inside it: at 342px tall the desktop cap would leave the list
+     filling the pane, and its contained overscroll would strand the heading,
+     the import button and the open boards above it. */
+  .library-saved { flex: none; }
+  .saved-maps { flex: none; max-height: none; overflow: visible; }
+  .saved-maps.fade-top, .saved-maps.fade-bottom { -webkit-mask-image: none; mask-image: none; }
   .workspace { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 52fr) minmax(0, 48fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
   .center-column { grid-column: 1; grid-row: 1; min-height: 0; align-self: start; }
   .draft-ribbon { display: none; }

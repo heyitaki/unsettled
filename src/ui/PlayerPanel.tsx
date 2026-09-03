@@ -266,15 +266,21 @@ export function PlayerPanel() {
                 // it can track a finger.
                 style={offset !== 0 ? { transform: `translateY(${offset}px)` } : undefined}
                 {...rowProps(player.id)}
-                onClick={() => commit(setMe(board, player.id))}
               >
+                {/* The claim is the phone's row-wide button (spec S8), not a
+                    handler on the row, so it can be tabbed to and announces
+                    which seat is yours. The row's other controls paint over it. */}
+                <button
+                  type="button"
+                  className="list-row-select"
+                  aria-label={`Claim ${player.name}`}
+                  aria-pressed={isMe}
+                  onClick={() => commit(setMe(board, player.id))}
+                />
                 <span
                   className="roster-grip"
                   aria-hidden="true"
                   onPointerDown={(event) => startImmediately(event, player.id)}
-                  // The grip reorders; a click on it must not also claim the
-                  // seat through the row behind it.
-                  onClick={(event) => event.stopPropagation()}
                 >
                   <GripGlyph />
                 </span>
@@ -285,12 +291,10 @@ export function PlayerPanel() {
                   aria-label={`Use ${player.name} for new pieces`}
                   aria-pressed={active}
                   style={{ background: player.color }}
-                  onClick={(event) => {
+                  onClick={() => {
                     // The brush is not the claim (spec DB3): this picks the
-                    // player new pieces are painted with, and stopPropagation
-                    // keeps the row's own claim out of it. It toggles like the
+                    // player new pieces are painted with. It toggles like the
                     // tool palette, so board clicks can place nothing.
-                    event.stopPropagation()
                     dispatch({ type: 'active-player', playerId: active ? null : player.id })
                   }}
                 />
@@ -345,8 +349,7 @@ export function PlayerPanel() {
                     type="button"
                     className="roster-vp"
                     aria-label={`Victory points: ${standing.victoryPoints}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
+                    onClick={() => {
                       const text = vpBreakdown(standing, stats.vpCards)
                       setCaption((current) =>
                         current?.key === `vp:${player.id}` ? null : { key: `vp:${player.id}`, text })

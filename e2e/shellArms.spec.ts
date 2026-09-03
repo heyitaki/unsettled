@@ -352,6 +352,50 @@ test.describe('desktop', () => {
     await expect(add).toBeDisabled()
   })
 
+  test('claims from the keyboard, and the controls over the claim button still answer', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const rows = page.locator('.player-panel .roster-row')
+    await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
+
+    // The claim is a real button, so it takes focus and Enter (spec D5).
+    const claim = rows.nth(2).getByRole('button', { name: `Claim ${UNCLAIMED_ROSTER[2].name}` })
+    await claim.focus()
+    await page.keyboard.press('Enter')
+    await expect(rows.nth(2)).toHaveClass(/\bme\b/)
+    await expect(claim).toHaveAttribute('aria-pressed', 'true')
+    await expect(rows.nth(0).getByRole('button', { name: `Claim ${UNCLAIMED_ROSTER[0].name}` }))
+      .toHaveAttribute('aria-pressed', 'false')
+
+    // That button covers the whole row, so everything drawn over it has to keep
+    // its own hit area: the swatch and the VP click, the tally shows its title.
+    const swatch = rows.nth(3).locator('.swatch')
+    await swatch.click()
+    await expect(swatch).toHaveAttribute('aria-pressed', 'true')
+    await expect(rows.nth(2)).toHaveClass(/\bme\b/)
+    const own = await rows.nth(2).evaluate((row) => [...row.querySelectorAll('.player-tally > span, .roster-vp')]
+      .every((el) => {
+        const box = el.getBoundingClientRect()
+        return el.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))
+      }))
+    expect(own).toBe(true)
+  })
+
+  /* The right rail is at its 372px ceiling well before the three-column arm's
+     widest layout, so no width may take pixels back off the name (spec D5). */
+  test('never narrows the roster name as the window widens', async ({ page }) => {
+    await page.goto('')
+    await expect(page.locator('.player-list .roster-row')).not.toHaveCount(0)
+    const cell = page.locator('.player-list .roster-row .list-row-main').first()
+    let narrowest = 0
+    for (const width of [1121, 1200, 1300, 1339, 1340, 1400, 1580]) {
+      await page.setViewportSize({ width, height: 900 })
+      const measured = await cell.evaluate((el) => el.getBoundingClientRect().width)
+      expect(measured, `at ${width}px`).toBeGreaterThanOrEqual(narrowest)
+      narrowest = measured
+    }
+  })
+
   test('the snake draft is the phone grid, and a grip drag reseats it', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
@@ -486,6 +530,33 @@ test.describe('landscape phone', () => {
     await expect(page.locator('.draft-ribbon')).toBeHidden()
     await expect(page.locator('footer')).toHaveCount(0)
     await snap(page, 'landscape')
+  })
+
+  test('keeps the Library pane a single scroller however long the library grows', async ({ page }) => {
+    await page.goto('')
+    await seedSavedMaps(page, 25)
+    await page.locator('.mobile-nav').getByRole('tab', { name: 'Library' }).click()
+    const pane = page.locator('.mobile-pane[data-pane="library"]')
+    await expect(pane.locator('.saved-maps .list-row')).toHaveCount(25)
+
+    // The pane is the scroller here and the list inside it is not, so a thumb
+    // on the rows cannot be trapped short of the heading, the import button and
+    // the open boards above them (spec D1).
+    const scrollers = await pane.evaluate((el) => {
+      const list = el.querySelector('.saved-maps')!
+      return {
+        paneScrolls: el.scrollHeight > el.clientHeight,
+        listScrolls: list.scrollHeight > list.clientHeight,
+        listOverflow: getComputedStyle(list).overflowY,
+      }
+    })
+    expect(scrollers.paneScrolls).toBe(true)
+    expect(scrollers.listScrolls).toBe(false)
+    expect(scrollers.listOverflow).toBe('visible')
+
+    // And the pane really reaches its foot, rather than stopping at the list.
+    await pane.evaluate((el) => { el.scrollTop = el.scrollHeight })
+    await expect(pane.locator('.hero-import')).not.toBeInViewport()
   })
 
   test('rotating to portrait mounts the phone shell and rotating back restores the nav', async ({ page }) => {
