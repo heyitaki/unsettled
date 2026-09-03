@@ -20,8 +20,8 @@ import {
   type PreWindowResult,
 } from '../analyze'
 import { inferDraftState } from '../draft'
-import { expansionTerm } from '../expansion'
-import { legalSettlementVertices } from '../legality'
+import { expansionSites, expansionTerm } from '../expansion'
+import { blockedVertices, legalSettlementVertices, vertexAdjacency } from '../legality'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
@@ -382,6 +382,72 @@ describe('joint draft analysis', () => {
       expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
         .toBe(entry.firstRoad)
     }
+  })
+
+  // The rollout's `blocked` set is closed under the distance rule, so it carries the neighbours of
+  // my own first pick beside the pick itself. Reading that set as the occupancy made those
+  // neighbours look like rivals' settlements, and the walk in `expansion.ts` stops dead at a rival.
+  it('prices the second pick against the settlements standing, not the vertices the rule bars', () => {
+    const board = filledBoard(1)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.5 }
+    const ctx = computeBoardContext(board, weights)
+    const [top] = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights }).recommendations
+    const first = top.firstPick
+    const second = top.plannedSecond[0]
+
+    // The two readings disagree about exactly my own first pick's neighbours, and nobody has
+    // settled any of them.
+    const barred = [...blockedVertices(board.layout, [first])].filter((vertexId) => vertexId !== first)
+    expect(new Set(barred)).toEqual(new Set(vertexAdjacency(board.layout).get(first)))
+    expect(board.buildings).toEqual([])
+
+    const pieces = occupancyFromBoard(board)
+    const seated = (blocked: ReadonlySet<VertexId>) => ({ ...pieces, blocked, seat: 'aki' })
+    const held = addToHoldings(ctx, emptyHoldings(), first)
+    const own = new Set<VertexId>([...held.vertices, second])
+    const settled = seated(new Set([first]))
+    const closed = seated(blockedVertices(board.layout, [first]))
+    // Sites the walk reaches only once my own settlement's neighbours stop reading as rivals.
+    const reachedUnderClosed = new Set(expansionSites(board.layout, closed, own, second)
+      .map((site) => site.vertexId))
+    const opened = expansionSites(board.layout, settled, own, second)
+      .filter((site) => !reachedUnderClosed.has(site.vertexId))
+    expect(opened.length).toBeGreaterThan(0)
+
+    const firstTerm =
+      expansionTerm(ctx, emptyHoldings(), occupancyFromBoard(board, 'aki'), first).value
+    expect(expansionTerm(ctx, held, settled, second).value)
+      .toBeGreaterThan(expansionTerm(ctx, held, closed, second).value)
+    expect(top.breakdown.expansion)
+      .toBeCloseTo(firstTerm + expansionTerm(ctx, held, settled, second).value, 10)
+  })
+
+  it('reads one occupancy on both picks when the rollout took nothing', () => {
+    const board = filledBoard(1)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.5 }
+    const ctx = computeBoardContext(board, weights)
+    const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
+    const [top] = analysis.recommendations
+    const first = top.firstPick
+    const second = top.plannedSecond[0]
+    // A solo roster drafts alone, so nothing is taken between my two picks.
+    expect(analysis.draft.sequence).toEqual(['aki', 'aki'])
+    expect(top.expectedTaken).toEqual([])
+
+    // The same board with my first pick standing on it, where the one pick left is scored as a
+    // first pick off `occupancyFromBoard`. The second pick has to read exactly that.
+    const placed = analyzeBoard(placeBuilding(board, first, 'aki', 'settlement'), {
+      rollouts: 1,
+      maxResults: 54,
+      weights,
+    })
+    const asFirstPick = placed.recommendations.find((entry) => entry.firstPick === second)
+    expect(asFirstPick).toBeDefined()
+    const firstTerm =
+      expansionTerm(ctx, emptyHoldings(), occupancyFromBoard(board, 'aki'), first).value
+    expect(firstTerm).toBeGreaterThan(0)
+    expect(asFirstPick!.breakdown.expansion).toBeGreaterThan(0)
+    expect(top.breakdown.expansion).toBeCloseTo(firstTerm + asFirstPick!.breakdown.expansion, 10)
   })
 
   it('scores each player at its own index in board.players as its draft slot', () => {
