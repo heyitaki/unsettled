@@ -219,9 +219,9 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 14: Run M-65 and record it, conditional on M-63
 
-- [ ] Record `uptime`, run, record `uptime` again
-- [ ] Append `## M-65: SP6 candidate on extension6` with full provenance, both tables, and the flag if it read `worse`
-- [ ] Link check passes
+- [x] Record `uptime`, run, record `uptime` again (load before `2.17 3.58 4.66`, after `14.33 6.66 5.72`; the single preregistered invocation ran in the foreground in 55.439s, 48,000 games, zero illegal actions, domain `tuning2` at seed `8796197394747623682`, against the preregistration's extrapolated 55 seconds)
+- [x] Append `## M-65: SP6 candidate on extension6` with full provenance, both tables, and the flag if it read `worse` (verdict **`inconclusive`**, `+0.717pp` on clustered `[+0.211pp, +1.222pp]`, so the whole interval is above zero but straddles the 0.5 bar. It did not read `worse`, so no flag is raised and nothing is due in Task 18's completion note or the run summary beyond the reading itself)
+- [x] Link check passes (0 bad references in 49 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 15: Preregister M-66, the `gate2` decision, conditional on M-64
 
