@@ -1687,8 +1687,97 @@ mod tests {
         }
     }
 
-    /// Walks every committed weights-shaped file (the two shipped vectors plus the
-    /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
+    /// The axes M-62's re-screen left standing, at the values it read them at. One axis
+    /// survived of the four SP6 carried in: `expansionWeight` at 0.1 read `better` at both
+    /// powers, `expansionDecay` and `diversityWeight` were dropped null and
+    /// `robberConcentrationWeight` dropped unresolved.
+    const SP6_KEPT_AXES: [(&str, f64); 1] = [("expansionWeight", 0.1)];
+
+    /// Pins `placement/sp6-candidate-weights.json`, the vector M-63 carries into the `eval2`
+    /// confirmation and, if that reads `better`, the `gate2` adoption decision: the live
+    /// `default-weights.json` with the kept axes at their recorded values and nothing else
+    /// moved. The differing-leaf walk is what makes "nothing else" an assertion rather than a
+    /// claim, so a stray edit anywhere in the vector fails here rather than inside a
+    /// confirmation run.
+    ///
+    /// With one survivor the candidate is the same vector as `arms/sp6_expansion.json`, the arm
+    /// M-62 actually read against `base`, and no coordinate pass was run because a single axis
+    /// cannot stack with anything. That equality is asserted so the confirmed candidate and its
+    /// measured arm cannot drift apart while both are still cited.
+    ///
+    /// This file is a record, not a default: nothing ships these values unless the `gate2` run
+    /// reads `better`, and Task 17 of `docs/plans/simulator-placement-sp6.md` is where this pin
+    /// is rewritten to record that adoption.
+    #[test]
+    fn the_sp6_candidate_file_records_the_combined_vector() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let read = |path: String| -> String {
+            std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{path} must be committed"))
+        };
+        let source = read(format!("{placement_dir}/sp6-candidate-weights.json"));
+        let weights: EngineWeights = serde_json::from_str(&source)
+            .unwrap_or_else(|error| panic!("the SP6 candidate must load as weights: {error}"));
+        weights
+            .validate()
+            .expect("the SP6 candidate must validate");
+        let candidate: Value = serde_json::from_str(&source).expect("valid JSON");
+
+        let base: Value = serde_json::from_str(&read(format!(
+            "{placement_dir}/default-weights.json"
+        )))
+        .expect("valid JSON");
+        let bounds: Value =
+            serde_json::from_str(&read(SWEEP_BOUNDS_PATH.to_string())).expect("valid JSON");
+
+        let mut expected = base.clone();
+        for (key, value) in SP6_KEPT_AXES {
+            let range = &bounds["placement"][key];
+            assert!(
+                value >= range["min"].as_f64().expect("min")
+                    && value <= range["max"].as_f64().expect("max"),
+                "{key} at {value} must sit inside its committed sweep-bounds range"
+            );
+            assert_ne!(
+                base[key].as_f64(),
+                Some(value),
+                "{key} at {value} is the shipped value, so the candidate carries nothing"
+            );
+            expected[key] = Value::from(value);
+        }
+        assert_eq!(
+            candidate, expected,
+            "the SP6 candidate must be the live defaults with the kept axes at their recorded values"
+        );
+
+        let mut leaves = Vec::new();
+        collect_leaf_paths(&base, "", &mut leaves);
+        let mut moved: Vec<String> = leaves
+            .into_iter()
+            .filter(|leaf| candidate.pointer(leaf) != base.pointer(leaf))
+            .collect();
+        let mut kept: Vec<String> = SP6_KEPT_AXES
+            .iter()
+            .map(|(key, _)| format!("/{key}"))
+            .collect();
+        moved.sort();
+        kept.sort();
+        assert_eq!(
+            moved, kept,
+            "the SP6 candidate must differ from default-weights.json on exactly the kept axes"
+        );
+
+        let arm: Value =
+            serde_json::from_str(&read(format!("{placement_dir}/arms/sp6_expansion.json")))
+                .expect("valid JSON");
+        assert_eq!(
+            candidate, arm,
+            "with one survivor the candidate is the arm M-62 read, so the two must not drift apart"
+        );
+    }
+
+    /// Walks every committed weights-shaped file (the shipped vector, the two committed
+    /// candidate records, and the weights arms under `placement/arms/`) through the full
+    /// `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
     /// `validate`. `contracts.md` states such a walk exists and none did, so until now a
     /// weights arm left behind by a new formula weight failed silently, at run time, in
@@ -1705,7 +1794,11 @@ mod tests {
                 .validate()
                 .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
         };
-        for name in ["default-weights.json", "phase-i-candidate-weights.json"] {
+        for name in [
+            "default-weights.json",
+            "phase-i-candidate-weights.json",
+            "sp6-candidate-weights.json",
+        ] {
             let source = std::fs::read_to_string(format!("{placement_dir}/{name}"))
                 .expect("committed weights vector");
             load(name, &source);

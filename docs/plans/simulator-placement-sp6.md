@@ -189,10 +189,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 10: Run M-63 and record it, conditional on M-62
 
-- [ ] Record `uptime`, run both invocations, record `uptime` again
-- [ ] Append `## M-63: SP6 combined vector and coordinate pass` with full provenance, both tables per arm, the disposition per axis under the coordinate rule, and the final vector
-- [ ] Write `simulator/placement/sp6-candidate-weights.json` as the final vector (the live defaults with the kept axes at their values) and add a pin test that it differs from `default-weights.json` exactly on the kept axes at the recorded values
-- [ ] Both cargo profiles green, link check passes
+- [x] Record `uptime`, run both invocations, record `uptime` again (skipped: Task 9's one-survivor branch forbade both invocations, so there was no measurement window to bracket. M-62's survivor set has one member, which makes the combined arm `sp6_expansion.json`, already read against `base` at both powers, and the only removal arm `base` itself)
+- [x] Append `## M-63: SP6 combined vector and coordinate pass` with full provenance, both tables per arm, the disposition per axis under the coordinate rule, and the final vector (no tables, because no arm was read: the entry carries the provenance that exists, states that no domain was touched and nothing was measured, gives the disposition per axis under the coordinate rule and why the rule has nothing to act on with one survivor, and names the final vector)
+- [x] Write `simulator/placement/sp6-candidate-weights.json` as the final vector (the live defaults with the kept axes at their values) and add a pin test that it differs from `default-weights.json` exactly on the kept axes at the recorded values (`params_file.rs::the_sp6_candidate_file_records_the_combined_vector`, which walks every leaf of the shipped vector and asserts the moved set is exactly `SP6_KEPT_AXES`, checks the value against `sweep-bounds.json`, and pins the file equal to `arms/sp6_expansion.json`; the file also joins the full-contract walk, and sits in `placement/` so the weights-arm count stays at 64)
+- [x] Both cargo profiles green, link check passes
 
 ### Task 11: Preregister M-64, the `eval2` confirmation, conditional on M-63
 
