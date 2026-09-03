@@ -39,19 +39,19 @@ test.describe('desktop', () => {
     await expect(page.locator('.mobile-nav')).toBeHidden()
 
     const maps = page.locator('.maps-panel')
-    const rows = maps.locator('.open-boards .list-row')
-    const saved = maps.locator('.saved-maps .list-row')
+    const rows = maps.locator('.board-list .list-row')
     await expect(maps).toBeVisible()
-    // Import is the panel's first action, ahead of both lists (spec D1).
+    // Import is the panel's first action, ahead of the one list (spec D1).
     await expect(maps.locator('.panel-heading + .hero-import')).toHaveText('Import screenshot')
-    await expect(maps.locator('.group-label').first()).toContainText('Open boards (1)')
+    await expect(maps.locator('.group-label')).toContainText('Boards (1)')
     await expect(rows).toHaveCount(1)
     await expect(rows.first()).toHaveClass(/\bcurrent\b/)
     await expect(rows.first().locator('.list-row-name')).toHaveText('Board 1')
-    await expect(rows.first().getByRole('button', { name: 'Close Board 1' })).toBeVisible()
+    await expect(rows.first().getByRole('button', { name: 'Delete Board 1' })).toBeVisible()
+    // A blank board has nothing saved, so it carries no timestamp.
+    await expect(rows.first()).toBeVisible()
+    await expect(rows.first().locator('.list-row-meta')).toHaveCount(0)
     await expect(maps.getByRole('button', { name: 'New board' })).toBeVisible()
-    await expect(maps.locator('.group-label').nth(1)).toContainText('Saved maps')
-    await expect(saved).toHaveCount(0)
     await expect(maps.getByLabel('Map name')).toHaveCount(0)
 
     // The strip's right-click menu died with the strip; a row has no menu.
@@ -65,10 +65,11 @@ test.describe('desktop', () => {
     await expect(menu).toHaveCount(0)
     await snap(page, 'desktop')
 
-    // An edit is all it takes to reach the library: there is no save button.
+    // An edit is all it takes to reach the library: there is no save button,
+    // and the saved board is the same row, now stamped, not a second list.
     await randomize(page)
-    await expect(saved).toHaveCount(1)
-    await expect(saved.first().locator('.list-row-name')).toHaveText('Board 1')
+    await expect(rows).toHaveCount(1)
+    await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
 
     await rows.first().getByRole('button', { name: 'Rename Board 1', exact: true }).click()
     const field = maps.locator('.list-row-rename')
@@ -76,14 +77,14 @@ test.describe('desktop', () => {
     await field.fill('Harbour')
     await field.press('Enter')
     await expect(field).toHaveCount(0)
-    await expect(rows.first().locator('.list-row-name')).toHaveText('Harbour')
-    await expect(saved.first().locator('.list-row-name')).toHaveText('Harbour')
+    // The rename reached the map and the board alike: still one row.
+    await expect(rows.locator('.list-row-name')).toHaveText(['Harbour'])
 
-    // An edited board closes on the spot: it has already saved itself, so
-    // there is nothing to ask about.
+    // Deleting a board takes its map and its row in one gesture, with nothing
+    // to ask about. The blank new board lists ahead of the saved one.
     await maps.getByRole('button', { name: 'New board' }).click()
-    await expect(rows).toHaveCount(2)
-    await page.getByRole('button', { name: 'Close Harbour' }).click()
+    await expect(rows.locator('.list-row-name')).toHaveText(['Board 1', 'Harbour'])
+    await page.getByRole('button', { name: 'Delete Harbour' }).click()
     await expect(rows).toHaveCount(1)
     // The new board took the name the rename freed up.
     await expect(rows.first().locator('.list-row-name')).toHaveText('Board 1')
@@ -479,8 +480,9 @@ test.describe('desktop', () => {
     await page.goto('')
     await expect(page.locator('.maps-panel')).toBeVisible()
     await seedSavedMaps(page, 25)
-    const saved = page.locator('.saved-maps')
-    await expect(saved.locator('.list-row')).toHaveCount(25)
+    const saved = page.locator('.board-list')
+    // The seeded maps, plus the blank board the document opened with.
+    await expect(saved.locator('.list-row')).toHaveCount(26)
 
     // The list is bounded, so it scrolls inside the panel and wears the mask
     // over the rows it cuts off (spec D1).
@@ -553,13 +555,13 @@ test.describe('landscape phone', () => {
     await seedSavedMaps(page, 25)
     await page.locator('.mobile-nav').getByRole('tab', { name: 'Library' }).click()
     const pane = page.locator('.mobile-pane[data-pane="library"]')
-    await expect(pane.locator('.saved-maps .list-row')).toHaveCount(25)
+    await expect(pane.locator('.board-list .list-row')).toHaveCount(26)
 
     // The pane is the scroller here and the list inside it is not, so a thumb
     // on the rows cannot be trapped short of the heading, the import button and
-    // the open boards above them (spec D1).
+    // the label above them (spec D1).
     const scrollers = await pane.evaluate((el) => {
-      const list = el.querySelector('.saved-maps')!
+      const list = el.querySelector('.board-list')!
       return {
         paneScrolls: el.scrollHeight > el.clientHeight,
         listScrolls: list.scrollHeight > list.clientHeight,

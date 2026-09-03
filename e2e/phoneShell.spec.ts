@@ -322,19 +322,20 @@ test.describe('build mode', () => {
 })
 
 test.describe('maps screen', () => {
-  test('the title opens Maps, where boards are added, selected, renamed, closed, saved and sorted', async ({ page }) => {
+  test('the title opens Maps, where boards are added, selected, renamed, deleted, saved and sorted', async ({ page }) => {
     await open(page)
     const title = page.locator('.phone-title')
     const screen = page.getByRole('dialog', { name: 'Maps' })
-    const rows = screen.locator('.open-boards .list-row')
-    const saved = screen.locator('.saved-maps .list-row')
+    const rows = screen.locator('.board-list .list-row')
     await title.click()
     await expect(screen).toBeVisible()
     await expect(screen.locator('.phone-overlay-title')).toHaveText('Maps')
     await expect(screen.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
     await expect(rows).toHaveCount(1)
     await expect(rows.first()).toHaveClass(/\bcurrent\b/)
-    await expect(saved).toHaveCount(0)
+    // A blank board has nothing saved, so it carries no timestamp.
+    await expect(rows.first()).toBeVisible()
+    await expect(rows.first().locator('.list-row-meta')).toHaveCount(0)
     await snap(page, 'maps-screen')
 
     await screen.getByRole('button', { name: 'New board' }).click()
@@ -365,16 +366,18 @@ test.describe('maps screen', () => {
     await page.getByRole('button', { name: 'Board options' }).click()
     await page.getByRole('menuitem', { name: 'Randomize board' }).click()
     await title.click()
-    await expect(saved).toHaveCount(1)
-    await expect(saved.first().locator('.list-row-name')).toHaveText('Thursday')
-    await expect(saved.first().locator('.list-row-meta')).toHaveText('just now')
-    await expect(screen.locator('.group-label').nth(1)).toContainText('Saved maps (1)')
+    // The edit saved the board, so its row is the same row, now stamped and
+    // listed after the blank board that has no map yet: one list, not two.
+    await expect(rows.locator('.list-row-name')).toHaveText(['Board 2', 'Thursday'])
+    await expect(rows.nth(1)).toHaveClass(/\bcurrent\b/)
+    await expect(rows.nth(1).locator('.list-row-meta')).toHaveText('just now')
+    await expect(screen.locator('.group-label')).toContainText('Boards (2)')
 
-    await screen.getByRole('button', { name: 'Close Board 2', exact: true }).click()
+    await screen.getByRole('button', { name: 'Delete Board 2', exact: true }).click()
     await expect(rows).toHaveCount(1)
     await expect(screen).toBeVisible()
 
-    await screen.getByRole('button', { name: /Sort saved maps/ }).click()
+    await screen.getByRole('button', { name: /Sort boards/ }).click()
     await expect(page.getByRole('option')).toHaveText(['Last modified', 'Created', 'Last opened', 'Name'])
     await page.keyboard.press('Escape')
     await expect(page.getByRole('option')).toHaveCount(0)
@@ -402,7 +405,7 @@ test.describe('maps screen', () => {
     await field.press('Escape')
     await expect(field).toHaveCount(0)
     await expect(screen).toBeVisible()
-    await expect(screen.locator('.open-boards .list-row-name')).toHaveText('Board 1')
+    await expect(screen.locator('.board-list .list-row-name')).toHaveText('Board 1')
     await expect(page.locator('.phone-title')).toHaveText('Board 1')
   })
 
@@ -411,16 +414,17 @@ test.describe('maps screen', () => {
     await page.getByRole('button', { name: 'Board options' }).click()
     await page.getByRole('menuitem', { name: 'Randomize board' }).click()
     const screen = page.getByRole('dialog', { name: 'Maps' })
-    const saved = screen.locator('.saved-maps .list-row')
+    const rows = screen.locator('.board-list .list-row')
     await page.locator('.phone-title').click()
-    await expect(saved).toHaveCount(1)
-    await saved.first().getByRole('button', { name: 'Rename Board 1', exact: true }).click()
+    // One board, one row, even now that it is saved.
+    await expect(rows).toHaveCount(1)
+    await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
+    await rows.first().getByRole('button', { name: 'Rename Board 1', exact: true }).click()
     const field = screen.getByRole('textbox', { name: 'Rename Board 1' })
     await field.fill('Friday')
     await field.press('Enter')
     await expect(field).toHaveCount(0)
-    await expect(saved.first().locator('.list-row-name')).toHaveText('Friday')
-    await expect(screen.locator('.open-boards .list-row-name')).toHaveText('Friday')
+    await expect(rows.locator('.list-row-name')).toHaveText(['Friday'])
     await expect(page.locator('.phone-title')).toHaveText('Friday')
     await expect(screen).toBeVisible()
   })
@@ -436,13 +440,13 @@ test.describe('maps screen', () => {
     await importDialog.getByRole('button', { name: 'Done' }).click()
     await expect(importDialog).toHaveCount(0)
     await expect(screen).toBeVisible()
-    // Closing the current board afterwards changes the active tab, which is
+    // Deleting the current board afterwards changes the active tab, which is
     // not an import either.
     await screen.getByRole('button', { name: 'New board' }).click()
     await expect(screen).toHaveCount(0)
     await page.locator('.phone-title').click()
-    await screen.getByRole('button', { name: 'Close Board 2', exact: true }).click()
-    await expect(screen.locator('.open-boards .list-row')).toHaveCount(1)
+    await screen.getByRole('button', { name: 'Delete Board 2', exact: true }).click()
+    await expect(screen.locator('.board-list .list-row')).toHaveCount(1)
     await expect(screen).toBeVisible()
     // A JSON file that does not parse: a toast, and the screen stays.
     await screen.locator('input[type="file"]').setInputFiles({

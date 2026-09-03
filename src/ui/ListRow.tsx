@@ -3,9 +3,8 @@ import { BoardHexGlyph } from './glyphs'
 import { InlineRename } from './InlineRename'
 
 /**
- * A row of either list (spec S7): the same height and columns in both, so the
- * two lists read as two lists. The whole row is the select target, laid under
- * the name, which renames in place, and the trailing button. The name field
+ * A row of the board list (spec S7). The whole row is the select target, laid
+ * under the name, which renames in place, and the trailing button. The name field
  * takes only the width of its text, so the rest of the row still selects (O3).
  */
 export function ListRow({ current, color, name, meta, selectLabel, selectDisabled, onSelect, draft, onDraft, onStartRename, onCommit, onCancel, action }: {

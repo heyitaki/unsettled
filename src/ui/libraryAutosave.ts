@@ -22,6 +22,12 @@ export interface LibraryAutosave {
    * the workspace flush that follows has to be handed it.
    */
   flush(): readonly TabState[] | null
+  /**
+   * Drops everything owed for a tab about to be closed with `discard`: its
+   * map was deleted on purpose, so the closing save that normally rescues a
+   * closed tab's last edit must not land it back in the library as a new map.
+   */
+  forget(id: string): void
   dispose(): void
 }
 
@@ -136,6 +142,13 @@ export function createLibraryAutosave(
         const link = flushed.get(tab.id)
         return link === undefined ? tab : { ...tab, mapId: link.mapId, title: link.title }
       })
+    },
+    forget(id) {
+      const timer = timers.get(id)
+      if (timer !== undefined) window.clearTimeout(timer)
+      timers.delete(id)
+      failed.delete(id)
+      baseline.delete(id)
     },
     dispose() {
       for (const timer of timers.values()) window.clearTimeout(timer)

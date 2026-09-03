@@ -41,7 +41,7 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .left-rail { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
 .left-rail > *, .mobile-pane > * { flex: none; }
 .maps-panel { display: flex; flex-direction: column; gap: 14px; flex: 0 1 auto; min-height: 0; }
-.maps-panel > :not(.library-saved) { flex: none; }
+.maps-panel > :not(.library-boards) { flex: none; }
 .maps-panel .panel-heading { margin-bottom: 0; }
 .panel-dots { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
@@ -202,17 +202,18 @@ button.selected.danger { color: #fff; }
 input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #fffdf7; color: var(--ink); }
 .notice.warning { margin: 10px 0 0; padding: 7px 9px; border-radius: 8px; background: #fff0e5; color: var(--accent-dark); font-size: 11px; }
 
-/* Library. The saved-map list is the panel's one scroller; the group above it
-   and everything before that keep their height. Fade classes are set from JS. */
-.library-saved { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.library-saved > :not(.saved-maps) { flex: none; }
+/* Library. The board list is the panel's one scroller; the label above it
+   and the New board row under it keep their height. Fade classes are set from JS. */
+.library-boards { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.library-boards > :not(.board-list) { flex: none; }
 /* Six rows and the top of a seventh, so a long library scrolls under the fade
    rather than running the rail past the tools and off the page. */
-.saved-maps { flex: 0 1 auto; min-height: 0; max-height: 340px; overflow-y: auto; scrollbar-width: none; }
-.saved-maps::-webkit-scrollbar { display: none; }
-.saved-maps.fade-top { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
-.saved-maps.fade-bottom { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
-.saved-maps.fade-top.fade-bottom { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); }
+.board-list { flex: 0 1 auto; min-height: 0; max-height: 340px; overflow-y: auto; scrollbar-width: none; }
+.board-list::-webkit-scrollbar { display: none; }
+.library-boards > .list-add { margin-top: 5px; }
+.board-list.fade-top { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
+.board-list.fade-bottom { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
+.board-list.fade-top.fade-bottom { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent); }
 
 /* Lists */
 .group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
@@ -393,7 +394,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .tally-header button, .player-list .roster-vp { min-height: 44px; }
 }
 
-.saved-maps, .issue-list, .mobile-pane { overscroll-behavior: contain; }
+.board-list, .issue-list, .mobile-pane { overscroll-behavior: contain; }
 .board-canvas, .tool-grid button, .token-tools button, .mobile-nav {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -511,9 +512,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 
   /* Nothing below the board keeps its own scroller: a thumb cannot tell a nested
      one apart from the page. Panels extend the document instead. */
-  .library-saved { flex: none; }
-  .saved-maps { flex: none; max-height: none; overflow: visible; }
-  .saved-maps.fade-top, .saved-maps.fade-bottom { -webkit-mask-image: none; mask-image: none; }
+  .library-boards { flex: none; }
+  .board-list { flex: none; max-height: none; overflow: visible; }
+  .board-list.fade-top, .board-list.fade-bottom { -webkit-mask-image: none; mask-image: none; }
   .issue-list { max-height: none; overflow: visible; }
 
   .terrain-grid, .structure-grid, .token-tools {
@@ -637,13 +638,13 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   }
   .site-header { height: 32px; }
   .site-header h1 { display: none; }
-  /* The pane is the scroller in this arm, so the saved-map list must not be a
+  /* The pane is the scroller in this arm, so the board list must not be a
      second one inside it: at 342px tall the desktop cap would leave the list
      filling the pane, and its contained overscroll would strand the heading,
-     the import button and the open boards above it. */
-  .library-saved { flex: none; }
-  .saved-maps { flex: none; max-height: none; overflow: visible; }
-  .saved-maps.fade-top, .saved-maps.fade-bottom { -webkit-mask-image: none; mask-image: none; }
+     the import button and the label above it. */
+  .library-boards { flex: none; }
+  .board-list { flex: none; max-height: none; overflow: visible; }
+  .board-list.fade-top, .board-list.fade-bottom { -webkit-mask-image: none; mask-image: none; }
   .workspace { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 52fr) minmax(0, 48fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
   .center-column { grid-column: 1; grid-row: 1; min-height: 0; align-self: start; }
   /* Room for everything stacked above the canvas in this arm: the shell's own

@@ -87,16 +87,13 @@ The pencil replaces the analysis block with the board tools in the same slot. Ev
 Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON` and `Export JSON`. Body, in order:
 
 1. **`Import screenshot`** — the filled accent button, first on the page. It is why the screen was opened.
-2. **`OPEN BOARDS (n)`** — one row per open tab: colour hex, title, close ×. The active tab is marked with an accent border and a white ground. Below the rows, a dashed **`New board`** button.
-3. **`SAVED MAPS (n)`** with a sort control on the right of the label — the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. Rows: colour hex, name, relative timestamp, trash.
+2. **`BOARDS (n)`** with a sort control on the right of the label — the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. The board on screen is marked with an accent border and a white ground. Below the rows, a dashed **`New board`** button.
 
-Every row in both lists is the same height with the same column structure, so the two lists read as two lists rather than as ragged variants of one.
+Every board autosaves into a map (O2), so an open board and its saved map are one thing and the list shows it once. Nothing marks a map as loaded: tapping one already loaded just switches to it. An unsaved board carries no timestamp, because it has nothing saved; the timestamp answers "can I delete this?". The trash deletes the map and drops the board loaded from it in one gesture (an unsaved board is simply dropped, pending edit included). Desktop spec D1 holds the store actions each row reaches.
 
-Open boards carry no timestamp. They are the two or three you have open right now, all equally current; the timestamp answers "can I delete this?", which is a saved-maps question.
+There is no save control anywhere on this screen: boards save themselves (O2). The **name is a rename target**: tapping it opens an in-place field bounded to the name's own width, the way the roster name works (S8, B6), so a tap anywhere else on the row still selects or opens the board (O3).
 
-There is no save control anywhere on this screen: boards save themselves (O2). In both lists the **name is a rename target**: tapping it opens an in-place field bounded to the name's own width, the way the roster name works (S8, B6), so a tap anywhere else on the row still selects or opens the board (O3).
-
-This screen is the phone's document switcher, so it must reach `tab-select`, `tab-close`, `tab-add`, `tab-rename`, `renameMap` and `openMap`.
+This screen is the phone's document switcher, so it must reach `tab-select`, `tab-close`, `tab-add`, `tab-rename`, `renameMap`, `openMap` and `deleteMap`.
 
 ### S8 · Players screen
 
@@ -127,7 +124,7 @@ Bottom of the screen, above the safe area. With the nav bar gone it no longer ha
 | B1 | Build mode snapshots the tab's game on entry; `Cancel` restores it, `Done` keeps it. |
 | B2 | Selecting a recommendation whose board is scrolled out of view returns the page to the board, and only then. Use CSS `scroll-behavior: smooth` plus a plain `scrollTop` assignment; `scrollTo({behavior:'smooth'})` silently no-ops on a nested scroller in Chrome. Honour `prefers-reduced-motion`. |
 | B3 | Roster order is the source of the snake draft. A reorder re-runs the analysis. |
-| B4 | A board's hex colour is a pure function of its name: hash the name, index a fixed palette. The same board wears the same colour in the header, the open-boards list and the saved-maps list. The palette needs enough distinct hues that two boards open together do not collide — six was not enough in the prototype; ten was. |
+| B4 | A board's hex colour is a pure function of its name: hash the name, index a fixed palette. The same board wears the same colour in the header and the board list. The palette needs enough distinct hues that two boards open together do not collide — six was not enough in the prototype; ten was. |
 | B5 | Empty board (`board.hexes.every(hex => hex.tile === null)`) replaces the analysis block with the two ways to fill it. |
 | B6 | The roster name's hit area is the name, not the column. |
 | B7 | Boards save themselves. Every edit made in this document autosaves the tab into its library map, debounced; an unlinked tab links itself to a new map on its first non-blank edit, so blank new boards never reach the library. Adopting another window's workspace never triggers a write. Undo is the way back from an unwanted change. The explicit save UI (tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row) goes, on desktop too. |
@@ -147,7 +144,7 @@ Do not rebuild these; move or restyle them.
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
 | Undo, redo, randomize, clear | `ToolPalette.tsx` heading; on the phone the header's dots menu in `phone/PhoneHeader.tsx`, with the tool rows shared as `ToolGroups` |
-| Open, close, select, rename boards | the open-boards list in `LibraryLists.tsx` (rows are `ListRow.tsx`) and `store.ts` (`tab-*` actions) |
+| Open, delete, select, rename boards | the board list in `LibraryLists.tsx` (rows are `ListRow.tsx`), `useLibrary.ts` and `store.ts` (`tab-*` actions) |
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `GlobalNotice.tsx`, rendered by both `Workspace` and `PhoneShell` |
@@ -161,7 +158,7 @@ Resolved 2026-09-02; the open questions they close are kept for the record.
 
 **O2 · Saving: automatic (B7).** No save control on the phone or on the desktop. Every edit autosaves the tab into its map; the first non-blank edit of an unlinked tab creates the map and links the tab. The desktop tab menu's `Save to library`, the dirty dots, the save-and-close prompt and the `MapsPanel` name field and button are removed.
 
-**O3 · Renaming: tap the name, in both lists.** On the Maps screen the name in an open-boards row and in a saved-maps row is a rename target bounded to its own width, exactly like the roster name (B6). The rest of the row selects or opens. An open board's rename goes through `tab-rename` plus `renameMap` when linked; a saved map's rename goes through `renameMap` and the library refresh retitles any tab linked to it.
+**O3 · Renaming: tap the name.** On the Maps screen the name in a board row is a rename target bounded to its own width, exactly like the roster name (B6). The rest of the row selects or opens. An unsaved board's rename goes through `tab-rename`; a saved map's rename goes through `renameMap` and the library refresh retitles any tab linked to it.
 
 **M2 · `MobileNav` stays (B8).** Landscape phone uses it as a side rail with the same pane gating, so nothing is deleted. The portrait shell is its own tree that never mounts `MobileNav` or the site header; it shows the brand through its own row (S1).
 

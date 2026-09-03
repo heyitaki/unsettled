@@ -1,6 +1,7 @@
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -118,7 +119,9 @@ export type StoreAction =
   | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
-  | { type: 'tab-close'; id: string }
+  // `discard`: the tab's map was deleted with it, so the autosave must not
+  // rescue the tab's last edit into a new map on the way out.
+  | { type: 'tab-close'; id: string; discard?: boolean }
   // Attaches a tab to the library map it was just saved into or opened from.
   | { type: 'tab-link'; id: string; mapId: string; title: string }
   // The library changed (here or in another document); see LibraryView.
@@ -215,7 +218,7 @@ export function adoptLegacyLinks(tabs: TabState[], library: LibraryView): TabSta
  * Which board this window opens on: the one it was looking at before the
  * reload, else whatever the last window to write the old shared field was
  * looking at, else the first tab. A window opened fresh has no session of its
- * own and so starts at the front of the open-boards list rather than
+ * own and so starts at the first tab rather than
  * inheriting another window's place.
  */
 export function bootActiveTab(tabs: readonly TabState[], legacy: string | undefined): string {
@@ -575,7 +578,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       autosave.dispose()
     }
   }, [sync, autosave])
-  const value = useMemo(() => ({ state, dispatch }), [state, dispatch])
+  // The reducer is pure and the autosave only ever sees tab sets, so a close
+  // that must not be rescued is announced to it here, before the close lands.
+  const dispatchDiscarding = useCallback((action: StoreAction) => {
+    if (action.type === 'tab-close' && action.discard === true) autosave.forget(action.id)
+    dispatch(action)
+  }, [autosave])
+  const value = useMemo(() => ({ state, dispatch: dispatchDiscarding }), [state, dispatchDiscarding])
   return createElement(StoreContext.Provider, { value }, children)
 }
 

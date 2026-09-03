@@ -2,7 +2,8 @@ import { readLibrary, renameMap } from '../persistence/localStorage'
 import { type StoreAction, type TabState, useStore } from './store'
 
 /**
- * The board rename rule, shared by both trees through the library's open-boards list.
+ * The rename rule for a board the library's board list shows as a tab: one with
+ * no map yet, or one whose map the listing cannot show; a live link renames the map too.
  * Returns the title the tab carries afterwards, or null when the rename was
  * refused and said so, so a caller never reports a success over that message.
  */

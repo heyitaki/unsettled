@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoard, setTile } from '../../model/board'
 import { newGame, type Game } from '../../model/game'
-import { listMaps, loadMap, saveMap } from '../../persistence/localStorage'
+import { deleteMap, listMaps, loadMap, saveMap } from '../../persistence/localStorage'
 import { createLibraryAutosave } from '../libraryAutosave'
 import { activeTab, reducer, type StoreAction, type StoreState, type TabState } from '../store'
 
@@ -43,6 +43,7 @@ function harness(initial: StoreState) {
   const dispatched: StoreAction[] = []
   const dispatch = (action: StoreAction) => {
     dispatched.push(action)
+    if (action.type === 'tab-close' && action.discard === true) autosave.forget(action.id)
     current = reducer(current, action)
     autosave.arm(current.tabs)
   }
@@ -278,6 +279,21 @@ describe('library autosave', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     vi.advanceTimersByTime(2000)
     expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing for a tab closed with discard, even inside the debounce', () => {
+    // The library row was deleted on purpose; the rescue write for a closing
+    // tab would put the map straight back.
+    const store = harness(state([tab('t1'), tab('t2')]))
+    store.edit(painted(store.active().game))
+    vi.advanceTimersByTime(1000)
+    expect(mapNames()).toEqual(['t1'])
+    const mapId = listMaps().maps[0].id as string
+    store.edit(painted(store.active().game, 1, 0, 8))
+    deleteMap(mapId)
+    store.dispatch({ type: 'tab-close', id: 't1', discard: true })
+    vi.advanceTimersByTime(2000)
+    expect(mapNames()).toEqual([])
   })
 
   it('retries a failed save when the tab closes, and lands it when the library has room', () => {

@@ -8,9 +8,9 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
  * 500ms autosave debounce, and both are real here.
  */
 
-const openBoards = (page: Page) => page.locator('.open-boards .list-row')
+const openBoards = (page: Page) => page.locator('.board-list .list-row')
 const titles = (page: Page) => openBoards(page).locator('.list-row-name')
-const active = (page: Page) => page.locator('.open-boards .list-row.current .list-row-name')
+const active = (page: Page) => page.locator('.board-list .list-row.current .list-row-name')
 
 async function open(context: BrowserContext): Promise<Page> {
   const page = await context.newPage()
@@ -37,7 +37,7 @@ const CLOSE_PACE_MS = 700
 
 async function closeLeftmost(page: Page, count: number) {
   for (let index = 0; index < count; index += 1) {
-    await page.locator('.open-boards .list-row-x').first().click()
+    await page.locator('.board-list .list-row-x').first().click()
     await page.waitForTimeout(CLOSE_PACE_MS)
   }
 }
@@ -71,7 +71,7 @@ test('closing every board while the other window is in use leaves one blank boar
   await expect(openBoards(b)).toHaveCount(1)
 
   // And it has to still be true after a reload, or the blob kept what the
-  // open-boards list did not.
+  // board list did not.
   await a.reload()
   await expect(openBoards(a)).toHaveCount(1)
 })
@@ -95,7 +95,7 @@ test('closes made while the other window is writing stay closed', async ({ conte
   await expect(titles(b)).toHaveText(['Board 3', 'Board 4', 'Board 5'])
 })
 
-test('each window keeps its own place in the open boards', async ({ context }) => {
+test('each window keeps its own place in the board list', async ({ context }) => {
   // The active board is per-window now. Two windows disagreeing about it must
   // not be a difference either of them tries to write away.
   const a = await open(context)

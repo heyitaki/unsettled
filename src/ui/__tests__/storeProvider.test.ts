@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act, createElement, useEffect, useRef, type Dispatch } from 'react'
-import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setTile } from '../../model/board'
-import { listMaps } from '../../persistence/localStorage'
+import { deleteMap, listMaps } from '../../persistence/localStorage'
 import { activeTab, StoreProvider, useStore, type StoreAction, type StoreState } from '../store'
 
 type Seen = { state: StoreState; dispatch: Dispatch<StoreAction> }
@@ -26,11 +26,19 @@ function HideAfterEdit({ onRender }: { onRender: (seen: Seen) => void }) {
   return null
 }
 
+// A child that only reports what the provider hands it.
+function Capture({ onRender }: { onRender: (seen: Seen) => void }) {
+  const { state, dispatch } = useStore()
+  useEffect(() => onRender({ state, dispatch }), [state, dispatch, onRender])
+  return null
+}
+
 describe('StoreProvider', () => {
   const container = document.createElement('div')
-  const root = createRoot(container)
+  let root: Root
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    root = createRoot(container)
     localStorage.clear()
     sessionStorage.clear()
   })
@@ -54,5 +62,31 @@ describe('StoreProvider', () => {
     // the edit would leave the library empty and the tab unlinked.
     expect(listMaps().maps.map((map) => map.name)).toEqual([tab.title])
     expect(activeTab(seen.state).mapId).not.toBeNull()
+  })
+
+  it('tells the autosave to forget a tab closed with discard, so the deleted map is not rescued', () => {
+    vi.useFakeTimers()
+    try {
+      let seen: Seen | undefined
+      const onRender = (next: Seen) => {
+        seen = next
+      }
+      act(() => root.render(createElement(StoreProvider, null, createElement(Capture, { onRender }))))
+      if (seen === undefined) throw new Error('provider never rendered')
+      const { dispatch } = seen
+      const first = activeTab(seen.state)
+      act(() => dispatch({ type: 'commit', board: setTile(first.game.board, { q: 0, r: 0 }, 'wheat', 6) }))
+      act(() => vi.advanceTimersByTime(1000))
+      const linked = activeTab(seen.state)
+      expect(linked.mapId).not.toBeNull()
+      // A second edit still inside its debounce when the map goes.
+      act(() => dispatch({ type: 'commit', board: setTile(linked.game.board, { q: 1, r: 0 }, 'ore', 8) }))
+      expect(deleteMap(linked.mapId as string).ok).toBe(true)
+      act(() => dispatch({ type: 'tab-close', id: linked.id, discard: true }))
+      act(() => vi.advanceTimersByTime(2000))
+      expect(listMaps().maps).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

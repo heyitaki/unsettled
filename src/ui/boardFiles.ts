@@ -50,7 +50,7 @@ export const savedMap = (result: ParseGameResult | undefined): SavedMap =>
   ({ linked: true, game: result?.ok === true ? result.game : null })
 
 // Serialized games, keyed by game identity. Games are immutable and replaced
-// wholesale by the reducer, so this is exact, and it keeps the open-boards list
+// wholesale by the reducer, so this is exact, and it keeps the board list
 // from re-serializing every board on every edit.
 const signatures = new WeakMap<Game, string>()
 
@@ -123,12 +123,18 @@ export function saveTab(
   return result.ok ? { ok: true, id: result.id, name } : result
 }
 
+// The board's non-blocking warnings as a clause, or null when it has none.
+export function loadWarnings(board: Parameters<typeof validateBoard>[0]): string | null {
+  const warnings = validateBoard(board).filter((issue) => issue.severity === 'warning')
+  if (warnings.length === 0) return null
+  const messages = [...new Set(warnings.map((warning) => warning.message))]
+  return `with ${warnings.length} warning${warnings.length === 1 ? '' : 's'}: ${messages.join('; ')}`
+}
+
 // Summarizes any non-blocking warnings so a load/import notice surfaces them.
 export function loadedNotice(action: string, board: Parameters<typeof validateBoard>[0]): string {
-  const warnings = validateBoard(board).filter((issue) => issue.severity === 'warning')
-  if (warnings.length === 0) return action
-  const messages = [...new Set(warnings.map((warning) => warning.message))]
-  return `${action} with ${warnings.length} warning${warnings.length === 1 ? '' : 's'}: ${messages.join('; ')}`
+  const warnings = loadWarnings(board)
+  return warnings === null ? action : `${action} ${warnings}`
 }
 
 export function downloadBoard(name: string, contents: string) {

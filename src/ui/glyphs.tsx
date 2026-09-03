@@ -329,14 +329,6 @@ export function BackGlyph() {
   )
 }
 
-export function XMarkGlyph() {
-  return (
-    <svg {...LINE_ART} width="13" height="13" viewBox="0 0 12 12" strokeWidth="1.6">
-      <path d="M2 2 10 10M10 2 2 10" />
-    </svg>
-  )
-}
-
 export function PlusGlyph() {
   return (
     <svg {...LINE_ART} width="12" height="12" viewBox="0 0 12 12" strokeWidth="1.8">
