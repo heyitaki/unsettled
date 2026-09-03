@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoard, setTile } from '../../model/board'
 import { newGame, type Game } from '../../model/game'
-import { deleteMap, listMaps, loadMap, saveMap } from '../../persistence/localStorage'
+import { MAX_MAPS, deleteMap, listMaps, loadMap, saveMap } from '../../persistence/localStorage'
 import { createLibraryAutosave } from '../libraryAutosave'
 import { activeTab, reducer, type StoreAction, type StoreState, type TabState } from '../store'
 
@@ -73,6 +73,17 @@ const loaded = (id: string): Game => {
 }
 
 const mapNames = () => listMaps().maps.map((map) => map.name)
+
+// MAX_MAPS maps m1..m<MAX_MAPS>, each stamped a second after the last, then
+// the clock moved past them all so a new save is the warmest entry.
+const fillLibrary = (): string[] => {
+  const ids = Array.from({ length: MAX_MAPS }, (_, i) => {
+    vi.setSystemTime(1000 * (i + 1))
+    return savedId(`m${i + 1}`, painted(blank()))
+  })
+  vi.setSystemTime(1000 * (MAX_MAPS + 2))
+  return ids
+}
 
 describe('library autosave', () => {
   beforeEach(() => {
@@ -294,6 +305,90 @@ describe('library autosave', () => {
     store.dispatch({ type: 'tab-close', id: 't1', discard: true })
     vi.advanceTimersByTime(2000)
     expect(mapNames()).toEqual([])
+  })
+
+  it('closes the board whose map the cap evicted, without a rescue write', () => {
+    // MAX_MAPS maps, the oldest of them open in a tab beside a fresh board.
+    const ids = fillLibrary()
+    const oldest = tab('t1', loaded(ids[0]), { mapId: ids[0] })
+    const store = harness(state([oldest, tab('t2')], 't2'))
+    store.edit(painted(store.active().game))
+    vi.advanceTimersByTime(1000)
+    expect(store.state().tabs.map((candidate) => candidate.id)).toEqual(['t2'])
+    expect(store.dispatched).toContainEqual({ type: 'tab-close', id: 't1', discard: true })
+    const names = mapNames()
+    expect(names).toHaveLength(MAX_MAPS)
+    expect(names).not.toContain('m1')
+    expect(names).toContain('t2')
+    // Nothing owed for the closed tab: no rescue write lands later.
+    vi.advanceTimersByTime(2000)
+    expect(mapNames()).toHaveLength(MAX_MAPS)
+  })
+
+  it('says how many boards the cap dropped', () => {
+    fillLibrary()
+    const store = harness(state([tab('t1')]))
+    store.edit(painted(store.active().game))
+    vi.advanceTimersByTime(1000)
+    expect(store.notices()).toEqual([{ type: 'notice', message: `Dropped 1 older board to keep the library at ${MAX_MAPS}` }])
+  })
+
+  it('never evicts a map another tab here still owes a write to', () => {
+    // The fresh board's first save fires while the cold board's edit is still
+    // inside its debounce: the cold map must survive, and its edit must land.
+    const ids = fillLibrary()
+    const cold = tab('t1', loaded(ids[0]), { mapId: ids[0] })
+    const store = harness(state([cold, tab('t2')], 't2'))
+    store.edit(painted(store.active().game))
+    store.dispatch({ type: 'tab-select', id: 't1' })
+    const coldEdit = painted(cold.game, 1, 0, 8)
+    store.edit(coldEdit)
+    vi.advanceTimersByTime(1000)
+    expect(store.state().tabs.map((candidate) => candidate.id)).toEqual(['t1', 't2'])
+    const names = mapNames()
+    expect(names).toHaveLength(MAX_MAPS)
+    expect(names).toContain('m1')
+    expect(names).not.toContain('m2')
+    expect(loaded(ids[0])).toEqual(coldEdit)
+  })
+
+  it('shields a closing tab from the eviction another closing tab causes', () => {
+    // Two tabs leave together (another window's write), both owing: the fresh
+    // one's save must not evict the cold one's map out from under its write.
+    const ids = fillLibrary()
+    const fresh = tab('t2')
+    const cold = tab('t1', loaded(ids[0]), { mapId: ids[0] })
+    const coldEdit = painted(cold.game, 1, 0, 8)
+    const store = harness(state([fresh, cold], 't2'))
+    store.edit(painted(fresh.game))
+    store.dispatch({ type: 'tab-select', id: 't1' })
+    store.edit(coldEdit)
+    store.dispatch({ type: 'workspace-adopt', tabs: [{ id: 't3', title: 't3', game: blank() }] })
+    expect(store.state().tabs.map((candidate) => candidate.id)).toEqual(['t3'])
+    const names = mapNames()
+    expect(names).toHaveLength(MAX_MAPS)
+    expect(names).toContain('m1')
+    expect(names).not.toContain('m2')
+    expect(names).toContain('t2')
+    expect(loaded(ids[0])).toEqual(coldEdit)
+  })
+
+  it('drops an evicted tab from the tab set a pagehide flush hands back', () => {
+    const ids = fillLibrary()
+    const tabs = [tab('t1', loaded(ids[0]), { mapId: ids[0] }), tab('t2')]
+    // React cannot render a pagehide dispatch, so the autosave never sees the
+    // close it asks for: the tab set it returns is the only correction, and
+    // the closed tab must not be written on the way out of the same loop.
+    const dispatched: StoreAction[] = []
+    const autosave = createLibraryAutosave((action) => dispatched.push(action), tabs)
+    autosave.arm([tabs[0], { ...tabs[1], game: painted(tabs[1].game) }])
+    expect(autosave.flush()?.map((entry) => entry.id)).toEqual(['t2'])
+    expect(dispatched).toContainEqual({ type: 'tab-close', id: 't1', discard: true })
+    const names = mapNames()
+    expect(names).toHaveLength(MAX_MAPS)
+    expect(names).not.toContain('m1')
+    expect(names).toContain('m2')
+    expect(names).not.toContain('t1')
   })
 
   it('retries a failed save when the tab closes, and lands it when the library has room', () => {

@@ -6,7 +6,7 @@
 
 import type { Dispatch } from 'react'
 import type { Game } from '../model/game'
-import { loadMap, readLibrary } from '../persistence/localStorage'
+import { MAX_MAPS, loadMap, readLibrary } from '../persistence/localStorage'
 import { saveTab, savedMap, tabIsDirty } from './boardFiles'
 import type { StoreAction, TabState } from './store'
 
@@ -16,16 +16,18 @@ export interface LibraryAutosave {
   /** Called with the tab set after every commit; arms the debounce per tab. */
   arm(tabs: readonly TabState[]): void
   /**
-   * Writes every pending tab now, for pagehide. Returns the tab set with the
-   * links those writes made applied, or null when they made none: the
-   * dispatches carrying a link cannot render before the document unloads, so
-   * the workspace flush that follows has to be handed it.
+   * Writes every pending tab now, for pagehide. Returns the tab set as those
+   * writes left it, with the links they made applied and the tabs the cap
+   * closed removed, or null when they changed nothing: the dispatches
+   * carrying a link or a close cannot render before the document unloads, so
+   * the workspace flush that follows has to be handed the result.
    */
   flush(): readonly TabState[] | null
   /**
    * Drops everything owed for a tab about to be closed with `discard`: its
-   * map was deleted on purpose, so the closing save that normally rescues a
-   * closed tab's last edit must not land it back in the library as a new map.
+   * map was deleted on purpose, or the cap evicted it, so the closing save
+   * that normally rescues a closed tab's last edit must not land it back in
+   * the library as a new map.
    */
   forget(id: string): void
   dispose(): void
@@ -51,12 +53,17 @@ export function createLibraryAutosave(
   const timers = new Map<string, number>()
   // Links made by the current flush, for the tab set it returns.
   const flushed = new Map<string, { mapId: string; title: string }>()
+  // Tabs the current flush closed because the cap evicted their maps; the
+  // workspace written after it must not carry them, or a reload would revive
+  // each as an unsaved board that re-saves itself past the cap.
+  const closed = new Set<string>()
   let latest: readonly TabState[] = initialTabs
 
-  // `closing` names the failure for what it is: the tab is gone once the
-  // dispatch renders, so "could not save" would suggest a retry that cannot
-  // happen.
-  const save = (tab: TabState, closing = false) => {
+  // `tabs` is the set the write is made from: `latest`, or the previous set
+  // when a closing tab is written on its way out. `closing` names the failure
+  // for what it is: the tab is gone once the dispatch renders, so "could not
+  // save" would suggest a retry that cannot happen.
+  const save = (tab: TabState, tabs: readonly TabState[], closing = false) => {
     const { id } = tab
     timers.delete(id)
     // Nothing to write for a blank unlinked board, or for a linked one whose
@@ -67,7 +74,16 @@ export function createLibraryAutosave(
       baseline.set(id, tab.game)
       return
     }
-    const result = saveTab(tab)
+    // Maps other tabs here still owe a write to are kept out of the cap's
+    // reach: evicted, each would come back as a new map on that write, and an
+    // edit still inside its debounce would go with the closed tab. Over `tabs`
+    // rather than `latest`, so two tabs closing together cover each other.
+    const owed = owing()
+    const keep = new Set<string>()
+    for (const other of tabs) {
+      if (other.id !== id && other.mapId !== null && owed.has(other.id)) keep.add(other.mapId)
+    }
+    const result = saveTab(tab, keep)
     if (!result.ok) {
       // Once per attempt: the debounce has already folded a burst of edits into
       // this one write, and the next edit is what retries it.
@@ -87,7 +103,35 @@ export function createLibraryAutosave(
       flushed.set(id, { mapId: result.id, title: result.name })
       dispatch({ type: 'tab-link', id, mapId: result.id, title: result.name })
     }
+    // A board whose map the cap just dropped goes with it: left open, it
+    // would list as unsaved and re-save itself into a 51st map on its next
+    // edit. Forgotten first, so its own closing rescue cannot do the same.
+    if (result.evicted !== undefined) {
+      // Only a tab owing nothing can be here: `keep` shielded the rest.
+      const gone = new Set(result.evicted)
+      for (const other of latest) {
+        if (other.mapId === null || !gone.has(other.mapId)) continue
+        forget(other.id)
+        closed.add(other.id)
+        dispatch({ type: 'tab-close', id: other.id, discard: true })
+      }
+      // Said out loud: a library that was already over the cap loses many at
+      // once here, and even one board leaving on its own deserves a word.
+      const count = result.evicted.length
+      dispatch({
+        type: 'notice',
+        message: `Dropped ${count} older board${count === 1 ? '' : 's'} to keep the library at ${MAX_MAPS}`,
+      })
+    }
     dispatch({ type: 'maps-changed', library: readLibrary() })
+  }
+
+  const forget = (id: string) => {
+    const timer = timers.get(id)
+    if (timer !== undefined) window.clearTimeout(timer)
+    timers.delete(id)
+    failed.delete(id)
+    baseline.delete(id)
   }
 
   const schedule = (id: string) => {
@@ -95,7 +139,7 @@ export function createLibraryAutosave(
     if (pending !== undefined) window.clearTimeout(pending)
     timers.set(id, window.setTimeout(() => {
       const tab = latest.find((candidate) => candidate.id === id)
-      if (tab !== undefined) save(tab)
+      if (tab !== undefined) save(tab, latest)
     }, delay))
   }
 
@@ -104,7 +148,7 @@ export function createLibraryAutosave(
     const timer = timers.get(id)
     if (timer !== undefined) window.clearTimeout(timer)
     const tab = tabs.find((candidate) => candidate.id === id)
-    if (tab !== undefined) save(tab, closing)
+    if (tab !== undefined) save(tab, tabs, closing)
     else timers.delete(id)
   }
   // Every tab owing a write: one inside its debounce, or one whose last save
@@ -136,20 +180,17 @@ export function createLibraryAutosave(
     },
     flush() {
       flushed.clear()
+      closed.clear()
       for (const id of owing()) fire(id, latest)
-      if (flushed.size === 0) return null
-      return latest.map((tab) => {
-        const link = flushed.get(tab.id)
-        return link === undefined ? tab : { ...tab, mapId: link.mapId, title: link.title }
-      })
+      if (flushed.size === 0 && closed.size === 0) return null
+      return latest
+        .filter((tab) => !closed.has(tab.id))
+        .map((tab) => {
+          const link = flushed.get(tab.id)
+          return link === undefined ? tab : { ...tab, mapId: link.mapId, title: link.title }
+        })
     },
-    forget(id) {
-      const timer = timers.get(id)
-      if (timer !== undefined) window.clearTimeout(timer)
-      timers.delete(id)
-      failed.delete(id)
-      baseline.delete(id)
-    },
+    forget,
     dispose() {
       for (const timer of timers.values()) window.clearTimeout(timer)
       timers.clear()

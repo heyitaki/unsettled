@@ -86,17 +86,20 @@ export function tabIsDirty(game: Game, saved: SavedMap): boolean {
 }
 
 export type SaveTabResult =
-  | { ok: true; id: string; name: string }
+  // `evicted`: the maps the library cap dropped to make room for a new entry.
+  | { ok: true; id: string; name: string; evicted?: readonly string[] }
   | { ok: false; error: string }
 
 /**
  * Save a tab into the library, with no prompt: the autosave has no name field
  * to answer with and nowhere to put the answer. It writes back into the tab's
  * own map where there is one, and otherwise adds an entry, never over one
- * that already holds the name.
+ * that already holds the name. `keep` names maps the library cap must not
+ * evict to make room: the ones this document still owes a write to.
  */
 export function saveTab(
   tab: { title: string; game: Game; mapId: string | null },
+  keep: ReadonlySet<string> = new Set(),
 ): SaveTabResult {
   const wanted = tab.title.trim()
   if (wanted.length === 0) return { ok: false, error: 'Map name cannot be empty' }
@@ -119,8 +122,9 @@ export function saveTab(
   // refuse over but readLibrary cannot address would otherwise be invisible
   // here and fatal one line later, with no prompt to resolve it.
   const name = firstFreeName(wanted, takenMapNames())
-  const result = saveMap(name, tab.game)
-  return result.ok ? { ok: true, id: result.id, name } : result
+  const result = saveMap(name, tab.game, false, keep)
+  if (!result.ok) return result
+  return { ok: true, id: result.id, name, ...(result.evicted === undefined ? {} : { evicted: result.evicted }) }
 }
 
 // The board's non-blocking warnings as a clause, or null when it has none.

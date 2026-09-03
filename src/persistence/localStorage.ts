@@ -50,7 +50,11 @@ export interface PersistedWorkspace {
 }
 
 type WriteResult = { ok: true } | { ok: false; error: string }
-type SaveMapResult = { ok: true; id: string } | { ok: false; error: string }
+// `evicted`: the ids the cap dropped to make room, present only when it did.
+type SaveMapResult = { ok: true; id: string; evicted?: readonly string[] } | { ok: false; error: string }
+
+/** How many maps the library keeps; a save beyond it drops the least recently touched. */
+export const MAX_MAPS = 50
 const MISSING_MAP = 'That map is no longer in the library'
 let corruptMapsBlob: string | null = null
 let corruptWorkspaceBlob: string | null = null
@@ -232,21 +236,57 @@ function mapEntry(name: string, game: Game, existing: Record<string, unknown> | 
   }
 }
 
+// The newest stamp an entry carries, so a board that was merely looked at
+// counts as touched; an entry with no stamps at all (legacy) is the coldest.
+function lastTouched(entry: unknown): number {
+  if (!isRecord(entry)) return -Infinity
+  const stamps = [entry.createdAt, entry.modifiedAt, entry.openedAt]
+    .filter((value): value is number => typeof value === 'number')
+  return stamps.length === 0 ? -Infinity : Math.max(...stamps)
+}
+
+/**
+ * The library with the coldest entries beyond MAX_MAPS dropped, plus the ids
+ * that went. Never a `kept` id: the entry just written, and the maps the
+ * caller is about to write to, since dropping one of those would only have
+ * its next save add it back as a 51st. Ties keep the earlier row, so a run of
+ * unstamped legacy entries goes oldest-first.
+ */
+function evictBeyondCap(maps: unknown[], kept: ReadonlySet<string>): { maps: unknown[]; evicted: string[] } {
+  const excess = maps.length - MAX_MAPS
+  if (excess <= 0) return { maps, evicted: [] }
+  const cold = maps
+    .map((entry, index) => ({ index, id: mapEntryId(entry), touched: lastTouched(entry) }))
+    .filter(({ id }) => id === null || !kept.has(id))
+    .sort((left, right) => left.touched - right.touched)
+    .slice(0, excess)
+  const dropped = new Set(cold.map(({ index }) => index))
+  const evicted = cold.map(({ id }) => id).filter((id): id is string => id !== null)
+  return { maps: maps.filter((_, index) => !dropped.has(index)), evicted }
+}
+
 /**
  * Write `game` under `name`, returning the id of the entry it landed in.
+ * A fresh entry that takes the library past MAX_MAPS evicts the coldest ones;
+ * an overwrite never grows the library, so it never evicts.
  * Overwriting an existing name keeps that entry's id, so a tab linked to the
  * map stays linked; a fresh name mints a new id.
  */
-export function saveMap(name: string, game: Game, overwrite = false): SaveMapResult {
+export function saveMap(name: string, game: Game, overwrite = false, keep: ReadonlySet<string> = new Set()): SaveMapResult {
   if (name.length === 0) return { ok: false, error: 'Map name cannot be empty' }
   const maps = [...readRawMaps().entries]
   const index = maps.findIndex((entry) => isNamedMapEntry(entry) && entry.name === name)
   if (index >= 0 && !overwrite) return { ok: false, error: 'A map with this name already exists' }
   const entry = mapEntry(name, game, index >= 0 && isRecord(maps[index]) ? maps[index] : null)
-  if (index >= 0) maps[index] = entry
-  else maps.push(entry)
-  const result = writeMaps(maps)
-  return result.ok ? { ok: true, id: entry.id } : result
+  if (index >= 0) {
+    maps[index] = entry
+    const result = writeMaps(maps)
+    return result.ok ? { ok: true, id: entry.id } : result
+  }
+  const capped = evictBeyondCap([...maps, entry], new Set([...keep, entry.id]))
+  const result = writeMaps(capped.maps)
+  if (!result.ok) return result
+  return { ok: true, id: entry.id, ...(capped.evicted.length > 0 ? { evicted: capped.evicted } : {}) }
 }
 
 /**

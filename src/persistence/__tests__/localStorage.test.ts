@@ -7,6 +7,7 @@ import {
   CURRENT_KEY,
   MAPS_CORRUPT_KEY,
   MAPS_KEY,
+  MAX_MAPS,
   autosaveCurrent,
   deleteMap,
   listMaps,
@@ -181,6 +182,71 @@ describe('map timestamps and sorting metadata', () => {
     expect(renameMap(a, 'b').ok).toBe(false)
     // A no-op rename to the same name is allowed.
     expect(renameMap(a, 'a').ok).toBe(true)
+  })
+})
+
+describe('map cap', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => vi.restoreAllMocks())
+
+  // `count` maps named m1..m<count>, each stamped a second after the last.
+  const fill = (count: number): string[] => {
+    const now = vi.spyOn(Date, 'now')
+    return Array.from({ length: count }, (_, i) => {
+      now.mockReturnValue(1000 * (i + 1))
+      return savedId(`m${i + 1}`)
+    })
+  }
+
+  it('drops the least recently touched map once a new save passes MAX_MAPS, never the one just saved', () => {
+    const ids = fill(MAX_MAPS)
+    // Looking at the oldest board counts as touching it, so the next one goes instead.
+    vi.spyOn(Date, 'now').mockReturnValue(1000 * (MAX_MAPS + 1))
+    expect(markMapOpened(ids[0]).ok).toBe(true)
+    vi.spyOn(Date, 'now').mockReturnValue(1000 * (MAX_MAPS + 2))
+    const result = saveMap('newest', game())
+    expect(result).toEqual({ ok: true, id: expect.any(String), evicted: [ids[1]] })
+    const names = listMaps().maps.map((map) => map.name)
+    expect(names).toHaveLength(MAX_MAPS)
+    expect(names).toContain('m1')
+    expect(names).not.toContain('m2')
+    expect(names).toContain('newest')
+  })
+
+  it('never evicts on an overwrite, which cannot grow the library', () => {
+    // Seeded past the cap by hand, so an overwrite that evicted would show.
+    fill(MAX_MAPS)
+    const entries = JSON.parse(localStorage.getItem(MAPS_KEY) as string) as unknown[]
+    localStorage.setItem(MAPS_KEY, JSON.stringify([...entries, { id: 'extra', name: 'extra', game: game() }]))
+    expect(saveMap('m7', game('extension6'), true)).toEqual({ ok: true, id: expect.any(String) })
+    expect(listMaps().maps).toHaveLength(MAX_MAPS + 1)
+  })
+
+  it('keeps the map just saved even when the clock has gone backwards', () => {
+    // Two documents share one clock; a save stamped earlier than every map
+    // in the library must still be the one that stays.
+    const ids = fill(MAX_MAPS)
+    vi.spyOn(Date, 'now').mockReturnValue(0)
+    expect(saveMap('backdated', game())).toEqual({ ok: true, id: expect.any(String), evicted: [ids[0]] })
+    expect(listMaps().maps.map((map) => map.name)).toContain('backdated')
+  })
+
+  it('never evicts a map the caller asks to keep', () => {
+    const ids = fill(MAX_MAPS)
+    vi.spyOn(Date, 'now').mockReturnValue(1000 * (MAX_MAPS + 2))
+    expect(saveMap('newest', game(), false, new Set([ids[0]]))).toEqual({ ok: true, id: expect.any(String), evicted: [ids[1]] })
+  })
+
+  it('drops legacy entries with no stamps before any stamped map', () => {
+    // One legacy entry and MAX_MAPS - 2 stamped maps: room for one more, not two.
+    fill(MAX_MAPS - 2)
+    const entries = JSON.parse(localStorage.getItem(MAPS_KEY) as string) as unknown[]
+    // Last in row order, so only its missing stamps can be what picks it.
+    localStorage.setItem(MAPS_KEY, JSON.stringify([...entries, { id: 'legacy', name: 'old', board: game().board }]))
+    vi.spyOn(Date, 'now').mockReturnValue(1000 * (MAX_MAPS + 5))
+    expect(saveMap('fits', game())).toEqual({ ok: true, id: expect.any(String) })
+    expect(saveMap('over', game())).toEqual({ ok: true, id: expect.any(String), evicted: ['legacy'] })
+    expect(listMaps().maps.map((map) => map.name)).not.toContain('old')
   })
 })
 
