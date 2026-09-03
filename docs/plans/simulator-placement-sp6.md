@@ -151,10 +151,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 5: Preregister M-61, lookahead accuracy on the draft-aware field
 
-- [ ] Write `docs/plans/preregs/<today>-m61-lookahead-accuracy.md`: two `diagnose` invocations on `tuning2`, `standard4`, 4 seats, 2000 boards x 2 reps, composite policy with `--player-trading`, `--alpha 0.05`, `--threads 0`; one with `--placement app_formula:placement/default-weights.json` as the control, one with `--placement app_formula_draft:placement/default-weights.json@placement/default-weights.json`
-- [ ] State that this is a diagnostic with no arm and no verdict, that the control must read 100% on tie-free picks or the statistic is broken, and record a prediction for the draft-aware share
-- [ ] Admissibility conditions
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m61-lookahead-accuracy.md`: two `diagnose` invocations on `tuning2`, `standard4`, 4 seats, 2000 boards x 2 reps, composite policy with `--player-trading`, `--alpha 0.05`, `--threads 0`; one with `--placement app_formula:placement/default-weights.json` as the control, one with `--placement app_formula_draft:placement/default-weights.json@placement/default-weights.json`
+- [x] State that this is a diagnostic with no arm and no verdict, that the control must read 100% on tie-free picks or the statistic is broken, and record a prediction for the draft-aware share
+- [x] Admissibility conditions
+- [x] Link check passes
 
 ### Task 6: Run M-61 and record it
 
