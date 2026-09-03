@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { analyzeBoardCached } from '../engine/analyze'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
-import { DraftRibbon } from './DraftRibbon'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
 import { MobileNav } from './MobileNav'
@@ -69,7 +68,6 @@ function Workspace() {
           </div>
         </aside>
         <div className="center-column">
-          <DraftRibbon />
           <BoardCanvas restMarks={restMarks} />
         </div>
         <aside className="right-rail">

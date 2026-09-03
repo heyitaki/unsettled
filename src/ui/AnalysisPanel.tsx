@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { readableInk } from './colors'
-import { PencilGlyph, PhotoGlyph } from './glyphs'
+import { PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
@@ -20,21 +20,66 @@ const RESOURCE_LABELS: Record<Resource, string> = {
   ore: 'Ore',
 }
 
-function vertexDescription(board: Board, vertexId: VertexId): string {
+/** What a vertex touches: its hexes, then any port on an edge it ends. */
+type VertexPart =
+  | { kind: 'hex'; resource: Resource; number: number | null }
+  | { kind: 'word'; word: 'Desert' | 'Unassigned' }
+  | { kind: 'port'; resource: Resource | null; rate: number }
+
+function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
   const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
   const hexes = board.hexes
     .filter((hex) => touching.has(axialKey(hex.coord)))
-    .map((hex) => {
-      if (hex.tile === 'desert') return 'Desert'
-      if (hex.tile === null) return 'Unassigned'
-      return `${RESOURCE_LABELS[hex.tile]} ${hex.numberToken ?? '?'}`
+    .map((hex): VertexPart => {
+      if (hex.tile === 'desert') return { kind: 'word', word: 'Desert' }
+      if (hex.tile === null) return { kind: 'word', word: 'Unassigned' }
+      return { kind: 'hex', resource: hex.tile, number: hex.numberToken }
     })
   const ports = board.ports
     .filter((port) => edgeEndpointVertexIds(port.edgeId).includes(vertexId))
-    .map((port) => port.resource === null
-      ? `${port.rate}:1 port`
-      : `${RESOURCE_LABELS[port.resource]} ${port.rate}:1 port`)
-  return [...hexes, ...ports].join(' · ')
+    .map((port): VertexPart => ({ kind: 'port', resource: port.resource, rate: port.rate }))
+  return [...hexes, ...ports]
+}
+
+/** The vertex in words, for tooltips and accessible names. */
+function vertexDescription(board: Board, vertexId: VertexId): string {
+  return vertexParts(board, vertexId).map((part) => {
+    if (part.kind === 'word') return part.word
+    if (part.kind === 'hex') return `${RESOURCE_LABELS[part.resource]} ${part.number ?? '?'}`
+    return part.resource === null ? `${part.rate}:1 port` : `${RESOURCE_LABELS[part.resource]} ${part.rate}:1 port`
+  }).join(' · ')
+}
+
+/**
+ * The vertex as glyphs (spec D4): each hex is its resource card beside its
+ * number, a port its anchor (or its resource card) beside the rate, so a triple
+ * and the follow-up line read at a glance and fit one line.
+ */
+function VertexLabel({ board, vertexId }: { board: Board; vertexId: VertexId }) {
+  return (
+    <>
+      {vertexParts(board, vertexId).map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && ' · '}
+          {part.kind === 'word' ? part.word : (
+            <span className="hex-label">
+              {part.kind === 'hex' ? <ResourceGlyph resource={part.resource} />
+                : part.resource === null ? <StructureGlyph shape="port" color="currentColor" size={12} />
+                  : <ResourceGlyph resource={part.resource} />}
+              {part.kind === 'hex' ? part.number ?? '?' : `${part.rate}:1`}
+            </span>
+          )}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+/** React children joined by a separator, the way `Array.join` joins strings. */
+function joined(items: ReactNode[], separator: string): ReactNode {
+  return items.map((item, index) => (
+    <Fragment key={index}>{index > 0 && separator}{item}</Fragment>
+  ))
 }
 
 function formatFactor(value: number): string {
@@ -211,8 +256,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
       <p>{emptyMessage[analysis.status]}</p>
       {analysis.status === 'no-availability' && likelyGone.length > 0 && (
         <span>
-          likely gone: {likelyGone.map(({ vertexId }) =>
-            vertexDescription(board, vertexId)).join(', ')}
+          likely gone: {joined(likelyGone.map(({ vertexId }) =>
+            <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ', ')}
         </span>
       )}
     </div>
@@ -229,11 +274,15 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             onClick={selectLikelyGone}
             onMouseEnter={() => preview(likelyGoneMarks)}
           >
-            <span>Likely gone before your turn</span>
-            {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+            <span className="analysis-likely-gone-title">Likely gone before your turn</span>
+            {joined(likelyGone.map(({ vertexId, playerId, frequency }, index) => {
               const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
-              return `${index + 1}. ${name}: ${vertexDescription(board, vertexId)} ${Math.round(frequency * 100)}%`
-            }).join(' · ')}
+              return (
+                <Fragment key={vertexId}>
+                  {index + 1}. {name}: <VertexLabel board={board} vertexId={vertexId} /> {Math.round(frequency * 100)}%
+                </Fragment>
+              )
+            }), ' · ')}
           </button>
           {selectedLikelyGone && (
             <div className="analysis-touch-actions">
@@ -255,6 +304,10 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         {recommendations.map((recommendation, index) => {
           const factors = displayedFactors(recommendation)
           const current = selectedPick === recommendation.firstPick
+          // The desktop list is collapsed: a row is its pick line, score and
+          // follow-up until it is selected, and the factors open with it. The
+          // phone card carries everything at rest (mobile spec S5).
+          const expanded = onBuild !== undefined || current
           return (
             <div
               key={recommendation.firstPick}
@@ -263,6 +316,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
               <button
                 type="button"
                 className="analysis-row-select"
+                title={vertexDescription(board, recommendation.firstPick)}
                 onClick={() => selectRecommendation(recommendation)}
                 onMouseEnter={() => preview(recommendationMarks(recommendation, myColor))}
               >
@@ -274,7 +328,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 </span>
                 <span className="analysis-row-body">
                   <span className="analysis-pick-line">
-                    <strong>{vertexDescription(board, recommendation.firstPick)}</strong>
+                    <strong><VertexLabel board={board} vertexId={recommendation.firstPick} /></strong>
                     <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
                   </span>
                   {recommendation.survival < 1 && (
@@ -284,16 +338,17 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                   )}
                   {recommendation.plannedSecond.length > 0 && (
                     <span className="analysis-second">
-                      then: {recommendation.plannedSecond
-                        .map((vertexId) => vertexDescription(board, vertexId))
-                        .join(' / ')}
+                      then: {joined(recommendation.plannedSecond
+                        .map((vertexId) => <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ' or ')}
                     </span>
                   )}
-                  <span className="analysis-factors">
-                    {factors.map(([label, value]) => (
-                      <span key={label}>{label} {formatFactor(value)}</span>
-                    ))}
-                  </span>
+                  {expanded && (
+                    <span className="analysis-factors">
+                      {factors.map(([label, value]) => (
+                        <span key={label}>{label} {formatFactor(value)}</span>
+                      ))}
+                    </span>
+                  )}
                 </span>
               </button>
               {current && (
@@ -339,20 +394,20 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             Nothing has been laid out yet. Import a screenshot and the parser reads the tiles,
             numbers and players off it, or place them yourself.
           </p>
-          <div className="empty-actions">
-            <button type="button" className="primary" onClick={() => setImportOpen(true)}>
-              <PhotoGlyph />
-              Import screenshot
-            </button>
-            {/* The desktop's tools are always on screen, so only the phone needs
-                a way into build mode from here (spec D4). */}
-            {onBuild && (
+          {/* The desktop's import and tools are already on screen in the left
+              rail, so only the phone needs the two ways in from here (spec D4). */}
+          {onBuild && (
+            <div className="empty-actions">
+              <button type="button" className="primary" onClick={() => setImportOpen(true)}>
+                <PhotoGlyph />
+                Import screenshot
+              </button>
               <button type="button" onClick={onBuild}>
                 <PencilGlyph />
                 Build it by hand
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       ) : !me ? (
         <div className="claim">

@@ -10,7 +10,7 @@ The phone shell was built to a design that fixed decisions the desktop still con
 
 ## The model
 
-One `Workspace` tree for desktop and landscape (mobile spec B8 holds; the portrait shell is untouched). Left rail: Library, then Board tools. Centre: draft ribbon, board in its paper stage, layout caption. Right rail: Players, then Best picks. No tab strip and no footer. The site header (brand mark, subtitle rotation, `Unsettled`) stays exactly as it is.
+One `Workspace` tree for desktop and landscape (mobile spec B8 holds; the portrait shell is untouched). Left rail: Library, then Board tools. Centre: the board in its paper stage with the layout caption under it. Right rail: Players (roster, then the draft ribbon), then Best picks. No tab strip and no footer. The site header (brand mark, subtitle rotation, `Unsettled`) stays exactly as it is.
 
 Everything the phone and the desktop both render is one component with one stylesheet rule. A phone surface that reaches the desktop is promoted: its component moves out of `src/ui/phone/` into `src/ui/`, its CSS moves out of the portrait arm into the base rules, and both lose the `phone-` prefix. The portrait arm keeps only the rules that differ on a phone. Anything still phone-only (`PhoneShell`, `PhoneHeader`, `PhoneOverlay`, the overlays, `PhoneBuild`, `buildMode.ts`, `revealBoard.ts`) keeps its name, its place and its prefix.
 
@@ -30,14 +30,13 @@ Replaces the tab strip, the `Import & export` panel and the `Saved maps` panel w
 
 ### D2 · Board area
 
-- **Draft ribbon** above the board, the phone's ribbon (S2) promoted to `DraftRibbon`: one circle per pick, taken solid, later faded, current ringed, own picks dotted, click marks the pick's placed or predicted vertex. Hidden in the landscape arm, whose board height budget has no row to spare.
 - **Resting marks** (S5): while nothing is selected the board wears every listed recommendation's first pick, ranked, in the claimed colour, ranks four and up faded. `Workspace` passes `restingMarks(board, analysis)` to `BoardCanvas` exactly as `PhoneShell` does. Marks are drawn flat everywhere: the phone's `vertex-highlight` sizing and no cast shadow become the base rule; the desktop's red defaults go.
-- **Layout caption**: `4 player layout ⌄` with `ChevronGlyph`, centred, on both trees; the `19/19 terrain` and `4 pieces` counts leave the caption. `BoardCanvas` no longer consults `usePortraitPhone`. The zoom chip stays.
+- **Layout caption**: `4 player layout ⌄` with `ChevronGlyph`, centred under the board on both trees (the stage no longer clips, so the menu can open below it); the `19/19 terrain` and `4 pieces` counts leave the caption. `BoardCanvas` no longer consults `usePortraitPhone`. The zoom chip stays.
 - The board stage keeps its desktop frame (paper panel, sea rect, drop shadow); the phone's square sea frame stays portrait-only.
 
 ### D3 · Board tools
 
-- The heading keeps its four round buttons, drawn from `glyphs.tsx`: `DiceGlyph` (Randomize), `ClearBoardGlyph` (Clear all, styled destructive like the phone menu's `Clear board`), `UndoGlyph`, `RedoGlyph`. The inline dice and hexagon SVGs and the `←` `→` text go.
+- The heading carries one dots button (`DotsGlyph`, `aria-label="Board options"`) opening the phone header's menu without its `Export JSON` row: `Undo` and `Redo` as the history pair on top, then `Randomize board` and `Clear board` (destructive), each with its glyph. The four round buttons go.
 - The counts the caption lost move to the tool labels, right-aligned and muted: `Terrain` carries `12/19`, `Structures` carries `4 pieces`. They render inside `ToolGroups`, so the phone's build block shows them too.
 - The phone's dots menu prints `Undo` and `Redo` with no stack-depth count (S1). `ContextMenuItem.count` is deleted.
 
@@ -48,7 +47,7 @@ One code path for every pointer; the `coarse` branch and the `variant` prop go.
 - **Selecting a card** (click or tap) pins its marks in the claimed colour, first pick solid, planned second faded, road stub when present, and opens `Place settlement` / `Clear` under it; clicking the selected card again deselects. **Hovering** a card with a fine pointer previews its marks only while nothing is selected; leaving the list restores the resting marks. The likely-gone block behaves the same way with `Play these out` / `Clear`. A click never places a piece directly.
 - **Heading** `Draft analysis` / `Best picks` with the `Your turn` pill at the right when it is your turn. **Context line** `You are <picker> · picking X and Y of N`; the desktop's `· pick N of M, whose turn` tail goes.
 - **No player claimed**: the hint `Tap your colour and the ranking starts` (desktop: `Pick your colour and the ranking starts`) and a row of swatch buttons, one per player, that claim on click. The `choose player` placeholder goes.
-- **Empty board** (mobile B5): heading `Nothing to rank yet` / `This board is empty`, the hint, and `Import screenshot`. `Build it by hand` renders only when the panel is given `onBuild`, which only the phone shell supplies; the desktop's tools are already on screen.
+- **Empty board** (mobile B5): heading `Nothing to rank yet` / `This board is empty` and the hint. The `Import screenshot` and `Build it by hand` buttons render only when the panel is given `onBuild`, which only the phone shell supplies; on the desktop both the import and the tools are already on screen in the left rail.
 - **Cards** are the phone's: rank circle in the claimed colour with an ink ring, the triple in Inter, the score in ink, survival as plain accent text, flat tinted factor chips. The selected card uses the `current` state. The desktop rules for the accent-red rank, the Georgia score, the blue survival pill and the bordered 8px factor pills go.
 
 ### D5 · Players panel
@@ -62,7 +61,7 @@ The roster is the phone's roster (S8) plus the tally the desktop keeps (mobile O
 - **Clicking the name renames in place** (`InlineRename`, dotted underline at rest, the field bounded to the text, Enter commits, Escape reverts, `renamePlayer` on commit rather than on every keystroke).
 - **Dragging**: the rows the lifted row passes ease out of the way (`rowShift`) and the mid-drag trash row removes. The desktop's faded-card drag look goes. Fine pointers keep `useRowReorder`'s HTML5 path, where the browser's own drag image follows the pointer and the lifted row instead eases into the slot it would land in, so the list previews the order it will commit to; on a hold the lifted row tracks the finger with no easing. Every offset derives from `dragId` and `dropTarget`, which both paths supply.
 - The native drag is aimed and dropped on the **list**, not on the rows: a row under the pointer has already moved out from under it, and the gap a row leaves behind is bare list, which would refuse the drop. Both paths therefore resolve the destination with `dropIndexFor` against the layout measured when the drag started.
-- **Snake draft**: the strip is replaced by the phone's grid, promoted to `DraftGrid` and shared with `PlayersScreen`: group label `Snake draft` with `pick n of m` (or `draft complete`) at the right, one column per player, circle plus name, the current pick outlined, pending picks dashed. The grid is static; marking a pick on the board is the ribbon's job (D2).
+- **Snake draft**: under the roster, where the strip was, the phone's ribbon (S2) promoted to `DraftRibbon` under the group label `Snake draft` with `pick n of m` (or `draft complete`) at the right (`DraftLabel`, shared with the phone's grid): one circle per pick, taken solid, later faded, current ringed, own picks dotted, click marks the pick's placed or predicted vertex. The phone's named grid (`DraftGrid`) stays on the phone's Players screen; the desktop roster already names every seat.
 
 ### D6 · Vocabulary
 
@@ -84,7 +83,7 @@ The roster is the phone's roster (S8) plus the tally the desktop keeps (mobile O
 | DB3 | Roster row click claims (`setMe`); swatch click toggles the piece brush (`active-player`) without claiming. |
 | DB4 | In all three lists (open boards, saved maps, roster) the rename hit area is the name, not the row, and the field grows with the text (mobile B6). |
 | DB5 | The open-boards list reaches `tab-select`, `tab-close`, `tab-add` and the `useRenameTab` rule. `workspaceSync.ts` and the semantics of `e2e/workspaceSync.spec.ts` are unchanged: that spec changes only where a locator named the tab strip, never its pacing. |
-| DB6 | The ribbon is hidden in the landscape arm. |
+| DB6 | The ribbon renders inside the Players panel on desktop and landscape, never over the board. |
 | DB7 | A promoted component or rule loses the `phone-` prefix and the `.phone-shell` scope; `grep -rl "phone-" src/ui --include='*.ts' --include='*.tsx'` outside `src/ui/phone/` matches only `revealBoard.ts`. The phone e2e selectors follow the renames. |
 
 ## What already exists
@@ -96,7 +95,7 @@ Every row below has been moved; the paths are where each piece lives now.
 | Name-bounded in-place rename | `ui/InlineRename.tsx` |
 | The two-list row, and the two lists around it | `ui/ListRow.tsx` inside `ui/LibraryLists.tsx`, rendered by `ui/MapsPanel.tsx` and `phone/MapsScreen.tsx` |
 | Draft ribbon | `ui/DraftRibbon.tsx`, mounted by `ui/App.tsx` and `phone/PhoneShell.tsx` |
-| Snake draft grid | `ui/DraftGrid.tsx`, mounted by `ui/PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
+| Snake draft grid and its label | `ui/DraftGrid.tsx` (`DraftGrid`, mounted by `phone/PlayersScreen.tsx`; `DraftLabel`, also over the desktop ribbon in `ui/PlayerPanel.tsx`) |
 | Resting marks | `ui/restMarks.ts` |
 | Board colour | `ui/boardColor.ts` |
 | Board rename rule, library sort/open/delete/rename, JSON import and export | `useRenameTab.ts`, `useLibrary.ts`, `useJsonFiles.tsx` |
@@ -110,8 +109,8 @@ Every row below has been moved; the paths are where each piece lives now.
 - **No board title over the board.** The open-boards list is the only place the active board's name shows and the only place to rename it. The site header stays as it is.
 - **Tab strip actions match the phone.** Only select, close, rename and new survive; the context menu, duplicate, close-others, close-to-the-right and every chord are deleted, not relocated.
 - **Library first in the left rail.** It is the document switcher and the import entry, the two things done before any tool is touched.
-- **Landscape keeps its height budget.** The ribbon is hidden there; the Library panel and every other promoted surface reach it.
-- **Build it by hand stays phone-only.** The desktop's tools are always on screen.
+- **Landscape keeps its height budget.** Nothing new sits over its board; the ribbon rides in the Players pane, and the Library panel and every other promoted surface reach it.
+- **The empty-board buttons stay phone-only.** The desktop's import and tools are always on screen.
 - **Desktop keeps hover previews**, layered under the phone's select-on-click, rather than dropping hover.
 
 ## Ledger

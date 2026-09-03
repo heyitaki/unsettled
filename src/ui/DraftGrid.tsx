@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { analyzeBoardCached } from '../engine/analyze'
+import { analyzeBoardCached, type DraftAnalysis } from '../engine/analyze'
 import type { Board } from '../model/types'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
@@ -10,16 +10,22 @@ import { draftSlots } from './draftSlots'
  * outlined and the rest dashed. Static on purpose: marking a pick on the board
  * is the ribbon's job.
  */
+export function DraftLabel({ analysis }: { analysis: DraftAnalysis }) {
+  const { turnIndex, sequence } = analysis.draft
+  return (
+    <div className="group-label">
+      <span>Snake draft</span>
+      <span>{turnIndex === null ? 'draft complete' : `pick ${turnIndex + 1} of ${sequence.length}`}</span>
+    </div>
+  )
+}
+
 export function DraftGrid({ board }: { board: Board }) {
   const analysis = analyzeBoardCached(board)
   const slots = draftSlots(board, analysis)
-  const { turnIndex, sequence } = analysis.draft
   return (
     <div className="draft-section">
-      <div className="group-label">
-        <span>Snake draft</span>
-        <span>{turnIndex === null ? 'draft complete' : `pick ${turnIndex + 1} of ${sequence.length}`}</span>
-      </div>
+      <DraftLabel analysis={analysis} />
       <div className="draft-grid" style={{ '--draft-cols': board.players.length } as CSSProperties}>
         {slots.map((slot, index) => {
           const player = board.players.find((candidate) => candidate.id === slot.playerId)

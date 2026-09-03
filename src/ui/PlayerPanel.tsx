@@ -9,7 +9,9 @@ import {
 } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
-import { DraftGrid } from './DraftGrid'
+import { analyzeBoardCached } from '../engine/analyze'
+import { DraftLabel } from './DraftGrid'
+import { DraftRibbon } from './DraftRibbon'
 import { CounterGlyph, GLYPH_MUTED, GripGlyph, PlusGlyph, ResourceGlyph, StructureGlyph, TrashGlyph } from './glyphs'
 import { InlineRename } from './InlineRename'
 import { MenuSelect } from './MenuSelect'
@@ -419,7 +421,12 @@ export function PlayerPanel() {
           Add player
         </button>
       </div>
-      <DraftGrid board={board} />
+      {/* The ribbon, not the phone's named grid: the desktop roster already
+          names every seat, so the compact bar the strip used to be is enough. */}
+      <div className="draft-section">
+        <DraftLabel analysis={analyzeBoardCached(board)} />
+        <DraftRibbon />
+      </div>
     </section>
   )
 }

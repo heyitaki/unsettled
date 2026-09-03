@@ -18,6 +18,12 @@ import { seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 const snap = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
+/** The board actions live in the tools panel's dots menu, as in the phone header (spec D3). */
+async function randomize(page: Page) {
+  await page.getByRole('button', { name: 'Board options' }).click()
+  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+}
+
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 900 } })
 
@@ -60,7 +66,7 @@ test.describe('desktop', () => {
     await snap(page, 'desktop')
 
     // An edit is all it takes to reach the library: there is no save button.
-    await page.getByRole('button', { name: 'Randomize' }).click()
+    await randomize(page)
     await expect(saved).toHaveCount(1)
     await expect(saved.first().locator('.list-row-name')).toHaveText('Board 1')
 
@@ -88,7 +94,7 @@ test.describe('desktop', () => {
   test('draws the draft ribbon over a board wearing the resting marks, under a bare caption', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('footer')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Randomize' }).click()
+    await randomize(page)
 
     // Two picks per player, the first one up (spec D4).
     const players = await page.locator('.player-list .roster-row').count()
@@ -129,28 +135,33 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(2)
   })
 
-  test('the tool heading is glyphs alone and the labels carry the counts the caption lost', async ({ page }) => {
+  test('the tool heading is a dots menu like the phone header, and the labels carry the counts the caption lost', async ({ page }) => {
     await page.goto('')
     const heading = page.locator('.tools-panel .panel-heading')
-    for (const name of ['Randomize', 'Clear all', 'Undo', 'Redo']) {
-      const button = heading.getByRole('button', { name })
-      await expect(button.locator('svg')).toHaveCount(1)
-      await expect(button).not.toContainText(/[\u2190\u2192]/)
-    }
+    await expect(heading.getByRole('button')).toHaveCount(1)
+    await heading.getByRole('button', { name: 'Board options' }).click()
+    const menu = page.getByRole('menu', { name: 'Board options' })
+    await expect(menu.getByRole('menuitem')).toHaveText(['Undo', 'Redo', 'Randomize board', 'Clear board'])
+    await expect(menu.getByRole('menuitem', { name: 'Undo' })).toBeDisabled()
     // Clearing the board reads as destructive, as it does in the phone's menu (spec D3).
-    await expect(heading.getByRole('button', { name: 'Clear all' })).toHaveClass(/\bdanger\b/)
+    await expect(menu.getByRole('menuitem', { name: 'Clear board' })).toHaveClass(/\bdanger\b/)
+    // A viewport capture, not a full-page one: the full-page resize closes the menu.
+    await page.screenshot({ path: 'test-results/phone/desktop-tools-menu.png' })
+    await menu.getByRole('menuitem', { name: 'Randomize board' }).click()
+    await expect(menu).toHaveCount(0)
 
-    await heading.getByRole('button', { name: 'Randomize' }).click()
     const labels = page.locator('.tools-panel .tool-label')
     const terrain = labels.filter({ hasText: 'Terrain' }).locator('.tool-count')
     await expect(terrain).toHaveText('19/19')
     await expect(labels.filter({ hasText: 'Structures' }).locator('.tool-count')).toHaveText('0 pieces')
     await snap(page, 'desktop-tools')
 
-    // The chords are gone, so these buttons are the only way back (spec D3).
-    await heading.getByRole('button', { name: 'Undo' }).click()
+    // The chords are gone, so the menu's undo and redo are the only way back (spec D3).
+    await heading.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Undo' }).click()
     await expect(terrain).toHaveText('0/19')
-    await heading.getByRole('button', { name: 'Redo' }).click()
+    await heading.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Redo' }).click()
     await expect(terrain).toHaveText('19/19')
   })
 
@@ -182,14 +193,14 @@ test.describe('desktop', () => {
     await snap(page, 'desktop-menus', false)
   })
 
-  test('an empty board offers the import and keeps the build handoff to the phone', async ({ page }) => {
+  test('an empty board says so and offers nothing: the import and the tools are already in the left rail', async ({ page }) => {
     await page.goto('')
     const panel = page.locator('.analysis-panel')
     await expect(panel.locator('.eyebrow')).toHaveText('Nothing to rank yet')
     await expect(panel.locator('h2')).toHaveText('This board is empty')
-    await expect(panel.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
-    // The tools are already on screen here, so there is nothing to hand off to (spec D4).
-    await expect(panel.getByRole('button', { name: 'Build it by hand' })).toHaveCount(0)
+    await expect(panel.locator('.hint')).toBeVisible()
+    // Both ways in are on screen already, so the phone's two buttons stay on the phone (spec D4).
+    await expect(panel.getByRole('button')).toHaveCount(0)
     await snap(page, 'desktop-empty-picks')
   })
 
@@ -198,7 +209,7 @@ test.describe('desktop', () => {
     await seedUnclaimedRoster(page)
     const panel = page.locator('.analysis-panel')
     await expect(panel.locator('h2')).toHaveText('This board is empty')
-    await page.getByRole('button', { name: 'Randomize' }).click()
+    await randomize(page)
     await expect(panel.locator('h2')).toHaveText('Best picks')
 
     // Nobody is claimed, so the panel asks before it ranks (spec D4).
@@ -261,7 +272,7 @@ test.describe('desktop', () => {
   test('the cards are the phone cards: claimed rank circle, plain survival, flat chips', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
-    await page.getByRole('button', { name: 'Randomize' }).click()
+    await randomize(page)
     const panel = page.locator('.analysis-panel')
     const claim = panel.locator('.claim-row button').first()
     const mine = await claim.locator('.swatch').evaluate((el) => getComputedStyle(el).backgroundColor)
@@ -273,7 +284,11 @@ test.describe('desktop', () => {
     await expect(rank).toHaveCSS('background-color', mine)
     await expect(rank).not.toHaveCSS('border-top-width', '0px')
 
-    // The factors are flat tinted chips, not the bordered pills.
+    // The list is collapsed: a row is its pick line until it is selected, and
+    // the factors open with it as flat tinted chips, not the bordered pills.
+    await expect(panel.locator('.analysis-factors')).toHaveCount(0)
+    await panel.locator('.analysis-row-select').first().click()
+    await expect(panel.locator('.analysis-factors')).toHaveCount(1)
     await expect(panel.locator('.analysis-factors span').first()).toHaveCSS('border-top-width', '0px')
 
     // Survival only renders on a spot the rollouts expect to be contested, and a
@@ -307,7 +322,7 @@ test.describe('desktop', () => {
     await expect(panel.locator('.roster-row.me')).toHaveCount(0)
     // The heading's + moved to the dashed row under the roster (spec D5).
     await expect(panel.locator('.panel-heading button')).toHaveCount(0)
-    await page.getByRole('button', { name: 'Randomize' }).click()
+    await randomize(page)
 
     await rows.nth(1).click()
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
@@ -396,26 +411,26 @@ test.describe('desktop', () => {
     }
   })
 
-  test('the snake draft is the phone grid, and a grip drag reseats it', async ({ page }) => {
+  test('the snake draft ribbon sits under the roster, and a grip drag reseats it', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
     const panel = page.locator('.player-panel')
-    const grid = panel.locator('.draft-grid')
-    const cells = grid.locator('.draft-grid-slot')
+    const ribbon = panel.locator('.draft-section .draft-ribbon')
+    const slots = ribbon.locator('.draft-ribbon-slot')
 
-    // The grid is the phone's, two picks per player (spec D5).
-    await expect(cells).toHaveCount(UNCLAIMED_ROSTER.length * 2)
-    await expect(grid.locator('.draft-grid-slot.now')).toHaveCount(1)
-    await expect(panel.locator('.group-label')).toContainText('pick 1 of 8')
-    await snap(page, 'desktop-draft-grid')
+    // The ribbon is the phone's, two picks per player, in the Players panel and nowhere else.
+    await expect(slots).toHaveCount(UNCLAIMED_ROSTER.length * 2)
+    await expect(ribbon.locator('.draft-ribbon-slot.now')).toHaveCount(1)
+    await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
+    await expect(panel.locator('.draft-section .group-label')).toContainText('pick 1 of 8')
+    await snap(page, 'desktop-draft-ribbon')
 
-    // Seat order is draft order, so a reorder repaints the grid and the ribbon.
+    // Seat order is draft order, so a reorder repaints the ribbon.
     const rows = panel.locator('.roster-row')
     await rows.first().locator('.roster-grip').dragTo(rows.nth(2))
     await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
-    await expect(grid.locator('.draft-grid-name').first()).toHaveText('Blue')
-    await expect(page.locator('.draft-ribbon-slot').first())
-      .toHaveCSS('background-color', 'rgb(48, 99, 186)')
+    await expect(slots.first()).toHaveAttribute('title', /Blue/)
+    await expect(slots.first()).toHaveCSS('background-color', 'rgb(48, 99, 186)')
 
     // The trash row only exists mid-drag, so the drag has to be driven by hand:
     // dragTo resolves its target before the drop zone the drag creates exists.
@@ -429,7 +444,7 @@ test.describe('desktop', () => {
     await trash.hover()
     await page.mouse.up()
     await expect(rows.locator('.list-row-name')).toHaveText(['Orange', 'Red', 'White'])
-    await expect(cells).toHaveCount(6)
+    await expect(slots).toHaveCount(6)
     await expect(panel.locator('.roster-trash')).toHaveCount(0)
   })
 
@@ -526,8 +541,9 @@ test.describe('landscape phone', () => {
     await expect(nav.getByRole('tab')).toHaveText(['Board', 'Players', 'Picks', 'Library'])
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.board-tabs')).toHaveCount(0)
-    // The ribbon needs a row this arm has no height for (spec D4).
-    await expect(page.locator('.draft-ribbon')).toBeHidden()
+    // The ribbon lives in the Players pane here too, never over the height-capped board.
+    await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
+    await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(1)
     await expect(page.locator('footer')).toHaveCount(0)
     await snap(page, 'landscape')
   })

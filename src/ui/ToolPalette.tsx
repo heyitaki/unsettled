@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { clearBoard, randomizeBoard } from '../model/board'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import {
   ClearBoardGlyph,
   DiceGlyph,
+  DotsGlyph,
   GLYPH_MUTED,
   RedoGlyph,
   StructureGlyph,
@@ -99,7 +102,7 @@ export function ToolGroups() {
                 className={`${active ? 'selected ' : ''}${item.danger ? 'danger' : ''}`.trim()}
                 onClick={() => selectTool(item.tool)}
               >
-                <StructureGlyph shape={item.key} color={pieceColor} />
+                <StructureGlyph shape={item.key} color={active ? 'currentColor' : pieceColor} size={22} />
                 {item.label}
               </button>
             )
@@ -110,9 +113,28 @@ export function ToolGroups() {
   )
 }
 
+/** The desktop tools panel: the phone header's dots menu over the shared tool rows. */
 export function ToolPalette() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const history: ContextMenuItem[] = [
+    { label: 'Undo', icon: <UndoGlyph />, disabled: tab.past.length === 0, onClick: () => dispatch({ type: 'undo' }) },
+    { label: 'Redo', icon: <RedoGlyph />, disabled: tab.future.length === 0, onClick: () => dispatch({ type: 'redo' }) },
+  ]
+  const items: ContextMenuItem[] = [
+    {
+      label: 'Randomize board',
+      icon: <DiceGlyph />,
+      onClick: () => dispatch({ type: 'commit', board: randomizeBoard(tab.game.board) }),
+    },
+    {
+      label: 'Clear board',
+      icon: <ClearBoardGlyph />,
+      danger: true,
+      onClick: () => dispatch({ type: 'commit', board: clearBoard(tab.game.board) }),
+    },
+  ]
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -120,22 +142,31 @@ export function ToolPalette() {
           <span className="eyebrow">Build mode</span>
           <h2>Board tools</h2>
         </div>
-        <div className="history-buttons">
-          <button type="button" aria-label="Randomize" onClick={() => dispatch({ type: 'commit', board: randomizeBoard(tab.game.board) })}>
-            <DiceGlyph />
-          </button>
-          <button type="button" className="danger" aria-label="Clear all" onClick={() => dispatch({ type: 'commit', board: clearBoard(tab.game.board) })}>
-            <ClearBoardGlyph />
-          </button>
-          <button type="button" aria-label="Undo" onClick={() => dispatch({ type: 'undo' })} disabled={!tab.past.length}>
-            <UndoGlyph />
-          </button>
-          <button type="button" aria-label="Redo" onClick={() => dispatch({ type: 'redo' })} disabled={!tab.future.length}>
-            <RedoGlyph />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="panel-dots"
+          aria-label="Board options"
+          aria-haspopup="menu"
+          aria-expanded={menuAt !== null}
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            setMenuAt({ x: rect.right, y: rect.bottom + 4 })
+          }}
+        >
+          <DotsGlyph />
+        </button>
       </div>
       <ToolGroups />
+      {menuAt && (
+        <ContextMenu
+          ariaLabel="Board options"
+          x={menuAt.x}
+          y={menuAt.y}
+          history={history}
+          items={items}
+          onClose={() => setMenuAt(null)}
+        />
+      )}
     </section>
   )
 }

@@ -762,23 +762,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     // The fitted box's proportions, for the portrait arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.
     <section className="board-stage" style={{ '--board-aspect': String(viewBox.width / viewBox.height) } as CSSProperties}>
-      <div className="board-status">
-        <MenuSelect
-          ariaLabel="Board layout"
-          value={board.layout}
-          options={LAYOUT_OPTIONS}
-          onSelect={choose}
-          align="center"
-        >
-          <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
-        </MenuSelect>
-        {transform.scale > 1 && (
-          <span className="board-zoom">
-            {transform.scale.toFixed(1)}×
-            <button type="button" onClick={() => setTransform(IDENTITY)}>Reset</button>
-          </span>
-        )}
-      </div>
       {/* The board covers most of the phone viewport, so it must never be the
           reason a vertical swipe does nothing: the browser keeps that axis at
           every zoom level. Panning a zoomed board is the two-finger gesture,
@@ -923,6 +906,23 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           onCancel={() => setPendingLayout(null)}
         />
       )}
+      <div className="board-status">
+        <MenuSelect
+          ariaLabel="Board layout"
+          value={board.layout}
+          options={LAYOUT_OPTIONS}
+          onSelect={choose}
+          align="center"
+        >
+          <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
+        </MenuSelect>
+        {transform.scale > 1 && (
+          <span className="board-zoom">
+            {transform.scale.toFixed(1)}×
+            <button type="button" onClick={() => setTransform(IDENTITY)}>Reset</button>
+          </span>
+        )}
+      </div>
     </section>
   )
 }
