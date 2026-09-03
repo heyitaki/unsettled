@@ -26,7 +26,7 @@ import {
   vertexProduction,
 } from '../board'
 import { axialKey, neighbor } from '../coords'
-import { boardGrid, NUMBER_TOKEN_COUNTS } from '../layouts'
+import { boardGrid, defaultPortEdges, NUMBER_TOKEN_COUNTS } from '../layouts'
 import type { LayoutId, TileKind } from '../types'
 
 describe('board operations', () => {
@@ -214,6 +214,12 @@ describe('randomizeBoard', () => {
     standard4: { wood: 4, sheep: 4, wheat: 4, brick: 3, ore: 3, desert: 1 },
     extension6: { wood: 6, sheep: 6, wheat: 6, brick: 5, ore: 5, desert: 2 },
   }
+  // The harbours a physical frame carries: one 2:1 per resource (the six-player
+  // frame adds a second sheep) and 3:1 for the rest.
+  const PORT_TOTALS: Record<LayoutId, Record<string, number>> = {
+    standard4: { wood: 1, sheep: 1, wheat: 1, brick: 1, ore: 1, generic: 4 },
+    extension6: { wood: 1, sheep: 2, wheat: 1, brick: 1, ore: 1, generic: 5 },
+  }
 
   for (const layout of layouts) {
     // Run many times: placement is random, so invariants must hold every draw.
@@ -247,6 +253,17 @@ describe('randomizeBoard', () => {
           }
         }
 
+        // Every port edge of the frame carries one harbour from the box's set,
+        // 2:1 when it names a resource and 3:1 otherwise.
+        expect(board.ports.map((port) => port.edgeId).sort()).toEqual([...defaultPortEdges(layout)].sort())
+        const portCounts: Record<string, number> = {}
+        for (const port of board.ports) {
+          expect(port.rate).toBe(port.resource ? 2 : 3)
+          const kind = port.resource ?? 'generic'
+          portCounts[kind] = (portCounts[kind] ?? 0) + 1
+        }
+        expect(portCounts).toEqual(PORT_TOTALS[layout])
+
         // The robber sits on a desert; pieces are cleared.
         expect(board.roads).toHaveLength(0)
         expect(board.buildings).toHaveLength(0)
@@ -256,11 +273,19 @@ describe('randomizeBoard', () => {
     })
   }
 
-  it('keeps players and ports', () => {
+  it('keeps players and redeals the ports', () => {
     const base = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })
     const board = randomizeBoard(base)
     expect(board.players).toEqual(base.players)
-    expect(board.ports).toEqual(base.ports)
     expect(board.mePlayerId).toBe(base.mePlayerId)
+    expect(board.ports.filter((port) => port.rate === 2)).toHaveLength(5)
+  })
+
+  it('shuffles the harbours across draws', () => {
+    const draws = new Set<string>()
+    for (let trial = 0; trial < 40; trial += 1) {
+      draws.add(randomizeBoard(createBoard('standard4')).ports.map((port) => port.resource ?? '-').join(','))
+    }
+    expect(draws.size).toBeGreaterThan(1)
   })
 })

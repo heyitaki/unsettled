@@ -201,12 +201,12 @@ test.describe('reveal on select', () => {
     await expect(page.locator('.vertex-highlight.faded')).toHaveCount(1)
     await snap(page, 'selected-card')
 
-    await page.evaluate(() => window.scrollTo(0, 60))
+    await page.evaluate(() => window.scrollTo(0, 100))
     const first = (await cards.first().boundingBox())!
-    expect(first.y + first.height).toBeLessThan(700)
+    expect(first.y + first.height).toBeLessThan(page.viewportSize()!.height)
     await cards.first().click()
     await expect(block.locator('.analysis-row.current .analysis-rank')).toHaveText('1')
-    expect(await page.evaluate(() => window.scrollY)).toBe(60)
+    expect(await page.evaluate(() => window.scrollY)).toBe(100)
   })
 })
 

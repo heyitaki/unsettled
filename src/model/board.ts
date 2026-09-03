@@ -73,6 +73,13 @@ const RESOURCE_COUNTS: Record<LayoutId, Record<TileKind, number>> = {
   extension6: { wood: 6, sheep: 6, wheat: 6, brick: 5, ore: 5, desert: 2 },
 }
 
+// The harbours on each frame: one 2:1 per resource (the six-player frame adds a
+// second sheep), the rest 3:1. Dealt across the layout's port edges.
+const PORT_POOLS: Record<LayoutId, readonly (Resource | null)[]> = {
+  standard4: ['wood', 'sheep', 'wheat', 'brick', 'ore', null, null, null, null],
+  extension6: ['wood', 'sheep', 'sheep', 'wheat', 'brick', 'ore', null, null, null, null, null],
+}
+
 const isRedToken = (token: number): boolean => token === 6 || token === 8
 
 function shuffle<T>(items: readonly T[]): T[] {
@@ -94,8 +101,9 @@ const hexesAdjacent = (a: string, b: string): boolean => {
  * Generate a legal Catan starting map for the board's layout: the correct
  * multiset of resource tiles and number tokens, with the red (6/8) high-odds
  * tokens placed as an independent set so no two ever touch — the one arrangement
- * rule a hand-dealt board always follows. Players, ports, and mePlayerId are
- * kept; roads and buildings are cleared and the robber moves onto a desert.
+ * rule a hand-dealt board always follows. The harbours are dealt across the
+ * layout's port edges the same way. Players and mePlayerId are kept; roads and
+ * buildings are cleared and the robber moves onto a desert.
  */
 export function randomizeBoard(board: Board): Board {
   const layout = board.layout
@@ -137,8 +145,15 @@ export function randomizeBoard(board: Board): Board {
 
   const desert = coords.find((coord) => tiles.get(axialKey(coord)) === 'desert')
 
+  const portPool = shuffle(PORT_POOLS[layout])
+  const ports = defaultPortEdges(layout).map((edgeId, index) => {
+    const resource = portPool[index]
+    return { edgeId, resource, rate: resource ? 2 : 3 }
+  })
+
   return {
     ...board,
+    ports,
     hexes: coords.map((coord) => {
       const tile = tiles.get(axialKey(coord)) as TileKind
       return {
