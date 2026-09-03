@@ -135,10 +135,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 3: Fix the rollout occupancy in the app
 
-- [ ] Rewrite `src/engine/analyze.ts::rolloutOccupancy` per the occupancy default in Context: blocked set built from the board's buildings plus the window's raw `taken` vertices, the `blocked` set retained for legality only; update its doc comment and remove the "something to settle" sentence
-- [ ] Vitest: the two cases named in Context, with expected values hand-derived at an explicit nonzero `expansionWeight` passed through `AnalysisOptions.weights`
-- [ ] Confirm the parity generator's `occupancyFromBoard` path is untouched and the fixture does not need regenerating
-- [ ] `npm run typecheck`, `npm run lint`, `npm test` green
+- [x] Rewrite `src/engine/analyze.ts::rolloutOccupancy` per the occupancy default in Context: blocked set built from the board's buildings plus the window's raw `taken` vertices, the `blocked` set retained for legality only; update its doc comment and remove the "something to settle" sentence
+- [x] Vitest: the two cases named in Context, with expected values hand-derived at an explicit nonzero `expansionWeight` passed through `AnalysisOptions.weights`
+- [x] Confirm the parity generator's `occupancyFromBoard` path is untouched and the fixture does not need regenerating
+- [x] `npm run typecheck`, `npm run lint`, `npm test` green
 
 ### Task 4: The lookahead accuracy statistic in `diagnose`
 
