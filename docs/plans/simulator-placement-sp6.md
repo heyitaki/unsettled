@@ -204,10 +204,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 12: Run M-64 and record it, conditional on M-63
 
-- [ ] Record `uptime`, run, record `uptime` again
-- [ ] Append `## M-64: SP6 confirmation on eval2` with full provenance, both tables, the verdict, and whether the gate runs
-- [ ] Update the spend ledger in `programme.md` "Seed-domain discipline" to say `eval2` is spent, on what
-- [ ] Link check passes
+- [x] Record `uptime`, run, record `uptime` again (load before `2.43 3.80 5.01`, after `14.63 6.98 6.11`; the single preregistered invocation ran in the foreground in 59.525s, 128,000 games, zero illegal actions, domain `eval2` at seed `16691007541528103170`)
+- [x] Append `## M-64: SP6 confirmation on eval2` with full provenance, both tables, the verdict, and whether the gate runs (verdict **`better`**, `+0.934pp` on clustered `[+0.579pp, +1.290pp]`, so the gate runs and Tasks 13 through 17 stand on their non-skip branches)
+- [x] Update the spend ledger in `programme.md` "Seed-domain discipline" to say `eval2` is spent, on what (spent 2026-09-03 by M-64 on the SP6 candidate vector; the repo `CLAUDE.md` spend-once bullet was updated in the same edit, because it still listed `eval2` as available and would otherwise have permitted a forbidden run)
+- [x] Link check passes (0 bad references in 48 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 13: Preregister M-65, the extension-board reading, conditional on M-63
 
