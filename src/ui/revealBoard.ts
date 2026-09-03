@@ -13,7 +13,6 @@ const VISIBLE_SLACK = 120
 export const shouldRevealBoard = (boardBottom: number, headerBottom: number): boolean =>
   boardBottom < headerBottom + VISIBLE_SLACK
 
-/** Measures the phone shell's header and board, and reveals the board if it has scrolled past. */
 export function revealBoardIfScrolledPast(): void {
   const board = document.querySelector('.phone-shell .board-canvas')?.getBoundingClientRect()
   const header = document.querySelector('.phone-head')?.getBoundingClientRect()

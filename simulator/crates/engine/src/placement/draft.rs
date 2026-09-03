@@ -679,8 +679,8 @@ mod tests {
     /// a full legality scan per rival per position, once with the candidate taken and once with
     /// the vertex genuinely empty rather than merely vacated for legality.
     ///
-    /// Roads are left off the replayed board. Only the `expansion` component reads edges and the
-    /// committed weights ship it at 0, which is the same condition `ScoreRows` reuses rows under.
+    /// Roads are left off the replayed board. Only the `expansion` component reads edges and these
+    /// scorers hold it at 0, which is the same condition `ScoreRows` reuses rows under.
     fn rival_losses(
         scorers: &DraftScorers,
         topology: &Topology,

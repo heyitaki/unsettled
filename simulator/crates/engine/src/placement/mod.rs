@@ -308,8 +308,8 @@ fn choose_app_formula(
     // cheapest path to the best site the settlement opens, which is the direction the score just
     // paid for. A boxed settlement opens nothing and has no such direction, so it falls through to
     // the far-endpoint scoring below. At weight 0 the walk is skipped outright and that scoring is
-    // all there is, so the shipped formula's picks, and its whole draw on the RNG stream, are what
-    // they always were.
+    // all there is, so a formula with the term off keeps the picks, and the whole draw on the RNG
+    // stream, it always had.
     if let Some(edge) = scorer.expansion_road(vertex_owner, edge_owner, seat, vertex) {
         return Some((vertex, edge));
     }

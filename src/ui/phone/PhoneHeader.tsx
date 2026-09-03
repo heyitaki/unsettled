@@ -22,7 +22,7 @@ import type { PhoneOverlay } from './PhoneShell'
  * The phone's header (spec S1): the brand row, which scrolls away with the
  * page, over the sticky controls row that holds the board's identity, the
  * roster, the pencil that toggles build mode, and the dots menu with what the
- * desktop tool palette's heading holds.
+ * desktop tool palette's heading holds plus Export JSON.
  */
 export function PhoneHeader({ building, onToggleMode, onOpen }: {
   building: boolean

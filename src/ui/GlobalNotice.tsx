@@ -11,8 +11,7 @@ export function GlobalNotice() {
   // Pause auto-dismiss while the pointer is over the toast, so it can be read,
   // clicked, and text-selected; the timer restarts fresh once the pointer leaves.
   const [hover, setHover] = useState(false)
-  // Notices are transient toasts, so they auto-dismiss rather than linger. Keyed
-  // on noticeSeq so an identical repeat message still restarts the timer.
+  // Keyed on noticeSeq so an identical repeat message still restarts the timer.
   useEffect(() => {
     if (!state.notice || hover) return
     const timeout = window.setTimeout(() => dispatch({ type: 'notice', message: null }), 3500)

@@ -15,8 +15,8 @@ import { useStore } from './store'
 /**
  * The saved-map library as both trees see it: the listing, cached on the
  * store's revision counter, and the open, delete and rename paths that address
- * an entry by id. Shared by MapsPanel and the phone's Maps screen so there is
- * one open path and one delete path. Sorting is the caller's: `sortMaps` in
+ * an entry by id. Read by LibraryLists, which MapsPanel and the phone's Maps
+ * screen both render, so there is one open path and one delete path. Sorting is the caller's: `sortMaps` in
  * library.ts over `listed.maps`.
  *
  * The one list in the Library shows every map beside the boards not yet saved,

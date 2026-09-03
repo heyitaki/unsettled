@@ -531,7 +531,6 @@ impl AppFormulaScorer {
             .map(move |(slot, neighbor)| (links.edge_to[slot], *neighbor))
     }
 
-    /// The weights this scorer was built with.
     pub(super) fn weights(&self) -> &EngineWeights {
         &self.weights
     }

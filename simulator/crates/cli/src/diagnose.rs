@@ -45,7 +45,7 @@ pub struct DiagnoseRequest<'a> {
 
 /// One game's observation: where in the schedule it was played, the setup picks every seat made,
 /// how each pick compared with its pip-matched runner-up, what each completed pair looked like,
-/// and how the game ended. The SP0 statistics are read off these records.
+/// how the lookahead read each first settlement, and how the game ended. The SP0 statistics are read off these records.
 #[derive(Clone, Debug)]
 pub struct GameObservation {
     pub unit: EvaluationUnit,

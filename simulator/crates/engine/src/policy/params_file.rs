@@ -1226,8 +1226,8 @@ mod tests {
         ("portCoverageDeficitWeight", "sp2b_portdeficit", 1.0),
     ];
 
-    /// Walks the committed SP2 term arms (`placement/arms/sp2*.json`): each is the live
-    /// `default-weights.json` with exactly one new weight raised, and that value sits inside
+    /// Walks the committed SP2 term arms (`placement/arms/sp2*.json`): each is
+    /// `sp6-pre-adoption-weights.json` with exactly one new weight raised, and that value sits inside
     /// the axis's committed sweep-bounds range. The weights-file walk below only proves these
     /// load; without this an edit that also moved `portWeight` would run and be recorded as an
     /// isolated port-deficit A/B. The stray-file check is the same one the SP1e walk carries:
@@ -1309,7 +1309,7 @@ mod tests {
 
     /// Walks the committed SP3 arms (`placement/arms/sp3*.json`) as the SP2 walk above walks its
     /// own: each is `sp6-pre-adoption-weights.json` with only its declared keys moved, each moved
-    /// value differs from the shipped one and sits inside that axis's committed sweep-bounds
+    /// value differs from that base and sits inside that axis's committed sweep-bounds
     /// range, and no `sp3*` file nobody preregistered is sitting in the directory waiting to join
     /// a run. Without this an edit that also moved `diversityWeight` would run and be recorded as
     /// an isolated expansion A/B.
@@ -1350,7 +1350,7 @@ mod tests {
                 assert_ne!(
                     base[key].as_f64(),
                     Some(*value),
-                    "{name}: {key} at {value} is the shipped value, so the arm perturbs nothing"
+                    "{name}: {key} at {value} is the pre-adoption value, so the arm perturbs nothing"
                 );
                 perturbed[key] = Value::from(*value);
             }
@@ -1603,7 +1603,7 @@ mod tests {
 
     /// Walks the committed SP6 arms (`placement/arms/sp6*.json`) as the SP2 through SP5 walks
     /// walk theirs: each is `sp6-pre-adoption-weights.json` with only its declared keys moved,
-    /// each moved value differs from the shipped one and sits inside that axis's committed
+    /// each moved value differs from that base and sits inside that axis's committed
     /// sweep-bounds range, and no `sp6*` file nobody preregistered is sitting in the directory
     /// waiting to join a run.
     ///
@@ -1649,7 +1649,7 @@ mod tests {
                 assert_ne!(
                     base[key].as_f64(),
                     Some(*value),
-                    "{name}: {key} at {value} is the shipped value, so the arm perturbs nothing"
+                    "{name}: {key} at {value} is the pre-adoption value, so the arm perturbs nothing"
                 );
                 perturbed[key] = Value::from(*value);
             }

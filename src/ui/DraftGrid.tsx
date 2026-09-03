@@ -4,12 +4,6 @@ import type { Board } from '../model/types'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
 
-/**
- * The snake draft under the roster (spec S8, D5): one column per player, so the
- * two rounds read as two rows, with the taken picks solid, the current one
- * outlined and the rest dashed. Static on purpose: marking a pick on the board
- * is the ribbon's job.
- */
 export function DraftLabel({ analysis }: { analysis: DraftAnalysis }) {
   const { turnIndex, sequence } = analysis.draft
   return (
@@ -20,6 +14,12 @@ export function DraftLabel({ analysis }: { analysis: DraftAnalysis }) {
   )
 }
 
+/**
+ * The snake draft on the phone's Players screen (spec S8): one column per
+ * player, so the two rounds read as two rows, with the taken picks solid, the
+ * current one outlined and the rest dashed. Static on purpose: marking a pick
+ * on the board is the ribbon's job.
+ */
 export function DraftGrid({ board }: { board: Board }) {
   const analysis = analyzeBoardCached(board)
   const slots = draftSlots(board, analysis)

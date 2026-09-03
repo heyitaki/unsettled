@@ -31,8 +31,8 @@ const NO_EXPANSION: ExpansionValue = ExpansionValue {
     road: None,
 };
 
-// Times this thread entered the walk, so a test can pin that the shipped weight of 0 never
-// reaches it. Thread-local rather than global: tests run in parallel and would otherwise move
+// Times this thread entered the walk, so a test can pin that weight 0 never reaches it and the
+// shipped weight does. Thread-local rather than global: tests run in parallel and would otherwise move
 // each other's count.
 #[cfg(test)]
 thread_local! {

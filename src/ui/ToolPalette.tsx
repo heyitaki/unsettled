@@ -40,8 +40,6 @@ export function ToolGroups() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const selected = keyOf(state.tool)
-  // Clicking the already-selected tool clears the selection (kind 'none'), so a
-  // second click on a highlighted button deselects it.
   const selectTool = (tool: Tool) =>
     dispatch({ type: 'tool', tool: selected === keyOf(tool) ? { kind: 'none' } : tool })
   // Preview the colour the active player will place with; with nobody selected

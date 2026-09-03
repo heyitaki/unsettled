@@ -315,9 +315,9 @@ export function setLayout(board: Board, layout: LayoutId): Board {
   return { ...fresh, players: board.players.map((player) => ({ ...player })), mePlayerId: board.mePlayerId }
 }
 
-// Nothing on the board but its layout and roster. Ports outlive a clear, so
-// blank means the ports are still the layout's defaults — in any order, since
-// deleting one and drawing it back leaves the same set rearranged.
+// Nothing on the board but its layout and roster. The ports count as blank
+// while they are still the layout's defaults in any order, since deleting one
+// and drawing it back leaves the same set rearranged.
 export const isBlank = (board: Board): boolean => {
   if (board.robber !== null || board.roads.length > 0 || board.buildings.length > 0) return false
   if (board.hexes.some((hex) => hex.tile !== null || hex.numberToken !== null)) return false

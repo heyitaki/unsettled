@@ -5,10 +5,9 @@ import { useJsonFiles } from '../useJsonFiles'
 import { PhoneOverlay } from './PhoneOverlay'
 
 /**
- * The desktop Library panel's body in a full-screen overlay (spec S7):
- * the shared library body in a full-screen overlay. Selecting, opening,
- * importing and New board act and close the screen; rename, close, delete and
- * sort keep it open.
+ * The desktop Library panel's body in a full-screen overlay (spec S7).
+ * Selecting, opening, importing and New board act and close the screen.
+ * Rename, delete and sort keep it open.
  */
 export function MapsScreen({ onClose }: { onClose: () => void }) {
   const { importJson, exportJson, fileInput } = useJsonFiles({ onImported: onClose })
