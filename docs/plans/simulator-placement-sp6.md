@@ -119,9 +119,9 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 1: Record the SP6 decisions
 
-- [ ] Append `## SP6 decisions, 2026-09-02` to `.claude/specs/simulator/placement-programme.md` carrying the eight decisions in Context, in that wording, each as its own paragraph, with the delegation sentence for `eval2` and `gate2` stated plainly, and a closing paragraph saying which earlier sentences each decision supersedes (the survivor rule in the Phases preamble, the "open decision" seed-domain section, and the SP5 bullet's field statement)
-- [ ] In `.claude/specs/simulator/contracts.md` "Paired statistics", add one sentence recording that SP6 runs at a 0.5pp practical threshold (`--threshold 0.005`) and that the threshold is a per-run declaration the prereg fixes
-- [ ] Link check passes
+- [x] Append `## SP6 decisions, 2026-09-02` to `.claude/specs/simulator/placement-programme.md` carrying the eight decisions in Context, in that wording, each as its own paragraph, with the delegation sentence for `eval2` and `gate2` stated plainly, and a closing paragraph saying which earlier sentences each decision supersedes (the survivor rule in the Phases preamble, the "open decision" seed-domain section, and the SP5 bullet's field statement)
+- [x] In `.claude/specs/simulator/contracts.md` "Paired statistics", add one sentence recording that SP6 runs at a 0.5pp practical threshold (`--threshold 0.005`) and that the threshold is a per-run declaration the prereg fixes
+- [x] Link check passes
 
 ### Task 2: Mint `tuning2`, `eval2` and `gate2`
 
