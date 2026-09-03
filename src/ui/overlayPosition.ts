@@ -46,7 +46,8 @@ export const overlayOpen = (): boolean =>
 
 /**
  * Is the keystroke going into a field? Global key handling stays out of the
- * way of one: F2 and Escape would otherwise fire while a title is being typed.
+ * way of one: the overlay's Escape would otherwise close it while a title is
+ * being typed.
  */
 export const isTextEntry = (element: Element | null): boolean =>
   element instanceof HTMLInputElement ||
