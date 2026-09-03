@@ -129,8 +129,10 @@ describe('second settlement resource grant (SU-7)', () => {
       expect(recommendation.breakdown.handValue).toBe(0)
     }
     // Pinned at 23d1987, before the grant existed: the first pick is the
-    // mirror-image guard against applying the grant unconditionally.
-    expect(firstPick.recommendations[0].score).toBe(17.502774503013576)
+    // mirror-image guard against applying the grant unconditionally. Re-pinned on the SP6
+    // adoption, which put `expansionWeight` on 0.1 and so moved every score on this board; it
+    // read 17.502774503013576 while the walk was off.
+    expect(firstPick.recommendations[0].score).toBe(18.531650153123863)
   })
 
   it('prices the second pick as one card per adjacent producing hex', () => {

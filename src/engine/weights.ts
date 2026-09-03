@@ -73,8 +73,8 @@ export interface EngineWeights {
   nearPortDecay: number
   // What the best sites a candidate *opens* are worth to it. A pair that is
   // boxed in by rivals converts its pips into nothing, and every other
-  // component prices only the two vertices themselves. Ships at 0 until an A/B
-  // prices it, where the walk is skipped and the term is exactly 0.
+  // component prices only the two vertices themselves. Adopted at 0.1 by M-66,
+  // the SP6 gate; at 0 the walk is skipped and the term is exactly 0.
   expansionWeight: number
   // Per paid road-build discount on a site's value. The first road is the free
   // setup one, so a site two builds out is worth `decay ** 2` of its score. At
@@ -134,7 +134,7 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   portCoverageDeficitWeight: 0,
   nearPortRadius: 2,
   nearPortDecay: 0.5,
-  expansionWeight: 0,
+  expansionWeight: 0.1,
   expansionDecay: 0.5,
   robberDiscount: 0.35,
   robberConcentrationWeight: 0,

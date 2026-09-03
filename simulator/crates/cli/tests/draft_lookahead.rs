@@ -45,6 +45,25 @@ fn kinds(label: &str) -> (PlacementKind, PlacementKind) {
     (field, draft)
 }
 
+/// `kinds` with the expansion walk off on both sides, for the one test below that rebuilds the
+/// replay by hand. The walk is the only component that reads the board past the scoring seat's
+/// own holdings, and a rebuild cannot see the setup roads `Lookahead::replay` lays for the hero
+/// and for each intervening rival. Zeroed, the rebuild is exact. The shipped weight is 0.1 since
+/// M-66 adopted it, so this is a deliberately zeroed vector rather than the field.
+fn kinds_without_expansion(label: &str) -> (PlacementKind, PlacementKind, EngineWeights) {
+    let mut weights = default_weights();
+    weights.expansion_weight = 0.0;
+    let field = register_app_formula(format!("app_formula:{label}-field"), weights.clone())
+        .expect("registry has room");
+    let draft = register_app_formula_draft(
+        format!("app_formula_draft:{label}-hero@{label}-opponent"),
+        weights.clone(),
+        weights.clone(),
+    )
+    .expect("registry has room");
+    (field, draft, weights)
+}
+
 fn prepared_board(board_index: u64, kinds: &[PlacementKind]) -> (Topology, SimBoard) {
     let topology = Topology::load(Layout::Standard4).expect("committed topology");
     let mut board = generate_board(Layout::Standard4, SEATS, mix64(TUNING_SEED ^ board_index))
@@ -280,13 +299,13 @@ fn a_standard4_first_pick_stays_within_its_budget() {
 /// value the pin says is untouched at 0.
 #[test]
 fn the_shipped_weight_adds_no_denial_credit() {
-    let (field, draft) = kinds("denial");
-    let mut hero = default_weights();
+    let (field, draft, weights) = kinds_without_expansion("denial");
+    let mut hero = weights.clone();
     hero.setup_denial_weight = 1.0;
     let credited = register_app_formula_draft(
         "app_formula_draft:denial-credited@denial-opponent".to_string(),
         hero,
-        default_weights(),
+        weights,
     )
     .expect("registry has room");
     let order = setup_order(SEATS);
@@ -302,8 +321,8 @@ fn the_shipped_weight_adds_no_denial_credit() {
             let candidate = trace[first].vertex;
 
             // The replayed board carries no roads, which the second settlement's score cannot
-            // tell: only the `expansion` component reads edges and the committed weights ship it
-            // at 0.
+            // tell: only the `expansion` component reads edges, and these kinds run with it
+            // zeroed for exactly that reason. See `kinds_without_expansion`.
             let mut replayed = vertex_owner.clone();
             replayed[usize::from(candidate)] = hero;
             for (seat, vertex) in setup_lookahead_plan(

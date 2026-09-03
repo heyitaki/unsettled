@@ -271,7 +271,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -376,10 +376,10 @@
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.4036890151515153
       },
-      "marginalTotal": 15.25963787878788,
-      "breakdownTotal": 15.25963787878788,
+      "marginalTotal": 16.663326893939395,
+      "breakdownTotal": 16.663326893939395,
       "ingestion": {
         "outcome": "score"
       },
@@ -652,7 +652,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -757,10 +757,10 @@
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.4036890151515153
       },
-      "marginalTotal": 15.25963787878788,
-      "breakdownTotal": 15.25963787878788,
+      "marginalTotal": 16.663326893939395,
+      "breakdownTotal": 16.663326893939395,
       "ingestion": {
         "outcome": "score"
       },
@@ -998,7 +998,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -1105,10 +1105,10 @@
         "diversity": -0.08,
         "port": 1.375,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.5481250000000001
       },
-      "marginalTotal": 1.92,
-      "breakdownTotal": 1.92,
+      "marginalTotal": 2.468125,
+      "breakdownTotal": 2.468125,
       "ingestion": {
         "outcome": "score"
       },
@@ -1344,7 +1344,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -1451,10 +1451,10 @@
         "diversity": -0.08,
         "port": 1.375,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.524375
       },
-      "marginalTotal": 1.8699999999999999,
-      "breakdownTotal": 1.8699999999999999,
+      "marginalTotal": 2.394375,
+      "breakdownTotal": 2.394375,
       "ingestion": {
         "outcome": "score"
       },
@@ -1690,7 +1690,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -1797,10 +1797,10 @@
         "diversity": -0.08,
         "port": 1.375,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.8093750000000001
       },
-      "marginalTotal": 2.4699999999999998,
-      "breakdownTotal": 2.4699999999999998,
+      "marginalTotal": 3.279375,
+      "breakdownTotal": 3.279375,
       "ingestion": {
         "outcome": "score"
       },
@@ -2036,7 +2036,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -2143,10 +2143,10 @@
         "diversity": -0.08,
         "port": 1.375,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.5481250000000001
       },
-      "marginalTotal": 1.92,
-      "breakdownTotal": 1.92,
+      "marginalTotal": 2.468125,
+      "breakdownTotal": 2.468125,
       "ingestion": {
         "outcome": "score"
       },
@@ -2382,7 +2382,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -2489,10 +2489,10 @@
         "diversity": -0.08,
         "port": 1.375,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.785625
       },
-      "marginalTotal": 2.42,
-      "breakdownTotal": 2.42,
+      "marginalTotal": 3.205625,
+      "breakdownTotal": 3.205625,
       "ingestion": {
         "outcome": "score"
       },
@@ -2763,7 +2763,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -2868,10 +2868,10 @@
         "diversity": 0.15600000000000003,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.1567781601099403
       },
-      "marginalTotal": 0.9385000000000001,
-      "breakdownTotal": 0.9385000000000001,
+      "marginalTotal": 2.0952781601099404,
+      "breakdownTotal": 2.0952781601099404,
       "ingestion": {
         "outcome": "score"
       },
@@ -3141,7 +3141,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -3246,10 +3246,10 @@
         "diversity": 2.5331673694447354,
         "port": 0.18333333333333332,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 2.0078208630148047
       },
-      "marginalTotal": 10.327971291013364,
-      "breakdownTotal": 10.327971291013364,
+      "marginalTotal": 12.33579215402817,
+      "breakdownTotal": 12.33579215402817,
       "ingestion": {
         "outcome": "reject",
         "error": "NoRobberPlacement"
@@ -3523,7 +3523,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -3628,10 +3628,10 @@
         "diversity": 1.7131000000000003,
         "port": 0.09166666666666666,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.3131398970960104
       },
-      "marginalTotal": 5.983266666666667,
-      "breakdownTotal": 5.983266666666667,
+      "marginalTotal": 7.296406563762678,
+      "breakdownTotal": 7.296406563762678,
       "ingestion": {
         "outcome": "score"
       },
@@ -3905,7 +3905,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -4010,10 +4010,10 @@
         "diversity": 1.367887125277521,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.8000163368987447
       },
-      "marginalTotal": 5.365387125277522,
-      "breakdownTotal": 5.365387125277522,
+      "marginalTotal": 7.165403462176267,
+      "breakdownTotal": 7.165403462176267,
       "ingestion": {
         "outcome": "score"
       },
@@ -4286,7 +4286,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -4391,10 +4391,10 @@
         "diversity": 3.455709090909091,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.4065776515151516
       },
-      "marginalTotal": 15.154110606060607,
-      "breakdownTotal": 15.154110606060607,
+      "marginalTotal": 16.56068825757576,
+      "breakdownTotal": 16.56068825757576,
       "ingestion": {
         "outcome": "reject",
         "error": "NullTile"
@@ -4668,7 +4668,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -4773,10 +4773,10 @@
         "diversity": 3.455709090909091,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.4065776515151516
       },
-      "marginalTotal": 15.154110606060607,
-      "breakdownTotal": 15.154110606060607,
+      "marginalTotal": 16.56068825757576,
+      "breakdownTotal": 16.56068825757576,
       "ingestion": {
         "outcome": "reject",
         "error": "MissingToken"
@@ -5050,7 +5050,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -5155,10 +5155,10 @@
         "diversity": 3.7875428571428573,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.7537506410256412
       },
-      "marginalTotal": 11.854126190476192,
-      "breakdownTotal": 11.854126190476192,
+      "marginalTotal": 12.607876831501834,
+      "breakdownTotal": 12.607876831501834,
       "ingestion": {
         "outcome": "score"
       },
@@ -5534,7 +5534,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -5639,10 +5639,10 @@
         "diversity": 2.57897535898576,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.2982418321184028
       },
-      "marginalTotal": 12.070021110619747,
-      "breakdownTotal": 12.070021110619747,
+      "marginalTotal": 13.36826294273815,
+      "breakdownTotal": 13.36826294273815,
       "ingestion": {
         "outcome": "score"
       },
@@ -6018,7 +6018,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -6123,10 +6123,10 @@
         "diversity": 2.57897535898576,
         "port": 0,
         "handValue": 1.3600000000000003,
-        "expansion": 0
+        "expansion": 1.2982418321184028
       },
-      "marginalTotal": 13.430021110619748,
-      "breakdownTotal": 13.430021110619748,
+      "marginalTotal": 14.728262942738152,
+      "breakdownTotal": 14.728262942738152,
       "ingestion": {
         "outcome": "score"
       },
@@ -6359,7 +6359,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": "Infinity",
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -6464,10 +6464,10 @@
         "diversity": 3.8309181818181823,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.289885953079234
       },
-      "marginalTotal": 14.573054545454546,
-      "breakdownTotal": 14.573054545454546,
+      "marginalTotal": 15.86294049853378,
+      "breakdownTotal": 15.86294049853378,
       "ingestion": {
         "outcome": "score"
       },
@@ -6700,7 +6700,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": "Infinity",
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -6805,10 +6805,10 @@
         "diversity": 3.8309181818181823,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.289885953079234
       },
-      "marginalTotal": 14.573054545454546,
-      "breakdownTotal": 14.573054545454546,
+      "marginalTotal": 15.86294049853378,
+      "breakdownTotal": 15.86294049853378,
       "ingestion": {
         "outcome": "score"
       },
@@ -7081,7 +7081,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 2,
         "robberConcentrationWeight": 0,
@@ -7188,10 +7188,10 @@
         "diversity": -0.88,
         "port": 0.11458333333333333,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.3263973484848486
       },
-      "marginalTotal": 2.500219696969698,
-      "breakdownTotal": 2.500219696969698,
+      "marginalTotal": 3.8266170454545465,
+      "breakdownTotal": 3.8266170454545465,
       "ingestion": {
         "outcome": "score"
       },
@@ -7464,7 +7464,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -7845,7 +7845,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -8186,7 +8186,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -8291,10 +8291,10 @@
         "diversity": 1.7131000000000003,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.267306563762677
       },
-      "marginalTotal": 5.8916,
-      "breakdownTotal": 5.8916,
+      "marginalTotal": 7.158906563762677,
+      "breakdownTotal": 7.158906563762677,
       "ingestion": {
         "outcome": "score"
       },
@@ -8528,7 +8528,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 1,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -8633,10 +8633,10 @@
         "diversity": 1.7131000000000003,
         "port": 0.09166666666666666,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.3131398970960104
       },
-      "marginalTotal": 5.983266666666667,
-      "breakdownTotal": 5.983266666666667,
+      "marginalTotal": 7.296406563762678,
+      "breakdownTotal": 7.296406563762678,
       "ingestion": {
         "outcome": "score"
       },
@@ -8869,7 +8869,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -8974,10 +8974,10 @@
         "diversity": 1.7131000000000003,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.267306563762677
       },
-      "marginalTotal": 5.8916,
-      "breakdownTotal": 5.8916,
+      "marginalTotal": 7.158906563762677,
+      "breakdownTotal": 7.158906563762677,
       "ingestion": {
         "outcome": "score"
       },
@@ -9250,7 +9250,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -9355,10 +9355,10 @@
         "diversity": 0,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.18902690528383292
       },
-      "marginalTotal": 0.4722196969696972,
-      "breakdownTotal": 0.4722196969696972,
+      "marginalTotal": 0.6612466022535302,
+      "breakdownTotal": 0.6612466022535302,
       "ingestion": {
         "outcome": "score"
       },
@@ -9631,7 +9631,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -9736,10 +9736,10 @@
         "diversity": 3.4874181818181818,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.4036890151515153
       },
-      "marginalTotal": 15.25963787878788,
-      "breakdownTotal": 15.25963787878788,
+      "marginalTotal": 16.663326893939395,
+      "breakdownTotal": 16.663326893939395,
       "ingestion": {
         "outcome": "score"
       },
@@ -10012,7 +10012,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -10117,10 +10117,10 @@
         "diversity": 1.3852943577577819,
         "port": 0.11458333333333331,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.3926162547219718
       },
-      "marginalTotal": 13.15751405472748,
-      "breakdownTotal": 13.15751405472748,
+      "marginalTotal": 14.550130309449452,
+      "breakdownTotal": 14.550130309449452,
       "ingestion": {
         "outcome": "score"
       },
@@ -10353,7 +10353,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -10458,10 +10458,10 @@
         "diversity": 1.7131000000000003,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.267306563762677
       },
-      "marginalTotal": 5.8916,
-      "breakdownTotal": 5.8916,
+      "marginalTotal": 7.158906563762677,
+      "breakdownTotal": 7.158906563762677,
       "ingestion": {
         "outcome": "score"
       },
@@ -10695,7 +10695,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -10802,10 +10802,10 @@
         "diversity": -0.32,
         "port": 2.2,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 0.8278749999999999
       },
-      "marginalTotal": 4.380000000000001,
-      "breakdownTotal": 4.380000000000001,
+      "marginalTotal": 5.2078750000000005,
+      "breakdownTotal": 5.2078750000000005,
       "ingestion": {
         "outcome": "score"
       },
@@ -11032,7 +11032,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -11137,10 +11137,10 @@
         "diversity": 3.4874181818181818,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.388793181818182
       },
-      "marginalTotal": 15.145054545454546,
-      "breakdownTotal": 15.145054545454546,
+      "marginalTotal": 16.53384772727273,
+      "breakdownTotal": 16.53384772727273,
       "ingestion": {
         "outcome": "score"
       },
@@ -11413,7 +11413,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -11523,10 +11523,10 @@
         "diversity": -0.88,
         "port": 0.25208333333333327,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.2618640151515153
       },
-      "marginalTotal": 11.029719696969696,
-      "breakdownTotal": 11.029719696969696,
+      "marginalTotal": 12.291583712121211,
+      "breakdownTotal": 12.291583712121211,
       "ingestion": {
         "outcome": "score"
       },
@@ -11799,7 +11799,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -11906,10 +11906,10 @@
         "diversity": 1.7051647173503168,
         "port": 0.13749999999999998,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.0643587795622211
       },
-      "marginalTotal": 12.58480108098668,
-      "breakdownTotal": 12.58480108098668,
+      "marginalTotal": 13.6491598605489,
+      "breakdownTotal": 13.6491598605489,
       "ingestion": {
         "outcome": "score"
       },
@@ -12285,7 +12285,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -12390,10 +12390,10 @@
         "diversity": 2.776035637353016,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.6445654587618794
       },
-      "marginalTotal": 12.055447243290939,
-      "breakdownTotal": 12.055447243290939,
+      "marginalTotal": 13.700012702052819,
+      "breakdownTotal": 13.700012702052819,
       "ingestion": {
         "outcome": "score"
       },
@@ -12769,7 +12769,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -12874,10 +12874,10 @@
         "diversity": 2.776035637353016,
         "port": 0,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.6445654587618794
       },
-      "marginalTotal": 12.055447243290939,
-      "breakdownTotal": 12.055447243290939,
+      "marginalTotal": 13.700012702052819,
+      "breakdownTotal": 13.700012702052819,
       "ingestion": {
         "outcome": "score"
       },
@@ -13150,7 +13150,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -13255,10 +13255,10 @@
         "diversity": 7.989853650623914,
         "port": 0.06874999999999999,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.2439128787878788
       },
-      "marginalTotal": 21.68105819607846,
-      "breakdownTotal": 21.68105819607846,
+      "marginalTotal": 22.92497107486634,
+      "breakdownTotal": 22.92497107486634,
       "ingestion": {
         "outcome": "score"
       },
@@ -13491,7 +13491,7 @@
         "portCoverageDeficitWeight": 1,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,
@@ -13598,10 +13598,10 @@
         "diversity": 1.4123636363636363,
         "port": 8.662500000000001,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.514240190143222
       },
-      "marginalTotal": 23.364257575757577,
-      "breakdownTotal": 23.364257575757577,
+      "marginalTotal": 24.8784977659008,
+      "breakdownTotal": 24.8784977659008,
       "ingestion": {
         "outcome": "score"
       },
@@ -14690,7 +14690,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 4,
@@ -14797,10 +14797,10 @@
         "diversity": 1.9469252309541794,
         "port": 0.20625,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.3069319593256208
       },
-      "marginalTotal": 17.058928195381057,
-      "breakdownTotal": 17.058928195381057,
+      "marginalTotal": 18.365860154706677,
+      "breakdownTotal": 18.365860154706677,
       "ingestion": {
         "outcome": "score"
       },
@@ -15073,7 +15073,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 4,
@@ -15180,10 +15180,10 @@
         "diversity": -0.48,
         "port": 0.16041666666666662,
         "handValue": 0,
-        "expansion": 0
+        "expansion": 1.5532397139286616
       },
-      "marginalTotal": 6.655325757575758,
-      "breakdownTotal": 6.655325757575758,
+      "marginalTotal": 8.20856547150442,
+      "breakdownTotal": 8.20856547150442,
       "ingestion": {
         "outcome": "score"
       },
@@ -16219,7 +16219,7 @@
         "portCoverageDeficitWeight": 0,
         "nearPortRadius": 2,
         "nearPortDecay": 0.5,
-        "expansionWeight": 0,
+        "expansionWeight": 0.1,
         "expansionDecay": 0.5,
         "robberDiscount": 0.35,
         "robberConcentrationWeight": 0,

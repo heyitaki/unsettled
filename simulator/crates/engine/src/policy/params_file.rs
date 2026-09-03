@@ -230,6 +230,15 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../placement/default-weights.json"
     );
+    /// The shipped placement vector as it stood before the SP6 adoption (M-66) moved
+    /// `expansionWeight` off 0. Every SP-family arm file is the *pre-adoption* defaults with
+    /// one axis perturbed, and each is a measurement record cited by a committed M entry, so
+    /// their pins anchor here rather than to the live defaults, the way the H-family pins
+    /// anchor to `screen_baseline_value`.
+    const SP6_PRE_ADOPTION_WEIGHTS_PATH: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../placement/sp6-pre-adoption-weights.json"
+    );
 
     /// Serialization round trip through a string, so `f32` fields land as the same `f64`
     /// a JSON file's shortest-decimal spelling parses to.
@@ -948,9 +957,12 @@ mod tests {
     /// Pins the Phase-I outcome (M-46, gate `better` at +14.10pp, adopted): the
     /// candidate params are now byte-shape-identical to the *live* composite defaults
     /// (adoption moved the four winning axes into `Default::default()`) and still match
-    /// the confirmed `h4_final.json` record. The candidate weights file is the
-    /// pre-adoption placement snapshot: identical to `default-weights.json` except
-    /// `handValueWeight`, where adoption applied the M-43 drop (0.4 → 0).
+    /// the confirmed `h4_final.json` record. The candidate weights file is the placement
+    /// snapshot Phase I ran on: identical to the pre-adoption placement vector except
+    /// `handValueWeight`, where adoption applied the M-43 drop (0.4 → 0). Its weights half
+    /// is anchored to `sp6-pre-adoption-weights.json` rather than to the live defaults for
+    /// the same reason the SP-family arm pins are: the SP6 adoption moved
+    /// `expansionWeight`, which this record predates.
     #[test]
     fn the_phase_i_candidate_files_record_the_adopted_vectors() {
         let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
@@ -985,11 +997,12 @@ mod tests {
             "the candidate snapshot carries the pre-drop handValueWeight"
         );
         candidate["handValueWeight"] = Value::from(0);
-        let default_source = std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("defaults");
+        let pre_adoption_source =
+            std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH).expect("pre-adoption defaults");
         assert_eq!(
             candidate,
-            serde_json::from_str::<Value>(&default_source).expect("valid JSON"),
-            "default-weights.json must differ from the candidate snapshot only in the adopted handValue drop"
+            serde_json::from_str::<Value>(&pre_adoption_source).expect("valid JSON"),
+            "the pre-adoption vector must differ from the candidate snapshot only in the adopted handValue drop"
         );
     }
 
@@ -1207,7 +1220,7 @@ mod tests {
     }
 
     /// The two SP2 term arms, as weights key, arm file stem and the value the arm carries.
-    /// Both terms ship at 0, so an arm is the live defaults with its own term switched on.
+    /// Both terms ship at 0, so an arm is the pre-adoption defaults with its own term switched on.
     const SP2_ARMS: [(&str, &str, f64); 2] = [
         ("recipeDevCardBonus", "sp2a_devcard", 1.0),
         ("portCoverageDeficitWeight", "sp2b_portdeficit", 1.0),
@@ -1227,9 +1240,10 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
+        // Frozen at the pre-adoption field: these arms are measurement records, and the
+        // SP6 adoption moved the live defaults out from under them.
         let base: Value = serde_json::from_str(
-            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
-                .expect("committed weights"),
+            &std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH).expect("committed weights"),
         )
         .expect("valid JSON");
 
@@ -1261,7 +1275,7 @@ mod tests {
             let file: Value = serde_json::from_str(&source).expect("valid JSON");
             assert_eq!(
                 file, perturbed,
-                "{name} must be the live defaults with {key} at {value} and nothing else moved"
+                "{name} must be the pre-adoption defaults with {key} at {value} and nothing else moved"
             );
             expected.push(name);
         }
@@ -1282,7 +1296,7 @@ mod tests {
         assert_eq!(found, expected, "the SP2 phase commits one arm per term");
     }
 
-    /// The SP3 arms, as arm file stem and the weights keys that arm moves off the live defaults.
+    /// The SP3 arms, as arm file stem and the weights keys that arm moves off the pre-adoption defaults.
     /// A table of overrides rather than SP2's single key, because the phase's conditional decay
     /// arms would have moved two axes at once: the surviving `expansionWeight` and
     /// `expansionDecay`. M-54 read no survivor, so they never existed, and the phase's third arm
@@ -1294,7 +1308,7 @@ mod tests {
     ];
 
     /// Walks the committed SP3 arms (`placement/arms/sp3*.json`) as the SP2 walk above walks its
-    /// own: each is the live `default-weights.json` with only its declared keys moved, each moved
+    /// own: each is `sp6-pre-adoption-weights.json` with only its declared keys moved, each moved
     /// value differs from the shipped one and sits inside that axis's committed sweep-bounds
     /// range, and no `sp3*` file nobody preregistered is sitting in the directory waiting to join
     /// a run. Without this an edit that also moved `diversityWeight` would run and be recorded as
@@ -1307,9 +1321,10 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
+        // Frozen at the pre-adoption field: these arms are measurement records, and the
+        // SP6 adoption moved the live defaults out from under them.
         let base: Value = serde_json::from_str(
-            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
-                .expect("committed weights"),
+            &std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH).expect("committed weights"),
         )
         .expect("valid JSON");
 
@@ -1342,7 +1357,7 @@ mod tests {
             let file: Value = serde_json::from_str(&source).expect("valid JSON");
             assert_eq!(
                 file, perturbed,
-                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+                "{name} must be the pre-adoption defaults with {overrides:?} and nothing else moved"
             );
             expected.push(name);
         }
@@ -1367,10 +1382,12 @@ mod tests {
     }
 
     /// The SP4 arms, as arm file stem and the four-seat `slotScales` leaves that arm moves off
-    /// the live defaults: slot key, component, scale. Only the four-seat row is measured, so an
-    /// arm that touched the 3, 5 or 6 seat rows would be scaling entries no run of this phase
-    /// exercises. Only the `diversity` component appears: `expansionWeight` ships at 0 and M-54
-    /// read no survivor, so an `expansion` scale multiplies a term that is exactly 0.
+    /// the pre-adoption defaults: slot key, component, scale. Only the four-seat row is
+    /// measured, so an arm that touched the 3, 5 or 6 seat rows would be scaling entries no run
+    /// of this phase exercises. Only the `diversity` component appears: on the field SP4 ran on
+    /// `expansionWeight` was 0 and M-54 had read no survivor, so an `expansion` scale multiplied
+    /// a term that was exactly 0. The SP6 adoption made the weight nonzero, which is why these
+    /// arms are frozen records rather than a design a later phase would repeat.
     const SP4_ARMS: [(&str, &[(&str, &str, f64)]); 2] = [
         (
             "sp4_div_rise",
@@ -1408,9 +1425,10 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
+        // Frozen at the pre-adoption field: these arms are measurement records, and the
+        // SP6 adoption moved the live defaults out from under them.
         let base: Value = serde_json::from_str(
-            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
-                .expect("committed weights"),
+            &std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH).expect("committed weights"),
         )
         .expect("valid JSON");
 
@@ -1443,7 +1461,7 @@ mod tests {
             let file: Value = serde_json::from_str(&source).expect("valid JSON");
             assert_eq!(
                 file, perturbed,
-                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+                "{name} must be the pre-adoption defaults with {overrides:?} and nothing else moved"
             );
             expected.push(name);
         }
@@ -1477,7 +1495,7 @@ mod tests {
     ];
 
     /// Walks the committed SP5 arms (`placement/arms/sp5*.json`) as the SP2, SP3 and SP4 walks
-    /// walk theirs: each is the live `default-weights.json` with only `setupDenialWeight` raised,
+    /// walk theirs: each is `sp6-pre-adoption-weights.json` with only `setupDenialWeight` raised,
     /// that value sits inside the axis's committed sweep-bounds range, and no `sp5*` file nobody
     /// preregistered is sitting in the directory waiting to join a run.
     ///
@@ -1494,9 +1512,10 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
+        // Frozen at the pre-adoption field: these arms are measurement records, and the
+        // SP6 adoption moved the live defaults out from under them.
         let base: Value = serde_json::from_str(
-            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
-                .expect("committed weights"),
+            &std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH).expect("committed weights"),
         )
         .expect("valid JSON");
 
@@ -1528,7 +1547,7 @@ mod tests {
             let file: Value = serde_json::from_str(&source).expect("valid JSON");
             assert_eq!(
                 file, perturbed,
-                "{name} must be the live defaults with {key} at {value} and nothing else moved"
+                "{name} must be the pre-adoption defaults with {key} at {value} and nothing else moved"
             );
             expected.push(name);
         }
@@ -1553,7 +1572,7 @@ mod tests {
     }
 
     /// The six SP6 re-screen arms, as arm file stem and the weights keys that arm moves off the
-    /// live defaults. SP6 re-screens four axes SP3 through SP5 left unadopted, against the new
+    /// pre-adoption defaults. SP6 re-screens four axes SP3 through SP5 left unadopted, against the new
     /// draft-aware field, so three of these stems repeat a value an SP3 arm already carries.
     /// They are minted rather than reused because an arm file is a measurement record: an SP3
     /// file is cited by M-54 and M-57 as the vector those entries ran, and the adoption task
@@ -1583,7 +1602,7 @@ mod tests {
     ];
 
     /// Walks the committed SP6 arms (`placement/arms/sp6*.json`) as the SP2 through SP5 walks
-    /// walk theirs: each is the live `default-weights.json` with only its declared keys moved,
+    /// walk theirs: each is `sp6-pre-adoption-weights.json` with only its declared keys moved,
     /// each moved value differs from the shipped one and sits inside that axis's committed
     /// sweep-bounds range, and no `sp6*` file nobody preregistered is sitting in the directory
     /// waiting to join a run.
@@ -1601,9 +1620,10 @@ mod tests {
             &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
         )
         .expect("valid JSON");
+        // Frozen at the pre-adoption field: these arms are measurement records, and the
+        // SP6 adoption moved the live defaults out from under them.
         let base: Value = serde_json::from_str(
-            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
-                .expect("committed weights"),
+            &std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH).expect("committed weights"),
         )
         .expect("valid JSON");
 
@@ -1636,7 +1656,7 @@ mod tests {
             let file: Value = serde_json::from_str(&source).expect("valid JSON");
             assert_eq!(
                 file, perturbed,
-                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+                "{name} must be the pre-adoption defaults with {overrides:?} and nothing else moved"
             );
             expected.push(name);
         }
@@ -1693,39 +1713,50 @@ mod tests {
     /// `robberConcentrationWeight` dropped unresolved.
     const SP6_KEPT_AXES: [(&str, f64); 1] = [("expansionWeight", 0.1)];
 
-    /// Pins `placement/sp6-candidate-weights.json`, the vector M-63 carries into the `eval2`
-    /// confirmation and, if that reads `better`, the `gate2` adoption decision: the live
-    /// `default-weights.json` with the kept axes at their recorded values and nothing else
-    /// moved. The differing-leaf walk is what makes "nothing else" an assertion rather than a
-    /// claim, so a stray edit anywhere in the vector fails here rather than inside a
-    /// confirmation run.
+    /// Pins the SP6 outcome (M-66, gate `better` at +1.097pp on `gate2`, adopted). Three
+    /// files have to agree for the adoption to mean what the record says it means:
+    /// `sp6-pre-adoption-weights.json` is the vector every SP-family arm perturbs and every
+    /// M-61 through M-66 reading was taken against, `sp6-candidate-weights.json` is the
+    /// vector the `eval2` confirmation and the `gate2` gate read, and the live
+    /// `default-weights.json` is what ships. Adoption makes the candidate and the live
+    /// defaults the same vector, and leaves the pre-adoption snapshot differing from both on
+    /// exactly `SP6_KEPT_AXES`.
     ///
-    /// With one survivor the candidate is the same vector as `arms/sp6_expansion.json`, the arm
-    /// M-62 actually read against `base`, and no coordinate pass was run because a single axis
-    /// cannot stack with anything. That equality is asserted so the confirmed candidate and its
-    /// measured arm cannot drift apart while both are still cited.
+    /// The differing-leaf walk is what makes "nothing else moved" an assertion rather than a
+    /// claim: a stray edit anywhere in the shipped vector fails here rather than silently
+    /// shipping an axis no gate ever read.
     ///
-    /// This file is a record, not a default: nothing ships these values unless the `gate2` run
-    /// reads `better`, and Task 17 of `docs/plans/simulator-placement-sp6.md` is where this pin
-    /// is rewritten to record that adoption.
+    /// With one survivor the candidate is also the same vector as `arms/sp6_expansion.json`,
+    /// the arm M-62 read against `base`, and no coordinate pass was run because a single axis
+    /// cannot stack with anything. That equality is asserted so the adopted vector and the
+    /// arm the record cites cannot drift apart.
     #[test]
-    fn the_sp6_candidate_file_records_the_combined_vector() {
+    fn the_sp6_candidate_file_records_the_adopted_vector() {
         let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
         let read = |path: String| -> String {
             std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{path} must be committed"))
         };
-        let source = read(format!("{placement_dir}/sp6-candidate-weights.json"));
-        let weights: EngineWeights = serde_json::from_str(&source)
-            .unwrap_or_else(|error| panic!("the SP6 candidate must load as weights: {error}"));
-        weights
-            .validate()
-            .expect("the SP6 candidate must validate");
-        let candidate: Value = serde_json::from_str(&source).expect("valid JSON");
+        let load = |name: &str, source: &str| -> Value {
+            let weights: EngineWeights = serde_json::from_str(source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+            serde_json::from_str(source).expect("valid JSON")
+        };
 
-        let base: Value = serde_json::from_str(&read(format!(
-            "{placement_dir}/default-weights.json"
-        )))
-        .expect("valid JSON");
+        let candidate = load(
+            "sp6-candidate-weights.json",
+            &read(format!("{placement_dir}/sp6-candidate-weights.json")),
+        );
+        let base = load(
+            "sp6-pre-adoption-weights.json",
+            &read(SP6_PRE_ADOPTION_WEIGHTS_PATH.to_string()),
+        );
+        let shipped = load(
+            "default-weights.json",
+            &read(DEFAULT_WEIGHTS_PATH.to_string()),
+        );
         let bounds: Value =
             serde_json::from_str(&read(SWEEP_BOUNDS_PATH.to_string())).expect("valid JSON");
 
@@ -1740,20 +1771,24 @@ mod tests {
             assert_ne!(
                 base[key].as_f64(),
                 Some(value),
-                "{key} at {value} is the shipped value, so the candidate carries nothing"
+                "{key} at {value} is the pre-adoption value, so the candidate carries nothing"
             );
             expected[key] = Value::from(value);
         }
         assert_eq!(
             candidate, expected,
-            "the SP6 candidate must be the live defaults with the kept axes at their recorded values"
+            "the SP6 candidate must be the pre-adoption defaults with the kept axes at their recorded values"
+        );
+        assert_eq!(
+            shipped, candidate,
+            "adoption ships the gate-confirmed candidate, so the live defaults must be that vector"
         );
 
         let mut leaves = Vec::new();
         collect_leaf_paths(&base, "", &mut leaves);
         let mut moved: Vec<String> = leaves
             .into_iter()
-            .filter(|leaf| candidate.pointer(leaf) != base.pointer(leaf))
+            .filter(|leaf| shipped.pointer(leaf) != base.pointer(leaf))
             .collect();
         let mut kept: Vec<String> = SP6_KEPT_AXES
             .iter()
@@ -1763,7 +1798,7 @@ mod tests {
         kept.sort();
         assert_eq!(
             moved, kept,
-            "the SP6 candidate must differ from default-weights.json on exactly the kept axes"
+            "the shipped defaults must differ from the pre-adoption snapshot on exactly the kept axes"
         );
 
         let arm: Value =
@@ -1775,8 +1810,82 @@ mod tests {
         );
     }
 
-    /// Walks every committed weights-shaped file (the shipped vector, the two committed
-    /// candidate records, and the weights arms under `placement/arms/`) through the full
+    /// The pre-adoption placement vector, leaf by leaf. `the_sp6_candidate_file_records_the_adopted_vector`
+    /// above pins the snapshot only *relatively*, as the shipped vector with the kept axes put
+    /// back, so on its own an edit that moved the same leaf in both files would keep every
+    /// assertion there green while quietly rewriting what every SP-family arm is a perturbation
+    /// of. This is the absolute pin: the literal vector M-61 through M-66 were measured against,
+    /// which is `DEFAULT_WEIGHTS` as it stood before the SP6 adoption.
+    #[test]
+    fn the_sp6_pre_adoption_snapshot_is_the_literal_measured_vector() {
+        let source = std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH)
+            .expect("sp6-pre-adoption-weights.json must be committed");
+        let weights: EngineWeights = serde_json::from_str(&source)
+            .unwrap_or_else(|error| panic!("the SP6 snapshot must load as weights: {error}"));
+        weights.validate().expect("the SP6 snapshot must validate");
+        let snapshot: Value = serde_json::from_str(&source).expect("valid JSON");
+
+        let mut neutral_slot = serde_json::Map::new();
+        neutral_slot.insert("expansion".into(), Value::from(1));
+        neutral_slot.insert("diversity".into(), Value::from(1));
+        let mut slot_scales = serde_json::Map::new();
+        for seats in 3..=6 {
+            let mut row = serde_json::Map::new();
+            for slot in 0..seats {
+                row.insert(slot.to_string(), Value::Object(neutral_slot.clone()));
+            }
+            slot_scales.insert(seats.to_string(), Value::Object(row));
+        }
+
+        let expected = serde_json::json!({
+            "resourceValue": {
+                "wheat": 1.35,
+                "ore": 1.3,
+                "wood": 0.8,
+                "brick": 0.8,
+                "sheep": 0.75
+            },
+            "handValueWeight": 0,
+            "scarcityWeight": 0.35,
+            "scarcityClampMin": 0.5,
+            "scarcityClampMax": 2,
+            "diversityWeight": 1.6,
+            "diversityCap": 4,
+            "coverageExponent": 1.5,
+            "coverageScarcityWeight": 0.5,
+            "duplicateNumberPenalty": 0.08,
+            "recipeRoadBonus": 1.5,
+            "recipeCityBonus": 2,
+            "recipeSettlementBonus": 1,
+            "recipeDevCardBonus": 0,
+            "recipeCap": 4,
+            "portWeight": 0.55,
+            "genericPortFactor": 0.5,
+            "portSurplusThreshold": 3,
+            "portCoverageDeficitWeight": 0,
+            "nearPortRadius": 2,
+            "nearPortDecay": 0.5,
+            "expansionWeight": 0,
+            "expansionDecay": 0.5,
+            "robberDiscount": 0.35,
+            "robberConcentrationWeight": 0,
+            "setupDenialWeight": 0,
+            "opponentTopK": 3,
+            "softmaxTemperature": 1.25,
+            "rolloutBudget": 500000,
+            "rolloutsMin": 4,
+            "rolloutsMax": 24,
+            "maxResults": 8,
+            "slotScales": Value::Object(slot_scales)
+        });
+        assert_eq!(
+            snapshot, expected,
+            "the SP6 pre-adoption snapshot is a frozen measurement record and must not be edited"
+        );
+    }
+
+    /// Walks every committed weights-shaped file (the shipped vector, the three committed
+    /// candidate and snapshot records, and the weights arms under `placement/arms/`) through the full
     /// `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
     /// `validate`. `contracts.md` states such a walk exists and none did, so until now a
@@ -1798,6 +1907,7 @@ mod tests {
             "default-weights.json",
             "phase-i-candidate-weights.json",
             "sp6-candidate-weights.json",
+            "sp6-pre-adoption-weights.json",
         ] {
             let source = std::fs::read_to_string(format!("{placement_dir}/{name}"))
                 .expect("committed weights vector");

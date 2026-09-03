@@ -51,9 +51,37 @@ struct Reached {
     road_used: bool,
 }
 
-/// Every site the candidate opens through one of its own incident edges, keyed by that edge and
-/// listed in ascending edge order, which is ascending edge id and so the order the TypeScript walk
-/// takes its sorted incident edges in.
+/// The walk's and the term's working memory, reused across calls so neither allocates once the
+/// buffers have grown. Per thread, not global: workers run the setup phase in parallel and would
+/// otherwise share one buffer, and a thread only ever reads what its own call just wrote.
+///
+/// Adoption is what made this necessary. While `expansionWeight` shipped at 0 the walk was never
+/// entered in a measured run, so allocating freshly inside it cost nothing; M-66 put the term in
+/// the field, and `cli/tests/alloc.rs` pins the setup hot loop at zero steady-state allocations.
+#[derive(Default)]
+struct Scratch {
+    /// The candidate's own passable incident edges, sorted, which fixes the walk's order.
+    firsts: Vec<(Edge, Vertex)>,
+    /// One queue per paid-build count, drained cheapest first.
+    bands: [Vec<Reached>; MAX_PAID_BUILDS + 1],
+    /// Sites, flat and grouped by first edge; `edges` holds each edge and its `[start, end)` span.
+    sites: Vec<ExpansionSite>,
+    edges: Vec<(Edge, usize, usize)>,
+    /// Per `term` call, indexed by vertex: a site's undiscounted score, and its cheapest reach.
+    scores: Vec<Option<f64>>,
+    cheapest: Vec<Option<(u32, f64)>>,
+    /// One discounted value per site of the first edge being folded.
+    values: Vec<f64>,
+}
+
+thread_local! {
+    static SCRATCH: std::cell::RefCell<Scratch> =
+        std::cell::RefCell::new(Scratch::default());
+}
+
+/// Every site the candidate opens through one of its own incident edges, written into `scratch`
+/// grouped by that edge and listed in ascending edge order, which is ascending edge id and so the
+/// order the TypeScript walk takes its sorted incident edges in.
 ///
 /// The walk leaves `candidate` along each first edge and spreads outward. A rival's road is
 /// impassable and a vertex a rival holds is a dead end, because a settlement stops a road network
@@ -63,13 +91,14 @@ struct Reached {
 ///
 /// A site is a vertex at least two edges out that would be legal once the candidate is built:
 /// unoccupied, with no occupied neighbour, and not adjacent to the candidate.
-pub(super) fn sites_by_edge(
+fn walk(
+    scratch: &mut Scratch,
     scorer: &AppFormulaScorer,
     vertex_owner: &[u8],
     edge_owner: &[u8],
     seat: u8,
     candidate: Vertex,
-) -> Vec<(Edge, Vec<ExpansionSite>)> {
+) {
     #[cfg(test)]
     WALK_CALLS.with(|calls| calls.set(calls.get() + 1));
 
@@ -89,21 +118,23 @@ pub(super) fn sites_by_edge(
                 .all(|neighbour| !occupied(*neighbour))
     };
 
-    let mut firsts: Vec<(Edge, Vertex)> = scorer
-        .steps(candidate)
-        .filter(|(edge, _)| {
-            let owner = edge_owner[usize::from(*edge)];
-            owner == EMPTY || owner == seat
-        })
-        .collect();
-    firsts.sort_unstable();
+    scratch.firsts.clear();
+    scratch.firsts.extend(scorer.steps(candidate).filter(|(edge, _)| {
+        let owner = edge_owner[usize::from(*edge)];
+        owner == EMPTY || owner == seat
+    }));
+    scratch.firsts.sort_unstable();
 
-    let mut by_edge = Vec::with_capacity(firsts.len());
-    for (first_edge, first_vertex) in firsts {
+    scratch.sites.clear();
+    scratch.edges.clear();
+    for index in 0..scratch.firsts.len() {
+        let (first_edge, first_vertex) = scratch.firsts[index];
         // Cheapest-first: a free step joins the band being drained, a paid one the next band, so a
         // state is settled at its minimum paid-build count the first time it is popped.
-        let mut bands: [Vec<Reached>; MAX_PAID_BUILDS + 1] =
-            std::array::from_fn(|_| Vec::new());
+        let bands = &mut scratch.bands;
+        for band in bands.iter_mut() {
+            band.clear();
+        }
         // The free setup road is spent only on an edge nobody owns; travelling the seat's own road
         // keeps it in hand for later on the same path.
         bands[0].push(Reached {
@@ -123,7 +154,7 @@ pub(super) fn sites_by_edge(
         // cheapest-first, so the first pop is the cheapest one; recording the repeat would let
         // `top_two` pair a site with itself. One bit per vertex, unlike `settled`'s two lanes.
         let mut recorded = 0_u128;
-        let mut sites = Vec::new();
+        let span_start = scratch.sites.len();
         for cost in 0..=MAX_PAID_BUILDS {
             let mut head = 0;
             while head < bands[cost].len() {
@@ -139,7 +170,7 @@ pub(super) fn sites_by_edge(
                 // in `is_site` drops the ones that are two edges out but still touch the candidate.
                 if state.vertex != first_vertex && recorded & bit == 0 && is_site(state.vertex) {
                     recorded |= bit;
-                    sites.push(ExpansionSite {
+                    scratch.sites.push(ExpansionSite {
                         vertex: state.vertex,
                         paid_builds: cost as u32,
                     });
@@ -168,11 +199,31 @@ pub(super) fn sites_by_edge(
                 }
             }
         }
-        if !sites.is_empty() {
-            by_edge.push((first_edge, sites));
+        if scratch.sites.len() > span_start {
+            scratch
+                .edges
+                .push((first_edge, span_start, scratch.sites.len()));
         }
     }
-    by_edge
+}
+
+/// `walk`'s sites in the shape the tests read them: one owned vector per first edge.
+#[cfg(test)]
+pub(super) fn sites_by_edge(
+    scorer: &AppFormulaScorer,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+) -> Vec<(Edge, Vec<ExpansionSite>)> {
+    SCRATCH.with_borrow_mut(|scratch| {
+        walk(scratch, scorer, vertex_owner, edge_owner, seat, candidate);
+        scratch
+            .edges
+            .iter()
+            .map(|(edge, start, end)| (*edge, scratch.sites[*start..*end].to_vec()))
+            .collect()
+    })
 }
 
 /// What the candidate is worth as a place to expand *from*, and the road that goes there.
@@ -197,73 +248,85 @@ pub(super) fn term(
     if weights.expansion_weight == 0.0 {
         return NO_EXPANSION;
     }
-    let by_edge = sites_by_edge(scorer, vertex_owner, edge_owner, seat, candidate);
-    if by_edge.is_empty() {
-        return NO_EXPANSION;
-    }
     let mut with_candidate = *holdings;
     scorer.add_to_holdings(&mut with_candidate, candidate);
-    // One score per site, shared by every first edge that reaches it: a site's worth depends on
-    // the site and the pair, never on the road taken to get there.
-    let mut scores: Vec<Option<f64>> = vec![None; vertex_owner.len()];
-    // Each site at the cheapest paid-build count any first edge reaches it for, matching
-    // `ExpansionSite`'s own definition. Folding on the larger *value* instead would pick the
-    // dearest path for a site the pair scores below zero, decay shrinking a negative toward 0.
-    // `expansion.ts::expansionTerm` folds the same way.
-    let mut cheapest: Vec<Option<(u32, f64)>> = vec![None; vertex_owner.len()];
-    let mut road: Option<Edge> = None;
-    let mut best_site = f64::NEG_INFINITY;
-    let mut best_pair = f64::NEG_INFINITY;
-    let mut values = Vec::new();
-    for (first_edge, sites) in &by_edge {
-        values.clear();
-        for site in sites {
-            let index = usize::from(site.vertex);
-            let score = match scores[index] {
-                Some(score) => score,
-                None => {
-                    // Unscaled by any draft slot: a site is a settlement some later turn buys,
-                    // so what the pair's *current* pick position leans on says nothing about it.
-                    // SP4's scales price this whole term instead, through the `expansion` scale
-                    // its caller applies. `expansion.ts::expansionTerm` matches.
-                    let score = scorer.total_with_holdings(with_candidate, site.vertex, false);
-                    scores[index] = Some(score);
-                    score
+    SCRATCH.with_borrow_mut(|scratch| {
+        walk(scratch, scorer, vertex_owner, edge_owner, seat, candidate);
+        if scratch.edges.is_empty() {
+            return NO_EXPANSION;
+        }
+        // One score per site, shared by every first edge that reaches it: a site's worth depends
+        // on the site and the pair, never on the road taken to get there.
+        scratch.scores.clear();
+        scratch.scores.resize(vertex_owner.len(), None);
+        // Each site at the cheapest paid-build count any first edge reaches it for, matching
+        // `ExpansionSite`'s own definition. Folding on the larger *value* instead would pick the
+        // dearest path for a site the pair scores below zero, decay shrinking a negative toward 0.
+        // `expansion.ts::expansionTerm` folds the same way.
+        scratch.cheapest.clear();
+        scratch.cheapest.resize(vertex_owner.len(), None);
+        let Scratch {
+            sites,
+            edges,
+            scores,
+            cheapest,
+            values,
+            ..
+        } = scratch;
+
+        let mut road: Option<Edge> = None;
+        let mut best_site = f64::NEG_INFINITY;
+        let mut best_pair = f64::NEG_INFINITY;
+        for (first_edge, start, end) in edges.iter() {
+            let span = &sites[*start..*end];
+            values.clear();
+            for site in span {
+                let index = usize::from(site.vertex);
+                let score = match scores[index] {
+                    Some(score) => score,
+                    None => {
+                        // Unscaled by any draft slot: a site is a settlement some later turn buys,
+                        // so what the pair's *current* pick position leans on says nothing about
+                        // it. SP4's scales price this whole term instead, through the `expansion`
+                        // scale its caller applies. `expansion.ts::expansionTerm` matches.
+                        let score = scorer.total_with_holdings(with_candidate, site.vertex, false);
+                        scores[index] = Some(score);
+                        score
+                    }
+                };
+                // `powf`, not `powi`: JavaScript's `**` is `Math.pow`, and the two Rust intrinsics
+                // are free to round differently.
+                values.push(score * weights.expansion_decay.powf(f64::from(site.paid_builds)));
+            }
+            let best = values
+                .iter()
+                .fold(f64::NEG_INFINITY, |held, value| js_max(held, *value));
+            let pair = top_two(values);
+            if road.is_none()
+                || best > best_site
+                || (best == best_site && pair > best_pair)
+                || (best == best_site && pair == best_pair && Some(*first_edge) < road)
+            {
+                road = Some(*first_edge);
+                best_site = best;
+                best_pair = pair;
+            }
+            for (site, value) in span.iter().zip(values.iter()) {
+                let held = &mut cheapest[usize::from(site.vertex)];
+                if held.is_none_or(|(paid_builds, _)| site.paid_builds < paid_builds) {
+                    *held = Some((site.paid_builds, *value));
                 }
-            };
-            // `powf`, not `powi`: JavaScript's `**` is `Math.pow`, and the two Rust intrinsics are
-            // free to round differently.
-            values.push(score * weights.expansion_decay.powf(f64::from(site.paid_builds)));
-        }
-        let best = values.iter().fold(f64::NEG_INFINITY, |held, value| {
-            js_max(held, *value)
-        });
-        let pair = top_two(&values);
-        if road.is_none()
-            || best > best_site
-            || (best == best_site && pair > best_pair)
-            || (best == best_site && pair == best_pair && Some(*first_edge) < road)
-        {
-            road = Some(*first_edge);
-            best_site = best;
-            best_pair = pair;
-        }
-        for (site, value) in sites.iter().zip(&values) {
-            let held = &mut cheapest[usize::from(site.vertex)];
-            if held.is_none_or(|(paid_builds, _)| site.paid_builds < paid_builds) {
-                *held = Some((site.paid_builds, *value));
             }
         }
-    }
-    let reached: Vec<f64> = cheapest
-        .into_iter()
-        .flatten()
-        .map(|(_, value)| value)
-        .collect();
-    ExpansionValue {
-        value: weights.expansion_weight * top_two(&reached),
-        road,
-    }
+        // Folded in vertex order, which is the order the collected vector carried, and `top_two`
+        // reads the same two numbers out of any order in any case.
+        values.clear();
+        values.extend(cheapest.iter().flatten().map(|(_, value)| *value));
+        ExpansionValue {
+            value: weights.expansion_weight * top_two(values),
+            road,
+        }
+    })
 }
 
 /// Sum of the two largest values, or of the one there is, or 0 for none. A NaN never wins a
@@ -324,14 +387,18 @@ mod tests {
         serde_json::from_str(include_str!("../../../../placement/default-weights.json")).unwrap()
     }
 
-    /// The walk is skipped entirely at the shipped weight, which is what keeps the rollout hot
-    /// path and the whole behaviour corpus where they were.
+    /// A weight of 0 skips the walk entirely, which is what keeps a zeroed vector on the rollout
+    /// hot path it was on before the term existed. The shipped weight is 0.1 since M-66, the SP6
+    /// gate, so the shipped vector walks: that is asserted here too, because the whole adoption
+    /// is worthless if the term the gate measured is skipped in the field.
     #[test]
-    fn the_shipped_weight_never_reaches_the_walk() {
+    fn a_zero_weight_never_reaches_the_walk_and_the_shipped_one_does() {
         let (topology, board) = fixture();
-        let weights = default_weights();
-        assert_eq!(weights.expansion_weight, 0.0, "the shipped weight is 0");
-        let scorer = AppFormulaScorer::new(&board, &topology, weights.clone());
+        let shipped = default_weights();
+        assert_eq!(shipped.expansion_weight, 0.1, "the shipped weight is the adopted 0.1");
+        let mut zeroed = shipped.clone();
+        zeroed.expansion_weight = 0.0;
+        let scorer = AppFormulaScorer::new(&board, &topology, zeroed);
         let vertex_owner = vec![EMPTY; topology.vertex_count()];
         let edge_owner = vec![EMPTY; topology.edge_count()];
 
@@ -342,11 +409,9 @@ mod tests {
         }
         assert_eq!(walk_calls(), before, "weight 0 must not walk");
 
-        let mut witness = weights;
-        witness.expansion_weight = 0.3;
-        let scorer = AppFormulaScorer::new(&board, &topology, witness);
+        let scorer = AppFormulaScorer::new(&board, &topology, shipped);
         let score = scorer.score_for_owner(&vertex_owner, &edge_owner, 0, 0, false);
-        assert!(walk_calls() > before, "a nonzero weight must walk");
+        assert!(walk_calls() > before, "the shipped weight must walk");
         assert!(score.is_finite());
     }
 

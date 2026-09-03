@@ -367,20 +367,24 @@ describe('joint draft analysis', () => {
 
   it('reports the expansion walk road only while the walk is on', () => {
     const board = filledBoard(3, 4)
-    const shipped = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
-    expect(shipped.recommendations.length).toBeGreaterThan(0)
-    expect(shipped.recommendations.every((entry) => entry.firstRoad === null)).toBe(true)
+    const off = { ...DEFAULT_WEIGHTS, expansionWeight: 0 }
+    const silent = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights: off })
+    expect(silent.recommendations.length).toBeGreaterThan(0)
+    expect(silent.recommendations.every((entry) => entry.firstRoad === null)).toBe(true)
 
-    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.3 }
-    const witness = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
-    const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
-    expect(withRoads.length).toBeGreaterThan(0)
-    const ctx = computeBoardContext(board, weights)
-    const occupancy = occupancyFromBoard(board, 'aki')
-    for (const entry of withRoads) {
-      expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
-      expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
-        .toBe(entry.firstRoad)
+    // The shipped weight is 0.1 since the SP6 adoption, so the walk is on by default and the
+    // recommendations carry roads without being told to.
+    for (const weights of [DEFAULT_WEIGHTS, { ...DEFAULT_WEIGHTS, expansionWeight: 0.3 }]) {
+      const witness = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
+      const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
+      expect(withRoads.length).toBeGreaterThan(0)
+      const ctx = computeBoardContext(board, weights)
+      const occupancy = occupancyFromBoard(board, 'aki')
+      for (const entry of withRoads) {
+        expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
+        expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
+          .toBe(entry.firstRoad)
+      }
     }
   })
 

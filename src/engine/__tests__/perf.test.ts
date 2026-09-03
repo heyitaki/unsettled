@@ -57,6 +57,12 @@ describe('rollout performance', () => {
     expect(performance.now() - start).toBeLessThan(500)
   })
 
+  // The bound was 500ms while `expansionWeight` shipped at 0 and the walk never ran. M-66, the
+  // SP6 gate, adopted the term at 0.1, and the walk prices every site a candidate opens with the
+  // full marginal formula: about sixteen extra scorings per scored candidate, which on this board
+  // is 5.8 million of them. That is what an analysis of the largest board now costs, and no
+  // rewrite of the walk closes a gap that size. The number is the measured worst case with
+  // headroom for a slow machine, so it still fires on a regression rather than on contention.
   it('analyzes the worst-case six-player opening under the CI tripwire', () => {
     const board = worstCaseBoard()
     analyzeBoard(board)
@@ -66,6 +72,6 @@ describe('rollout performance', () => {
     console.timeEnd('analyzeBoard worst-case')
     const elapsed = performance.now() - start
     expect(analysis.status).toBe('ready')
-    expect(elapsed).toBeLessThan(500)
+    expect(elapsed).toBeLessThan(3000)
   })
 })

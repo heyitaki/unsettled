@@ -648,17 +648,25 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
 fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
     let shipped: EngineWeights =
         serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
-    assert_eq!(shipped.expansion_weight, 0.0, "the shipped weight is 0");
-    let mut opened = shipped.clone();
+    assert_eq!(
+        shipped.expansion_weight, 0.1,
+        "the shipped weight is the adopted 0.1"
+    );
+    // The plain draft arm is here to leave the policy RNG stream alone, which needs the walk off,
+    // and the shipped vector stopped supplying that when M-66 adopted the term. So the contrast
+    // is spelled out: one draft kind with the walk closed, one with it opened wide.
+    let mut closed = shipped.clone();
+    closed.expansion_weight = 0.0;
+    let mut opened = shipped;
     opened.expansion_weight = 0.3;
     opened.validate().expect("the witness weight is admissible");
 
     let expansion =
         register_app_formula("app_formula:expansion-witness".into(), opened.clone()).unwrap();
     let draft = register_app_formula_draft(
-        "app_formula_draft:shipped@shipped".into(),
-        shipped.clone(),
-        shipped,
+        "app_formula_draft:walk-off@walk-off".into(),
+        closed.clone(),
+        closed,
     )
     .unwrap();
     let draft_expansion = register_app_formula_draft(
@@ -674,7 +682,7 @@ fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
     ];
     let specs = vec![
         "app_formula:expansion-witness".to_string(),
-        "app_formula_draft:shipped@shipped".to_string(),
+        "app_formula_draft:walk-off@walk-off".to_string(),
         "app_formula_draft:expansion-witness@expansion-witness".to_string(),
     ];
 

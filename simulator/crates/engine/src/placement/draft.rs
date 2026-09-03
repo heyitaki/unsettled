@@ -625,6 +625,30 @@ mod tests {
         }
     }
 
+    /// The same pairing with the expansion walk switched off on both sides, for the one test that
+    /// recomputes a rival's losses itself. The walk is the only component that reads the board
+    /// beyond the scoring seat's own holdings, so with it off a rival's score depends on nothing
+    /// but which vertices are occupied. That is what lets the recomputation stay a short,
+    /// independent statement of the rule instead of a second copy of `replay`, which would have
+    /// to lay every setup road the replay lays and would assert nothing the code does not say.
+    /// The shipped weight is 0.1 since M-66; the credit's own behaviour above 0 is the
+    /// legality-only counterfactual `best_legal` documents.
+    fn scorers_without_expansion(
+        topology: &Topology,
+        board: &SimBoard,
+        weight: f64,
+    ) -> DraftScorers {
+        let mut hero = default_weights();
+        hero.setup_denial_weight = weight;
+        hero.expansion_weight = 0.0;
+        let mut opponent = default_weights();
+        opponent.expansion_weight = 0.0;
+        DraftScorers {
+            hero: AppFormulaScorer::new(board, topology, hero),
+            opponent: AppFormulaScorer::new(board, topology, opponent),
+        }
+    }
+
     /// Seats and hero of the denial tests. At six seats the hero picking fifth is followed by the
     /// last seat's two picks and nothing else, so the credit sums exactly one rival's two losses.
     const SEATS: usize = 6;
@@ -673,11 +697,23 @@ mod tests {
         for position in first + 1..last {
             let seat = order[position];
             let grant = position >= SEATS;
-            let best = |owners: &[u8]| {
+            // `vacated` reopens a vertex for legality alone, which is the credit's preregistered
+            // counterfactual and what `best_legal` implements: every score is still taken with
+            // the candidate standing, so only reachability moves. Recomputed here rather than
+            // called, so the two agree only if the credit really is that difference.
+            let best = |owners: &[u8], vacated: Option<Vertex>| {
+                let free = |vertex: Vertex| {
+                    Some(vertex) == vacated || owners[usize::from(vertex)] == EMPTY
+                };
                 let mut best: Option<(Vertex, f64)> = None;
                 for index in 0..topology.vertex_count() {
                     let vertex = index as Vertex;
-                    if !can_place_settlement(topology, owners, vertex) {
+                    let legal = free(vertex)
+                        && topology
+                            .vertex_adjacent(vertex)
+                            .iter()
+                            .all(|adjacent| free(*adjacent));
+                    if !legal {
                         continue;
                     }
                     let score = scorers
@@ -689,10 +725,8 @@ mod tests {
                 }
                 best.expect("a rival always has somewhere legal to go during setup")
             };
-            let (pick, taken) = best(&owners);
-            let mut free_board = owners.clone();
-            free_board[usize::from(candidate)] = EMPTY;
-            let (_, free) = best(&free_board);
+            let (pick, taken) = best(&owners, None);
+            let (_, free) = best(&owners, Some(candidate));
             losses.push((free - taken).max(0.0));
             owners[usize::from(pick)] = seat;
         }
@@ -817,14 +851,15 @@ mod tests {
     ///
     /// The state is an empty board with the hero at the fifth position, which no real draft
     /// reaches: the lookahead reads no history, only what stands and who picks next, so the
-    /// arrangement is the whole input. The losses are recomputed here the long way round, so the
-    /// two agree only if a rival's scores really are independent of what the hero owns.
+    /// arrangement is the whole input. The losses are recomputed here the long way round, over
+    /// the whole vertex set and seat by seat, so the two agree only if the credit really is the
+    /// sum of the intervening rivals' floored losses at the positions they pick from.
     #[test]
     fn the_denial_credit_is_what_the_intervening_rivals_lose() {
         const WEIGHT: f64 = 0.75;
         let (topology, board) = fixture();
-        let plain = scorers(&topology, &board);
-        let credited = scorers_at_denial(&topology, &board, WEIGHT);
+        let plain = scorers_without_expansion(&topology, &board, 0.0);
+        let credited = scorers_without_expansion(&topology, &board, WEIGHT);
         let vertex_owner = vec![EMPTY; topology.vertex_count()];
         let edge_owner = vec![EMPTY; topology.edge_count()];
 
