@@ -26,6 +26,5 @@ function useMediaQuery(query: string): boolean {
 }
 
 export const useCoarsePointer = (): boolean => useMediaQuery('(pointer: coarse)')
-/** The portrait-phone arm, where App mounts PhoneShell instead of Workspace (spec B8). */
-export const usePortraitPhone = (): boolean =>
-  useMediaQuery('(max-width: 760px) and (orientation: portrait)')
+/** The phone arm, where App mounts PhoneShell instead of Workspace (spec B8). */
+export const usePhone = (): boolean => useMediaQuery('(max-width: 760px)')

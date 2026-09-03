@@ -3,9 +3,8 @@ import { resolve } from 'node:path'
 import { seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
- * The portrait-phone shell, in the one emulation that makes both
- * `(max-width: 760px) and (orientation: portrait)` and `(pointer: coarse)`
- * match in the installed Chromium. Never spread a `devices[...]` preset here:
+ * The phone shell, in the one emulation that makes both `(max-width: 760px)`
+ * and `(pointer: coarse)` match in the installed Chromium. Never spread a `devices[...]` preset here:
  * the iPhone ones select WebKit, which is not installed.
  */
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 })
@@ -23,7 +22,7 @@ test('the header names the active board and nothing of the desktop chrome mounts
   await open(page)
   await expect(page.getByRole('button', { name: 'Board 1' })).toBeVisible()
   await expect(page.locator('.phone-title')).toHaveText('Board 1')
-  for (const selector of ['.mobile-nav', '.board-tabs', '.site-header', 'footer']) {
+  for (const selector of ['.workspace', '.board-tabs', '.site-header', 'footer']) {
     await expect(page.locator(selector)).toHaveCount(0)
   }
   await snap(page, 'header')

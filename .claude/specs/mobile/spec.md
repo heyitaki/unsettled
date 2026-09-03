@@ -2,7 +2,7 @@
 
 What the portrait-phone UI must become. The working prototype is the normative reference for layout and interaction: **https://claude.ai/code/artifact/86ae14f6-692d-4a86-878d-f23b72bb0895** (source kept at `.claude/specs/mobile/prototype.html`). Where this file and the prototype disagree, this file wins; where this file is silent, copy the prototype.
 
-Scope is the `@media (max-width: 760px) and (orientation: portrait)` arm plus the React that arm needs. **Landscape phone and desktop are out of scope** and must not regress: the landscape arm deliberately keeps the opposite model (fixed viewport, pane is its own scroller, board height capped), because a 342px-tall screen cannot scroll a page under a board.
+Scope is the `@media (max-width: 760px)` arm plus the React that arm needs. **Desktop is out of scope** and must not regress. Width alone picks the tree: a landscape phone is wider than 760px and gets the desktop `Workspace`; a desktop window narrower than that gets this shell whatever its orientation or pointer. There is no landscape-phone arm and no tab-gated pane layout (decided 2026-09-03, when the old shared arm was found surfacing a bottom tab bar in narrow desktop windows).
 
 ## Why
 
@@ -128,7 +128,7 @@ Bottom of the screen, above the safe area. With the nav bar gone it no longer ha
 | B5 | Empty board (`board.hexes.every(hex => hex.tile === null)`) replaces the analysis block with the two ways to fill it. |
 | B6 | The roster name's hit area is the name, not the column. |
 | B7 | Boards save themselves. Every edit made in this document autosaves the tab into its library map, debounced; an unlinked tab links itself to a new map on its first non-blank edit, so blank new boards never reach the library. Adopting another window's workspace never triggers a write. Undo is the way back from an unwanted change. The explicit save UI (tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row) goes, on desktop too. |
-| B8 | The portrait shell is a separate React tree mounted only while `(max-width: 760px) and (orientation: portrait)` matches. Desktop and landscape keep today's `Workspace`, `MobileNav` and pane gating untouched: landscape phone uses `MobileNav` as its side rail, so nothing of it may be deleted. |
+| B8 | The phone shell is a separate React tree mounted only while `(max-width: 760px)` matches (`usePhone`). Every wider viewport, a landscape phone included, keeps the `Workspace` tree. `MobileNav`, the pane gating and the landscape arm are gone: the workspace has no tab bar at any width. |
 
 ## What already exists
 
@@ -160,7 +160,7 @@ Resolved 2026-09-02; the open questions they close are kept for the record.
 
 **O3 · Renaming: tap the name.** On the Maps screen the name in a board row is a rename target bounded to its own width, exactly like the roster name (B6). The rest of the row selects or opens. An unsaved board's rename goes through `tab-rename`; a saved map's rename goes through `renameMap` and the library refresh retitles any tab linked to it.
 
-**M2 · `MobileNav` stays (B8).** Landscape phone uses it as a side rail with the same pane gating, so nothing is deleted. The portrait shell is its own tree that never mounts `MobileNav` or the site header; it shows the brand through its own row (S1).
+**M2 · Two trees, split by width (B8).** The phone shell is its own tree that never mounts the site header; it shows the brand through its own row (S1). `MobileNav` and the pane gating were kept for landscape phones at first and deleted on 2026-09-03; landscape phones now get the workspace.
 
 ## Open questions
 
@@ -179,7 +179,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | id | Item | Depends on | State |
 | --- | --- | --- | --- |
 | M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | | done |
-| M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | | done |
+| M2 | Phone widths mount a separate `PhoneShell` tree (B8); `MobileNav` and pane gating deleted | | done |
 | M3 | Build the header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
 | M4 | Board colour hash (B4) and the hex in header and both lists | | done |
 | M5 | Draft ribbon in the analysis block (S2) | M2 | done |

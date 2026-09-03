@@ -22,7 +22,7 @@ button, input, select { font: inherit; }
 button { color: inherit; }
 button, input, select, label.drop-zone { touch-action: manipulation; }
 
-.app-shell { min-height: 100vh; min-height: 100dvh; padding: 24px clamp(16px, 3vw, 44px) 18px; }
+.app-shell { --shell-gutter: clamp(16px, 3vw, 44px); min-height: 100vh; min-height: 100dvh; padding: max(24px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
 .site-header { max-width: 1580px; margin: 0 auto 18px; display: flex; align-items: center; gap: 14px; }
 .site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 clamp(26px, 3vw, 42px)/1 Georgia, serif; letter-spacing: -.04em; }
 .brand-mark { position: relative; width: 50px; height: 48px; }
@@ -39,7 +39,7 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .workspace { max-width: 1580px; margin: auto; display: grid; grid-template-columns: minmax(248px, 320px) minmax(494px, 1fr) minmax(288px, 372px); gap: 16px; align-items: start; }
 .left-rail, .right-rail { display: grid; gap: 12px; }
 .left-rail { align-self: stretch; display: flex; flex-direction: column; min-height: 0; }
-.left-rail > *, .mobile-pane > * { flex: none; }
+.left-rail > * { flex: none; }
 .maps-panel { display: flex; flex-direction: column; gap: 14px; flex: 0 1 auto; min-height: 0; }
 .maps-panel > :not(.library-boards) { flex: none; }
 .maps-panel .panel-heading { margin-bottom: 0; }
@@ -327,8 +327,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .global-notice-text { flex: 1; font-size: 13px; line-height: 1.4; user-select: text; -webkit-user-select: text; }
 .global-notice-close { flex: none; margin-top: -1px; padding: 0 3px; border: 0; border-radius: 6px; background: transparent; color: rgba(255,255,255,.65); font-size: 15px; line-height: 1.3; }
 
-.mobile-pane { display: contents; }
-.mobile-nav { display: none; }
 .board-zoom { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 3px 4px 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(248,243,232,.9); color: var(--ink); font-variant-numeric: tabular-nums; }
 .board-zoom button { padding: 3px 7px; border-radius: 999px; font-size: 10px; }
 .analysis-row.current, .analysis-likely-gone.current { border-color: var(--accent-dark); background: #fff; box-shadow: 0 4px 16px rgba(62, 45, 21, .14); }
@@ -341,7 +339,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .tally-caption { margin: 0 0 5px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 .tally-header button { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--muted); }
 .tally-header button.active { color: var(--accent); }
-.nav-icon { width: 22px; height: 22px; }
 
 @media (hover: hover) {
   button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55,45,32,.35); box-shadow: 0 4px 10px rgba(55,45,32,.08); }
@@ -394,8 +391,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .tally-header button, .player-list .roster-vp { min-height: 44px; }
 }
 
-.board-list, .issue-list, .mobile-pane { overscroll-behavior: contain; }
-.board-canvas, .tool-grid button, .token-tools button, .mobile-nav {
+.board-list, .issue-list { overscroll-behavior: contain; }
+.board-canvas, .tool-grid button, .token-tools button {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -408,7 +405,16 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 
 @media (max-width: 1120px) {
   .workspace { grid-template-columns: 250px 1fr; }
+  /* The page scrolls here, so a short viewport (a landscape phone) gets a board
+     worth looking at rather than a strip capped to what fits beside the header. */
+  .board-canvas { max-height: max(320px, calc(100dvh - 130px)); }
   .right-rail { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+}
+
+/* Two rail panels side by side leave the roster name a few characters once the
+   window is this narrow, so the rail stacks. */
+@media (max-width: 900px) {
+  .right-rail { grid-template-columns: 1fr; }
 }
 
 /* Across the whole three-column arm the roster row's fixed cells leave the name
@@ -421,94 +427,19 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .player-list { --tally-col: 18px; --row-gap: 4px; }
 }
 
-/* The landscape arm is gated on a coarse pointer so a merely short desktop
-   window (1440x500, say) keeps the three-column workspace. */
-@media (max-width: 760px), (max-height: 560px) and (orientation: landscape) and (pointer: coarse) {
-  .app-shell {
-    --gutter: max(10px, env(safe-area-inset-left), env(safe-area-inset-right));
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding: max(6px, env(safe-area-inset-top)) var(--gutter) calc(68px + env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: column;
-  }
-  .site-header { flex: none; height: 44px; margin: 0; gap: 10px; }
-  .site-header h1 { margin: 0; font-size: 30px; }
-  .brand-mark { width: 34px; height: 34px; }
-  .brand-mark span { width: 19px; height: 22px; }
-  .brand-mark span:nth-child(2) { left: 15px; }
-  .brand-mark span:nth-child(3) { left: 7px; top: 11px; }
-  /* The desktop grid's `align-items: start` would shrink every stacked row to
-     its content width once the workspace becomes a flex column. */
-  .workspace { flex: none; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
-  .left-rail, .right-rail { display: contents; }
-  /* Not sticky: at full width the board is most of the viewport, so pinning it
-     leaves the pane a strip too short to read. */
-  .center-column { order: -1; position: static; flex: none; width: 100%; gap: 5px; }
-  .board-stage { width: 100%; padding: 8px; }
-  .mobile-pane { display: none; }
-  .app-shell[data-pane="board"] .mobile-pane[data-pane="board"],
-  .app-shell[data-pane="players"] .mobile-pane[data-pane="players"],
-  .app-shell[data-pane="picks"] .mobile-pane[data-pane="picks"],
-  .app-shell[data-pane="library"] .mobile-pane[data-pane="library"] {
-    order: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .panel { flex: none; width: 100%; padding: 14px; }
-  .panel-heading { margin-bottom: 8px; }
-  .panel-heading h2 { font-size: 18px; }
-
-  /* Both phone arms: landscape's pane is ~240px, narrower than portrait's. */
-  .player-list { --tally-col: 26px; --card-pad: 4px; gap: 1px; }
-  .tally-header button, .player-list .roster-vp { min-height: 38px; }
-  .tally-header .stat-icon { width: 17px; height: 17px; }
-  /* Clear of the fixed bottom nav, which the toast must not cover or take touches from.
-     :where() keeps the specificity the landscape block's override was written against. */
-  :where(.app-shell) .global-notice { top: auto; bottom: calc(96px + env(safe-area-inset-bottom)); left: 12px; right: 12px; max-width: none; }
-  .mobile-nav {
-    position: fixed;
-    z-index: 25;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    min-height: 56px;
-    padding-bottom: env(safe-area-inset-bottom);
-    display: flex;
-    background: rgba(238, 229, 209, .96);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid rgba(255,255,255,.65);
-    box-shadow: 0 -10px 28px rgba(62,45,21,.12), inset 0 1px 0 var(--line);
-    transition: transform .16s ease;
-  }
-  .mobile-nav button { position: relative; min-width: 0; min-height: 56px; flex: 1; display: grid; place-items: center; align-content: center; gap: 2px; padding: 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--muted); }
-  .mobile-nav button[aria-selected="true"] { color: var(--accent-dark); box-shadow: inset 0 3px 0 var(--accent); }
-  .mobile-nav button > span:last-child { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-  .mobile-nav-icon { position: relative; display: inline-flex; }
-  .turn-badge { position: absolute; top: -1px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-  .app-shell:has(.mobile-pane :is(input, textarea):focus) .mobile-nav { transform: translateY(100%); }
-}
-
-@media (max-width: 760px) and (orientation: portrait) {
+/* The phone arm: App mounts PhoneShell here, so nothing of the Workspace tree is styled. */
+@media (max-width: 760px) {
   /* On the root, not body: the overscroll canvas only takes body's background if the root's is transparent. */
   :root { background: var(--paper-board); }
   /* The page is the one scroller and a thumb needs no scrollbar for it. */
   html { scroll-behavior: smooth; scrollbar-width: none; }
   html::-webkit-scrollbar { display: none; }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-  .app-shell { padding-inline: 0; overflow-x: clip; background: var(--paper-board); }
-  .site-header { padding-inline: var(--gutter); }
-  .center-column { margin-top: 10px; gap: 0; display: flex; flex-direction: column; }
   /* overflow: visible because the status line moves below the board, so its
      dropdown now opens downward and the stage's clip would eat it. */
-  .board-stage { display: flex; flex-direction: column; padding: 0 var(--gutter); border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
+  .board-stage { display: flex; flex-direction: column; border: 0; border-radius: 0; background: transparent; box-shadow: none; overflow: visible; }
   /* Below the board here, so the reservation would only pad the page's foot. */
   .board-status { min-height: 0; }
-  /* The cap has to go, not just grow: the SVG scales to fit, so any height
-     limit shrinks the board away from the gutters it should meet. */
-  .board-canvas { width: 100%; height: auto; max-height: none; }
-  .mobile-pane { padding: 12px var(--gutter) 0; }
 
   /* Nothing below the board keeps its own scroller: a thumb cannot tell a nested
      one apart from the page. Panels extend the document instead. */
@@ -516,29 +447,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .board-list { flex: none; max-height: none; overflow: visible; }
   .board-list.fade-top, .board-list.fade-bottom { -webkit-mask-image: none; mask-image: none; }
   .issue-list { max-height: none; overflow: visible; }
-
-  .terrain-grid, .structure-grid, .token-tools {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-  }
-  .terrain-grid { gap: 4px; }
-  .terrain-grid button { min-height: 54px; padding: 6px 1px; font-size: clamp(8px, 2.5vw, 10px); }
-  .hex-swatch { width: 24px; height: 26px; }
-  .structure-grid { gap: 4px; }
-  /* "settlement" is one unbreakable word in a cell that falls to ~42px at 320px
-     wide, so the label scales with the viewport instead of spilling into its
-     neighbours; min-width/overflow bound it if the scaling ever falls short. */
-  .structure-grid button { grid-template-rows: 22px auto; min-height: 54px; min-width: 0; overflow: hidden; padding: 6px 1px; font-size: clamp(6.5px, 2.1vw, 9px); line-height: 1.15; }
-  .token-tools { gap: 3px; }
-  .token-tools button { min-height: 38px; padding: 0; font-size: 15px; }
-
-  /* A grid, not flex wrap: the chips' natural width fits two per row here and
-     strands a third of the card. */
-  .player-steppers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 6px 0 2px; }
-  .stat-chip { display: flex; justify-content: space-between; }
-  .stat-chip button { flex: none; width: 26px; padding: 7px 0; font-size: 14px; }
-  .stat-face { min-width: 22px; font-size: 12px; }
 
   .phone-shell { --gutter: max(10px, env(safe-area-inset-left), env(safe-area-inset-right)); position: relative; isolation: isolate; min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
   /* The paper gradient stays put while the page scrolls over it, so it is a fixed
@@ -624,47 +532,4 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .roster-row { grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; }
   .roster-row .swatch { pointer-events: none; }
   .roster-vp { font-size: 14px; pointer-events: none; }
-}
-
-/* Landscape phone keeps a fixed viewport, unlike portrait: at 342px tall there
-   is no room to scroll a page, so the pane stays its own scroller. */
-@media (max-height: 560px) and (orientation: landscape) and (pointer: coarse) {
-  .app-shell {
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-    padding: 8px max(10px, env(safe-area-inset-right)) 8px calc(70px + env(safe-area-inset-left));
-  }
-  .site-header { height: 32px; }
-  .site-header h1 { display: none; }
-  /* The pane is the scroller in this arm, so the board list must not be a
-     second one inside it: at 342px tall the desktop cap would leave the list
-     filling the pane, and its contained overscroll would strand the heading,
-     the import button and the label above it. */
-  .library-boards { flex: none; }
-  .board-list { flex: none; max-height: none; overflow: visible; }
-  .board-list.fade-top, .board-list.fade-bottom { -webkit-mask-image: none; mask-image: none; }
-  .workspace { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 52fr) minmax(0, 48fr); grid-template-rows: minmax(0, 1fr); gap: 8px; }
-  .center-column { grid-column: 1; grid-row: 1; min-height: 0; align-self: start; }
-  /* Room for everything stacked above the canvas in this arm: the shell's own
-     padding twice over, the shrunken header, the column gap, and the status
-     line. A viewport-height fraction instead would overflow the column. */
-  .board-canvas { max-height: calc(100dvh - 105px); }
-  .app-shell[data-pane="board"] .mobile-pane[data-pane="board"],
-  .app-shell[data-pane="players"] .mobile-pane[data-pane="players"],
-  .app-shell[data-pane="picks"] .mobile-pane[data-pane="picks"],
-  .app-shell[data-pane="library"] .mobile-pane[data-pane="library"] {
-    grid-column: 2;
-    grid-row: 1;
-    height: 100%;
-    min-height: 0;
-    overflow-y: auto;
-  }
-  .mobile-nav { top: 0; right: auto; width: 60px; height: 100vh; height: 100dvh; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); border-top: 0; border-right: 1px solid rgba(255,255,255,.65); }
-  /* The shared arm slides a bottom bar out from under the keyboard. Here the nav
-     is a side rail, so the same translate would drop it off the screen. */
-  .app-shell:has(.mobile-pane :is(input, textarea):focus) .mobile-nav { transform: none; }
-  .mobile-nav button[aria-selected="true"] { box-shadow: inset 3px 0 0 var(--accent); }
-  .global-notice { bottom: 12px; left: calc(72px + env(safe-area-inset-left)); }
 }

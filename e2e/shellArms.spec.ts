@@ -3,9 +3,9 @@ import { LISTED_PICKS } from '../src/ui/restMarks'
 import { seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
- * The two arms that must render as they did before the phone shell existed
- * (spec M15): the desktop workspace and the landscape phone. Both keep the
- * `Workspace` tree; only a portrait phone mounts `PhoneShell`.
+ * The `Workspace` tree, which every viewport wider than 760px gets (spec B8),
+ * a landscape phone included; anything narrower mounts `PhoneShell` whatever
+ * its orientation or pointer.
  */
 
 /**
@@ -36,7 +36,7 @@ test.describe('desktop', () => {
     await page.goto('')
     await expect(page.locator('.board-tabs')).toHaveCount(0)
     await expect(page.locator('.phone-shell')).toHaveCount(0)
-    await expect(page.locator('.mobile-nav')).toBeHidden()
+    await expect(page.locator('.mobile-nav')).toHaveCount(0)
 
     const maps = page.locator('.maps-panel')
     const rows = maps.locator('.board-list .list-row')
@@ -536,56 +536,67 @@ test.describe('desktop', () => {
 test.describe('landscape phone', () => {
   test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true })
 
-  test('keeps the four-tab nav and mounts no phone shell', async ({ page }) => {
+  test('gets the workspace, with no tab nav and no phone shell', async ({ page }) => {
     await page.goto('')
-    const nav = page.locator('.mobile-nav')
-    await expect(nav).toBeVisible()
-    await expect(nav.getByRole('tab')).toHaveText(['Board', 'Players', 'Picks', 'Library'])
+    await expect(page.locator('.workspace')).toBeVisible()
+    await expect(page.locator('.mobile-nav')).toHaveCount(0)
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.board-tabs')).toHaveCount(0)
-    // The ribbon lives in the Players pane here too, never over the height-capped board.
+    await expect(page.locator('.maps-panel')).toBeVisible()
+    // The ribbon lives in the Players panel here too, never over the board (spec DB6).
     await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
     await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(1)
     await expect(page.locator('footer')).toHaveCount(0)
     await snap(page, 'landscape')
   })
 
-  test('keeps the Library pane a single scroller however long the library grows', async ({ page }) => {
+  test('rotating to portrait mounts the phone shell and rotating back restores the workspace', async ({ page }) => {
     await page.goto('')
-    await seedSavedMaps(page, 25)
-    await page.locator('.mobile-nav').getByRole('tab', { name: 'Library' }).click()
-    const pane = page.locator('.mobile-pane[data-pane="library"]')
-    await expect(pane.locator('.board-list .list-row')).toHaveCount(26)
-
-    // The pane is the scroller here and the list inside it is not, so a thumb
-    // on the rows cannot be trapped short of the heading, the import button and
-    // the label above them (spec D1).
-    const scrollers = await pane.evaluate((el) => {
-      const list = el.querySelector('.board-list')!
-      return {
-        paneScrolls: el.scrollHeight > el.clientHeight,
-        listScrolls: list.scrollHeight > list.clientHeight,
-        listOverflow: getComputedStyle(list).overflowY,
-      }
-    })
-    expect(scrollers.paneScrolls).toBe(true)
-    expect(scrollers.listScrolls).toBe(false)
-    expect(scrollers.listOverflow).toBe('visible')
-
-    // And the pane really reaches its foot, rather than stopping at the list.
-    await pane.evaluate((el) => { el.scrollTop = el.scrollHeight })
-    await expect(pane.locator('.hero-import')).not.toBeInViewport()
-  })
-
-  test('rotating to portrait mounts the phone shell and rotating back restores the nav', async ({ page }) => {
-    await page.goto('')
-    await expect(page.locator('.mobile-nav')).toBeVisible()
+    await expect(page.locator('.workspace')).toBeVisible()
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(page.locator('.phone-shell')).toBeVisible()
-    await expect(page.locator('.mobile-nav')).toHaveCount(0)
+    await expect(page.locator('.workspace')).toHaveCount(0)
     await snap(page, 'rotated-portrait')
     await page.setViewportSize({ width: 844, height: 390 })
     await expect(page.locator('.phone-shell')).toHaveCount(0)
-    await expect(page.locator('.mobile-nav')).toBeVisible()
+    await expect(page.locator('.workspace')).toBeVisible()
+  })
+})
+
+/* The two-column arm, where the right rail wraps under the board. The board
+   is sticky on the three-column arm, and Chromium bounds a sticky grid item by
+   the grid rather than its row, so a pinned board would slide over the rail. */
+test.describe('two-column desktop window', () => {
+  test.use({ viewport: { width: 1000, height: 700 } })
+
+  test('scrolls the board away rather than over the players panel', async ({ page }) => {
+    await page.goto('')
+    await expect(page.locator('.workspace')).toBeVisible()
+    const board = page.locator('.center-column')
+    const rail = page.locator('.right-rail')
+    const railTop = await rail.evaluate((el) => el.getBoundingClientRect().top)
+    const boardBottom = await board.evaluate((el) => el.getBoundingClientRect().bottom)
+    expect(boardBottom).toBeLessThanOrEqual(railTop)
+    await rail.evaluate((el) => el.scrollIntoView({ block: 'start' }))
+    const scrolled = await board.evaluate((el) => el.getBoundingClientRect().bottom)
+    const railScrolled = await rail.evaluate((el) => el.getBoundingClientRect().top)
+    expect(scrolled).toBeLessThanOrEqual(railScrolled)
+    await snap(page, 'desktop-two-column')
+  })
+})
+
+/* A desktop window narrower than the phone arm but wider than it is tall: the
+   old shared arm stacked the workspace behind a bottom tab bar here. Width
+   alone picks the tree now. */
+test.describe('narrow landscape desktop window', () => {
+  test.use({ viewport: { width: 700, height: 640 } })
+
+  test('mounts the phone shell and never a tab nav', async ({ page }) => {
+    await page.goto('')
+    await expect(page.locator('.phone-shell')).toBeVisible()
+    await expect(page.locator('.workspace')).toHaveCount(0)
+    await expect(page.locator('.mobile-nav')).toHaveCount(0)
+    await expect(page.locator('[role="tablist"]')).toHaveCount(0)
+    await snap(page, 'desktop-narrow-landscape')
   })
 })
