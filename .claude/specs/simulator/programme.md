@@ -84,7 +84,7 @@ The rules-level `trade::embargoed` eligibility check runs on the shared ETW dang
 
 `--domain` deliberately has no default so tuning work cannot accidentally use a held-out domain. The domain constants and their disjointness assertion are contracts; see [contracts.md](contracts.md).
 
-Spend the domains in order and never go back, one generation at a time. Screen and tune on the generation's tuning domain freely; use its eval domain once a candidate is settled, to check the tuning result was not an artifact of its seeds; keep its gate domain for the final adoption decision only. A domain cannot be un-spent — once a parameter has been screened against a domain, that domain's estimate for *that parameter* is no longer unbiased, though it stays clean for every other parameter.
+Spend the domains in order and never go back, one generation at a time. Screen and tune on the generation's tuning domain freely; use its eval domain once a candidate is settled, to check the tuning result was not an artifact of its seeds; keep its gate domain for the final adoption decision only. A domain cannot be un-spent: once a parameter has been screened against a domain, that domain's estimate for *that parameter* is no longer unbiased, though it stays clean for every other parameter.
 
 The first generation is spent in full. `tuning` screened everything through SP5. `eval` was spent twice: on the `resourceValue` spread question, and on the M-45 confirmation of the H4 final vector (the trade-axis and `devBuyScale` parameters). `gate` was spent once, on the M-46 Phase-I adoption decision (user-delegated, preregistered). For the adopted vector all three are gone: no unbiased re-measurement of it exists.
 
