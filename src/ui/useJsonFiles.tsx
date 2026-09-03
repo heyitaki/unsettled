@@ -5,7 +5,7 @@ import { downloadBoard, fileTitle, firstFreeName, loadedNotice } from './boardFi
 import { activeTab, useStore } from './store'
 
 /**
- * JSON import and export of boards, shared by the desktop import panel and the
+ * JSON import and export of boards, shared by the desktop Library panel and the
  * phone's Maps menu. The browser's file picker needs a real `<input type=file>`
  * in the tree, so the hook hands back one to render along with the two actions.
  * `onImported` runs once an import has become a tab.

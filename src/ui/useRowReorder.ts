@@ -239,12 +239,13 @@ export function useRowReorder({
 
   const onRowPointerDown = (event: ReactPointerEvent<HTMLElement>, id: string) => {
     if (!canLift(id)) return
-    // Re-armed here rather than on a timer: a click that never arrives would
-    // otherwise leave the flag set and swallow the next tap.
-    draggedRef.current = false
     // A second finger must not hijack a live press: the first one's pointerup
     // would then no longer match, and the drag could never be ended.
     if (press.current || dragId !== null) return
+    // Re-armed here rather than on a timer: a click that never arrives would
+    // otherwise leave the flag set and swallow the next tap. After the guard,
+    // so a second finger landing mid-drag cannot disarm the drop's swallow.
+    draggedRef.current = false
     const row = event.currentTarget
     const { pointerId, clientX, clientY } = event
     press.current = {
