@@ -158,10 +158,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 6: Run M-61 and record it
 
-- [ ] Record `uptime`, run both invocations, record `uptime` again
-- [ ] Append `## M-61: greedy lookahead accuracy against the draft-aware field` with full provenance, the control and the reading overall and per slot, and a paragraph on what the approximation costs and does not cost
-- [ ] Append a dated note to `placement-programme.md` recording that the draft-aware kind is now the reference field, citing M-59 and M-61, and that this landed independently of the weight package
-- [ ] Link check passes
+- [x] Record `uptime`, run both invocations, record `uptime` again
+- [x] Append `## M-61: greedy lookahead accuracy against the draft-aware field` with full provenance, the control and the reading overall and per slot, and a paragraph on what the approximation costs and does not cost
+- [x] Append a dated note to `placement-programme.md` recording that the draft-aware kind is now the reference field, citing M-59 and M-61, and that this landed independently of the weight package
+- [x] Link check passes
 
 ### Task 7: Preregister M-62, the re-screen on the new field
 
