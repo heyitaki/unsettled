@@ -1552,6 +1552,141 @@ mod tests {
         );
     }
 
+    /// The six SP6 re-screen arms, as arm file stem and the weights keys that arm moves off the
+    /// live defaults. SP6 re-screens four axes SP3 through SP5 left unadopted, against the new
+    /// draft-aware field, so three of these stems repeat a value an SP3 arm already carries.
+    /// They are minted rather than reused because an arm file is a measurement record: an SP3
+    /// file is cited by M-54 and M-57 as the vector those entries ran, and the adoption task
+    /// re-anchors each phase's pin to its own pre-adoption snapshot, so a shared file would put
+    /// two phases' records in one place. `sp6_diversity` could not have been reused in any case,
+    /// because `h1_diversity_48.json` is anchored to the pre-drop defaults at `handValueWeight`
+    /// 0.4.
+    ///
+    /// The decay pair moves two keys, `expansionWeight` and `expansionDecay` together, because
+    /// the decay is inert at a weight of 0 and can only be read beside a nonzero weight. Both
+    /// carry 0.1, the value `sp6_expansion` carries, so the decay contrast has a reference that
+    /// agrees with them on every other axis; M-62's preregistration is where the condition that
+    /// keeps that true lives.
+    const SP6_ARMS: [(&str, &[(&str, f64)]); 6] = [
+        ("sp6_expansion", &[("expansionWeight", 0.1)]),
+        ("sp6_expansion_hi", &[("expansionWeight", 0.3)]),
+        (
+            "sp6_decay_lo",
+            &[("expansionWeight", 0.1), ("expansionDecay", 0.25)],
+        ),
+        (
+            "sp6_decay_hi",
+            &[("expansionWeight", 0.1), ("expansionDecay", 1.0)],
+        ),
+        ("sp6_concentration", &[("robberConcentrationWeight", 4.0)]),
+        ("sp6_diversity", &[("diversityWeight", 4.8)]),
+    ];
+
+    /// Walks the committed SP6 arms (`placement/arms/sp6*.json`) as the SP2 through SP5 walks
+    /// walk theirs: each is the live `default-weights.json` with only its declared keys moved,
+    /// each moved value differs from the shipped one and sits inside that axis's committed
+    /// sweep-bounds range, and no `sp6*` file nobody preregistered is sitting in the directory
+    /// waiting to join a run.
+    ///
+    /// Each file is the hero half of an SP6 arm and nothing more. Every arm in this phase runs as
+    /// `app_formula_draft:placement/arms/<stem>.json@placement/default-weights.json`, so the
+    /// opponent path stays pinned to the field's own weights and the contrast moves the hero's
+    /// formula alone. Nothing in a JSON file can pin that half of the contrast; the
+    /// preregistration and the committed command are where it lives.
+    #[test]
+    fn the_sp6_arm_files_are_the_committed_rescreen_perturbations() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let arms_dir = format!("{placement_dir}/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!("{placement_dir}/default-weights.json"))
+                .expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (stem, overrides) in SP6_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let mut perturbed = base.clone();
+            for (key, value) in overrides {
+                let range = &bounds["placement"][key];
+                assert!(
+                    *value >= range["min"].as_f64().expect("min")
+                        && *value <= range["max"].as_f64().expect("max"),
+                    "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+                );
+                assert_ne!(
+                    base[key].as_f64(),
+                    Some(*value),
+                    "{name}: {key} at {value} is the shipped value, so the arm perturbs nothing"
+                );
+                perturbed[key] = Value::from(*value);
+            }
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with {overrides:?} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sp6") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(
+            found, expected,
+            "the SP6 phase commits one arm per preregistered value"
+        );
+    }
+
+    /// The decay pair carries the same `expansionWeight` as `sp6_expansion`, which is what makes
+    /// M-62's second invocation a reading of `expansionDecay` alone rather than of two axes at
+    /// once. The reference of that invocation is an expansion arm and its arms are the decay
+    /// pair, so a later edit that moved either weight would turn a decay contrast into a
+    /// two-axis one without changing a single assertion above.
+    #[test]
+    fn the_sp6_decay_arms_share_the_reference_arms_expansion_weight() {
+        let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
+        let read = |stem: &str| -> Value {
+            let source =
+                std::fs::read_to_string(format!("{placement_dir}/arms/{stem}.json")).expect(stem);
+            serde_json::from_str(&source).expect("valid JSON")
+        };
+        let reference = read("sp6_expansion");
+        for stem in ["sp6_decay_lo", "sp6_decay_hi"] {
+            let arm = read(stem);
+            assert_eq!(
+                arm["expansionWeight"], reference["expansionWeight"],
+                "{stem} must carry sp6_expansion's expansionWeight so the decay contrast is decay alone"
+            );
+            assert_ne!(
+                arm["expansionDecay"], reference["expansionDecay"],
+                "{stem} must move the decay off the reference's, or it is the reference"
+            );
+        }
+    }
+
     /// Walks every committed weights-shaped file (the two shipped vectors plus the
     /// weights arms under `placement/arms/`) through the full `EngineWeights` contract:
     /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
@@ -1596,8 +1731,8 @@ mod tests {
             load(&name, &source);
         }
         assert_eq!(
-            weights_arms, 58,
-            "the committed weights arms are 58 files; a change to the set is a decision"
+            weights_arms, 64,
+            "the committed weights arms are 64 files; a change to the set is a decision"
         );
     }
 

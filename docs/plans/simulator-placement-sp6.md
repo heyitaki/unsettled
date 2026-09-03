@@ -165,12 +165,12 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 7: Preregister M-62, the re-screen on the new field
 
-- [ ] Write `docs/plans/preregs/<today>-m62-sp6-rescreen.md`
-- [ ] Build the six re-screen arm files named in Context under `simulator/placement/arms/`, add `SP6_ARMS` and its pin test to `params_file.rs`, move the weights-arm count pin by six
-- [ ] Two invocations preregistered: the four non-decay arms against `base`; the decay pair against reference `sp6_expansion` (or `sp6_expansion_hi` if it is the better reader), run only if an expansion arm survives, with that condition written down. Screen power and protocol as in Context, `--threshold 0.005`
-- [ ] Decision rule: the standing disposition rule at the 0.5 bar. State why the field change requires this re-screen and why no SP3 through SP5 number transfers
-- [ ] Prediction per arm and admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Write `docs/plans/preregs/<today>-m62-sp6-rescreen.md`
+- [x] Build the six re-screen arm files named in Context under `simulator/placement/arms/`, add `SP6_ARMS` and its pin test to `params_file.rs`, move the weights-arm count pin by six
+- [x] Two invocations preregistered: the four non-decay arms against `base`; the decay pair against reference `sp6_expansion` (or `sp6_expansion_hi` if it is the better reader), run only if an expansion arm survives, with that condition written down. Screen power and protocol as in Context, `--threshold 0.005`
+- [x] Decision rule: the standing disposition rule at the 0.5 bar. State why the field change requires this re-screen and why no SP3 through SP5 number transfers
+- [x] Prediction per arm and admissibility conditions
+- [x] Both cargo profiles green, link check passes
 
 ### Task 8: Run M-62 and record it
 
