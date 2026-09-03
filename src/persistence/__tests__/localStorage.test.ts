@@ -266,7 +266,7 @@ describe('map identity', () => {
     const loaded = loadMaps([first, second, 'gone'])
     expect(loaded.get(first)).toEqual({ ok: true, game: game() })
     expect(loaded.get(second)).toEqual({ ok: true, game: game('extension6') })
-    // A deleted map is reported, not omitted — the autosave must be able to
+    // A deleted map is reported, not omitted: the autosave must be able to
     // tell "no longer saved" apart from "not linked".
     expect(loaded.get('gone')).toMatchObject({ ok: false })
     // Three ids, one read of the blob.

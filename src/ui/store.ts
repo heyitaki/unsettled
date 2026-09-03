@@ -356,8 +356,8 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
     case 'notice':
       return { ...state, notice: action.message, noticeSeq: state.noticeSeq + 1 }
     case 'highlight':
-      // Marks are rebuilt per hover, so only the identical value — null → null,
-      // most of all — is a no-op; sweeping the draft ribbon clears an already
+      // Marks are rebuilt per hover, so only the identical value (null to null,
+      // most of all) is a no-op; sweeping the draft ribbon clears an already
       // empty highlight once per slot, and each of those would otherwise
       // re-render every consumer of the store.
       return action.marks === state.highlight ? state : { ...state, highlight: action.marks }
