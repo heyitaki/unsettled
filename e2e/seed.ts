@@ -30,3 +30,23 @@ export async function seedUnclaimedRoster(page: Page) {
   }, UNCLAIMED_ROSTER)
   await page.reload()
 }
+
+/**
+ * `count` saved maps, every one a copy of the stored board, so a test can put
+ * more in the Library than the rail can show. Runs on the reloaded document
+ * like `seedUnclaimedRoster`, after the store's own pagehide flush.
+ */
+export async function seedSavedMaps(page: Page, count: number) {
+  await page.addInitScript((n) => {
+    const raw = localStorage.getItem('unsettled.workspace.v1')
+    if (raw === null) return
+    const { game } = JSON.parse(raw).tabs[0]
+    const now = Date.now()
+    localStorage.setItem('unsettled.maps.v1', JSON.stringify(
+      Array.from({ length: n }, (_, i) => (
+        { id: `map-${i}`, name: `Map ${i + 1}`, game, createdAt: now - i, modifiedAt: now - i }
+      )),
+    ))
+  }, count)
+  await page.reload()
+}

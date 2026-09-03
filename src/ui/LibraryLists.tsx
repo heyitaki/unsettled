@@ -35,9 +35,9 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
     onCancel: () => setEditing(null),
   })
   const maps = useMemo(() => sortMaps(listed.maps, sortKey), [listed, sortKey])
-  // Fade whichever end of the saved-map scroller still hides cut-off rows. The
-  // rail bounds it on the desktop; the portrait arm unbounds it, where both
-  // ends measure flush and no mask is drawn.
+  // Fade whichever end of the saved-map scroller still hides cut-off rows. Its
+  // max-height bounds it on the desktop; the portrait arm unbounds it, where
+  // both ends measure flush and no mask is drawn.
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [fades, setFades] = useState({ top: false, bottom: false })
   const syncFades = useCallback(() => {

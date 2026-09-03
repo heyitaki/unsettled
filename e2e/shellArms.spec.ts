@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { LISTED_PICKS } from '../src/ui/restMarks'
-import { seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
+import { seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
  * The two arms that must render as they did before the phone shell existed
@@ -414,6 +414,26 @@ test.describe('desktop', () => {
     await page.mouse.move(x, y + 1)
     await page.mouse.up()
     await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
+  })
+
+  test('a library of maps scrolls inside the rail instead of pushing the tools off the page', async ({ page }) => {
+    await page.goto('')
+    await expect(page.locator('.maps-panel')).toBeVisible()
+    await seedSavedMaps(page, 25)
+    const saved = page.locator('.saved-maps')
+    await expect(saved.locator('.list-row')).toHaveCount(25)
+
+    // The list is bounded, so it scrolls inside the panel and wears the mask
+    // over the rows it cuts off (spec D1).
+    const list = await saved.evaluate((el) => ({ client: el.clientHeight, scroll: el.scrollHeight }))
+    expect(list.scroll).toBeGreaterThan(list.client)
+    await expect(saved).toHaveClass(/fade-bottom/)
+
+    // So the tools below it stay on screen however long the library grows.
+    const viewport = page.viewportSize()!
+    const toolsTop = await page.locator('.tools-panel')
+      .evaluate((el) => el.getBoundingClientRect().top)
+    expect(toolsTop).toBeLessThan(viewport.height)
   })
 })
 

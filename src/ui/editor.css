@@ -96,7 +96,7 @@ button.selected.danger { color: #fff; }
 .menu-backdrop { position: fixed; inset: 0; z-index: 14; border: 0; border-radius: 0; padding: 0; background: transparent; }
 /* Every dropdown is the same bordered sheet: a check on the current option, and
    no marker for the arrow keys unless a keyboard is what opened it. */
-.menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 156px; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 0; padding: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-light); box-shadow: 0 14px 34px rgba(62, 45, 21, .24); scrollbar-width: none; animation: menu-pop .15s ease; }
+.menu-popup { position: absolute; top: calc(100% + 6px); left: 0; z-index: 15; min-width: 156px; max-height: min(60vh, 420px); max-height: min(60dvh, 420px); overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 0; padding: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--paper-light); box-shadow: 0 14px 34px rgba(62, 45, 21, .24); scrollbar-width: none; animation: menu-pop .15s ease; }
 /* A fade, not a scale-in: the phone shell scrolls the window, where a transform
    animation on the fixed popup makes Chrome smooth-scroll the page ~160px on
    open. Opacity alone does not. */
@@ -200,7 +200,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
    and everything before that keep their height. Fade classes are set from JS. */
 .library-saved { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .library-saved > :not(.saved-maps) { flex: none; }
-.saved-maps { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+/* Six rows and the top of a seventh, so a long library scrolls under the fade
+   rather than running the rail past the tools and off the page. */
+.saved-maps { flex: 0 1 auto; min-height: 0; max-height: 340px; overflow-y: auto; scrollbar-width: none; }
 .saved-maps::-webkit-scrollbar { display: none; }
 .saved-maps.fade-top { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px); mask-image: linear-gradient(180deg, transparent 0, #000 22px); }
 .saved-maps.fade-bottom { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
