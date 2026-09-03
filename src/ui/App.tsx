@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { analyzeBoardCached } from '../engine/analyze'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
+import { Brand } from './Brand'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
 import { MobileNav } from './MobileNav'
@@ -14,24 +15,8 @@ import { ToolPalette } from './ToolPalette'
 import { usePortraitPhone } from './useMediaQuery'
 import './editor.css'
 
-const SUBTITLES = [
-  'Catan Map Analyzer',
-  'Min-maxing manipulating friends',
-  'GC BWR NW Best-in-dungeon',
-  'Winner POV',
-]
-// Every so often the app roasts you instead.
-const RARE_SUBTITLE = 'Your face is unsettling'
-
-function pickSubtitle(): string {
-  if (Math.random() < 0.1) return RARE_SUBTITLE
-  return SUBTITLES[Math.floor(Math.random() * SUBTITLES.length)]
-}
-
 function Workspace() {
   const { state } = useStore()
-  // Chosen once per page load, so the tagline rotates between visits.
-  const [subtitle] = useState(pickSubtitle)
   const [pane, setPane] = useState<PaneId>(PANES[0].id)
   // What the board wears while nothing is selected (spec D4), the same ranked
   // picks the phone rests on.
@@ -47,15 +32,7 @@ function Workspace() {
   return (
     <div className="app-shell" data-pane={pane}>
       <header className="site-header">
-        <div className="brand-mark" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-        <div>
-          <span className="eyebrow">{subtitle}</span>
-          <h1>Unsettled</h1>
-        </div>
+        <Brand />
       </header>
       <GlobalNotice />
       <main className="workspace">

@@ -18,7 +18,7 @@ The panels themselves are desktop panels narrowed. The board fights for space wi
 
 One board. One scrolling document. No bottom nav.
 
-- The **header** is the only fixed chrome: it holds the board's identity, the roster, and the two controls that change what the page below is for.
+- The **header** is the only chrome that stays: under a brand row that scrolls away, its controls row sticks and holds the board's identity, the roster, and the two controls that change what the page below is for.
 - The **page** below it is a single scroller: draft ribbon, board, layout caption, then one block that is either the analysis or the board tools.
 - **Maps** and **Players** are full-screen overlays that slide in from the right and return you to exactly where you were. They are screens you go to and come back from, not drawers that share the page.
 - Nothing below the board has its own `overflow-y`. Nothing overflows horizontally except deliberately sideways-scrolling tool rows.
@@ -29,7 +29,7 @@ This restores the layout contract already recorded for this arm (one scroller, o
 
 ### S1 · Header
 
-Fixed, opaque (not frosted: scrolled content read through the blur as smudge), sitting above the document. Four things, left to right:
+Two rows. The **brand row** (the three-hex mark and `Unsettled`, the desktop site header's `Brand`) sits at the top of the page and scrolls away with it. The **controls row** under it is sticky: it rides up with the page until it meets the top of the viewport, then stays, opaque (not frosted: scrolled content read through the blur as smudge), taking a ground and a shadow only once the page is sliding under it. Four things in the controls row, left to right:
 
 1. **Board title** — the active tab's `title`, preceded by a hex in that board's colour (see B4) and followed by a chevron. The whole thing is one button that opens the Maps screen. This is the phone's document switcher.
 2. **Player dots** — one dot per player in roster order, the claimed player ringed. One button; opens the Players screen.
@@ -163,7 +163,7 @@ Resolved 2026-09-02; the open questions they close are kept for the record.
 
 **O3 · Renaming: tap the name, in both lists.** On the Maps screen the name in an open-boards row and in a saved-maps row is a rename target bounded to its own width, exactly like the roster name (B6). The rest of the row selects or opens. An open board's rename goes through `tab-rename` plus `renameMap` when linked; a saved map's rename goes through `renameMap` and the library refresh retitles any tab linked to it.
 
-**M2 · `MobileNav` stays (B8).** Landscape phone uses it as a side rail with the same pane gating, so nothing is deleted. The portrait shell is its own tree that never mounts `MobileNav` or the site header.
+**M2 · `MobileNav` stays (B8).** Landscape phone uses it as a side rail with the same pane gating, so nothing is deleted. The portrait shell is its own tree that never mounts `MobileNav` or the site header; it shows the brand through its own row (S1).
 
 ## Open questions
 
@@ -183,7 +183,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | --- | --- | --- | --- |
 | M1 | Copy the prototype to `.claude/specs/mobile/prototype.html` | | done |
 | M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | | done |
-| M3 | Build the fixed header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
+| M3 | Build the header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
 | M4 | Board colour hash (B4) and the hex in header and both lists | | done |
 | M5 | Draft ribbon above the board (S2) | M2 | done |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | done |
@@ -201,4 +201,4 @@ One row per work item. Keep the state column current; this file is the durable c
 
 ## Out of scope
 
-Landscape phone. Desktop layout, which now follows [`.claude/specs/desktop/spec.md`](../desktop/spec.md) (B7 and the S5 factor labels change desktop behaviour deliberately). Phase 3 boons and curses. The random header subtitle, which the phone header drops along with the rest of the site header.
+Landscape phone. Desktop layout, which now follows [`.claude/specs/desktop/spec.md`](../desktop/spec.md) (B7 and the S5 factor labels change desktop behaviour deliberately). Phase 3 boons and curses.

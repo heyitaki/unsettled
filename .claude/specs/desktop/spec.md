@@ -10,7 +10,7 @@ The phone shell was built to a design that fixed decisions the desktop still con
 
 ## The model
 
-One `Workspace` tree for desktop and landscape (mobile spec B8 holds; the portrait shell is untouched). Left rail: Library, then Board tools. Centre: the board in its paper stage with the layout caption under it. Right rail: Players (roster, then the draft ribbon), then Best picks. No tab strip and no footer. The site header (brand mark, subtitle rotation, `Unsettled`) stays exactly as it is.
+One `Workspace` tree for desktop and landscape (mobile spec B8 holds; the portrait shell is untouched). Left rail: Library, then Board tools. Centre: the board in its paper stage with the layout caption under it. Right rail: Players (roster, then the draft ribbon), then Best picks. No tab strip and no footer. The site header is the brand mark and `Unsettled`, with no subtitle.
 
 Everything the phone and the desktop both render is one component with one stylesheet rule. A phone surface that reaches the desktop is promoted: its component moves out of `src/ui/phone/` into `src/ui/`, its CSS moves out of the portrait arm into the base rules, and both lose the `phone-` prefix. The portrait arm keeps only the rules that differ on a phone. Anything still phone-only (`PhoneShell`, `PhoneHeader`, `PhoneOverlay`, the overlays, `PhoneBuild`, `buildMode.ts`, `revealBoard.ts`) keeps its name, its place and its prefix.
 
@@ -106,7 +106,7 @@ Every row below has been moved; the paths are where each piece lives now.
 
 ## Decisions
 
-- **No board title over the board.** The open-boards list is the only place the active board's name shows and the only place to rename it. The site header stays as it is.
+- **No board title over the board.** The open-boards list is the only place the active board's name shows and the only place to rename it. The site header keeps only the brand.
 - **Tab strip actions match the phone.** Only select, close, rename and new survive; the context menu, duplicate, close-others, close-to-the-right and every chord are deleted, not relocated.
 - **Library first in the left rail.** It is the document switcher and the import entry, the two things done before any tool is touched.
 - **Landscape keeps its height budget.** Nothing new sits over its board; the ribbon rides in the Players pane, and the Library panel and every other promoted surface reach it.
@@ -134,4 +134,4 @@ One row per work item. Keep the state column current; this file is the durable c
 
 ## Out of scope
 
-The portrait shell's own layout and the `PhoneShell`, `PhoneHeader`, `PhoneOverlay`, `MapsScreen`, `PlayersScreen`, `PhoneBuild` components beyond consuming promoted pieces. The site header. The points ledger's columns and steppers. The toast. `simulator/`, `parser/`, `engine/`, `persistence/`, `workspaceSync.ts`. Phase 3. Any new dependency.
+The portrait shell's own layout and the `PhoneShell`, `PhoneHeader`, `PhoneOverlay`, `MapsScreen`, `PlayersScreen`, `PhoneBuild` components beyond consuming promoted pieces. The points ledger's columns and steppers. The toast. `simulator/`, `parser/`, `engine/`, `persistence/`, `workspaceSync.ts`. Phase 3. Any new dependency.

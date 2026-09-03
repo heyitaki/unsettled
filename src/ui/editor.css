@@ -24,7 +24,7 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 
 .app-shell { min-height: 100vh; min-height: 100dvh; padding: 24px clamp(16px, 3vw, 44px) 18px; }
 .site-header { max-width: 1580px; margin: 0 auto 18px; display: flex; align-items: center; gap: 14px; }
-.site-header h1 { margin: -2px 0 0; font: 800 clamp(26px, 3vw, 42px)/1 Georgia, serif; letter-spacing: -.04em; }
+.site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 clamp(26px, 3vw, 42px)/1 Georgia, serif; letter-spacing: -.04em; }
 .brand-mark { position: relative; width: 50px; height: 48px; }
 .brand-mark span { position: absolute; width: 28px; height: 32px; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 .brand-mark span:nth-child(1) { left: 0; top: 0; background: #3d7cb7; }
@@ -433,7 +433,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   }
   .site-header { flex: none; height: 44px; margin: 0; gap: 10px; }
   .site-header h1 { margin: 0; font-size: 30px; }
-  .site-header .eyebrow { display: none; }
   .brand-mark { width: 34px; height: 34px; }
   .brand-mark span { width: 19px; height: 22px; }
   .brand-mark span:nth-child(2) { left: 15px; }
@@ -557,9 +556,14 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
     .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover { color: var(--ink); background: var(--paper-deep); }
     .phone-shell .analysis-row:hover:not(.current) { border-color: var(--line); box-shadow: none; }
   }
-  /* No ground of its own until the page moves under it; then it takes one and casts a shadow. */
-  .phone-head { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: calc(46px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 7px; padding: env(safe-area-inset-top) 12px 0; background: transparent; transition: background-color .18s ease, box-shadow .18s ease; }
+  .phone-brand { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 4px; }
+  .phone-brand h1 { margin: 0; font-size: 26px; }
+  /* No ground of its own until the page moves under it; then it takes one and
+     casts a shadow. The pseudo paints that ground on up through the safe area,
+     which the sticky offset leaves open above the header. */
+  .phone-head { position: sticky; z-index: 20; top: env(safe-area-inset-top); height: 46px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: transparent; transition: background-color .18s ease, box-shadow .18s ease; }
   .phone-head.scrolled { background: #f3ecdd; box-shadow: 0 1px 0 rgba(55, 45, 32, .22), 0 10px 18px -6px rgba(62, 45, 21, .18); }
+  .phone-head.scrolled::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: env(safe-area-inset-top); background: inherit; }
   .phone-title { min-width: 0; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px 0 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(248, 243, 232, .9); box-shadow: 0 2px 8px rgba(62, 45, 21, .07); }
   .phone-title-hex { flex: none; width: 15px; height: 17px; }
   .phone-title-name { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 14px/1.1 Georgia, serif; }
@@ -572,7 +576,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   @keyframes phone-nudge { 0%, 82%, 100% { box-shadow: 0 0 0 0 rgba(187, 76, 50, 0); } 88% { box-shadow: 0 0 0 5px rgba(187, 76, 50, .22); } }
   .phone-icon-btn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: rgba(248, 243, 232, .9); }
   .phone-icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
-  .phone-page { padding: calc(50px + env(safe-area-inset-top)) 0 22px; }
+  .phone-page { padding: 4px 0 22px; }
   /* The frame is the SVG's own box, so the sea rect inside it goes: the box holds
      the shape, the rect would only ever paint a smaller sea inside it. */
   .phone-shell .board-stage { padding: 4px var(--gutter) 0; }
@@ -631,7 +635,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
     padding: 8px max(10px, env(safe-area-inset-right)) 8px calc(70px + env(safe-area-inset-left));
   }
   .site-header { height: 32px; }
-  .site-header > div:last-child { display: none; }
+  .site-header h1 { display: none; }
   /* The pane is the scroller in this arm, so the saved-map list must not be a
      second one inside it: at 342px tall the desktop cap would leave the list
      filling the pane, and its contained overscroll would strand the heading,
