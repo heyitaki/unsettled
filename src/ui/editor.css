@@ -576,13 +576,14 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   @keyframes phone-nudge { 0%, 82%, 100% { box-shadow: 0 0 0 0 rgba(187, 76, 50, 0); } 88% { box-shadow: 0 0 0 5px rgba(187, 76, 50, .22); } }
   .phone-icon-btn { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 11px; background: rgba(248, 243, 232, .9); }
   .phone-icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
-  .phone-page { padding: 4px 0 22px; }
+  .phone-page { padding: 10px 0 22px; }
   /* The frame is the SVG's own box, so the sea rect inside it goes: the box holds
      the shape, the rect would only ever paint a smaller sea inside it. */
   .phone-shell .board-stage { padding: 4px var(--gutter) 0; }
   .phone-shell .board-canvas { aspect-ratio: min(1, var(--board-aspect)); width: 100%; height: auto; max-height: none; padding: 5px; border-radius: 24px; background: #3c7fbf; box-shadow: 0 14px 24px rgba(33, 51, 67, .24); filter: none; }
   .phone-shell .board-sea { display: none; }
   .phone-shell .board-zoom { margin-left: 0; }
+  .phone-analysis .draft-ribbon { height: auto; padding: 0; margin: 0 0 20px; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
   .phone-block-head, .phone-block .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .phone-block-head h2, .phone-block .panel-heading h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }

@@ -71,10 +71,12 @@ test('the window is the only scroller and nothing overflows sideways', async ({ 
   await snap(page, 'page')
 })
 
-test('the ribbon shows every pick and the board sits in a square sea', async ({ page }) => {
+test('the analysis block opens with a ribbon of every pick and the board sits in a square sea', async ({ page }) => {
   await open(page)
+  await page.getByRole('button', { name: 'Board options' }).click()
+  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
   const players = await page.locator('.phone-dot').count()
-  const slots = page.locator('.draft-ribbon-slot')
+  const slots = page.locator('.phone-analysis .draft-ribbon-slot')
   await expect(slots).toHaveCount(players * 2)
   await expect(slots.first()).toHaveClass(/\bnow\b/)
   const frame = await page.locator('.board-canvas').boundingBox()
@@ -83,16 +85,16 @@ test('the ribbon shows every pick and the board sits in a square sea', async ({ 
   await snap(page, 'ribbon-board')
 })
 
-test('the six-player layout gets a taller frame under an unmoved ribbon and a bare caption', async ({ page }) => {
+test('the six-player layout gets a taller frame from an unmoved top and a bare caption', async ({ page }) => {
   await open(page)
-  const ribbonTop = (await page.locator('.draft-ribbon').boundingBox())!.y
+  const frameTop = (await page.locator('.board-canvas').boundingBox())!.y
   await page.getByRole('button', { name: /Board layout/ }).click()
   await page.getByRole('option', { name: '5–6 player' }).click()
   await expect(page.locator('.board-status')).toContainText('5–6 player')
   await expect(page.locator('.confirm-dialog')).toHaveCount(0)
   const frame = await page.locator('.board-canvas').boundingBox()
   expect(frame!.height).toBeGreaterThan(frame!.width)
-  expect((await page.locator('.draft-ribbon').boundingBox())!.y).toBe(ribbonTop)
+  expect((await page.locator('.board-canvas').boundingBox())!.y).toBe(frameTop)
   const caption = await page.locator('.board-status').innerText()
   expect(caption).not.toMatch(/terrain|pieces/)
   await snap(page, 'six-player-frame')

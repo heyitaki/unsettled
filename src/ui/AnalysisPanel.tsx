@@ -5,6 +5,7 @@ import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/c
 import type { Board, Resource, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { readableInk } from './colors'
+import { DraftRibbon } from './DraftRibbon'
 import { PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
@@ -388,6 +389,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         </div>
         {!empty && yourTurn && <span className="turn-pill"><i />Your turn</span>}
       </div>
+      {/* The desktop's ribbon sits under the roster; the phone's block is the
+          one place the draft is read, so the ribbon opens it (spec S2). */}
+      {onBuild && !empty && <DraftRibbon />}
       {empty ? (
         <div className="claim">
           <p className="hint">

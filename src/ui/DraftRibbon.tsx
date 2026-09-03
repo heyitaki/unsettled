@@ -5,8 +5,8 @@ import { draftSlots } from './draftSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
 
 /**
- * The snake draft above the board (spec S2, D4): one circle per pick, tinted to
- * the player who takes it. Taken picks are solid, later ones faded, the current
+ * The snake draft as a row (spec S2, D4): one circle per pick, tinted to the
+ * player who takes it. Taken picks are solid, later ones faded, the current
  * one ringed, and each of the claimed player's own picks carries a dot beneath
  * it. A click marks the pick's settlement, or where the analysis expects it, on
  * the board.

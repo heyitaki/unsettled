@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { analyzeBoardCached } from '../../engine/analyze'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { BoardCanvas } from '../BoardCanvas'
-import { DraftRibbon } from '../DraftRibbon'
 import { GlobalNotice } from '../GlobalNotice'
 import { restingMarks } from '../restMarks'
 import { activeTab, useStore } from '../store'
@@ -83,7 +82,6 @@ export function PhoneShell() {
     <div className="phone-shell" data-overlay={overlay ?? undefined} data-closing={closing || undefined}>
       <PhoneHeader building={building} onToggleMode={building ? done : enter} onOpen={openOverlay} />
       <main className="phone-page">
-        <DraftRibbon />
         <BoardCanvas restMarks={restMarks} />
         {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
       </main>

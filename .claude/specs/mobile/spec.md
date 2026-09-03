@@ -19,7 +19,7 @@ The panels themselves are desktop panels narrowed. The board fights for space wi
 One board. One scrolling document. No bottom nav.
 
 - The **header** is the only chrome that stays: under a brand row that scrolls away, its controls row sticks and holds the board's identity, the roster, and the two controls that change what the page below is for.
-- The **page** below it is a single scroller: draft ribbon, board, layout caption, then one block that is either the analysis or the board tools.
+- The **page** below it is a single scroller: board, layout caption, then one block that is either the analysis (which opens with the draft ribbon) or the board tools.
 - **Maps** and **Players** are full-screen overlays that slide in from the right and return you to exactly where you were. They are screens you go to and come back from, not drawers that share the page.
 - Nothing below the board has its own `overflow-y`. Nothing overflows horizontally except deliberately sideways-scrolling tool rows.
 
@@ -40,9 +40,9 @@ Undo prints as `Undo`, with no stack-depth count. The count is a quantity the us
 
 ### S2 · Draft ribbon
 
-A row of numbered circles above the board, one per pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, the current pick is ringed, and each of your own picks carries a dot beneath it, clear of the current-pick ring.
+A row of numbered circles at the top of the analysis block (S5), under its heading and over the `You are` line, one per pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, the current pick is ringed, and each of your own picks carries a dot beneath it, clear of the current-pick ring. Centred in the block.
 
-Visible in build mode too, so entering build mode does not shift the page.
+It leaves with the analysis block in build mode; nothing sits between the header and the board, so entering build mode does not shift the board.
 
 ### S3 · Board frame
 
@@ -151,7 +151,7 @@ Do not rebuild these; move or restyle them.
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `GlobalNotice.tsx`, rendered by both `Workspace` and `PhoneShell` |
-| Snake draft grid and the ribbon over the board, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` under `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` under `App.tsx` and `phone/PhoneShell.tsx` |
+| Snake draft grid and the ribbon over the board, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` under `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` under `PlayerPanel.tsx` and, on the phone, inside `AnalysisPanel.tsx` |
 
 ## Decisions
 
@@ -185,7 +185,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M2 | Portrait mounts a separate `PhoneShell` tree (B8); `MobileNav` and pane gating stay for landscape | | done |
 | M3 | Build the header (S1): title button, dots cluster, pencil, dots menu | M2 | done |
 | M4 | Board colour hash (B4) and the hex in header and both lists | | done |
-| M5 | Draft ribbon above the board (S2) | M2 | done |
+| M5 | Draft ribbon in the analysis block (S2) | M2 | done |
 | M6 | Board frame proportions (S3) and the trimmed layout caption (S4) | M2 | done |
 | M7 | Maps overlay (S7): import first, open boards, saved maps, in-place rename (O3), JSON behind the dots | M3, M4, M16 | done |
 | M8 | Players overlay (S8) roster: claim on row, rename hit area (B6), reorder | M3 | done |
