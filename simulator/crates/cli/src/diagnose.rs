@@ -16,6 +16,7 @@ use crate::coastal::{
 };
 use crate::evaluate::{EvaluationDomain, EvaluationUnit, evaluation_schedule, evaluation_workers};
 use crate::expansion::{ExpansionReading, PairOutcome, PairReading, expansion_reading, game_pairs};
+use crate::lookahead::{LookaheadAccuracy, LookaheadReading, game_lookahead, lookahead_accuracy};
 use crate::output::Meta;
 use crate::stats::normal_quantile;
 
@@ -53,13 +54,15 @@ pub struct GameObservation {
     pub comparisons: Vec<PickComparison>,
     /// One entry per seat that completed a pair, in the order the pairs completed.
     pub pairs: Vec<PairReading>,
+    /// One entry per first settlement the lookahead could be held against, in pick order.
+    pub lookahead: Vec<LookaheadReading>,
     pub winner: Option<u8>,
     pub draw: bool,
     pub illegal_actions: u32,
 }
 
 /// Per-worker scratch, reused across games so the walks below refill buffers a worker already
-/// owns rather than allocating a fresh one per game. The three vectors an observation keeps are
+/// owns rather than allocating a fresh one per game. The four vectors an observation keeps are
 /// still cloned out of here once per game, which is what makes the serial aggregation independent
 /// of which worker finished first.
 #[derive(Default)]
@@ -70,6 +73,7 @@ struct Scratch {
     edge_owner: Vec<u8>,
     comparisons: Vec<PickComparison>,
     pairs: Vec<PairReading>,
+    lookahead: Vec<LookaheadReading>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -110,6 +114,7 @@ pub struct Diagnostics {
     pub observations: ObservationCounts,
     pub coastal_selection: CoastalSelection,
     pub expansion: ExpansionReading,
+    pub lookahead: LookaheadAccuracy,
     pub illegal_actions: u64,
 }
 
@@ -193,11 +198,21 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
                     &mut scratch.edge_owner,
                     &mut scratch.pairs,
                 );
+                game_lookahead(
+                    board,
+                    &topology,
+                    request.placement,
+                    &scratch.trace,
+                    &mut scratch.vertex_owner,
+                    &mut scratch.edge_owner,
+                    &mut scratch.lookahead,
+                );
                 GameObservation {
                     unit: *unit,
                     picks: scratch.trace.clone(),
                     comparisons: scratch.comparisons.clone(),
                     pairs: scratch.pairs.clone(),
+                    lookahead: scratch.lookahead.clone(),
                     winner: result.winner,
                     draw: result.draw,
                     illegal_actions: result.illegal_actions,
@@ -218,6 +233,7 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
     let mut illegal_actions = 0_u64;
     let mut coastal_picks = Vec::with_capacity(games * 2 * request.seats);
     let mut expansion_pairs = Vec::with_capacity(games * request.seats);
+    let mut lookahead_readings = Vec::with_capacity(games * request.seats);
     for (unit, observation) in schedule.iter().zip(&observations) {
         if observation.unit != *unit {
             return Err(
@@ -251,6 +267,7 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
                 seat_won: observation.winner == Some(reading.seat),
             });
         }
+        lookahead_readings.extend_from_slice(&observation.lookahead);
     }
     let z = normal_quantile(1.0 - request.alpha / 2.0);
 
@@ -274,6 +291,7 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
         observations: counts,
         coastal_selection: coastal_selection(&coastal_picks, request.seats, request.boards, z),
         expansion: expansion_reading(&expansion_pairs, request.seats),
+        lookahead: lookahead_accuracy(&lookahead_readings, request.seats),
         illegal_actions,
     })
 }

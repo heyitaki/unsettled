@@ -4,6 +4,7 @@ pub mod diagnose;
 pub mod evaluate;
 pub mod expansion;
 pub mod heuristics;
+pub mod lookahead;
 pub mod output;
 pub mod runner;
 pub mod schedule;

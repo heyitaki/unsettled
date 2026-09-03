@@ -6,6 +6,8 @@ pub mod app_formula;
 pub(crate) mod draft;
 mod expansion;
 
+pub use draft::LookaheadPlan;
+
 use crate::board::SimBoard;
 use crate::rng::Xoshiro256StarStar;
 use crate::rules::{RESOURCE_COUNT, Resource};
@@ -338,10 +340,16 @@ fn choose_app_formula(
     Some((vertex, selected_edge))
 }
 
-/// The intervening picks the draft kind's lookahead predicts when the hero takes `candidate` at
-/// this state, in `setup_order` order. Observation only: the replay without the valuation it
-/// feeds, so a test or a diagnostic can hold the opponent model against picks a real field made.
-pub fn draft_replay(
+/// The plan the draft kind's first-pick lookahead forms when the hero takes `candidate` at this
+/// state: the intervening picks it predicts, in `setup_order` order, and the second settlement it
+/// plans on the board those picks leave.
+///
+/// Observation only: the replay without the valuation it feeds, so a test or a diagnostic can
+/// hold the opponent model against the picks a real field made. A plain `app_formula` kind is
+/// read as its own opponent model, which is exactly the greedy field the lookahead assumes, so
+/// one code path reads both the model's subject and its control. Any other kind has no formula to
+/// replay with and returns `None`.
+pub fn setup_lookahead_plan(
     kind: PlacementKind,
     board: &SimBoard,
     topology: &Topology,
@@ -349,15 +357,24 @@ pub fn draft_replay(
     edge_owner: &[u8],
     seat: u8,
     candidate: Vertex,
-) -> Vec<(u8, Vertex)> {
-    let PlacementKind::AppFormulaDraft(index) = kind else {
-        panic!(
-            "draft_replay wants a draft placement kind, got {}",
-            kind.name()
-        );
+) -> Option<LookaheadPlan> {
+    let (hero, opponent) = match kind {
+        PlacementKind::AppFormulaDraft(index) => {
+            let scorers = draft_scorers(board, index);
+            (&scorers.hero, &scorers.opponent)
+        }
+        PlacementKind::AppFormula(index) => {
+            let name = app_formula_definition(index).name;
+            let scorer = board.app_formula_scorer(index).unwrap_or_else(|| {
+                panic!("app formula arm {name} has no prepared context for this board")
+            });
+            (scorer, scorer)
+        }
+        _ => return None,
     };
-    draft::replay_picks(
-        draft_scorers(board, index),
+    draft::lookahead_plan(
+        hero,
+        opponent,
         topology,
         board.seats(),
         vertex_owner,

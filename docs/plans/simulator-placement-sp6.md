@@ -142,12 +142,12 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 4: The lookahead accuracy statistic in `diagnose`
 
-- [ ] Expose from `placement/draft.rs` a function that, given the board, topology, owner arrays and a hero seat and pick index, returns the intervening picks the lookahead predicts and the planned second site, without choosing anything
-- [ ] In `simulator/crates/cli/src/diagnose.rs` (and a sibling module beside `expansion.rs`), for each traced game and each seat's first pick, compare the prediction against the picks the trace recorded, and aggregate the shares named in Context overall and per slot into `diagnostics.json`, byte-identical across worker counts. The statistic runs whatever placement `--placement` names, so the greedy control and the draft-aware reading are two invocations of one code path
-- [ ] Rust test over a hand-built trace pinning the share arithmetic in both directions, plus a test that on a greedy field with tie-free picks the share reads exactly 1.0
-- [ ] Update the `diagnose` section of `simulator/README.md`
-- [ ] Recapture the corpus and assert it is byte-identical (the statistic only observes)
-- [ ] Both cargo profiles green, link check passes
+- [x] Expose from `placement/draft.rs` a function that, given the board, topology, owner arrays and a hero seat and pick index, returns the intervening picks the lookahead predicts and the planned second site, without choosing anything
+- [x] In `simulator/crates/cli/src/diagnose.rs` (and a sibling module beside `expansion.rs`), for each traced game and each seat's first pick, compare the prediction against the picks the trace recorded, and aggregate the shares named in Context overall and per slot into `diagnostics.json`, byte-identical across worker counts. The statistic runs whatever placement `--placement` names, so the greedy control and the draft-aware reading are two invocations of one code path
+- [x] Rust test over a hand-built trace pinning the share arithmetic in both directions, plus a test that on a greedy field with tie-free picks the share reads exactly 1.0
+- [x] Update the `diagnose` section of `simulator/README.md`
+- [x] Recapture the corpus and assert it is byte-identical (the statistic only observes)
+- [x] Both cargo profiles green, link check passes
 
 ### Task 5: Preregister M-61, lookahead accuracy on the draft-aware field
 
