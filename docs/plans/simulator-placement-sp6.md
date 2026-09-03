@@ -233,10 +233,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 16: Run M-66 and record it, conditional on M-64
 
-- [ ] Record `uptime`, run, record `uptime` again
-- [ ] Append `## M-66: SP6 adoption gate on gate2` with full provenance, both tables, the verdict, and the decision it makes
-- [ ] Update the spend ledger to say `gate2` is spent, on what
-- [ ] Link check passes
+- [x] Record `uptime`, run, record `uptime` again (load before `2.55 4.05 4.74`, after `14.05 7.09 5.83`; the single preregistered invocation ran in the foreground in 58.809s, 128,000 games, zero illegal actions, domain `gate2` at seed `7670297487904999682`, against the preregistration's predicted 60 seconds)
+- [x] Append `## M-66: SP6 adoption gate on gate2` with full provenance, both tables, the verdict, and the decision it makes (verdict **`better`**, `+1.097pp` on clustered `[+0.740pp, +1.453pp]`, whose lower edge clears the `+0.5pp` bar by 0.240pp, so the package is adopted and Task 17 runs on its non-skip branch)
+- [x] Update the spend ledger to say `gate2` is spent, on what (spent 2026-09-03 by M-66 on the SP6 adoption gate; the ledger now also records that all six domains are spent and that a future placement phase must mint a third generation, and the repo `CLAUDE.md` spend-once bullet was updated in the same edit)
+- [x] Link check passes (0 bad references in 50 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 17: Adopt the package, conditional on M-66
 
