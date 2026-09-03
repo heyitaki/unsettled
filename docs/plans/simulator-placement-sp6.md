@@ -174,10 +174,10 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 8: Run M-62 and record it
 
-- [ ] Record `uptime`, run the first invocation, record `uptime` again; run the decay invocation only if its condition holds, with its own load readings
-- [ ] Append `## M-62: SP6 re-screen against the draft-aware field` with full provenance, pooled and per-hero-seat tables per arm, the single retry where bought, and the disposition per axis
-- [ ] Record the survivor set explicitly in the entry's last paragraph, as `(key, value)` pairs, since Tasks 9 and 11 read it. If no axis survives, say so; Task 9 then takes its skip branch
-- [ ] Link check passes
+- [x] Record `uptime`, run the first invocation, record `uptime` again; run the decay invocation only if its condition holds, with its own load readings
+- [x] Append `## M-62: SP6 re-screen against the draft-aware field` with full provenance, pooled and per-hero-seat tables per arm, the single retry where bought, and the disposition per axis
+- [x] Record the survivor set explicitly in the entry's last paragraph, as `(key, value)` pairs, since Tasks 9 and 11 read it. If no axis survives, say so; Task 9 then takes its skip branch
+- [x] Link check passes
 
 ### Task 9: Preregister M-63, the combined arm and coordinate pass, conditional on M-62
 
