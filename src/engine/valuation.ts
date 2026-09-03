@@ -709,8 +709,8 @@ export function marginalBreakdown(
     diversity: scale.diversity * diversityDelta(ctx, holdings, stats, precompute),
     port: portDelta(ctx, holdings, stats, precompute),
     handValue: hand === null ? 0 : handValue(ctx.weights, hand),
-    // `expansionTerm` returns 0 at weight 0 without walking, which is the shipped default and
-    // every rollout scan.
+    // `expansionTerm` returns 0 at weight 0 without walking. The shipped weight is 0.1 since the
+    // SP6 adoption, so that short circuit now applies only to an explicitly zeroed vector.
     expansion: scale.expansion * expansionTerm(ctx, holdings, occupancy, candidate).value,
   }
 }

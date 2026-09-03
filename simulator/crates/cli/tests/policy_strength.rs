@@ -5,7 +5,9 @@ use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::rules::{Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_sim::boardgen::generate_board;
-use unsettled_sim::evaluate::{EVAL_SEED, GATE_SEED, TUNING_SEED};
+use unsettled_sim::evaluate::{
+    EVAL2_SEED, EVAL_SEED, GATE2_SEED, GATE_SEED, TUNING2_SEED, TUNING_SEED,
+};
 use unsettled_sim::stats::wilson95;
 
 fn evaluate(hero: PolicyKind, baseline: PolicyKind, games: usize) -> (u64, f64) {
@@ -45,10 +47,10 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
             .collect::<std::collections::BTreeSet<_>>()
     };
 
-    let boards = |domain| {
+    let boards = |domain, layout, seats| {
         (0..5)
             .map(|index| {
-                let board = generate_board(Layout::Standard4, 4, mix64(domain ^ index)).unwrap();
+                let board = generate_board(layout, seats, mix64(domain ^ index)).unwrap();
                 (
                     board.tiles().to_vec(),
                     board.tokens().to_vec(),
@@ -58,14 +60,20 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
             .collect::<Vec<(Vec<Option<Resource>>, Vec<Option<u8>>, u8)>>()
     };
 
-    // Pairwise across all three domains, not just tuning/eval: GATE only holds
-    // its value as an unspent adoption gate if it shares neither seed streams
-    // nor generated boards with the domains tuning work is free to burn.
+    // Pairwise across all six domains, not just tuning/eval: a held-out domain only holds
+    // its value as an unspent gate if it shares neither seed streams nor generated boards
+    // with the domains tuning work is free to burn. Boards are compared on both layouts
+    // because a domain that collided on only one of them would still leak through a run
+    // there, and every domain is runnable on either.
     let domains = [
         ("tuning", TUNING_SEED),
         ("eval", EVAL_SEED),
         ("gate", GATE_SEED),
+        ("tuning2", TUNING2_SEED),
+        ("eval2", EVAL2_SEED),
+        ("gate2", GATE2_SEED),
     ];
+    let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {
         for (right_name, right) in &domains[index + 1..] {
             assert_ne!(left, right, "{left_name} and {right_name} share a seed");
@@ -73,11 +81,13 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
                 seeds(*left).is_disjoint(&seeds(*right)),
                 "{left_name} and {right_name} share evaluation seeds"
             );
-            assert_ne!(
-                boards(*left),
-                boards(*right),
-                "{left_name} and {right_name} generate the same boards"
-            );
+            for (layout, seats) in layouts {
+                assert_ne!(
+                    boards(*left, layout, seats),
+                    boards(*right, layout, seats),
+                    "{left_name} and {right_name} generate the same {layout:?} boards"
+                );
+            }
         }
     }
 }

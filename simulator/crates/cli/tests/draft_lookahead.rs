@@ -1,15 +1,17 @@
-//! SP5's draft-aware placement kind: the opponent model must reproduce the field, and the second
-//! pick must stay the plain formula argmax.
+//! SP5's draft-aware placement kind: the opponent model must reproduce the field, the second pick
+//! must stay the plain formula argmax, and M-61's accuracy statistic must count both.
 //!
 //! The boards and seeds are the `tuning` domain's own, so the games the model is held against are
 //! games the measurement runs would actually play, not a hand-built arrangement chosen to suit it.
+//! The one exception is the statistic's arithmetic, which is pinned against a trace built by hand
+//! so a deliberate mismatch can be put in a known position.
 
 use unsettled_engine::board::SimBoard;
 use unsettled_engine::game::{GameArena, GameConfig, SetupPick, can_place_settlement, setup_order};
 use unsettled_engine::placement::app_formula::EngineWeights;
 use unsettled_engine::placement::{
-    PlacementKind, choose, draft_replay, prepare_app_formula_boards, production_pips,
-    register_app_formula, register_app_formula_draft, setup_candidate_score,
+    PlacementKind, choose, prepare_app_formula_boards, production_pips, register_app_formula,
+    register_app_formula_draft, setup_candidate_score, setup_lookahead_plan,
 };
 use unsettled_engine::rng::{Xoshiro256StarStar, derive_evaluation_seed, mix64};
 use unsettled_engine::rules::RuleConfig;
@@ -17,6 +19,7 @@ use unsettled_engine::state::EMPTY;
 use unsettled_engine::topology::{Layout, Topology, Vertex};
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::TUNING_SEED;
+use unsettled_sim::lookahead::{game_lookahead, lookahead_accuracy};
 
 const SEATS: usize = 4;
 /// Traced games the opponent-model test wants, and how many boards it may look at to find them.
@@ -40,6 +43,25 @@ fn kinds(label: &str) -> (PlacementKind, PlacementKind) {
     )
     .expect("registry has room");
     (field, draft)
+}
+
+/// `kinds` with the expansion walk off on both sides, for the one test below that rebuilds the
+/// replay by hand. The walk is the only component that reads the board past the scoring seat's
+/// own holdings, and a rebuild cannot see the setup roads `Lookahead::replay` lays for the hero
+/// and for each intervening rival. Zeroed, the rebuild is exact. The shipped weight is 0.1 since
+/// M-66 adopted it, so this is a deliberately zeroed vector rather than the field.
+fn kinds_without_expansion(label: &str) -> (PlacementKind, PlacementKind, EngineWeights) {
+    let mut weights = default_weights();
+    weights.expansion_weight = 0.0;
+    let field = register_app_formula(format!("app_formula:{label}-field"), weights.clone())
+        .expect("registry has room");
+    let draft = register_app_formula_draft(
+        format!("app_formula_draft:{label}-hero@{label}-opponent"),
+        weights.clone(),
+        weights.clone(),
+    )
+    .expect("registry has room");
+    (field, draft, weights)
 }
 
 fn prepared_board(board_index: u64, kinds: &[PlacementKind]) -> (Topology, SimBoard) {
@@ -166,7 +188,7 @@ fn the_lookahead_predicts_the_picks_the_field_actually_made() {
                 .rposition(|seat| *seat == hero)
                 .expect("every seat picks twice");
             let (vertex_owner, edge_owner) = &states[first];
-            let predicted = draft_replay(
+            let predicted = setup_lookahead_plan(
                 draft,
                 &board,
                 &topology,
@@ -174,7 +196,9 @@ fn the_lookahead_predicts_the_picks_the_field_actually_made() {
                 edge_owner,
                 hero,
                 trace[first].vertex,
-            );
+            )
+            .expect("a draft kind always has a formula to replay with")
+            .picks;
             let played: Vec<(u8, Vertex)> = trace[first + 1..last]
                 .iter()
                 .map(|pick| (pick.seat, pick.vertex))
@@ -275,13 +299,13 @@ fn a_standard4_first_pick_stays_within_its_budget() {
 /// value the pin says is untouched at 0.
 #[test]
 fn the_shipped_weight_adds_no_denial_credit() {
-    let (field, draft) = kinds("denial");
-    let mut hero = default_weights();
+    let (field, draft, weights) = kinds_without_expansion("denial");
+    let mut hero = weights.clone();
     hero.setup_denial_weight = 1.0;
     let credited = register_app_formula_draft(
         "app_formula_draft:denial-credited@denial-opponent".to_string(),
         hero,
-        default_weights(),
+        weights,
     )
     .expect("registry has room");
     let order = setup_order(SEATS);
@@ -297,11 +321,11 @@ fn the_shipped_weight_adds_no_denial_credit() {
             let candidate = trace[first].vertex;
 
             // The replayed board carries no roads, which the second settlement's score cannot
-            // tell: only the `expansion` component reads edges and the committed weights ship it
-            // at 0.
+            // tell: only the `expansion` component reads edges, and these kinds run with it
+            // zeroed for exactly that reason. See `kinds_without_expansion`.
             let mut replayed = vertex_owner.clone();
             replayed[usize::from(candidate)] = hero;
-            for (seat, vertex) in draft_replay(
+            for (seat, vertex) in setup_lookahead_plan(
                 draft,
                 &board,
                 &topology,
@@ -309,7 +333,10 @@ fn the_shipped_weight_adds_no_denial_credit() {
                 edge_owner,
                 hero,
                 candidate,
-            ) {
+            )
+            .expect("a draft kind always has a formula to replay with")
+            .picks
+            {
                 replayed[usize::from(vertex)] = seat;
             }
             let mut second: Option<f64> = None;
@@ -373,4 +400,178 @@ fn the_shipped_weight_adds_no_denial_credit() {
         moved > 0,
         "a weight of 1 must move some candidate, or the pin at 0 proves nothing"
     );
+}
+
+/// A full setup trace over `setup_order` from the vertices given in pick order. The pick index and
+/// the setup grant follow the round, exactly as `game.rs::setup` records them, and each road is the
+/// settlement's first incident edge, which no part of the accuracy statistic reads.
+fn hand_built_trace(topology: &Topology, vertices: &[Vertex]) -> Vec<SetupPick> {
+    let order = setup_order(SEATS);
+    assert_eq!(vertices.len(), order.len(), "a trace covers every setup pick");
+    order
+        .iter()
+        .zip(vertices)
+        .enumerate()
+        .map(|(position, (seat, vertex))| SetupPick {
+            seat: *seat,
+            pick: u8::from(position >= SEATS),
+            grant: position >= SEATS,
+            vertex: *vertex,
+            edge: topology.vertex_edges(*vertex)[0],
+        })
+        .collect()
+}
+
+/// The lowest-index vertex legal on `owners` that is not `avoid`, which is how the deviating trace
+/// takes a settlement the lookahead did not name.
+fn other_legal(topology: &Topology, owners: &[u8], avoid: Option<Vertex>) -> Vertex {
+    (0..topology.vertex_count())
+        .map(|index| index as Vertex)
+        .find(|vertex| Some(*vertex) != avoid && can_place_settlement(topology, owners, *vertex))
+        .expect("a standard4 setup always leaves a legal vertex")
+}
+
+/// M-61's arithmetic, read off two traces that differ in one known place: one the lookahead named
+/// exactly, and one where the last intervening pick and the hero's second settlement both went
+/// somewhere else. Five of six named picks, one exact sequence of two, and one matched second is
+/// what the statistic must report, per slot and pooled.
+#[test]
+fn the_accuracy_statistic_counts_a_hand_built_trace_both_ways() {
+    let draft = register_app_formula_draft(
+        "app_formula_draft:arithmetic-hero@arithmetic-opponent".to_string(),
+        default_weights(),
+        default_weights(),
+    )
+    .expect("registry has room");
+    let (topology, board) = prepared_board(0, &[draft]);
+    let vertex_owner = vec![EMPTY; topology.vertex_count()];
+    let edge_owner = vec![EMPTY; topology.edge_count()];
+    // Vertex 0 is legal on an empty board, and which candidate the hero holds does not matter: the
+    // statistic reads the plan that candidate produces, whatever it is.
+    let candidate: Vertex = 0;
+    let plan = setup_lookahead_plan(
+        draft,
+        &board,
+        &topology,
+        &vertex_owner,
+        &edge_owner,
+        0,
+        candidate,
+    )
+    .expect("a draft kind always has a formula to replay with");
+    assert_eq!(
+        plan.picks.len(),
+        2 * SEATS - 2,
+        "seat 0 looks past every other seat's two picks"
+    );
+
+    let mut named: Vec<Vertex> = vec![candidate];
+    named.extend(plan.picks.iter().map(|(_, vertex)| *vertex));
+    named.push(plan.second.expect("the replay leaves seat 0 a second site"));
+
+    // The deviation goes at the end, so every pick before it stands where the exact trace put it
+    // and the two traces differ in exactly two known places.
+    let order = setup_order(SEATS);
+    let last_intervening = 2 * SEATS - 2;
+    let mut deviating = named.clone();
+    let mut owners = vertex_owner.clone();
+    for (seat, vertex) in order.iter().zip(&deviating).take(last_intervening) {
+        owners[usize::from(*vertex)] = *seat;
+    }
+    deviating[last_intervening] = other_legal(&topology, &owners, Some(named[last_intervening]));
+    owners[usize::from(deviating[last_intervening])] = order[last_intervening];
+    deviating[last_intervening + 1] = other_legal(&topology, &owners, plan.second);
+
+    let mut scratch_vertices = Vec::new();
+    let mut scratch_edges = Vec::new();
+    let mut readings = Vec::new();
+    let mut collected = Vec::new();
+    for vertices in [&named, &deviating] {
+        game_lookahead(
+            &board,
+            &topology,
+            draft,
+            &hand_built_trace(&topology, vertices),
+            &mut scratch_vertices,
+            &mut scratch_edges,
+            &mut readings,
+        );
+        assert_eq!(readings.len(), SEATS, "every seat completes a pair");
+        assert_eq!(
+            readings[SEATS - 1].intervening,
+            0,
+            "the seat picking last in the first round has nothing to look past"
+        );
+        collected.push(readings[0]);
+    }
+
+    let (exact, deviated) = (collected[0], collected[1]);
+    assert_eq!(exact.intervening, 6);
+    assert_eq!(exact.matched, 6);
+    assert!(exact.sequence_exact);
+    assert!(exact.second_matched);
+    assert_eq!(deviated.intervening, 6);
+    assert_eq!(deviated.matched, 5);
+    assert!(!deviated.sequence_exact);
+    assert!(!deviated.second_matched);
+
+    let accuracy = lookahead_accuracy(&collected, SEATS);
+    assert_eq!(accuracy.overall.first_picks, 2);
+    assert_eq!(accuracy.overall.predicting_first_picks, 2);
+    assert_eq!(accuracy.overall.intervening_picks, 12);
+    assert_eq!(accuracy.overall.matched_picks, 11);
+    assert_eq!(accuracy.overall.pick_share, 11.0 / 12.0);
+    assert_eq!(accuracy.overall.exact_sequences, 1);
+    assert_eq!(accuracy.overall.sequence_share, 0.5);
+    assert_eq!(accuracy.overall.second_matches, 1);
+    assert_eq!(accuracy.overall.second_share, 0.5);
+    // Both readings are seat 0's, so slot 0 carries the whole run and every other slot is empty.
+    assert_eq!(accuracy.per_slot.len(), SEATS);
+    assert_eq!(accuracy.per_slot[0].intervening_picks, 12);
+    assert_eq!(accuracy.per_slot[0].pick_share, 11.0 / 12.0);
+    for slot in &accuracy.per_slot[1..] {
+        assert_eq!(slot.first_picks, 0);
+        assert_eq!(slot.pick_share, 0.0);
+        assert_eq!(slot.sequence_share, 0.0);
+        assert_eq!(slot.second_share, 0.0);
+    }
+
+    // A seat with nothing between its picks is exact by having nothing to get wrong, so it is left
+    // out of the sequence share rather than counted as a success.
+    let vacuous = lookahead_accuracy(&readings[SEATS - 1..], SEATS);
+    assert_eq!(vacuous.overall.first_picks, 1);
+    assert_eq!(vacuous.overall.predicting_first_picks, 0);
+    assert_eq!(vacuous.overall.sequence_share, 0.0);
+}
+
+/// The statistic's control, and the condition M-61's preregistration reads it under: against a
+/// greedy field with no tie anywhere, the lookahead's opponent model is the field itself, so every
+/// share must read exactly 1. Anything else says the statistic is broken rather than that the
+/// model is.
+#[test]
+fn a_tie_free_greedy_field_is_predicted_exactly() {
+    let field = register_app_formula("app_formula:control-field".to_string(), default_weights())
+        .expect("registry has room");
+    let mut scratch_vertices = Vec::new();
+    let mut scratch_edges = Vec::new();
+    let mut game = Vec::new();
+    let mut readings = Vec::new();
+    for (topology, board, trace, _) in tie_free_games(field, &[]) {
+        game_lookahead(
+            &board,
+            &topology,
+            field,
+            &trace,
+            &mut scratch_vertices,
+            &mut scratch_edges,
+            &mut game,
+        );
+        readings.extend_from_slice(&game);
+    }
+    let accuracy = lookahead_accuracy(&readings, SEATS);
+    assert_eq!(accuracy.overall.first_picks, TIE_FREE_GAMES * SEATS);
+    assert!(accuracy.overall.intervening_picks > 0);
+    assert_eq!(accuracy.overall.pick_share, 1.0);
+    assert_eq!(accuracy.overall.sequence_share, 1.0);
+    assert_eq!(accuracy.overall.second_share, 1.0);
 }

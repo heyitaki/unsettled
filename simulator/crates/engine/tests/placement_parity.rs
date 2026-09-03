@@ -392,10 +392,18 @@ fn occupancy_moves_the_expansion_component_and_nothing_else() {
             ("diversity", expected.diversity, actual.diversity),
             ("port", expected.port, actual.port),
             ("handValue", expected.hand_value, actual.hand_value),
+            // Zeroing the component rather than subtracting it: `total` folds expansion last,
+            // so subtracting a nonzero one back off is a rounding step and reads a one-ULP
+            // difference where there is none. Zeroed, the six remaining components fold in the
+            // same order as the holdings entry's.
             (
                 "total less expansion",
                 expected.total(),
-                actual.total() - actual.expansion,
+                ScoreBreakdown {
+                    expansion: 0.0,
+                    ..actual
+                }
+                .total(),
             ),
         ] {
             assert_eq!(

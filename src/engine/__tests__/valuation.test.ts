@@ -661,11 +661,12 @@ describe('occupancy', () => {
     expect(occupancyFromBoard({ ...board }).blocked).not.toBe(occupancyFromBoard(board).blocked)
   })
 
-  // At the shipped `expansionWeight` of 0 no component reads occupancy, so a full one has to score
+  // At an `expansionWeight` of 0 no component reads occupancy, so a full one has to score
   // bit-for-bit what an empty one scores. Bits, not toBeCloseTo: the claim is that the argument is
-  // inert.
-  it('leaves every score untouched at every scoring entry', () => {
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+  // inert. The shipped weight is 0.1 since the SP6 adoption, so this is the zeroed vector; the
+  // occupancy tests above pin what a live walk reads.
+  it('leaves every score untouched at a zero expansion weight', () => {
+    const ctx = computeBoardContext(board, { ...DEFAULT_WEIGHTS, expansionWeight: 0 })
     const occupancy = occupancyFromBoard(board)
     const grid = boardGrid(board.layout)
     const holding = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])

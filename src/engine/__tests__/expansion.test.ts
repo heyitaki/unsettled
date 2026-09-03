@@ -206,24 +206,42 @@ describe('expansion term', () => {
     }
   })
 
-  it('is exactly inert at the shipped weight of 0', () => {
-    expect(DEFAULT_WEIGHTS.expansionWeight).toBe(0)
+  it('is exactly inert at a weight of 0', () => {
+    const off: EngineWeights = { ...DEFAULT_WEIGHTS, expansionWeight: 0 }
     const board = secondRing(CANDIDATE).reduce(
       (next, vertexId) => placeBuilding(next, vertexId, 'foe', 'settlement'),
       placeRoad(completeBoard(), incidentEdges(CANDIDATE)[0], 'foe'),
     )
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, off)
     const occupancy = occupancyFromBoard(board, 'me')
     const held = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
     for (const vertexId of grid.vertexIds) {
       const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
       const breakdown = marginalBreakdown(ctx, held, vertexId, hand, occupancy)
-      // Bits, not toBeCloseTo: the claim is that the shipped default cannot move a number.
+      // Bits, not toBeCloseTo: the claim is that a zero weight cannot move a number.
       expect(breakdown.expansion).toBe(0)
       expect(breakdown).toEqual(marginalBreakdown(ctx, held, vertexId, hand, emptyOccupancy()))
       expect(marginalTotal(ctx, held, vertexId, hand, occupancy))
         .toBe(marginalWithoutExpansion(ctx, held, vertexId, hand))
     }
+  })
+
+  // M-66, the SP6 gate on `gate2`, adopted the term at 0.1, so the walk now runs on every score
+  // the app takes. Pinned as a value rather than a range: the app and the simulator ship one
+  // vector, and `simulator/placement/default-weights.json` carries the same number.
+  it('ships on, at the weight the SP6 gate adopted', () => {
+    expect(DEFAULT_WEIGHTS.expansionWeight).toBe(0.1)
+    const board = completeBoard()
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const occupancy = occupancyFromBoard(board, 'me')
+    const held = addToHoldings(ctx, emptyHoldings(), grid.vertexIds[0])
+    // An open board opens sites everywhere, so the shipped weight has to move real scores.
+    const moved = grid.vertexIds.filter((vertexId) => {
+      const hand = ctx.stats.get(vertexId)?.setupGrant ?? null
+      return marginalTotal(ctx, held, vertexId, hand, occupancy) !==
+        marginalWithoutExpansion(ctx, held, vertexId, hand)
+    })
+    expect(moved.length).toBe(grid.vertexIds.length)
   })
 
   it('lays the road toward the best site, breaking ties on the pair then the edge id', () => {

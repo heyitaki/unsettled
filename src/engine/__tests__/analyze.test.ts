@@ -20,8 +20,8 @@ import {
   type PreWindowResult,
 } from '../analyze'
 import { inferDraftState } from '../draft'
-import { expansionTerm } from '../expansion'
-import { legalSettlementVertices } from '../legality'
+import { expansionSites, expansionTerm } from '../expansion'
+import { blockedVertices, legalSettlementVertices, vertexAdjacency } from '../legality'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
@@ -300,6 +300,18 @@ describe('joint draft analysis', () => {
     expect(analysis.status).toBe('ready')
     expect(analysis.recommendations.every((entry) => entry.plannedSecond.length === 0)).toBe(true)
     const existingHoldings = addToHoldings(ctx, emptyHoldings(), existing)
+    // Seats pick ahead of this last one, so the settlements standing when it is made are the
+    // board's own beside the ones the rollout took, and that is what it has to be scored against.
+    expect(analysis.takenBeforeFirstPick.length).toBeGreaterThan(0)
+    const pieces = occupancyFromBoard(board)
+    const standing = {
+      ...pieces,
+      blocked: new Set([
+        ...pieces.blocked,
+        ...analysis.takenBeforeFirstPick.map((entry) => entry.vertexId),
+      ]),
+      seat: 'aki',
+    }
     expect(analysis.recommendations[0].score).toBeCloseTo(
       scoreCandidate(
         ctx,
@@ -309,6 +321,7 @@ describe('joint draft analysis', () => {
         board,
         neutralModifier,
         ctx.stats.get(analysis.recommendations[0].firstPick)?.setupGrant ?? null,
+        standing,
       ).total,
     )
   })
@@ -367,21 +380,183 @@ describe('joint draft analysis', () => {
 
   it('reports the expansion walk road only while the walk is on', () => {
     const board = filledBoard(3, 4)
-    const shipped = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
-    expect(shipped.recommendations.length).toBeGreaterThan(0)
-    expect(shipped.recommendations.every((entry) => entry.firstRoad === null)).toBe(true)
+    const off = { ...DEFAULT_WEIGHTS, expansionWeight: 0 }
+    const silent = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights: off })
+    expect(silent.recommendations.length).toBeGreaterThan(0)
+    expect(silent.recommendations.every((entry) => entry.firstRoad === null)).toBe(true)
 
-    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.3 }
-    const witness = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
-    const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
-    expect(withRoads.length).toBeGreaterThan(0)
-    const ctx = computeBoardContext(board, weights)
-    const occupancy = occupancyFromBoard(board, 'aki')
-    for (const entry of withRoads) {
-      expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
-      expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
-        .toBe(entry.firstRoad)
+    // The shipped weight is 0.1 since the SP6 adoption, so the walk is on by default and the
+    // recommendations carry roads without being told to.
+    for (const weights of [DEFAULT_WEIGHTS, { ...DEFAULT_WEIGHTS, expansionWeight: 0.3 }]) {
+      const witness = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
+      const withRoads = witness.recommendations.filter((entry) => entry.firstRoad !== null)
+      expect(withRoads.length).toBeGreaterThan(0)
+      const ctx = computeBoardContext(board, weights)
+      // The reported road comes off the modal rollout, the same one `takenBeforeFirstPick` is
+      // drawn from, so the drawn road and the drawn losses cannot contradict each other.
+      const pieces = occupancyFromBoard(board)
+      const occupancy = {
+        ...pieces,
+        blocked: new Set([
+          ...pieces.blocked,
+          ...witness.takenBeforeFirstPick.map((taken) => taken.vertexId),
+        ]),
+        seat: 'aki',
+      }
+      for (const entry of withRoads) {
+        expect(vertexIncidentEdgeIds(entry.firstPick)).toContain(entry.firstRoad)
+        expect(expansionTerm(ctx, holdingsFor(board, 'aki').holdings, occupancy, entry.firstPick).road)
+          .toBe(entry.firstRoad)
+      }
     }
+  })
+
+  // The rollout's `blocked` set is closed under the distance rule, so it carries the neighbours of
+  // my own first pick beside the pick itself. Reading that set as the occupancy made those
+  // neighbours look like rivals' settlements, and the walk in `expansion.ts` stops dead at a rival.
+  it('prices the second pick against the settlements standing, not the vertices the rule bars', () => {
+    const board = filledBoard(1)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.5 }
+    const ctx = computeBoardContext(board, weights)
+    const [top] = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights }).recommendations
+    const first = top.firstPick
+    const second = top.plannedSecond[0]
+
+    // The two readings disagree about exactly my own first pick's neighbours, and nobody has
+    // settled any of them.
+    const barred = [...blockedVertices(board.layout, [first])].filter((vertexId) => vertexId !== first)
+    expect(new Set(barred)).toEqual(new Set(vertexAdjacency(board.layout).get(first)))
+    expect(board.buildings).toEqual([])
+
+    const pieces = occupancyFromBoard(board)
+    const seated = (blocked: ReadonlySet<VertexId>) => ({ ...pieces, blocked, seat: 'aki' })
+    const held = addToHoldings(ctx, emptyHoldings(), first)
+    const own = new Set<VertexId>([...held.vertices, second])
+    const settled = seated(new Set([first]))
+    const closed = seated(blockedVertices(board.layout, [first]))
+    // Sites the walk reaches only once my own settlement's neighbours stop reading as rivals.
+    const reachedUnderClosed = new Set(expansionSites(board.layout, closed, own, second)
+      .map((site) => site.vertexId))
+    const opened = expansionSites(board.layout, settled, own, second)
+      .filter((site) => !reachedUnderClosed.has(site.vertexId))
+    expect(opened.length).toBeGreaterThan(0)
+
+    const firstTerm =
+      expansionTerm(ctx, emptyHoldings(), occupancyFromBoard(board, 'aki'), first).value
+    expect(expansionTerm(ctx, held, settled, second).value)
+      .toBeGreaterThan(expansionTerm(ctx, held, closed, second).value)
+    expect(top.breakdown.expansion)
+      .toBeCloseTo(firstTerm + expansionTerm(ctx, held, settled, second).value, 10)
+  })
+
+  it('reads one occupancy on both picks when the rollout took nothing', () => {
+    const board = filledBoard(1)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 0.5 }
+    const ctx = computeBoardContext(board, weights)
+    const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54, weights })
+    const [top] = analysis.recommendations
+    const first = top.firstPick
+    const second = top.plannedSecond[0]
+    // A solo roster drafts alone, so nothing is taken between my two picks.
+    expect(analysis.draft.sequence).toEqual(['aki', 'aki'])
+    expect(top.expectedTaken).toEqual([])
+
+    // The same board with my first pick standing on it, where the one pick left is scored as a
+    // first pick off `occupancyFromBoard`. The second pick has to read exactly that.
+    const placed = analyzeBoard(placeBuilding(board, first, 'aki', 'settlement'), {
+      rollouts: 1,
+      maxResults: 54,
+      weights,
+    })
+    const asFirstPick = placed.recommendations.find((entry) => entry.firstPick === second)
+    expect(asFirstPick).toBeDefined()
+    const firstTerm =
+      expansionTerm(ctx, emptyHoldings(), occupancyFromBoard(board, 'aki'), first).value
+    expect(firstTerm).toBeGreaterThan(0)
+    expect(asFirstPick!.breakdown.expansion).toBeGreaterThan(0)
+    expect(top.breakdown.expansion).toBeCloseTo(firstTerm + asFirstPick!.breakdown.expansion, 10)
+  })
+
+  // Both of these boards have more than one seat, which is where the two occupancy readings can
+  // actually part: a solo roster takes nothing between the two picks, so every set is the same set.
+  it('prices the first pick against the settlements the rollout took before it', () => {
+    const board = filledBoard(2)
+    const draft = inferDraftState(board)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 1 }
+    const ctx = computeBoardContext(board, weights)
+    expect(board.buildings).toEqual([])
+    // Two vertices a road apart on the same hex ring: legal together, and the take sits inside the
+    // candidate's expansion range, so the walk has to see it.
+    const candidate = 'v:-1,-1;-1,0;0,-1' as VertexId
+    const taken = 'v:-1,0;-1,1;0,0' as VertexId
+    // Everything else barred, so the pick has no legal second and its score is the first alone.
+    const blocked = new Set(boardGrid(board.layout).vertexIds)
+    blocked.delete(candidate)
+
+    const pieces = occupancyFromBoard(board)
+    const seated = (occupied: ReadonlySet<VertexId>) => ({ ...pieces, blocked: occupied, seat: 'aki' })
+    const under = (occupied: ReadonlySet<VertexId>) => scoreCandidate(
+      ctx,
+      emptyHoldings(),
+      candidate,
+      'aki',
+      board,
+      neutralModifier,
+      null,
+      seated(occupied),
+    ).total
+    expect(under(new Set([taken]))).toBeLessThan(under(new Set()))
+
+    const result = rankCandidates(ctx, board, draft, [{ blocked, taken: [taken] }], requiredOptions({
+      maxResults: 54,
+      weights,
+    }))
+    const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
+    expect(entry).toBeDefined()
+    expect(entry!.plannedSecond).toEqual([])
+    expect(entry!.score).toBeCloseTo(under(new Set([taken])))
+  })
+
+  // A rollout bars a vertex by the distance rule but occupies only the vertex itself, and the two
+  // sets are what the scan hands the walk. Reading the barred set as the occupancy would make a
+  // rival's neighbours look like rivals; forgetting to occupy a pick would let the next seat in the
+  // window walk straight through it.
+  it('scans each rollout pick against the settlements standing, not the vertices the rule bars', () => {
+    const board = filledBoard(3)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 1 }
+    const ctx = computeBoardContext(board, weights)
+    expect(board.buildings).toEqual([])
+    const pieces = occupancyFromBoard(board)
+    const vertexIds = boardGrid(board.layout).vertexIds
+    const argmax = (seat: string, blocked: ReadonlySet<VertexId>, occupied: ReadonlySet<VertexId>) => {
+      let best: VertexId | null = null
+      let bestScore = -Infinity
+      for (const vertexId of vertexIds) {
+        if (blocked.has(vertexId)) continue
+        const total = scoreCandidate(ctx, emptyHoldings(), vertexId, seat, board, neutralModifier,
+          null, { ...pieces, blocked: occupied, seat }).total
+        if (total > bestScore) {
+          best = vertexId
+          bestScore = total
+        }
+      }
+      return best
+    }
+
+    const barred = blockedVertices(board.layout, ['v:0,0;1,-1;1,0' as VertexId])
+    const taken = simulateOpponentWindow(ctx, board, ['p2', 'p3'], new Map<string, Holdings>(),
+      new Set(barred), () => 0, neutralModifier)
+    expect(taken).toHaveLength(2)
+
+    // The first seat scans against an empty occupancy: nothing is settled yet, however much the
+    // distance rule has barred.
+    expect(taken[0]).toBe(argmax('p2', barred, new Set()))
+    expect(argmax('p2', barred, barred)).not.toBe(taken[0])
+
+    // The second seat scans against the first seat's settlement, and only that one vertex.
+    const barredAfter = blockedVertices(board.layout, ['v:0,0;1,-1;1,0' as VertexId, taken[0]])
+    expect(taken[1]).toBe(argmax('p3', barredAfter, new Set([taken[0]])))
+    expect(argmax('p3', barredAfter, new Set())).not.toBe(taken[1])
   })
 
   it('scores each player at its own index in board.players as its draft slot', () => {
@@ -530,6 +705,47 @@ describe('hostile states and simulator seams', () => {
       board,
       neutralModifier,
     ).total)
+  })
+
+  // A recommendation only needs one surviving window to be listed, and the modal window need not
+  // be it. Walking such a candidate against the modal occupancy would draw a road out of a vertex
+  // a rival holds in that window, which is a placement the window made illegal.
+  it('draws the first road from a window the recommendation is placeable in', () => {
+    const board = filledBoard(2)
+    const draft = inferDraftState(board)
+    const weights = { ...DEFAULT_WEIGHTS, expansionWeight: 1 }
+    const ctx = computeBoardContext(board, weights)
+    const candidate = 'v:-1,-1;-1,0;0,-1' as VertexId
+    const pieces = occupancyFromBoard(board)
+    const roadUnder = (occupied: ReadonlySet<VertexId>) =>
+      expansionTerm(ctx, emptyHoldings(), { ...pieces, blocked: occupied, seat: 'aki' }, candidate).road
+
+    // The modal window takes the far end of the road an unobstructed walk would lay. That bars the
+    // candidate by the distance rule and makes a rival settlement of the very site the road went
+    // to, so the modal reading is both illegal and a different answer.
+    const openRoad = roadUnder(new Set())
+    expect(openRoad).not.toBeNull()
+    const takenBySeat = edgeEndpointVertexIds(openRoad!).find((vertexId) => vertexId !== candidate)!
+    const modalBlocked = blockedVertices(board.layout, [takenBySeat])
+    expect(modalBlocked.has(candidate)).toBe(true)
+    // The second window takes nothing and leaves the candidate the only vertex open, so the pick
+    // survives there and nowhere else.
+    const survivable = new Set(boardGrid(board.layout).vertexIds)
+    survivable.delete(candidate)
+    const preWindows: PreWindowResult[] = [
+      { blocked: modalBlocked, taken: [takenBySeat] },
+      { blocked: survivable, taken: [] },
+    ]
+
+    const result = rankCandidates(ctx, board, draft, preWindows, requiredOptions({
+      maxResults: 54,
+      weights,
+    }))
+    const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
+    expect(entry).toBeDefined()
+    expect(entry!.survival).toBe(0.5)
+    expect(entry!.firstRoad).toBe(openRoad)
+    expect(roadUnder(new Set([takenBySeat]))).not.toBe(openRoad)
   })
 
   it('preserves structured pre-window take frequencies when all survival is zero', () => {

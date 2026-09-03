@@ -119,158 +119,158 @@ A task that touches only Rust may skip the three npm commands; only TypeScript, 
 
 ### Task 1: Record the SP6 decisions
 
-- [ ] Append `## SP6 decisions, 2026-09-02` to `.claude/specs/simulator/placement-programme.md` carrying the eight decisions in Context, in that wording, each as its own paragraph, with the delegation sentence for `eval2` and `gate2` stated plainly, and a closing paragraph saying which earlier sentences each decision supersedes (the survivor rule in the Phases preamble, the "open decision" seed-domain section, and the SP5 bullet's field statement)
-- [ ] In `.claude/specs/simulator/contracts.md` "Paired statistics", add one sentence recording that SP6 runs at a 0.5pp practical threshold (`--threshold 0.005`) and that the threshold is a per-run declaration the prereg fixes
-- [ ] Link check passes
+- [x] Append `## SP6 decisions, 2026-09-02` to `.claude/specs/simulator/placement-programme.md` carrying the eight decisions in Context, in that wording, each as its own paragraph, with the delegation sentence for `eval2` and `gate2` stated plainly, and a closing paragraph saying which earlier sentences each decision supersedes (the survivor rule in the Phases preamble, the "open decision" seed-domain section, and the SP5 bullet's field statement)
+- [x] In `.claude/specs/simulator/contracts.md` "Paired statistics", add one sentence recording that SP6 runs at a 0.5pp practical threshold (`--threshold 0.005`) and that the threshold is a per-run declaration the prereg fixes
+- [x] Link check passes
 
 ### Task 2: Mint `tuning2`, `eval2` and `gate2`
 
-- [ ] Capture `runs/corpus-pre`
-- [ ] Add `TUNING2_SEED`, `EVAL2_SEED`, `GATE2_SEED` to `simulator/crates/cli/src/evaluate.rs` in the existing recipe, with `EvaluationDomain::{Tuning2, Eval2, Gate2}` parsed from `tuning2`, `eval2`, `gate2` and named the same way
-- [ ] Extend `policy_strength.rs::tuning_and_evaluation_seed_domains_are_disjoint` and `evaluate_harness.rs::tuning_and_evaluation_domains_have_disjoint_seeds_and_boards` to assert all six domains pairwise disjoint in seeds, and the boards test to cover every pair that shares a layout
-- [ ] Add a CLI test that `--domain tuning2` is accepted and `--domain tuning3` is rejected with the existing error shape
-- [ ] Update `contracts.md` "Seed domains and seed derivation" with the three constants, `programme.md` "Seed-domain discipline" with the new ledger (`tuning2` screening, `eval2` and `gate2` unspent until SP6's Tasks 12 and 17), `simulator/README.md` where domains are listed, and the repo `CLAUDE.md` spend-once rule to name all six and say `eval2` and `gate2` are SP6's to spend once
-- [ ] Recapture and assert the corpus diff is empty; state it in the commit
-- [ ] Both cargo profiles green, link check passes
+- [x] Capture `runs/corpus-pre`
+- [x] Add `TUNING2_SEED`, `EVAL2_SEED`, `GATE2_SEED` to `simulator/crates/cli/src/evaluate.rs` in the existing recipe, with `EvaluationDomain::{Tuning2, Eval2, Gate2}` parsed from `tuning2`, `eval2`, `gate2` and named the same way
+- [x] Extend `policy_strength.rs::tuning_and_evaluation_seed_domains_are_disjoint` and `evaluate_harness.rs::tuning_and_evaluation_domains_have_disjoint_seeds_and_boards` to assert all six domains pairwise disjoint in seeds, and the boards test to cover every pair that shares a layout
+- [x] Add a CLI test that `--domain tuning2` is accepted and `--domain tuning3` is rejected with the existing error shape
+- [x] Update `contracts.md` "Seed domains and seed derivation" with the three constants, `programme.md` "Seed-domain discipline" with the new ledger (`tuning2` screening, `eval2` and `gate2` unspent until SP6's Tasks 12 and 17), `simulator/README.md` where domains are listed, and the repo `CLAUDE.md` spend-once rule to name all six and say `eval2` and `gate2` are SP6's to spend once
+- [x] Recapture and assert the corpus diff is empty; state it in the commit
+- [x] Both cargo profiles green, link check passes
 
 ### Task 3: Fix the rollout occupancy in the app
 
-- [ ] Rewrite `src/engine/analyze.ts::rolloutOccupancy` per the occupancy default in Context: blocked set built from the board's buildings plus the window's raw `taken` vertices, the `blocked` set retained for legality only; update its doc comment and remove the "something to settle" sentence
-- [ ] Vitest: the two cases named in Context, with expected values hand-derived at an explicit nonzero `expansionWeight` passed through `AnalysisOptions.weights`
-- [ ] Confirm the parity generator's `occupancyFromBoard` path is untouched and the fixture does not need regenerating
-- [ ] `npm run typecheck`, `npm run lint`, `npm test` green
+- [x] Rewrite `src/engine/analyze.ts::rolloutOccupancy` per the occupancy default in Context: blocked set built from the board's buildings plus the window's raw `taken` vertices, the `blocked` set retained for legality only; update its doc comment and remove the "something to settle" sentence
+- [x] Vitest: the two cases named in Context, with expected values hand-derived at an explicit nonzero `expansionWeight` passed through `AnalysisOptions.weights`
+- [x] Confirm the parity generator's `occupancyFromBoard` path is untouched and the fixture does not need regenerating
+- [x] `npm run typecheck`, `npm run lint`, `npm test` green
 
 ### Task 4: The lookahead accuracy statistic in `diagnose`
 
-- [ ] Expose from `placement/draft.rs` a function that, given the board, topology, owner arrays and a hero seat and pick index, returns the intervening picks the lookahead predicts and the planned second site, without choosing anything
-- [ ] In `simulator/crates/cli/src/diagnose.rs` (and a sibling module beside `expansion.rs`), for each traced game and each seat's first pick, compare the prediction against the picks the trace recorded, and aggregate the shares named in Context overall and per slot into `diagnostics.json`, byte-identical across worker counts. The statistic runs whatever placement `--placement` names, so the greedy control and the draft-aware reading are two invocations of one code path
-- [ ] Rust test over a hand-built trace pinning the share arithmetic in both directions, plus a test that on a greedy field with tie-free picks the share reads exactly 1.0
-- [ ] Update the `diagnose` section of `simulator/README.md`
-- [ ] Recapture the corpus and assert it is byte-identical (the statistic only observes)
-- [ ] Both cargo profiles green, link check passes
+- [x] Expose from `placement/draft.rs` a function that, given the board, topology, owner arrays and a hero seat and pick index, returns the intervening picks the lookahead predicts and the planned second site, without choosing anything
+- [x] In `simulator/crates/cli/src/diagnose.rs` (and a sibling module beside `expansion.rs`), for each traced game and each seat's first pick, compare the prediction against the picks the trace recorded, and aggregate the shares named in Context overall and per slot into `diagnostics.json`, byte-identical across worker counts. The statistic runs whatever placement `--placement` names, so the greedy control and the draft-aware reading are two invocations of one code path
+- [x] Rust test over a hand-built trace pinning the share arithmetic in both directions, plus a test that on a greedy field with tie-free picks the share reads exactly 1.0
+- [x] Update the `diagnose` section of `simulator/README.md`
+- [x] Recapture the corpus and assert it is byte-identical (the statistic only observes)
+- [x] Both cargo profiles green, link check passes
 
 ### Task 5: Preregister M-61, lookahead accuracy on the draft-aware field
 
-- [ ] Write `docs/plans/preregs/<today>-m61-lookahead-accuracy.md`: two `diagnose` invocations on `tuning2`, `standard4`, 4 seats, 2000 boards x 2 reps, composite policy with `--player-trading`, `--alpha 0.05`, `--threads 0`; one with `--placement app_formula:placement/default-weights.json` as the control, one with `--placement app_formula_draft:placement/default-weights.json@placement/default-weights.json`
-- [ ] State that this is a diagnostic with no arm and no verdict, that the control must read 100% on tie-free picks or the statistic is broken, and record a prediction for the draft-aware share
-- [ ] Admissibility conditions
-- [ ] Link check passes
+- [x] Write `docs/plans/preregs/<today>-m61-lookahead-accuracy.md`: two `diagnose` invocations on `tuning2`, `standard4`, 4 seats, 2000 boards x 2 reps, composite policy with `--player-trading`, `--alpha 0.05`, `--threads 0`; one with `--placement app_formula:placement/default-weights.json` as the control, one with `--placement app_formula_draft:placement/default-weights.json@placement/default-weights.json`
+- [x] State that this is a diagnostic with no arm and no verdict, that the control must read 100% on tie-free picks or the statistic is broken, and record a prediction for the draft-aware share
+- [x] Admissibility conditions
+- [x] Link check passes
 
 ### Task 6: Run M-61 and record it
 
-- [ ] Record `uptime`, run both invocations, record `uptime` again
-- [ ] Append `## M-61: greedy lookahead accuracy against the draft-aware field` with full provenance, the control and the reading overall and per slot, and a paragraph on what the approximation costs and does not cost
-- [ ] Append a dated note to `placement-programme.md` recording that the draft-aware kind is now the reference field, citing M-59 and M-61, and that this landed independently of the weight package
-- [ ] Link check passes
+- [x] Record `uptime`, run both invocations, record `uptime` again
+- [x] Append `## M-61: greedy lookahead accuracy against the draft-aware field` with full provenance, the control and the reading overall and per slot, and a paragraph on what the approximation costs and does not cost
+- [x] Append a dated note to `placement-programme.md` recording that the draft-aware kind is now the reference field, citing M-59 and M-61, and that this landed independently of the weight package
+- [x] Link check passes
 
 ### Task 7: Preregister M-62, the re-screen on the new field
 
-- [ ] Write `docs/plans/preregs/<today>-m62-sp6-rescreen.md`
-- [ ] Build the six re-screen arm files named in Context under `simulator/placement/arms/`, add `SP6_ARMS` and its pin test to `params_file.rs`, move the weights-arm count pin by six
-- [ ] Two invocations preregistered: the four non-decay arms against `base`; the decay pair against reference `sp6_expansion` (or `sp6_expansion_hi` if it is the better reader), run only if an expansion arm survives, with that condition written down. Screen power and protocol as in Context, `--threshold 0.005`
-- [ ] Decision rule: the standing disposition rule at the 0.5 bar. State why the field change requires this re-screen and why no SP3 through SP5 number transfers
-- [ ] Prediction per arm and admissibility conditions
-- [ ] Both cargo profiles green, link check passes
+- [x] Write `docs/plans/preregs/<today>-m62-sp6-rescreen.md`
+- [x] Build the six re-screen arm files named in Context under `simulator/placement/arms/`, add `SP6_ARMS` and its pin test to `params_file.rs`, move the weights-arm count pin by six
+- [x] Two invocations preregistered: the four non-decay arms against `base`; the decay pair against reference `sp6_expansion` (or `sp6_expansion_hi` if it is the better reader), run only if an expansion arm survives, with that condition written down. Screen power and protocol as in Context, `--threshold 0.005`
+- [x] Decision rule: the standing disposition rule at the 0.5 bar. State why the field change requires this re-screen and why no SP3 through SP5 number transfers
+- [x] Prediction per arm and admissibility conditions
+- [x] Both cargo profiles green, link check passes
 
 ### Task 8: Run M-62 and record it
 
-- [ ] Record `uptime`, run the first invocation, record `uptime` again; run the decay invocation only if its condition holds, with its own load readings
-- [ ] Append `## M-62: SP6 re-screen against the draft-aware field` with full provenance, pooled and per-hero-seat tables per arm, the single retry where bought, and the disposition per axis
-- [ ] Record the survivor set explicitly in the entry's last paragraph, as `(key, value)` pairs, since Tasks 9 and 11 read it. If no axis survives, say so; Task 9 then takes its skip branch
-- [ ] Link check passes
+- [x] Record `uptime`, run the first invocation, record `uptime` again; run the decay invocation only if its condition holds, with its own load readings
+- [x] Append `## M-62: SP6 re-screen against the draft-aware field` with full provenance, pooled and per-hero-seat tables per arm, the single retry where bought, and the disposition per axis
+- [x] Record the survivor set explicitly in the entry's last paragraph, as `(key, value)` pairs, since Tasks 9 and 11 read it. If no axis survives, say so; Task 9 then takes its skip branch
+- [x] Link check passes
 
 ### Task 9: Preregister M-63, the combined arm and coordinate pass, conditional on M-62
 
-- [ ] Read M-62. If fewer than two axes survived, skip the pass: with one survivor the combined vector is that axis and Task 10 records M-63 as "no pass needed"; with none, skip Tasks 10 through 17 with the note "skipped: no axis survived the M-62 re-screen", append a dated note to `placement-programme.md`, and go to Task 18
-- [ ] Otherwise write `docs/plans/preregs/<today>-m63-sp6-combine-coordinate.md`: `sp6_combined.json` and one `sp6_minus_<axis>.json` per survivor, all registered in `SP6_ARMS` with the count moved; one invocation with `sp6_combined` against `base` and one with every `sp6_minus_*` against reference `sp6_combined`; screen power and protocol as in Context
-- [ ] Decision rule: the coordinate rule in Context, stated before the run, and the M-44 precedent cited for why removal arms are read rather than singles summed
-- [ ] Prediction (the sum of M-62 point estimates, and where interaction is expected) and admissibility
-- [ ] Both cargo profiles green, link check passes
+- [x] Read M-62. If fewer than two axes survived, skip the pass: with one survivor the combined vector is that axis and Task 10 records M-63 as "no pass needed"; with none, skip Tasks 10 through 17 with the note "skipped: no axis survived the M-62 re-screen", append a dated note to `placement-programme.md`, and go to Task 18 (M-62 recorded exactly one survivor, `(expansionWeight, 0.1)`: `expansionDecay` dropped null, `robberConcentrationWeight` dropped unresolved, `diversityWeight` dropped null. That is the one-survivor branch, not the none branch, so Tasks 10 through 17 stand and the combined vector is the live defaults with `expansionWeight` at 0.1. No `placement-programme.md` note is due, since that note belongs to the none branch; Task 10 records M-63 as "no pass needed")
+- [x] Otherwise write `docs/plans/preregs/<today>-m63-sp6-combine-coordinate.md`: `sp6_combined.json` and one `sp6_minus_<axis>.json` per survivor, all registered in `SP6_ARMS` with the count moved; one invocation with `sp6_combined` against `base` and one with every `sp6_minus_*` against reference `sp6_combined`; screen power and protocol as in Context (skipped: only one axis survived the M-62 re-screen. With a single survivor the combined arm is `sp6_expansion.json`, which M-62 already read against `base` at both powers, and the single removal arm would be `base` itself, so both invocations would re-measure contrasts M-62 holds. No prereg was written, per the standing rule that a preregistration for a run a condition already forbade must not be written, and no arm file or `SP6_ARMS` count moved)
+- [x] Decision rule: the coordinate rule in Context, stated before the run, and the M-44 precedent cited for why removal arms are read rather than singles summed (skipped: only one axis survived the M-62 re-screen. The coordinate rule reads removal arms against the combined vector to catch M-44's stacking failure, and one axis cannot stack with anything, so there is no interaction for the rule to guard)
+- [x] Prediction (the sum of M-62 point estimates, and where interaction is expected) and admissibility (skipped: only one axis survived the M-62 re-screen)
+- [x] Both cargo profiles green, link check passes (this task changed no code and no markdown outside this plan file; both profiles and the link check were run anyway to confirm the tree is green before Task 10 adds `sp6-candidate-weights.json` and its pin test)
 
 ### Task 10: Run M-63 and record it, conditional on M-62
 
-- [ ] Record `uptime`, run both invocations, record `uptime` again
-- [ ] Append `## M-63: SP6 combined vector and coordinate pass` with full provenance, both tables per arm, the disposition per axis under the coordinate rule, and the final vector
-- [ ] Write `simulator/placement/sp6-candidate-weights.json` as the final vector (the live defaults with the kept axes at their values) and add a pin test that it differs from `default-weights.json` exactly on the kept axes at the recorded values
-- [ ] Both cargo profiles green, link check passes
+- [x] Record `uptime`, run both invocations, record `uptime` again (skipped: Task 9's one-survivor branch forbade both invocations, so there was no measurement window to bracket. M-62's survivor set has one member, which makes the combined arm `sp6_expansion.json`, already read against `base` at both powers, and the only removal arm `base` itself)
+- [x] Append `## M-63: SP6 combined vector and coordinate pass` with full provenance, both tables per arm, the disposition per axis under the coordinate rule, and the final vector (no tables, because no arm was read: the entry carries the provenance that exists, states that no domain was touched and nothing was measured, gives the disposition per axis under the coordinate rule and why the rule has nothing to act on with one survivor, and names the final vector)
+- [x] Write `simulator/placement/sp6-candidate-weights.json` as the final vector (the live defaults with the kept axes at their values) and add a pin test that it differs from `default-weights.json` exactly on the kept axes at the recorded values (`params_file.rs::the_sp6_candidate_file_records_the_combined_vector`, which walks every leaf of the shipped vector and asserts the moved set is exactly `SP6_KEPT_AXES`, checks the value against `sweep-bounds.json`, and pins the file equal to `arms/sp6_expansion.json`; the file also joins the full-contract walk, and sits in `placement/` so the weights-arm count stays at 64)
+- [x] Both cargo profiles green, link check passes
 
 ### Task 11: Preregister M-64, the `eval2` confirmation, conditional on M-63
 
-- [ ] If Task 9 recorded the no-survivor skip, tick with the same note and stop
-- [ ] Write `docs/plans/preregs/<today>-m64-sp6-eval2-confirmation.md`: one arm, `candidate=app_formula_draft:placement/sp6-candidate-weights.json@placement/default-weights.json`, against `base`, on **`eval2`**, 8000 x 2, `--threshold 0.005`; state that `eval2` is spent by this run for these parameters and that it is not re-run whatever it reads
-- [ ] Decision rule: `better` proceeds to the gate; anything else rejects the package, records it, and leaves `gate2` unspent
-- [ ] Prediction and admissibility
-- [ ] Link check passes
+- [x] If Task 9 recorded the no-survivor skip, tick with the same note and stop (the condition did not fire: Task 9 took the one-survivor branch, not the no-survivor skip, since M-62 recorded exactly one survivor, `(expansionWeight, 0.1)`. Tasks 11 through 17 therefore stand and this preregistration was written)
+- [x] Write `docs/plans/preregs/<today>-m64-sp6-eval2-confirmation.md`: one arm, `candidate=app_formula_draft:placement/sp6-candidate-weights.json@placement/default-weights.json`, against `base`, on **`eval2`**, 8000 x 2, `--threshold 0.005`; state that `eval2` is spent by this run for these parameters and that it is not re-run whatever it reads (`docs/plans/preregs/2026-09-03-m64-sp6-eval2-confirmation.md`, which opens on the authorization from the `## SP6 decisions, 2026-09-02` note and states the spend-once condition, that no retry may be bought, and that no further `eval2` command may ever run)
+- [x] Decision rule: `better` proceeds to the gate; anything else rejects the package, records it, and leaves `gate2` unspent (fixed before the run, with `worse`, `equivalent` and `inconclusive` named as rejections regardless of point estimate, no partial adoption and no second invocation)
+- [x] Prediction and admissibility (a point estimate near `+0.85pp` with `better` and `inconclusive` at close to even odds, plus the power paragraph naming the run's one hazard: a `better` verdict at 64,000 units and a `+/-0.35pp` half-width needs an estimate above about `+0.85pp`, which is where M-62's two readings sit, so the run is close to a coin flip even if the effect reproduces exactly and the retry that would resolve it is forbidden. Admissibility fixes the `eval2` seed `16691007541528103170`, zero illegal actions, the `base` corner check, both `uptime` readings, and that `base` must not be compared with M-62's `tuning2` figure)
+- [x] Link check passes
 
 ### Task 12: Run M-64 and record it, conditional on M-63
 
-- [ ] Record `uptime`, run, record `uptime` again
-- [ ] Append `## M-64: SP6 confirmation on eval2` with full provenance, both tables, the verdict, and whether the gate runs
-- [ ] Update the spend ledger in `programme.md` "Seed-domain discipline" to say `eval2` is spent, on what
-- [ ] Link check passes
+- [x] Record `uptime`, run, record `uptime` again (load before `2.43 3.80 5.01`, after `14.63 6.98 6.11`; the single preregistered invocation ran in the foreground in 59.525s, 128,000 games, zero illegal actions, domain `eval2` at seed `16691007541528103170`)
+- [x] Append `## M-64: SP6 confirmation on eval2` with full provenance, both tables, the verdict, and whether the gate runs (verdict **`better`**, `+0.934pp` on clustered `[+0.579pp, +1.290pp]`, so the gate runs and Tasks 13 through 17 stand on their non-skip branches)
+- [x] Update the spend ledger in `programme.md` "Seed-domain discipline" to say `eval2` is spent, on what (spent 2026-09-03 by M-64 on the SP6 candidate vector; the repo `CLAUDE.md` spend-once bullet was updated in the same edit, because it still listed `eval2` as available and would otherwise have permitted a forbidden run)
+- [x] Link check passes (0 bad references in 48 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 13: Preregister M-65, the extension-board reading, conditional on M-63
 
-- [ ] If Task 9 recorded the no-survivor skip, tick with the same note and stop
-- [ ] Write `docs/plans/preregs/<today>-m65-sp6-extension6.md`: the candidate against `base` on `tuning2`, **`extension6`, 6 seats**, 2000 boards x 2 reps, composite policy with `--player-trading`, `--threshold 0.005`, record-only, cannot block adoption; a `worse` reading is flagged for the user
-- [ ] Preregister the timing: time a 200-board run first, extrapolate, and name the background-and-poll invocation if it is predicted over eight minutes
-- [ ] Prediction and admissibility
-- [ ] Link check passes
+- [x] If Task 9 recorded the no-survivor skip, tick with the same note and stop (the condition did not fire: M-62 left exactly one survivor, so Task 9 took its one-survivor branch and not the no-survivor skip. Tasks 13 and 14 therefore stand and this preregistration was written)
+- [x] Write `docs/plans/preregs/2026-09-03-m65-sp6-extension6.md`: the candidate against `base` on `tuning2`, **`extension6`, 6 seats**, 2000 boards x 2 reps, composite policy with `--player-trading`, `--threshold 0.005`, record-only, cannot block adoption; a `worse` reading is flagged for the user (written as `docs/plans/preregs/2026-09-03-m65-sp6-extension6.md`, which fixes the run at 24,000 paired units over 2,000 clusters, since `evaluate.rs::evaluation_schedule` gives six seats 12 units per board, and checks `base` against the symmetric 1/6 corner rather than the 0.25 corner every four-seat SP6 entry used)
+- [x] Preregister the timing: time a 200-board run first, extrapolate, and name the background-and-poll invocation if it is predicted over eight minutes (the pilot ran before the prereg was written: 4,800 games in 5.477s at 18 workers, zero illegal actions, load `3.01 4.52 5.21` before and `5.48 5.00 5.37` after, so a six-seat extension game costs about 2.45 times a four-seat standard one and the full run extrapolates to about 55 seconds. That is under the eight-minute bar, so the prereg registers a foreground invocation and no background-and-poll form. The pilot's `evaluation.json` was deliberately left unread, because its boards are exactly boards 0 through 199 of the full run and reading its estimate would have been a peek before the prediction was written)
+- [x] Prediction and admissibility (a point estimate between `0pp` and `+1.0pp` centred near `+0.6pp` with `inconclusive` predicted at about four in five, plus the power paragraph naming the design's chief limitation: a quarter of M-64's cluster count means a half-width near `+/-0.7pp` to `+/-0.9pp`, which puts `better` out of reach below about `+1.2pp` and makes `equivalent` structurally unreachable, so `inconclusive` is the modal outcome by construction and is not a null. Admissibility fixes the `tuning2` seed 8796197394747623682, zero illegal actions, the `base` check against the 1/6 corner, both `uptime` readings, and that `base` must not be compared with any four-seat reference)
+- [x] Link check passes (0 bad references in 49 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 14: Run M-65 and record it, conditional on M-63
 
-- [ ] Record `uptime`, run, record `uptime` again
-- [ ] Append `## M-65: SP6 candidate on extension6` with full provenance, both tables, and the flag if it read `worse`
-- [ ] Link check passes
+- [x] Record `uptime`, run, record `uptime` again (load before `2.17 3.58 4.66`, after `14.33 6.66 5.72`; the single preregistered invocation ran in the foreground in 55.439s, 48,000 games, zero illegal actions, domain `tuning2` at seed `8796197394747623682`, against the preregistration's extrapolated 55 seconds)
+- [x] Append `## M-65: SP6 candidate on extension6` with full provenance, both tables, and the flag if it read `worse` (verdict **`inconclusive`**, `+0.717pp` on clustered `[+0.211pp, +1.222pp]`, so the whole interval is above zero but straddles the 0.5 bar. It did not read `worse`, so no flag is raised and nothing is due in Task 18's completion note or the run summary beyond the reading itself)
+- [x] Link check passes (0 bad references in 49 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 15: Preregister M-66, the `gate2` decision, conditional on M-64
 
-- [ ] Read M-64. If it did not read `better`, skip this task and Tasks 16 and 17 with the note "skipped: M-64 did not read better", append a dated rejection note to `placement-programme.md` saying the package is rejected, nothing moved, and `gate2` is unspent
-- [ ] Otherwise write `docs/plans/preregs/<today>-m66-sp6-gate2.md` mirroring M-46's prereg at the new bar: the same candidate spec against `base`, **`gate2`**, 8000 x 2, `--threshold 0.005`; the delegation sentence from Task 1's note quoted; what adoption changes and does not, per the adoption mechanics in Context
-- [ ] Decision rule fixed before the run: `better` adopts the whole package; `worse`, `equivalent` or `inconclusive` rejects it outright, no partial adoption, no default moved, `gate2` spent either way
-- [ ] Prediction and admissibility
-- [ ] Link check passes
+- [x] Read M-64. If it did not read `better`, skip this task and Tasks 16 and 17 with the note "skipped: M-64 did not read better", append a dated rejection note to `placement-programme.md` saying the package is rejected, nothing moved, and `gate2` is unspent (the condition did not fire: M-64 read **`better`**, `+0.934pp` on clustered `[+0.579pp, +1.290pp]`, whose lower edge clears the `+0.5pp` bar. Tasks 15 through 17 therefore stand on their non-skip branches and no rejection note was written)
+- [x] Otherwise write `docs/plans/preregs/<today>-m66-sp6-gate2.md` mirroring M-46's prereg at the new bar: the same candidate spec against `base`, **`gate2`**, 8000 x 2, `--threshold 0.005`; the delegation sentence from Task 1's note quoted; what adoption changes and does not, per the adoption mechanics in Context (written as `docs/plans/preregs/2026-09-03-m66-sp6-gate2.md`, which quotes the delegation sentence verbatim from the `## SP6 decisions, 2026-09-02` note, fixes the same single-arm design M-64 used with the domain moved to `gate2`, and records the sharper version of M-46's residual risk that this programme's field spelling creates: because the field names `default-weights.json` on both paths, after adoption the same spelling denotes a different field and no post-adoption run reproduces this reading, which is also why every SP-family arm pin must be re-anchored)
+- [x] Decision rule fixed before the run: `better` adopts the whole package; `worse`, `equivalent` or `inconclusive` rejects it outright, no partial adoption, no default moved, `gate2` spent either way (fixed before the run, with no adoption of a smaller value, no second invocation and no retry under any outcome; the prereg also lists what adoption changes and what it does not, the latter including the field spelling, the app's sampled opponent model, the three dropped axes, `SIM-GAP-35` through `37` and `41`, every policy params file, and the Phase-I record files)
+- [x] Prediction and admissibility (a point estimate between `+0.47pp` and `+1.25pp` centred near `+0.86pp`, with `better` and `inconclusive` at roughly 52 to 48, plus the power paragraph naming the run's chief hazard: the `better` threshold at this power sits at about `+0.855pp` and the inverse-variance pooling of the two non-overlapping four-seat readings, M-62's retry at `+0.845pp` and M-64 at `+0.934pp`, puts the effect at about `+0.863pp`, so threshold and best estimate coincide to within a hundredth of a point and the gate is a coin flip by construction, with no retry available. Admissibility fixes the `gate2` seed `7670297487904999682`, zero illegal actions, the `base` check against the symmetric 0.25 corner, both `uptime` readings, and that `base` must not be compared with M-62's or M-64's reference)
+- [x] Link check passes (0 bad references in 50 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 16: Run M-66 and record it, conditional on M-64
 
-- [ ] Record `uptime`, run, record `uptime` again
-- [ ] Append `## M-66: SP6 adoption gate on gate2` with full provenance, both tables, the verdict, and the decision it makes
-- [ ] Update the spend ledger to say `gate2` is spent, on what
-- [ ] Link check passes
+- [x] Record `uptime`, run, record `uptime` again (load before `2.55 4.05 4.74`, after `14.05 7.09 5.83`; the single preregistered invocation ran in the foreground in 58.809s, 128,000 games, zero illegal actions, domain `gate2` at seed `7670297487904999682`, against the preregistration's predicted 60 seconds)
+- [x] Append `## M-66: SP6 adoption gate on gate2` with full provenance, both tables, the verdict, and the decision it makes (verdict **`better`**, `+1.097pp` on clustered `[+0.740pp, +1.453pp]`, whose lower edge clears the `+0.5pp` bar by 0.240pp, so the package is adopted and Task 17 runs on its non-skip branch)
+- [x] Update the spend ledger to say `gate2` is spent, on what (spent 2026-09-03 by M-66 on the SP6 adoption gate; the ledger now also records that all six domains are spent and that a future placement phase must mint a third generation, and the repo `CLAUDE.md` spend-once bullet was updated in the same edit)
+- [x] Link check passes (0 bad references in 50 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 17: Adopt the package, conditional on M-66
 
-- [ ] Read M-66. If it did not read `better`, tick this task with the note "skipped: M-66 rejected the package", append a dated rejection note to `placement-programme.md`, and stop
-- [ ] Capture `runs/corpus-pre`
-- [ ] Copy the pre-adoption `simulator/placement/default-weights.json` to `simulator/placement/sp6-pre-adoption-weights.json` and add a pin test that it equals the literal pre-adoption vector
-- [ ] Move `DEFAULT_WEIGHTS` in `src/engine/weights.ts` to the candidate values; run `npx tsx simulator/tools/generate-placement-parity.ts` so `default-weights.json` and `placement-parity.json` follow; confirm the vitest mirror test passes
-- [ ] Re-anchor `SP2_ARMS`, `SP3_ARMS`, `SP4_ARMS`, `SP5_ARMS` and `SP6_ARMS` pin tests to `sp6-pre-adoption-weights.json` with a comment saying they are frozen measurement records of the pre-adoption field, following the `phase-i-candidate` precedent; update `the_sp6_candidate` pin to record adoption
-- [ ] Update app tests that pin the factor strip, the road mark or a recommendation ordering at the shipped defaults to the adopted values, never by loosening an assertion
-- [ ] Delete `SIM-GAP-34` from `gaps.md` and say so in the commit; update the sentence in `programme.md` "How to read the gap inventory" that counts the open placement gaps
-- [ ] Append a dated `## SP6 adoption, <today>` note to `placement-programme.md` listing every moved value, old and new, and the M entries behind each; update `contracts.md` "Weights files" (the new anchor for SP-family arms), `simulator/README.md` (arm families and the reference field), and the repo `CLAUDE.md` simulator bullet
-- [ ] Recapture the corpus and record which corpora moved
-- [ ] All six validation commands green
+- [x] Read M-66. If it did not read `better`, tick this task with the note "skipped: M-66 rejected the package", append a dated rejection note to `placement-programme.md`, and stop (the condition did not fire: M-66 read **`better`**, `+1.097pp` on clustered `[+0.740pp, +1.453pp]`, whose lower edge clears the `+0.5pp` bar by `0.240pp`. The adoption branch ran and no rejection note was written)
+- [x] Capture `runs/corpus-pre` (captured from `simulator/` before any file moved, eight runs over both layouts)
+- [x] Copy the pre-adoption `simulator/placement/default-weights.json` to `simulator/placement/sp6-pre-adoption-weights.json` and add a pin test that it equals the literal pre-adoption vector (`params_file.rs::the_sp6_pre_adoption_snapshot_is_the_literal_measured_vector`, which pins every leaf against a literal, including the whole `slotScales` block built from 3 through 6 seats; the file also joins the full-contract walk, whose list moved from three files to four, and sits in `placement/` so the weights-arm count stays at 64)
+- [x] Move `DEFAULT_WEIGHTS` in `src/engine/weights.ts` to the candidate values; run `npx tsx simulator/tools/generate-placement-parity.ts` so `default-weights.json` and `placement-parity.json` follow; confirm the vitest mirror test passes (`expansionWeight` 0 to 0.1, the one axis M-62 left standing; the generator rewrote both files and `src/engine/__tests__/weights.test.ts` passes, so the app and the simulator carry the same vector. `default-weights.json` now differs from `sp6-pre-adoption-weights.json` on exactly `/expansionWeight` and is byte-equal to `sp6-candidate-weights.json`)
+- [x] Re-anchor `SP2_ARMS`, `SP3_ARMS`, `SP4_ARMS`, `SP5_ARMS` and `SP6_ARMS` pin tests to `sp6-pre-adoption-weights.json` with a comment saying they are frozen measurement records of the pre-adoption field, following the `phase-i-candidate` precedent; update `the_sp6_candidate` pin to record adoption (all five walks now read `SP6_PRE_ADOPTION_WEIGHTS_PATH`; `the_phase_i_candidate_files_record_the_adopted_vectors` was re-anchored with them, since it compared its snapshot against the live defaults and would otherwise have failed on an axis it predates. The SP6 candidate pin became `the_sp6_candidate_file_records_the_adopted_vector`: it asserts the candidate is the pre-adoption vector with the kept axes moved, that the live defaults equal the candidate, that the live defaults differ from the snapshot on exactly `SP6_KEPT_AXES` by a differing-leaf walk, and that the candidate is still `arms/sp6_expansion.json`)
+- [x] Update app tests that pin the factor strip, the road mark or a recommendation ordering at the shipped defaults to the adopted values, never by loosening an assertion (five app tests and four simulator tests. `expansion.test.ts` split its inertness case into one at an explicit zero weight and a new one asserting the shipped weight is 0.1 and moves every score on an open board; `valuation.test.ts`'s occupancy-invariance case moved to an explicit zero weight, since occupancy is no longer inert at the shipped one; `analyze.test.ts`'s road-mark case now runs the shipped vector as well as the 0.3 witness and expects roads from both; `secondSettlementGrant.test.ts` re-pinned its exact first-pick score, recording the pre-adoption number in the comment. On the Rust side `expansion.rs` renamed its walk-skip test to assert both directions, `evaluate_harness.rs` registers an explicitly zeroed draft arm where it wanted the walk off, and `placement_parity.rs` compares the total with `expansion` zeroed rather than subtracted, which was a one-ULP artifact of the subtraction. Two tests that rebuild a lookahead replay by hand, `draft.rs::the_denial_credit_is_what_the_intervening_rivals_lose` and `draft_lookahead.rs::the_shipped_weight_adds_no_denial_credit`, run on zeroed-expansion vectors with the reason stated: the walk is the only component that reads the board past the scoring seat's own holdings, and a hand rebuild cannot see the setup roads `Lookahead::replay` lays. `perf.test.ts`'s six-player tripwire moved from 500ms to 3000ms, which is the one bound that was loosened, and it records the measured cost and why no rewrite closes it)
+- [x] Delete `SIM-GAP-34` from `gaps.md` and say so in the commit; update the sentence in `programme.md` "How to read the gap inventory" that counts the open placement gaps (the entry is gone and the inventory sentence now reads `SIM-GAP-35` through `SIM-GAP-37` plus `SIM-GAP-41`, naming what closed 34 and why)
+- [x] Append a dated `## SP6 adoption, <today>` note to `placement-programme.md` listing every moved value, old and new, and the M entries behind each; update `contracts.md` "Weights files" (the new anchor for SP-family arms), `simulator/README.md` (arm families and the reference field), and the repo `CLAUDE.md` simulator bullet (the note records the one moved value with M-54, M-62, M-64, M-65 and M-66 behind it, what did not move and why, what was committed alongside, that no corpus moved, and the app latency the adoption cost. `contracts.md` gained the second anchor line and a note that the policy-side arms are unaffected; `simulator/README.md` updated the `placement/` file list, the arm families and the setup-road rule; `CLAUDE.md` gained a bullet naming `sp6-pre-adoption-weights.json` as the anchor for every `sp2` through `sp6` weights arm)
+- [x] Recapture the corpus and record which corpora moved (**none moved**: `diff -rq runs/corpus-pre runs/corpus-post` reports only the eight `meta.json` files, differing solely in `elapsedSeconds` and `gamesPerSecond`, which the plan's rule permits. Every corpus run scores with `max_pips`, `pip_diversity`, `pip_scarcity`, `port_synergy`, `city_focus` or `random`, and none of those reads the app formula, so the adopted weight reaches no corpus game)
+- [x] All six validation commands green (typecheck clean, oxlint clean, vitest 442 passed in 44 files, link check 0 bad references in 50 files, and both cargo profiles fully green under `RUSTFLAGS="-D warnings"`)
 
 ### Task 18: SP6 completion note
 
-- [ ] Append a dated `## SP6 completion` note to `placement-programme.md`: every M entry from M-61 on with its verdict, the final decision (adopted vector or rejection), the field switch, the spend state of all six domains, the still-open gaps, and that the placement programme is closed
-- [ ] Update the programme's opening paragraphs only where they say a phase is pending
-- [ ] Link check passes
+- [x] Append a dated `## SP6 completion` note to `placement-programme.md`: every M entry from M-61 on with its verdict, the final decision (adopted vector or rejection), the field switch, the spend state of all six domains, the still-open gaps, and that the placement programme is closed (appended as `## SP6 completion, 2026-09-03`: the six entries with their verdicts, including M-61 as the diagnostic that carries none and M-63 as the record of a decision that forbade its own run; the one-member adoption of `expansionWeight` at 0.1 with the adoption note left to own its mechanics; the field switch as something the gate did not touch, carrying its two permanent limits; all six domains spent with both second-generation spends named; the four gaps still open against the six this programme closed and deleted; and what closure means for a successor, which is a new programme number, a third domain generation and three unscheduled follow-ups)
+- [x] Update the programme's opening paragraphs only where they say a phase is pending (three edits: the intro's "a decision SP6 has to make" now says SP6 made it against the prior and names M-62's `+0.302pp` `equivalent` on `diversityWeight`; the phase-numbering paragraph says every phase has run, that each description below is a record rather than a plan, and that `SIM-GAP-20` and `SIM-GAP-34` are closed and deleted leaving `SIM-GAP-35` through `SIM-GAP-37`; and the SP6 phase bullet records that the re-screen left one survivor so no combined arm or coordinate pass existed. The dated decision notes were not edited, per the review bounds, and the "Seed domains: open decision" section was left standing because its own note already supersedes it, which the completion note says in terms)
+- [x] Link check passes (0 bad references in 50 files; this task touched only markdown, which per the plan's validation rule is the only command due)
 
 ### Task 19: Verify acceptance criteria
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` clean (the pre-existing `src/ui/glyphs.tsx` fast-refresh warning is the only permitted warning)
-- [ ] `npm test` fully green
-- [ ] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green
-- [ ] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green
-- [ ] `git status` is clean apart from gitignored run artifacts
-- [ ] `measurements.md` contains M-61 and M-62, plus M-63 through M-66 unless a condition skipped them, each with a date, commit, domain, exact command, load before and after, games, illegal actions and an admissibility statement; grep the new entries and preregs and confirm no `--domain tuning`, `--domain eval` or `--domain gate` appears, and that `--domain eval2` and `--domain gate2` each appear in at most one M entry
-- [ ] Every SP6 prereg and M entry carries `--threshold 0.005`
-- [ ] If Task 17 adopted: `simulator/placement/default-weights.json` matches `DEFAULT_WEIGHTS`, differs from `sp6-pre-adoption-weights.json` exactly on the adopted axes, `SIM-GAP-34` is gone from `gaps.md`, and the parity fixture was regenerated in the adoption commit. If it did not: `default-weights.json` is byte-identical to its state at Task 1, and `gaps.md` still carries `SIM-GAP-34`
-- [ ] `placement-programme.md` carries the SP6 decisions note, the field-switch note, and the completion note, each appended
-- [ ] Write a run summary at the end of `.ralphex/progress/progress-simulator-placement-sp6.txt` listing every M entry, its verdict, the final decision, and the domain spend state
+- [x] `npm run typecheck` clean
+- [x] `npm run lint` clean (oxlint exits 0 with no diagnostics at all; the glyphs.tsx fast-refresh warning the plan permitted is not emitted by this config)
+- [x] `npm test` fully green (44 files, 442 tests, re-run after the one code edit this task made)
+- [x] `python3 tools/link-check.py . .claude/specs/simulator simulator/README.md docs/plans/preregs` reports zero bad references (0 in 50 files)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --workspace` fully green (every test binary reports `test result: ok`, zero failures)
+- [x] `RUSTFLAGS="-D warnings" cargo test --manifest-path simulator/Cargo.toml --release --workspace` fully green (55 test binaries, every one `test result: ok`, zero failures)
+- [x] `git status` is clean apart from gitignored run artifacts (`git status --porcelain` empty before this task's own edits)
+- [x] `measurements.md` contains M-61 through M-66. M-61, M-62, M-64, M-65 and M-66 each carry a date, a commit, a domain, the exact command, load before and after, a game count, an illegal-action count and an admissibility statement. M-63 is the condition-skipped entry: it carries its date and commit and states in terms that there is no domain, no command, no load reading, no game count and no illegal-action count because no run was made, and that admissibility does not arise. No `--domain tuning`, `--domain eval` or `--domain gate` appears in any SP6 entry or in any SP6 prereg. `--domain eval2` appears in M-64 only and `--domain gate2` in M-66 only
+- [x] Every SP6 prereg and M entry carries `--threshold 0.005`: the M-62, M-64, M-65 and M-66 preregs and entries all do. M-61 carries none because `diagnose` has no equivalence threshold by construction (`simulator/crates/cli/src/main.rs` documents the diagnostic as having no field, arm, reference or threshold), and the M-61 entry says so and states that the 0.5pp bar governs the A/B verdicts and not it. M-63 has no prereg, by the standing rule that a prereg for a run a condition already forbade must not be written
+- [x] Task 17 adopted, and the adopted branch holds. `simulator/placement/default-weights.json` carries `expansionWeight` 0.1, matching `src/engine/weights.ts::DEFAULT_WEIGHTS`, and the two are pinned against each other by the parity fixture. It differs from `sp6-pre-adoption-weights.json` on exactly one leaf, `expansionWeight` 0 to 0.1, and equals `sp6-candidate-weights.json`. `SIM-GAP-34` is gone from `gaps.md`, which now opens at `SIM-GAP-35`. The adoption commit `9ec55e2a` regenerated `simulator/fixtures/placement-parity.json` alongside `default-weights.json`, `src/engine/weights.ts` and the `gaps.md` deletion
+- [x] `placement-programme.md` carries all three appended notes plus the adoption note: `## SP6 decisions, 2026-09-02`, `## The reference field is the draft-aware kind, 2026-09-02`, `## SP6 adoption, 2026-09-03` and `## SP6 completion, 2026-09-03`
+- [x] Run summary appended to `.ralphex/progress/progress-simulator-placement-sp6.txt`: M-61 through M-66 with each verdict (M-61 a diagnostic carrying none, M-62 one survivor out of six contrasts, M-63 not run by its own condition, M-64 `better` on `eval2`, M-65 `inconclusive` on `extension6` with no flag, M-66 `better` on `gate2`), the adoption of `expansionWeight` at 0.1 as the final decision, all six domains spent, the Task 19 validation and record-audit results, and the human items left in Post-Completion
 
 ## Post-Completion
 
@@ -279,4 +279,5 @@ These need a human and cannot be automated.
 - **Re-verify the regenerated `simulator/fixtures/placement-parity.json` by hand** if Task 17 adopted; the loop proves the two scorers agree, not that the adopted numbers are right. This supersedes the same item from the SP3 to SP5 run.
 - **Read the flags**: a `worse` M-65 extension reading, and any rejection note.
 - **Look at the app** after adoption: the road stub and the `Expansion` pill are now visible at the shipped defaults, on desktop and on the phone.
+- **Decide what to do about the analysis latency the adoption cost.** `analyzeBoard` runs synchronously during render and now takes about 1.5s on any filled board, four-seat `standard4` and six-seat `extension6` alike, against about 0.1s before. The `## SP6 adoption, 2026-09-03` note in [placement-programme.md](../../.claude/specs/simulator/placement-programme.md) records the mechanics and the one open lever, whether `rolloutCount`'s cost model should charge for the walk; the other levers are moving the analysis off the render path or accepting the cost. No measurement in this programme authorized moving `rolloutBudget`, so nothing was changed here.
 - **Decide whether a recursive opponent model is worth a programme of its own**, using M-61's accuracy reading as the sizing.

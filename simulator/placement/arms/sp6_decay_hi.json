@@ -27,7 +27,7 @@
   "nearPortRadius": 2,
   "nearPortDecay": 0.5,
   "expansionWeight": 0.1,
-  "expansionDecay": 0.5,
+  "expansionDecay": 1.0,
   "robberDiscount": 0.35,
   "robberConcentrationWeight": 0,
   "setupDenialWeight": 0,

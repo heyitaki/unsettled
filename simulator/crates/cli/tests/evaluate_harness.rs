@@ -7,7 +7,8 @@ use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::topology::Layout;
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
-    EVAL_SEED, EvaluateRequest, EvaluationDomain, TUNING_SEED, evaluate, evaluation_schedule,
+    EVAL2_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain, GATE2_SEED, GATE_SEED,
+    TUNING2_SEED, TUNING_SEED, evaluate, evaluation_schedule,
     summarize_arm,
 };
 
@@ -561,38 +562,78 @@ fn symmetric_field_calibration_matches_the_draw_corrected_target() {
 
 #[test]
 fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
-    let tuning = (0..5)
-        .flat_map(|board| {
-            (0..3).flat_map(move |rep| {
-                (0..4).map(move |hero_seat| {
-                    derive_evaluation_seed(TUNING_SEED, board, rep, hero_seat)
+    let seeds = |domain| {
+        (0..5)
+            .flat_map(move |board| {
+                (0..3).flat_map(move |rep| {
+                    (0..4)
+                        .map(move |hero_seat| derive_evaluation_seed(domain, board, rep, hero_seat))
                 })
             })
-        })
-        .collect::<BTreeSet<_>>();
-    let evaluation = (0..5)
-        .flat_map(|board| {
-            (0..3).flat_map(move |rep| {
-                (0..4)
-                    .map(move |hero_seat| derive_evaluation_seed(EVAL_SEED, board, rep, hero_seat))
+            .collect::<BTreeSet<_>>()
+    };
+    let boards = |domain, layout, seats| {
+        (0..5)
+            .map(|board| {
+                let board = generate_board(layout, seats, mix64(domain ^ board)).unwrap();
+                (board.tiles().to_vec(), board.tokens().to_vec())
             })
-        })
-        .collect::<BTreeSet<_>>();
-    assert!(tuning.is_disjoint(&evaluation));
+            .collect::<Vec<_>>()
+    };
 
-    let tuning_boards = (0..5)
-        .map(|board| {
-            let board = generate_board(Layout::Standard4, 4, mix64(TUNING_SEED ^ board)).unwrap();
-            (board.tiles().to_vec(), board.tokens().to_vec())
-        })
-        .collect::<Vec<_>>();
-    let evaluation_boards = (0..5)
-        .map(|board| {
-            let board = generate_board(Layout::Standard4, 4, mix64(EVAL_SEED ^ board)).unwrap();
-            (board.tiles().to_vec(), board.tokens().to_vec())
-        })
-        .collect::<Vec<_>>();
-    assert_ne!(tuning_boards, evaluation_boards);
+    // Every domain the CLI accepts, pairwise, on both layouts: the seed stream a run
+    // consumes and the board set it generates must both be new to a held-out domain.
+    let domains = [
+        ("tuning", TUNING_SEED),
+        ("eval", EVAL_SEED),
+        ("gate", GATE_SEED),
+        ("tuning2", TUNING2_SEED),
+        ("eval2", EVAL2_SEED),
+        ("gate2", GATE2_SEED),
+    ];
+    let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
+    for (index, (left_name, left)) in domains.iter().enumerate() {
+        for (right_name, right) in &domains[index + 1..] {
+            assert!(
+                seeds(*left).is_disjoint(&seeds(*right)),
+                "{left_name} and {right_name} share evaluation seeds"
+            );
+            for (layout, seats) in layouts {
+                assert_ne!(
+                    boards(*left, layout, seats),
+                    boards(*right, layout, seats),
+                    "{left_name} and {right_name} generate the same {layout:?} boards"
+                );
+            }
+        }
+    }
+}
+
+/// The six spellings the CLI parses, and the one it must not.
+///
+/// `EvaluationDomain::seed` is the only place a run's whole seed stream is chosen, so a
+/// domain that parses to the wrong constant would silently spend a held-out set. The
+/// unknown case is pinned too: a typo like `tuning3` has to fail rather than fall back.
+#[test]
+fn every_evaluation_domain_parses_to_its_own_named_seed() {
+    let expected = [
+        ("tuning", EvaluationDomain::Tuning, TUNING_SEED),
+        ("eval", EvaluationDomain::Eval, EVAL_SEED),
+        ("gate", EvaluationDomain::Gate, GATE_SEED),
+        ("tuning2", EvaluationDomain::Tuning2, TUNING2_SEED),
+        ("eval2", EvaluationDomain::Eval2, EVAL2_SEED),
+        ("gate2", EvaluationDomain::Gate2, GATE2_SEED),
+    ];
+    for (spelling, domain, seed) in expected {
+        assert_eq!(EvaluationDomain::parse(spelling), Ok(domain));
+        assert_eq!(domain.name(), spelling);
+        assert_eq!(domain.seed(), seed);
+    }
+
+    assert_eq!(
+        EvaluationDomain::parse("tuning3"),
+        Err("unknown evaluation domain tuning3".to_string())
+    );
 }
 
 /// SP3's expansion term and SP5's draft kind, played rather than scored.
@@ -607,17 +648,25 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
 fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
     let shipped: EngineWeights =
         serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
-    assert_eq!(shipped.expansion_weight, 0.0, "the shipped weight is 0");
-    let mut opened = shipped.clone();
+    assert_eq!(
+        shipped.expansion_weight, 0.1,
+        "the shipped weight is the adopted 0.1"
+    );
+    // The plain draft arm is here to leave the policy RNG stream alone, which needs the walk off,
+    // and the shipped vector stopped supplying that when M-66 adopted the term. So the contrast
+    // is spelled out: one draft kind with the walk closed, one with it opened wide.
+    let mut closed = shipped.clone();
+    closed.expansion_weight = 0.0;
+    let mut opened = shipped;
     opened.expansion_weight = 0.3;
     opened.validate().expect("the witness weight is admissible");
 
     let expansion =
         register_app_formula("app_formula:expansion-witness".into(), opened.clone()).unwrap();
     let draft = register_app_formula_draft(
-        "app_formula_draft:shipped@shipped".into(),
-        shipped.clone(),
-        shipped,
+        "app_formula_draft:walk-off@walk-off".into(),
+        closed.clone(),
+        closed,
     )
     .unwrap();
     let draft_expansion = register_app_formula_draft(
@@ -633,7 +682,7 @@ fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
     ];
     let specs = vec![
         "app_formula:expansion-witness".to_string(),
-        "app_formula_draft:shipped@shipped".to_string(),
+        "app_formula_draft:walk-off@walk-off".to_string(),
         "app_formula_draft:expansion-witness@expansion-witness".to_string(),
     ];
 

@@ -278,7 +278,11 @@ fn best_direct(
 /// One hero's first-pick lookahead over one board state, carrying the scratch every candidate
 /// reuses: the replayed owner arrays and the score rows.
 struct Lookahead<'a> {
-    scorers: &'a DraftScorers,
+    /// The hero's formula, which an arm sweeps: it prices the candidate, plans the second
+    /// settlement and lays the hero's setup road.
+    hero_scorer: &'a AppFormulaScorer,
+    /// The opponent model, pinned to the field's weights: it takes every intervening pick.
+    opponent_scorer: &'a AppFormulaScorer,
     topology: &'a Topology,
     seats: usize,
     hero: u8,
@@ -299,7 +303,8 @@ struct Lookahead<'a> {
 
 impl<'a> Lookahead<'a> {
     fn new(
-        scorers: &'a DraftScorers,
+        hero_scorer: &'a AppFormulaScorer,
+        opponent_scorer: &'a AppFormulaScorer,
         topology: &'a Topology,
         seats: usize,
         hero: u8,
@@ -309,10 +314,11 @@ impl<'a> Lookahead<'a> {
         let order = setup_order(seats);
         let first = order.iter().position(|seat| *seat == hero)?;
         let last = order.iter().rposition(|seat| *seat == hero)?;
-        let reusable = scorers.hero.weights().expansion_weight == 0.0
-            && scorers.opponent.weights().expansion_weight == 0.0;
+        let reusable = hero_scorer.weights().expansion_weight == 0.0
+            && opponent_scorer.weights().expansion_weight == 0.0;
         Some(Self {
-            scorers,
+            hero_scorer,
+            opponent_scorer,
             topology,
             seats,
             hero,
@@ -321,7 +327,7 @@ impl<'a> Lookahead<'a> {
             rows: ScoreRows::new(seats, topology.vertex_count(), vertex_owner.len(), reusable),
             owners: vertex_owner.to_vec(),
             edges: edge_owner.to_vec(),
-            denial_weight: scorers.hero.weights().setup_denial_weight,
+            denial_weight: hero_scorer.weights().setup_denial_weight,
             denial: 0.0,
         })
     }
@@ -331,7 +337,7 @@ impl<'a> Lookahead<'a> {
     /// setup denial credit. A candidate whose replay leaves the hero nowhere to go is worth its
     /// own marginal alone.
     fn value(&mut self, vertex_owner: &[u8], edge_owner: &[u8], candidate: Vertex) -> f64 {
-        let marginal = self.scorers.hero.score_for_owner(
+        let marginal = self.hero_scorer.score_for_owner(
             vertex_owner,
             edge_owner,
             self.hero,
@@ -339,16 +345,7 @@ impl<'a> Lookahead<'a> {
             false,
         );
         self.replay(vertex_owner, edge_owner, candidate, None);
-        let second = {
-            let row = self.rows.row(
-                &self.scorers.hero,
-                &self.owners,
-                &self.edges,
-                self.hero,
-                true,
-            );
-            best_legal(self.topology, &self.owners, None, row).map_or(0.0, |(_, score)| score)
-        };
+        let second = self.planned_second().map_or(0.0, |(_, score)| score);
         // At the shipped weight the credit is not merely zero but never formed: `replay` skips
         // its second scan and the value is exactly the one the kind carried before SP5's denial
         // term existed.
@@ -356,6 +353,15 @@ impl<'a> Lookahead<'a> {
             return marginal + second;
         }
         marginal + second + self.denial_weight * self.denial
+    }
+
+    /// The best second settlement still legal on the board `replay` left, at the hero's own
+    /// formula and with the setup grant only the second round pays.
+    fn planned_second(&mut self) -> Option<(Vertex, f64)> {
+        let row = self
+            .rows
+            .row(self.hero_scorer, &self.owners, &self.edges, self.hero, true);
+        best_legal(self.topology, &self.owners, None, row)
     }
 
     /// Places the candidate for the hero and lets every intervening seat take its argmax, in
@@ -378,7 +384,7 @@ impl<'a> Lookahead<'a> {
         self.edges.copy_from_slice(edge_owner);
         self.denial = 0.0;
         let road = setup_road(
-            &self.scorers.hero,
+            self.hero_scorer,
             self.topology,
             vertex_owner,
             edge_owner,
@@ -394,7 +400,7 @@ impl<'a> Lookahead<'a> {
             let grant = position >= self.seats;
             let pick = {
                 let row = self.rows.row(
-                    &self.scorers.opponent,
+                    self.opponent_scorer,
                     &self.owners,
                     &self.edges,
                     seat,
@@ -411,7 +417,7 @@ impl<'a> Lookahead<'a> {
                 continue;
             };
             let road = setup_road(
-                &self.scorers.opponent,
+                self.opponent_scorer,
                 self.topology,
                 &self.owners,
                 &self.edges,
@@ -474,7 +480,15 @@ fn first_pick(
     edge_owner: &[u8],
     hero: u8,
 ) -> Option<Vertex> {
-    let mut lookahead = Lookahead::new(scorers, topology, seats, hero, vertex_owner, edge_owner)?;
+    let mut lookahead = Lookahead::new(
+        &scorers.hero,
+        &scorers.opponent,
+        topology,
+        seats,
+        hero,
+        vertex_owner,
+        edge_owner,
+    )?;
     let mut best: Option<(Vertex, f64)> = None;
     for vertex_index in 0..topology.vertex_count() {
         let candidate = vertex_index as Vertex;
@@ -507,31 +521,58 @@ pub(super) fn candidate_score(
             .hero
             .score_for_owner(vertex_owner, edge_owner, seat, candidate, true);
     }
-    Lookahead::new(scorers, topology, seats, seat, vertex_owner, edge_owner)
-        .map_or(f64::NEG_INFINITY, |mut lookahead| {
-            lookahead.value(vertex_owner, edge_owner, candidate)
-        })
+    Lookahead::new(
+        &scorers.hero,
+        &scorers.opponent,
+        topology,
+        seats,
+        seat,
+        vertex_owner,
+        edge_owner,
+    )
+    .map_or(f64::NEG_INFINITY, |mut lookahead| {
+        lookahead.value(vertex_owner, edge_owner, candidate)
+    })
 }
 
-/// The intervening picks the first-pick lookahead predicts when the hero takes `candidate` at
-/// this state, in `setup_order` order. Observation only: the replay without its valuation, so a
-/// test can hold the opponent model against the picks a real field made.
-pub(super) fn replay_picks(
-    scorers: &DraftScorers,
+/// What the first-pick lookahead expects to follow the hero's candidate.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LookaheadPlan {
+    /// The intervening picks, in `setup_order` order, each as the seat and the vertex it takes.
+    pub picks: Vec<(u8, Vertex)>,
+    /// The second settlement the hero plans on the board those picks leave, `None` only when the
+    /// replay leaves it no legal site.
+    pub second: Option<Vertex>,
+}
+
+/// The plan the first-pick lookahead forms when the hero takes `candidate` at this state.
+///
+/// Observation only: the replay without the valuation it feeds, so a test or a diagnostic can
+/// hold the opponent model against the picks a real field made. No cheaper than ranking one
+/// candidate, because it is the same replay.
+pub(super) fn lookahead_plan(
+    hero_scorer: &AppFormulaScorer,
+    opponent_scorer: &AppFormulaScorer,
     topology: &Topology,
     seats: usize,
     vertex_owner: &[u8],
     edge_owner: &[u8],
     hero: u8,
     candidate: Vertex,
-) -> Vec<(u8, Vertex)> {
+) -> Option<LookaheadPlan> {
+    let mut lookahead = Lookahead::new(
+        hero_scorer,
+        opponent_scorer,
+        topology,
+        seats,
+        hero,
+        vertex_owner,
+        edge_owner,
+    )?;
     let mut picks = Vec::new();
-    if let Some(mut lookahead) =
-        Lookahead::new(scorers, topology, seats, hero, vertex_owner, edge_owner)
-    {
-        lookahead.replay(vertex_owner, edge_owner, candidate, Some(&mut picks));
-    }
-    picks
+    lookahead.replay(vertex_owner, edge_owner, candidate, Some(&mut picks));
+    let second = lookahead.planned_second().map(|(vertex, _)| vertex);
+    Some(LookaheadPlan { picks, second })
 }
 
 #[cfg(test)]
@@ -584,11 +625,55 @@ mod tests {
         }
     }
 
+    /// The same pairing with the expansion walk switched off on both sides, for the one test that
+    /// recomputes a rival's losses itself. The walk is the only component that reads the board
+    /// beyond the scoring seat's own holdings, so with it off a rival's score depends on nothing
+    /// but which vertices are occupied. That is what lets the recomputation stay a short,
+    /// independent statement of the rule instead of a second copy of `replay`, which would have
+    /// to lay every setup road the replay lays and would assert nothing the code does not say.
+    /// The shipped weight is 0.1 since M-66; the credit's own behaviour above 0 is the
+    /// legality-only counterfactual `best_legal` documents.
+    fn scorers_without_expansion(
+        topology: &Topology,
+        board: &SimBoard,
+        weight: f64,
+    ) -> DraftScorers {
+        let mut hero = default_weights();
+        hero.setup_denial_weight = weight;
+        hero.expansion_weight = 0.0;
+        let mut opponent = default_weights();
+        opponent.expansion_weight = 0.0;
+        DraftScorers {
+            hero: AppFormulaScorer::new(board, topology, hero),
+            opponent: AppFormulaScorer::new(board, topology, opponent),
+        }
+    }
+
     /// Seats and hero of the denial tests. At six seats the hero picking fifth is followed by the
     /// last seat's two picks and nothing else, so the credit sums exactly one rival's two losses.
     const SEATS: usize = 6;
     const HERO: u8 = 4;
     const RIVAL: u8 = 5;
+
+    /// The hero's lookahead over a `DraftScorers` pair, which is the pairing the kind itself holds
+    /// and the shape every test below wants.
+    fn lookahead<'a>(
+        scorers: &'a DraftScorers,
+        topology: &'a Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+    ) -> Lookahead<'a> {
+        Lookahead::new(
+            &scorers.hero,
+            &scorers.opponent,
+            topology,
+            SEATS,
+            HERO,
+            vertex_owner,
+            edge_owner,
+        )
+        .expect("the hero picks twice")
+    }
 
     /// What each intervening rival loses to the hero's candidate, computed without the lookahead:
     /// a full legality scan per rival per position, once with the candidate taken and once with
@@ -612,11 +697,23 @@ mod tests {
         for position in first + 1..last {
             let seat = order[position];
             let grant = position >= SEATS;
-            let best = |owners: &[u8]| {
+            // `vacated` reopens a vertex for legality alone, which is the credit's preregistered
+            // counterfactual and what `best_legal` implements: every score is still taken with
+            // the candidate standing, so only reachability moves. Recomputed here rather than
+            // called, so the two agree only if the credit really is that difference.
+            let best = |owners: &[u8], vacated: Option<Vertex>| {
+                let free = |vertex: Vertex| {
+                    Some(vertex) == vacated || owners[usize::from(vertex)] == EMPTY
+                };
                 let mut best: Option<(Vertex, f64)> = None;
                 for index in 0..topology.vertex_count() {
                     let vertex = index as Vertex;
-                    if !can_place_settlement(topology, owners, vertex) {
+                    let legal = free(vertex)
+                        && topology
+                            .vertex_adjacent(vertex)
+                            .iter()
+                            .all(|adjacent| free(*adjacent));
+                    if !legal {
                         continue;
                     }
                     let score = scorers
@@ -628,10 +725,8 @@ mod tests {
                 }
                 best.expect("a rival always has somewhere legal to go during setup")
             };
-            let (pick, taken) = best(&owners);
-            let mut free_board = owners.clone();
-            free_board[usize::from(candidate)] = EMPTY;
-            let (_, free) = best(&free_board);
+            let (pick, taken) = best(&owners, None);
+            let (_, free) = best(&owners, Some(candidate));
             losses.push((free - taken).max(0.0));
             owners[usize::from(pick)] = seat;
         }
@@ -722,9 +817,7 @@ mod tests {
         let vertex_owner = vec![EMPTY; topology.vertex_count()];
         let edge_owner = vec![EMPTY; topology.edge_count()];
 
-        let mut lookahead =
-            Lookahead::new(&scorers, &topology, SEATS, HERO, &vertex_owner, &edge_owner)
-                .expect("the hero picks twice");
+        let mut lookahead = lookahead(&scorers, &topology, &vertex_owner, &edge_owner);
         let candidate: Vertex = 24;
         let value = lookahead.value(&vertex_owner, &edge_owner, candidate);
 
@@ -758,14 +851,15 @@ mod tests {
     ///
     /// The state is an empty board with the hero at the fifth position, which no real draft
     /// reaches: the lookahead reads no history, only what stands and who picks next, so the
-    /// arrangement is the whole input. The losses are recomputed here the long way round, so the
-    /// two agree only if a rival's scores really are independent of what the hero owns.
+    /// arrangement is the whole input. The losses are recomputed here the long way round, over
+    /// the whole vertex set and seat by seat, so the two agree only if the credit really is the
+    /// sum of the intervening rivals' floored losses at the positions they pick from.
     #[test]
     fn the_denial_credit_is_what_the_intervening_rivals_lose() {
         const WEIGHT: f64 = 0.75;
         let (topology, board) = fixture();
-        let plain = scorers(&topology, &board);
-        let credited = scorers_at_denial(&topology, &board, WEIGHT);
+        let plain = scorers_without_expansion(&topology, &board, 0.0);
+        let credited = scorers_without_expansion(&topology, &board, WEIGHT);
         let vertex_owner = vec![EMPTY; topology.vertex_count()];
         let edge_owner = vec![EMPTY; topology.edge_count()];
 
@@ -789,29 +883,13 @@ mod tests {
             "taking the rival's own first choice must cost it something"
         );
 
-        let mut uncredited = Lookahead::new(
-            &plain,
-            &topology,
-            SEATS,
-            HERO,
-            &vertex_owner,
-            &edge_owner,
-        )
-        .expect("the hero picks twice");
+        let mut uncredited = lookahead(&plain, &topology, &vertex_owner, &edge_owner);
         let base = uncredited.value(&vertex_owner, &edge_owner, candidate);
-        let mut lookahead = Lookahead::new(
-            &credited,
-            &topology,
-            SEATS,
-            HERO,
-            &vertex_owner,
-            &edge_owner,
-        )
-        .expect("the hero picks twice");
-        let paid = lookahead.value(&vertex_owner, &edge_owner, candidate);
+        let mut credited = lookahead(&credited, &topology, &vertex_owner, &edge_owner);
+        let paid = credited.value(&vertex_owner, &edge_owner, candidate);
 
         let expected: f64 = losses.iter().sum();
-        assert_eq!(lookahead.denial, expected);
+        assert_eq!(credited.denial, expected);
         assert_eq!(paid, base + WEIGHT * expected);
     }
 
@@ -834,28 +912,12 @@ mod tests {
             })
             .expect("some opening leaves both of the rival's picks where they were");
 
-        let mut uncredited = Lookahead::new(
-            &plain,
-            &topology,
-            SEATS,
-            HERO,
-            &vertex_owner,
-            &edge_owner,
-        )
-        .expect("the hero picks twice");
+        let mut uncredited = lookahead(&plain, &topology, &vertex_owner, &edge_owner);
         let base = uncredited.value(&vertex_owner, &edge_owner, candidate);
-        let mut lookahead = Lookahead::new(
-            &credited,
-            &topology,
-            SEATS,
-            HERO,
-            &vertex_owner,
-            &edge_owner,
-        )
-        .expect("the hero picks twice");
+        let mut credited = lookahead(&credited, &topology, &vertex_owner, &edge_owner);
 
-        assert_eq!(lookahead.value(&vertex_owner, &edge_owner, candidate), base);
-        assert_eq!(lookahead.denial, 0.0);
+        assert_eq!(credited.value(&vertex_owner, &edge_owner, candidate), base);
+        assert_eq!(credited.denial, 0.0);
     }
 
     /// The credit is a credit and never a charge: a rival that comes out ahead pays the hero
