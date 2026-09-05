@@ -622,8 +622,8 @@ export function rankCandidates(
     }
   }
   const denominator = Math.max(1, preWindows.length)
-  // Show the "likely gone" spots from the deterministic (modal) rollout — the
-  // greedy scenario where every opponent takes their top choice. Its picks are
+  // Show the "likely gone" spots from the deterministic (modal) rollout, where
+  // every opponent takes its top choice. Its picks are
   // mutually legal (a real snake draft can never take two spots a single road
   // apart), ordered by draft turn, and each carries the player who takes it.
   // Frequency across all rollouts annotates how reliably that exact spot goes.
