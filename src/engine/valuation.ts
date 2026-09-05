@@ -729,9 +729,28 @@ export function marginalTotal(
   occupancy: Occupancy = emptyOccupancy(),
   slot: DraftSlot | null = null,
 ): number {
-  return marginalWithoutExpansion(ctx, holdings, candidate, hand, slot) +
-    slotScaleOf(ctx.weights, slot).expansion *
-      expansionTerm(ctx, holdings, occupancy, candidate).value
+  return marginalParts(ctx, holdings, candidate, hand, occupancy, slot).total
+}
+
+/**
+ * `marginalTotal` with its slot-scaled expansion component reported beside the total, for the
+ * rollout scan that prices a rival's partner through the same walk value. One decomposition, so
+ * the scan and the total cannot disagree about what the walk contributed.
+ */
+export function marginalParts(
+  ctx: BoardContext,
+  holdings: Holdings,
+  candidate: VertexId,
+  hand: HandCounts | null,
+  occupancy: Occupancy,
+  slot: DraftSlot | null,
+): { expansion: number; total: number } {
+  const expansion = slotScaleOf(ctx.weights, slot).expansion *
+    expansionTerm(ctx, holdings, occupancy, candidate).value
+  return {
+    expansion,
+    total: expansion + marginalWithoutExpansion(ctx, holdings, candidate, hand, slot),
+  }
 }
 
 /**

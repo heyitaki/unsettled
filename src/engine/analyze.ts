@@ -1,5 +1,5 @@
 import { boardGrid } from '../model/layouts'
-import type { Board, EdgeId, VertexId } from '../model/types'
+import type { Board, EdgeId, LayoutId, VertexId } from '../model/types'
 import { draftIsComplete, inferDraftState, type DraftState, type DraftWarning } from './draft'
 import { expansionTerm } from './expansion'
 import {
@@ -15,7 +15,9 @@ import {
   breakdownTotal,
   computeBoardContext,
   emptyHoldings,
+  marginalParts,
   marginalTotal,
+  marginalWithoutExpansion,
   occupancyFromBoard,
   scoreCandidate,
   type BoardContext,
@@ -95,6 +97,8 @@ interface CandidateAggregate {
 interface ScoredTurn {
   playerId: string
   receivesGrant: boolean
+  /** A seat with a pick still to come is choosing a first settlement, priced as a pair. */
+  hasLaterPick: boolean
 }
 
 interface DraftTurn extends ScoredTurn {
@@ -150,11 +154,17 @@ function remainingTurns(
 ): DraftTurn[] {
   return draft.remainingPickIndices
     .filter((turnIndex) => turnIndex >= startIndex && turnIndex < endIndex)
-    .map((turnIndex) => ({
-      playerId: draft.sequence[turnIndex],
-      receivesGrant: receivesSecondSettlementGrant(draft, turnIndex),
-      turnIndex,
-    }))
+    .map((turnIndex) => {
+      const playerId = draft.sequence[turnIndex]
+      return {
+        playerId,
+        receivesGrant: receivesSecondSettlementGrant(draft, turnIndex),
+        // Searched past the window on purpose: a seat's later pick usually falls outside it.
+        hasLaterPick: draft.remainingPickIndices.some((index) =>
+          index > turnIndex && draft.sequence[index] === playerId),
+        turnIndex,
+      }
+    })
     .filter(({ playerId }) => excludedPlayerId === null || playerId !== excludedPlayerId)
 }
 
@@ -270,6 +280,117 @@ function bestLegalCandidate(
   return best
 }
 
+/**
+ * The partner half of a first settlement's pair value, tabulated once per analysis.
+ *
+ * A rival with a pick still to come is choosing a first settlement, and what it is worth is the
+ * pair it leads to: its own score plus the best second settlement that candidate opens. The
+ * second's score without its expansion component depends only on the two vertices and the seat's
+ * draft slot, because a first pick starts from empty holdings and a second settlement always
+ * receives the setup grant; so the partner scores are tabulated by grid index the first time a
+ * slot is asked for, and every rollout scan after that reads them. The expansion component is the
+ * one part that moves with the board's occupancy, so `opponentPick` adds it per scan from the
+ * values it already has.
+ */
+const partnerTables = new WeakMap<BoardContext, Map<string, Float64Array[]>>()
+
+/** Row `first`, column `second`, both grid indices: the second's score without expansion. */
+function partnerTable(ctx: BoardContext, slot: DraftSlot | null): readonly Float64Array[] {
+  let tables = partnerTables.get(ctx)
+  if (!tables) {
+    tables = new Map()
+    partnerTables.set(ctx, tables)
+  }
+  const key = slot === null ? '' : `${slot.seats}/${slot.slot}`
+  const cached = tables.get(key)
+  if (cached) return cached
+  const vertexIds = boardGrid(ctx.layout).vertexIds
+  const rows = vertexIds.map((first) => {
+    const holdings = addToHoldings(ctx, emptyHoldings(), first)
+    return Float64Array.from(vertexIds, (second) => marginalWithoutExpansion(
+      ctx,
+      holdings,
+      second,
+      handForCandidate(ctx, second, true),
+      slot,
+    ))
+  })
+  tables.set(key, rows)
+  return rows
+}
+
+/**
+ * Below this, two pair scores are the same pair read in either order: the pair value is symmetric
+ * apart from float noise unless the grant is priced, and noise must not decide which half goes
+ * first.
+ */
+export const PAIR_TIE = 1e-9
+
+/**
+ * Each legal candidate's best partner as an index into `legal`, or -1 when no legal vertex is
+ * clear of it, in which case that candidate is priced alone beside rivals priced as pairs, and
+ * the partner's value, 0 when there is none.
+ */
+function bestPartners(
+  layout: LayoutId,
+  legal: readonly VertexId[],
+  gridIndex: readonly number[],
+  partners: readonly Float64Array[],
+  expansion: readonly number[],
+): { mate: number[]; value: number[] } {
+  const adjacency = vertexAdjacency(layout)
+  const count = legal.length
+  const position = new Map(legal.map((vertexId, index) => [vertexId, index]))
+  // Positions the current row cannot pair with: itself and its neighbours, marked then unmarked.
+  const skip = new Uint8Array(count)
+  const mate: number[] = []
+  const value: number[] = []
+  for (let index = 0; index < count; index += 1) {
+    const row = partners[gridIndex[index]]
+    const adjacent = adjacency.get(legal[index]) ?? []
+    skip[index] = 1
+    for (const neighbour of adjacent) {
+      const at = position.get(neighbour)
+      if (at !== undefined) skip[at] = 1
+    }
+    let best = -Infinity
+    let bestIndex = -1
+    for (let other = 0; other < count; other += 1) {
+      if (skip[other] === 1) continue
+      const partner = row[gridIndex[other]] + expansion[other]
+      if (partner > best) {
+        best = partner
+        bestIndex = other
+      }
+    }
+    skip[index] = 0
+    for (const neighbour of adjacent) {
+      const at = position.get(neighbour)
+      if (at !== undefined) skip[at] = 0
+    }
+    mate.push(bestIndex)
+    value.push(bestIndex < 0 ? 0 : best)
+  }
+  return { mate, value }
+}
+
+/**
+ * A rival's pick: the softmax over its top candidates, each priced as a pair when the rival has
+ * a pick still to come and holds nothing yet, and alone otherwise, since holdings already carry
+ * the first settlement a last pick is completing.
+ *
+ * The pair value is the unordered pair's, so its two halves would tie to the bit and the softmax
+ * would split one plan across two candidates. A player planning a pair takes its contested half
+ * first, so when two candidates are each other's best partner only the one worth more alone
+ * stays a candidate; the weaker half is the one more likely to still be there. A priced grant
+ * breaks the symmetry, and then the orientation worth more is the one that stays.
+ *
+ * The pair value assumes the planned second survives the picks in between, and prices its
+ * expansion against the current occupancy with empty holdings rather than the candidate. The
+ * hero's own ranking rolls the picks in between out instead, so the two views agree on the pick
+ * and not to the decimal. A modifier reaches the candidate's own score and, through the walk's
+ * value, the partner's expansion component; the rest of the partner is read from the table.
+ */
 function opponentPick(
   ctx: BoardContext,
   board: Board,
@@ -280,30 +401,76 @@ function opponentPick(
   uniform: number,
   modifier: PlacementModifier,
   receivesGrant: boolean,
+  hasLaterPick: boolean,
 ): VertexId | null {
   const topVertices: VertexId[] = []
   const topScores: number[] = []
   const topK = Math.max(1, ctx.weights.opponentTopK)
   const occupancy = rolloutOccupancy(board, occupied, playerId)
   const slot = draftSlotOf(board, playerId)
-  for (const vertexId of boardGrid(board.layout).vertexIds) {
+  const partners = hasLaterPick && holdings.vertices.length === 0
+    ? partnerTable(ctx, slot)
+    : null
+  const legal: VertexId[] = []
+  const gridIndex: number[] = []
+  const own: number[] = []
+  const expansion: number[] = []
+  for (const [index, vertexId] of boardGrid(board.layout).vertexIds.entries()) {
     if (blocked.has(vertexId)) continue
-    const score = scoreForScan(
-      ctx,
-      board,
-      holdings,
-      vertexId,
-      playerId,
-      modifier,
-      receivesGrant,
-      occupancy,
-      slot,
-    )
-    let index = 0
-    while (index < topScores.length && score <= topScores[index]) index += 1
-    if (index >= topK) continue
-    topVertices.splice(index, 0, vertexId)
-    topScores.splice(index, 0, score)
+    legal.push(vertexId)
+    if (partners === null) {
+      own.push(scoreForScan(
+        ctx,
+        board,
+        holdings,
+        vertexId,
+        playerId,
+        modifier,
+        receivesGrant,
+        occupancy,
+        slot,
+      ))
+      continue
+    }
+    gridIndex.push(index)
+    // The scan's two halves kept apart: the walk's value is also the partner's expansion.
+    const hand = handForCandidate(ctx, vertexId, receivesGrant)
+    let scored: { expansion: number; total: number }
+    if (modifier === neutralModifier) {
+      scored = marginalParts(ctx, holdings, vertexId, hand, occupancy, slot)
+    } else {
+      const full = scoreCandidate(
+        ctx, holdings, vertexId, playerId, board, modifier, hand, occupancy, slot,
+      )
+      scored = { expansion: full.breakdown.expansion, total: full.total }
+    }
+    expansion.push(scored.expansion)
+    own.push(scored.total)
+  }
+  const plan = partners === null
+    ? null
+    : bestPartners(board.layout, legal, gridIndex, partners, expansion)
+  for (const [index, vertexId] of legal.entries()) {
+    let score = own[index]
+    if (plan !== null) {
+      score += plan.value[index]
+      const other = plan.mate[index]
+      if (other >= 0 && plan.mate[other] === index) {
+        // The grant goes to the second settlement, so with it priced the two orientations of a
+        // pair differ and the better one is the candidate; otherwise they tie to the bit and the
+        // half worth more alone goes first.
+        const gap = score - (own[other] + plan.value[other])
+        const weaker = Math.abs(gap) > PAIR_TIE
+          ? gap < 0
+          : own[other] > own[index] || (own[other] === own[index] && other < index)
+        if (weaker) continue
+      }
+    }
+    let rank = 0
+    while (rank < topScores.length && score <= topScores[rank]) rank += 1
+    if (rank >= topK) continue
+    topVertices.splice(rank, 0, vertexId)
+    topScores.splice(rank, 0, score)
     if (topVertices.length > topK) {
       topVertices.pop()
       topScores.pop()
@@ -341,7 +508,7 @@ function simulateWindowDetailed(
   const taken: VertexId[] = []
   const actualPickers: string[] = []
   const adjacency = vertexAdjacency(board.layout)
-  for (const { playerId, receivesGrant } of turns) {
+  for (const { playerId, receivesGrant, hasLaterPick } of turns) {
     const uniform = nextUniform()
     const held = holdings.get(playerId) ?? emptyHoldings()
     const vertexId = opponentPick(
@@ -354,6 +521,7 @@ function simulateWindowDetailed(
       uniform,
       modifier,
       receivesGrant,
+      hasLaterPick,
     )
     if (vertexId === null) continue
     blockVertex(adjacency, blocked, vertexId)
@@ -366,7 +534,8 @@ function simulateWindowDetailed(
 }
 
 /**
- * Exported for tests: exercises defensive branches unreachable from valid boards.
+ * Exported for tests: exercises defensive branches unreachable from valid boards, and the pair
+ * pricing of a first settlement when every picker is given a later pick.
  */
 export function simulateOpponentWindow(
   ctx: BoardContext,
@@ -376,11 +545,12 @@ export function simulateOpponentWindow(
   blocked: Set<VertexId>,
   nextUniform: () => number,
   modifier: PlacementModifier,
+  hasLaterPick = false,
 ): VertexId[] {
   return simulateWindowDetailed(
     ctx,
     board,
-    pickerIds.map((playerId) => ({ playerId, receivesGrant: false })),
+    pickerIds.map((playerId) => ({ playerId, receivesGrant: false, hasLaterPick })),
     holdings,
     blocked,
     new Set(boardSettlements(board)),
@@ -489,6 +659,8 @@ export function rankCandidates(
   // One occupancy per window, shared by every candidate scored against it.
   const preWindowOccupancy = preWindowOccupied.map((occupied) =>
     rolloutOccupancy(board, occupied, me))
+  const preWindowHoldings = preWindows.map((preWindow) =>
+    replayPreWindowHoldings(ctx, board, draft, preWindow, firstPickIndex))
 
   for (const candidate of candidates) {
     const aggregate: CandidateAggregate = {
@@ -529,7 +701,7 @@ export function rankCandidates(
       const occupied = new Set(preWindowOccupied[windowIndex])
       occupied.add(candidate)
       const firstHoldings = addToHoldings(ctx, myHoldings, candidate)
-      const opponentHoldings = replayPreWindowHoldings(ctx, board, draft, preWindow, firstPickIndex)
+      const opponentHoldings = preWindowHoldings[windowIndex]
       let uniformIndex = 0
       const nextUniform = () =>
         preWindow.uniforms?.[midTurns[uniformIndex++]?.turnIndex ?? 0] ?? 0

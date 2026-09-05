@@ -21,17 +21,20 @@ import {
 } from '../analyze'
 import { inferDraftState } from '../draft'
 import { expansionSites, expansionTerm } from '../expansion'
-import { blockedVertices, legalSettlementVertices, vertexAdjacency } from '../legality'
+import { blockedVertices, blockVertex, legalSettlementVertices, vertexAdjacency } from '../legality'
 import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   computeBoardContext,
   emptyHoldings,
+  marginalWithoutExpansion,
   occupancyFromBoard,
   scoreCandidate,
+  slotScaleOf,
   type Holdings,
 } from '../valuation'
 import { DEFAULT_WEIGHTS, neutralSlotScales } from '../weights'
+import { PAIR_TIE } from '../analyze'
 
 const resources: readonly Resource[] = RESOURCES
 const tokens = [6, 8, 5, 9, 4, 10, 3, 11, 2, 12] as const
@@ -104,6 +107,71 @@ const recommendationPair = (
 
 function pairResources(board: Board, pair: readonly VertexId[]): Set<string> {
   return new Set(pair.flatMap((vertexId) => Object.keys(vertexProduction(board, vertexId))))
+}
+
+/**
+ * The pair rule `opponentPick` prices a first settlement by, written out against the public
+ * scorers: a candidate's own score plus the best legal partner's, the partner read without its
+ * expansion component holding the candidate and with its expansion against the standing
+ * occupancy; of two candidates that are each other's best partner only the one worth more alone
+ * is a candidate, unless the grant makes one orientation of the pair worth more than the other,
+ * in which case that orientation is. Ties fall to grid order, as the scan's insertion does.
+ */
+function pairAwarePick(
+  ctx: ReturnType<typeof computeBoardContext>,
+  board: Board,
+  playerId: string,
+  blocked: ReadonlySet<VertexId>,
+  standing: readonly VertexId[],
+): {
+  pick: VertexId
+  mate: VertexId | null
+  greedy: VertexId
+  ownScore: (vertexId: VertexId) => number
+} {
+  const slot = { seats: board.players.length, slot: board.players.findIndex((p) => p.id === playerId) }
+  const scale = slotScaleOf(ctx.weights, slot)
+  const pieces = occupancyFromBoard(board)
+  const occupancy = { ...pieces, blocked: new Set([...pieces.blocked, ...standing]), seat: playerId }
+  const adjacency = vertexAdjacency(board.layout)
+  const legal = boardGrid(board.layout).vertexIds.filter((vertexId) => !blocked.has(vertexId))
+  const own = legal.map((vertexId) => scoreCandidate(
+    ctx, emptyHoldings(), vertexId, playerId, board, neutralModifier, null, occupancy, slot,
+  ).total)
+  const expansion = legal.map((vertexId) =>
+    scale.expansion * expansionTerm(ctx, emptyHoldings(), occupancy, vertexId).value)
+  const plans = legal.map((vertexId, index) => {
+    const holdings = addToHoldings(ctx, emptyHoldings(), vertexId)
+    let mate = -1
+    let best = -Infinity
+    for (const [other, otherId] of legal.entries()) {
+      if (other === index || adjacency.get(vertexId)?.includes(otherId)) continue
+      const partner = marginalWithoutExpansion(
+        ctx, holdings, otherId, ctx.stats.get(otherId)?.setupGrant ?? null, slot,
+      ) + expansion[other]
+      if (partner > best) {
+        best = partner
+        mate = other
+      }
+    }
+    return { index, mate, score: mate < 0 ? own[index] : own[index] + best }
+  })
+  const ranked = plans
+    .filter(({ index, mate, score }) => {
+      if (mate < 0 || plans[mate].mate !== index) return true
+      const gap = score - plans[mate].score
+      if (Math.abs(gap) > PAIR_TIE) return gap > 0
+      return own[mate] < own[index] || (own[mate] === own[index] && index < mate)
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+  const greedy = legal[own.indexOf(Math.max(...own))]
+  const top = ranked[0]
+  return {
+    pick: legal[top.index],
+    mate: top.mate < 0 ? null : legal[top.mate],
+    greedy,
+    ownScore: (vertexId: VertexId) => own[legal.indexOf(vertexId)],
+  }
 }
 
 const requiredOptions = (overrides: Partial<Required<AnalysisOptions>> = {}): Required<AnalysisOptions> => ({
@@ -272,20 +340,52 @@ describe('joint draft analysis', () => {
     expect(score(onPort)).toBeGreaterThan(score(oneRoad))
   })
 
-  it('simulates opponents before a not-my-turn pick', () => {
+  it('simulates opponents before a not-my-turn pick, each pricing its first settlement as a pair', () => {
     const board = setMe(filledBoard(5, 3), 'p4')
     const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
     expect(analysis.status).toBe('ready')
-    expect(analysis.takenBeforeFirstPick.length).toBeGreaterThan(0)
     const { ctx } = holdingsFor(board, 'aki')
-    const greedyBest = legalSettlementVertices(board)
-      .map((vertexId) => ({
-        vertexId,
-        score: scoreCandidate(ctx, emptyHoldings(), vertexId, 'aki', board, neutralModifier).total,
-      }))
-      .sort((a, b) => b.score - a.score)[0].vertexId
-    expect(analysis.takenBeforeFirstPick.map((entry) => entry.vertexId)).toContain(greedyBest)
+    const { pick, greedy } = pairAwarePick(ctx, board, 'aki', new Set(), [])
+    // aki picks first and again last, so its first settlement is worth the pair it leads to; on
+    // this board that is not the vertex that scores best alone, which is what makes the case bite.
+    expect(pick).not.toBe(greedy)
+    expect(analysis.takenBeforeFirstPick[0]).toMatchObject({ vertexId: pick, playerId: 'aki' })
     expect(analysis.recommendations.every((entry) => entry.survival > 0)).toBe(true)
+  })
+
+  it('prices each first settlement in a window as a pair, taking the contested half first', () => {
+    const board = filledBoard(4, 3)
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const adjacency = vertexAdjacency(board.layout)
+    const pickers = ['aki', 'p2', 'p3']
+    const taken = simulateOpponentWindow(
+      ctx, board, pickers, new Map(), new Set(), () => 0, neutralModifier, true,
+    )
+    expect(taken).toHaveLength(pickers.length)
+    const blocked = new Set<VertexId>()
+    const standing: VertexId[] = []
+    for (const [turn, playerId] of pickers.entries()) {
+      const { pick, mate, greedy } = pairAwarePick(ctx, board, playerId, blocked, standing)
+      expect(taken[turn]).toBe(pick)
+      // The half of the pair the modal pick leaves for later is the one worth less alone.
+      expect(mate).not.toBeNull()
+      if (turn === 0) expect(pick).not.toBe(greedy)
+      blockVertex(adjacency, blocked, pick)
+      standing.push(pick)
+    }
+  })
+
+  it('takes the orientation of a pair the grant makes worth more, before the contested half', () => {
+    // The second settlement receives the setup grant, so with the grant priced the pair is worth
+    // more in one order than the other, and that order wins over the half worth more alone.
+    const weights = { ...DEFAULT_WEIGHTS, handValueWeight: 0.4 }
+    const board = setMe(filledBoard(2, 1), 'p2')
+    const ctx = computeBoardContext(board, weights)
+    const { pick, mate, ownScore } = pairAwarePick(ctx, board, 'aki', new Set(), [])
+    expect(mate).not.toBeNull()
+    expect(ownScore(pick)).toBeLessThan(ownScore(mate!))
+    const analysis = analyzeBoard(board, { rollouts: 1, weights })
+    expect(analysis.takenBeforeFirstPick[0]).toMatchObject({ vertexId: pick, playerId: 'aki' })
   })
 
   it('conditions a one-pick remainder on the existing settlement', () => {
