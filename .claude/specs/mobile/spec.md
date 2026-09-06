@@ -84,7 +84,7 @@ The pencil replaces the analysis block with the board tools in the same slot. Ev
 
 ### S7 · Maps screen
 
-Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON` and `Export JSON`. Body, in order:
+Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON`, `Export JSON`, `Back up library` and `Restore library backup`. Backup includes current unsaved games. Restore merges without overwriting or evicting boards. Body, in order:
 
 1. **`Import screenshot`** — the filled accent button, first on the page. It is why the screen was opened.
 2. **`BOARDS (n)`** with a sort control on the right of the label — the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. The board on screen is marked with an accent border and a white ground. Below the rows, a dashed **`New board`** button.
@@ -111,11 +111,13 @@ Below the rows, a dashed **`Add player`** button matching `New board` on the Map
 
 **Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `picking 3 and 6 of 8` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
 
-The points ledger is not on the phone at all (O1): this screen carries the roster and the snake draft only.
+The points ledger stays on desktop (O1). Below the snake draft, `Award holders` provides the same tie-correction controls as desktop D5 when anyone qualifies for an award.
 
 ### S9 · Toast
 
 Bottom of the screen, above the safe area. With the nav bar gone it no longer has to clear it.
+
+Save failures stay visible until resolved, with `Retry saving` and `Export backup` actions. Ordinary notices still dismiss automatically.
 
 ## Behaviours that are not CSS
 
