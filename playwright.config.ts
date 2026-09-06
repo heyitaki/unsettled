@@ -9,6 +9,7 @@ const PORT = Number(process.env.UNSETTLED_E2E_PORT ?? 5199)
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: '**/production/**',
   // The races these tests exist to catch are between two documents on one
   // origin. Running files in parallel would put unrelated tests on that same
   // origin at the same time and make the workspace key a shared variable.

@@ -8,8 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --exclude src/engine/__tests__/perf.test.ts && vitest run src/engine/__tests__/perf.test.ts",
     "test:e2e": "playwright test",
+    "test:pwa": "playwright test --config playwright.production.config.ts",
     "typecheck": "tsc -b"
   },
   "dependencies": {

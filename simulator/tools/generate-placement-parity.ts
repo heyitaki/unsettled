@@ -684,13 +684,14 @@ const pack = {
   cases: cases.map(scoreCase),
 }
 
-mkdirSync(fixtureDir, { recursive: true })
-mkdirSync(weightsDir, { recursive: true })
-writeFileSync(
-  resolve(fixtureDir, 'placement-parity.json'),
-  `${JSON.stringify(pack, encodeNonFinite, 2)}\n`,
-)
-writeFileSync(
-  resolve(weightsDir, 'default-weights.json'),
-  `${JSON.stringify(DEFAULT_WEIGHTS, null, 2)}\n`,
-)
+export const placementFiles = [
+  { path: resolve(fixtureDir, 'placement-parity.json'), contents: `${JSON.stringify(pack, encodeNonFinite, 2)}\n` },
+  { path: resolve(weightsDir, 'default-weights.json'), contents: `${JSON.stringify(DEFAULT_WEIGHTS, null, 2)}\n` },
+]
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  for (const { path, contents } of placementFiles) {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, contents)
+  }
+}

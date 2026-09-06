@@ -5,20 +5,64 @@
 # Requires a repo secret SITE_DISPATCH_TOKEN: a fine-grained PAT scoped to
 # heyitaki/heyitaki.github.io with Contents: Read and write (cross-repo dispatch
 # can't use the default GITHUB_TOKEN).
-name: Notify site to rebuild
+name: Check and deploy
 
 on:
+  pull_request:
   push:
     branches: ["main"]
 
+permissions:
+  contents: read
+
 jobs:
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm run test:pwa
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failures
+          path: test-results/
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      matrix:
+        profile: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: simulator
+      - name: Test simulator and placement parity
+        working-directory: simulator
+        run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
   notify:
+    needs: [app, rust]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch rebuild to personal site
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
           curl --fail -sS -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.SITE_DISPATCH_TOKEN }}" \
+            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
             https://api.github.com/repos/heyitaki/heyitaki.github.io/dispatches \
             -d '{"event_type":"unsettled-update"}'
