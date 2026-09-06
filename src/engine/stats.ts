@@ -3,7 +3,7 @@
 // bonuses are auto-assigned from those. Pure functions, no React.
 
 import { edgeEndpointVertexIds } from '../model/coords'
-import type { Game } from '../model/game'
+import type { AwardHolders, AwardKind, Game } from '../model/game'
 import type { Board, EdgeId, VertexId } from '../model/types'
 
 export const SUPER_CITY_VP = 3
@@ -117,9 +117,7 @@ function longestRoadHolder(board: Board): string | null {
   return holder
 }
 
-// The award holder is the unique owner of the maximum at or above the
-// threshold. On a tie we award nobody: knights carry no placement order, so
-// unlike longest road there is no way to know who reached the max first.
+// Without a qualifying incumbent, only a unique leader can claim the award.
 function uniqueMaxHolder(values: ReadonlyMap<string, number>, threshold: number): string | null {
   let holder: string | null = null
   let max = threshold - 1
@@ -130,6 +128,59 @@ function uniqueMaxHolder(values: ReadonlyMap<string, number>, threshold: number)
     } else if (value === max) holder = null
   }
   return holder
+}
+
+function retainedHolder(values: ReadonlyMap<string, number>, threshold: number, holder: string | null): string | null {
+  const highest = Math.max(threshold, ...values.values())
+  if (holder !== null && values.get(holder) === highest) return holder
+  return uniqueMaxHolder(values, threshold)
+}
+
+function awardValues(game: Game, kind: AwardKind): Map<string, number> {
+  return new Map(computeStandings(game).map((standing) => [standing.playerId,
+    kind === 'longestRoad' ? standing.longestRoad : game.stats[standing.playerId]?.knights ?? 0]))
+}
+
+const thresholdFor = (kind: AwardKind) => kind === 'longestRoad' ? LONGEST_ROAD_MIN : LARGEST_ARMY_MIN
+
+export function awardCandidates(game: Game, kind: AwardKind): string[] {
+  const values = awardValues(game, kind)
+  const highest = Math.max(thresholdFor(kind), ...values.values())
+  return [...values].filter(([, value]) => value === highest).map(([id]) => id)
+}
+
+function recordAwards(game: Game, awards: AwardHolders): Game {
+  if (game.awards?.longestRoad === awards.longestRoad && game.awards.largestArmy === awards.largestArmy) return game
+  if (!game.awards && awards.longestRoad === null && awards.largestArmy === null &&
+    awardCandidates(game, 'longestRoad').length === 0 && awardCandidates(game, 'largestArmy').length === 0) return game
+  return { ...game, awards }
+}
+
+/** A snapshot supplies counts, but no history that could break an imported tie. */
+export function initializeAwards(game: Game): Game {
+  return recordAwards(game, {
+    longestRoad: retainedHolder(awardValues(game, 'longestRoad'), LONGEST_ROAD_MIN, game.awards?.longestRoad ?? null),
+    largestArmy: retainedHolder(awardValues(game, 'largestArmy'), LARGEST_ARMY_MIN, game.awards?.largestArmy ?? null),
+  })
+}
+
+/** A committed edit supplies the previous holders, so matching a leader keeps their award. */
+export function trackAwards(previous: Game, next: Game): Game {
+  if (previous === next) return next
+  const standings = computeStandings(previous)
+  const roadHolder = previous.awards?.longestRoad ?? standings.find((standing) => standing.hasLongestRoad)?.playerId ?? null
+  const armyHolder = previous.awards?.largestArmy ?? standings.find((standing) => standing.hasLargestArmy)?.playerId ?? null
+  return recordAwards(next, {
+    longestRoad: retainedHolder(awardValues(next, 'longestRoad'), LONGEST_ROAD_MIN, roadHolder),
+    largestArmy: retainedHolder(awardValues(next, 'largestArmy'), LARGEST_ARMY_MIN, armyHolder),
+  })
+}
+
+export function setAwardHolder(game: Game, kind: AwardKind, playerId: string | null): Game {
+  const candidates = awardCandidates(game, kind)
+  if (playerId === null ? candidates.length === 1 : !candidates.includes(playerId)) return game
+  const current = initializeAwards(game)
+  return recordAwards(current, { longestRoad: null, largestArmy: null, ...current.awards, [kind]: playerId })
 }
 
 // Memoized on game identity like analyzeBoardCached: PlayerPanel needs standings
@@ -160,10 +211,12 @@ function standingsFor(game: Game): PlayerStanding[] {
       longestRoad: longestRoadLength(board, player.id),
     }
   })
-  const roadHolder = longestRoadHolder(board)
-  const armyHolder = uniqueMaxHolder(
+  const roadHolder = game.awards === undefined ? longestRoadHolder(board) : retainedHolder(
+    new Map(counts.map((entry) => [entry.playerId, entry.longestRoad])), LONGEST_ROAD_MIN, game.awards.longestRoad,
+  )
+  const armyHolder = retainedHolder(
     new Map(board.players.map((player) => [player.id, stats[player.id]?.knights ?? 0])),
-    LARGEST_ARMY_MIN,
+    LARGEST_ARMY_MIN, game.awards?.largestArmy ?? null,
   )
   return counts.map((entry) => {
     const hasLongestRoad = entry.playerId === roadHolder

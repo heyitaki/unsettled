@@ -298,8 +298,9 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .empty-actions button.primary { border-color: var(--accent-dark); background: var(--accent); color: #fff; }
 .empty-actions button svg { width: 15px; height: 15px; }
 
-.drop-zone { display: grid; gap: 4px; padding: 18px 12px; border: 1px dashed #9c8364; border-radius: 12px; background: #f8f0de; text-align: center; cursor: pointer; }
-.drop-zone input { display: none; }
+.drop-zone { position: relative; display: grid; gap: 4px; padding: 18px 12px; border: 1px dashed #9c8364; border-radius: 12px; background: #f8f0de; text-align: center; cursor: pointer; }
+.drop-zone input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.drop-zone:has(input:focus-visible) { outline: 2px solid var(--accent-dark); outline-offset: 3px; }
 .drop-zone strong { font-family: Georgia, serif; }
 .drop-zone span { color: var(--muted); font-size: 10px; }
 .working { color: var(--accent); font-size: 11px; font-weight: 700; }
@@ -537,3 +538,7 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .roster-row .swatch { pointer-events: none; }
   .roster-vp { font-size: 14px; pointer-events: none; }
 }
+.award-controls { margin-top: 12px; font-size: 12px; }
+.award-controls > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
+.save-failure p { margin: 0 0 8px; }
+.save-failure button + button { margin-left: 8px; }

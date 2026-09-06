@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  parseBoardImageWithNames,
+  parseScreenshot,
   type ParseIssue,
   type RgbaImage,
 } from '../parser'
 import { listMaps } from '../persistence/localStorage'
+import { newId } from '../model/ids'
 import { fileTitle, firstFreeName } from './boardFiles'
 import { useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
+import { useDialogFocus } from './useDialogFocus'
+import { importNames } from './importNames'
 
 async function decodeImage(file: File): Promise<RgbaImage> {
   let bitmap: ImageBitmap
@@ -32,6 +35,7 @@ async function decodeImage(file: File): Promise<RgbaImage> {
 // can be reviewed and clicked to highlight the offending element on the board.
 // `onImported` runs once a parse has become a tab, before either close.
 export function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported?: () => void }) {
+  const dialogRef = useDialogFocus(onClose)
   const { state, dispatch } = useStore()
   const [issues, setIssues] = useState<ParseIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -47,6 +51,8 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
   return (
     <div className="popover-backdrop" onClick={onClose}>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         className="import-dialog"
         role="dialog"
         aria-modal="true"
@@ -60,52 +66,35 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
             accept="image/png,image/jpeg"
             disabled={busy}
             onChange={async (event) => {
-              const file = event.target.files?.[0]
+              const input = event.currentTarget
+              const file = input.files?.[0]
               if (!file) return
               setBusy(true)
               setIssues([])
               try {
                 const image = await decodeImage(file)
-                let reader
-                let startupError: unknown
-                try {
-                  // Dynamic import keeps the tesseract.js wrapper out of the
-                  // initial /unsettled bundle — it loads only on first import.
-                  const { createBrowserTextReader } = await import('../parser/textReader')
-                  reader = await createBrowserTextReader()
-                } catch (error) {
-                  startupError = error
-                  reader = {
-                    async read() {
-                      throw startupError
-                    },
-                  }
-                }
-                try {
-                  const result = await parseBoardImageWithNames(image, reader)
-                  if (result.ok) {
-                    // Disambiguate the title against open tabs and saved maps so a
-                    // repeat import never spawns a second tab that reads as the
-                    // same board. Cosmetic — links are ids, not titles.
-                    const reserved = new Set([
-                      ...state.tabs.map((tab) => tab.title),
-                      ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
-                    ])
-                    const importTitle = firstFreeName(fileTitle(file.name), reserved)
-                    dispatch({ type: 'tab-add', game: result.game, title: importTitle })
-                    onImported?.()
-                    notice(`Imported ${file.name}`)
-                    setIssues(result.issues)
-                    if (result.issues.length === 0) onClose()
-                  } else notice(`Screenshot import failed: ${result.error}`)
-                } finally {
-                  await reader.terminate?.()
-                }
+                const result = parseScreenshot(image)
+                if (result.ok) {
+                  // Disambiguate the title against open tabs and saved maps so a
+                  // repeat import never spawns a second tab with the same label.
+                  const reserved = new Set([
+                    ...state.tabs.map((tab) => tab.title),
+                    ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
+                  ])
+                  const importTitle = firstFreeName(fileTitle(file.name), reserved)
+                  const id = newId()
+                  dispatch({ type: 'tab-add', id, game: result.game, title: importTitle })
+                  onImported?.()
+                  notice(`Imported ${file.name}`)
+                  setIssues(result.issues)
+                  if (result.issues.length === 0) onClose()
+                  void importNames(id, image, result, dispatch)
+                } else notice(`Screenshot import failed: ${result.error}`)
               } catch (error) {
                 notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)
               } finally {
                 setBusy(false)
-                event.target.value = ''
+                input.value = ''
               }
             }}
           />

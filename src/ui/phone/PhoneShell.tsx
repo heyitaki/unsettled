@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { analyzeBoardCached } from '../../engine/analyze'
+import { useAnalysis } from '../useAnalysis'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { BoardCanvas } from '../BoardCanvas'
 import { GlobalNotice } from '../GlobalNotice'
@@ -27,6 +27,7 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 export function PhoneShell() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
+  const { analysis } = useAnalysis()
   const [session, setSession] = useState<BuildSession | null>(null)
   const [overlay, setOverlay] = useState<PhoneOverlay | null>(null)
   // An overlay leaves the way it came: it stays mounted, sliding out, until the
@@ -53,8 +54,8 @@ export function PhoneShell() {
   // mode, where the analysis block is not on the page.
   const { board } = tab.game
   const restMarks = useMemo(
-    () => building ? null : restingMarks(board, analyzeBoardCached(board)),
-    [board, building],
+    () => building ? null : restingMarks(board, analysis),
+    [board, building, analysis],
   )
   // The store boots with the desktop's default tile tool. Here the pencil is the
   // only way into editing, so a board tap in analyze mode must not paint.

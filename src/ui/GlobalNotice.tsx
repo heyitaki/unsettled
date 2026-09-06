@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useStore } from './store'
+import { useSaveRecovery, useStore } from './store'
+import { createLibraryBackup } from '../persistence/backup'
+import { downloadBoard } from './boardFiles'
+import { persistedWorkspace } from './workspaceSync'
 
 /**
  * The toast, rendered by both shells so a notice reads the same wherever it is
@@ -8,6 +11,9 @@ import { useStore } from './store'
  */
 export function GlobalNotice() {
   const { state, dispatch } = useStore()
+  const { failures, retry } = useSaveRecovery()
+  const errors = Object.values(failures)
+  const [backupError, setBackupError] = useState<string | null>(null)
   // Pause auto-dismiss while the pointer is over the toast, so it can be read,
   // clicked, and text-selected; the timer restarts fresh once the pointer leaves.
   const [hover, setHover] = useState(false)
@@ -25,6 +31,25 @@ export function GlobalNotice() {
     window.addEventListener('unsettled:notice', showNotice)
     return () => window.removeEventListener('unsettled:notice', showNotice)
   }, [dispatch])
+  if (errors.length > 0) return (
+    <div className="global-notice save-failure" role="alert">
+      <div>
+        {errors.map((error, index) => <p key={index}>{error.message}</p>)}
+        {backupError && <p>{backupError}</p>}
+        <button type="button" onClick={retry}>Retry saving</button>
+        <button type="button" onClick={() => {
+          const tabs = persistedWorkspace(state.tabs).tabs
+          const closed = errors.flatMap((error) => error.tab && !tabs.some((tab) => tab.id === error.tab?.id) ? [error.tab] : [])
+          try {
+            downloadBoard('unsettled-library-backup', createLibraryBackup([...tabs, ...closed]))
+            setBackupError(null)
+          } catch (error) {
+            setBackupError(`Backup failed: ${error instanceof Error ? error.message : 'Unable to export backup'}`)
+          }
+        }}>Export backup</button>
+      </div>
+    </div>
+  )
   if (!state.notice) return null
   return (
     <div

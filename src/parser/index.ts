@@ -1,6 +1,6 @@
 import type { RgbaImage } from './image'
 import { createSourceRegistry, DEFAULT_SOURCES } from './sources/registry'
-import type { ParseBoardImageResult, ParseIssue } from './sources/types'
+import type { ParseBoardImageResult, ParseIssue, SourceParse } from './sources/types'
 import type { TextReader } from './textReader'
 
 export type { RgbaImage } from './image'
@@ -8,6 +8,10 @@ export type { ParseBoardImageResult, ParseIssue } from './sources/types'
 export type { TextReader } from './textReader'
 
 const registry = createSourceRegistry(DEFAULT_SOURCES)
+
+export function parseScreenshot(image: RgbaImage): SourceParse {
+  return registry.parse(image)
+}
 
 export function parseBoardImage(image: RgbaImage): ParseBoardImageResult {
   const result = registry.parse(image)

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useDialogFocus } from './useDialogFocus'
 
 interface ConfirmAction {
   label: string
@@ -14,47 +14,7 @@ interface Props {
 }
 
 export function ConfirmDialog({ title, message, actions, onCancel }: Props) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onCancel()
-        return
-      }
-      if (event.key !== 'Tab') return
-      // Trap Tab focus inside the modal so keyboard users can't reach — and
-      // mutate — the board behind it (the mousedown backdrop only stops clicks).
-      const buttons = dialogRef.current
-        ? Array.from(dialogRef.current.querySelectorAll<HTMLButtonElement>('button'))
-        : []
-      if (buttons.length === 0) return
-      const first = buttons[0]
-      const last = buttons[buttons.length - 1]
-      const active = document.activeElement
-      if (!dialogRef.current?.contains(active)) {
-        event.preventDefault()
-        first.focus()
-      } else if (event.shiftKey && active === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onCancel])
-
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    // Focus the last action (Cancel by convention) so a stray Enter dismisses
-    // rather than fires the destructive default; restore focus on close.
-    const buttons = dialogRef.current?.querySelectorAll<HTMLButtonElement>('button')
-    buttons?.[buttons.length - 1]?.focus()
-    return () => previous?.focus?.()
-  }, [])
+  const dialogRef = useDialogFocus(onCancel, true)
 
   return (
     <div className="popover-backdrop" role="presentation" onMouseDown={onCancel}>

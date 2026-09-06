@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { analyzeBoardCached } from '../engine/analyze'
+import { AnalysisProvider } from './AnalysisProvider'
+import { useAnalysis } from './useAnalysis'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
 import { Brand } from './Brand'
@@ -18,7 +19,8 @@ function Workspace() {
   // What the board wears while nothing is selected (spec D4), the same ranked
   // picks the phone rests on.
   const { board } = activeTab(state).game
-  const restMarks = useMemo(() => restingMarks(board, analyzeBoardCached(board)), [board])
+  const { analysis } = useAnalysis()
+  const restMarks = useMemo(() => restingMarks(board, analysis), [board, analysis])
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -49,5 +51,5 @@ function Shell() {
 }
 
 export function App() {
-  return <StoreProvider><Shell /></StoreProvider>
+  return <StoreProvider><AnalysisProvider><Shell /></AnalysisProvider></StoreProvider>
 }

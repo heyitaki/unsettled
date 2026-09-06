@@ -10,11 +10,13 @@ import { useJsonFiles } from './useJsonFiles'
  * Maps screen in a panel, so everything below the heading is `LibraryLists`.
  */
 export function MapsPanel() {
-  const { importJson, exportJson, fileInput } = useJsonFiles()
+  const { importJson, exportJson, exportLibrary, restoreLibrary, fileInput } = useJsonFiles()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const items: ContextMenuItem[] = [
     { label: 'Import JSON', icon: <ImportGlyph />, onClick: importJson },
     { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
+    { label: 'Back up library', icon: <ExportGlyph />, onClick: exportLibrary },
+    { label: 'Restore library backup', icon: <ImportGlyph />, onClick: restoreLibrary },
   ]
   return (
     <section className="panel maps-panel">

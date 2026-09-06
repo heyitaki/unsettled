@@ -9,6 +9,7 @@ import { activeTab, useStore } from '../store'
 import { useCoarsePointer } from '../useMediaQuery'
 import { useRowReorder } from '../useRowReorder'
 import { PhoneOverlay } from './PhoneOverlay'
+import { AwardControls } from '../AwardControls'
 
 /**
  * The roster and the snake draft (spec S8). A row claims on tap, renames on
@@ -124,6 +125,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <DraftGrid board={board} />
+      <AwardControls />
     </PhoneOverlay>
   )
 }

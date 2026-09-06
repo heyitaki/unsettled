@@ -19,7 +19,16 @@ export interface Game {
   schemaVersion: 1
   board: Board
   stats: Record<string, PlayerStats>
+  /** Absent in legacy snapshots. Null records an award with no known holder. */
+  awards?: AwardHolders
 }
+
+export interface AwardHolders {
+  longestRoad: string | null
+  largestArmy: string | null
+}
+
+export type AwardKind = keyof AwardHolders
 
 export type StatCounter = 'handUnknown' | 'devCards' | 'knights' | 'vpCards'
 

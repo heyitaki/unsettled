@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { analyzeBoardCached } from '../engine/analyze'
+import { useAnalysis } from './useAnalysis'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
@@ -14,7 +14,8 @@ import { activeTab, useStore, type HighlightMark } from './store'
 export function DraftRibbon() {
   const { state, dispatch } = useStore()
   const { board } = activeTab(state).game
-  const slots = draftSlots(board, analyzeBoardCached(board))
+  const { analysis } = useAnalysis()
+  const slots = draftSlots(board, analysis)
   const [selected, setSelected] = useState<number | null>(null)
   // An edit moves or invalidates the marked pick, so the selection drops with it.
   useEffect(() => {

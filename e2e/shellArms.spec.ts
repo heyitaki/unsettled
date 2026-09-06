@@ -60,7 +60,7 @@ test.describe('desktop', () => {
 
     await maps.getByRole('button', { name: 'Import and export files' }).click()
     const menu = page.getByRole('menu', { name: 'Import and export files' })
-    await expect(menu.getByRole('menuitem')).toHaveText(['Import JSON', 'Export JSON'])
+    await expect(menu.getByRole('menuitem')).toHaveText(['Import JSON', 'Export JSON', 'Back up library', 'Restore library backup'])
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
     await snap(page, 'desktop')
@@ -247,11 +247,11 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(2)
     await expect(cards.first()).toHaveClass(/\bcurrent\b/)
 
-    // The pointer parks off the rails before the shot: a full-page capture
-    // resizes the viewport, and the draft ribbon sliding under a live pointer
-    // would repaint the board marks and drop the selection with them.
+    // Chromium briefly resizes to 1x1 during a full-page capture, mounting the
+    // phone tree and losing local selection. A viewport shot keeps this tree.
     await page.mouse.move(0, 0)
-    await snap(page, 'desktop-selected-card')
+    await snap(page, 'desktop-selected-card', false)
+    await expect(cards.first()).toHaveClass(/\bcurrent\b/)
 
     // Clearing drops back to the resting marks, and nothing was placed on the way.
     const structures = page.locator('.tools-panel .tool-label')

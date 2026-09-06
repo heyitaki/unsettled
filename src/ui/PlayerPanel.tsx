@@ -9,7 +9,7 @@ import {
 } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
-import { analyzeBoardCached } from '../engine/analyze'
+import { inferDraftState } from '../engine/draft'
 import { DraftLabel } from './DraftGrid'
 import { DraftRibbon } from './DraftRibbon'
 import { CounterGlyph, GLYPH_MUTED, GripGlyph, PlusGlyph, ResourceGlyph, StructureGlyph, TrashGlyph } from './glyphs'
@@ -18,6 +18,7 @@ import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 import { useRowReorder } from './useRowReorder'
+import { AwardControls } from './AwardControls'
 
 const RESOURCE_LABELS: Record<Resource, string> = {
   wood: 'Wood',
@@ -424,9 +425,10 @@ export function PlayerPanel() {
       {/* The ribbon, not the phone's named grid: the desktop roster already
           names every seat, so the compact bar the strip used to be is enough. */}
       <div className="draft-section">
-        <DraftLabel analysis={analyzeBoardCached(board)} />
+        <DraftLabel analysis={{ draft: inferDraftState(board) }} />
         <DraftRibbon />
       </div>
+      <AwardControls />
     </section>
   )
 }

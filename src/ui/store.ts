@@ -12,9 +12,10 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react'
-import { createBoard } from '../model/board'
+import { createBoard, renamePlayer, setMe } from '../model/board'
 import { newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
+import { initializeAwards, trackAwards } from '../engine/stats'
 import type {
   Board,
   BuildingTier,
@@ -32,7 +33,8 @@ import {
   type WorkspaceTab,
 } from '../persistence/localStorage'
 import { savedMap, tabIsDirty } from './boardFiles'
-import { createLibraryAutosave } from './libraryAutosave'
+import { AUTOSAVE_DELAY, createLibraryAutosave } from './libraryAutosave'
+import type { ReportSave, SaveFailure } from './saveStatus'
 import {
   NOTHING_UNFLUSHED,
   createWorkspaceSync,
@@ -110,6 +112,7 @@ export type StoreAction =
   // whole next Game via commit-game. Both share one undo stack of games.
   | { type: 'commit'; board: Board }
   | { type: 'commit-game'; game: Game }
+  | { type: 'import-names'; id: string; original: Board; names: { playerId: string; name: string }[] }
   | { type: 'tool'; tool: Tool }
   | { type: 'active-player'; playerId: string | null }
   | { type: 'undo' }
@@ -171,7 +174,7 @@ function withOneTabPerMap(tabs: TabState[]): TabState[] {
 }
 
 function createTab({ game, title, id, activePlayerId, mapId }: Partial<WorkspaceTab> = {}): TabState {
-  const resolved = game ?? newGame(createBoard('standard4'))
+  const resolved = initializeAwards(game ?? newGame(createBoard('standard4')))
   return {
     id: id ?? newId(),
     title: title ?? 'Board 1',
@@ -298,9 +301,28 @@ function unusedBoardTitle(tabs: TabState[]): string {
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
+    case 'import-names': {
+      const index = state.tabs.findIndex((tab) => tab.id === action.id)
+      if (index < 0) return state
+      const tab = state.tabs[index]
+      let board = tab.game.board
+      for (const { playerId, name } of action.names) {
+        const original = action.original.players.find((player) => player.id === playerId)
+        const player = board.players.find((candidate) => candidate.id === playerId)
+        if (!original || !player || player.name !== original.name) continue
+        board = renamePlayer(board, playerId, name)
+        if (name.trim().toLowerCase() === 'you' && board.mePlayerId === action.original.mePlayerId) {
+          board = setMe(board, playerId)
+        }
+      }
+      if (board === tab.game.board) return state
+      const tabs = [...state.tabs]
+      tabs[index] = { ...tab, game: withBoard(tab.game, board) }
+      return { ...state, tabs }
+    }
     case 'commit':
       return updateActiveTab(state, (tab) => {
-        const game = withBoard(tab.game, action.board)
+        const game = trackAwards(tab.game, withBoard(tab.game, action.board))
         if (game === tab.game) return tab
         return {
           ...tab,
@@ -315,7 +337,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         if (action.game === tab.game) return tab
         return {
           ...tab,
-          game: action.game,
+          game: action.game.awards !== tab.game.awards ? initializeAwards(action.game) : trackAwards(tab.game, action.game),
           // A whole game can carry a different roster (build mode's Cancel
           // restores one), so the id is reconciled as every other write is.
           activePlayerId: activePlayerFor(action.game.board, tab.activePlayerId),
@@ -493,14 +515,28 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
 }
 
 const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<StoreAction> } | null>(null)
+const SaveRecoveryContext = createContext<{
+  failures: Readonly<Record<string, SaveFailure>>
+  retry(): void
+} | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
+  const [failures, setFailures] = useState<Record<string, SaveFailure>>({})
+  const reportSave = useCallback<ReportSave>((key, failure) => {
+    setFailures((previous) => {
+      if (failure === null && !(key in previous)) return previous
+      const next = { ...previous }
+      if (failure === null) delete next[key]
+      else next[key] = failure
+      return next
+    })
+  }, [])
   // Created on the first render, when their reads of shared storage are still
   // this document's own history rather than another document's write.
   const [{ autosave, sync }] = useState(() => ({
-    autosave: createLibraryAutosave(dispatch, state.tabs),
-    sync: createWorkspaceSync(dispatch),
+    autosave: createLibraryAutosave(dispatch, state.tabs, AUTOSAVE_DELAY, reportSave),
+    sync: createWorkspaceSync(dispatch, reportSave),
   }))
   // A write that stood down leaves work owed, and the reconciled workspace only
   // exists after a render — so the retry is a render this asks for. Nothing
@@ -585,7 +621,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dispatch(action)
   }, [autosave])
   const value = useMemo(() => ({ state, dispatch: dispatchDiscarding }), [state, dispatchDiscarding])
-  return createElement(StoreContext.Provider, { value }, children)
+  const retry = () => {
+    const linked = autosave.flush()
+    sync.arm(persistedWorkspace(linked ?? state.tabs))
+    if (sync.flush() === 'deferred') {
+      deferred.current = true
+      rearm()
+    }
+  }
+  return createElement(SaveRecoveryContext.Provider, { value: { failures, retry } },
+    createElement(StoreContext.Provider, { value }, children))
+}
+
+export function useSaveRecovery() {
+  const value = useContext(SaveRecoveryContext)
+  if (!value) throw new Error('useSaveRecovery must be used inside StoreProvider')
+  return value
 }
 
 export function useStore() {

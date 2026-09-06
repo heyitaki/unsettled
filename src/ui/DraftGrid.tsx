@@ -1,10 +1,11 @@
 import type { CSSProperties } from 'react'
-import { analyzeBoardCached, type DraftAnalysis } from '../engine/analyze'
+import { inferDraftState } from '../engine/draft'
+import type { DraftAnalysis } from '../engine/analyze'
 import type { Board } from '../model/types'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
 
-export function DraftLabel({ analysis }: { analysis: DraftAnalysis }) {
+export function DraftLabel({ analysis }: { analysis: Pick<DraftAnalysis, 'draft'> }) {
   const { turnIndex, sequence } = analysis.draft
   return (
     <div className="group-label">
@@ -21,7 +22,9 @@ export function DraftLabel({ analysis }: { analysis: DraftAnalysis }) {
  * on the board is the ribbon's job.
  */
 export function DraftGrid({ board }: { board: Board }) {
-  const analysis = analyzeBoardCached(board)
+  const analysis: DraftAnalysis = {
+    draft: inferDraftState(board), status: 'no-production', recommendations: [], takenBeforeFirstPick: [], warnings: [],
+  }
   const slots = draftSlots(board, analysis)
   return (
     <div className="draft-section">

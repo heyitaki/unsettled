@@ -12,6 +12,7 @@ import {
   type WorkspaceTab,
 } from '../persistence/localStorage'
 import type { StoreAction, TabState } from './store'
+import type { ReportSave } from './saveStatus'
 
 /**
  * What this document holds that shared storage has not been told about: tabs it
@@ -171,7 +172,7 @@ export type FlushOutcome =
  * races between documents are not observable any other way, and every bug this
  * protocol has had has been a race.
  */
-export function createWorkspaceSync(dispatch: (action: StoreAction) => void) {
+export function createWorkspaceSync(dispatch: (action: StoreAction) => void, report: ReportSave = () => {}) {
   // Seeded from the stored blob rather than from the initial tabs, because
   // startup reconciliation can already have changed links nothing has written,
   // and a tab invented because no workspace was stored is unflushed work.
@@ -251,12 +252,14 @@ export function createWorkspaceSync(dispatch: (action: StoreAction) => void) {
           // but without re-arming here: an immediate retry would fail the same
           // way and do it every 500ms.
           dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
+          report('workspace', { message: `Workspace autosave failed: ${result.error}` })
           return 'settled'
         }
       }
       // Storage now holds exactly this, whether this document wrote it or found
       // it already there.
       owed = null
+      report('workspace', null)
       seen = blob
       persistedTabs = tabLinks(workspace.tabs)
       return 'settled'

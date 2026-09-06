@@ -384,7 +384,7 @@ test.describe('maps screen', () => {
 
     await screen.getByRole('button', { name: 'Import and export files' }).click()
     const menu = page.getByRole('menu', { name: 'Import and export files' })
-    await expect(menu.getByRole('menuitem')).toHaveText(['Import JSON', 'Export JSON'])
+    await expect(menu.getByRole('menuitem')).toHaveText(['Import JSON', 'Export JSON', 'Back up library', 'Restore library backup'])
     await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
     await expect(screen).toBeVisible()

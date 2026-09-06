@@ -1,6 +1,6 @@
 import { validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
-import { newGame, reconcileStats, validateGameStats, type Game, type PlayerStats } from './game'
+import { newGame, reconcileStats, validateGameStats, type AwardHolders, type Game, type PlayerStats } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type Player, type Port, type Road } from './types'
 
 export type ParseBoardResult =
@@ -154,11 +154,22 @@ export function parseGame(data: unknown): ParseGameResult {
   }
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
-  if (!exactKeys(value, ['schemaVersion', 'board', 'stats'])) {
+  if (!exactKeys(value, ['schemaVersion', 'board', 'stats']) && !exactKeys(value, ['schemaVersion', 'board', 'stats', 'awards'])) {
     return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
   }
   const parsedBoard = parseBoard(value.board)
   if (!parsedBoard.ok) return parsedBoard
+  let awards: AwardHolders | undefined
+  if ('awards' in value) {
+    if (!isRecord(value.awards) || !exactKeys(value.awards, ['longestRoad', 'largestArmy'])) {
+      return { ok: false, errors: ['Invalid award holders'] }
+    }
+    const { longestRoad, largestArmy } = value.awards
+    const validHolder = (id: unknown): id is string | null => id === null ||
+      typeof id === 'string' && parsedBoard.board.players.some((player) => player.id === id)
+    if (!validHolder(longestRoad) || !validHolder(largestArmy)) return { ok: false, errors: ['Award holder is not in the roster'] }
+    awards = { longestRoad, largestArmy }
+  }
   if (!isRecord(value.stats)) {
     return { ok: false, errors: ['Invalid player stats'] }
   }
@@ -176,6 +187,7 @@ export function parseGame(data: unknown): ParseGameResult {
     schemaVersion: 1,
     board: parsedBoard.board,
     stats: reconcileStats(stats, parsedBoard.board.players),
+    ...(awards === undefined ? {} : { awards }),
   }
   // reconcileStats zero-fills missing entries, so any surviving issue is a
   // stats key pointing at a player outside the roster.

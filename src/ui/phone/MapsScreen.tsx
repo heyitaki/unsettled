@@ -10,10 +10,12 @@ import { PhoneOverlay } from './PhoneOverlay'
  * Rename, delete and sort keep it open.
  */
 export function MapsScreen({ onClose }: { onClose: () => void }) {
-  const { importJson, exportJson, fileInput } = useJsonFiles({ onImported: onClose })
+  const { importJson, exportJson, exportLibrary, restoreLibrary, fileInput } = useJsonFiles({ onImported: onClose })
   const menu: ContextMenuItem[] = [
     { label: 'Import JSON', icon: <ImportGlyph />, onClick: importJson },
     { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
+    { label: 'Back up library', icon: <ExportGlyph />, onClick: exportLibrary },
+    { label: 'Restore library backup', icon: <ImportGlyph />, onClick: restoreLibrary },
   ]
   return (
     <PhoneOverlay title="Maps" menu={menu} menuLabel="Import and export files" onClose={onClose}>

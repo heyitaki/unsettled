@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { analyzeBoardCached, type Recommendation } from '../engine/analyze'
+import type { Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
+import { useAnalysis } from './useAnalysis'
 import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
 import { PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
@@ -131,7 +132,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
 } = {}) {
   const { state, dispatch } = useStore()
   const board = activeTab(state).game.board
-  const analysis = analyzeBoardCached(board)
+  const { analysis, pending, error, retry } = useAnalysis()
   const recommendations = analysis.recommendations.slice(0, LISTED_PICKS)
   const [selectedPick, setSelectedPick] = useState<VertexId | null>(null)
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
@@ -440,7 +441,12 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             {` · picking ${pickText} of ${analysis.draft.sequence.length}`}
           </p>
           {warnings}
-          {body}
+          {pending ? <p role="status">Analyzing placements…</p> : error ? (
+            <div role="alert">
+              <p>{error}</p>
+              <button type="button" onClick={retry}>Retry analysis</button>
+            </div>
+          ) : body}
         </>
       )}
       {/* Outside the empty branch: a successful import replaces the board

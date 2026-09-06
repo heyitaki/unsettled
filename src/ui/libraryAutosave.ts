@@ -9,6 +9,7 @@ import type { Game } from '../model/game'
 import { MAX_MAPS, loadMap, readLibrary } from '../persistence/localStorage'
 import { saveTab, savedMap, tabIsDirty } from './boardFiles'
 import type { StoreAction, TabState } from './store'
+import type { ReportSave } from './saveStatus'
 
 export const AUTOSAVE_DELAY = 500
 
@@ -37,6 +38,7 @@ export function createLibraryAutosave(
   dispatch: Dispatch<StoreAction>,
   initialTabs: readonly TabState[],
   delay = AUTOSAVE_DELAY,
+  report: ReportSave = () => {},
 ): LibraryAutosave {
   // The game identity each tab last saved or arrived with. A tab whose game is
   // any other object has been edited here and owes a write. Games are immutable
@@ -50,6 +52,7 @@ export function createLibraryAutosave(
   // library that just refused this one would only repeat the toast, but a
   // close or unload is the last chance before the tab's copy is gone.
   const failed = new Map<string, Game>()
+  const closedFailures = new Map<string, TabState>()
   const timers = new Map<string, number>()
   // Links made by the current flush, for the tab set it returns.
   const flushed = new Map<string, { mapId: string; title: string }>()
@@ -72,6 +75,9 @@ export function createLibraryAutosave(
     const saved = tab.mapId === null ? { linked: false as const } : savedMap(loadMap(tab.mapId))
     if (!tabIsDirty(tab.game, saved)) {
       baseline.set(id, tab.game)
+      failed.delete(id)
+      closedFailures.delete(id)
+      report(`library:${id}`, null)
       return
     }
     // Maps other tabs here still owe a write to are kept out of the cap's
@@ -88,6 +94,10 @@ export function createLibraryAutosave(
       // Once per attempt: the debounce has already folded a burst of edits into
       // this one write, and the next edit is what retries it.
       failed.set(id, tab.game)
+      if (closing) closedFailures.set(id, tab)
+      report(`library:${id}`, { message: `Could not save "${tab.title}": ${result.error}`, tab: {
+        id: tab.id, title: tab.title, game: tab.game, ...(tab.mapId === null ? {} : { mapId: tab.mapId }),
+      } })
       dispatch({
         type: 'notice',
         message: closing
@@ -99,6 +109,8 @@ export function createLibraryAutosave(
     // Before dispatching: the commits below call back into arm with this game.
     baseline.set(id, tab.game)
     failed.delete(id)
+    closedFailures.delete(id)
+    report(`library:${id}`, null)
     if (result.id !== tab.mapId) {
       flushed.set(id, { mapId: result.id, title: result.name })
       dispatch({ type: 'tab-link', id, mapId: result.id, title: result.name })
@@ -131,6 +143,8 @@ export function createLibraryAutosave(
     if (timer !== undefined) window.clearTimeout(timer)
     timers.delete(id)
     failed.delete(id)
+    closedFailures.delete(id)
+    report(`library:${id}`, null)
     baseline.delete(id)
   }
 
@@ -181,6 +195,7 @@ export function createLibraryAutosave(
     flush() {
       flushed.clear()
       closed.clear()
+      for (const tab of [...closedFailures.values()]) save(tab, latest, true)
       for (const id of owing()) fire(id, latest)
       if (flushed.size === 0 && closed.size === 0) return null
       return latest
