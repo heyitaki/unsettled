@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, renamePlayer, setMe } from '../../model/board'
+import { addPlayer, createBoard, renamePlayer, setMe, setTile } from '../../model/board'
 import { newGame } from '../../model/game'
 import { reducer, type StoreState, type TabState } from '../store'
 
@@ -33,6 +33,25 @@ describe('background imported names', () => {
     })
     expect(next.tabs[0].game.board.players[1].name).toBe('My name')
     expect(next.tabs[0].game.board.mePlayerId).toBe('b')
+  })
+
+  it('carries the names into undo history so an unrelated undo keeps them', () => {
+    const before = newGame(setTile(original, { q: 0, r: 0 }, 'wheat', 6))
+    const history = {
+      ...state, activeTabId: tab.id,
+      tabs: [{ ...tab, past: [before], future: [newGame(setTile(original, { q: 1, r: 0 }, 'ore', 8))] }, state.tabs[1]],
+    }
+    const named = reducer(history, {
+      type: 'import-names', id: tab.id, original,
+      names: [{ playerId: 'b', name: 'Sam' }, { playerId: 'aki', name: 'You' }],
+    })
+    for (const game of [named.tabs[0].game, ...named.tabs[0].past, ...named.tabs[0].future]) {
+      expect(game.board.players[1].name).toBe('Sam')
+      expect(game.board.mePlayerId).toBe('aki')
+    }
+    expect(named.tabs[0].past[0].board.hexes.find((hex) => hex.tile === 'wheat')).toBeDefined()
+    const undone = reducer(named, { type: 'undo' })
+    expect(undone.tabs[0].game.board.players[1].name).toBe('Sam')
   })
 
   it('does not recreate a tab closed before the names arrive', () => {

@@ -1,7 +1,7 @@
-import { validateBoard } from './board'
+import { createBoard, validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
 import { newGame, reconcileStats, validateGameStats, type AwardHolders, type Game, type PlayerStats } from './game'
-import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type Player, type Port, type Road } from './types'
+import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
 export type ParseBoardResult =
   | { ok: true; board: Board }
@@ -195,4 +195,31 @@ export function parseGame(data: unknown): ParseGameResult {
     .filter((issue) => issue.code === 'stats-unknown-player')
   if (statErrors.length > 0) return { ok: false, errors: statErrors.map((issue) => issue.message) }
   return { ok: true, game }
+}
+
+// Memoized on game identity: games are immutable, and the UI compares
+// signatures on every render and autosave.
+const signatures = new WeakMap<Game, string>()
+
+export function gameSignature(game: Game): string {
+  const cached = signatures.get(game)
+  if (cached !== undefined) return cached
+  const value = serializeGame(game)
+  signatures.set(game, value)
+  return value
+}
+
+// One fresh game per layout, rather than building and serializing a
+// throwaway baseline for every unlinked tab on every render.
+const fresh = new Map<LayoutId, string>()
+
+/** Nothing beyond a fresh board of its layout: the autosave and a backup both leave such a tab out. */
+export function isFreshGame(game: Game): boolean {
+  const { layout } = game.board
+  let baseline = fresh.get(layout)
+  if (baseline === undefined) {
+    baseline = serializeGame(newGame(createBoard(layout)))
+    fresh.set(layout, baseline)
+  }
+  return gameSignature(game) === baseline
 }

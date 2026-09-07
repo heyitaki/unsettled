@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSaveRecovery, useStore } from './store'
 import { createLibraryBackup } from '../persistence/backup'
 import { downloadBoard } from './boardFiles'
+import { recoveryTabs } from './saveStatus'
 import { persistedWorkspace } from './workspaceSync'
 
 /**
@@ -38,10 +39,8 @@ export function GlobalNotice() {
         {backupError && <p>{backupError}</p>}
         <button type="button" onClick={retry}>Retry saving</button>
         <button type="button" onClick={() => {
-          const tabs = persistedWorkspace(state.tabs).tabs
-          const closed = errors.flatMap((error) => error.tab && !tabs.some((tab) => tab.id === error.tab?.id) ? [error.tab] : [])
           try {
-            downloadBoard('unsettled-library-backup', createLibraryBackup([...tabs, ...closed]))
+            downloadBoard('unsettled-library-backup', createLibraryBackup(recoveryTabs(persistedWorkspace(state.tabs).tabs, errors)))
             setBackupError(null)
           } catch (error) {
             setBackupError(`Backup failed: ${error instanceof Error ? error.message : 'Unable to export backup'}`)

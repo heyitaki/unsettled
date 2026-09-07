@@ -305,19 +305,28 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
       const index = state.tabs.findIndex((tab) => tab.id === action.id)
       if (index < 0) return state
       const tab = state.tabs[index]
-      let board = tab.game.board
-      for (const { playerId, name } of action.names) {
-        const original = action.original.players.find((player) => player.id === playerId)
-        const player = board.players.find((candidate) => candidate.id === playerId)
-        if (!original || !player || player.name !== original.name) continue
-        board = renamePlayer(board, playerId, name)
-        if (name.trim().toLowerCase() === 'you' && board.mePlayerId === action.original.mePlayerId) {
-          board = setMe(board, playerId)
+      const originalNames = new Map(action.original.players.map((player) => [player.id, player.name]))
+      const named = (game: Game): Game => {
+        let board = game.board
+        for (const { playerId, name } of action.names) {
+          const player = board.players.find((candidate) => candidate.id === playerId)
+          if (!player || player.name !== originalNames.get(playerId)) continue
+          board = renamePlayer(board, playerId, name)
+          if (name.trim().toLowerCase() === 'you' && board.mePlayerId === action.original.mePlayerId) {
+            board = setMe(board, playerId)
+          }
         }
+        return withBoard(game, board)
       }
-      if (board === tab.game.board) return state
+      // The whole history, not only the live game: the names arrive outside the
+      // undo stack, and an undo of an unrelated edit must not take them back.
+      const game = named(tab.game)
+      const past = tab.past.map(named)
+      const future = tab.future.map(named)
+      const same = (a: readonly Game[], b: readonly Game[]) => a.every((entry, i) => entry === b[i])
+      if (game === tab.game && same(past, tab.past) && same(future, tab.future)) return state
       const tabs = [...state.tabs]
-      tabs[index] = { ...tab, game: withBoard(tab.game, board) }
+      tabs[index] = { ...tab, game, past, future }
       return { ...state, tabs }
     }
     case 'commit':

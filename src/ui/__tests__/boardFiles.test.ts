@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
 import { newGame } from '../../model/game'
-import { firstFreeName, inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
+import { firstFreeName } from '../../model/names'
+import { inPlaceTarget, savedMap, tabIsDirty } from '../boardFiles'
 
 const pristine = (layout: 'standard4' | 'extension6' = 'standard4') => newGame(createBoard(layout))
 

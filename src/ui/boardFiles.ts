@@ -2,23 +2,14 @@
 // the map library, the comparison behind "this tab holds work the library does
 // not", and the no-prompt save behind the autosave.
 
-import { createBoard, validateBoard } from '../model/board'
-import { newGame, type Game } from '../model/game'
-import { serializeGame, type ParseGameResult } from '../model/serialization'
-import type { LayoutId } from '../model/types'
+import { validateBoard } from '../model/board'
+import type { Game } from '../model/game'
+import { firstFreeName } from '../model/names'
+import { gameSignature, isFreshGame, type ParseGameResult } from '../model/serialization'
 import { readLibrary, saveMap, takenMapNames, updateMap } from '../persistence/localStorage'
 
 export function fileTitle(name: string): string {
   return name.replace(/\.[^/.]+$/, '') || name
-}
-
-// `base` if free, else the first unused "base (n)", so two open boards never
-// read as the same board. Cosmetic only: links are ids, not titles.
-export function firstFreeName(base: string, taken: Set<string>): string {
-  if (!taken.has(base)) return base
-  let index = 1
-  while (taken.has(`${base} (${index})`)) index += 1
-  return `${base} (${index})`
 }
 
 /**
@@ -52,28 +43,6 @@ export const savedMap = (result: ParseGameResult | undefined): SavedMap =>
 // Serialized games, keyed by game identity. Games are immutable and replaced
 // wholesale by the reducer, so this is exact, and it keeps the board list
 // from re-serializing every board on every edit.
-const signatures = new WeakMap<Game, string>()
-
-function signature(game: Game): string {
-  const cached = signatures.get(game)
-  if (cached !== undefined) return cached
-  const value = serializeGame(game)
-  signatures.set(game, value)
-  return value
-}
-
-// One blank board per layout, rather than building and serializing a throwaway
-// baseline for every unlinked tab on every render.
-const blanks = new Map<LayoutId, string>()
-
-function blankSignature(layout: LayoutId): string {
-  const cached = blanks.get(layout)
-  if (cached !== undefined) return cached
-  const value = serializeGame(newGame(createBoard(layout)))
-  blanks.set(layout, value)
-  return value
-}
-
 /**
  * Does the library differ from what this tab holds, so that an autosave has
  * something to write? A linked tab whose map has vanished is dirty whatever it
@@ -81,8 +50,8 @@ function blankSignature(layout: LayoutId): string {
  * it holds anything beyond a fresh board.
  */
 export function tabIsDirty(game: Game, saved: SavedMap): boolean {
-  if (!saved.linked) return signature(game) !== blankSignature(game.board.layout)
-  return saved.game === null || signature(saved.game) !== signature(game)
+  if (!saved.linked) return !isFreshGame(game)
+  return saved.game === null || gameSignature(saved.game) !== gameSignature(game)
 }
 
 export type SaveTabResult =

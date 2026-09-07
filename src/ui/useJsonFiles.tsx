@@ -3,7 +3,8 @@ import { parseGame, serializeGame } from '../model/serialization'
 import { listMaps, readLibrary } from '../persistence/localStorage'
 import { createLibraryBackup, restoreLibraryBackup } from '../persistence/backup'
 import { persistedWorkspace } from './workspaceSync'
-import { downloadBoard, fileTitle, firstFreeName, loadedNotice } from './boardFiles'
+import { firstFreeName } from '../model/names'
+import { downloadBoard, fileTitle, loadedNotice } from './boardFiles'
 import { activeTab, useStore } from './store'
 
 /**

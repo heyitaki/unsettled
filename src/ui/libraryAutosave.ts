@@ -6,12 +6,17 @@
 
 import type { Dispatch } from 'react'
 import type { Game } from '../model/game'
-import { MAX_MAPS, loadMap, readLibrary } from '../persistence/localStorage'
+import { MAX_MAPS, loadMap, readLibrary, type WorkspaceTab } from '../persistence/localStorage'
 import { saveTab, savedMap, tabIsDirty } from './boardFiles'
 import type { StoreAction, TabState } from './store'
 import type { ReportSave } from './saveStatus'
 
 export const AUTOSAVE_DELAY = 500
+
+// What a failure report carries of a tab: the persisted shape, so the recovery
+// export can write it straight into a backup.
+const failureTab = ({ id, title, game, mapId }: TabState): WorkspaceTab =>
+  ({ id, title, game, ...(mapId === null ? {} : { mapId }) })
 
 export interface LibraryAutosave {
   /** Called with the tab set after every commit; arms the debounce per tab. */
@@ -95,9 +100,7 @@ export function createLibraryAutosave(
       // this one write, and the next edit is what retries it.
       failed.set(id, tab.game)
       if (closing) closedFailures.set(id, tab)
-      report(`library:${id}`, { message: `Could not save "${tab.title}": ${result.error}`, tab: {
-        id: tab.id, title: tab.title, game: tab.game, ...(tab.mapId === null ? {} : { mapId: tab.mapId }),
-      } })
+      report(`library:${id}`, { message: `Could not save "${tab.title}": ${result.error}`, tab: failureTab(tab) })
       dispatch({
         type: 'notice',
         message: closing
@@ -111,6 +114,18 @@ export function createLibraryAutosave(
     failed.delete(id)
     closedFailures.delete(id)
     report(`library:${id}`, null)
+    // A closed tab's failed rescue of this same map would now write over
+    // what just landed, and neither copy is known to be the newer one. Unlink
+    // it, so a retry lands its edits beside the map as a board of their own.
+    for (const [other, closedTab] of closedFailures) {
+      if (closedTab.mapId !== result.id) continue
+      const unlinked = { ...closedTab, mapId: null }
+      closedFailures.set(other, unlinked)
+      report(`library:${other}`, {
+        message: `"${closedTab.title}" was saved again after it closed; its last edits will be kept as a separate board`,
+        tab: failureTab(unlinked),
+      })
+    }
     if (result.id !== tab.mapId) {
       flushed.set(id, { mapId: result.id, title: result.name })
       dispatch({ type: 'tab-link', id, mapId: result.id, title: result.name })
@@ -195,7 +210,11 @@ export function createLibraryAutosave(
     flush() {
       flushed.clear()
       closed.clear()
-      for (const tab of [...closedFailures.values()]) save(tab, latest, true)
+      // By key, re-read each time: one rescue's success can unlink another's.
+      for (const id of [...closedFailures.keys()]) {
+        const tab = closedFailures.get(id)
+        if (tab !== undefined) save(tab, latest, true)
+      }
       for (const id of owing()) fire(id, latest)
       if (flushed.size === 0 && closed.size === 0) return null
       return latest
