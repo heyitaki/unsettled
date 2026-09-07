@@ -40,9 +40,6 @@ export type SavedMap =
 export const savedMap = (result: ParseGameResult | undefined): SavedMap =>
   ({ linked: true, game: result?.ok === true ? result.game : null })
 
-// Serialized games, keyed by game identity. Games are immutable and replaced
-// wholesale by the reducer, so this is exact, and it keeps the board list
-// from re-serializing every board on every edit.
 /**
  * Does the library differ from what this tab holds, so that an autosave has
  * something to write? A linked tab whose map has vanished is dirty whatever it

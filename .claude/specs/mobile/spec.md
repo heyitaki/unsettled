@@ -84,7 +84,7 @@ The pencil replaces the analysis block with the board tools in the same slot. Ev
 
 ### S7 · Maps screen
 
-Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON`, `Export JSON`, `Back up library` and `Restore library backup`. Backup includes current unsaved games, leaving out an unlinked board still blank. Restore merges without overwriting or evicting boards. Body, in order:
+Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON`, `Export JSON`, `Back up library` and `Restore library backup`. Backup includes current unsaved games, leaving out an unlinked board still blank. Restore merges without overwriting, skips content already restored under its name or a `name (n)` copy, and refuses to evict boards at the cap. Body, in order:
 
 1. **`Import screenshot`** — the filled accent button, first on the page. It is why the screen was opened.
 2. **`BOARDS (n)`** with a sort control on the right of the label — the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. The board on screen is marked with an accent border and a white ground. Below the rows, a dashed **`New board`** button.
@@ -117,7 +117,7 @@ The points ledger stays on desktop (O1). Below the snake draft, `Award holders` 
 
 Bottom of the screen, above the safe area. With the nav bar gone it no longer has to clear it.
 
-Save failures stay visible until resolved, with `Retry saving` and `Export backup` actions. Ordinary notices still dismiss automatically.
+Save failures stay visible until resolved, with `Retry saving` and `Export backup` actions. A board saved again after it closed says so, and its rescued edits land as a separate board rather than over the newer save. Ordinary notices still dismiss automatically.
 
 ## Behaviours that are not CSS
 
