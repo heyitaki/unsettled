@@ -3,7 +3,7 @@ import { parseEdgeId, parseVertexId } from './coords'
 import { newGame, reconcileStats, validateGameStats, type AwardHolders, type Game, type PlayerStats } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
-export type ParseBoardResult =
+type ParseBoardResult =
   | { ok: true; board: Board }
   | { ok: false; errors: string[] }
 
@@ -11,18 +11,13 @@ export type ParseGameResult =
   | { ok: true; game: Game }
   | { ok: false; errors: string[] }
 
-export const serializeBoard = (board: Board): string => JSON.stringify(board, null, 2)
-
 export const serializeGame = (game: Game): string => JSON.stringify(game, null, 2)
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const exactKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean => {
-  const actual = Object.keys(value).sort()
-  const expected = [...keys].sort()
-  return actual.length === expected.length && expected.every((key, index) => actual[index] === key)
-}
+const exactKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
+  Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))
 
 const isCoord = (value: unknown): value is AxialCoord =>
   isRecord(value) && exactKeys(value, ['q', 'r']) && Number.isInteger(value.q) && Number.isInteger(value.r)
@@ -110,33 +105,25 @@ const isCount = (value: unknown): value is number => Number.isInteger(value) && 
 
 function normalizePlayerStats(value: unknown): PlayerStats | null {
   if (!isRecord(value)) return null
-  const legacyKeys = ['hand', 'devCards', 'knights', 'vpCards']
-  const currentKeys = [...legacyKeys, 'handUnknown']
-  if (!exactKeys(value, legacyKeys) && !exactKeys(value, currentKeys)) return null
+  if (!exactKeys(value, ['hand', 'devCards', 'knights', 'vpCards', 'handUnknown'])) return null
   const hand = value.hand
   if (!isRecord(hand) || !exactKeys(hand, RESOURCES) ||
-    !RESOURCES.every((resource) => isCount(hand[resource])) ||
+    !isCount(hand.wood) || !isCount(hand.sheep) || !isCount(hand.wheat) ||
+    !isCount(hand.brick) || !isCount(hand.ore) ||
     !isCount(value.devCards) || !isCount(value.knights) || !isCount(value.vpCards) ||
-    ('handUnknown' in value && !isCount(value.handUnknown))) {
+    !isCount(value.handUnknown)) {
     return null
   }
   return {
-    hand: Object.fromEntries(RESOURCES.map((resource) => [resource, hand[resource]])) as PlayerStats['hand'],
-    handUnknown: 'handUnknown' in value ? value.handUnknown as number : 0,
+    hand: { wood: hand.wood, sheep: hand.sheep, wheat: hand.wheat, brick: hand.brick, ore: hand.ore },
+    handUnknown: value.handUnknown,
     devCards: value.devCards,
     knights: value.knights,
     vpCards: value.vpCards,
   }
 }
 
-/**
- * Parse a persisted or pasted game. Accepts either the Game envelope or a bare
- * legacy Board (everything saved before games existed), which is wrapped with
- * zero-filled stats. Version 1 remains compatible because legacy four-key
- * stats normalize forward with handUnknown zero-filled. A game whose
- * stats are missing roster entries is repaired by zero-filling rather than
- * rejected — absence of data is benign, unlike malformed data.
- */
+/** Parse a game, zero-filling missing roster stats while rejecting malformed data. */
 export function parseGame(data: unknown): ParseGameResult {
   let value = data
   if (typeof data === 'string') {
@@ -145,12 +132,6 @@ export function parseGame(data: unknown): ParseGameResult {
     } catch {
       return { ok: false, errors: ['Invalid JSON'] }
     }
-  }
-  // Bare boards carry their hexes at the top level; the Game envelope nests
-  // everything under `board`.
-  if (isRecord(value) && !('board' in value)) {
-    const parsed = parseBoard(value)
-    return parsed.ok ? { ok: true, game: newGame(parsed.board) } : parsed
   }
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }

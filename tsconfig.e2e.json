@@ -1,26 +1,17 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
-    "target": "es2023",
-    "lib": ["ES2023", "DOM"],
     "types": ["node"],
-    "skipLibCheck": true,
 
     /* Bundler mode, matching the app project: the specs import app modules
        (constants the assertions must stay tied to) and resolve them the way
        Vite and Playwright's own loader do. */
     "module": "esnext",
     "moduleResolution": "bundler",
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "noEmit": true,
 
     /* Linting */
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "strict": true
   },
   "include": ["e2e", "playwright.config.ts", "playwright.production.config.ts"]
 }

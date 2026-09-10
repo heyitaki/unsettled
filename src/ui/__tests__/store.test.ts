@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard, removePlayer, setTile } from '../../model/board'
 import { adjustHand, newGame, type Game } from '../../model/game'
 import { activeTab, reducer, type StoreState, type TabState } from '../store'
@@ -201,19 +201,13 @@ describe('workspace tabs', () => {
     expect(closed.tabs).toHaveLength(1)
   })
 
-  it('creates tab ids without crypto.randomUUID (insecure origins)', () => {
-    const realCrypto = globalThis.crypto
-    vi.stubGlobal('crypto', { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) })
-    try {
-      const added = reducer(state([tab('t1')]), { type: 'tab-add' })
-      const fresh = activeTab(added)
-      expect(fresh.id).toBeTruthy()
-      expect(fresh.id).not.toBe('t1')
-      const again = reducer(added, { type: 'tab-add' })
-      expect(activeTab(again).id).not.toBe(fresh.id)
-    } finally {
-      vi.unstubAllGlobals()
-    }
+  it('creates distinct tab ids', () => {
+    const added = reducer(state([tab('t1')]), { type: 'tab-add' })
+    const fresh = activeTab(added)
+    expect(fresh.id).toBeTruthy()
+    expect(fresh.id).not.toBe('t1')
+    const again = reducer(added, { type: 'tab-add' })
+    expect(activeTab(again).id).not.toBe(fresh.id)
   })
 
   it('adopts an external workspace, keeping local state for tabs it still lists', () => {

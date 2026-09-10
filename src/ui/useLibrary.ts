@@ -5,7 +5,6 @@ import {
   listMaps,
   loadMap,
   markMapOpened,
-  migrateMapIds,
   readLibrary,
   renameMap,
 } from '../persistence/localStorage'
@@ -34,31 +33,9 @@ export function useLibrary() {
   }, [state.mapsRevision])
   const notice = (message: string) => dispatch({ type: 'notice', message })
   const refresh = () => dispatch({ type: 'maps-changed', library: readLibrary() })
-  /**
-   * An entry with no id is one the startup migration could not stamp: its write
-   * failed, or it has no name to be addressed by. Retry on demand so a
-   * transient failure heals rather than leaving the row permanently unopenable
-   * and undeletable. Resolved by position, never by name: matching on a name
-   * is what this whole mechanism replaced.
-   */
   const addressable = (map: ListedMap): string | null => {
-    if (map.id !== null) return map.id
-    const result = migrateMapIds()
-    if (!result.ok) {
-      notice(`Could not upgrade the map library: ${result.error}`)
-      return null
-    }
-    refresh()
-    const stamped = listMaps().maps[map.index]
-    // Another document can have added or removed rows since this list was
-    // rendered, sliding that position onto a different map. Refuse rather than
-    // address the wrong one; the refresh above re-renders the row with its id.
-    if (stamped === undefined || stamped.name !== map.name) {
-      notice('The library changed in another window; open it again')
-      return null
-    }
-    if (stamped.id === null) notice('This map entry is malformed and cannot be opened or deleted')
-    return stamped.id
+    if (map.id === null) notice('This map entry is malformed and cannot be opened or deleted')
+    return map.id
   }
   // The map's tab is the one linked to its id. A tab that merely shares the
   // name is a different board and is left alone.

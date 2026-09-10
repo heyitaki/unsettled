@@ -7,7 +7,6 @@ import {
   saveWorkspaceBlob,
   storedTabLinks,
   tabLinks,
-  workspaceBlob,
   type PersistedWorkspace,
   type WorkspaceTab,
 } from '../persistence/localStorage'
@@ -233,7 +232,7 @@ export function createWorkspaceSync(dispatch: (action: StoreAction) => void, rep
     flush(only?: PersistedWorkspace): FlushOutcome {
       const workspace = owed
       if (workspace === null || (only !== undefined && only !== workspace)) return 'settled'
-      const blob = workspaceBlob(workspace)
+      const blob = JSON.stringify(workspace)
       const stored = readWorkspaceBlob()
       const verdict = writeVerdict(blob, stored, seen)
       if (verdict === 'resync') {

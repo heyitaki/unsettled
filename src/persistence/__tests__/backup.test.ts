@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBoard, setTile } from '../../model/board'
 import { newGame } from '../../model/game'
 import { createLibraryBackup, restoreLibraryBackup } from '../backup'
@@ -7,8 +7,17 @@ import { MAPS_KEY, MAX_MAPS, listMaps, loadMap, saveMap } from '../localStorage'
 
 const game = newGame(createBoard('standard4'))
 beforeEach(() => localStorage.clear())
+afterEach(() => vi.restoreAllMocks())
 
 describe('library backup', () => {
+  it('still exports in-memory games when browser storage cannot be read', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Storage denied') })
+    const game = newGame(setTile(createBoard('standard4'), { q: 0, r: 0 }, 'wheat', 6))
+    const backup = JSON.parse(createLibraryBackup([{ id: 'open', title: 'Open', game }]))
+    expect(backup.maps).toEqual([{ id: 'open', name: 'Open', game }])
+    expect(Object.values(backup.recovery)).toContain('Storage denied')
+  })
+
   it('exports saved maps plus the latest unsaved edits and unlinked boards', () => {
     const saved = saveMap('Saved', game)
     if (!saved.ok) throw new Error(saved.error)

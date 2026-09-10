@@ -1,9 +1,8 @@
 import type { Game } from '../model/game'
-import { parseGame, serializeGame, type ParseGameResult } from '../model/serialization'
+import { isRecord, parseGame, type ParseGameResult } from '../model/serialization'
 import { newId } from '../model/ids'
 
 export const MAPS_KEY = 'unsettled.maps.v1'
-export const CURRENT_KEY = 'unsettled.current.v1'
 export const MAPS_CORRUPT_KEY = `${MAPS_KEY}.corrupt`
 export const WORKSPACE_KEY = 'unsettled.workspace.v1'
 // Session-scoped, so it is per browser tab and fires no cross-document events.
@@ -12,10 +11,9 @@ export const WORKSPACE_CORRUPT_KEY = `${WORKSPACE_KEY}.corrupt`
 
 export interface ListedMap {
   // Stable identity, minted on first write and preserved across renames and
-  // overwrites. Null only for entries with no name, which nothing can address.
+  // overwrites. Null for entries with no usable id.
   id: string | null
-  // Position in the stored array. The one handle onto an entry that has no id
-  // yet, and stable across migrateMapIds, which rewrites entries in place.
+  // Position in the stored array, including entries with no usable id.
   index: number
   name: string
   valid: boolean
@@ -40,13 +38,6 @@ export interface WorkspaceTab {
 
 export interface PersistedWorkspace {
   tabs: WorkspaceTab[]
-  /**
-   * Only ever read, never written: which tab is in front is per-window state,
-   * and it lives in ACTIVE_TAB_KEY now. Blobs written before that carry it, and
-   * it is still the best cold-start guess for a window with no session of its
-   * own, so loading keeps honouring it.
-   */
-  activeTabId?: string
 }
 
 type WriteResult = { ok: true } | { ok: false; error: string }
@@ -59,16 +50,11 @@ const MISSING_MAP = 'That map is no longer in the library'
 let corruptMapsBlob: string | null = null
 let corruptWorkspaceBlob: string | null = null
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function isNamedMapEntry(entry: unknown): entry is Record<string, unknown> & { name: string } {
   return isRecord(entry) && typeof entry.name === 'string'
 }
 
-// An empty string is not an identity: it would compare equal across every
-// entry that carries one, so the migration treats it as missing and re-mints.
+// Empty ids would make unrelated entries share an identity.
 const mapEntryId = (entry: unknown): string | null =>
   isRecord(entry) && typeof entry.id === 'string' && entry.id.length > 0 ? entry.id : null
 
@@ -76,10 +62,6 @@ const mapEntryId = (entry: unknown): string | null =>
 // user can change, ids are what a tab's link points at.
 const findMapIndexById = (maps: unknown[], id: string): number =>
   maps.findIndex((entry) => mapEntryId(entry) === id)
-
-// Entries written before games existed stored a bare `board`; parseGame wraps
-// those with zero-filled stats, so both shapes stay loadable forever.
-const entryGame = (entry: Record<string, unknown>): unknown => entry.game ?? entry.board
 
 function readRawMaps(): { entries: unknown[]; warning?: string } {
   return parseRawMaps(localStorage.getItem(MAPS_KEY))
@@ -113,36 +95,6 @@ function writeMaps(maps: unknown[]): WriteResult {
 }
 
 /**
- * Stamp an id on every named entry that lacks a usable one, so maps saved
- * before ids existed become linkable. Deliberately additive and one-shot:
- * entries with no name are unaddressable and left byte-identical, and a store
- * whose ids are already unique is not rewritten at all.
- */
-export function migrateMapIds(): WriteResult {
-  const maps = readRawMaps().entries
-  const seen = new Set<string>()
-  let changed = false
-  const migrated = maps.map((entry) => {
-    const id = mapEntryId(entry)
-    if (id !== null && !seen.has(id)) {
-      seen.add(id)
-      return entry
-    }
-    // A repeated id is worse than none: two rows sharing one address as each
-    // other, so opening the second yields the first. Nothing can be done for an
-    // entry with no name — it is unaddressable either way — so it is left be.
-    if (!isNamedMapEntry(entry)) return entry
-    changed = true
-    // Minted id last: an entry carrying a non-string or duplicate `id` must
-    // lose it, or it stays unaddressable and marks the store dirty every launch.
-    const minted = newId()
-    seen.add(minted)
-    return { ...entry, id: minted }
-  })
-  return changed ? writeMaps(migrated) : { ok: true }
-}
-
-/**
  * What the library holds, for callers that need identity rather than content.
  * `readable: false` means the blob did not parse, which is emphatically not the
  * same as an empty library: treating it as empty would unlink every tab and
@@ -166,11 +118,8 @@ export function readLibrary(): LibraryView {
 }
 
 /**
- * Every name a save would collide with — by the same predicate saveMap refuses
- * on, which is deliberately not readLibrary's. An entry can carry a name and no
- * id (written before ids, and left that way by a failed migration): unaddressable,
- * so absent from the library view, yet still enough to make saveMap refuse. A
- * caller picking a free name has to see those, or it picks one that is taken.
+ * Every name a save would collide with, including entries with no usable id.
+ * Such entries are absent from readLibrary but still reserve their names.
  */
 export function takenMapNames(): Set<string> {
   const names = new Set<string>()
@@ -213,7 +162,7 @@ function buildListing(rawText: string | null): Listing {
       ...(typeof entry.modifiedAt === 'number' ? { modifiedAt: entry.modifiedAt } : {}),
       ...(typeof entry.openedAt === 'number' ? { openedAt: entry.openedAt } : {}),
     }
-    const parsed = parseGame(entryGame(entry))
+    const parsed = parseGame(entry.game)
     const base = parsed.ok
       ? { id: mapEntryId(entry), index, name, valid: true, ...timestamps }
       : { id: mapEntryId(entry), index, name, valid: false, errors: parsed.errors, ...timestamps }
@@ -359,7 +308,7 @@ export function loadMaps(ids: readonly string[]): Map<string, ParseGameResult> {
     for (const entry of parseRawMaps(raw).entries) {
       const id = mapEntryId(entry)
       if (id === null || !needed.has(id) || cache.has(id)) continue
-      cache.set(id, parseGame(entryGame(entry as Record<string, unknown>)))
+      cache.set(id, parseGame((entry as Record<string, unknown>).game))
     }
     for (const id of needed) if (!cache.has(id)) cache.set(id, missingMap())
   }
@@ -376,30 +325,6 @@ export function deleteMap(id: string): WriteResult {
   // One row, never every row that answers to the id: hand-edited or foreign
   // data can repeat an id, and deleting a map must not take another with it.
   return writeMaps(entries.filter((_, at) => at !== index))
-}
-
-export function autosaveCurrent(game: Game): WriteResult {
-  try {
-    localStorage.setItem(CURRENT_KEY, serializeGame(game))
-    return { ok: true }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Unable to autosave' }
-  }
-}
-
-export function loadCurrent(): ParseGameResult {
-  const value = localStorage.getItem(CURRENT_KEY)
-  return value === null ? { ok: false, errors: ['No autosave found'] } : parseGame(value)
-}
-
-/**
- * The exact bytes a workspace persists as. Documents compare blobs to tell an
- * autosave that would change nothing from one that would, and to notice that
- * storage moved since they last looked, so the serialization has to be the one
- * saveWorkspace performs and not a second, subtly different one.
- */
-export function workspaceBlob(workspace: PersistedWorkspace): string {
-  return JSON.stringify(workspace)
 }
 
 /** The stored workspace, unparsed: the blob to compare a write against. */
@@ -461,10 +386,6 @@ export function saveWorkspaceBlob(blob: string): WriteResult {
   }
 }
 
-export function saveWorkspace(workspace: PersistedWorkspace): WriteResult {
-  return saveWorkspaceBlob(workspaceBlob(workspace))
-}
-
 /**
  * Tab id → linked map id, exactly as the stored workspace holds them, with no
  * game validation. This is what a document can be sure is already in shared
@@ -496,18 +417,7 @@ export function loadWorkspace():
   | { ok: true; workspace: PersistedWorkspace; warning?: string }
   | { ok: false } {
   const raw = localStorage.getItem(WORKSPACE_KEY)
-  if (raw === null) {
-    const current = loadCurrent()
-    if (!current.ok) return { ok: false }
-    const id = newId()
-    return {
-      ok: true,
-      workspace: {
-        activeTabId: id,
-        tabs: [{ id, title: 'Board 1', game: current.game }],
-      },
-    }
-  }
+  if (raw === null) return { ok: false }
 
   let value: unknown
   try {
@@ -539,7 +449,7 @@ export function loadWorkspace():
       lossy = true
       return
     }
-    const parsed = parseGame(entryGame(entry))
+    const parsed = parseGame(entry.game)
     if (!parsed.ok) {
       invalidTabs.push(label)
       lossy = true
@@ -569,14 +479,7 @@ export function loadWorkspace():
     corruptWorkspaceBlob = raw
     return { ok: false }
   }
-  // A blob with no active tab is the normal shape now, and one naming a tab
-  // this window cannot see is an ordinary disagreement between windows, not
-  // damage — neither is worth preserving a corrupt copy over.
-  const hasActiveTab = typeof value.activeTabId === 'string' &&
-    tabs.some((tab) => tab.id === value.activeTabId)
-  const workspace: PersistedWorkspace = hasActiveTab
-    ? { tabs, activeTabId: value.activeTabId as string }
-    : { tabs }
+  const workspace: PersistedWorkspace = { tabs }
   return invalidTabs.length > 0
     ? { ok: true, workspace, warning: `Ignored invalid workspace tabs: ${invalidTabs.join(', ')}` }
     : { ok: true, workspace }

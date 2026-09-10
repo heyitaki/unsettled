@@ -10,7 +10,7 @@ import {
 } from '../board'
 import { adjustCounter, adjustHand, emptyStats, newGame } from '../game'
 import { boardGrid } from '../layouts'
-import { parseBoard, parseGame, serializeBoard, serializeGame } from '../serialization'
+import { parseBoard, parseGame, serializeGame } from '../serialization'
 
 describe('board serialization', () => {
   it.each(['standard4', 'extension6'] as const)('round trips a populated %s board', (layout) => {
@@ -33,7 +33,7 @@ describe('board serialization', () => {
     board = placeRoad(board, boardGrid(layout).edgeIds[1], 'aki')
     board = placeBuilding(board, boardGrid(layout).vertexIds[0], 'aki', 'superCity')
     board = placeBuilding(board, boardGrid(layout).vertexIds[1], 'b', 'city')
-    expect(parseBoard(serializeBoard(board))).toEqual({ ok: true, board })
+    expect(parseBoard(JSON.stringify(board))).toEqual({ ok: true, board })
   })
 
   it('rejects future schemas, extra keys, malformed JSON, and invalid locations', () => {
@@ -76,23 +76,6 @@ describe('game serialization', () => {
     game = adjustHand(game, 'aki', 'ore', 3)
     game = adjustCounter(game, 'b', 'knights', 2)
     expect(parseGame(serializeGame(game))).toEqual({ ok: true, game })
-  })
-
-  it('wraps a legacy bare board with zero-filled stats', () => {
-    const board = createBoard('standard4')
-    const result = parseGame(serializeBoard(board))
-    expect(result).toEqual({ ok: true, game: newGame(board) })
-  })
-
-  it('normalizes legacy four-key player stats with an unknown hand count of zero', () => {
-    const game = newGame(createBoard('standard4'))
-    const { handUnknown: _handUnknown, ...legacyStats } = game.stats.aki
-    const result = parseGame({
-      ...game,
-      stats: { aki: legacyStats },
-    })
-    expect(result).toMatchObject({ ok: true })
-    if (result.ok) expect(result.game.stats.aki).toEqual(emptyStats())
   })
 
   it('zero-fills stats entries missing from the roster', () => {

@@ -7,7 +7,7 @@ import {
   MAPS_KEY,
   WORKSPACE_KEY,
   saveMap,
-  saveWorkspace,
+  saveWorkspaceBlob,
   storedTabLinks,
 } from '../../persistence/localStorage'
 import { bootActiveTab } from '../store'
@@ -30,10 +30,9 @@ const unflushed = (work: Partial<UnflushedWork> = {}): UnflushedWork => ({
 })
 
 function seedWorkspace() {
-  const result = saveWorkspace({
-    activeTabId: 'a',
+  const result = saveWorkspaceBlob(JSON.stringify({
     tabs: [{ id: 'a', title: 'Alpha', game: game(), mapId: 'map-1' }],
-  })
+  }))
   if (!result.ok) throw new Error(result.error)
 }
 
@@ -88,7 +87,6 @@ describe('storageActions', () => {
 
   it('carries the warning when the incoming workspace lost tabs', () => {
     localStorage.setItem(WORKSPACE_KEY, JSON.stringify({
-      activeTabId: 'a',
       tabs: [
         { id: 'a', title: 'Alpha', game: game() },
         { id: 'b', title: 'Broken', game: { schemaVersion: 9 } },
@@ -130,19 +128,12 @@ describe('bootActiveTab', () => {
 
   it('opens on the board this window was looking at before the reload', () => {
     sessionStorage.setItem(ACTIVE_TAB_KEY, 't2')
-    expect(bootActiveTab(tabs, 't1')).toBe('t2')
+    expect(bootActiveTab(tabs)).toBe('t2')
   })
 
-  it('falls back to the shared field for a window with no session of its own', () => {
-    // A blob written before the active tab moved out of it, or a window opened
-    // into a workspace someone else was already using.
-    expect(bootActiveTab(tabs, 't2')).toBe('t2')
-  })
-
-  it('falls back to the first board when neither names an open tab', () => {
+  it('falls back to the first board when the session names no open tab', () => {
     sessionStorage.setItem(ACTIVE_TAB_KEY, 'closed-in-another-window')
-    expect(bootActiveTab(tabs, 'also-gone')).toBe('t1')
-    expect(bootActiveTab(tabs, undefined)).toBe('t1')
+    expect(bootActiveTab(tabs)).toBe('t1')
   })
 })
 

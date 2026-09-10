@@ -4,18 +4,14 @@ import { createBoard } from '../../model/board'
 import { newGame } from '../../model/game'
 import type { LayoutId } from '../../model/types'
 import {
-  CURRENT_KEY,
   MAPS_CORRUPT_KEY,
   MAPS_KEY,
   MAX_MAPS,
-  autosaveCurrent,
   deleteMap,
   listMaps,
-  loadCurrent,
   loadMap,
   loadMaps,
   markMapOpened,
-  migrateMapIds,
   renameMap,
   saveMap,
   updateMap,
@@ -46,15 +42,6 @@ describe('map persistence', () => {
     expect(saveMap('map', game(), false).ok).toBe(true)
     expect(saveMap('map', game('extension6'), false).ok).toBe(false)
     expect(saveMap('map', game('extension6'), true).ok).toBe(true)
-  })
-
-  it('loads a legacy entry holding a bare board as a zero-stat game', () => {
-    const board = createBoard('standard4')
-    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'legacy', board }]))
-    expect(migrateMapIds().ok).toBe(true)
-    const listed = listMaps().maps[0]
-    expect(listed).toMatchObject({ name: 'legacy', valid: true, id: expect.any(String) })
-    expect(loadMap(listed.id!)).toEqual({ ok: true, game: newGame(board) })
   })
 
   it('backs up a corrupt store and reports invalid entries', () => {
@@ -106,11 +93,9 @@ describe('map persistence', () => {
       { id, name: 'bad', game: game(), createdAt: 1000, modifiedAt: 1000, openedAt: 1000 },
     ])
 
-    // Reset to the no-game shape so the delete half exercises that entry too,
-    // routed through the migration because deleteMap is id-addressed.
-    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'bad' }]))
-    expect(migrateMapIds().ok).toBe(true)
-    expect(deleteMap(listMaps().maps[0].id!).ok).toBe(true)
+    // Reset to the no-game shape so the delete half exercises that entry too.
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ id, name: 'bad' }]))
+    expect(deleteMap(id).ok).toBe(true)
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([])
   })
 
@@ -119,13 +104,6 @@ describe('map persistence', () => {
       throw new DOMException('full', 'QuotaExceededError')
     })
     expect(saveMap('map', game(), true).ok).toBe(false)
-  })
-
-  it('autosaves and restores the current game', () => {
-    const current = game('extension6')
-    expect(autosaveCurrent(current).ok).toBe(true)
-    expect(localStorage.getItem(CURRENT_KEY)).not.toBeNull()
-    expect(loadCurrent()).toEqual({ ok: true, game: current })
   })
 })
 
@@ -273,57 +251,6 @@ describe('map identity', () => {
     expect(loadMap(first)).toMatchObject({ ok: false })
   })
 
-  it('migrateMapIds stamps ids on named legacy entries and leaves the rest alone', () => {
-    const board = createBoard('standard4')
-    const junk = 42
-    const unnamed = { marker: 'keep exactly' }
-    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'legacy', board }, junk, unnamed]))
-
-    expect(migrateMapIds().ok).toBe(true)
-    const stored = JSON.parse(localStorage.getItem(MAPS_KEY)!)
-    expect(stored[0]).toEqual({ id: expect.any(String), name: 'legacy', board })
-    // Entries with no name are unaddressable, so they gain nothing.
-    expect(stored[1]).toBe(junk)
-    expect(stored[2]).toEqual(unnamed)
-  })
-
-  it('migrateMapIds is idempotent and does not rewrite an already-migrated store', () => {
-    savedId('m')
-    const before = localStorage.getItem(MAPS_KEY)
-    const setItem = vi.spyOn(Storage.prototype, 'setItem')
-    expect(migrateMapIds().ok).toBe(true)
-    expect(setItem).not.toHaveBeenCalled()
-    expect(localStorage.getItem(MAPS_KEY)).toBe(before)
-  })
-
-  it('migrateMapIds replaces a non-string id rather than keeping it', () => {
-    const board = createBoard('standard4')
-    localStorage.setItem(MAPS_KEY, JSON.stringify([{ id: 42, name: 'legacy', board }]))
-
-    expect(migrateMapIds().ok).toBe(true)
-    const id = listMaps().maps[0].id
-    expect(typeof id).toBe('string')
-    expect(loadMap(id!)).toEqual({ ok: true, game: newGame(board) })
-    expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([{ id, name: 'legacy', board }])
-
-    // A kept-bad id would leave the entry unaddressable and mark the store dirty
-    // on every launch, rewriting the whole blob forever.
-    const setItem = vi.spyOn(Storage.prototype, 'setItem')
-    expect(migrateMapIds().ok).toBe(true)
-    expect(setItem).not.toHaveBeenCalled()
-  })
-
-  it('migrateMapIds leaves the store untouched when the write fails', () => {
-    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'legacy', board: createBoard('standard4') }]))
-    const before = localStorage.getItem(MAPS_KEY)
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new DOMException('full', 'QuotaExceededError')
-    })
-
-    expect(migrateMapIds()).toMatchObject({ ok: false, error: expect.any(String) })
-    expect(localStorage.getItem(MAPS_KEY)).toBe(before)
-  })
-
   it('loadMaps answers for every id it is given, in one pass', () => {
     const first = savedId('a')
     const second = savedId('b', 'extension6')
@@ -376,23 +303,6 @@ describe('map identity', () => {
     // Another document rewriting the key by hand is a change too.
     localStorage.setItem(MAPS_KEY, JSON.stringify([42]))
     expect(listMaps().maps[0]).toMatchObject({ id: null, synthetic: true })
-  })
-
-  it('migrateMapIds re-mints a repeated id so two rows stop sharing an identity', () => {
-    const board = createBoard('standard4')
-    localStorage.setItem(MAPS_KEY, JSON.stringify([
-      { id: 'shared', name: 'first', board },
-      { id: 'shared', name: 'second', board },
-      { id: '', name: 'blank id', board },
-    ]))
-
-    expect(migrateMapIds().ok).toBe(true)
-    const ids = listMaps().maps.map((map) => map.id)
-    // The first claimant keeps the id; every later one is a distinct map that
-    // would otherwise open — and be deleted — as the first.
-    expect(ids[0]).toBe('shared')
-    expect(new Set(ids).size).toBe(3)
-    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
   })
 
   it('deletes one row even when the store repeats an id', () => {

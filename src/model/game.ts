@@ -4,7 +4,7 @@
 // resumed mid-play; the Board schema itself stays untouched (parser fixtures
 // and geometry validation are unaffected).
 
-import { RESOURCES, type Board, type Issue, type Player, type Resource } from './types'
+import type { Board, Issue, Player, Resource } from './types'
 
 export interface PlayerStats {
   hand: Record<Resource, number>
@@ -33,7 +33,7 @@ export type AwardKind = keyof AwardHolders
 export type StatCounter = 'handUnknown' | 'devCards' | 'knights' | 'vpCards'
 
 export function emptyStats(): PlayerStats {
-  const hand = Object.fromEntries(RESOURCES.map((resource) => [resource, 0])) as Record<Resource, number>
+  const hand = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
   return { hand, handUnknown: 0, devCards: 0, knights: 0, vpCards: 0 }
 }
 

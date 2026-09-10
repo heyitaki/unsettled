@@ -34,8 +34,6 @@ export interface BoardGrid {
   coastalEdgeIds: EdgeId[]
 }
 
-const cache = new Map<LayoutId, BoardGrid>()
-
 /**
  * Rows in ascending `r`, which is top-to-bottom on screen. The parser's
  * registration pairs these positionally with the tile rows it detects (sorted
@@ -45,9 +43,7 @@ export function layoutRows(layout: LayoutId): readonly RowSpec[] {
   return layout === 'standard4' ? ROWS_STANDARD4 : ROWS_EXTENSION6
 }
 
-export function boardGrid(layout: LayoutId): BoardGrid {
-  const cached = cache.get(layout)
-  if (cached) return cached
+function buildGrid(layout: LayoutId): BoardGrid {
   const landCoords = layoutRows(layout).flatMap(({ r, qStart, count }) =>
     Array.from({ length: count }, (_, index) => ({ q: qStart + index, r })),
   )
@@ -61,16 +57,21 @@ export function boardGrid(layout: LayoutId): BoardGrid {
   const coastalEdgeIds = [...edges].filter((id) =>
     parseEdgeId(id).filter((coord) => landKeys.has(axialKey(coord))).length === 1,
   ).sort()
-  const grid = {
+  return {
     landCoords,
     landKeys,
     vertexIds: [...vertices].sort(),
     edgeIds: [...edges].sort(),
     coastalEdgeIds,
   }
-  cache.set(layout, grid)
-  return grid
 }
+
+const grids: Record<LayoutId, BoardGrid> = {
+  standard4: buildGrid('standard4'),
+  extension6: buildGrid('extension6'),
+}
+
+export const boardGrid = (layout: LayoutId): BoardGrid => grids[layout]
 
 export const PORT_EDGES_STANDARD4: EdgeId[] = [
   'e:-2,-1;-2,0',

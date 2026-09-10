@@ -4,7 +4,7 @@ import { createBoard } from '../../model/board'
 import { adjustHand, newGame } from '../../model/game'
 import {
   WORKSPACE_KEY,
-  saveWorkspace,
+  saveWorkspaceBlob,
   type PersistedWorkspace,
 } from '../../persistence/localStorage'
 import { reducer, type StoreAction, type StoreState, type TabState } from '../store'
@@ -122,7 +122,7 @@ describe('two documents on one workspace', () => {
 
   beforeEach(() => {
     localStorage.clear()
-    saveWorkspace(persistedWorkspace(stateOf(OPEN).tabs))
+    saveWorkspaceBlob(JSON.stringify(persistedWorkspace(stateOf(OPEN).tabs)))
     writes = 0
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
       this: Storage,

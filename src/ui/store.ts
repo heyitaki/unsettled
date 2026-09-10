@@ -26,7 +26,6 @@ import {
   loadActiveTab,
   loadMaps,
   loadWorkspace,
-  migrateMapIds,
   readLibrary,
   saveActiveTab,
   type LibraryView,
@@ -217,27 +216,12 @@ export function adoptLegacyLinks(tabs: TabState[], library: LibraryView): TabSta
   })
 }
 
-/**
- * Which board this window opens on: the one it was looking at before the
- * reload, else whatever the last window to write the old shared field was
- * looking at, else the first tab. A window opened fresh has no session of its
- * own and so starts at the first tab rather than
- * inheriting another window's place.
- */
-export function bootActiveTab(tabs: readonly TabState[], legacy: string | undefined): string {
-  const resolves = (id: string | null | undefined): id is string =>
-    id !== null && id !== undefined && tabs.some((tab) => tab.id === id)
+export function bootActiveTab(tabs: readonly TabState[]): string {
   const session = loadActiveTab()
-  if (resolves(session)) return session
-  return resolves(legacy) ? legacy : tabs[0].id
+  return session !== null && tabs.some((tab) => tab.id === session) ? session : tabs[0].id
 }
 
 function initialState(): StoreState {
-  // Stamp ids on maps saved before ids existed, so they are linkable from the
-  // first interaction rather than only after their next write. A failure here
-  // leaves the whole legacy library unaddressable, so it has to be said out
-  // loud rather than discovered as "this map is malformed" on every row.
-  const migration = migrateMapIds()
   const restored = loadWorkspace()
   const library = readLibrary()
   // Links are reconciled at startup too, not only on the storage event: a map
@@ -253,11 +237,9 @@ function initialState(): StoreState {
     : [createTab()]
   return {
     tabs,
-    activeTabId: bootActiveTab(tabs, restored.ok ? restored.workspace.activeTabId : undefined),
+    activeTabId: bootActiveTab(tabs),
     tool: { kind: 'tile', tile: 'wood' },
-    notice: migration.ok
-      ? restored.ok ? restored.warning ?? null : null
-      : `Could not upgrade the map library: ${migration.error}`,
+    notice: restored.ok ? restored.warning ?? null : null,
     noticeSeq: 0,
     highlight: null,
     mapsRevision: 0,

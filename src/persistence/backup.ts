@@ -1,7 +1,7 @@
 import type { Game } from '../model/game'
 import { newId } from '../model/ids'
 import { firstFreeName, isCopyName } from '../model/names'
-import { isFreshGame, parseGame, serializeGame } from '../model/serialization'
+import { isFreshGame, isRecord, parseGame, serializeGame } from '../model/serialization'
 import { MAPS_CORRUPT_KEY, MAPS_KEY, MAX_MAPS, WORKSPACE_CORRUPT_KEY, type WorkspaceTab } from './localStorage'
 
 interface BackupMap {
@@ -13,13 +13,10 @@ interface BackupMap {
   openedAt?: number
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 function parseMap(value: unknown): BackupMap | null {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id ||
     typeof value.name !== 'string' || !value.name.trim()) return null
-  const parsed = parseGame(value.game ?? value.board)
+  const parsed = parseGame(value.game)
   if (!parsed.ok) return null
   const map: BackupMap = { id: value.id, name: value.name, game: parsed.game }
   for (const key of ['createdAt', 'modifiedAt', 'openedAt'] as const) {
@@ -89,11 +86,7 @@ export function restoreLibraryBackup(data: unknown): { ok: true; count: number }
     // id, or under its name or a `name (n)` copy, which is what an earlier
     // restore minted when the id was taken by an edited board. Only names are
     // matched, so two boards a user kept identical on purpose both come back.
-    const held = new Map<string, BackupMap[]>()
-    for (const map of maps) {
-      const key = serializeGame(map.game)
-      held.set(key, [...(held.get(key) ?? []), map])
-    }
+    const held = Map.groupBy(maps, (map) => serializeGame(map.game))
     const restored = (candidate: BackupMap) => (held.get(serializeGame(candidate.game)) ?? []).some((entry) =>
       entry.id === candidate.id || entry.name === candidate.name || isCopyName(candidate.name, entry.name))
     const ids = new Set(maps.map((map) => map.id))
