@@ -43,10 +43,8 @@ pub struct PairOutcome {
 /// Legal expansion sites the seat reaches by adding at most `BOXING_ROADS` roads to its own road
 /// network, counting distances 0, 1 and 2.
 ///
-/// A site is what `policy::frontier::opened` treats as an expansion target and what
-/// `can_place_settlement` accepts: a vertex nobody owns whose neighbours nobody owns. The walk
-/// differs from `opened` only in where it starts: from every vertex the seat's roads already
-/// touch rather than from one candidate vertex.
+/// A site is what `can_place_settlement` accepts: a vertex nobody owns whose neighbours nobody
+/// owns. The walk starts from every vertex the seat's roads already touch.
 ///
 /// Road legality is `can_build_road`'s: a road needs an unowned edge, and continuing past a
 /// vertex needs that vertex to be the seat's own or nobody's, because a rival settlement stops a
