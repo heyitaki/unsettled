@@ -52,7 +52,7 @@ cargo run --release -p unsettled-sim -- evaluate \
   --out runs/evaluation
 ```
 
-`--layout` defaults to `standard4`; the corresponding default seat counts are four for `standard4` and six for `extension6`. `--policy`, `--threshold`, `--alpha`, and `--threads` default to `heuristic-v1`, `0.01`, `0.05`, and all logical cores, respectively; `--arm-policy` defaults every arm to `--policy`. As with tournament, non-official seat counts require `--allow-unofficial`.
+`--layout` defaults to `standard4`; the corresponding default seat counts are four for `standard4` and six for `extension6`. `--policy`, `--threshold`, `--alpha`, and `--threads` default to `heuristic-v1`, `0.01`, `0.05`, and all logical cores, respectively (`--alpha` accepts only `0.10`, `0.05` or `0.01`); `--arm-policy` defaults every arm to `--policy`. As with tournament, non-official seat counts require `--allow-unofficial`.
 
 `--domain tuning|eval|gate|tuning2|eval2|gate2` is required and has no default. The first three are spent; the second generation was minted for the placement programme's SP6 phase, where `tuning2` screens and `eval2` and `gate2` are each spent once. The spend ledger is in [`programme.md`](../.claude/specs/simulator/programme.md) under "Seed-domain discipline", and the constants are in [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Seed domains and seed derivation".
 
@@ -77,7 +77,7 @@ cargo run --release -p unsettled-sim -- diagnose \
 
 `diagnose` has no field, no arms and no hero-seat rotation: every seat plays `--placement` and `--policy`. It plays `--boards` x `--reps` games on the board set an `evaluate` run at the same domain, layout and seat count would generate, seeding each game like that run's first hero-seat unit. `--layout`, `--seats`, `--domain`, `--policy`, `--threads`, `--alpha` and `--allow-unofficial` behave as they do for `evaluate`.
 
-It computes three fixed setup-time statistics, not a general diagnostics menu. **Coastal selection** replays every recorded setup pick against its best-scoring pip-matched alternative and reports how often the scorer took the lower hex count, with a board-clustered interval; its `coastalSelection` block also carries `sp2cGatePassed`, a preregistered pass/fail boolean whose threshold lives in the code. **Expansion** reports, per completed settlement pair, the quartile win-rate gap of two-road expansion room (boxing) and of the share of pips on the pair's single highest-pip hex (blockability), plus the `robberAttractionRevisit` branch comparing the two. Blockability is reported a second time as `blockabilityByHexCount`, one quartile gap per stratum of distinct producing hexes the pair touches, with the pair-count-weighted mean over the strata holding at least 1000 pairs and the `concentrationTermIndicated` boolean read off it. All of it is reported overall and per draft slot; the three booleans are read off the overall row. **Lookahead accuracy** holds the draft-aware kind's opponent model against the games it was played in: for every recorded first settlement, the lookahead runs from the board as it stood before that pick, with the vertex the seat actually took, and its plan is compared with the trace. Its `lookahead` block reports `pickShare`, the share of intervening picks the model named exactly; `sequenceShare`, the share of first picks whose whole intervening sequence it named, counted over the picks that have one, because the seat picking last in the first round has nothing between its two settlements; and `secondShare`, the share of second settlements that landed where the lookahead planned. All three are reported overall and per draft slot as well. The statistic reads whatever `--placement` names, so a run on `app_formula:<weights>` is the control, where a tie-free greedy field must read 1 on all three, and a run on `app_formula_draft:<hero>@<opponent>` is the reading; a placement carrying no app formula produces no observations and the block reads zero. What each of them was preregistered for is in [`placement-programme.md`](../.claude/specs/simulator/placement-programme.md).
+It computes three fixed setup-time statistics, not a general diagnostics menu. **Coastal selection** replays every recorded setup pick against its best-scoring pip-matched alternative and reports how often the scorer took the lower hex count, with a board-clustered interval. **Expansion** reports, per completed settlement pair, the quartile win-rate gap of two-road expansion room (boxing) and of the share of pips on the pair's single highest-pip hex (blockability). Both are reported overall and per draft slot. **Lookahead accuracy** holds the draft-aware kind's opponent model against the games it was played in: for every recorded first settlement, the lookahead runs from the board as it stood before that pick, with the vertex the seat actually took, and its plan is compared with the trace. Its `lookahead` block reports `pickShare`, the share of intervening picks the model named exactly; `sequenceShare`, the share of first picks whose whole intervening sequence it named, counted over the picks that have one, because the seat picking last in the first round has nothing between its two settlements; and `secondShare`, the share of second settlements that landed where the lookahead planned. All three are reported overall and per draft slot as well. The statistic reads whatever `--placement` names, so a run on `app_formula:<weights>` is the control, where a tie-free greedy field must read 1 on all three, and a run on `app_formula_draft:<hero>@<opponent>` is the reading; a placement carrying no app formula produces no observations and the block reads zero. What each of them was preregistered for is in [`placement-programme.md`](../.claude/specs/simulator/placement-programme.md).
 
 Use an app Board JSON file:
 
@@ -117,29 +117,7 @@ The `tournament`, `evaluate`, `diagnose`, and `simulate` commands enable the mec
 
 `--allow-unofficial` permits non-official seat counts.
 
-### Tournament config
-
-`--config config.json` can supply tournament options. Explicit flags override config values. The schema is:
-
-```json
-{
-  "layout": "standard4",
-  "board": ["boards/example.json"],
-  "boardDir": "boards/",
-  "randomBoards": 50,
-  "reps": 25,
-  "heuristics": "max_pips,pip_diversity,pip_scarcity,port_synergy,city_focus,random",
-  "policy": "heuristic-v1",
-  "seed": 42,
-  "threads": 0,
-  "out": "runs/std4",
-  "seats": 4,
-  "allowUnofficial": false,
-  "jsonl": "runs/std4/games.jsonl"
-}
-```
-
-Fields are optional. At least one board source and an output directory are required after config and flags are merged. `--board` and config `board` entries are combined. `--jsonl` writes deterministic per-game records and is off by default.
+`--jsonl` writes deterministic per-game records and is off by default.
 
 ## Outputs and determinism
 
