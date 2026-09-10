@@ -1069,8 +1069,6 @@ fn knight_play(actions: &[ScoredAction]) -> (u8, Option<u8>) {
 //   default and at a doubled weight): the_threat_gate_prices_the_knight_own_tile_relief
 // - `RobberChoice::placement_score` / `steal_value` derivations, including belief sensitivity:
 //   robber_choice_* (tests/threat_robber.rs)
-// - `LegacyValuation::frozen_knight` (restores flat pressure and self-regarding pricing):
-//   the_frozen_knight_flag_restores_the_g1_score
 #[test]
 fn the_denial_gate_scales_the_knight_contested_card() {
     let (topology, board, arena) = knight_fixture(2);
@@ -1237,40 +1235,6 @@ fn the_threat_gate_prices_the_knight_own_tile_relief() {
     let (doubled_score, doubled_expected) = scored(24.0);
     assert_eq!(doubled_score.to_bits(), doubled_expected.to_bits());
     assert_ne!(default_score.to_bits(), doubled_score.to_bits());
-}
-
-#[test]
-fn the_frozen_knight_flag_restores_the_g1_score() {
-    let (topology, board, arena) = knight_fixture(0);
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let gated = HeuristicParams {
-        threat: Some(ThreatParams::default()),
-        denial: Some(DenialParams::default()),
-        ..HeuristicParams::default()
-    };
-    let frozen = HeuristicParams {
-        legacy_valuation: Some(heuristic_v1::LegacyValuation {
-            frozen_knight: true,
-            ..heuristic_v1::LegacyValuation::default()
-        }),
-        ..gated.clone()
-    };
-    let ungated = heuristic_v1::recommend(&view, &HeuristicParams::default());
-    let rejoined = heuristic_v1::recommend(&view, &gated);
-    let restored = heuristic_v1::recommend(&view, &frozen);
-    // The freeze prices the self-regarding baseline at flat pressure, so its score is
-    // bit-identical to the fully ungated policy even though the threat gate still plays the
-    // threat-chosen destination.
-    assert_eq!(
-        knight_score(&restored).to_bits(),
-        knight_score(&ungated).to_bits()
-    );
-    assert_eq!(knight_play(&restored), knight_play(&rejoined));
-    assert_ne!(
-        knight_score(&rejoined).to_bits(),
-        knight_score(&restored).to_bits(),
-        "the rejoined score must actually move under the gates"
-    );
 }
 
 #[test]
@@ -1799,8 +1763,6 @@ fn the_action_path_goal_reaches_the_next_discard() {
 // - `count`: discard_preserves_the_active_city_cost asserts the discarded sum
 // - `scratch` (carried goal): the_action_path_goal_reaches_the_next_discard
 // - `params` (fallback path, scratch goal absent): the_gated_params_reach_the_discard_fallback
-// - `params` (legacy_valuation.exposure_blind): the_legacy_flag_restores_the_greedy_discard
-//   (exposure.rs)
 #[test]
 fn the_gated_params_reach_the_discard_fallback() {
     let (topology, board, mut arena) = road_city_fixture(false, 5);
@@ -1887,10 +1849,6 @@ fn blocking_fixture() -> (Topology, SimBoard, GameArena, Edge) {
 //   the_default_budget_finds_the_third_ranked_challenger (policy/denial.rs)
 // - `DenialParams::contest_block_bonus` (non-default value, closed form both scaled and
 //   unscaled): the_block_bonus_prices_the_rivals_only_approach
-// - `LegacyValuation::bounded_race` (race half through `score_actions`):
-//   the_default_budget_finds_the_third_ranked_challenger (policy/denial.rs)
-// - `LegacyValuation::bounded_race` (blocking half through `recommend`):
-//   the_legacy_race_flag_restores_blocking_blind_contesting
 #[test]
 fn the_block_bonus_prices_the_rivals_only_approach() {
     let (topology, board, arena, candidate) = blocking_fixture();
@@ -2048,53 +2006,6 @@ fn an_open_second_approach_earns_no_block_bonus() {
     assert_eq!(
         denial::contest_term(&view, &context, &params, candidate).to_bits(),
         (params.contest_weight * (danger as f32)).to_bits()
-    );
-}
-
-#[test]
-fn the_legacy_race_flag_restores_blocking_blind_contesting() {
-    let (topology, board, arena, candidate) = blocking_fixture();
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let denial_params = DenialParams {
-        contest_weight: 10_000.0,
-        contest_cap: 1_000_000.0,
-        contest_block_bonus: 2.0,
-        ..DenialParams::default()
-    };
-    let fixed = HeuristicParams {
-        denial: Some(denial_params),
-        ..HeuristicParams::default()
-    };
-    let legacy = HeuristicParams {
-        legacy_valuation: Some(heuristic_v1::LegacyValuation {
-            bounded_race: true,
-            ..heuristic_v1::LegacyValuation::default()
-        }),
-        ..fixed.clone()
-    };
-    let road_score = |params: &HeuristicParams| {
-        score_for(&heuristic_v1::recommend(&view, params), |action| {
-            action == Action::BuildRoad(candidate)
-        })
-    };
-    // The candidate's contest dominates every other road, so it is the recommended road under
-    // both param sets; the legacy flag strips exactly the block bonus from its score.
-    let context = denial::context(&view, &denial_params);
-    let blocked = denial::contest_term(&view, &context, &denial_params, candidate);
-    let blind_params = DenialParams {
-        contest_block_bonus: 0.0,
-        ..denial_params
-    };
-    let blind_context = denial::context(&view, &blind_params);
-    let blind = denial::contest_term(&view, &blind_context, &blind_params, candidate);
-    let expansion = expansion_score(&view, candidate, &fixed).unwrap_or_default();
-    assert_eq!(
-        road_score(&fixed).to_bits(),
-        (40.0 + expansion + blocked).to_bits()
-    );
-    assert_eq!(
-        road_score(&legacy).to_bits(),
-        (40.0 + expansion + blind).to_bits()
     );
 }
 

@@ -746,7 +746,6 @@ impl GameArena {
             &mut self.scratch[seat],
             &mut self.streams.policy[seat],
         );
-        self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
         selected
     }
 
@@ -805,7 +804,6 @@ impl GameArena {
                 &mut self.streams.policy[seat],
             )
         };
-        self.state.players[seat].incumbent_goal = self.scratch[seat].goal;
         if let Some(play) = play {
             self.apply_action_internal(
                 board,
@@ -927,7 +925,7 @@ impl GameArena {
                 self.offers_remaining(seat),
                 DecisionPhase::TradeResponse,
             );
-            *value = embargoed(&view, seat, policy::vp_embargo(config.policies[seat]));
+            *value = embargoed(&view, seat);
         }
         if embargoes[proposer] {
             return;

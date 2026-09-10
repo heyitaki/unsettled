@@ -7,12 +7,9 @@ use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::longest_road::RoadCard;
 use unsettled_engine::policy::PolicyScratch;
 use unsettled_engine::policy::denial::DenialParams;
-use unsettled_engine::policy::heuristic_v1::{
-    self, BUILD_BAND, BuildKind, HeuristicParams, LegacyValuation,
-};
+use unsettled_engine::policy::heuristic_v1::{self, BUILD_BAND, BuildKind, HeuristicParams};
 use unsettled_engine::policy::heuristic_v1_trader;
 use unsettled_engine::policy::trading::TradeParams;
-use unsettled_engine::policy::{self, PolicyKind};
 use unsettled_engine::rng::Xoshiro256StarStar;
 use unsettled_engine::rules::{Buildable, Resource, RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
@@ -379,7 +376,7 @@ fn city_score_excludes_the_expansion_frontier() {
 /// A regression guard, not evidence for the fix: the assertion held identically before this batch,
 /// for the reason `heuristic_v1.rs::vertex_score` records, so it cannot distinguish the fixed
 /// scorer from the pre-batch one. What it does do is fail any change that reintroduces a nonzero
-/// city diversity count, which is why the legacy flag has no diversity arm to restore.
+/// city diversity count.
 #[test]
 fn city_score_excludes_diversity() {
     let (topology, board, arena, city, _, _) = building_fixture(true);
@@ -714,67 +711,8 @@ fn an_aware_offer_no_longer_outranks_an_affordable_settlement() {
     let mut scratch = PolicyScratch::default();
     let mut rng = Xoshiro256StarStar::from_seed(11);
     let fixed = heuristic_v1_trader::action(&view, &mut scratch, &params, &mut rng);
-    let mut legacy = params.clone();
-    legacy.legacy_valuation = Some(LegacyValuation {
-        band_ladder: true,
-        ..LegacyValuation::default()
-    });
-    let mut scratch = PolicyScratch::default();
-    let mut rng = Xoshiro256StarStar::from_seed(11);
-    let old = heuristic_v1_trader::action(&view, &mut scratch, &legacy, &mut rng);
     assert!(settlement >= BUILD_BAND);
-    assert!(matches!(old, Action::OfferTrade { .. }));
     assert!(matches!(fixed, Action::BuildSettlement(_)));
-}
-
-#[test]
-fn ablation_kinds_dispatch_through_trader_paths() {
-    let (topology, board, _rules, _config, mut arena) = fixture(true);
-    let target = topology.vertex_adjacent(0)[0];
-    arena.state.edge_owner[usize::from(topology.vertex_edges(target)[0])] = 0;
-    arena.state.players[0].pieces[Buildable::Road.index()] = 0;
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let cost = view.costs(Buildable::Settlement)[0];
-    for resource in Resource::ALL {
-        arena.state.players[1].resources[resource.index()] = 2;
-        arena.state.belief.gain(1, resource.index(), 2);
-    }
-    let get = Resource::ALL
-        .into_iter()
-        .find(|resource| cost[resource.index()] > 0)
-        .unwrap();
-    let give = Resource::ALL
-        .into_iter()
-        .find(|resource| *resource != get)
-        .unwrap();
-    arena.state.players[0].resources = cost.map(i16::from);
-    arena.state.players[0].resources[get.index()] -= 1;
-    arena.state.players[0].resources[give.index()] += 2;
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let expected = Action::OfferTrade {
-        give: Resource::Sheep,
-        get: Resource::Ore,
-        count: 1,
-    };
-    for kind in [
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
-    ] {
-        let mut scratch = PolicyScratch::default();
-        let mut rng = Xoshiro256StarStar::from_seed(11);
-        assert_eq!(
-            policy::action(kind, &view, &mut scratch, &mut rng),
-            expected,
-            "{kind:?}"
-        );
-    }
 }
 
 fn bridged_progress_fixture() -> (Topology, SimBoard, RuleConfig, GameArena) {

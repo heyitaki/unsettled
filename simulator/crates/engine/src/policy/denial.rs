@@ -91,10 +91,6 @@ impl DenialContext {
         self.race_checks.get()
     }
 
-    pub fn top_danger(&self) -> f64 {
-        self.top_danger
-    }
-
     fn one_step(&self, view: &DecisionView<'_>, seat: usize) -> u128 {
         if let Some(cached) = self.one_step[seat].get() {
             return cached;
@@ -757,25 +753,24 @@ mod tests {
         assert_eq!(challenger, 3);
         assert_eq!(full.race_checks(), 3);
 
-        // `LegacyValuation::bounded_race` restores the two-check budget through the real
-        // decision path, without `denial.rs` ever reading the flag itself.
+        // The decision path must use the configured race budget.
         let fixed_params = HeuristicParams {
             denial: Some(params),
             ..HeuristicParams::default()
-        };
-        let legacy_params = HeuristicParams {
-            legacy_valuation: Some(heuristic_v1::LegacyValuation {
-                bounded_race: true,
-                ..heuristic_v1::LegacyValuation::default()
-            }),
-            ..fixed_params.clone()
         };
         let mut actions = Box::new(crate::view::ActionBuf::new());
         reset();
         heuristic_v1::score_actions(&view, &fixed_params, &mut actions);
         assert_eq!(exact_checks(), 3);
+        let capped_params = HeuristicParams {
+            denial: Some(DenialParams {
+                race_check_cap: 2,
+                ..params
+            }),
+            ..fixed_params
+        };
         reset();
-        heuristic_v1::score_actions(&view, &legacy_params, &mut actions);
+        heuristic_v1::score_actions(&view, &capped_params, &mut actions);
         assert_eq!(exact_checks(), 2);
     }
 

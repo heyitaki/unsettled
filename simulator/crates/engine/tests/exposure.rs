@@ -9,7 +9,7 @@ use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::PolicyScratch;
 use unsettled_engine::policy::devcards::{self, DevCardParams, DevOffers};
 use unsettled_engine::policy::exposure;
-use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams, LegacyValuation};
+use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams};
 use unsettled_engine::rules::{Buildable, PlayerModifiers, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::view::{Action, DecisionPhase, DevPlay, ScoredAction};
@@ -117,7 +117,6 @@ fn marginal_conversion_prices_bundles_above_spares() {
 // Forwarded arguments of `heuristic_v1::discard`'s conversion ranking, one observing test each:
 // - trade rates (via `view`): the_discard_sheds_the_cheapest_conversion_first
 // - goal cost (via `scratch`): goal_need_dominates_conversion_on_disagreement
-// - `params.legacy_valuation.exposure_blind`: the_legacy_flag_restores_the_greedy_discard
 #[test]
 fn the_discard_sheds_the_cheapest_conversion_first() {
     // Hand: one sheep (4:1 spare, marginal 3) and two ore (2:1 full bundle, marginal 12).
@@ -129,24 +128,6 @@ fn the_discard_sheds_the_cheapest_conversion_first() {
     scratch.goal = Some(Buildable::Road);
     let discarded = heuristic_v1::discard(&view, 1, &mut scratch, &HeuristicParams::default());
     assert_eq!(discarded, [0, 1, 0, 0, 0]);
-}
-
-#[test]
-fn the_legacy_flag_restores_the_greedy_discard() {
-    // Same state as above: the pre-change greedy rule sheds from the largest surplus (ore).
-    let (topology, board, arena) = ore_port_fixture([0, 1, 0, 0, 2]);
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let mut scratch = PolicyScratch::default();
-    scratch.goal = Some(Buildable::Road);
-    let params = HeuristicParams {
-        legacy_valuation: Some(LegacyValuation {
-            exposure_blind: true,
-            ..LegacyValuation::default()
-        }),
-        ..HeuristicParams::default()
-    };
-    let discarded = heuristic_v1::discard(&view, 1, &mut scratch, &params);
-    assert_eq!(discarded, [0, 0, 0, 0, 1]);
 }
 
 #[test]
@@ -165,33 +146,20 @@ fn goal_need_dominates_conversion_on_disagreement() {
 #[test]
 fn an_all_needed_hand_keeps_the_greedy_least_damage_rule() {
     // Every held card sits at or under the settlement cost, so the conversion ranking finds
-    // no surplus and the original greedy rule decides — bit-identical to the legacy flag,
-    // including its quirk of returning short when the greedy tie lands on an empty resource
-    // (the game then substitutes its legal default).
+    // no surplus and uses the greedy rule. If its tie lands on an empty resource,
+    // it returns a short discard and the game substitutes its legal default.
     let (topology, board, arena) = ore_port_fixture([1, 1, 0, 1, 0]);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let legacy = HeuristicParams {
-        legacy_valuation: Some(LegacyValuation {
-            exposure_blind: true,
-            ..LegacyValuation::default()
-        }),
-        ..HeuristicParams::default()
-    };
     let mut scratch = PolicyScratch::default();
     scratch.goal = Some(Buildable::Settlement);
-    let discarded =
-        heuristic_v1::discard(&view, 1, &mut scratch, &HeuristicParams::default());
-    let mut scratch = PolicyScratch::default();
-    scratch.goal = Some(Buildable::Settlement);
-    let greedy = heuristic_v1::discard(&view, 1, &mut scratch, &legacy);
-    assert_eq!(discarded, greedy);
+    let discarded = heuristic_v1::discard(&view, 1, &mut scratch, &HeuristicParams::default());
+    assert_eq!(discarded, [0, 0, 0, 0, 0]);
 }
 
 // Forwarded arguments of `heuristic_v1::shed_trade`, one observing test each:
 // - hand exposure (via `view`): a_seven_safe_hand_offers_no_shed_trade
 // - `params.shed_weight`: the_shed_trade_prices_certainty_against_expected_loss (non-default
 //   weight in the closed form) and zeroing_the_shed_weight_disables_the_candidate
-// - `params.legacy_valuation.exposure_blind`: the_legacy_flag_removes_the_shed_trade
 // - goal cost (via `goal`): the_goal_cost_is_never_shed_into
 #[test]
 fn the_shed_trade_prices_certainty_against_expected_loss() {
@@ -224,21 +192,6 @@ fn a_seven_safe_hand_offers_no_shed_trade() {
     let (topology, board, arena) = flat_two_rate_fixture([4, 3, 0, 0, 0]);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let actions = heuristic_v1::recommend(&view, &HeuristicParams::default());
-    assert!(shed_candidates(&actions).is_empty());
-}
-
-#[test]
-fn the_legacy_flag_removes_the_shed_trade() {
-    let (topology, board, arena) = flat_two_rate_fixture([4, 4, 0, 0, 0]);
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let params = HeuristicParams {
-        legacy_valuation: Some(LegacyValuation {
-            exposure_blind: true,
-            ..LegacyValuation::default()
-        }),
-        ..HeuristicParams::default()
-    };
-    let actions = heuristic_v1::recommend(&view, &params);
     assert!(shed_candidates(&actions).is_empty());
 }
 
@@ -329,10 +282,8 @@ fn the_seven_charge_is_subtracted_from_card_adding_plays() {
 }
 
 #[test]
-fn the_legacy_flag_zeroes_the_charge_through_the_pre_roll_path() {
-    // With a heavy exposure weight the charged path holds instead of playing Year of Plenty;
-    // the exposure_blind flag must restore the play by zeroing the weight before the
-    // comparison runs.
+fn the_exposure_weight_reaches_the_pre_roll_path() {
+    // The pre-roll caller must forward the exposure weight to the card comparison.
     let (topology, rules, wire) = fixture_wire();
     let board =
         SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
@@ -350,16 +301,16 @@ fn the_legacy_flag_zeroes_the_charge_through_the_pre_roll_path() {
     };
     let mut scratch = PolicyScratch::default();
     assert_eq!(heuristic_v1::pre_roll(&view, &mut scratch, &heavy), None);
-    let legacy = HeuristicParams {
-        legacy_valuation: Some(LegacyValuation {
-            exposure_blind: true,
-            ..LegacyValuation::default()
+    let uncharged = HeuristicParams {
+        dev_cards: Some(DevCardParams {
+            exposure_weight: 0.0,
+            ..heavy.dev_cards.unwrap()
         }),
         ..heavy
     };
     let mut scratch = PolicyScratch::default();
     assert!(matches!(
-        heuristic_v1::pre_roll(&view, &mut scratch, &legacy),
+        heuristic_v1::pre_roll(&view, &mut scratch, &uncharged),
         Some(DevPlay::YearOfPlenty { .. })
     ));
 }

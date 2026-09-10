@@ -4,11 +4,9 @@
 //! The file contract mirrors the app-formula weights file: every key present (missing and
 //! unknown keys are load errors, checked structurally against the live struct's own
 //! serialization so the contract cannot drift), gate blocks either `null` or fully
-//! populated, `legacyValuation` pinned to `null` and `specialBuild` to `"uniform"` (both
-//! are measurement-only surfaces owned by named roster labels, never swept). A vector
-//! must then pass the shared domain guards (`validate_params`, the same conditions the
-//! engine debug-asserts at every scoring entry) and the SIM-GAP-30 building-band headroom
-//! check before it registers.
+//! populated. A vector must then pass the shared domain guards (`validate_params`, the
+//! same conditions the engine debug-asserts at every scoring entry) and the SIM-GAP-30
+//! building-band headroom check before it registers.
 //!
 //! A loaded vector becomes `PolicyKind::Custom(index)` through a registry mirroring the
 //! app-formula one. The base kind a custom policy is registered against contributes only
@@ -24,9 +22,7 @@ use serde_json::Value;
 use crate::policy::PolicyKind;
 use crate::policy::denial::DenialParams;
 use crate::policy::devcards::DevCardParams;
-use crate::policy::heuristic_v1::{
-    HeuristicParams, LegacyValuation, SpecialBuildScoring, building_band_headroom, validate_params,
-};
+use crate::policy::heuristic_v1::{HeuristicParams, building_band_headroom, validate_params};
 use crate::policy::threat::ThreatParams;
 use crate::policy::trading::TradeParams;
 
@@ -129,20 +125,6 @@ pub fn parse_params_file(source: &str) -> Result<HeuristicParams, String> {
     check_exact_keys(&value, &expected_shape(), "")?;
     let params: HeuristicParams =
         serde_json::from_value(value).map_err(|error| format!("invalid params value: {error}"))?;
-    if params.legacy_valuation.is_some() {
-        return Err(
-            "params files pin legacyValuation to null: legacy restorations are \
-             measurement-only and live behind named policy labels"
-                .into(),
-        );
-    }
-    if params.special_build != SpecialBuildScoring::Uniform {
-        return Err(
-            "params files pin specialBuild to \"uniform\": the M-30 measurement labels own \
-             the other variants"
-                .into(),
-        );
-    }
     validate_params(&params)?;
     building_band_headroom(&params)?;
     Ok(params)
@@ -157,7 +139,6 @@ fn expected_shape() -> Value {
         dev_cards: Some(DevCardParams::default()),
         trading: Some(TradeParams::default()),
         denial: Some(DenialParams::default()),
-        legacy_valuation: Some(LegacyValuation::default()),
         ..HeuristicParams::default()
     })
     .expect("params serialize to JSON")
@@ -200,7 +181,6 @@ fn check_exact_keys(file: &Value, shape: &Value, path: &str) -> Result<(), Strin
 // | name -> registry identity       | `re_registration_dedupes_and_conflicts_error`          |
 // | key contract (missing/unknown)  | `every_missing_key_is_a_load_error`,                   |
 // |                                 | `an_unknown_key_is_a_load_error`                       |
-// | pinned fields                   | `legacy_valuation_and_special_build_are_pinned`        |
 // | domain guards at load           | `a_domain_violation_is_a_load_error`                   |
 // | SIM-GAP-30 headroom at load     | `the_headroom_boundary_is_exact`                       |
 #[cfg(test)]
@@ -298,6 +278,33 @@ mod tests {
     }
 
     #[test]
+    fn policy_params_expose_only_the_shipped_scoring_fields() {
+        let mut expected = vec![
+            "productionWeight",
+            "scarcityWeight",
+            "diversityBonus",
+            "portWeight",
+            "expansionWeight",
+            "robberBlockThreshold",
+            "shedWeight",
+            "devBuyScale",
+            "threat",
+            "devCards",
+            "trading",
+            "denial",
+        ];
+        expected.sort_unstable();
+        let value = composite_value();
+        let actual: Vec<_> = value
+            .as_object()
+            .expect("object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn every_missing_key_is_a_load_error() {
         let full = composite_value();
         let top = full.as_object().expect("object");
@@ -334,30 +341,11 @@ mod tests {
     }
 
     #[test]
-    fn legacy_valuation_and_special_build_are_pinned() {
-        let mut with_legacy = composite_value();
-        with_legacy["legacyValuation"] =
-            round_trip(&crate::policy::heuristic_v1::LegacyValuation::default());
-        let error = parse_params_file(&with_legacy.to_string()).expect_err("legacy");
-        assert!(error.contains("legacyValuation"), "{error}");
-
-        let mut with_special = composite_value();
-        with_special["specialBuild"] = Value::from("mute");
-        let error = parse_params_file(&with_special.to_string()).expect_err("special build");
-        assert!(error.contains("specialBuild"), "{error}");
-    }
-
-    #[test]
     fn a_domain_violation_is_a_load_error() {
         let mut zero_floor = composite_value();
         zero_floor["trading"]["dangerFloor"] = Value::from(0.0);
         let error = parse_params_file(&zero_floor.to_string()).expect_err("danger floor");
         assert!(error.contains("trading.dangerFloor"), "{error}");
-
-        let mut wide_mix = composite_value();
-        wide_mix["frontierMix"] = Value::from(1.5);
-        let error = parse_params_file(&wide_mix.to_string()).expect_err("frontier mix");
-        assert!(error.contains("frontierMix"), "{error}");
     }
 
     /// Closed form: with every other vertex term zeroed the headroom bound is
@@ -387,7 +375,6 @@ mod tests {
         // struct proves the file's numbers (not a kind's own params) reach dispatch.
         let expected = HeuristicParams {
             production_weight: 2.5,
-            goal_need_weight: 0.75,
             threat: Some(ThreatParams {
                 delay_weight: 1.75,
                 ..ThreatParams::default()
@@ -491,15 +478,7 @@ mod tests {
             ("/expansionWeight", None),
             ("/robberBlockThreshold", None),
             ("/shedWeight", float(-1.0)),
-            ("/goalNeedWeight", float(-1.0)),
-            ("/stageExpansionWeight", float(-1.0)),
-            ("/stageCityWeight", float(-1.0)),
-            ("/stageUrgencyWeight", float(-1.0)),
-            ("/slotReturnWeight", float(-1.0)),
-            ("/costPressureWeight", float(-1.0)),
-            ("/frontierMix", float(1.5)),
             ("/devBuyScale", float(-1.0)),
-            ("/goalHysteresisMargin", float(-1.0)),
             ("/threat/delayWeight", None),
             ("/threat/needWeight", None),
             ("/threat/needCompletionWeight", float(-1.0)),
@@ -555,7 +534,6 @@ mod tests {
         let base = composite_value();
         let mut leaves = Vec::new();
         collect_leaf_paths(&base, "", &mut leaves);
-        leaves.retain(|path| path != "/legacyValuation" && path != "/specialBuild");
         for leaf in &leaves {
             assert!(
                 bad_values.iter().any(|(path, _)| path == leaf),
@@ -586,12 +564,10 @@ mod tests {
         )
         .expect("valid JSON");
 
-        // Policy section against the params shape (legacyValuation and specialBuild are
-        // pinned by the loader, not swept).
+        // Policy section against the params shape.
         let base = composite_value();
         let mut policy_paths = Vec::new();
         collect_leaf_paths(&base, "", &mut policy_paths);
-        policy_paths.retain(|path| path != "/legacyValuation" && path != "/specialBuild");
         for path in &policy_paths {
             let range = bounds["policy"]
                 .pointer(path)
@@ -682,9 +658,9 @@ mod tests {
 
     /// Walks the committed H2 screen arms (`placement/arms/h2_*.json` plus the `h2x_*`
     /// extension arms): every file loads through the full contract (exact keys, guards,
-    /// headroom), differs from the composite defaults in exactly one leaf, and that leaf
-    /// sits inside its committed sweep-bounds range. The counts pin the preregistered
-    /// 64-parameter x 2-arm M-41 set and the 10-arm M-42 extension set.
+    /// headroom), differs from the screen baseline in exactly one leaf, and that leaf
+    /// sits inside its committed sweep-bounds range. The counts pin the retained
+    /// 56-parameter x 2-arm M-41 set and the 10-arm M-42 extension set.
     #[test]
     fn the_h2_arm_files_are_single_parameter_perturbations_inside_bounds() {
         let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
@@ -738,7 +714,7 @@ mod tests {
                 "{name}: {leaf} = {value} lies outside its bounds range"
             );
         }
-        assert_eq!(screen_count, 128, "the H2 screen commits 64 parameters x 2 arms");
+        assert_eq!(screen_count, 112, "the H2 screen retains 56 parameters x 2 arms");
         assert_eq!(extension_count, 10, "the M-42 extension commits 10 arms");
     }
 
@@ -1889,17 +1865,10 @@ mod tests {
         );
     }
 
-    /// Walks every committed weights-shaped file (the shipped vector, the three committed
-    /// candidate and snapshot records, and the weights arms under `placement/arms/`) through the full
-    /// `EngineWeights` contract:
-    /// the exact-key rule (`deny_unknown_fields` plus serde's missing-field error) and
-    /// `validate`. `contracts.md` states such a walk exists and none did, so until now a
-    /// weights arm left behind by a new formula weight failed silently, at run time, in
-    /// whichever measurement first selected it. A weights file is one carrying
-    /// `resourceValue`; the count pins the set so a file that loses the key is a failure
-    /// rather than a skip.
+    /// Loads all committed params and weights vectors, including every arm, through their
+    /// exact-key and domain checks. Counts prevent a file from silently changing shape.
     #[test]
-    fn every_committed_weights_file_loads_through_the_full_contract() {
+    fn every_committed_params_and_weights_file_loads_through_the_full_contract() {
         let placement_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement");
         let load = |name: &str, source: &str| {
             let weights: EngineWeights = serde_json::from_str(source)
@@ -1919,6 +1888,17 @@ mod tests {
             load(name, &source);
         }
 
+        for path in [
+            DEFAULT_PARAMS_PATH,
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../placement/phase-i-candidate-params.json"
+            ),
+        ] {
+            let source = std::fs::read_to_string(path).expect("committed params vector");
+            parse_params_file(&source).unwrap_or_else(|error| panic!("{path} must load: {error}"));
+        }
+        let mut params_arms = 0;
         let mut weights_arms = 0;
         for entry in std::fs::read_dir(format!("{placement_dir}/arms")).expect("arms dir") {
             let path = entry.expect("entry").path();
@@ -1933,11 +1913,15 @@ mod tests {
             let source = std::fs::read_to_string(&path).expect("arm file");
             let file: Value = serde_json::from_str(&source).expect("valid JSON");
             if file.get("resourceValue").is_none() {
+                parse_params_file(&source)
+                    .unwrap_or_else(|error| panic!("{name} must load: {error}"));
+                params_arms += 1;
                 continue;
             }
             weights_arms += 1;
             load(&name, &source);
         }
+        assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
             weights_arms, 64,
             "the committed weights arms are 64 files; a change to the set is a decision"

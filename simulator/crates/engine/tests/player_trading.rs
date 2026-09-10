@@ -143,7 +143,7 @@ fn eligible_recipients(view: &DecisionView<'_>, get: Resource) -> Vec<usize> {
     (0..view.seats())
         .filter(|seat| {
             *seat != view.observer()
-                && !embargoed(view, *seat, false)
+                && !embargoed(view, *seat)
                 && view.belief().expected(*seat)[get.index()] >= 1.0
         })
         .collect()
@@ -154,9 +154,9 @@ fn explicit_trading_state() -> (Topology, SimBoard, RuleConfig, GameConfig, Game
     let board = boardgen::generate_board(Layout::Extension6, 6, mix64(TUNING_SEED ^ (8_u64 << 40)))
         .unwrap();
     let mut rules = RuleConfig::base(Layout::Extension6);
-    // Nobody in this hand-authored state crossed the legacy VP embargo; danger cannot
-    // exceed 1.0, so out-of-range thresholds keep the whole table tradeable and the
-    // fixture's selection mechanics observable.
+
+    // Danger cannot exceed 1.0. Thresholds of 2.0 keep the whole table tradeable
+    // so the fixture isolates trade selection.
     rules.player_trading = Some(TradeConfig {
         acceptance_temperature: 0.0,
         embargo_danger: 2.0,
@@ -482,10 +482,10 @@ fn hidden_vp_estimate_crosses_the_embargo_threshold_and_is_monotone_in_confidenc
 
     assert!(low <= middle && middle <= high);
     assert!(high >= 9);
-    // The estimate crosses the legacy VP threshold; the danger model does not embargo a
-    // seat with zero production regardless of hidden cards.
-    assert!(embargoed(&view, 1, true));
-    assert!(!embargoed(&view, 1, false));
+
+    // Zero production keeps ETW danger below the embargo threshold, even with a
+    // high hidden-VP estimate.
+    assert!(!embargoed(&view, 1));
 }
 
 #[test]
@@ -538,30 +538,15 @@ fn revealed_dev_plays_preserve_the_public_pool_identity() {
     assert_eq!(deck_total, view.dev_deck_remaining() + held + revealed);
 }
 
-#[test]
-fn legacy_embargo_blocks_a_seat_at_one_point_below_the_win_threshold() {
-    let (topology, board, mut rules, config, mut arena) = fixture();
-    enable_trading(&mut rules);
-    arena.prepare(&board, &topology, &rules, &config);
-    arena.state.players[1].vp_public = rules.win_vp - 1;
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-
-    assert!(embargoed(&view, 1, true));
-}
-
 // Forwarded arguments of `trade::embargoed` (SIM-GAP-27), one observing test each:
 // - `view` (trade config gate): invalid_trade_params_panic_before_response_without_trade_config
 //   (no trading config means nobody is embargoed on any path)
 // - `seat` (self-check vs belief estimate): the_self_check_prices_the_real_hand_not_the_belief
-// - `legacy_vp`: hidden_vp_estimate_crosses_the_embargo_threshold_and_is_monotone_in_confidence
-//   (same view, both flag values, opposite verdicts)
 // - `embargo_danger_floor`: the_danger_embargo_thresholds_match_the_capped_etw_closed_form
 // - `embargo_danger`: the_danger_embargo_thresholds_match_the_capped_etw_closed_form
 // - `embargo_takeover_danger` and the award-imminence queries:
 //   embargo_detects_a_single_road_bridging_two_components_into_longest_road,
 //   embargo_detects_largest_army_one_knight_away
-// - `hidden_vp_confidence` (legacy path only): responder_embargo_does_not_depend_on_the_proposers_hidden_vp
-// - policy kind -> flag (engine eligibility pass): the_engine_forwards_each_seats_legacy_embargo_flag
 
 /// Zero production caps ETW at exactly `ETW_CAP`, so danger is exactly
 /// `floor / (ETW_CAP + floor)` and the threshold comparison is a closed form.
@@ -601,7 +586,7 @@ fn the_danger_embargo_thresholds_match_the_capped_etw_closed_form() {
         arena.prepare(&board, &topology, &rules, &game_config);
         let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
         assert_eq!(etw::etw_for_seat(&view, 1), etw::ETW_CAP);
-        assert_eq!(embargoed(&view, 1, false), expected, "config={config:?}");
+        assert_eq!(embargoed(&view, 1), expected, "config={config:?}");
     }
 }
 
@@ -643,77 +628,9 @@ fn the_self_check_prices_the_real_hand_not_the_belief() {
         ..TradeConfig::default()
     });
     let self_view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
-    assert!(embargoed(&self_view, 1, false));
+    assert!(embargoed(&self_view, 1));
     let rival_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
-    assert!(!embargoed(&rival_view, 1, false));
-}
-
-#[test]
-fn the_engine_forwards_each_seats_legacy_embargo_flag() {
-    assert!(policy::vp_embargo(
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo
-    ));
-    assert!(!policy::vp_embargo(
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial
-    ));
-    assert!(!policy::vp_embargo(PolicyKind::HeuristicV1Trader));
-
-    // A zero-production seat one point from winning is embargoed only by the legacy
-    // thresholds, so which model the engine consults is observable through the trade RNG
-    // stream: an embargoed proposer dies before any responder consultation draws from it.
-    let (topology, board, mut rules, mut config, mut arena) = fixture();
-    enable_trading(&mut rules);
-    config.policies = [PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial; 6];
-    arena.prepare(&board, &topology, &rules, &config);
-    move_from_bank(&mut arena, 0, Resource::Wood, 1);
-    move_from_bank(&mut arena, 1, Resource::Ore, 1);
-    // The responder needs a goal to reach the acceptance draw at all.
-    give_road(&mut arena, 1, 10);
-    arena.state.players[0].vp_public = rules.win_vp - 1;
-    let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
-    assert!(embargoed(&proposer_view, 0, true));
-    assert!(!embargoed(&proposer_view, 0, false));
-    let offer = Action::OfferTrade {
-        give: Resource::Wood,
-        get: Resource::Ore,
-        count: 1,
-    };
-
-    let mut legacy = arena.clone();
-    let trace_before = arena.trade_trace_for_test::<4>();
-
-    assert!(arena.apply_action_for_test(
-        &board,
-        &topology,
-        &rules,
-        &config,
-        0,
-        offer,
-        DecisionPhase::Action,
-    ));
-    assert_ne!(
-        arena.trade_trace_for_test::<4>(),
-        trace_before,
-        "the danger model must let the proposer through to responder consultation"
-    );
-
-    let mut legacy_config = config.clone();
-    legacy_config.policies =
-        [PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyembargo; 6];
-    assert!(legacy.apply_action_for_test(
-        &board,
-        &topology,
-        &rules,
-        &legacy_config,
-        0,
-        offer,
-        DecisionPhase::Action,
-    ));
-    assert_eq!(
-        legacy.trade_trace_for_test::<4>(),
-        trace_before,
-        "the legacy flag must embargo the proposer before any responder is consulted"
-    );
+    assert!(!embargoed(&rival_view, 1));
 }
 
 /// The embargo floor still defaults with the threat-side danger floor; the trade-side
@@ -748,9 +665,9 @@ fn embargoed_responder_is_skipped_without_mutating_any_hand() {
     assert_eq!(arena.state.players[1].vp_public, rules.win_vp - 1);
     // The engine's eligibility pass runs each seat's self-check.
     let responder_view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
-    assert!(embargoed(&responder_view, 1, false));
+    assert!(embargoed(&responder_view, 1));
     let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
-    assert!(!embargoed(&proposer_view, 0, false));
+    assert!(!embargoed(&proposer_view, 0));
     let hands = std::array::from_fn::<_, 6, _>(|seat| arena.state.players[seat].resources);
 
     assert!(arena.apply_action_for_test(
@@ -823,7 +740,7 @@ fn embargo_detects_a_single_road_bridging_two_components_into_longest_road() {
         3
     );
     assert!(view.road_takes_longest_road(1));
-    assert!(embargoed(&view, 1, false));
+    assert!(embargoed(&view, 1));
 }
 
 #[test]
@@ -842,12 +759,12 @@ fn embargo_detects_largest_army_one_knight_away() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
 
     assert!(view.knight_takes_largest_army_for(1));
-    assert!(embargoed(&view, 1, false));
+    assert!(embargoed(&view, 1));
     // Seat 3 sits at the same danger but holds no imminent award swing, so the takeover
     // clause alone cannot embargo it.
     assert!(!view.knight_takes_largest_army_for(3));
     assert!(!view.road_takes_longest_road(3));
-    assert!(!embargoed(&view, 3, false));
+    assert!(!embargoed(&view, 3));
 }
 
 #[test]
@@ -864,7 +781,7 @@ fn a_seat_two_points_below_the_win_threshold_trades_when_no_award_is_imminent() 
     give_road(&mut arena, 1, 10);
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
 
-    assert!(!embargoed(&view, 1, false));
+    assert!(!embargoed(&view, 1));
     let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
     let mut rng = Xoshiro256StarStar::from_seed(5);
     assert!(policy::respond_trade(
@@ -1182,7 +1099,7 @@ fn embargoed_proposer_is_declined_before_any_counterparty_mutation() {
     give_settlement(&mut arena, 0, 4);
     assert_eq!(arena.state.players[0].vp_public, rules.win_vp - 1);
     let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
-    assert!(embargoed(&proposer_view, 0, false));
+    assert!(embargoed(&proposer_view, 0));
     let hands = std::array::from_fn::<_, 6, _>(|seat| arena.state.players[seat].resources);
     let trade_trace = arena.trade_trace_for_test::<16>();
 
@@ -1226,10 +1143,11 @@ fn responder_embargo_does_not_depend_on_the_proposers_hidden_vp() {
     let mut second = first.clone();
     second.state.players[0].vp_dev = 1;
     for arena in [&first, &second] {
-        let responder_view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
-        assert!(embargoed(&responder_view, 1, false));
+        let responder_view =
+            arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
+        assert!(embargoed(&responder_view, 1));
         let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
-        assert!(!embargoed(&proposer_view, 0, false));
+        assert!(!embargoed(&proposer_view, 0));
     }
     let offer = Action::OfferTrade {
         give: Resource::Wood,
@@ -1538,35 +1456,6 @@ fn aware_response_receives_the_policy_trade_params() {
 }
 
 #[test]
-fn every_ablation_kind_dispatches_trade_responses_through_the_trader_path() {
-    let (topology, board, _rules, _config, arena) = explicit_trading_state();
-    let offer = TradeOffer {
-        proposer: 2,
-        give: Resource::Sheep,
-        get: Resource::Wood,
-        count: 2,
-    };
-    let view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
-    for kind in [
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyall,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyport,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacychooser,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycityterms,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyband,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycitygoal,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacycards,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacydeck,
-        PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenialLegacyexposure,
-    ] {
-        let mut rng = Xoshiro256StarStar::from_seed(1);
-        assert!(
-            policy::respond_trade(kind, &view, offer, &mut rng),
-            "{kind:?}"
-        );
-    }
-}
-
-#[test]
 fn acceptance_uses_the_proposers_inputs_and_offer_delta() {
     let (topology, board, rules, _config, arena) = explicit_trading_state();
     let params = TradeParams::default();
@@ -1799,7 +1688,7 @@ fn applied_aware_trade_mutates_the_selected_recipients_hand() {
     config.policies[1] = PolicyKind::HeuristicV1TraderAware;
     let proposer_view = arena.decision_view(&board, &topology, 1, DecisionPhase::TradeResponse);
     assert!(
-        !embargoed(&proposer_view, 1, false),
+        !embargoed(&proposer_view, 1),
         "fixture precondition: proposer embargoed"
     );
     let seat_three_before = arena.state.players[3].resources[Resource::Wood.index()];
@@ -1855,7 +1744,7 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
     };
     let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
     assert!(
-        !embargoed(&proposer_view, 0, false),
+        !embargoed(&proposer_view, 0),
         "replay precondition: proposer embargoed"
     );
     let mut acceptors = Vec::new();
@@ -1864,7 +1753,7 @@ fn applied_aware_trade_forwards_the_offer_count_to_selection() {
             continue;
         }
         let view = arena.decision_view(&board, &topology, seat, DecisionPhase::TradeResponse);
-        if embargoed(&view, seat, false) {
+        if embargoed(&view, seat) {
             continue;
         }
         // Acceptance is deterministic at acceptance_temperature 0.0, so any seed works.
@@ -2235,7 +2124,7 @@ fn proposal_recipient_filter_uses_expected_holdings() {
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
     assert!((0..view.seats()).any(|seat| {
         seat != view.observer()
-            && !embargoed(&view, seat, false)
+            && !embargoed(&view, seat)
             && view.belief().expected(seat)[Resource::Wheat.index()] >= 1.0
             && view.belief().lo(seat)[Resource::Wheat.index()] == 0
     }));
@@ -2267,8 +2156,8 @@ fn proposal_recipient_filter_excludes_embargoed_seats() {
         },
     );
     let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    assert!((0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat, false)));
-    assert!((0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat, false)));
+    assert!((0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat)));
+    assert!((0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat)));
     let mut scratch = PolicyScratch::default();
     let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ 55 << 8 ^ 0);
     assert_eq!(
@@ -2438,8 +2327,18 @@ fn refind_replay_fixtures() {
             let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
             let mut scratch = PolicyScratch::default();
             let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ game << 8 ^ seat as u64);
-            let action = policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng);
-            let Action::OfferTrade { give, get, count: 1 } = action else {
+            let action = policy::action(
+                PolicyKind::HeuristicV1TraderAware,
+                &view,
+                &mut scratch,
+                &mut rng,
+            );
+            let Action::OfferTrade {
+                give,
+                get,
+                count: 1,
+            } = action
+            else {
                 continue;
             };
             if !view.legal_offer_trade(give, get, 1) {
@@ -2468,11 +2367,14 @@ fn refind_replay_fixtures() {
             let nonflat = scores.iter().any(|score| (score - scores[0]).abs() > 1e-12);
             let stable = (0..8).all(|repeat| {
                 let mut scratch = PolicyScratch::default();
-                let mut rng = Xoshiro256StarStar::from_seed(
-                    8_u64 << 48 ^ game << 8 ^ seat as u64 ^ repeat,
-                );
-                policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng)
-                    == action
+                let mut rng =
+                    Xoshiro256StarStar::from_seed(8_u64 << 48 ^ game << 8 ^ seat as u64 ^ repeat);
+                policy::action(
+                    PolicyKind::HeuristicV1TraderAware,
+                    &view,
+                    &mut scratch,
+                    &mut rng,
+                ) == action
             });
             eprintln!(
                 "OFFER game={game} seat={seat} give={give:?} get={get:?} recipients={recipients:?} nonflat={nonflat} stable={stable}"
@@ -2497,7 +2399,12 @@ fn refind_replay_fixtures() {
                 policy::action(kind, &view, &mut scratch, &mut rng)
             };
             let aware = run(PolicyKind::HeuristicV1TraderAware);
-            let Action::OfferTrade { give, get, count: 1 } = aware else {
+            let Action::OfferTrade {
+                give,
+                get,
+                count: 1,
+            } = aware
+            else {
                 continue;
             };
             if !view.legal_offer_trade(give, get, 1)
@@ -2519,14 +2426,24 @@ fn refind_replay_fixtures() {
         let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ game << 8);
-        let action = policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng);
-        let Action::OfferTrade { give, get, count: 1 } = action else {
+        let action = policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng,
+        );
+        let Action::OfferTrade {
+            give,
+            get,
+            count: 1,
+        } = action
+        else {
             continue;
         };
         let believed: Vec<usize> = (0..view.seats())
             .filter(|seat| {
                 *seat != view.observer()
-                    && !embargoed(&view, *seat, false)
+                    && !embargoed(&view, *seat)
                     && view.belief().expected(*seat)[get.index()] >= 1.0
                     && view.belief().lo(*seat)[get.index()] == 0
             })
@@ -2551,18 +2468,31 @@ fn refind_replay_fixtures() {
                     let mut scratch = PolicyScratch::default();
                     let mut rng = Xoshiro256StarStar::from_seed(seed);
                     match phase {
-                        DecisionPhase::Action => match policy::action(kind, &view, &mut scratch, &mut rng) {
-                            Action::PlayDev(play) => Some(play),
-                            _ => None,
-                        },
+                        DecisionPhase::Action => {
+                            match policy::action(kind, &view, &mut scratch, &mut rng) {
+                                Action::PlayDev(play) => Some(play),
+                                _ => None,
+                            }
+                        }
                         _ => policy::pre_roll(kind, &view, &mut scratch, &mut rng),
                     }
                 };
-                (run(PolicyKind::HeuristicV1TraderAwareThreat), run(PolicyKind::HeuristicV1TraderAware))
+                (
+                    run(PolicyKind::HeuristicV1TraderAwareThreat),
+                    run(PolicyKind::HeuristicV1TraderAware),
+                )
             });
             let [(action_threat, action_aware), (pre_threat, pre_aware)] = both;
-            let (Some(DevPlay::Knight { destination: td, victim: tv }), Some(DevPlay::Knight { destination: ad, victim: av })) =
-                (action_threat, action_aware)
+            let (
+                Some(DevPlay::Knight {
+                    destination: td,
+                    victim: tv,
+                }),
+                Some(DevPlay::Knight {
+                    destination: ad,
+                    victim: av,
+                }),
+            ) = (action_threat, action_aware)
             else {
                 continue;
             };
@@ -2596,8 +2526,10 @@ fn refind_replay_fixtures() {
             };
             let devcards = run(PolicyKind::HeuristicV1TraderAwareDevcards);
             let default = run(PolicyKind::HeuristicV1Trader);
-            let (Some(DevPlay::Monopoly { resource: dev }), Some(DevPlay::Monopoly { resource: base })) =
-                (devcards, default)
+            let (
+                Some(DevPlay::Monopoly { resource: dev }),
+                Some(DevPlay::Monopoly { resource: base }),
+            ) = (devcards, default)
             else {
                 continue;
             };
@@ -2640,7 +2572,7 @@ fn refind_replay_fixtures() {
         config.policies[0] = PolicyKind::HeuristicV1TraderAware;
         arena.begin_turn_for_test(&board, &topology, &rules, &config, 0);
         let proposer_view = arena.decision_view(&board, &topology, 0, DecisionPhase::TradeResponse);
-        if embargoed(&proposer_view, 0, false) {
+        if embargoed(&proposer_view, 0) {
             continue;
         }
         for give in Resource::ALL {
@@ -2661,8 +2593,9 @@ fn refind_replay_fixtures() {
                     if arena.state.players[seat].resources[get.index()] < 1 {
                         continue;
                     }
-                    let view = arena.decision_view(&board, &topology, seat, DecisionPhase::TradeResponse);
-                    if embargoed(&view, seat, false) {
+                    let view =
+                        arena.decision_view(&board, &topology, seat, DecisionPhase::TradeResponse);
+                    if embargoed(&view, seat) {
                         continue;
                     }
                     let mut rng = Xoshiro256StarStar::from_seed(seat as u64);
@@ -2704,14 +2637,19 @@ fn refind_replay_fixtures() {
     for game in 0..1200_u64 {
         let (topology, board, _rules, _config, arena) = truncated_game(game, 8, temp_zero());
         let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-        let mixed = (0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat, false))
-            && (0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat, false));
+        let mixed = (0..view.seats()).any(|seat| seat != view.observer() && embargoed(&view, seat))
+            && (0..view.seats()).any(|seat| seat != view.observer() && !embargoed(&view, seat));
         if !mixed {
             continue;
         }
         let mut scratch = PolicyScratch::default();
         let mut rng = Xoshiro256StarStar::from_seed(8_u64 << 48 ^ game << 8);
-        let action = policy::action(PolicyKind::HeuristicV1TraderAware, &view, &mut scratch, &mut rng);
+        let action = policy::action(
+            PolicyKind::HeuristicV1TraderAware,
+            &view,
+            &mut scratch,
+            &mut rng,
+        );
         if matches!(action, Action::OfferTrade { .. }) {
             eprintln!("EMBARGO game={game} action={action:?}");
             break;

@@ -8,7 +8,7 @@ use unsettled_engine::game::{GameArena, GameConfig};
 use unsettled_engine::policy::PolicyScratch;
 use unsettled_engine::policy::denial::{self, DenialParams};
 use unsettled_engine::policy::devcards::{self, DevCardContext, DevCardParams, DevOffers};
-use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams, LegacyValuation};
+use unsettled_engine::policy::heuristic_v1::{self, HeuristicParams};
 use unsettled_engine::policy::threat;
 use unsettled_engine::rules::{Buildable, RESOURCE_COUNT, Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
@@ -1349,22 +1349,10 @@ fn outside_the_plateau_the_etw_term_leads() {
 // - `view` (own production pips): plenty_spare_picks_rank_by_own_production_then_bank
 // - `view` (cost variants): plenty_uses_the_closest_cost_variant
 // - `goal` (`None` still offers): plenty_spare_pick_banks_the_scarce_resource
-// - `params` (legacy narrow scope): plenty_legacy_scope_restores_the_two_short_gate
 //
 // Forwarded arguments of `heuristic_v1::monopoly_for_goal`, one observing test each:
 // - `view` (opponent holdings and production): monopoly_prefers_the_belief_holding_over_the_production_proxy
 // - `goal` (every cost variant): monopoly_reads_every_cost_variant_of_the_goal
-// - `params` (legacy first-variant scope): monopoly_reads_every_cost_variant_of_the_goal
-
-fn narrow_params() -> HeuristicParams {
-    HeuristicParams {
-        legacy_valuation: Some(LegacyValuation {
-            narrow_card_plays: true,
-            ..LegacyValuation::default()
-        }),
-        ..HeuristicParams::default()
-    }
-}
 
 #[test]
 fn plenty_prefers_the_goal_missing_resource_over_spares() {
@@ -1374,26 +1362,7 @@ fn plenty_prefers_the_goal_missing_resource_over_spares() {
     // City costs [0,0,2,0,3]: one ore short. The need pick takes the ore; the spare pick then
     // ties on zero own pips and equal banks, and the index tie-break names ore again.
     assert_eq!(
-        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &HeuristicParams::default()),
-        Some((Resource::Ore, Resource::Ore))
-    );
-}
-
-#[test]
-fn plenty_legacy_scope_restores_the_two_short_gate() {
-    let (topology, board, _rules, _config, mut arena) = fixture();
-    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 2]);
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
-    // One short of the city was never offered under the narrow scope.
-    assert_eq!(
-        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &narrow_params()),
-        None
-    );
-    set_belief_and_hand(&mut arena, 0, [0, 0, 2, 0, 1]);
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
-    // Exactly two short still is, in index order.
-    assert_eq!(
-        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &narrow_params()),
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City)),
         Some((Resource::Ore, Resource::Ore))
     );
 }
@@ -1406,11 +1375,9 @@ fn plenty_spare_pick_banks_the_scarce_resource() {
     // No goal at all: the card still banks two spares. With no own production the scarcest
     // bank stock wins both picks; were bank stock ignored the index tie-break would name ore.
     assert_eq!(
-        heuristic_v1::plenty_offer(&view, None, &HeuristicParams::default()),
+        heuristic_v1::plenty_offer(&view, None),
         Some((Resource::Wood, Resource::Wood))
     );
-    // The narrow scope had no goalless offer.
-    assert_eq!(heuristic_v1::plenty_offer(&view, None, &narrow_params()), None);
 }
 
 #[test]
@@ -1423,7 +1390,7 @@ fn plenty_spare_picks_rank_by_own_production_then_bank() {
     // and exhausts the stock. The second pick falls to sheep (5 pips), not brick -- the index
     // tie-break would name brick only if own production were ignored.
     assert_eq!(
-        heuristic_v1::plenty_offer(&view, None, &HeuristicParams::default()),
+        heuristic_v1::plenty_offer(&view, None),
         Some((Resource::Sheep, Resource::Ore))
     );
 }
@@ -1442,7 +1409,7 @@ fn plenty_uses_the_closest_cost_variant() {
     // The base settlement cost [1,1,1,1,0] is three short; the brick alternative [0,0,0,4,0]
     // is one short and wins. The need pick takes the brick, the spare tie resolves to ore.
     assert_eq!(
-        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement), &HeuristicParams::default()),
+        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement)),
         Some((Resource::Brick, Resource::Ore))
     );
 }
@@ -1457,7 +1424,7 @@ fn plenty_picks_missing_resources_by_value_not_index_order() {
     // scarcer wheat stock and then the index tie-break decide. Index-order picking would have
     // named wood and sheep.
     assert_eq!(
-        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement), &HeuristicParams::default()),
+        heuristic_v1::plenty_offer(&view, Some(Buildable::Settlement)),
         Some((Resource::Sheep, Resource::Wheat))
     );
 }
@@ -1472,7 +1439,7 @@ fn plenty_degrades_a_bank_blocked_need_to_a_spare() {
     // the still-unmet need degrades to a spare pick (index tie-break: brick) instead of
     // cancelling the offer.
     assert_eq!(
-        heuristic_v1::plenty_offer(&view, Some(Buildable::City), &HeuristicParams::default()),
+        heuristic_v1::plenty_offer(&view, Some(Buildable::City)),
         Some((Resource::Brick, Resource::Ore))
     );
 }
@@ -1493,12 +1460,8 @@ fn monopoly_reads_every_cost_variant_of_the_goal() {
     // The base settlement cost is fully covered, so the first variant alone finds no missing
     // resource; the ore alternative is four short and the opponent's ore holding is takeable.
     assert_eq!(
-        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement, &HeuristicParams::default()),
+        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement),
         Some(Resource::Ore)
-    );
-    assert_eq!(
-        heuristic_v1::monopoly_for_goal(&view, Buildable::Settlement, &narrow_params()),
-        None
     );
 }
 
@@ -1516,17 +1479,6 @@ fn both_pre_roll_paths_receive_the_widened_offer() {
     });
     assert_eq!(baseline, expected);
     assert_eq!(arm, expected);
-    // The legacy composite restores the pre-widening hold on both paths.
-    let mut narrow = narrow_params();
-    assert_eq!(
-        heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
-        None
-    );
-    narrow.dev_cards = Some(DevCardParams::default());
-    assert_eq!(
-        heuristic_v1::pre_roll(&view, &mut PolicyScratch::default(), &narrow),
-        None
-    );
 }
 
 // Deck-composition-aware dev buying (SIM-GAP-17). `heuristic_v1::dev_buy_score` prices a buy by
@@ -1538,8 +1490,6 @@ fn both_pre_roll_paths_receive_the_widened_offer() {
 //   knight_only_deck_with_largest_army_held_is_near_worthless
 // - `view` (largest-army state: holder, knights played, contest gap):
 //   knight_only_deck_with_largest_army_held_is_near_worthless
-// - `params` (`legacy_valuation.deck_blind_buying` restores the flat base):
-//   deck_blind_legacy_restores_the_composition_blind_score
 // - `params` (`denial` gates the contest pressure, non-default `pressure_floor`):
 //   the_gated_denial_pressure_reaches_the_buy_score
 //
@@ -1607,24 +1557,6 @@ fn knight_only_deck_with_largest_army_held_is_near_worthless() {
     assert_eq!(score, (base + vp_chase) * 0.25);
     // Direction: far below the composition-blind holder score of 45.
     assert!(score < 45.0 / 4.0 * 0.25);
-}
-
-#[test]
-fn deck_blind_legacy_restores_the_composition_blind_score() {
-    let (topology, board, arena) = vp_rich_near_win_state();
-    let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-    let legacy = HeuristicParams {
-        legacy_valuation: Some(LegacyValuation {
-            deck_blind_buying: true,
-            ..LegacyValuation::default()
-        }),
-        ..HeuristicParams::default()
-    };
-    let proximity = 8.0_f32 / 10.0;
-    assert_eq!(
-        heuristic_v1::dev_buy_score(&view, &legacy),
-        (45.0 + 25.0 * (0.5 + proximity) * 1.0) * 0.25
-    );
 }
 
 #[test]

@@ -9,20 +9,6 @@ use crate::state::MAX_SEATS;
 use crate::trade::{self, TradeOffer, softened_accept, vp_estimate};
 use crate::view::{Action, DecisionPhase, DecisionView};
 
-#[cfg(test)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct AwareOfferObservation {
-    pub offer: TradeOffer,
-    pub score: f32,
-    pub old_settlement_score: f32,
-}
-
-#[cfg(test)]
-std::thread_local! {
-    static AWARE_OFFER_PROBE: std::cell::RefCell<Vec<AwareOfferObservation>> =
-        const { std::cell::RefCell::new(Vec::new()) };
-}
-
 pub fn action(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
@@ -39,16 +25,10 @@ pub fn action(
         .iter()
         .map(|candidate| candidate.score)
         .fold(f32::NEG_INFINITY, f32::max);
-    #[cfg(test)]
-    let old_settlement_score =
-        heuristic_v1::old_band_settlement_score(view, params, &scratch.actions);
     if let Some(trading_params) = params.trading.as_ref() {
-        let legacy_embargo = params
-            .legacy_valuation
-            .is_some_and(|legacy| legacy.vp_embargo);
         let mut recipients: [Option<EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
         for seat in 0..view.seats() {
-            if seat == view.observer() || trade::embargoed(view, seat, legacy_embargo) {
+            if seat == view.observer() || trade::embargoed(view, seat) {
                 continue;
             }
             recipients[seat] = Some(etw::inputs_for_seat(view, seat));
@@ -99,16 +79,6 @@ pub fn action(
                     };
                     let net = mine - trading_params.offer_gain_weight * theirs;
                     let score = trading_params.offer_base + trading_params.offer_span * net as f32;
-                    #[cfg(test)]
-                    if let Some(old_settlement_score) = old_settlement_score {
-                        AWARE_OFFER_PROBE.with(|observations| {
-                            observations.borrow_mut().push(AwareOfferObservation {
-                                offer,
-                                score,
-                                old_settlement_score,
-                            });
-                        });
-                    }
                     if score > base_score && best.is_none_or(|(_, best_score)| score > best_score) {
                         best = Some((Action::OfferTrade { give, get, count }, score));
                     }
@@ -116,8 +86,6 @@ pub fn action(
             }
         }
         let selected = best.map_or(base_action, |(offer, _)| offer);
-        #[cfg(test)]
-        heuristic_v1::replace_last_trace_selected(selected);
         return selected;
     }
     let Some(goal) = goal else {
@@ -150,19 +118,7 @@ pub fn action(
         }
     }
     let selected = best.map_or(base_action, |(offer, _)| offer);
-    #[cfg(test)]
-    heuristic_v1::replace_last_trace_selected(selected);
     selected
-}
-
-#[cfg(test)]
-pub(crate) fn reset_aware_offer_probe() {
-    AWARE_OFFER_PROBE.with(|observations| observations.borrow_mut().clear());
-}
-
-#[cfg(test)]
-pub(crate) fn aware_offer_probe() -> Vec<AwareOfferObservation> {
-    AWARE_OFFER_PROBE.with(|observations| observations.borrow().clone())
 }
 
 pub fn respond_trade(
@@ -222,102 +178,4 @@ fn best_missing(
         .map(|cost| missing_units(hand, cost))
         .min()
         .unwrap_or(u16::MAX)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::path::PathBuf;
-
-    use crate::board::{ConversionOptions, SimBoard};
-    use crate::game::{GameArena, GameConfig};
-    use crate::policy::PolicyScratch;
-    use crate::policy::heuristic_v1::{self, BuildKind, HeuristicParams};
-    use crate::policy::trading::{self, TradeParams};
-    use crate::rng::Xoshiro256StarStar;
-    use crate::rules::{Buildable, Resource, RuleConfig, TradeConfig};
-    use crate::topology::{Layout, Topology};
-    use crate::trade::{self, TradeOffer};
-    use crate::view::DecisionPhase;
-    use crate::wire::WireBoard;
-
-    #[test]
-    fn aware_offer_probe_records_the_production_score_and_old_settlement_maximum() {
-        let topology = Topology::load(Layout::Extension6).unwrap();
-        let mut rules = RuleConfig::base(Layout::Extension6);
-        rules.player_trading = Some(TradeConfig {
-            acceptance_temperature: 0.0,
-            ..TradeConfig::default()
-        });
-        let relative = PathBuf::from("src/parser/__tests__/expected/board-draft-empty.json");
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .map(|root| root.join(&relative))
-            .find(|candidate| candidate.is_file())
-            .expect("board fixture must be reachable from the worktree or sweep root");
-        let wire = WireBoard::parse_str(&fs::read_to_string(path).unwrap()).unwrap();
-        let board =
-            SimBoard::try_from_wire(wire, &topology, &rules, ConversionOptions::default()).unwrap();
-        let mut arena = GameArena::default();
-        arena.prepare(&board, &topology, &rules, &GameConfig::default());
-        let target = topology.vertex_adjacent(0)[0];
-        arena.state.edge_owner[usize::from(topology.vertex_edges(target)[0])] = 0;
-        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-        arena.state.players[0].resources = view.costs(Buildable::Settlement)[0].map(i16::from);
-        arena.state.players[0].resources[Resource::Wood.index()] += 3;
-        for resource in Resource::ALL {
-            arena.state.players[1].resources[resource.index()] = 2;
-            arena.state.belief.gain(1, resource.index(), 2);
-        }
-        let params = HeuristicParams {
-            trading: Some(TradeParams {
-                offer_base: 731.0,
-                offer_span: 19.0,
-                ..TradeParams::default()
-            }),
-            ..HeuristicParams::default()
-        };
-        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
-        super::reset_aware_offer_probe();
-        let mut scratch = PolicyScratch::default();
-        let mut rng = Xoshiro256StarStar::from_seed(11);
-        super::action(&view, &mut scratch, &params, &mut rng);
-        let observations = super::aware_offer_probe();
-        assert!(!observations.is_empty());
-
-        let expected_settlement = (0..topology.vertex_count())
-            .map(|vertex| vertex as u8)
-            .filter(|vertex| view.legal_settlement(*vertex))
-            .map(|vertex| {
-                500.0 + heuristic_v1::vertex_score(&view, vertex, &params, BuildKind::Settlement)
-            })
-            .fold(f32::NEG_INFINITY, f32::max);
-        let trade_params = params.trading.as_ref().unwrap();
-        let own = trading::own_inputs(&view);
-        let own_base = crate::etw::expected_turns_to_win(&own);
-        for observation in observations {
-            let TradeOffer { get, .. } = observation.offer;
-            let mine = trading::trade_benefit_with_base(
-                &own,
-                trade_params,
-                &trading::proposer_delta(observation.offer),
-                own_base,
-            );
-            let responder = trading::responder_delta(observation.offer);
-            let theirs = (0..view.seats())
-                .filter(|seat| *seat != view.observer() && !trade::embargoed(&view, *seat, false))
-                .map(|seat| crate::etw::inputs_for_seat(&view, seat))
-                .filter(|inputs| inputs.belief_expected[get.index()] >= 1.0)
-                .map(|inputs| trading::counterparty_score(&inputs, trade_params, &responder))
-                .filter(|score| score.is_finite())
-                .fold(f64::INFINITY, f64::min);
-            let net = mine - trade_params.offer_gain_weight * theirs;
-            let expected_score = trade_params.offer_base + trade_params.offer_span * net as f32;
-            assert_eq!(observation.score.to_bits(), expected_score.to_bits());
-            assert_eq!(
-                observation.old_settlement_score.to_bits(),
-                expected_settlement.to_bits()
-            );
-        }
-    }
 }

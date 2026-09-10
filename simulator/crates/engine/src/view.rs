@@ -276,13 +276,6 @@ impl<'a> DecisionView<'a> {
         self.state.players[self.observer].vp_public + self.state.players[self.observer].vp_dev
     }
 
-    /// The observer's last committed goal, recorded by the engine after each pre-roll and
-    /// action decision (see `PlayerState::incumbent_goal`). Consumed by the J4 goal-hysteresis
-    /// margin in the goal chooser.
-    pub const fn incumbent_goal(&self) -> Option<Buildable> {
-        self.state.players[self.observer].incumbent_goal
-    }
-
     pub fn dev_count(&self, seat: usize) -> u8 {
         self.state.players[seat].playable_dev.iter().sum::<u8>()
             + self.state.players[seat].bought_dev.iter().sum::<u8>()

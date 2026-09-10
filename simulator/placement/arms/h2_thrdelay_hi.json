@@ -6,15 +6,7 @@
   "expansionWeight": 0.15,
   "robberBlockThreshold": 4,
   "shedWeight": 10.0,
-  "goalNeedWeight": 0.0,
-  "stageExpansionWeight": 0.0,
-  "stageCityWeight": 0.0,
-  "stageUrgencyWeight": 0.0,
-  "slotReturnWeight": 0.0,
-  "costPressureWeight": 0.0,
-  "frontierMix": 0.0,
   "devBuyScale": 1.0,
-  "goalHysteresisMargin": 0.0,
   "threat": {
     "delayWeight": 2.0,
     "needWeight": 0.35,
@@ -73,7 +65,5 @@
     "contestGoalShare": 0.5,
     "armyDefendWeight": 80.0,
     "armyGapHalf": 1.0
-  },
-  "legacyValuation": null,
-  "specialBuild": "uniform"
+  }
 }
