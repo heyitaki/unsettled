@@ -28,10 +28,8 @@ export function transformedViewBox(base: Box, transform: ViewTransform): Box {
 export function clampTransform(
   transform: ViewTransform,
   base: Box,
-  minScale = 1,
-  maxScale = 6,
 ): ViewTransform {
-  const scale = clamp(transform.scale, minScale, maxScale)
+  const scale = clamp(transform.scale, 1, 6)
   const maxTx = Math.max(0, base.width - base.width / scale)
   const maxTy = Math.max(0, base.height - base.height / scale)
   return {

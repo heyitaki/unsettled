@@ -36,14 +36,9 @@ describe('clampTransform', () => {
     expect(clampTransform({ scale: 1, tx: 250, ty: -80 }, base)).toEqual(IDENTITY)
   })
 
-  it('bounds the scale to [1, 6] by default', () => {
+  it('bounds the scale to [1, 6]', () => {
     expect(clampTransform({ scale: 0.2, tx: 0, ty: 0 }, base).scale).toBe(1)
     expect(clampTransform({ scale: 99, tx: 0, ty: 0 }, base).scale).toBe(6)
-  })
-
-  it('honours explicit bounds', () => {
-    expect(clampTransform({ scale: 0.5, tx: 0, ty: 0 }, base, 0.5, 2).scale).toBe(0.5)
-    expect(clampTransform({ scale: 9, tx: 0, ty: 0 }, base, 1, 3).scale).toBe(3)
   })
 
   it('keeps the visible window inside the base box at every edge', () => {

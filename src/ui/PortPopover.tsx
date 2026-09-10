@@ -11,19 +11,14 @@ interface Props {
 
 export function PortPopover({ edgeId, port, onCancel, onDelete, onSave }: Props) {
   const [resource, setResource] = useState<Resource | ''>(port?.resource ?? '')
-  const [rate, setRate] = useState(port?.rate ?? 3)
-  const [error, setError] = useState<string | null>(null)
+  const [rate, setRate] = useState(String(port?.rate ?? 3))
   return (
     <div className="popover-backdrop" role="presentation" onMouseDown={onCancel}>
       <form
         className="port-popover"
         onSubmit={(event) => {
           event.preventDefault()
-          if (!Number.isInteger(rate) || rate < 2) {
-            setError('Enter a whole-number rate of at least 2.')
-            return
-          }
-          onSave(resource || null, rate)
+          onSave(resource || null, Number(rate))
         }}
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -43,9 +38,8 @@ export function PortPopover({ edgeId, port, onCancel, onDelete, onSave }: Props)
         </label>
         <label>
           Rate
-          <input inputMode="numeric" type="number" min="2" max="20" value={rate} onChange={(event) => setRate(Number(event.target.value))} />
+          <input inputMode="numeric" type="number" min="2" max="20" step="1" required value={rate} onChange={(event) => setRate(event.target.value)} />
         </label>
-        {error && <p className="notice warning" role="alert">{error}</p>}
         <div className="popover-actions">
           {port && <button type="button" className="danger" onClick={onDelete}>Delete</button>}
           <span />

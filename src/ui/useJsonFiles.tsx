@@ -6,11 +6,13 @@ import { persistedWorkspace } from './workspaceSync'
 import { firstFreeName } from '../model/names'
 import { downloadBoard, fileTitle, loadedNotice } from './boardFiles'
 import { activeTab, useStore } from './store'
+import type { ContextMenuItem } from './ContextMenu'
+import { ExportGlyph, ImportGlyph } from './glyphs'
 
 /**
  * JSON import and export of boards, shared by the desktop Library panel and the
  * phone's Maps menu. The browser's file picker needs a real `<input type=file>`
- * in the tree, so the hook hands back one to render along with the two actions.
+ * in the tree, so the hook returns it alongside the menu items.
  * `onImported` runs once an import has become a tab.
  */
 export function useJsonFiles({ onImported }: { onImported?: () => void } = {}) {
@@ -75,5 +77,11 @@ export function useJsonFiles({ onImported }: { onImported?: () => void } = {}) {
       }}
     />
   )
-  return { importJson, exportJson, exportLibrary, restoreLibrary, fileInput }
+  const items: ContextMenuItem[] = [
+    { label: 'Import JSON', icon: <ImportGlyph />, onClick: importJson },
+    { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
+    { label: 'Back up library', icon: <ExportGlyph />, onClick: exportLibrary },
+    { label: 'Restore library backup', icon: <ImportGlyph />, onClick: restoreLibrary },
+  ]
+  return { exportJson, items, fileInput }
 }

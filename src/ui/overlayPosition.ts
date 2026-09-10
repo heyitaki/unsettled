@@ -1,9 +1,4 @@
-export interface Rect {
-  width: number
-  height: number
-}
-
-export interface Viewport {
+interface Size {
   width: number
   height: number
 }
@@ -11,8 +6,8 @@ export interface Viewport {
 export function clampToViewport(
   x: number,
   y: number,
-  size: Rect,
-  viewport: Viewport,
+  size: Size,
+  viewport: Size,
   margin = 4,
 ): { left: number; top: number } {
   return {
@@ -23,26 +18,19 @@ export function clampToViewport(
 
 export function placeBelow(
   trigger: { left: number; top: number; bottom: number },
-  size: Rect,
-  viewport: Viewport,
+  size: Size,
+  viewport: Size,
   margin = 4,
-): { left: number; top: number; flipped: boolean } {
+): { left: number; top: number } {
   const spaceBelow = viewport.height - trigger.bottom - margin
   const spaceAbove = trigger.top - margin
-  const flipped = size.height > spaceBelow && spaceAbove > spaceBelow
-  const top = flipped ? trigger.top - size.height : trigger.bottom
-  return { ...clampToViewport(trigger.left, top, size, viewport, margin), flipped }
+  const top = size.height > spaceBelow && spaceAbove > spaceBelow ? trigger.top - size.height : trigger.bottom
+  return clampToViewport(trigger.left, top, size, viewport, margin)
 }
 
-/**
- * Whether a modal or dropdown is up. A DOM query because the popover, the
- * import dialog and every dropdown belong to components the callers know
- * nothing about. Both backdrop classes, because both block: `.popover-backdrop`
- * dims (ConfirmDialog, ImportDialog, PortPopover) and `.menu-backdrop` is
- * invisible but still swallows every click (MenuSelect, ContextMenu).
- */
+/** Whether a modal or dropdown is up, including native top-layer overlays. */
 export const overlayOpen = (): boolean =>
-  document.querySelector('.popover-backdrop, .menu-backdrop') !== null
+  document.querySelector('dialog[open], [popover]:popover-open, .popover-backdrop, .menu-backdrop') !== null
 
 /**
  * Is the keystroke going into a field? Global key handling stays out of the

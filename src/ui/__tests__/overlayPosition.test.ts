@@ -34,23 +34,23 @@ describe('placeBelow', () => {
 
   it('sits under the trigger when there is room', () => {
     const trigger = { left: 40, top: 100, bottom: 130 }
-    expect(placeBelow(trigger, size, viewport)).toEqual({ left: 40, top: 130, flipped: false })
+    expect(placeBelow(trigger, size, viewport)).toEqual({ left: 40, top: 130 })
   })
 
   it('flips above the trigger when the popup is taller than the space below', () => {
     const trigger = { left: 40, top: 640, bottom: 670 }
-    expect(placeBelow(trigger, size, viewport)).toEqual({ left: 40, top: 440, flipped: true })
+    expect(placeBelow(trigger, size, viewport)).toEqual({ left: 40, top: 440 })
   })
 
   it('stays below when flipping would only make it worse, and clamps instead', () => {
     // Taller than the space below, but the space above is smaller still.
     const trigger = { left: 40, top: 120, bottom: 150 }
     const tall = { width: 160, height: 700 }
-    expect(placeBelow(trigger, tall, viewport)).toEqual({ left: 40, top: 96, flipped: false })
+    expect(placeBelow(trigger, tall, viewport)).toEqual({ left: 40, top: 96 })
   })
 
   it('clamps horizontally like any other overlay', () => {
     const trigger = { left: 960, top: 100, bottom: 130 }
-    expect(placeBelow(trigger, size, viewport)).toEqual({ left: 836, top: 130, flipped: false })
+    expect(placeBelow(trigger, size, viewport)).toEqual({ left: 836, top: 130 })
   })
 })

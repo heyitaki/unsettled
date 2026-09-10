@@ -1,23 +1,17 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
-import {
-  addPlayer,
-  movePlayer,
-  removePlayer,
-  renamePlayer,
-  setMe,
-} from '../model/board'
+import { addPlayer } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
 import { inferDraftState } from '../engine/draft'
 import { DraftLabel } from './DraftGrid'
 import { DraftRibbon } from './DraftRibbon'
-import { CounterGlyph, GLYPH_MUTED, GripGlyph, PlusGlyph, ResourceGlyph, StructureGlyph, TrashGlyph } from './glyphs'
-import { InlineRename } from './InlineRename'
+import { CounterGlyph, GLYPH_MUTED, PlusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { RosterRow, RosterTrash } from './RosterRow'
 import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
-import { useRowReorder } from './useRowReorder'
+import { useRoster } from './useRoster'
 import { AwardControls } from './AwardControls'
 
 const RESOURCE_LABELS: Record<Resource, string> = {
@@ -37,7 +31,7 @@ interface TallyColumn {
   value: (standing: PlayerStanding, stats: PlayerStats) => number
   /** Longer per-row tooltip where the bare count leaves something out. */
   detail?: (standing: PlayerStanding) => string
-  /** Marks the count that won a card — the award holder's roads/knights. */
+  /** Marks the count that won a card, the award holder's roads/knights. */
   emphasize?: (standing: PlayerStanding) => boolean
 }
 
@@ -151,7 +145,7 @@ export function PlayerPanel() {
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
   const commitGame = (nextGame: Game) => dispatch({ type: 'commit-game', game: nextGame })
   const standings = computeStandings(game)
-  // The super-city tally only appears once one is on the board — the base game
+  // The super-city tally only appears once one is on the board, the base game
   // never has them, so the column would be noise.
   const showSuperCities = standings.some((standing) => standing.superCities > 0)
   const [view, setView] = useState<TallyView>('pieces')
@@ -160,28 +154,8 @@ export function PlayerPanel() {
     ? RESOURCE_COLUMNS
     : TALLY_COLUMNS.filter((column) => column.key !== 'superCities' || showSuperCities)
 
-  // Dragged from anywhere on the row; only a row being renamed is undraggable,
-  // so the input keeps its text selection. Dropping on the trash row (which only
-  // exists mid-drag) removes the player.
-  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
-  const ids = board.players.map((player) => player.id)
-  const { listRef, dragId, dropTarget, offsetFor, rowProps, startImmediately, listProps } = useRowReorder({
-    coarse,
-    ids,
-    rowSelector: '.roster-row',
-    trashSelector: '.roster-trash',
-    lockedId: editing?.id,
-    onMove: (playerId, index) => commit(movePlayer(board, playerId, index)),
-    onRemove: (playerId) => commit(removePlayer(board, playerId)),
-  })
-  // Committed on Enter or blur rather than on every keystroke, so a rename is
-  // one undo entry.
-  const commitRename = () => {
-    if (!editing) return
-    const next = editing.draft.trim()
-    setEditing(null)
-    if (next) commit(renamePlayer(board, editing.id, next))
-  }
+  const roster = useRoster(board, commit)
+  const { listRef, dragId, listProps } = roster.reorder
   const addSeat = () => {
     const index = board.players.length
     const colors = Object.values(PLAYER_PALETTE)
@@ -252,69 +226,26 @@ export function PlayerPanel() {
           const stats = game.stats[player.id]
           const active = tab.activePlayerId === player.id
           const isMe = board.mePlayerId === player.id
-          const lifted = dragId === player.id
-          const offset = offsetFor(index)
-          const classes = ['roster-row']
-          if (isMe) classes.push('me')
-          if (lifted) classes.push('dragging')
-          else if (dragId !== null && dropTarget?.kind === 'row' && dropTarget.index === index) {
-            classes.push('drag-over')
-          }
           return (
             <Fragment key={player.id}>
-              <div
-                className={classes.join(' ')}
-                // Every row is drawn where the drag currently puts it, over the
-                // row's own transition; the lifted row loses that transition so
-                // it can track a finger.
-                style={offset !== 0 ? { transform: `translateY(${offset}px)` } : undefined}
-                {...rowProps(player.id)}
-              >
-                {/* The claim is the phone's row-wide button (spec S8), not a
-                    handler on the row, so it can be tabbed to and announces
-                    which seat is yours. The row's other controls paint over it. */}
-                <button
-                  type="button"
-                  className="list-row-select"
-                  aria-label={`Claim ${player.name}`}
-                  aria-pressed={isMe}
-                  onClick={() => commit(setMe(board, player.id))}
-                />
-                <span
-                  className="roster-grip"
-                  aria-hidden="true"
-                  onPointerDown={(event) => startImmediately(event, player.id)}
-                >
-                  <GripGlyph />
-                </span>
-                <button
-                  className="swatch"
-                  type="button"
-                  title={active ? 'Deselect this player' : 'Use this player for new pieces'}
-                  aria-label={`Use ${player.name} for new pieces`}
-                  aria-pressed={active}
-                  style={{ background: player.color }}
-                  onClick={() => {
-                    // The brush is not the claim (spec DB3): this picks the
-                    // player new pieces are painted with. It toggles like the
-                    // tool palette, so board clicks can place nothing.
-                    dispatch({ type: 'active-player', playerId: active ? null : player.id })
-                  }}
-                />
-                <span className="list-row-main">
-                  <InlineRename
-                    name={player.name}
-                    draft={editing?.id === player.id ? editing.draft : null}
-                    onDraft={(draft) => setEditing({ id: player.id, draft })}
-                    onStart={() => setEditing({ id: player.id, draft: player.name })}
-                    onCommit={commitRename}
-                    onCancel={() => setEditing(null)}
+              <RosterRow
+                player={player}
+                index={index}
+                roster={roster}
+                swatch={
+                  <button
+                    className="swatch"
+                    type="button"
+                    title={active ? 'Deselect this player' : 'Use this player for new pieces'}
+                    aria-label={`Use ${player.name} for new pieces`}
+                    aria-pressed={active}
+                    style={{ background: player.color }}
+                    onClick={() => {
+                      dispatch({ type: 'active-player', playerId: active ? null : player.id })
+                    }}
                   />
-                  {/* Awards sit beside the name, not in the tally columns: they
-                      are worth +2 VP each and would otherwise break the table's
-                      alignment on the rows that hold them. */}
-                  {/* No badge for longest road: the bolded run in its column says
-                      who holds it, and the pill's road glyph read as a slash. */}
+                }
+                awards={
                   <span className="player-awards">
                     {standing.hasLargestArmy && (
                       <span
@@ -326,8 +257,8 @@ export function PlayerPanel() {
                       </span>
                     )}
                   </span>
-                </span>
-                <span className={isMe ? 'you-chip' : 'you-chip none'}>You</span>
+                }
+              >
                 <div className="player-tally">
                   {columns.map((column) => {
                     const count = column.value(standing, stats)
@@ -369,7 +300,7 @@ export function PlayerPanel() {
                     {standing.victoryPoints}
                   </span>
                 )}
-              </div>
+              </RosterRow>
               {active && (
                 <div className="player-steppers">
                   {RESOURCES.map((resource) => (
@@ -409,14 +340,7 @@ export function PlayerPanel() {
             </Fragment>
           )
         })}
-        {/* Only exists mid-drag: removing a player is rare enough that it does
-            not deserve permanent UI, and the drag is already in the hand. */}
-        {dragId !== null && board.players.length > 1 && (
-          <div className={dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}>
-            <TrashGlyph />
-            Drop here to remove
-          </div>
-        )}
+        <RosterTrash roster={roster} playerCount={board.players.length} />
         <button type="button" className="list-add" disabled={board.players.length >= 6} onClick={addSeat}>
           <PlusGlyph />
           Add player

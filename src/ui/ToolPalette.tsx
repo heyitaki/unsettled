@@ -1,16 +1,12 @@
 import { useState } from 'react'
-import { clearBoard, randomizeBoard } from '../model/board'
+import { boardMenu } from './boardMenu'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
-import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+import { ContextMenu } from './ContextMenu'
 import {
-  ClearBoardGlyph,
-  DiceGlyph,
   DotsGlyph,
   GLYPH_MUTED,
-  RedoGlyph,
   StructureGlyph,
-  UndoGlyph,
   type StructureShape,
 } from './glyphs'
 import { activeTab, useStore, type Tool } from './store'
@@ -115,24 +111,8 @@ export function ToolGroups() {
 export function ToolPalette() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
-  const history: ContextMenuItem[] = [
-    { label: 'Undo', icon: <UndoGlyph />, disabled: tab.past.length === 0, onClick: () => dispatch({ type: 'undo' }) },
-    { label: 'Redo', icon: <RedoGlyph />, disabled: tab.future.length === 0, onClick: () => dispatch({ type: 'redo' }) },
-  ]
-  const items: ContextMenuItem[] = [
-    {
-      label: 'Randomize board',
-      icon: <DiceGlyph />,
-      onClick: () => dispatch({ type: 'commit', board: randomizeBoard(tab.game.board) }),
-    },
-    {
-      label: 'Clear board',
-      icon: <ClearBoardGlyph />,
-      danger: true,
-      onClick: () => dispatch({ type: 'commit', board: clearBoard(tab.game.board) }),
-    },
-  ]
+  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
+  const { history, items } = boardMenu(tab, dispatch)
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -145,24 +125,20 @@ export function ToolPalette() {
           className="panel-dots"
           aria-label="Board options"
           aria-haspopup="menu"
-          aria-expanded={menuAt !== null}
-          onClick={(event) => {
-            const rect = event.currentTarget.getBoundingClientRect()
-            setMenuAt({ x: rect.right, y: rect.bottom + 4 })
-          }}
+          aria-expanded={menuTrigger !== null}
+          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
         >
           <DotsGlyph />
         </button>
       </div>
       <ToolGroups />
-      {menuAt && (
+      {menuTrigger && (
         <ContextMenu
           ariaLabel="Board options"
-          x={menuAt.x}
-          y={menuAt.y}
+          trigger={menuTrigger}
           history={history}
           items={items}
-          onClose={() => setMenuAt(null)}
+          onClose={() => setMenuTrigger(null)}
         />
       )}
     </section>

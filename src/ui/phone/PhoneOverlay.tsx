@@ -18,14 +18,14 @@ export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
   children: ReactNode
 }) {
   const ref = useRef<HTMLElement>(null)
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   // Held in a ref so the window listener binds once across re-renders.
   const close = useRef(onClose)
   useLayoutEffect(() => { close.current = onClose })
   useEffect(() => {
     ref.current?.focus({ preventScroll: true })
     // Capture phase, so a menu or dialog open over the screen sees Escape first
-    // and this listener still finds its backdrop in the DOM and leaves the key
+    // and this listener still finds the open overlay and leaves the key
     // to it. A rename field keeps Escape for its own revert.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || overlayOpen() || isTextEntry(document.activeElement)) return
@@ -46,25 +46,20 @@ export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
           className={menu ? 'phone-ohead-btn' : 'phone-ohead-btn invisible'}
           aria-label={menuLabel}
           aria-haspopup="menu"
-          aria-expanded={menuAt !== null}
-          onClick={(event) => {
-            // Hung from the button's bottom-right corner, clear of its round hit area.
-            const rect = event.currentTarget.getBoundingClientRect()
-            setMenuAt({ x: rect.right + 2, y: rect.bottom + 4 })
-          }}
+          aria-expanded={menuTrigger !== null}
+          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
         >
           <DotsGlyph />
         </button>
       </div>
       <div className="phone-overlay-body">{children}</div>
-      {menuAt && menu && menuLabel && (
+      {menuTrigger && menu && menuLabel && (
         <ContextMenu
           ariaLabel={menuLabel}
-          x={menuAt.x}
-          y={menuAt.y}
+          trigger={menuTrigger}
           className="sheet-menu-narrow"
           items={menu}
-          onClose={() => setMenuAt(null)}
+          onClose={() => setMenuTrigger(null)}
         />
       )}
     </section>

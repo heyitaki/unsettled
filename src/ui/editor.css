@@ -110,10 +110,14 @@ button.selected.danger { color: #fff; }
 /* Where the arrow keys are, which is not the same as the selected value. */
 .menu-popup button.keyboard-active { outline: 2px solid var(--accent-dark); outline-offset: -2px; }
 .menu-popup:not(:focus-visible) button.keyboard-active { outline: 0; }
-/* The dots menus (spec S1, S7, D1): a sheet hung from the button it grew out of,
-   with a tail pointing back at it, pinned to the viewport because ContextMenu
-   supplies its left/top. The board's carries undo and redo as a pair above the list. */
-.sheet-menu { position: fixed; width: 216px; min-width: 0; overflow: visible; display: flex; flex-direction: column; gap: 0; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-light); box-shadow: 0 18px 44px rgba(62, 45, 21, .26), 0 1px 0 rgba(255, 255, 255, .8) inset; }
+
+/* S1/S7/D1: dots menus hang below their trigger, with the board's undo/redo pair above the list. */
+.sheet-menu { position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + var(--menu-gap, 4px)); right: max(4px, calc(anchor(right) - var(--menu-nudge, 0px))); margin: 0; color: var(--ink); width: 216px; min-width: 0; overflow: visible; display: flex; flex-direction: column; gap: 0; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper-light); box-shadow: 0 18px 44px rgba(62, 45, 21, .26), 0 1px 0 rgba(255, 255, 255, .8) inset; }
+
+/* The author display:flex overrides the UA rule that hides closed popovers. */
+.sheet-menu:not(:popover-open) { display: none; }
+.phone-head .sheet-menu { --menu-gap: 0px; }
+.phone-overlay .sheet-menu { --menu-nudge: 2px; }
 .sheet-menu .menu-tail { position: absolute; top: -5px; right: 16px; width: 10px; height: 10px; border: 1px solid var(--line); border-width: 1px 0 0 1px; background: var(--paper-light); transform: rotate(45deg); }
 .sheet-menu .menu-history { position: relative; display: flex; gap: 4px; margin-bottom: 11px; padding: 3px; border-radius: 12px; background: var(--paper-deep); }
 .sheet-menu .menu-history::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px; border-top: 1px solid var(--line); }
@@ -310,16 +314,18 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .issue-list .unreadable { border-color: #d99372; background: #fff0e5; }
 
 .popover-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(29, 25, 20, .34); backdrop-filter: blur(3px); }
+.modal-dialog { max-width: none; max-height: calc(100% - 30px); margin: auto; padding: 0; border: 0; border-radius: 16px; color: var(--ink); background: transparent; overflow: auto; box-shadow: 0 25px 80px rgba(0,0,0,.28); }
+.modal-dialog::backdrop { background: rgba(29, 25, 20, .34); backdrop-filter: blur(3px); }
 .port-popover { width: min(360px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.28); }
 .port-popover h3 { margin: 3px 0 6px; font: 700 24px Georgia, serif; }
 .port-popover code { display: block; margin-bottom: 15px; color: var(--muted); font-size: 10px; }
 .port-popover label { display: grid; gap: 5px; margin: 9px 0; font-size: 11px; font-weight: 700; }
 .popover-actions { display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px; margin-top: 17px; }
-.confirm-dialog { width: min(430px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.28); }
+.confirm-dialog { width: min(430px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); }
 .confirm-dialog h3 { margin: 3px 0 8px; font: 700 24px Georgia, serif; }
 .confirm-dialog p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; }
-.import-dialog { width: min(420px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); box-shadow: 0 25px 80px rgba(0,0,0,.28); }
+.import-dialog { width: min(420px, calc(100vw - 30px)); padding: 22px; border: 1px solid #fff; border-radius: 16px; background: var(--paper); }
 .import-dialog h3 { margin: 3px 0 12px; font: 700 22px Georgia, serif; }
 .import-dialog .drop-zone { padding: 26px 16px; }
 .import-dialog .issue-list { margin-top: 12px; }

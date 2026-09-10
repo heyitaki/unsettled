@@ -1,5 +1,3 @@
-import type { ContextMenuItem } from '../ContextMenu'
-import { ExportGlyph, ImportGlyph } from '../glyphs'
 import { LibraryLists } from '../LibraryLists'
 import { useJsonFiles } from '../useJsonFiles'
 import { PhoneOverlay } from './PhoneOverlay'
@@ -10,15 +8,9 @@ import { PhoneOverlay } from './PhoneOverlay'
  * Rename, delete and sort keep it open.
  */
 export function MapsScreen({ onClose }: { onClose: () => void }) {
-  const { importJson, exportJson, exportLibrary, restoreLibrary, fileInput } = useJsonFiles({ onImported: onClose })
-  const menu: ContextMenuItem[] = [
-    { label: 'Import JSON', icon: <ImportGlyph />, onClick: importJson },
-    { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
-    { label: 'Back up library', icon: <ExportGlyph />, onClick: exportLibrary },
-    { label: 'Restore library backup', icon: <ImportGlyph />, onClick: restoreLibrary },
-  ]
+  const { items, fileInput } = useJsonFiles({ onImported: onClose })
   return (
-    <PhoneOverlay title="Maps" menu={menu} menuLabel="Import and export files" onClose={onClose}>
+    <PhoneOverlay title="Maps" menu={items} menuLabel="Import and export files" onClose={onClose}>
       <LibraryLists onNavigate={onClose} />
       {fileInput}
     </PhoneOverlay>

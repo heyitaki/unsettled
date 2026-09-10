@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { clearBoard, randomizeBoard } from '../../model/board'
+import { boardMenu } from '../boardMenu'
 import { boardColor } from '../boardColor'
 import { Brand } from '../Brand'
-import { ContextMenu, type ContextMenuItem } from '../ContextMenu'
+import { ContextMenu } from '../ContextMenu'
 import {
   BoardHexGlyph,
   ChevronGlyph,
-  ClearBoardGlyph,
-  DiceGlyph,
   DotsGlyph,
   ExportGlyph,
   PencilGlyph,
-  RedoGlyph,
-  UndoGlyph,
 } from '../glyphs'
 import { activeTab, useStore } from '../store'
 import { useJsonFiles } from '../useJsonFiles'
@@ -33,7 +29,7 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
   const tab = activeTab(state)
   const { board } = tab.game
   const { exportJson } = useJsonFiles()
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const brandRef = useRef<HTMLDivElement>(null)
   const headRef = useRef<HTMLElement>(null)
@@ -55,34 +51,8 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
     observer.observe(brand)
     return () => observer.disconnect()
   }, [])
-  const history: ContextMenuItem[] = [
-    {
-      label: 'Undo',
-      icon: <UndoGlyph />,
-      disabled: tab.past.length === 0,
-      onClick: () => dispatch({ type: 'undo' }),
-    },
-    {
-      label: 'Redo',
-      icon: <RedoGlyph />,
-      disabled: tab.future.length === 0,
-      onClick: () => dispatch({ type: 'redo' }),
-    },
-  ]
-  const items: ContextMenuItem[] = [
-    {
-      label: 'Randomize board',
-      icon: <DiceGlyph />,
-      onClick: () => dispatch({ type: 'commit', board: randomizeBoard(board) }),
-    },
-    { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
-    {
-      label: 'Clear board',
-      icon: <ClearBoardGlyph />,
-      danger: true,
-      onClick: () => dispatch({ type: 'commit', board: clearBoard(board) }),
-    },
-  ]
+  const { history, items } = boardMenu(tab, dispatch)
+  items.splice(1, 0, { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson })
   return (
     <>
       <div className="phone-brand" ref={brandRef}>
@@ -124,23 +94,18 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
           className="phone-icon-btn"
           aria-label="Board options"
           aria-haspopup="menu"
-          aria-expanded={menuAt !== null}
-          onClick={(event) => {
-            // Hung from the button's bottom-right corner, its tail pointing back up at it.
-            const rect = event.currentTarget.getBoundingClientRect()
-            setMenuAt({ x: rect.right, y: rect.bottom })
-          }}
+          aria-expanded={menuTrigger !== null}
+          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
         >
           <DotsGlyph />
         </button>
-        {menuAt && (
+        {menuTrigger && (
           <ContextMenu
             ariaLabel="Board options"
-            x={menuAt.x}
-            y={menuAt.y}
+            trigger={menuTrigger}
             history={history}
             items={items}
-            onClose={() => setMenuAt(null)}
+            onClose={() => setMenuTrigger(null)}
           />
         )}
       </header>

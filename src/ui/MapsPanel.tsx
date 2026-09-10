@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ContextMenu, type ContextMenuItem } from './ContextMenu'
-import { DotsGlyph, ExportGlyph, ImportGlyph } from './glyphs'
+import { ContextMenu } from './ContextMenu'
+import { DotsGlyph } from './glyphs'
 import { LibraryLists } from './LibraryLists'
 import { useJsonFiles } from './useJsonFiles'
 
@@ -10,14 +10,8 @@ import { useJsonFiles } from './useJsonFiles'
  * Maps screen in a panel, so everything below the heading is `LibraryLists`.
  */
 export function MapsPanel() {
-  const { importJson, exportJson, exportLibrary, restoreLibrary, fileInput } = useJsonFiles()
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
-  const items: ContextMenuItem[] = [
-    { label: 'Import JSON', icon: <ImportGlyph />, onClick: importJson },
-    { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson },
-    { label: 'Back up library', icon: <ExportGlyph />, onClick: exportLibrary },
-    { label: 'Restore library backup', icon: <ImportGlyph />, onClick: restoreLibrary },
-  ]
+  const { items, fileInput } = useJsonFiles()
+  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   return (
     <section className="panel maps-panel">
       <div className="panel-heading">
@@ -30,25 +24,20 @@ export function MapsPanel() {
           className="panel-dots"
           aria-label="Import and export files"
           aria-haspopup="menu"
-          aria-expanded={menuAt !== null}
-          onClick={(event) => {
-            // Hung from the button's bottom-right corner, its tail pointing back up at it.
-            const rect = event.currentTarget.getBoundingClientRect()
-            setMenuAt({ x: rect.right, y: rect.bottom + 4 })
-          }}
+          aria-expanded={menuTrigger !== null}
+          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
         >
           <DotsGlyph />
         </button>
       </div>
       <LibraryLists />
       {fileInput}
-      {menuAt && (
+      {menuTrigger && (
         <ContextMenu
           ariaLabel="Import and export files"
-          x={menuAt.x}
-          y={menuAt.y}
+          trigger={menuTrigger}
           items={items}
-          onClose={() => setMenuAt(null)}
+          onClose={() => setMenuTrigger(null)}
         />
       )}
     </section>

@@ -10,9 +10,6 @@ import {
 import { ChevronGlyph, TickGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 
-/** How long a typed prefix keeps accumulating before the next key starts over. */
-const TYPEAHEAD_RESET_MS = 500
-
 /** The active option's id, stable per position so aria-activedescendant can name it. */
 const optionId = (baseId: string, index: number) => `${baseId}-option-${index}`
 
@@ -23,11 +20,10 @@ const optionId = (baseId: string, index: number) => `${baseId}-option-${index}`
  * and the analysis panel's "You are …" selector so both look identical.
  *
  * Keyboard: the popup itself takes focus and holds the single tab stop, moving
- * an `aria-activedescendant` marker rather than focus between options — so the
+ * an `aria-activedescendant` marker rather than focus between options, so the
  * options are not tab stops, and a screen reader announces the active one
  * without the listbox losing its own identity. Arrows clamp at the ends the way
- * a native `<select>` does; only typeahead wraps, since a prefix search that
- * stopped at the last option would be unable to find half the list.
+ * a native `<select>` does.
  */
 export function MenuSelect<T extends string>({
   ariaLabel,
@@ -58,7 +54,6 @@ export function MenuSelect<T extends string>({
   const wrapRef = useRef<HTMLSpanElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
-  const typed = useRef({ prefix: '', at: 0 })
   const [at, setAt] = useState<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
     if (!open) {
@@ -103,7 +98,7 @@ export function MenuSelect<T extends string>({
     const option = document.getElementById(optionId(baseId, active))
     if (!popup || !option) return
     // Scrolled by hand rather than with scrollIntoView, which also scrolls every
-    // ancestor — including the page under a popup that sits near a screen edge.
+    // ancestor, including the page under a popup that sits near a screen edge.
     // offsetTop is measured from .menu-popup itself (it is position: absolute,
     // so it is the options' offsetParent) and shares scrollTop's origin.
     const top = option.offsetTop
@@ -114,18 +109,13 @@ export function MenuSelect<T extends string>({
 
   const selectedIndex = options.findIndex((option) => option.value === value)
   const clamp = (index: number) => Math.min(Math.max(index, 0), options.length - 1)
-  const resetTypeahead = () => {
-    typed.current = { prefix: '', at: 0 }
-  }
   const openAt = (index: number) => {
-    resetTypeahead()
     setActiveIndex(clamp(index))
     setOpen(true)
   }
   const close = () => {
-    resetTypeahead()
     setOpen(false)
-    // Focus always lands back on the trigger, whichever way the menu closed —
+    // Focus always lands back on the trigger, whichever way the menu closed,
     // selection, Escape, backdrop click. For Tab this runs *without* stopping
     // the default action, so the browser walks on from the trigger as if the
     // menu had never been open.
@@ -138,51 +128,22 @@ export function MenuSelect<T extends string>({
     close()
     if (option) onSelect(option.value)
   }
-  /**
-   * Extends the live prefix by one character and returns where it points, or -1
-   * when nothing starts with it. A keystroke that matches nothing is discarded
-   * whole — neither the prefix nor its clock moves — so one typo cannot make the
-   * rest of the list unreachable, nor hold the buffer alive by refreshing it.
-   */
-  const typeaheadTarget = (char: string) => {
-    if (options.length === 0) return -1
-    const now = Date.now()
-    const stale = now - typed.current.at > TYPEAHEAD_RESET_MS
-    const prefix = (stale ? '' : typed.current.prefix) + char.toLowerCase()
-    // A single character steps to the *next* match so repeating it cycles the
-    // options sharing an initial; a longer prefix re-tests the active one first.
-    const from = prefix.length === 1 ? active + 1 : Math.max(active, 0)
-    for (let step = 0; step < options.length; step += 1) {
-      const index = (from + step) % options.length
-      if (options[index]?.label.toLowerCase().startsWith(prefix)) {
-        typed.current = { prefix, at: now }
-        return index
-      }
-    }
-    return -1
-  }
   const onPopupKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
-      // Moving the marker abandons the prefix: the next letter starts a fresh
-      // search from wherever the arrows left off, not from a dead prefix.
       case 'ArrowDown':
         event.preventDefault()
-        resetTypeahead()
         setActiveIndex(clamp(active + 1))
         return
       case 'ArrowUp':
         event.preventDefault()
-        resetTypeahead()
         setActiveIndex(clamp(active - 1))
         return
       case 'Home':
         event.preventDefault()
-        resetTypeahead()
         setActiveIndex(clamp(0))
         return
       case 'End':
         event.preventDefault()
-        resetTypeahead()
         setActiveIndex(clamp(options.length - 1))
         return
       case 'Escape':
@@ -193,25 +154,11 @@ export function MenuSelect<T extends string>({
         close()
         return
       case 'Enter':
+      case ' ':
         event.preventDefault()
         choose(active)
         return
-      case ' ': {
-        event.preventDefault()
-        // Space is a typeahead character only where it continues a live prefix
-        // into a multi-word label ("Player two"). Anywhere else — including a
-        // prefix it cannot extend — it selects, the way a native select does.
-        const target = typeaheadTarget(' ')
-        if (target >= 0) setActiveIndex(target)
-        else choose(active)
-        return
-      }
     }
-    if (event.key.length !== 1 || event.altKey || event.ctrlKey || event.metaKey) return
-    // Held back from the page, where / would open quick-find.
-    event.preventDefault()
-    const target = typeaheadTarget(event.key)
-    if (target >= 0) setActiveIndex(target)
   }
 
   return (

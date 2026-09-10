@@ -1,13 +1,11 @@
-import { useState } from 'react'
 import { computeStandings } from '../../engine/stats'
-import { addPlayer, movePlayer, removePlayer, renamePlayer, setMe } from '../../model/board'
+import { addPlayer } from '../../model/board'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { DraftGrid } from '../DraftGrid'
-import { GripGlyph, PlusGlyph, TrashGlyph } from '../glyphs'
-import { InlineRename } from '../InlineRename'
+import { PlusGlyph } from '../glyphs'
+import { RosterRow, RosterTrash } from '../RosterRow'
 import { activeTab, useStore } from '../store'
-import { useCoarsePointer } from '../useMediaQuery'
-import { useRowReorder } from '../useRowReorder'
+import { useRoster } from '../useRoster'
 import { PhoneOverlay } from './PhoneOverlay'
 import { AwardControls } from '../AwardControls'
 
@@ -19,28 +17,12 @@ import { AwardControls } from '../AwardControls'
  */
 export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useStore()
-  const coarse = useCoarsePointer()
   const { game } = activeTab(state)
   const { board } = game
   const commit = (next: Board) => dispatch({ type: 'commit', board: next })
   const standings = computeStandings(game)
-  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null)
-  const ids = board.players.map((player) => player.id)
-  const reorder = useRowReorder({
-    coarse,
-    ids,
-    rowSelector: '.roster-row',
-    trashSelector: '.roster-trash',
-    lockedId: editing?.id,
-    onMove: (id, index) => commit(movePlayer(board, id, index)),
-    onRemove: (id) => commit(removePlayer(board, id)),
-  })
-  const commitRename = () => {
-    if (!editing) return
-    const next = editing.draft.trim()
-    setEditing(null)
-    if (next) commit(renamePlayer(board, editing.id, next))
-  }
+  const roster = useRoster(board, commit)
+  const { reorder } = roster
   const add = () => {
     const index = board.players.length
     const colors = Object.values(PLAYER_PALETTE)
@@ -57,67 +39,14 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           ref={reorder.listRef}
           {...reorder.listProps}
         >
-          {board.players.map((player, index) => {
-            const me = board.mePlayerId === player.id
-            const lifted = reorder.dragId === player.id
-            const offset = reorder.offsetFor(index)
-            const classes = ['roster-row']
-            if (me) classes.push('me')
-            if (lifted) classes.push('dragging')
-            else if (reorder.dragId !== null
-              && reorder.dropTarget?.kind === 'row' && reorder.dropTarget.index === index) {
-              classes.push('drag-over')
-            }
-            return (
-              <div
-                key={player.id}
-                className={classes.join(' ')}
-                // Every row is drawn where the drag currently puts it, over the
-                // row's own transition; the lifted row loses that transition so
-                // it can track a finger.
-                style={offset !== 0 ? { transform: `translateY(${offset}px)` } : undefined}
-                {...reorder.rowProps(player.id)}
-              >
-                <button
-                  type="button"
-                  className="list-row-select"
-                  aria-label={`Claim ${player.name}`}
-                  aria-pressed={me}
-                  onClick={() => commit(setMe(board, player.id))}
-                />
-                <span
-                  className="roster-grip"
-                  aria-hidden="true"
-                  onPointerDown={(event) => reorder.startImmediately(event, player.id)}
-                >
-                  <GripGlyph />
-                </span>
-                <span className="swatch" style={{ background: player.color }} />
-                <span className="list-row-main">
-                  <InlineRename
-                    name={player.name}
-                    draft={editing?.id === player.id ? editing.draft : null}
-                    onDraft={(draft) => setEditing({ id: player.id, draft })}
-                    onStart={() => setEditing({ id: player.id, draft: player.name })}
-                    onCommit={commitRename}
-                    onCancel={() => setEditing(null)}
-                  />
-                </span>
-                <span className={me ? 'you-chip' : 'you-chip none'}>You</span>
-                <span className="roster-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
-                  {standings[index].victoryPoints}
-                </span>
-              </div>
-            )
-          })}
-          {/* Only exists mid-drag: removing a player is rare enough that it does
-              not deserve permanent UI, and the drag is already in the hand. */}
-          {reorder.dragId !== null && board.players.length > 1 && (
-            <div className={reorder.dropTarget?.kind === 'trash' ? 'roster-trash over' : 'roster-trash'}>
-              <TrashGlyph />
-              Drop here to remove
-            </div>
-          )}
+          {board.players.map((player, index) => (
+            <RosterRow key={player.id} player={player} index={index} roster={roster}>
+              <span className="roster-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
+                {standings[index].victoryPoints}
+              </span>
+            </RosterRow>
+          ))}
+          <RosterTrash roster={roster} playerCount={board.players.length} />
           <button type="button" className="list-add" disabled={board.players.length >= 6} onClick={add}>
             <PlusGlyph />
             Add player

@@ -30,22 +30,17 @@ export function sortMaps(maps: readonly ListedMap[], sortKey: SortKey): ListedMa
 export const stampFor = (map: ListedMap, sortKey: SortKey): number | undefined =>
   sortKey === 'name' ? map.modifiedAt : map[sortKey]
 
-// Compact "3m ago" / "2d ago" so a row's timestamp fits the narrow rail.
+const UNITS: [number, string][] = [
+  [604800, 'w'],
+  [86400, 'd'],
+  [3600, 'h'],
+  [60, 'm'],
+]
+
+// Compact timestamps fit the narrow rail.
 export function relativeTime(ts: number, now = Date.now()): string {
   const seconds = Math.round((now - ts) / 1000)
   if (seconds < 45) return 'just now'
-  const units: [number, string][] = [
-    [60, 'm'],
-    [3600, 'h'],
-    [86400, 'd'],
-    [604800, 'w'],
-  ]
-  let value = seconds
-  let suffix = 's'
-  for (const [size, label] of units) {
-    if (seconds < size) break
-    value = Math.floor(seconds / size)
-    suffix = label
-  }
-  return `${value}${suffix} ago`
+  const [size, suffix] = UNITS.find(([n]) => seconds >= n) ?? [1, 's']
+  return `${Math.floor(seconds / size)}${suffix} ago`
 }

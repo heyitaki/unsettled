@@ -773,6 +773,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         style={{ touchAction: 'pan-y' }}
         viewBox={`${renderedViewBox.x} ${renderedViewBox.y} ${renderedViewBox.width} ${renderedViewBox.height}`}
         aria-label="Editable Catan board"
+        onPointerDownCapture={() => {
+          if (overlayOpen()) suppressClick.current = true
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(event) => endPointer(event, false)}
@@ -879,10 +882,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
             setEditingPort(null)
           }}
           onSave={(resource, rate) => {
-            if (!Number.isInteger(rate) || rate < 2) {
-              dispatch({ type: 'notice', message: 'Port rates must be whole numbers of at least 2.' })
-              return
-            }
             commit(upsertPort(board, editingPort, resource, rate))
             setEditingPort(null)
           }}
