@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBoard, setTile } from '../../model/board'
+import { createBoard } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { newGame, type Game } from '../../model/game'
 import { MAX_MAPS, deleteMap, listMaps, loadMap, saveMap } from '../../persistence/localStorage'
 import { createLibraryAutosave } from '../libraryAutosave'

@@ -4,10 +4,10 @@ import {
   createBoard,
   placeBuilding,
   setMe,
-  setTile,
   upsertPort,
   vertexProduction,
 } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { edgeEndpointVertexIds, hexVertexIds, vertexIncidentEdgeIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Resource, type VertexId } from '../../model/types'

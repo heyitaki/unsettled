@@ -1,4 +1,4 @@
-import { axialKey, neighbor, parseAxialKey, vertexAdjacentVertexIds, vertexTouchingHexes } from './coords'
+import { axialKey, neighbor, parseAxialKey, parseVertexId, vertexAdjacentVertexIds } from './coords'
 import { newId } from './ids'
 import { boardGrid, defaultPortEdges, NUMBER_TOKEN_COUNTS } from './layouts'
 import {
@@ -176,16 +176,6 @@ export function setHexTile(board: Board, coord: AxialCoord, tile: TileKind | nul
   }))
 }
 
-export function setTile(
-  board: Board,
-  coord: AxialCoord,
-  tile: TileKind | null,
-  numberToken: number | null = null,
-): Board {
-  const withTile = setHexTile(board, coord, tile)
-  return setNumberToken(withTile, coord, tile === 'desert' ? null : numberToken)
-}
-
 export function setNumberToken(board: Board, coord: AxialCoord, numberToken: number | null): Board {
   if (numberToken !== null && (!Number.isInteger(numberToken) || numberToken < 2 || numberToken > 12 || numberToken === 7)) {
     throw new RangeError('Number tokens must be 2 through 12, excluding 7')
@@ -334,16 +324,15 @@ export const isBlank = (board: Board): boolean => {
 export const clearBoard = (board: Board): Board =>
   isBlank(board) ? board : setLayout(board, board.layout)
 
-export function draftOrder(board: Board, rounds = 2): string[] {
-  return Array.from({ length: Math.max(0, rounds) }, (_, round) =>
-    round % 2 === 0 ? board.players.map((player) => player.id) : [...board.players].reverse().map((player) => player.id),
-  ).flat()
+export function draftOrder(board: Board): string[] {
+  const order = board.players.map((player) => player.id)
+  return order.concat([...order].reverse())
 }
 
 export const pips = (token: number | null): number => token === null ? 0 : Math.max(0, 6 - Math.abs(7 - token))
 
 export function vertexProduction(board: Board, vertexId: VertexId): Partial<Record<Resource, number>> {
-  const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
+  const touching = new Set(parseVertexId(vertexId).map(axialKey))
   const result: Partial<Record<Resource, number>> = {}
   for (const hex of board.hexes) {
     if (!touching.has(axialKey(hex.coord)) || !hex.tile || hex.tile === 'desert') continue

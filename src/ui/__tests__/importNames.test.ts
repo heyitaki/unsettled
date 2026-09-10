@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, renamePlayer, setMe, setTile } from '../../model/board'
+import { addPlayer, createBoard, renamePlayer, setMe } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { newGame } from '../../model/game'
 import { reducer, type StoreState, type TabState } from '../store'
 

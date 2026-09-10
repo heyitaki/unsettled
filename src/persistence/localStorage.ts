@@ -11,7 +11,7 @@ export const WORKSPACE_CORRUPT_KEY = `${WORKSPACE_KEY}.corrupt`
 
 export interface ListedMap {
   // Stable identity, minted on first write and preserved across renames and
-  // overwrites. Null for entries with no usable id.
+  // updates. Null for entries with no usable id.
   id: string | null
   // Position in the stored array, including entries with no usable id.
   index: number
@@ -214,24 +214,14 @@ function evictBeyondCap(maps: unknown[], kept: ReadonlySet<string>): { maps: unk
   return { maps: maps.filter((_, index) => !dropped.has(index)), evicted }
 }
 
-/**
- * Write `game` under `name`, returning the id of the entry it landed in.
- * A fresh entry that takes the library past MAX_MAPS evicts the coldest ones;
- * an overwrite never grows the library, so it never evicts.
- * Overwriting an existing name keeps that entry's id, so a tab linked to the
- * map stays linked; a fresh name mints a new id.
- */
-export function saveMap(name: string, game: Game, overwrite = false, keep: ReadonlySet<string> = new Set()): SaveMapResult {
+/** A new map beyond MAX_MAPS evicts the least recently touched entries. */
+export function saveMap(name: string, game: Game, keep: ReadonlySet<string> = new Set()): SaveMapResult {
   if (name.length === 0) return { ok: false, error: 'Map name cannot be empty' }
-  const maps = [...readRawMaps().entries]
-  const index = maps.findIndex((entry) => isNamedMapEntry(entry) && entry.name === name)
-  if (index >= 0 && !overwrite) return { ok: false, error: 'A map with this name already exists' }
-  const entry = mapEntry(name, game, index >= 0 && isRecord(maps[index]) ? maps[index] : null)
-  if (index >= 0) {
-    maps[index] = entry
-    const result = writeMaps(maps)
-    return result.ok ? { ok: true, id: entry.id } : result
+  const maps = readRawMaps().entries
+  if (maps.some((entry) => isNamedMapEntry(entry) && entry.name === name)) {
+    return { ok: false, error: 'A map with this name already exists' }
   }
+  const entry = mapEntry(name, game, null)
   const capped = evictBeyondCap([...maps, entry], new Set([...keep, entry.id]))
   const result = writeMaps(capped.maps)
   if (!result.ok) return result

@@ -21,7 +21,7 @@ describe('parsed game persistence', () => {
     if (!parsed.ok) return
 
     expect(parseGame(serializeGame(parsed.game))).toEqual({ ok: true, game: parsed.game })
-    const saved = saveMap('parsed', parsed.game, true)
+    const saved = saveMap('parsed', parsed.game)
     expect(saved.ok).toBe(true)
     if (!saved.ok) return
     expect(loadMap(saved.id)).toEqual({ ok: true, game: parsed.game })

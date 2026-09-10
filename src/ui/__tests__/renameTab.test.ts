@@ -7,7 +7,7 @@ import { renameTab } from '../useRenameTab'
 import type { StoreAction, TabState } from '../store'
 
 const savedId = (name: string): string => {
-  const result = saveMap(name, newGame(createBoard('standard4')), true)
+  const result = saveMap(name, newGame(createBoard('standard4')))
   if (!result.ok) throw new Error(result.error)
   return result.id
 }

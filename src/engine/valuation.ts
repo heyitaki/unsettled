@@ -1,4 +1,4 @@
-import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
+import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'
 import { pips, vertexProduction } from '../model/board'
 import { boardGrid } from '../model/layouts'
 import {
@@ -163,7 +163,7 @@ const boardOccupancies = new WeakMap<Board, BoardPieces>()
  * placed. `blocked` holds the occupied vertices themselves, not the ones the distance rule bars
  * building on, so a walk can tell a settlement apart from its neighbour.
  *
- * The pieces are memoized on board identity, the same key `analyzeBoardCached` uses: boards are
+ * The pieces are memoized on board identity: boards are
  * immutable, every edit is a new object, and a rollout asks the same board for this once per
  * window. Only the seat wrapper around them is rebuilt per caller.
  */
@@ -336,7 +336,7 @@ export function computeBoardContext(board: Board, weights: EngineWeights): Board
   const robberKey = board.robber === null ? null : axialKey(board.robber)
   const stats = new Map<VertexId, VertexStats>()
   for (const vertexId of boardGrid(board.layout).vertexIds) {
-    const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
+    const touching = new Set(parseVertexId(vertexId).map(axialKey))
     const robbedPips: Partial<Record<Resource, number>> = {}
     const setupGrant = zeroResources()
     const tokenPips: Partial<Record<number, number>> = {}

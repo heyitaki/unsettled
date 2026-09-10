@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBoard, setTile } from '../../model/board'
+import { createBoard } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { newGame } from '../../model/game'
 import { createLibraryBackup, restoreLibraryBackup } from '../backup'
-import { MAPS_KEY, MAX_MAPS, listMaps, loadMap, saveMap } from '../localStorage'
+import { MAPS_KEY, MAX_MAPS, listMaps, loadMap, saveMap, updateMap } from '../localStorage'
 
 const game = newGame(createBoard('standard4'))
 beforeEach(() => localStorage.clear())
@@ -47,7 +48,7 @@ describe('library backup', () => {
     const saved = saveMap('Original', game)
     if (!saved.ok) throw new Error(saved.error)
     const blob = createLibraryBackup([])
-    saveMap('Original', newGame(setTile(game.board, { q: 0, r: 0 }, 'wheat', 6)), true)
+    updateMap(saved.id, 'Original', newGame(setTile(game.board, { q: 0, r: 0 }, 'wheat', 6)))
     expect(restoreLibraryBackup(blob)).toMatchObject({ ok: true, count: 1 })
     expect(restoreLibraryBackup(blob)).toMatchObject({ ok: true, count: 0 })
     expect(listMaps().maps.map((map) => map.name)).toEqual(['Original', 'Original (1)'])

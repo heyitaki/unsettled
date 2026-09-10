@@ -44,7 +44,7 @@ describe('storageActions', () => {
   })
 
   it('turns a library write into a maps-changed carrying the current library', () => {
-    const saved = saveMap('Alpha', game(), true)
+    const saved = saveMap('Alpha', game())
     if (!saved.ok) throw new Error(saved.error)
     expect(storageActions(event(MAPS_KEY))).toEqual([
       { type: 'maps-changed', library: { readable: true, maps: [{ id: saved.id, name: 'Alpha' }] } },

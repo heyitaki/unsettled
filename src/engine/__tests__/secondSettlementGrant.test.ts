@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, pips, setTile } from '../../model/board'
-import { axialKey, vertexTouchingHexes } from '../../model/coords'
+import { addPlayer, createBoard, pips } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
+import { axialKey, parseVertexId } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Resource, type VertexId } from '../../model/types'
 import { rankCandidates, type PreWindowResult } from '../analyze'
@@ -74,7 +75,7 @@ const rank = (board: Board, turnIndex: 0 | 3, weights: EngineWeights = DEFAULT_W
  * echoing whatever the scorer computes.
  */
 function expectedHandValue(board: Board, vertexId: VertexId, weights: EngineWeights): number {
-  const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
+  const touching = new Set(parseVertexId(vertexId).map(axialKey))
   let value = 0
   for (const hex of board.hexes) {
     if (!touching.has(axialKey(hex.coord))) continue
@@ -85,7 +86,7 @@ function expectedHandValue(board: Board, vertexId: VertexId, weights: EngineWeig
 }
 
 const threeHexVertex = grid.vertexIds.find((vertex) =>
-  vertexTouchingHexes(vertex).filter((coord) => grid.landKeys.has(axialKey(coord))).length === 3)
+  parseVertexId(vertex).filter((coord) => grid.landKeys.has(axialKey(coord))).length === 3)
 if (!threeHexVertex) throw new Error('standard4 has no three-hex vertex')
 
 /**
@@ -142,7 +143,7 @@ describe('second settlement resource grant (SU-7)', () => {
 
   it('counts only producing hexes, so a desert neighbour is worth exactly nothing', () => {
     const producing = productiveBoard()
-    const sacrificed = vertexTouchingHexes(threeHexVertex).find((coord) =>
+    const sacrificed = parseVertexId(threeHexVertex).find((coord) =>
       grid.landKeys.has(axialKey(coord)))
     if (!sacrificed) throw new Error('three-hex vertex touches no land')
     const lost = producing.hexes.find((hex) => axialKey(hex.coord) === axialKey(sacrificed))?.tile

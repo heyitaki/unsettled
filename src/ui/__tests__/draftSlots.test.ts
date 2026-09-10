@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeBoardCached } from '../../engine/analyze'
+import { analyzeBoard } from '../../engine/analyze'
 import { addPlayer, createBoard, placeBuilding, randomizeBoard, setMe } from '../../model/board'
 import { boardGrid } from '../../model/layouts'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { draftSlots } from '../draftSlots'
 
-const slotsOf = (board: Board) => draftSlots(board, analyzeBoardCached(board))
+const slotsOf = (board: Board) => draftSlots(board, analyzeBoard(board))
 
 function fourPlayers(): Board {
   let board = createBoard('standard4')
@@ -41,7 +41,7 @@ describe('draftSlots', () => {
 
   it('predicts my picks from the top recommendation and the opponents before it from the rollout', () => {
     const board = randomizeBoard(fourPlayers())
-    const analysis = analyzeBoardCached(board)
+    const analysis = analyzeBoard(board)
     expect(analysis.status).toBe('ready')
     const slots = draftSlots(board, analysis)
     const top = analysis.recommendations[0]
@@ -59,7 +59,7 @@ describe('draftSlots', () => {
 
   it('still binds a settlement upgraded to a city once the draft is complete', () => {
     let board = randomizeBoard(fourPlayers())
-    const order = analyzeBoardCached(board).draft.sequence
+    const order = analyzeBoard(board).draft.sequence
     // Play the whole snake out on vertices spaced well apart.
     const chosen = boardGrid('standard4').vertexIds.filter((_, index) => index % 6 === 0).slice(0, order.length)
     order.forEach((playerId, pick) => {

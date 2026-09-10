@@ -2,7 +2,7 @@
 import { act, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
-import { setTile } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { MAPS_KEY, WORKSPACE_KEY, listMaps } from '../../persistence/localStorage'
 import { activeTab, StoreProvider, useStore, useSaveRecovery } from '../store'
 

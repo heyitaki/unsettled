@@ -6,7 +6,7 @@ import {
   neighbor,
   vertexAdjacentVertexIds,
   vertexIncidentEdgeIds,
-  vertexTouchingHexes,
+  parseVertexId,
 } from '../../src/model/coords.ts'
 import {
   boardGrid,
@@ -47,7 +47,7 @@ for (const layout of ['standard4', 'extension6'] as const) {
         .filter((index): index is number => index !== undefined),
     ),
     vertexHexes: grid.vertexIds.map((id) =>
-      vertexTouchingHexes(id).map(axialKey).filter((key) => landIndex.has(key)),
+      parseVertexId(id).map(axialKey).filter((key) => landIndex.has(key)),
     ),
     vertexEdges: grid.vertexIds.map((id) =>
       vertexIncidentEdgeIds(id).filter((edge) => edgeSet.has(edge)),

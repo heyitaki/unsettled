@@ -10,7 +10,6 @@ import {
   vertexAdjacentVertexIds,
   vertexIdOf,
   vertexIncidentEdgeIds,
-  vertexTouchingHexes,
   vertexTripleAt,
 } from '../coords'
 
@@ -29,7 +28,7 @@ describe('canonical board coordinates', () => {
     expect(edgeEndpointVertexIds(edge)).toHaveLength(2)
     expect(vertexIncidentEdgeIds(vertex)).toHaveLength(3)
     expect(vertexAdjacentVertexIds(vertex)).toHaveLength(3)
-    expect(vertexTouchingHexes(vertex)).toEqual([
+    expect(parseVertexId(vertex)).toEqual([
       { q: 0, r: 0 },
       { q: 1, r: -1 },
       { q: 1, r: 0 },

@@ -11,7 +11,7 @@ const edited = (id = 'z'): Game =>
   newGame(addPlayer(createBoard('standard4'), { id, name: 'Zed', color: '#3063ba' }))
 
 const savedId = (name: string, game: Game = pristine()): string => {
-  const result = saveMap(name, game, true)
+  const result = saveMap(name, game)
   if (!result.ok) throw new Error(result.error)
   return result.id
 }

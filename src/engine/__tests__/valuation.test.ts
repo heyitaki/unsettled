@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import endgame from '../../parser/__tests__/expected/board-endgame-pieces.json'
-import { createBoard, pips, setTile, vertexProduction } from '../../model/board'
+import { createBoard, pips, vertexProduction } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import {
   axialKey,
   edgeEndpointVertexIds,
   vertexAdjacentVertexIds,
-  vertexTouchingHexes,
+  parseVertexId,
 } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../../model/types'
@@ -98,7 +99,7 @@ describe('placement valuation', () => {
     const usedHexes = new Set<string>()
     const sites: { vertexId: VertexId; coord: Board['hexes'][number]['coord'] }[] = []
     for (const vertexId of grid.vertexIds) {
-      const land = vertexTouchingHexes(vertexId)
+      const land = parseVertexId(vertexId)
         .filter((coord) => grid.landKeys.has(axialKey(coord)))
       if (land.length !== 1 || usedHexes.has(axialKey(land[0]))) continue
       usedHexes.add(axialKey(land[0]))

@@ -88,7 +88,7 @@ export function saveTab(
   // refuse over but readLibrary cannot address would otherwise be invisible
   // here and fatal one line later, with no prompt to resolve it.
   const name = firstFreeName(wanted, takenMapNames())
-  const result = saveMap(name, tab.game, false, keep)
+  const result = saveMap(name, tab.game, keep)
   if (!result.ok) return result
   return { ok: true, id: result.id, name, ...(result.evicted === undefined ? {} : { evicted: result.evicted }) }
 }

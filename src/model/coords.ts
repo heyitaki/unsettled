@@ -87,9 +87,6 @@ export function vertexAdjacentVertexIds(vertexId: VertexId | string): VertexId[]
   return [...adjacent].sort()
 }
 
-export const vertexTouchingHexes = (vertexId: VertexId | string): AxialCoord[] =>
-  parseVertexId(vertexId)
-
 export function axialToPixel(coord: AxialCoord, size: number): { x: number; y: number } {
   return {
     x: size * Math.sqrt(3) * (coord.q + coord.r / 2),

@@ -820,16 +820,3 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
     warnings: [...draft.warnings],
   }
 }
-
-// Default-options analysis memoized on board identity, so the panels that all
-// need it per render (best picks, draft views) share one rollout pass. Boards
-// are immutable — every edit is a new object — so identity is a safe key.
-const analysisCache = new WeakMap<Board, DraftAnalysis>()
-
-export function analyzeBoardCached(board: Board): DraftAnalysis {
-  const hit = analysisCache.get(board)
-  if (hit) return hit
-  const analysis = analyzeBoard(board)
-  analysisCache.set(board, analysis)
-  return analysis
-}

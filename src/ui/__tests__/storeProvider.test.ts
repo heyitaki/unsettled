@@ -2,7 +2,7 @@
 import { act, createElement, useEffect, useRef, type Dispatch } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setTile } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { deleteMap, listMaps } from '../../persistence/localStorage'
 import { activeTab, StoreProvider, useStore, type StoreAction, type StoreState } from '../store'
 

@@ -5,9 +5,9 @@ import {
   placeBuilding,
   placeRoad,
   setRobber,
-  setTile,
   upsertPort,
 } from '../board'
+import { setTile } from './helpers'
 import { adjustCounter, adjustHand, emptyStats, newGame } from '../game'
 import { boardGrid } from '../layouts'
 import { parseBoard, parseGame, serializeGame } from '../serialization'

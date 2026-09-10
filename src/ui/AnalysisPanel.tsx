@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Recommendation } from '../engine/analyze'
 import { placeBuilding, setMe } from '../model/board'
-import { axialKey, edgeEndpointVertexIds, vertexTouchingHexes } from '../model/coords'
+import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { useAnalysis } from './useAnalysis'
@@ -29,7 +29,7 @@ type VertexPart =
   | { kind: 'port'; resource: Resource | null; rate: number }
 
 function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
-  const touching = new Set(vertexTouchingHexes(vertexId).map(axialKey))
+  const touching = new Set(parseVertexId(vertexId).map(axialKey))
   const hexes = board.hexes
     .filter((hex) => touching.has(axialKey(hex.coord)))
     .map((hex): VertexPart => {

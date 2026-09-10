@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { analyzeBoardCached } from '../../engine/analyze'
+import { analyzeBoard } from '../../engine/analyze'
 import { addPlayer, createBoard, placeBuilding, setMe } from '../../model/board'
 import { boardGrid } from '../../model/layouts'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
@@ -21,7 +21,7 @@ function fourPlayers(): Board {
 
 /** Plays the snake's first `picks` slots, each in the seat whose turn it is. */
 function playDraft(board: Board, picks: number): Board {
-  const { sequence } = analyzeBoardCached(board).draft
+  const { sequence } = analyzeBoard(board).draft
   let next = board
   for (let slot = 0; slot < picks; slot += 1) {
     next = placeBuilding(next, SPACED[slot], sequence[slot], 'settlement')

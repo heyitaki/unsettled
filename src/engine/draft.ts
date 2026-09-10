@@ -19,7 +19,7 @@ const draftIsOver = (board: Board, placedCount: number, sequenceLength: number):
   board.buildings.some((building) => building.tier === 'city' || building.tier === 'superCity')
 
 export function inferDraftState(board: Board): DraftState {
-  const sequence = draftOrder(board, 2)
+  const sequence = draftOrder(board)
   const settlements = board.buildings.filter((building) => building.tier === 'settlement')
   const placedCount = Math.min(settlements.length, sequence.length)
   const warnings: DraftWarning[] = []

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { createBoard, setTile } from '../../model/board'
+import { createBoard } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { newGame } from '../../model/game'
 import { recoveryTabs } from '../saveStatus'
 

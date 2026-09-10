@@ -17,7 +17,7 @@ function tab(id: string, title: string, game: Game, mapId: string | null = null)
 }
 
 function savedId(name: string, game: Game): string {
-  const result = saveMap(name, game, true)
+  const result = saveMap(name, game)
   if (!result.ok) throw new Error(result.error)
   return result.id
 }

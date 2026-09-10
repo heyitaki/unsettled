@@ -21,7 +21,7 @@ const game = (layout: LayoutId = 'standard4') => newGame(createBoard(layout))
 
 // Most tests address a map by the id its save returned; this keeps that terse.
 function savedId(name: string, layout: LayoutId = 'standard4'): string {
-  const result = saveMap(name, game(layout), true)
+  const result = saveMap(name, game(layout))
   if (!result.ok) throw new Error(result.error)
   return result.id
 }
@@ -37,17 +37,17 @@ describe('map persistence', () => {
     expect(Object.getPrototypeOf({})).toBe(Object.prototype)
   })
 
-  it('rejects the empty name and requires overwrite confirmation', () => {
-    expect(saveMap('', game(), true).ok).toBe(false)
-    expect(saveMap('map', game(), false).ok).toBe(true)
-    expect(saveMap('map', game('extension6'), false).ok).toBe(false)
-    expect(saveMap('map', game('extension6'), true).ok).toBe(true)
+  it('rejects empty and duplicate names while allowing updates by id', () => {
+    expect(saveMap('', game()).ok).toBe(false)
+    expect(saveMap('map', game()).ok).toBe(true)
+    expect(saveMap('map', game('extension6')).ok).toBe(false)
+    expect(updateMap(listMaps().maps[0].id!, 'map', game('extension6')).ok).toBe(true)
   })
 
   it('backs up a corrupt store and reports invalid entries', () => {
     localStorage.setItem(MAPS_KEY, 'broken')
     expect(listMaps()).toMatchObject({ warning: expect.any(String), maps: [] })
-    expect(saveMap('next', game(), true).ok).toBe(true)
+    expect(saveMap('next', game()).ok).toBe(true)
     expect(localStorage.getItem(MAPS_CORRUPT_KEY)).toBe('broken')
     localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'bad', board: { schemaVersion: 9 } }]))
     expect(listMaps().maps[0].valid).toBe(false)
@@ -58,7 +58,7 @@ describe('map persistence', () => {
     const [placeholder, named] = listMaps().maps
     // A non-object entry gets a synthetic label that saveMap cannot address.
     expect(placeholder).toMatchObject({ name: 'Invalid map 1', synthetic: true })
-    // A real (if invalid) stored name is not synthetic — saveMap would overwrite it.
+    // A real stored name reserves that name even when its game is invalid.
     expect(named.name).toBe('bad')
     expect(named.synthetic).toBeUndefined()
   })
@@ -86,9 +86,11 @@ describe('map persistence', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
     localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'bad' }]))
 
-    expect(saveMap('bad', game(), false).ok).toBe(false)
+    expect(saveMap('bad', game()).ok).toBe(false)
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([{ name: 'bad' }])
-    const id = savedId('bad')
+    const id = 'bad-map'
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ id, name: 'bad' }]))
+    updateMap(id, 'bad', game())
     expect(JSON.parse(localStorage.getItem(MAPS_KEY)!)).toEqual([
       { id, name: 'bad', game: game(), createdAt: 1000, modifiedAt: 1000, openedAt: 1000 },
     ])
@@ -103,7 +105,7 @@ describe('map persistence', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
       throw new DOMException('full', 'QuotaExceededError')
     })
-    expect(saveMap('map', game(), true).ok).toBe(false)
+    expect(saveMap('map', game()).ok).toBe(false)
   })
 })
 
@@ -113,7 +115,7 @@ describe('map timestamps and sorting metadata', () => {
 
   it('stamps created, modified, and opened on first save and surfaces them in listMaps', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1000)
-    expect(saveMap('m', game(), true).ok).toBe(true)
+    expect(saveMap('m', game()).ok).toBe(true)
     expect(listMaps().maps[0]).toMatchObject({
       name: 'm',
       valid: true,
@@ -125,9 +127,9 @@ describe('map timestamps and sorting metadata', () => {
 
   it('preserves createdAt and openedAt but bumps modifiedAt on overwrite', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1000)
-    saveMap('m', game(), true)
+    saveMap('m', game())
     now.mockReturnValue(2000)
-    expect(saveMap('m', game('extension6'), true).ok).toBe(true)
+    expect(updateMap(listMaps().maps[0].id!, 'm', game('extension6')).ok).toBe(true)
     expect(listMaps().maps[0]).toMatchObject({ createdAt: 1000, modifiedAt: 2000, openedAt: 1000 })
   })
 
@@ -193,10 +195,10 @@ describe('map cap', () => {
 
   it('never evicts on an overwrite, which cannot grow the library', () => {
     // Seeded past the cap by hand, so an overwrite that evicted would show.
-    fill(MAX_MAPS)
+    const ids = fill(MAX_MAPS)
     const entries = JSON.parse(localStorage.getItem(MAPS_KEY) as string) as unknown[]
     localStorage.setItem(MAPS_KEY, JSON.stringify([...entries, { id: 'extra', name: 'extra', game: game() }]))
-    expect(saveMap('m7', game('extension6'), true)).toEqual({ ok: true, id: expect.any(String) })
+    expect(updateMap(ids[6], 'm7', game('extension6'))).toEqual({ ok: true, id: expect.any(String) })
     expect(listMaps().maps).toHaveLength(MAX_MAPS + 1)
   })
 
@@ -212,7 +214,7 @@ describe('map cap', () => {
   it('never evicts a map the caller asks to keep', () => {
     const ids = fill(MAX_MAPS)
     vi.spyOn(Date, 'now').mockReturnValue(1000 * (MAX_MAPS + 2))
-    expect(saveMap('newest', game(), false, new Set([ids[0]]))).toEqual({ ok: true, id: expect.any(String), evicted: [ids[1]] })
+    expect(saveMap('newest', game(), new Set([ids[0]]))).toEqual({ ok: true, id: expect.any(String), evicted: [ids[1]] })
   })
 
   it('drops legacy entries with no stamps before any stamped map', () => {
@@ -237,7 +239,7 @@ describe('map identity', () => {
     expect(renameMap(id, 'second').ok).toBe(true)
     // Saving over the renamed map reuses its id rather than minting a new one,
     // so a tab linked before the overwrite stays linked after it.
-    expect(saveMap('second', game('extension6'), true)).toEqual({ ok: true, id })
+    expect(updateMap(id, 'second', game('extension6'))).toEqual({ ok: true, id })
     expect(loadMap(id)).toMatchObject({ ok: true, game: game('extension6') })
   })
 

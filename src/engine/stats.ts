@@ -183,7 +183,7 @@ export function setAwardHolder(game: Game, kind: AwardKind, playerId: string | n
   return recordAwards(current, { longestRoad: null, largestArmy: null, ...current.awards, [kind]: playerId })
 }
 
-// Memoized on game identity like analyzeBoardCached: PlayerPanel needs standings
+// Memoized on game identity: PlayerPanel needs standings
 // every render, and games are immutable, so identity is a safe key. readonly so
 // no caller can sort the shared array in place and corrupt the cache.
 const standingsCache = new WeakMap<Game, readonly PlayerStanding[]>()

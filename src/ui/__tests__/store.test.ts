@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, removePlayer, setTile } from '../../model/board'
+import { addPlayer, createBoard, removePlayer } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { adjustHand, newGame, type Game } from '../../model/game'
 import { activeTab, reducer, type StoreState, type TabState } from '../store'
 import { NOTHING_UNFLUSHED, type UnflushedWork } from '../workspaceSync'

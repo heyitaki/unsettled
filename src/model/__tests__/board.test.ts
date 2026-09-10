@@ -20,11 +20,11 @@ import {
   setMe,
   setNumberToken,
   setRobber,
-  setTile,
   upsertPort,
   validateBoard,
   vertexProduction,
 } from '../board'
+import { setTile } from './helpers'
 import { axialKey, neighbor } from '../coords'
 import { boardGrid, defaultPortEdges, NUMBER_TOKEN_COUNTS } from '../layouts'
 import type { LayoutId, TileKind } from '../types'

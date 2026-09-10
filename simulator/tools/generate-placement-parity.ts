@@ -34,7 +34,7 @@ import {
   hexVertexIds,
   vertexAdjacentVertexIds,
   vertexIncidentEdgeIds,
-  vertexTouchingHexes,
+  parseVertexId,
 } from '../../src/model/coords.ts'
 import { boardGrid } from '../../src/model/layouts.ts'
 import { parseBoard } from '../../src/model/serialization.ts'
@@ -114,7 +114,7 @@ function completeBoard(layout: LayoutId, absent?: Resource): Board {
 const vertexWithHexCount = (board: Board, count: number): VertexId => {
   const land = boardGrid(board.layout).landKeys
   const vertex = boardGrid(board.layout).vertexIds.find((candidate) =>
-    vertexTouchingHexes(candidate).filter((coord) => land.has(axialKey(coord))).length === count)
+    parseVertexId(candidate).filter((coord) => land.has(axialKey(coord))).length === count)
   if (!vertex) throw new Error(`No ${count}-hex vertex on ${board.layout}`)
   return vertex
 }
@@ -208,7 +208,7 @@ const offPortNeighbor = vertexAdjacentVertexIds(firstPortA).find(
   (vertex) => vertex !== firstPortB && boardGrid('standard4').vertexIds.includes(vertex),
 )
 if (!offPortNeighbor) throw new Error('Port endpoint has no inland neighbor')
-const robbedCoord = vertexTouchingHexes(threeHex).find((coord) =>
+const robbedCoord = parseVertexId(threeHex).find((coord) =>
   boardGrid('standard4').landKeys.has(axialKey(coord)))
 if (!robbedCoord) throw new Error('Robbed candidate does not touch land')
 const robbedBoard = setRobber(standard, robbedCoord)
@@ -248,7 +248,7 @@ const nullToken = setNumberToken(standard, standard.hexes[0].coord, null)
 // and the min the term takes is a fraction rather than a saturated 1.
 const standardGrid = boardGrid('standard4')
 const landHexesOf = (vertex: VertexId) =>
-  vertexTouchingHexes(vertex).filter((coord) => standardGrid.landKeys.has(axialKey(coord)))
+  parseVertexId(vertex).filter((coord) => standardGrid.landKeys.has(axialKey(coord)))
 const devCardVertex = standardGrid.vertexIds.find((candidate) => {
   const hexes = landHexesOf(candidate)
   return hexes.length === 3 &&

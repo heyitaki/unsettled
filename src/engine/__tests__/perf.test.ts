@@ -6,8 +6,8 @@ import {
   randomizeBoard,
   setMe,
   setRobber,
-  setTile,
 } from '../../model/board'
+import { setTile } from '../../model/__tests__/helpers'
 import { boardGrid } from '../../model/layouts'
 import { analyzeBoard, rolloutCount } from '../analyze'
 import { longestRoadLength } from '../stats'
