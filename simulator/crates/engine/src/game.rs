@@ -6,7 +6,7 @@ use crate::placement::{self, PlacementKind, choose};
 use crate::policy::{self, PolicyKind, PolicyScratch};
 use crate::rng::Streams;
 use crate::rules::{
-    Buildable, Effect, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource,
+    Buildable, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource,
     RuleConfig,
 };
 use crate::state::{
@@ -152,7 +152,7 @@ impl GameArena {
                 if roll == 7 {
                     self.resolve_seven(board, topology, rules, config, seat);
                 } else {
-                    self.produce(board, topology, config, roll as u8, seats);
+                    self.produce(board, topology, roll as u8, seats);
                 }
                 loop {
                     let action =
@@ -473,11 +473,10 @@ impl GameArena {
         &mut self,
         board: &SimBoard,
         topology: &Topology,
-        config: &GameConfig,
         roll: u8,
         seats: usize,
     ) {
-        self.produce(board, topology, config, roll, seats);
+        self.produce(board, topology, roll, seats);
     }
 
     /// Advances the deck cursor as if `count` cards had been drawn, without crediting them to a
@@ -765,9 +764,6 @@ impl GameArena {
         if self.total_vp(seat) >= rules.win_vp {
             return true;
         }
-        if self.flattened[seat].has_effects() {
-            on_pre_roll(&config.modifiers[seat].effects);
-        }
         self.run_pre_roll(board, topology, rules, config, seat);
         self.total_vp(seat) >= rules.win_vp
     }
@@ -1040,23 +1036,14 @@ impl GameArena {
             Action::BuildRoad(edge) => {
                 self.pay_cost(seat, Buildable::Road);
                 self.build_road(topology, rules, board.seats(), seat, edge);
-                if self.flattened[seat].has_effects() {
-                    on_build(&config.modifiers[seat].effects);
-                }
             }
             Action::BuildSettlement(vertex) => {
                 self.pay_cost(seat, Buildable::Settlement);
                 self.build_settlement(board, topology, rules, config, seat, vertex);
-                if self.flattened[seat].has_effects() {
-                    on_build(&config.modifiers[seat].effects);
-                }
             }
             Action::UpgradeCity(vertex) => {
                 self.pay_cost(seat, Buildable::City);
                 self.upgrade_city(seat, vertex);
-                if self.flattened[seat].has_effects() {
-                    on_build(&config.modifiers[seat].effects);
-                }
             }
             Action::BuyDev => self.buy_dev(seat),
             Action::TradeBank { give, get, count } => {
@@ -1075,9 +1062,6 @@ impl GameArena {
                     .min(u32::from(u16::MAX)) as u16;
                 self.state.belief.lose(seat, give.index(), given);
                 self.state.belief.gain(seat, get.index(), u16::from(count));
-                if self.flattened[seat].has_effects() {
-                    on_trade(&config.modifiers[seat].effects);
-                }
             }
             Action::OfferTrade { give, get, count } => {
                 self.offers_this_turn = self.offers_this_turn.saturating_add(1);
@@ -1167,9 +1151,6 @@ impl GameArena {
                         self.state.players[seat].pieces[Buildable::Road.index()],
                     ) {
                         self.build_road(topology, rules, board.seats(), seat, edge);
-                        if self.flattened[seat].has_effects() {
-                            on_build(&config.modifiers[seat].effects);
-                        }
                     }
                 }
             }
@@ -1230,7 +1211,6 @@ impl GameArena {
         &mut self,
         board: &SimBoard,
         topology: &Topology,
-        config: &GameConfig,
         roll: u8,
         seats: usize,
     ) {
@@ -1269,9 +1249,6 @@ impl GameArena {
                 }
             }
             self.state.players[seat].resources = hand;
-            if self.flattened[seat].has_effects() {
-                on_production(&config.modifiers[seat].effects);
-            }
         }
     }
 
@@ -1483,33 +1460,6 @@ impl GameArena {
             panic!("{message}");
         }
         self.illegal_actions += 1;
-    }
-}
-
-fn on_pre_roll(effects: &[Effect]) {
-    dispatch_effects(effects);
-}
-
-fn on_production(effects: &[Effect]) {
-    dispatch_effects(effects);
-}
-
-fn on_build(effects: &[Effect]) {
-    dispatch_effects(effects);
-}
-
-fn on_trade(effects: &[Effect]) {
-    dispatch_effects(effects);
-}
-
-fn dispatch_effects(effects: &[Effect]) {
-    // `Effect` is uninhabited, so the slice is always empty and the match is the exhaustive
-    // handler a future variant would extend. The loop stays because a future variant must be
-    // dispatched for every effect, not just the first; the allow is only for the empty case,
-    // where `clippy::never_loop` sees a body that cannot come back.
-    #[allow(clippy::never_loop)]
-    for effect in effects {
-        match *effect {}
     }
 }
 

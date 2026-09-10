@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::num::NonZero;
 use std::path::Path;
 use std::process::Command;
 
@@ -14,7 +15,7 @@ use unsettled_engine::topology::{Layout, Topology};
 
 use crate::boardgen::generate_board;
 use crate::output::Meta;
-use crate::stats::{normal_quantile, wilson};
+use crate::stats::{alpha_z, wilson};
 
 pub const TUNING_SEED: u64 = 0x7a11_1e5e_ed20_2607;
 pub const EVAL_SEED: u64 = 0xe7a1_5eed_2026_0724;
@@ -355,7 +356,7 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
         );
     }
 
-    let z = normal_quantile(1.0 - request.alpha / 2.0);
+    let z = alpha_z(request.alpha)?;
     let arms = request
         .arms
         .iter()
@@ -624,7 +625,7 @@ pub fn try_paired_stats(
 
 pub fn evaluation_workers(threads: usize) -> usize {
     if threads == 0 {
-        num_cpus::get()
+        std::thread::available_parallelism().map_or(1, NonZero::get)
     } else {
         threads
     }
@@ -731,8 +732,6 @@ fn validate_request(request: &EvaluateRequest<'_>) -> Result<(), String> {
     if !request.threshold.is_finite() || request.threshold < 0.0 {
         return Err("threshold must be finite and non-negative".into());
     }
-    if !request.alpha.is_finite() || request.alpha <= 0.0 || request.alpha >= 1.0 {
-        return Err("alpha must be greater than 0 and less than 1".into());
-    }
+    alpha_z(request.alpha)?;
     Ok(())
 }

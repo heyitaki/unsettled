@@ -1,5 +1,6 @@
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
+use std::num::NonZero;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
@@ -43,7 +44,7 @@ pub fn run(request: RunRequest<'_>) -> Result<Results, String> {
     let mut rules = RuleConfig::base(request.topology.layout());
     rules.player_trading = request.player_trading;
     let workers = if request.threads == 0 {
-        num_cpus::get()
+        std::thread::available_parallelism().map_or(1, NonZero::get)
     } else {
         request.threads
     }
@@ -166,7 +167,7 @@ pub fn benchmark(
     }
     let single_elapsed = single_started.elapsed().as_secs_f64();
     let workers = if threads == 0 {
-        num_cpus::get()
+        std::thread::available_parallelism().map_or(1, NonZero::get)
     } else {
         threads
     }
@@ -189,8 +190,7 @@ pub fn benchmark(
     Ok(BenchResult {
         total_games: games,
         elapsed_seconds: all_elapsed,
-        physical_cores: num_cpus::get_physical(),
-        logical_cores: num_cpus::get(),
+        logical_cores: std::thread::available_parallelism().map_or(1, NonZero::get),
         workers,
         single_core_rate: sample as f64 / single_elapsed,
         all_core_rate: games as f64 / all_elapsed,
@@ -200,7 +200,6 @@ pub fn benchmark(
 pub struct BenchResult {
     pub total_games: usize,
     pub elapsed_seconds: f64,
-    pub physical_cores: usize,
     pub logical_cores: usize,
     pub workers: usize,
     pub single_core_rate: f64,
@@ -209,7 +208,6 @@ pub struct BenchResult {
 
 impl BenchResult {
     pub fn parallel_efficiency(&self) -> f64 {
-        self.all_core_rate
-            / (self.single_core_rate * self.workers.min(self.physical_cores).max(1) as f64)
+        self.all_core_rate / (self.single_core_rate * self.workers.max(1) as f64)
     }
 }

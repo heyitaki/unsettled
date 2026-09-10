@@ -141,15 +141,11 @@ pub struct RuleConfig {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum PortSelector {
     All,
-    Resource(Resource),
-    Generic,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum PortAction {
     Disable,
-    RateDelta(i32),
-    RateSet(u32),
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -158,16 +154,12 @@ pub struct PortRule {
     pub action: PortAction,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum Effect {}
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerModifiers {
     pub extra_cost_alternatives: Vec<(Buildable, [u8; RESOURCE_COUNT])>,
     pub bank_rate_override: Option<u32>,
     pub port_rules: Vec<PortRule>,
-    pub effects: Vec<Effect>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -176,8 +168,8 @@ pub struct OwnedPort {
     pub rate: u32,
 }
 
-pub const MAX_COST_ALTERNATIVES: usize = 8;
-pub const MAX_PORT_RULES: usize = 16;
+// Two base variants plus a modifier alternative need three slots. Keep one spare slot.
+const MAX_COST_ALTERNATIVES: usize = 4;
 
 #[derive(Clone, Copy, Debug)]
 pub struct CostAlternatives {
@@ -209,39 +201,6 @@ impl CostAlternatives {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct PortRules {
-    values: [PortRule; MAX_PORT_RULES],
-    len: u8,
-}
-
-impl Default for PortRules {
-    fn default() -> Self {
-        Self {
-            values: [PortRule {
-                selector: PortSelector::All,
-                action: PortAction::Disable,
-            }; MAX_PORT_RULES],
-            len: 0,
-        }
-    }
-}
-
-impl PortRules {
-    fn as_slice(&self) -> &[PortRule] {
-        &self.values[..usize::from(self.len)]
-    }
-
-    fn push(&mut self, rule: PortRule) {
-        assert!(
-            usize::from(self.len) < MAX_PORT_RULES,
-            "too many port rules"
-        );
-        self.values[usize::from(self.len)] = rule;
-        self.len += 1;
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FlattenedRules {
     costs: [CostAlternatives; 4],
@@ -249,9 +208,8 @@ pub struct FlattenedRules {
     limits: [u8; 4],
     vp: [u8; 4],
     yield_multiplier: [u8; 4],
-    has_effects: bool,
     dev_cost: [u8; RESOURCE_COUNT],
-    port_rules: PortRules,
+    port_rule: Option<PortRule>,
     win_vp: u8,
     longest_road_min: u8,
     longest_road_vp: u8,
@@ -364,7 +322,6 @@ impl RuleConfig {
             trade_rate: [modifier.bank_rate_override.unwrap_or(self.bank_trade_rate);
                 RESOURCE_COUNT],
             dev_cost: self.dev_cost,
-            has_effects: !modifier.effects.is_empty(),
             win_vp: self.win_vp,
             longest_road_min: self.longest_road_min,
             longest_road_vp: self.longest_road_vp,
@@ -393,14 +350,17 @@ impl RuleConfig {
         for (kind, alternative) in &modifier.extra_cost_alternatives {
             flattened.costs[kind.index()].push(*alternative);
         }
-        for rule in modifier.port_rules.iter().chain(extra_port_rules) {
-            flattened.port_rules.push(*rule);
-        }
+        flattened.port_rule = modifier
+            .port_rules
+            .iter()
+            .chain(extra_port_rules)
+            .next()
+            .copied();
         for port in owned_ports {
             for resource in Resource::ALL {
                 if (port.resource.is_none() || port.resource == Some(resource))
                     && let Some(rate) =
-                        transformed_port_rate(*port, resource, flattened.port_rules.as_slice())
+                        transformed_port_rate(*port, flattened.port_rule)
                 {
                     flattened.trade_rate[resource.index()] =
                         flattened.trade_rate[resource.index()].min(rate);
@@ -449,10 +409,6 @@ impl FlattenedRules {
         self.yield_multiplier[buildable.index()]
     }
 
-    pub const fn has_effects(&self) -> bool {
-        self.has_effects
-    }
-
     pub const fn dev_cost(&self) -> &[u8; RESOURCE_COUNT] {
         &self.dev_cost
     }
@@ -494,36 +450,17 @@ impl FlattenedRules {
         if port.resource.is_some() && port.resource != Some(resource) {
             return current;
         }
-        transformed_port_rate(port, resource, self.port_rules.as_slice())
+        transformed_port_rate(port, self.port_rule)
             .map_or(current, |rate| current.min(rate))
     }
 }
 
-pub fn transformed_port_rate(
-    port: OwnedPort,
-    resource: Resource,
-    rules: &[PortRule],
-) -> Option<u32> {
-    let mut rate = Some(port.rate);
-    for rule in rules {
-        let selected = match rule.selector {
-            PortSelector::All => true,
-            PortSelector::Resource(selected) => {
-                port.resource == Some(selected) && selected == resource
-            }
-            PortSelector::Generic => port.resource.is_none(),
-        };
-        if !selected {
-            continue;
-        }
-        rate = match (rate, rule.action) {
-            (_, PortAction::Disable) => None,
-            (Some(current), PortAction::RateDelta(delta)) => {
-                Some(current.saturating_add_signed(delta).max(2))
-            }
-            (Some(_), PortAction::RateSet(value)) => Some(value.max(2)),
-            (None, _) => None,
-        };
+fn transformed_port_rate(port: OwnedPort, rule: Option<PortRule>) -> Option<u32> {
+    match rule {
+        Some(PortRule {
+            selector: PortSelector::All,
+            action: PortAction::Disable,
+        }) => None,
+        None => Some(port.rate),
     }
-    rate
 }

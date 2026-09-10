@@ -57,7 +57,6 @@ pub struct SimBoard {
     roads: Vec<InitialRoad>,
     buildings: Vec<InitialBuilding>,
     player_ids: Vec<String>,
-    saturated_rates: usize,
     /// Total pips per resource across the whole board. A fixed property of the tiles, yet the
     /// scarcity term of every vertex score wants it, so it is derived once here.
     resource_pips: [u16; RESOURCE_COUNT],
@@ -125,24 +124,15 @@ impl SimBoard {
             .enumerate()
             .map(|(seat, player)| (player.id.as_str(), seat as u8))
             .collect();
-        let mut saturated_rates = 0;
         let ports: Vec<SimPort> = wire
             .ports
             .iter()
-            .map(|port| {
-                let rate = if port.rate > f64::from(u32::MAX) {
-                    saturated_rates += 1;
-                    u32::MAX
-                } else {
-                    port.rate as u32
-                };
-                SimPort {
-                    edge: topology
-                        .edge_by_id(&port.edge_id)
-                        .expect("wire validation mapped port"),
-                    resource: port.resource,
-                    rate,
-                }
+            .map(|port| SimPort {
+                edge: topology
+                    .edge_by_id(&port.edge_id)
+                    .expect("wire validation mapped port"),
+                resource: port.resource,
+                rate: port.rate as u32,
             })
             .collect();
         let roads = wire
@@ -206,7 +196,6 @@ impl SimBoard {
             roads,
             buildings,
             player_ids: wire.players.into_iter().map(|player| player.id).collect(),
-            saturated_rates,
             resource_pips,
             port_vertices,
             app_formula_scorers: Vec::new(),
@@ -248,10 +237,6 @@ impl SimBoard {
 
     pub fn player_ids(&self) -> &[String] {
         &self.player_ids
-    }
-
-    pub fn saturated_rates(&self) -> usize {
-        self.saturated_rates
     }
 
     pub const fn resource_pips(&self) -> &[u16; RESOURCE_COUNT] {

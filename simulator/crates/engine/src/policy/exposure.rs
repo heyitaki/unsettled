@@ -20,7 +20,7 @@
 
 /// Cards a seven forces this hand to discard right now: half, rounded down, once
 /// the hand exceeds the rules threshold.
-pub fn discard_count(hand_total: u32, discard_threshold: u8) -> u32 {
+fn discard_count(hand_total: u32, discard_threshold: u8) -> u32 {
     if hand_total > u32::from(discard_threshold) {
         hand_total / 2
     } else {
@@ -29,7 +29,7 @@ pub fn discard_count(hand_total: u32, discard_threshold: u8) -> u32 {
 }
 
 /// Probability that at least one seven appears in `rolls` independent two-die rolls.
-pub fn seven_chance(rolls: u32) -> f64 {
+fn seven_chance(rolls: u32) -> f64 {
     1.0 - (5.0_f64 / 6.0).powi(rolls.min(10_000) as i32)
 }
 

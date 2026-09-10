@@ -37,7 +37,9 @@ fn hidden_opponent_composition_does_not_change_live_recommendations() {
     let first_view = first.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let second_view = second.decision_view(&board, &topology, 0, DecisionPhase::Action);
     let params = HeuristicParams::default();
-    assert_eq!(first_view.to_owned(), second_view.to_owned());
+    assert_eq!(first_view.belief(), second_view.belief());
+    assert_eq!(first_view.hand_size(1), second_view.hand_size(1));
+    assert_eq!(first_view.own_hand(), second_view.own_hand());
     assert_eq!(
         recommend(&first_view, &params),
         recommend(&second_view, &params)

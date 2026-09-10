@@ -18,7 +18,7 @@ use crate::evaluate::{EvaluationDomain, EvaluationUnit, evaluation_schedule, eva
 use crate::expansion::{ExpansionReading, PairOutcome, PairReading, expansion_reading, game_pairs};
 use crate::lookahead::{LookaheadAccuracy, LookaheadReading, game_lookahead, lookahead_accuracy};
 use crate::output::Meta;
-use crate::stats::normal_quantile;
+use crate::stats::alpha_z;
 
 /// A diagnostic has no hero seat: every seat plays `--placement` and `--policy`, so there is no
 /// arm to rotate and no rotation coordinate to vary. The evaluation seed derivation still takes
@@ -269,7 +269,7 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
         }
         lookahead_readings.extend_from_slice(&observation.lookahead);
     }
-    let z = normal_quantile(1.0 - request.alpha / 2.0);
+    let z = alpha_z(request.alpha)?;
 
     Ok(Diagnostics {
         config: DiagnosticsConfig {
@@ -334,8 +334,6 @@ fn validate_request(request: &DiagnoseRequest<'_>) -> Result<(), String> {
     if !(2..=6).contains(&request.seats) {
         return Err("seat count must be between 2 and 6".into());
     }
-    if !request.alpha.is_finite() || request.alpha <= 0.0 || request.alpha >= 1.0 {
-        return Err("alpha must be greater than 0 and less than 1".into());
-    }
+    alpha_z(request.alpha)?;
     Ok(())
 }

@@ -1,5 +1,5 @@
 use unsettled_sim::evaluate::{pair_verdict, paired_stats, parse_arm_spec, try_paired_stats};
-use unsettled_sim::stats::{normal_quantile, wilson, wilson95};
+use unsettled_sim::stats::{alpha_z, wilson, wilson95};
 
 const Z_95: f64 = 1.959_963_984_540_054;
 
@@ -192,10 +192,28 @@ fn every_preregistered_verdict_branch_is_reachable() {
 }
 
 #[test]
-fn as241_matches_reference_quantiles() {
-    assert!((normal_quantile(0.975) - 1.959_963_984_540_054).abs() <= 1e-12);
-    assert!((normal_quantile(0.995) - 2.575_829_303_548_900_4).abs() <= 1e-12);
-    assert!((normal_quantile(0.950) - 1.644_853_626_951_472_2).abs() <= 1e-12);
+fn supported_alphas_use_reference_quantiles() {
+    assert_eq!(alpha_z(0.05).unwrap(), Z_95);
+    assert_eq!(alpha_z(0.01).unwrap(), 2.575_829_303_548_900_4);
+    assert_eq!(alpha_z(0.10).unwrap(), 1.644_853_626_951_472_2);
+}
+
+#[test]
+fn unsupported_alphas_are_named_errors() {
+    for alpha in [
+        0.0,
+        1.0,
+        0.025,
+        -0.05,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    ] {
+        assert_eq!(
+            alpha_z(alpha).unwrap_err(),
+            "--alpha must be one of 0.10, 0.05, or 0.01"
+        );
+    }
 }
 
 #[test]

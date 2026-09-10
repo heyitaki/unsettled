@@ -104,7 +104,7 @@ fn steal_free_scripted_game_reconstructs_every_hand_exactly() {
     assert_exact(&arena, board.seats());
 
     for roll in 2..=12 {
-        arena.produce_for_test(&board, &topology, &config, roll, board.seats());
+        arena.produce_for_test(&board, &topology, roll, board.seats());
         assert_exact(&arena, board.seats());
     }
 
@@ -265,7 +265,7 @@ fn steal_free_scripted_game_reconstructs_every_hand_exactly() {
     place_settlement(&mut arena, 0, vertex);
     arena.state.vertex_tier[usize::from(vertex)] = 3;
     for _ in 0..3 {
-        arena.produce_for_test(&board, &topology, &config, roll, board.seats());
+        arena.produce_for_test(&board, &topology, roll, board.seats());
         assert_exact(&arena, board.seats());
     }
     arena.resolve_seven_for_test(&board, &topology, &rules, &config, 0);
@@ -350,14 +350,16 @@ fn belief_ignores_hidden_composition_of_identical_public_streams() {
         DecisionPhase::PreRoll,
     ));
     assert_eq!(first.state.belief, second.state.belief);
-    assert_eq!(
-        first
-            .decision_view(&board, &topology, 2, DecisionPhase::Action)
-            .to_owned(),
-        second
-            .decision_view(&board, &topology, 2, DecisionPhase::Action)
-            .to_owned()
-    );
+    let first_view = first.decision_view(&board, &topology, 2, DecisionPhase::Action);
+    let second_view = second.decision_view(&board, &topology, 2, DecisionPhase::Action);
+    assert_eq!(first_view.belief(), second_view.belief());
+    assert_eq!(first_view.own_hand(), second_view.own_hand());
+    assert_eq!(first_view.robber(), second_view.robber());
+    assert_eq!(first_view.knights_played(0), second_view.knights_played(0));
+    for seat in [0, victim] {
+        assert_eq!(first_view.hand_size(seat), second_view.hand_size(seat));
+        assert_eq!(first_view.dev_count(seat), second_view.dev_count(seat));
+    }
 }
 
 #[test]
@@ -365,7 +367,7 @@ fn monopoly_reveals_exact_counts_including_zero() {
     let (topology, board, rules, config, mut arena) = fixture();
     arena.setup_for_test(&board, &topology, &rules, &config);
     for roll in 2..=12 {
-        arena.produce_for_test(&board, &topology, &config, roll, board.seats());
+        arena.produce_for_test(&board, &topology, roll, board.seats());
     }
     let resource = Resource::ALL
         .into_iter()
@@ -426,24 +428,24 @@ fn monopoly_reveals_exact_counts_including_zero() {
 
 #[test]
 fn production_bank_shortfall_keeps_belief_exact() {
-    let (topology, board, _rules, config, mut arena) = fixture();
+    let (topology, board, _rules, _config, mut arena) = fixture();
     let (hex, roll, resource) = first_productive_hex(&board, &topology, arena.state.robber);
     let vertices = topology.hex_vertices(hex);
     place_settlement(&mut arena, 0, vertices[0]);
     place_settlement(&mut arena, 1, vertices[1]);
     arena.state.bank[resource.index()] = 1;
-    arena.produce_for_test(&board, &topology, &config, roll, board.seats());
+    arena.produce_for_test(&board, &topology, roll, board.seats());
     assert_exact(&arena, board.seats());
     assert_eq!(arena.state.players[0].resources[resource.index()], 0);
     assert_eq!(arena.state.players[1].resources[resource.index()], 0);
 
-    let (topology, board, _rules, config, mut arena) = fixture();
+    let (topology, board, _rules, _config, mut arena) = fixture();
     let (hex, roll, resource) = first_productive_hex(&board, &topology, arena.state.robber);
     let vertex = topology.hex_vertices(hex)[0];
     place_settlement(&mut arena, 0, vertex);
     arena.state.vertex_tier[usize::from(vertex)] = 2;
     arena.state.bank[resource.index()] = 1;
-    arena.produce_for_test(&board, &topology, &config, roll, board.seats());
+    arena.produce_for_test(&board, &topology, roll, board.seats());
     assert_exact(&arena, board.seats());
     assert_eq!(arena.state.players[0].resources[resource.index()], 1);
 }

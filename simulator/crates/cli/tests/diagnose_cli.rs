@@ -86,14 +86,14 @@ fn a_zero_board_or_rep_count_is_a_named_error() {
 }
 
 #[test]
-fn an_alpha_outside_the_open_unit_interval_is_a_named_error() {
-    for value in ["0", "1", "nan"] {
+fn an_unsupported_alpha_is_a_named_error() {
+    for value in ["0", "1", "nan", "inf", "0.025"] {
         let out = output_dir(&format!("diagnose-cli-alpha-{value}"));
         let mut arguments = valid_arguments(&out);
         arguments.extend(["--alpha".into(), value.into()]);
         assert_named_error(
             &arguments,
-            "alpha must be greater than 0 and less than 1",
+            "--alpha must be one of 0.10, 0.05, or 0.01",
         );
     }
 }
@@ -164,30 +164,16 @@ fn diagnostics_are_byte_identical_across_worker_counts() {
     // One completed pair per seat per game, which is the second half of those picks.
     assert_eq!(diagnostics["expansion"]["overall"]["pairs"], 48);
 
-    // The stratified blockability table rides both the overall row and every slot row, and its
-    // strata partition the pairs of the row they sit under.
-    let stratified_pairs = |group: &serde_json::Value| {
-        group["blockabilityByHexCount"]["strata"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|stratum| stratum["pairs"].as_u64().unwrap())
-            .sum::<u64>()
-    };
-    assert_eq!(stratified_pairs(&diagnostics["expansion"]["overall"]), 48);
     let per_slot = diagnostics["expansion"]["perSlot"].as_array().unwrap();
     assert_eq!(per_slot.len(), 4);
-    assert_eq!(per_slot.iter().map(stratified_pairs).sum::<u64>(), 48);
-    // Twelve games is far under the counting floor, so nothing is indicated off a run this size.
     assert_eq!(
-        diagnostics["expansion"]["overall"]["blockabilityByHexCount"]["countedPairs"],
-        0
+        per_slot
+            .iter()
+            .map(|group| group["pairs"].as_u64().unwrap())
+            .sum::<u64>(),
+        48
     );
-    assert_eq!(
-        diagnostics["expansion"]["overall"]["blockabilityByHexCount"]
-            ["concentrationTermIndicated"],
-        false
-    );
+
     // `max_pips` has no formula to replay, so every first pick is skipped and the block reads
     // empty rather than going missing.
     assert_eq!(diagnostics["lookahead"]["overall"]["firstPicks"], 0);

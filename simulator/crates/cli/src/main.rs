@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use clap::{Args, Parser, Subcommand};
-use serde::Deserialize;
 use unsettled_engine::board::{ConversionOptions, SimBoard};
 use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
@@ -54,8 +53,6 @@ struct TournamentArgs {
     #[arg(long)]
     board: Vec<PathBuf>,
     #[arg(long)]
-    board_dir: Option<PathBuf>,
-    #[arg(long)]
     random_boards: Option<usize>,
     #[arg(long)]
     reps: Option<usize>,
@@ -73,30 +70,10 @@ struct TournamentArgs {
     seats: Option<usize>,
     #[arg(long)]
     allow_unofficial: bool,
-    #[arg(long)]
-    config: Option<PathBuf>,
     #[arg(long)]
     jsonl: Option<PathBuf>,
     #[command(flatten)]
     trade: TradeArgs,
-}
-
-#[derive(Default, Deserialize)]
-#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
-struct TournamentFileConfig {
-    layout: Option<String>,
-    board: Vec<PathBuf>,
-    board_dir: Option<PathBuf>,
-    random_boards: Option<usize>,
-    reps: Option<usize>,
-    heuristics: Option<String>,
-    policy: Option<String>,
-    seed: Option<u64>,
-    threads: Option<usize>,
-    out: Option<PathBuf>,
-    seats: Option<usize>,
-    allow_unofficial: bool,
-    jsonl: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -221,31 +198,27 @@ struct TradeArgs {
 }
 
 impl TradeArgs {
-    /// The embargo domains below mirror the `TradeConfig` field contracts (`rules.rs`),
-    /// which the engine only debug-asserts. The domains differ deliberately: the floor is a
-    /// divisor in `danger_from_etw`, where zero or negative values yield NaN or unbounded
-    /// danger, so it must be positive; the two thresholds only compare against a danger that
-    /// always lands in (0, 1], so any finite value is well-defined: at or below zero is the
-    /// always-embargo endpoint, above one the never-embargo endpoint tests park arms at.
+    /// The floor enters the divisor in `danger_from_etw`, so it must be positive and finite.
+    /// The two thresholds compare against danger already in (0, 1], so any finite value is valid.
     fn config(self) -> Result<Option<TradeConfig>, String> {
         let defaults = TradeConfig::default();
-        let embargo_danger_floor = self
-            .embargo_danger_floor
-            .unwrap_or(defaults.embargo_danger_floor);
-        if !embargo_danger_floor.is_finite() || embargo_danger_floor <= 0.0 {
+        let check = |name: &str, value: f64| -> Result<f64, String> {
+            if value.is_finite() {
+                Ok(value)
+            } else {
+                Err(format!("{name} must be finite"))
+            }
+        };
+        let embargo_danger_floor = check(
+            "--embargo-danger-floor",
+            self.embargo_danger_floor
+                .unwrap_or(defaults.embargo_danger_floor),
+        )
+        .map_err(|_| "--embargo-danger-floor must be positive and finite")?;
+        if embargo_danger_floor <= 0.0 {
             return Err("--embargo-danger-floor must be positive and finite".into());
         }
-        let embargo_danger = self.embargo_danger.unwrap_or(defaults.embargo_danger);
-        if !embargo_danger.is_finite() {
-            return Err("--embargo-danger must be finite".into());
-        }
-        let embargo_takeover_danger = self
-            .embargo_takeover_danger
-            .unwrap_or(defaults.embargo_takeover_danger);
-        if !embargo_takeover_danger.is_finite() {
-            return Err("--embargo-takeover-danger must be finite".into());
-        }
-        Ok(self.player_trading.then(|| TradeConfig {
+        Ok(self.player_trading.then_some(TradeConfig {
             opponent_gain_weight: self
                 .opponent_gain_weight
                 .unwrap_or(defaults.opponent_gain_weight),
@@ -259,8 +232,15 @@ impl TradeArgs {
                 .hidden_vp_confidence
                 .unwrap_or(defaults.hidden_vp_confidence),
             embargo_danger_floor,
-            embargo_danger,
-            embargo_takeover_danger,
+            embargo_danger: check(
+                "--embargo-danger",
+                self.embargo_danger.unwrap_or(defaults.embargo_danger),
+            )?,
+            embargo_takeover_danger: check(
+                "--embargo-takeover-danger",
+                self.embargo_takeover_danger
+                    .unwrap_or(defaults.embargo_takeover_danger),
+            )?,
         }))
     }
 }
@@ -284,45 +264,24 @@ fn execute(cli: Cli) -> Result<(), String> {
 
 fn tournament(args: TournamentArgs) -> Result<(), String> {
     let player_trading = args.trade.config()?;
-    let file_config = if let Some(path) = &args.config {
-        serde_json::from_str::<TournamentFileConfig>(
-            &fs::read_to_string(path).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| format!("invalid tournament config: {error}"))?
-    } else {
-        TournamentFileConfig::default()
-    };
-    let layout_name = args
-        .layout
-        .or(file_config.layout)
-        .unwrap_or_else(|| "standard4".into());
+    let layout_name = args.layout.unwrap_or_else(|| "standard4".into());
     let layout = parse_layout(&layout_name)?;
     let topology = Topology::load(layout)?;
     let default_seats = if layout == Layout::Standard4 { 4 } else { 6 };
-    let seats = args.seats.or(file_config.seats).unwrap_or(default_seats);
-    let allow_unofficial = args.allow_unofficial || file_config.allow_unofficial;
-    let random_boards = args
-        .random_boards
-        .or(file_config.random_boards)
-        .unwrap_or(0);
-    let reps = args.reps.or(file_config.reps).unwrap_or(25);
-    let heuristic_names = args
-        .heuristics
-        .or(file_config.heuristics)
-        .unwrap_or_else(|| {
-            "max_pips,pip_diversity,pip_scarcity,port_synergy,city_focus,random".into()
-        });
+    let seats = args.seats.unwrap_or(default_seats);
+    let allow_unofficial = args.allow_unofficial;
+    let random_boards = args.random_boards.unwrap_or(0);
+    let reps = args.reps.unwrap_or(25);
+    let heuristic_names = args.heuristics.unwrap_or_else(|| {
+        "max_pips,pip_diversity,pip_scarcity,port_synergy,city_focus,random".into()
+    });
     let policy_name = args
         .policy
-        .or(file_config.policy)
         .unwrap_or_else(|| "heuristic-v1".into());
-    let seed = args.seed.or(file_config.seed).unwrap_or(42);
-    let threads = args.threads.or(file_config.threads).unwrap_or(0);
-    let out = args
-        .out
-        .or(file_config.out)
-        .ok_or_else(|| "--out is required unless supplied by --config".to_string())?;
-    let jsonl = args.jsonl.or(file_config.jsonl);
+    let seed = args.seed.unwrap_or(42);
+    let threads = args.threads.unwrap_or(0);
+    let out = args.out.ok_or_else(|| "--out is required".to_string())?;
+    let jsonl = args.jsonl;
     let official = match layout {
         Layout::Standard4 => (3..=4).contains(&seats),
         Layout::Extension6 => (5..=6).contains(&seats),
@@ -331,23 +290,8 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
         return Err("non-official layout and seat combinations require --allow-unofficial".into());
     }
     let mut boards = Vec::new();
-    for path in args.board.iter().chain(&file_config.board) {
+    for path in &args.board {
         boards.push(load_board(path, &topology, allow_unofficial)?);
-    }
-    if let Some(directory) = args.board_dir.as_ref().or(file_config.board_dir.as_ref()) {
-        let mut paths = fs::read_dir(directory)
-            .map_err(|error| error.to_string())?
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.extension()
-                    .is_some_and(|extension| extension == "json")
-            })
-            .collect::<Vec<_>>();
-        paths.sort();
-        for path in paths {
-            boards.push(load_board(&path, &topology, allow_unofficial)?);
-        }
     }
     for board_index in 0..random_boards {
         boards.push(generate_board(
@@ -357,7 +301,7 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
         )?);
     }
     if boards.is_empty() {
-        return Err("provide --random-boards, --board, or --board-dir".into());
+        return Err("provide --random-boards or --board".into());
     }
     if boards
         .iter()
@@ -558,7 +502,6 @@ fn bench(args: BenchArgs) -> Result<(), String> {
     let result = benchmark(&board, &topology, args.games, args.threads)?;
     println!("total games: {}", result.total_games);
     println!("elapsed seconds: {:.6}", result.elapsed_seconds);
-    println!("physical cores: {}", result.physical_cores);
     println!("logical cores: {}", result.logical_cores);
     println!("configured workers: {}", result.workers);
     println!("single-core games/sec: {:.2}", result.single_core_rate);
@@ -671,6 +614,21 @@ mod tests {
         };
         assert_eq!(on.config(), Ok(Some(TradeConfig::default())));
         assert_eq!(TradeArgs::default().config(), Ok(None));
+    }
+
+    #[test]
+    fn invalid_embargo_floors_report_the_full_domain() {
+        for floor in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let args = TradeArgs {
+                player_trading: true,
+                embargo_danger_floor: Some(floor),
+                ..TradeArgs::default()
+            };
+            assert_eq!(
+                args.config().unwrap_err(),
+                "--embargo-danger-floor must be positive and finite"
+            );
+        }
     }
 
     #[test]

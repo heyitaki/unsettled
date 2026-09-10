@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::belief::{BeliefState, DeckBelief};
 use crate::board::{SimBoard, SimPort};
@@ -136,40 +136,6 @@ pub enum DecisionPhase {
     Action,
     SpecialBuild,
     TradeResponse,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DecisionSnapshot {
-    pub belief: BeliefState,
-    pub observer: u8,
-    pub seats: u8,
-    pub vertex_owner: Vec<u8>,
-    pub vertex_tier: Vec<u8>,
-    pub edge_owner: Vec<u8>,
-    pub robber: Hex,
-    pub ports: Vec<SimPortSnapshot>,
-    pub bank: [u16; RESOURCE_COUNT],
-    pub public_vp: [u8; MAX_SEATS],
-    pub hand_sizes: [u16; MAX_SEATS],
-    pub dev_counts: [u8; MAX_SEATS],
-    pub knights_played: [u8; MAX_SEATS],
-    pub longest_road_len: [u8; MAX_SEATS],
-    pub pieces: [[u8; 4]; MAX_SEATS],
-    pub trade_rates: [[u32; RESOURCE_COUNT]; MAX_SEATS],
-    pub own_hand: [i16; RESOURCE_COUNT],
-    pub own_playable_dev: [u8; 5],
-    pub own_bought_dev: [u8; 5],
-    pub dev_deck_remaining: u8,
-    pub largest_army_holder: Option<usize>,
-    pub longest_road_holder: Option<usize>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SimPortSnapshot {
-    pub edge: Edge,
-    pub resource: Option<Resource>,
-    pub rate: u32,
 }
 
 /// The observer's road segments, summarised for the legality checks that run per vertex and edge.
@@ -998,42 +964,6 @@ impl<'a> DecisionView<'a> {
     /// action.
     pub fn stealable_on_hex(&self, hex: Hex, seat: usize) -> bool {
         self.victim_on_hex(hex, seat) && self.hand_size(seat) > 0
-    }
-
-    pub fn to_owned(&self) -> DecisionSnapshot {
-        DecisionSnapshot {
-            belief: self.state.belief,
-            observer: self.observer as u8,
-            seats: self.seats as u8,
-            vertex_owner: self.state.vertex_owner[..self.topology.vertex_count()].to_vec(),
-            vertex_tier: self.state.vertex_tier[..self.topology.vertex_count()].to_vec(),
-            edge_owner: self.state.edge_owner[..self.topology.edge_count()].to_vec(),
-            robber: self.state.robber,
-            ports: self
-                .board
-                .ports()
-                .iter()
-                .map(|port| SimPortSnapshot {
-                    edge: port.edge,
-                    resource: port.resource,
-                    rate: port.rate,
-                })
-                .collect(),
-            bank: self.state.bank,
-            public_vp: std::array::from_fn(|seat| self.state.players[seat].vp_public),
-            hand_sizes: std::array::from_fn(|seat| self.hand_size(seat)),
-            dev_counts: std::array::from_fn(|seat| self.dev_count(seat)),
-            knights_played: std::array::from_fn(|seat| self.state.players[seat].knights_played),
-            longest_road_len: std::array::from_fn(|seat| self.state.players[seat].longest_road_len),
-            pieces: std::array::from_fn(|seat| self.state.players[seat].pieces),
-            trade_rates: std::array::from_fn(|seat| self.state.players[seat].trade_rate),
-            own_hand: *self.own_hand(),
-            own_playable_dev: *self.own_playable_dev(),
-            own_bought_dev: *self.own_bought_dev(),
-            dev_deck_remaining: self.dev_deck_remaining,
-            largest_army_holder: self.state.largest_army,
-            longest_road_holder: self.state.longest_road.holder,
-        }
     }
 }
 

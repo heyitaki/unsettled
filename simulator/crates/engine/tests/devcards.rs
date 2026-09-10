@@ -802,7 +802,10 @@ fn devcards_ignores_hidden_composition_of_identical_public_streams() {
     };
     let first_view = first.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
     let second_view = second.decision_view(&board, &topology, 0, DecisionPhase::PreRoll);
-    assert_eq!(first_view.to_owned(), second_view.to_owned());
+    assert_eq!(first_view.belief(), second_view.belief());
+    assert_eq!(first_view.hand_size(1), second_view.hand_size(1));
+    assert_eq!(first_view.own_hand(), second_view.own_hand());
+    assert_eq!(first_view.own_playable_dev(), second_view.own_playable_dev());
     assert_eq!(
         devcards::pre_roll_choice(&first_view, &DevCardParams::default(), offers, None),
         devcards::pre_roll_choice(&second_view, &DevCardParams::default(), offers, None)

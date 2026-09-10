@@ -144,16 +144,7 @@ pub struct CoastalGroup {
 pub struct CoastalSelection {
     pub overall: CoastalGroup,
     pub per_slot: Vec<CoastalGroup>,
-    /// The preregistered SP2c gate, read off the overall row: the share must clear 50% by more
-    /// than its clustered interval *and* the lower-hex-count picks must win at least one
-    /// percentage point less often. Both conditions, not either.
-    pub sp2c_gate_passed: bool,
 }
-
-/// How much less often, in win rate, the lower-hex-count picks must win than the higher-hex-count
-/// ones for the gate's second condition to hold. It reads `win_rate_gap`, a contrast between the
-/// two arms, not either arm against 50%.
-const GATE_WIN_RATE_GAP: f64 = 0.01;
 
 pub fn coastal_selection(
     picks: &[CoastalPick],
@@ -165,14 +156,9 @@ pub fn coastal_selection(
     let per_slot = (0..seats)
         .map(|slot| group(Some(slot), picks, boards, z))
         .collect();
-    let sp2c_gate_passed = overall.pairs > 0
-        && !overall.clustered_degenerate
-        && overall.clustered[0] > 0.5
-        && overall.win_rate_gap >= GATE_WIN_RATE_GAP;
     CoastalSelection {
         overall,
         per_slot,
-        sp2c_gate_passed,
     }
 }
 

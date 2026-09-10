@@ -1,4 +1,4 @@
-//! SP0-D1: the pip-matched pair construction, the tie discard, and the preregistered SP2c gate.
+//! SP0-D1: pip-matched pairs, tie discards, clustered shares, and win-rate gaps.
 //!
 //! The board here is built by hand rather than generated, so every candidate's hex count and pip
 //! total is known in advance and the runner-up each pick should draw is a fact of the fixture
@@ -298,7 +298,7 @@ fn pair(board: usize, seat: u8, chose_lower: bool, seat_won: bool) -> CoastalPic
 /// `lower` pairs chose the lower hex count and `higher` pairs did not, spread one per board so
 /// the clustered interval has clusters to work with. `lower_wins` and `higher_wins` say how many
 /// of each went on to win.
-fn gate_picks(
+fn sample_picks(
     lower: usize,
     higher: usize,
     lower_wins: usize,
@@ -315,25 +315,26 @@ fn gate_picks(
 }
 
 #[test]
-fn the_gate_needs_both_the_share_and_the_win_rate_gap() {
+fn the_share_and_win_rate_gap_are_measured_independently() {
     let boards = 1000;
-    // 90% of pairs chose the lower hex count, and those picks won 40 points less often.
-    let both = gate_picks(900, 100, 360, 100);
-    assert!(coastal_selection(&both, SEATS, boards, Z).sp2c_gate_passed);
 
-    // Same share, but the lower-hex picks win only half a point less often.
-    let share_only = gate_picks(900, 100, 355, 40);
+    // 90% of pairs chose the lower hex count, and those picks won 60 points less often.
+    let both = sample_picks(900, 100, 360, 100);
+    let selection = coastal_selection(&both, SEATS, boards, Z);
+    assert!(selection.overall.clustered[0] > 0.5);
+    assert!((selection.overall.win_rate_gap - 0.6).abs() < 1e-12);
+
+    // Same share, with a win-rate gap below one percentage point.
+    let share_only = sample_picks(900, 100, 355, 40);
     let selection = coastal_selection(&share_only, SEATS, boards, Z);
     assert!(selection.overall.clustered[0] > 0.5);
     assert!(selection.overall.win_rate_gap < 0.01);
-    assert!(!selection.sp2c_gate_passed);
 
     // A wide win-rate gap cannot carry a share that sits on the null.
-    let gap_only = gate_picks(500, 500, 100, 400);
+    let gap_only = sample_picks(500, 500, 100, 400);
     let selection = coastal_selection(&gap_only, SEATS, boards, Z);
     assert!(selection.overall.clustered[0] <= 0.5);
     assert!(selection.overall.win_rate_gap >= 0.01);
-    assert!(!selection.sp2c_gate_passed);
 }
 
 #[test]

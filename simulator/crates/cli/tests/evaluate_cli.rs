@@ -129,12 +129,12 @@ fn the_second_generation_domains_are_accepted_and_a_typo_is_not() {
 }
 
 #[test]
-fn alpha_endpoints_are_rejected() {
-    for alpha in ["0", "1"] {
+fn unsupported_alphas_are_rejected() {
+    for alpha in ["0", "1", "0.025", "NaN", "inf"] {
         let out = output_dir(&format!("evaluate-cli-alpha-{alpha}"));
         let mut arguments = valid_arguments(&out);
         arguments.extend(["--alpha".into(), alpha.into()]);
-        assert_named_error(&arguments, "alpha must be greater than 0 and less than 1");
+        assert_named_error(&arguments, "--alpha must be one of 0.10, 0.05, or 0.01");
     }
 }
 

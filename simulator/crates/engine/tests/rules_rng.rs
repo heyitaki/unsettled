@@ -82,8 +82,22 @@ fn modifiers_flatten_costs_and_trade_rates_per_player() {
 }
 
 #[test]
-fn base_flattened_rules_take_the_no_effects_fast_path() {
-    let rules = RuleConfig::base(Layout::Standard4);
-    let flattened = rules.flatten_player(&PlayerModifiers::default(), &[]);
-    assert!(!flattened.has_effects());
+fn base_cost_variants_and_a_modifier_alternative_fit_together() {
+    let mut rules = RuleConfig::base(Layout::Standard4);
+    rules
+        .buildables
+        .iter_mut()
+        .find(|spec| spec.kind == Buildable::City)
+        .unwrap()
+        .costs = vec![[0, 2, 0, 0, 0], [2, 0, 0, 0, 0]];
+    let modifier = PlayerModifiers {
+        extra_cost_alternatives: vec![(Buildable::City, [0, 0, 0, 4, 0])],
+        ..PlayerModifiers::default()
+    };
+
+    let flattened = rules.flatten_player(&modifier, &[]);
+    assert_eq!(
+        flattened.costs(Buildable::City),
+        &[[0, 2, 0, 0, 0], [2, 0, 0, 0, 0], [0, 0, 0, 4, 0]]
+    );
 }
