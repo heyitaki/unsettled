@@ -11,7 +11,7 @@ import {
 import { edgeEndpointVertexIds, vertexIncidentEdgeIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type EdgeId, type VertexId } from '../../model/types'
-import { expansionSites, expansionSitesByEdge, expansionTerm } from '../expansion'
+import { expansionTerm, walkSites } from '../expansion'
 import { vertexAdjacency } from '../legality'
 import {
   addToHoldings,
@@ -76,20 +76,25 @@ describe('expansion term', () => {
     const openOccupancy = occupancyFromBoard(open, 'me')
     const boxedOccupancy = occupancyFromBoard(boxed, 'me')
 
-    const sites = expansionSites('standard4', openOccupancy, new Set([CANDIDATE]), CANDIDATE)
-    expect(sites.length).toBeGreaterThan(1)
+    const out = walkSites('standard4', openOccupancy, new Set([CANDIDATE]), CANDIDATE)!.output
+    const cheapest = new Map<number, number>()
+    for (const [index, vertex] of out.siteVertex.entries()) {
+      cheapest.set(vertex, Math.min(cheapest.get(vertex) ?? Infinity, out.sitePaid[index]))
+    }
+    expect(cheapest.size).toBeGreaterThan(1)
     const held = addToHoldings(openCtx, emptyHoldings(), CANDIDATE)
-    const discounted = sites
-      .map((site) =>
-        marginalWithoutExpansion(openCtx, held, site.vertexId) *
-          witness.expansionDecay ** site.paidBuilds)
+    const discounted = [...cheapest]
+      .map(([vertex, paidBuilds]) =>
+        marginalWithoutExpansion(openCtx, held, grid.vertexIds[vertex]) *
+          witness.expansionDecay ** paidBuilds)
       .sort((left, right) => right - left)
     const expected = witness.expansionWeight * (discounted[0] + discounted[1])
 
     const openScore = marginalBreakdown(openCtx, emptyHoldings(), CANDIDATE, null, openOccupancy)
     const boxedScore = marginalBreakdown(boxedCtx, emptyHoldings(), CANDIDATE, null, boxedOccupancy)
     expect(openScore.expansion).toBe(expected)
-    expect(expansionSites('standard4', boxedOccupancy, new Set([CANDIDATE]), CANDIDATE)).toEqual([])
+    expect(walkSites('standard4', boxedOccupancy, new Set([CANDIDATE]), CANDIDATE)!.output.siteVertex)
+      .toEqual([])
     expect(boxedScore.expansion).toBe(0)
     // The two boards differ only in the rivals' pieces, so every other component is untouched and
     // the whole gap is the term.
@@ -101,24 +106,29 @@ describe('expansion term', () => {
     const board = completeBoard()
     const [first, second, third] = incidentEdges(CANDIDATE)
     const ctx = computeBoardContext(board, witness)
-    const openSites = expansionSites(
+    const openOutput = walkSites(
       'standard4',
       occupancyFromBoard(board, 'me'),
       new Set([CANDIDATE]),
       CANDIDATE,
-    )
+    )!.output
+    const openSites = new Map<number, number>()
+    for (const [index, vertex] of openOutput.siteVertex.entries()) {
+      openSites.set(vertex, Math.min(openSites.get(vertex) ?? Infinity, openOutput.sitePaid[index]))
+    }
 
     const twoClosed = placeRoad(placeRoad(board, first, 'foe'), second, 'foe')
     const throughThird = occupancyFromBoard(twoClosed, 'me')
-    const narrowed = expansionSites('standard4', throughThird, new Set([CANDIDATE]), CANDIDATE)
-    expect(narrowed.length).toBeGreaterThan(0)
-    expect(narrowed.length).toBeLessThan(openSites.length)
-    expect(narrowed.every((site) => site.firstEdge === third)).toBe(true)
+    const narrowed = walkSites('standard4', throughThird, new Set([CANDIDATE]), CANDIDATE)!.output
+    expect(narrowed.siteVertex.length).toBeGreaterThan(0)
+    expect(new Set(narrowed.siteVertex).size).toBeLessThan(openSites.size)
+    expect(narrowed.edgeIds).toEqual([third])
     expect(expansionTerm(ctx, emptyHoldings(), throughThird, CANDIDATE).road).toBe(third)
 
     const allClosed = placeRoad(twoClosed, third, 'foe')
     const closed = occupancyFromBoard(allClosed, 'me')
-    expect(expansionSites('standard4', closed, new Set([CANDIDATE]), CANDIDATE)).toEqual([])
+    expect(walkSites('standard4', closed, new Set([CANDIDATE]), CANDIDATE)!.output.siteVertex)
+      .toEqual([])
     expect(expansionTerm(computeBoardContext(allClosed, witness), emptyHoldings(), closed, CANDIDATE))
       .toEqual({ value: 0, road: null })
 
@@ -129,59 +139,46 @@ describe('expansion term', () => {
       board,
     )
     const ownRoads = occupancyFromBoard(mine, 'me')
-    const owned = expansionSites('standard4', ownRoads, new Set([CANDIDATE]), CANDIDATE)
+    const owned = walkSites('standard4', ownRoads, new Set([CANDIDATE]), CANDIDATE)!.output
     // Strictly more, not merely no fewer: the free setup road is still in hand after travelling
     // an own road, so the horizon reaches one ring further than it does off the bare board. A
     // walk that spent the road on every first step would tie here, not lose.
-    expect(owned.length).toBeGreaterThan(openSites.length)
+    expect(new Set(owned.siteVertex).size).toBeGreaterThan(openSites.size)
     // And the sites the bare board already reached are reached for no more than they cost there.
-    for (const site of openSites) {
-      const same = owned.find((reached) => reached.vertexId === site.vertexId)
-      expect(same?.paidBuilds).toBeLessThanOrEqual(site.paidBuilds)
+    for (const [vertex, paidBuilds] of openSites) {
+      const costs = owned.sitePaid.filter((_, index) => owned.siteVertex[index] === vertex)
+      expect(Math.min(...costs)).toBeLessThanOrEqual(paidBuilds)
     }
     // Named as somebody else, the very same roads close the candidate in.
-    expect(expansionSites(
+    expect(walkSites(
       'standard4',
       occupancyFromBoard(mine, 'foe'),
       new Set([CANDIDATE]),
       CANDIDATE,
-    )).toEqual([])
+    )!.output.siteVertex).toEqual([])
   })
 
-  it('folds a site to its cheapest first edge and lists sites in vertex order', () => {
+  it('groups sites by first edge and visits paid-build costs in ascending order', () => {
     const board = completeBoard()
     const occupancy = occupancyFromBoard(board, 'me')
     const own = new Set([CANDIDATE])
-    const byEdge = expansionSitesByEdge('standard4', occupancy, own, CANDIDATE)
-    const folded = expansionSites('standard4', occupancy, own, CANDIDATE)
-
-    expect([...folded].sort((left, right) =>
-      left.vertexId < right.vertexId ? -1 : left.vertexId > right.vertexId ? 1 : 0))
-      .toEqual(folded)
-    expect(new Set(folded.map((site) => site.vertexId)).size).toBe(folded.length)
-
-    // Every kept site is the cheapest reading of that vertex anywhere in the walk, and among the
-    // cheapest readings it is the one through the lower edge id.
-    const reached = new Map<VertexId, { paidBuilds: number; firstEdge: EdgeId }[]>()
-    for (const sites of byEdge.values()) {
-      for (const site of sites) {
-        reached.set(site.vertexId, [...(reached.get(site.vertexId) ?? []), site])
-      }
+    const out = walkSites('standard4', occupancy, own, CANDIDATE)!.output
+    expect([...out.edgeIds].sort()).toEqual(incidentEdges(CANDIDATE))
+    expect(out.edgeStart[0]).toBe(0)
+    expect(out.edgeEnd.at(-1)).toBe(out.siteVertex.length)
+    expect(out.sitePaid).toHaveLength(out.siteVertex.length)
+    for (const [edge] of out.edgeIds.entries()) {
+      const start = out.edgeStart[edge]
+      const end = out.edgeEnd[edge]
+      if (edge > 0) expect(start).toBe(out.edgeEnd[edge - 1])
+      const vertices = out.siteVertex.slice(start, end)
+      expect(new Set(vertices).size).toBe(vertices.length)
+      const costs = out.sitePaid.slice(start, end)
+      expect([...costs].sort((left, right) => left - right)).toEqual(costs)
     }
-    expect(folded.length).toBe(reached.size)
-    for (const site of folded) {
-      const all = reached.get(site.vertexId) ?? []
-      const cheapest = Math.min(...all.map((one) => one.paidBuilds))
-      expect(site.paidBuilds).toBe(cheapest)
-      expect(site.firstEdge).toBe(
-        all.filter((one) => one.paidBuilds === cheapest)
-          .map((one) => one.firstEdge)
-          .sort()[0],
-      )
-    }
-    // A vertex reachable through more than one direction is what makes the rule bite.
-    expect([...reached.values()].some((all) => new Set(all.map((one) => one.firstEdge)).size > 1))
-      .toBe(true)
+
+    // Some sites are reachable through multiple first edges.
+    expect(new Set(out.siteVertex).size).toBeLessThan(out.siteVertex.length)
   })
 
   it('records a site once per first edge when both road-spent lanes reach it', () => {
@@ -195,14 +192,17 @@ describe('expansion term', () => {
     const farEnd = edgeEndpointVertexIds(far).find((vertexId) => vertexId !== neighbour)!
     const board = placeRoad(placeRoad(completeBoard(), near, 'me'), far, 'me')
     const occupancy = occupancyFromBoard(board, 'me')
-    const byEdge = expansionSitesByEdge('standard4', occupancy, new Set([CANDIDATE]), CANDIDATE)
-
-    const sites = byEdge.get(near) ?? []
-    expect(sites.filter((site) => site.vertexId === farEnd))
-      .toEqual([{ vertexId: farEnd, paidBuilds: 0, firstEdge: near }])
-    for (const [edgeId, listed] of byEdge) {
-      expect(new Set(listed.map((site) => site.vertexId)).size).toBe(listed.length)
-      expect(listed.every((site) => site.firstEdge === edgeId)).toBe(true)
+    const out = walkSites('standard4', occupancy, new Set([CANDIDATE]), CANDIDATE)!.output
+    const edge = out.edgeIds.indexOf(near)
+    expect(edge).toBeGreaterThanOrEqual(0)
+    const start = out.edgeStart[edge]
+    const end = out.edgeEnd[edge]
+    const farCosts = out.sitePaid.slice(start, end)
+      .filter((_, index) => grid.vertexIds[out.siteVertex[start + index]] === farEnd)
+    expect(farCosts).toEqual([0])
+    for (const [index] of out.edgeIds.entries()) {
+      const listed = out.siteVertex.slice(out.edgeStart[index], out.edgeEnd[index])
+      expect(new Set(listed).size).toBe(listed.length)
     }
   })
 
@@ -251,25 +251,25 @@ describe('expansion term', () => {
     const holdings = emptyHoldings()
     // Recompute the whole rule from the per-edge walk, on every candidate the board offers.
     for (const candidate of grid.vertexIds) {
-      const byEdge = expansionSitesByEdge('standard4', occupancy, new Set([candidate]), candidate)
-      const term = expansionTerm(ctx, holdings, occupancy, candidate)
-      if (byEdge.size === 0) {
-        expect(term).toEqual({ value: 0, road: null })
+      const out = walkSites('standard4', occupancy, new Set([candidate]), candidate)!.output
+      if (out.edgeIds.length === 0) {
+        expect(expansionTerm(ctx, holdings, occupancy, candidate)).toEqual({ value: 0, road: null })
         continue
       }
       const held = addToHoldings(ctx, holdings, candidate)
-      const ranked = [...byEdge].map(([edgeId, sites]) => {
-        const values = sites
-          .map((site) =>
-            marginalWithoutExpansion(ctx, held, site.vertexId) *
-              witness.expansionDecay ** site.paidBuilds)
+      const ranked = out.edgeIds.map((edgeId, edge) => {
+        const start = out.edgeStart[edge]
+        const values = out.siteVertex.slice(start, out.edgeEnd[edge])
+          .map((vertex, index) =>
+            marginalWithoutExpansion(ctx, held, grid.vertexIds[vertex]) *
+              witness.expansionDecay ** out.sitePaid[start + index])
           .sort((left, right) => right - left)
         return { edgeId, best: values[0], pair: values[0] + (values[1] ?? 0) }
       }).sort((left, right) =>
         right.best - left.best ||
         right.pair - left.pair ||
         (left.edgeId < right.edgeId ? -1 : 1))
-      expect(term.road).toBe(ranked[0].edgeId)
+      expect(expansionTerm(ctx, holdings, occupancy, candidate).road).toBe(ranked[0].edgeId)
     }
   })
 
@@ -280,13 +280,13 @@ describe('expansion term', () => {
     const weights = withWeights({ expansionWeight: 0.3, expansionDecay: 1 })
     const ctx = computeBoardContext(board, weights)
     const occupancy = occupancyFromBoard(board, 'me')
-    const byEdge = expansionSitesByEdge('standard4', occupancy, new Set([CANDIDATE]), CANDIDATE)
+    const out = walkSites('standard4', occupancy, new Set([CANDIDATE]), CANDIDATE)!.output
     const edges = incidentEdges(CANDIDATE)
-    expect([...byEdge.keys()].sort()).toEqual(edges)
+    expect([...out.edgeIds].sort()).toEqual(edges)
     const held = addToHoldings(ctx, emptyHoldings(), CANDIDATE)
-    const values = edges.map((edgeId) =>
-      (byEdge.get(edgeId) ?? [])
-        .map((site) => marginalWithoutExpansion(ctx, held, site.vertexId))
+    const values = out.edgeIds.map((_, edge) =>
+      out.siteVertex.slice(out.edgeStart[edge], out.edgeEnd[edge])
+        .map((vertex) => marginalWithoutExpansion(ctx, held, grid.vertexIds[vertex]))
         .sort((left, right) => right - left)
         .slice(0, 2))
     // The tie is real, not an artefact of one edge happening to win.

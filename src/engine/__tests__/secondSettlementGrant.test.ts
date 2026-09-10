@@ -3,9 +3,8 @@ import { addPlayer, createBoard, pips, setTile } from '../../model/board'
 import { axialKey, vertexTouchingHexes } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Resource, type VertexId } from '../../model/types'
-import { rankCandidates, type AnalysisOptions, type PreWindowResult } from '../analyze'
+import { rankCandidates, type PreWindowResult } from '../analyze'
 import type { DraftState } from '../draft'
-import { neutralModifier } from '../modifiers'
 import { computeBoardContext } from '../valuation'
 import { DEFAULT_WEIGHTS, type EngineWeights } from '../weights'
 
@@ -37,17 +36,11 @@ function productiveBoard(): Board {
   return board
 }
 
-const options: Required<AnalysisOptions> = {
-  seed: 7,
-  rollouts: 1,
-  weights: DEFAULT_WEIGHTS,
-  modifier: neutralModifier,
-  maxResults: 54,
-}
-
 const preWindows: PreWindowResult[] = [{
   blocked: new Set(),
   taken: [],
+  pickerIds: [],
+  uniforms: [0, 0, 0, 0],
 }]
 
 /** Snake order `aki, p2, p2, aki`: turn 0 is my first pick, turn 3 my second. */
@@ -71,7 +64,7 @@ const rank = (board: Board, turnIndex: 0 | 3, weights: EngineWeights = DEFAULT_W
     board,
     draftForPick(turnIndex),
     preWindows,
-    { ...options, weights },
+    54,
   )
 
 /**

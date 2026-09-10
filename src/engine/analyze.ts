@@ -8,18 +8,18 @@ import {
   legalSettlementVertices,
   vertexAdjacency,
 } from './legality'
-import { neutralModifier, type PlacementModifier } from './modifiers'
 import { mulberry32 } from './random'
 import {
   addToHoldings,
   breakdownTotal,
   computeBoardContext,
+  emptyBreakdown,
   emptyHoldings,
+  marginalBreakdown,
   marginalParts,
   marginalTotal,
   marginalWithoutExpansion,
   occupancyFromBoard,
-  scoreCandidate,
   type BoardContext,
   type DraftSlot,
   type HandCounts,
@@ -55,14 +55,12 @@ export interface Recommendation {
   score: number
   rankScore: number
   breakdown: ScoreBreakdown
-  expectedTaken: VertexId[]
 }
 
 export interface AnalysisOptions {
   seed?: number
   rollouts?: number
   weights?: EngineWeights
-  modifier?: PlacementModifier
   maxResults?: number
 }
 
@@ -77,8 +75,8 @@ export interface DraftAnalysis {
 export interface PreWindowResult {
   blocked: Set<VertexId>
   taken: readonly VertexId[]
-  pickerIds?: readonly string[]
-  uniforms?: readonly number[]
+  pickerIds: readonly string[]
+  uniforms: readonly number[]
 }
 
 interface WindowResult {
@@ -89,7 +87,6 @@ interface WindowResult {
 
 interface CandidateAggregate {
   breakdown: ScoreBreakdown
-  expectedTaken: Map<VertexId, number>
   plannedSecond: Map<VertexId, number>
   survived: number
 }
@@ -104,16 +101,6 @@ interface ScoredTurn {
 interface DraftTurn extends ScoredTurn {
   turnIndex: number
 }
-
-const emptyBreakdown = (): ScoreBreakdown => ({
-  production: 0,
-  scarcity: 0,
-  robber: 0,
-  diversity: 0,
-  port: 0,
-  handValue: 0,
-  expansion: 0,
-})
 
 const addBreakdown = (target: ScoreBreakdown, value: ScoreBreakdown): void => {
   target.production += value.production
@@ -214,37 +201,6 @@ const draftSlotOf = (board: Board, playerId: string): DraftSlot | null => {
   return slot < 0 ? null : { seats: board.players.length, slot }
 }
 
-const scoreForScan = (
-  ctx: BoardContext,
-  board: Board,
-  holdings: Holdings,
-  vertexId: VertexId,
-  playerId: string,
-  modifier: PlacementModifier,
-  receivesGrant: boolean,
-  occupancy: Occupancy,
-  slot: DraftSlot | null,
-): number => modifier === neutralModifier
-  ? marginalTotal(
-      ctx,
-      holdings,
-      vertexId,
-      handForCandidate(ctx, vertexId, receivesGrant),
-      occupancy,
-      slot,
-    )
-  : scoreCandidate(
-      ctx,
-      holdings,
-      vertexId,
-      playerId,
-      board,
-      modifier,
-      handForCandidate(ctx, vertexId, receivesGrant),
-      occupancy,
-      slot,
-    ).total
-
 function bestLegalCandidate(
   ctx: BoardContext,
   board: Board,
@@ -252,7 +208,6 @@ function bestLegalCandidate(
   blocked: ReadonlySet<VertexId>,
   occupied: ReadonlySet<VertexId>,
   playerId: string,
-  modifier: PlacementModifier,
   receivesGrant: boolean,
 ): VertexId | null {
   let best: VertexId | null = null
@@ -261,14 +216,11 @@ function bestLegalCandidate(
   const slot = draftSlotOf(board, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
-    const score = scoreForScan(
+    const score = marginalTotal(
       ctx,
-      board,
       holdings,
       vertexId,
-      playerId,
-      modifier,
-      receivesGrant,
+      handForCandidate(ctx, vertexId, receivesGrant),
       occupancy,
       slot,
     )
@@ -388,8 +340,7 @@ function bestPartners(
  * The pair value assumes the planned second survives the picks in between, and prices its
  * expansion against the current occupancy with empty holdings rather than the candidate. The
  * hero's own ranking rolls the picks in between out instead, so the two views agree on the pick
- * and not to the decimal. A modifier reaches the candidate's own score and, through the walk's
- * value, the partner's expansion component; the rest of the partner is read from the table.
+ * and not to the decimal.
  */
 function opponentPick(
   ctx: BoardContext,
@@ -399,7 +350,6 @@ function opponentPick(
   blocked: ReadonlySet<VertexId>,
   occupied: ReadonlySet<VertexId>,
   uniform: number,
-  modifier: PlacementModifier,
   receivesGrant: boolean,
   hasLaterPick: boolean,
 ): VertexId | null {
@@ -419,14 +369,11 @@ function opponentPick(
     if (blocked.has(vertexId)) continue
     legal.push(vertexId)
     if (partners === null) {
-      own.push(scoreForScan(
+      own.push(marginalTotal(
         ctx,
-        board,
         holdings,
         vertexId,
-        playerId,
-        modifier,
-        receivesGrant,
+        handForCandidate(ctx, vertexId, receivesGrant),
         occupancy,
         slot,
       ))
@@ -435,15 +382,7 @@ function opponentPick(
     gridIndex.push(index)
     // The scan's two halves kept apart: the walk's value is also the partner's expansion.
     const hand = handForCandidate(ctx, vertexId, receivesGrant)
-    let scored: { expansion: number; total: number }
-    if (modifier === neutralModifier) {
-      scored = marginalParts(ctx, holdings, vertexId, hand, occupancy, slot)
-    } else {
-      const full = scoreCandidate(
-        ctx, holdings, vertexId, playerId, board, modifier, hand, occupancy, slot,
-      )
-      scored = { expansion: full.breakdown.expansion, total: full.total }
-    }
+    const scored = marginalParts(ctx, holdings, vertexId, hand, occupancy, slot)
     expansion.push(scored.expansion)
     own.push(scored.total)
   }
@@ -494,7 +433,7 @@ function opponentPick(
   return topVertices.at(-1) ?? null
 }
 
-function simulateWindowDetailed(
+export function simulateWindowDetailed(
   ctx: BoardContext,
   board: Board,
   turns: readonly ScoredTurn[],
@@ -502,7 +441,6 @@ function simulateWindowDetailed(
   blocked: Set<VertexId>,
   occupied: Set<VertexId>,
   nextUniform: () => number,
-  modifier: PlacementModifier,
 ): WindowResult {
   const holdings = new Map(initialHoldings)
   const taken: VertexId[] = []
@@ -519,7 +457,6 @@ function simulateWindowDetailed(
       blocked,
       occupied,
       uniform,
-      modifier,
       receivesGrant,
       hasLaterPick,
     )
@@ -533,40 +470,12 @@ function simulateWindowDetailed(
   return { holdings, pickerIds: actualPickers, taken }
 }
 
-/**
- * Exported for tests: exercises defensive branches unreachable from valid boards, and the pair
- * pricing of a first settlement when every picker is given a later pick.
- */
-export function simulateOpponentWindow(
-  ctx: BoardContext,
-  board: Board,
-  pickerIds: readonly string[],
-  holdings: ReadonlyMap<string, Holdings>,
-  blocked: Set<VertexId>,
-  nextUniform: () => number,
-  modifier: PlacementModifier,
-  hasLaterPick = false,
-): VertexId[] {
-  return simulateWindowDetailed(
-    ctx,
-    board,
-    pickerIds.map((playerId) => ({ playerId, receivesGrant: false, hasLaterPick })),
-    holdings,
-    blocked,
-    new Set(boardSettlements(board)),
-    nextUniform,
-    modifier,
-  ).taken
-}
-
 const frequencyOrder = (
   counts: ReadonlyMap<VertexId, number>,
   denominator: number,
   gridIndex: ReadonlyMap<VertexId, number>,
-  threshold = 0,
 ): { vertexId: VertexId; frequency: number }[] =>
   [...counts]
-    .filter(([, count]) => count / denominator >= threshold)
     .map(([vertexId, count]) => ({ vertexId, frequency: count / denominator }))
     .sort((a, b) => b.frequency - a.frequency ||
       (gridIndex.get(a.vertexId) ?? 0) - (gridIndex.get(b.vertexId) ?? 0))
@@ -574,20 +483,11 @@ const frequencyOrder = (
 function replayPreWindowHoldings(
   ctx: BoardContext,
   board: Board,
-  draft: DraftState,
   preWindow: PreWindowResult,
-  firstPickIndex: number,
 ): Map<string, Holdings> {
   const holdings = holdingsFromBoard(ctx, board)
-  const scheduled = remainingTurns(
-    draft,
-    draft.turnIndex ?? firstPickIndex,
-    firstPickIndex,
-    board.mePlayerId,
-  ).map(({ playerId }) => playerId)
   for (let index = 0; index < preWindow.taken.length; index += 1) {
-    const playerId = preWindow.pickerIds?.[index] ?? scheduled[index]
-    if (playerId === undefined) continue
+    const playerId = preWindow.pickerIds[index]
     const held = holdings.get(playerId) ?? emptyHoldings()
     holdings.set(playerId, addToHoldings(ctx, held, preWindow.taken[index]))
   }
@@ -611,7 +511,7 @@ export function rankCandidates(
   board: Board,
   draft: DraftState,
   preWindows: readonly PreWindowResult[],
-  options: Required<AnalysisOptions>,
+  maxResults: number,
 ): { recommendations: Recommendation[]; takenBeforeFirstPick: TakenVertex[] } {
   const grid = boardGrid(board.layout)
   const gridIndex = new Map(grid.vertexIds.map((vertexId, index) => [vertexId, index]))
@@ -630,7 +530,7 @@ export function rankCandidates(
   const modal = preWindows[0]
   const takenBeforeFirstPick: TakenVertex[] = (modal?.taken ?? []).map((vertexId, index) => ({
     vertexId,
-    playerId: modal.pickerIds?.[index] ?? '',
+    playerId: modal.pickerIds[index],
     frequency: (takenCounts.get(vertexId) ?? 0) / denominator,
   }))
   const firstPickIndex = draft.myRemainingPickIndices[0]
@@ -660,12 +560,11 @@ export function rankCandidates(
   const preWindowOccupancy = preWindowOccupied.map((occupied) =>
     rolloutOccupancy(board, occupied, me))
   const preWindowHoldings = preWindows.map((preWindow) =>
-    replayPreWindowHoldings(ctx, board, draft, preWindow, firstPickIndex))
+    replayPreWindowHoldings(ctx, board, preWindow))
 
   for (const candidate of candidates) {
     const aggregate: CandidateAggregate = {
       breakdown: emptyBreakdown(),
-      expectedTaken: new Map(),
       plannedSecond: new Map(),
       survived: 0,
     }
@@ -675,23 +574,16 @@ export function rankCandidates(
       aggregate.survived += 1
       // Scored per window rather than once against the bare board: by the time I pick, the seats
       // ahead of me have taken the vertices this window records, and the expansion walk reads
-      // those as occupied. Expansion is the only component that moves between windows; the other
-      // six are recomputed alongside it so a modifier still sees one whole breakdown.
-      const firstScore = scoreCandidate(
+      // those as occupied.
+      const firstScore = marginalBreakdown(
         ctx,
         myHoldings,
         candidate,
-        me,
-        board,
-        options.modifier,
         firstHand,
         preWindowOccupancy[windowIndex],
         mySlot,
       )
-      addBreakdown(aggregate.breakdown, firstScore.breakdown)
-      for (const vertexId of preWindow.taken) {
-        aggregate.expectedTaken.set(vertexId, (aggregate.expectedTaken.get(vertexId) ?? 0) + 1)
-      }
+      addBreakdown(aggregate.breakdown, firstScore)
       if (secondPickIndex === undefined) continue
 
       const blocked = new Set(preWindow.blocked)
@@ -704,8 +596,8 @@ export function rankCandidates(
       const opponentHoldings = preWindowHoldings[windowIndex]
       let uniformIndex = 0
       const nextUniform = () =>
-        preWindow.uniforms?.[midTurns[uniformIndex++]?.turnIndex ?? 0] ?? 0
-      const midWindow = simulateWindowDetailed(
+        preWindow.uniforms[midTurns[uniformIndex++].turnIndex]
+      simulateWindowDetailed(
         ctx,
         board,
         midTurns,
@@ -713,11 +605,7 @@ export function rankCandidates(
         blocked,
         occupied,
         nextUniform,
-        options.modifier,
       )
-      for (const vertexId of midWindow.taken) {
-        aggregate.expectedTaken.set(vertexId, (aggregate.expectedTaken.get(vertexId) ?? 0) + 1)
-      }
       const second = bestLegalCandidate(
         ctx,
         board,
@@ -725,17 +613,13 @@ export function rankCandidates(
         blocked,
         occupied,
         me,
-        options.modifier,
         receivesSecondSettlementGrant(draft, secondPickIndex),
       )
       if (second === null) continue
-      const secondScore = scoreCandidate(
+      const secondScore = marginalBreakdown(
         ctx,
         firstHoldings,
         second,
-        me,
-        board,
-        options.modifier,
         handForCandidate(
           ctx,
           second,
@@ -744,7 +628,7 @@ export function rankCandidates(
         rolloutOccupancy(board, occupied, me),
         mySlot,
       )
-      addBreakdown(aggregate.breakdown, secondScore.breakdown)
+      addBreakdown(aggregate.breakdown, secondScore)
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
     }
     aggregates.set(candidate, aggregate)
@@ -778,12 +662,6 @@ export function rankCandidates(
       score,
       rankScore: survival * score,
       breakdown,
-      expectedTaken: frequencyOrder(
-        aggregate.expectedTaken,
-        aggregate.survived,
-        gridIndex,
-        0.5,
-      ).map(({ vertexId }) => vertexId),
     })
   }
   recommendations.sort((a, b) => b.rankScore - a.rankScore ||
@@ -799,7 +677,7 @@ export function rankCandidates(
   // against an occupancy that holds a rival on or beside the vertex would draw a road out of a
   // placement that window made illegal.
   return {
-    recommendations: recommendations.slice(0, options.maxResults).map((recommendation) => ({
+    recommendations: recommendations.slice(0, maxResults).map((recommendation) => ({
       ...recommendation,
       firstRoad: expansionTerm(
         ctx,
@@ -847,7 +725,6 @@ export function rolloutCount(
 
 export function analyzeBoard(board: Board, options: AnalysisOptions = {}): DraftAnalysis {
   const weights = options.weights ?? DEFAULT_WEIGHTS
-  const modifier = options.modifier ?? neutralModifier
   const draft = inferDraftState(board)
   const ctx = computeBoardContext(board, weights)
   const legal = legalSettlementVertices(board)
@@ -865,14 +742,11 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
   const pendingReceivesGrant = pendingPickIndex !== undefined &&
     receivesSecondSettlementGrant(draft, pendingPickIndex)
   const hasPositiveScore = canRank && legal.some((vertexId) =>
-    scoreForScan(
+    marginalTotal(
       ctx,
-      board,
       myHoldings,
       vertexId,
-      me,
-      modifier,
-      pendingReceivesGrant,
+      handForCandidate(ctx, vertexId, pendingReceivesGrant),
       boardOccupancy,
       mySlot,
     ) > 0)
@@ -904,7 +778,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
       let uniformIndex = 0
       const nextUniform = () => rollout === 0
         ? 0
-        : uniforms[rollout][preTurns[uniformIndex++]?.turnIndex ?? 0]
+        : uniforms[rollout][preTurns[uniformIndex++].turnIndex]
       const result = simulateWindowDetailed(
         ctx,
         board,
@@ -913,7 +787,6 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
         blocked,
         new Set(baseOccupied),
         nextUniform,
-        modifier,
       )
       preWindows.push({
         blocked,
@@ -924,13 +797,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
           : uniforms[rollout],
       })
     }
-    const ranked = rankCandidates(ctx, board, draft, preWindows, {
-      seed: options.seed ?? 7,
-      rollouts,
-      weights,
-      modifier,
-      maxResults: options.maxResults ?? weights.maxResults,
-    })
+    const ranked = rankCandidates(ctx, board, draft, preWindows, options.maxResults ?? weights.maxResults)
     recommendations = ranked.recommendations
     takenBeforeFirstPick = ranked.takenBeforeFirstPick
   }

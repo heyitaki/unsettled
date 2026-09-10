@@ -13,15 +13,6 @@ import {
 /** Paid road-builds a site may cost before it is out of reach. The free setup road is not one. */
 const MAX_PAID_BUILDS = 2
 
-/** A site the candidate opens, at the cheapest cost it can be reached for. */
-export interface ExpansionSite {
-  vertexId: VertexId
-  /** Roads that must be bought to settle it, over and above the free setup road. */
-  paidBuilds: number
-  /** The candidate's own incident edge the cheapest path leaves through. */
-  firstEdge: EdgeId
-}
-
 /** One step out of a vertex: the edge taken, and the index of the vertex it lands on. */
 interface Step {
   edgeId: EdgeId
@@ -113,9 +104,7 @@ interface Scratch {
  * The walk's sites, grouped by the first edge that reaches them, without an object per site.
  * `edgeIds[e]` owns the span `[edgeStart[e], edgeEnd[e])` of the flat site arrays.
  *
- * Valid only until the next walk on the same layout: both callers read it before walking again.
- * `expansionSitesByEdge` copies it into the public shape; `expansionTerm` reads it in place, which
- * is what keeps a six-player analysis from allocating a few million short-lived site objects.
+ * Valid only until the next walk on the same layout. Read it before walking again.
  */
 interface WalkOutput {
   edgeIds: EdgeId[]
@@ -174,7 +163,7 @@ const packState = (vertexIndex: number, roadUsed: boolean): number =>
  *
  * Returns null when the candidate is off the grid, which is the one case with no scratch to read.
  */
-function walkSites(
+export function walkSites(
   layout: LayoutId,
   occupancy: Occupancy,
   own: ReadonlySet<VertexId>,
@@ -290,68 +279,6 @@ function walkSites(
   return scratch
 }
 
-/**
- * Every site the candidate opens through one of its own incident edges, keyed by that edge. See
- * `walkSites` for the walk; this is its public shape, one object per site.
- *
- * This and `expansionSites` exist so the tests can read the walk's site set. `expansionTerm` reads
- * the flat scratch directly and no longer goes through either, so neither is on the scoring path.
- * `placement/expansion.rs::sites_by_edge` is the same shape behind `#[cfg(test)]`.
- */
-export function expansionSitesByEdge(
-  layout: LayoutId,
-  occupancy: Occupancy,
-  own: ReadonlySet<VertexId>,
-  candidate: VertexId,
-): Map<EdgeId, ExpansionSite[]> {
-  const byEdge = new Map<EdgeId, ExpansionSite[]>()
-  const scratch = walkSites(layout, occupancy, own, candidate)
-  if (scratch === null) return byEdge
-  const { vertexIds } = roadGraph(layout)
-  const out = scratch.output
-  for (let edge = 0; edge < out.edgeIds.length; edge += 1) {
-    const firstEdge = out.edgeIds[edge]
-    const sites: ExpansionSite[] = []
-    for (let index = out.edgeStart[edge]; index < out.edgeEnd[edge]; index += 1) {
-      sites.push({
-        vertexId: vertexIds[out.siteVertex[index]],
-        paidBuilds: out.sitePaid[index],
-        firstEdge,
-      })
-    }
-    byEdge.set(firstEdge, sites)
-  }
-  return byEdge
-}
-
-/**
- * The sites the candidate opens, each at its cheapest paid-build count over every first edge, in
- * ascending vertex order. See `expansionSitesByEdge` for the walk itself.
- */
-export function expansionSites(
-  layout: LayoutId,
-  occupancy: Occupancy,
-  own: ReadonlySet<VertexId>,
-  candidate: VertexId,
-): ExpansionSite[] {
-  const cheapest = new Map<VertexId, ExpansionSite>()
-  for (const sites of expansionSitesByEdge(layout, occupancy, own, candidate).values()) {
-    for (const site of sites) {
-      const held = cheapest.get(site.vertexId)
-      // Ties on cost go to the lower edge id, so the answer never depends on walk order.
-      if (
-        held === undefined ||
-        site.paidBuilds < held.paidBuilds ||
-        (site.paidBuilds === held.paidBuilds && site.firstEdge < held.firstEdge)
-      ) {
-        cheapest.set(site.vertexId, site)
-      }
-    }
-  }
-  return [...cheapest.values()].sort((left, right) =>
-    left.vertexId < right.vertexId ? -1 : left.vertexId > right.vertexId ? 1 : 0)
-}
-
 export interface ExpansionValue {
   /** The term, already multiplied by `expansionWeight`. */
   value: number
@@ -415,11 +342,10 @@ export function expansionTerm(
   for (let edge = 0; edge < out.edgeIds.length; edge += 1) {
     const firstEdge = out.edgeIds[edge]
     const spanEnd = out.edgeEnd[edge]
-    // One pass folds both readings of this edge's span: the two best values it reaches, and each
-    // site at the cheapest paid-build count any first edge reaches it for. Cheapest reach rather
-    // than largest value matches `expansionSites` and `ExpansionSite`'s own definition; folding on
-    // the value would pick the dearest path for a site the pair scores below zero, decay shrinking
-    // a negative toward 0. `placement/expansion.rs::term` folds both the same way.
+
+    // Fold the two best values and each site's cheapest reach in one pass. Folding reach by
+    // value would favor expensive paths for negative scores, because decay shrinks them toward 0.
+    // `placement/expansion.rs::term` uses the same rule.
     let first = -Infinity
     let second = -Infinity
     let sawNaN = false

@@ -18,7 +18,6 @@ describe('imported draft fixture', () => {
     for (let index = 0; index < first.recommendations.length; index += 1) {
       const entry = first.recommendations[index]
       expect(breakdownTotal(entry.breakdown)).toBeCloseTo(entry.score)
-      expect(entry.expectedTaken).not.toContain(entry.firstPick)
       if (index > 0) {
         expect(first.recommendations[index - 1].rankScore).toBeGreaterThanOrEqual(entry.rankScore)
       }

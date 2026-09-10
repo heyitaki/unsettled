@@ -15,21 +15,19 @@ import {
   analyzeBoard,
   rankCandidates,
   resolveStatus,
-  simulateOpponentWindow,
-  type AnalysisOptions,
+  simulateWindowDetailed,
   type PreWindowResult,
 } from '../analyze'
 import { inferDraftState } from '../draft'
-import { expansionSites, expansionTerm } from '../expansion'
+import { expansionTerm, walkSites } from '../expansion'
 import { blockedVertices, blockVertex, legalSettlementVertices, vertexAdjacency } from '../legality'
-import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   computeBoardContext,
   emptyHoldings,
+  marginalTotal,
   marginalWithoutExpansion,
   occupancyFromBoard,
-  scoreCandidate,
   slotScaleOf,
   type Holdings,
 } from '../valuation'
@@ -135,9 +133,14 @@ function pairAwarePick(
   const occupancy = { ...pieces, blocked: new Set([...pieces.blocked, ...standing]), seat: playerId }
   const adjacency = vertexAdjacency(board.layout)
   const legal = boardGrid(board.layout).vertexIds.filter((vertexId) => !blocked.has(vertexId))
-  const own = legal.map((vertexId) => scoreCandidate(
-    ctx, emptyHoldings(), vertexId, playerId, board, neutralModifier, null, occupancy, slot,
-  ).total)
+  const own = legal.map((vertexId) => marginalTotal(
+    ctx,
+    emptyHoldings(),
+    vertexId,
+    null,
+    occupancy,
+    slot,
+  ))
   const expansion = legal.map((vertexId) =>
     scale.expansion * expansionTerm(ctx, emptyHoldings(), occupancy, vertexId).value)
   const plans = legal.map((vertexId, index) => {
@@ -174,15 +177,6 @@ function pairAwarePick(
   }
 }
 
-const requiredOptions = (overrides: Partial<Required<AnalysisOptions>> = {}): Required<AnalysisOptions> => ({
-  seed: 7,
-  rollouts: 1,
-  weights: DEFAULT_WEIGHTS,
-  modifier: neutralModifier,
-  maxResults: DEFAULT_WEIGHTS.maxResults,
-  ...overrides,
-})
-
 function holdingsFor(board: Board, playerId: string) {
   const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
   let holdings = emptyHoldings()
@@ -202,6 +196,7 @@ describe('joint draft analysis', () => {
           n2: VertexId
           naiveFirst: number
           naiveSecond: number
+          taken: VertexId[]
         }
       | undefined
     for (let pattern = 0; pattern < 80 && witness === undefined; pattern += 1) {
@@ -210,17 +205,29 @@ describe('joint draft analysis', () => {
       const singles = legalSettlementVertices(board)
         .map((vertexId) => ({
           vertexId,
-          score: scoreCandidate(ctx, holdings, vertexId, 'aki', board, neutralModifier).total,
+          score: marginalTotal(ctx, holdings, vertexId),
         }))
         .sort((a, b) => b.score - a.score)
       const [first, second] = singles
+      const { taken } = simulateWindowDetailed(
+        ctx,
+        board,
+        [
+          { playerId: 'p2', receivesGrant: false, hasLaterPick: true },
+          { playerId: 'p2', receivesGrant: true, hasLaterPick: false },
+        ],
+        new Map(),
+        blockedVertices(board.layout, [first.vertexId]),
+        new Set([first.vertexId]),
+        () => 0,
+      )
       const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
       const top = analysis.recommendations[0]
       const naiveEntry = analysis.recommendations.find((entry) => entry.firstPick === first.vertexId)
       if (top && naiveEntry &&
         top.firstPick !== first.vertexId &&
         top.rankScore > naiveEntry.rankScore + 0.5 &&
-        naiveEntry.expectedTaken.includes(second.vertexId) &&
+        taken.includes(second.vertexId) &&
         naiveEntry.score < first.score + second.score) {
         witness = {
           analysis,
@@ -229,6 +236,7 @@ describe('joint draft analysis', () => {
           n2: second.vertexId,
           naiveFirst: first.score,
           naiveSecond: second.score,
+          taken,
         }
       }
     }
@@ -237,7 +245,7 @@ describe('joint draft analysis', () => {
     const naiveEntry = witness!.analysis.recommendations.find((entry) => entry.firstPick === witness!.n1)!
     expect(top.firstPick).not.toBe(witness!.n1)
     expect(top.rankScore).toBeGreaterThan(naiveEntry.rankScore + 0.5)
-    expect(naiveEntry.expectedTaken).toContain(witness!.n2)
+    expect(witness!.taken).toContain(witness!.n2)
     expect(naiveEntry.score).toBeLessThan(witness!.naiveFirst + witness!.naiveSecond)
   })
 
@@ -319,7 +327,7 @@ describe('joint draft analysis', () => {
     board = upsertPort(board, PORT_EDGE, 'wheat', 2)
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
     const score = (vertexId: VertexId): number =>
-      scoreCandidate(ctx, emptyHoldings(), vertexId, 'aki', board, neutralModifier).total
+      marginalTotal(ctx, emptyHoldings(), vertexId)
     const reachFor = (vertexId: VertexId): number =>
       ctx.stats.get(vertexId)?.ports.find((access) => access.port.resource === 'wheat')?.reach ?? 0
 
@@ -358,8 +366,14 @@ describe('joint draft analysis', () => {
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
     const adjacency = vertexAdjacency(board.layout)
     const pickers = ['aki', 'p2', 'p3']
-    const taken = simulateOpponentWindow(
-      ctx, board, pickers, new Map(), new Set(), () => 0, neutralModifier, true,
+    const { taken } = simulateWindowDetailed(
+      ctx,
+      board,
+      pickers.map((playerId) => ({ playerId, receivesGrant: false, hasLaterPick: true })),
+      new Map(),
+      new Set(),
+      new Set(),
+      () => 0,
     )
     expect(taken).toHaveLength(pickers.length)
     const blocked = new Set<VertexId>()
@@ -393,8 +407,8 @@ describe('joint draft analysis', () => {
     const { ctx } = holdingsFor(base, 'aki')
     const existing = legalSettlementVertices(base)
       .sort((a, b) =>
-        scoreCandidate(ctx, emptyHoldings(), b, 'aki', base, neutralModifier).total -
-        scoreCandidate(ctx, emptyHoldings(), a, 'aki', base, neutralModifier).total)[0]
+        marginalTotal(ctx, emptyHoldings(), b) -
+        marginalTotal(ctx, emptyHoldings(), a))[0]
     const board = placeBuilding(base, existing, 'aki', 'settlement')
     const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
     expect(analysis.status).toBe('ready')
@@ -413,16 +427,13 @@ describe('joint draft analysis', () => {
       seat: 'aki',
     }
     expect(analysis.recommendations[0].score).toBeCloseTo(
-      scoreCandidate(
+      marginalTotal(
         ctx,
         existingHoldings,
         analysis.recommendations[0].firstPick,
-        'aki',
-        board,
-        neutralModifier,
         ctx.stats.get(analysis.recommendations[0].firstPick)?.setupGrant ?? null,
         standing,
-      ).total,
+      ),
     )
   })
 
@@ -436,15 +447,12 @@ describe('joint draft analysis', () => {
     expect(analysis.takenBeforeFirstPick).toEqual([])
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
     const holdings = addToHoldings(ctx, emptyHoldings(), existing)
-    expect(analysis.recommendations[0].score).toBeCloseTo(scoreCandidate(
+    expect(analysis.recommendations[0].score).toBeCloseTo(marginalTotal(
       ctx,
       holdings,
       analysis.recommendations[0].firstPick,
-      'p2',
-      board,
-      neutralModifier,
       ctx.stats.get(analysis.recommendations[0].firstPick)?.setupGrant ?? null,
-    ).total)
+    ))
   })
 
   it('reconciles a placed-early opponent before the pre-window', () => {
@@ -475,7 +483,27 @@ describe('joint draft analysis', () => {
     expect(analysis.draft.remainingPickIndices
       .filter((index) => analysis.draft.sequence[index] === 'p3')).toEqual([3])
     expect(analysis.recommendations.length).toBeGreaterThan(0)
-    expect(analysis.recommendations.every((entry) => entry.expectedTaken.length === 1)).toBe(true)
+    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const [firstPickIndex, secondPickIndex] = analysis.draft.myRemainingPickIndices
+    const turns = analysis.draft.remainingPickIndices
+      .filter((index) => index > firstPickIndex && index < secondPickIndex)
+      .map((index) => ({
+        playerId: analysis.draft.sequence[index],
+        receivesGrant: true,
+        hasLaterPick: false,
+      }))
+    for (const entry of analysis.recommendations) {
+      const { taken } = simulateWindowDetailed(
+        ctx,
+        board,
+        turns,
+        new Map([['p3', addToHoldings(ctx, emptyHoldings(), existing)]]),
+        blockedVertices(board.layout, [existing, entry.firstPick]),
+        new Set([existing, entry.firstPick]),
+        () => 0,
+      )
+      expect(taken).toHaveLength(1)
+    }
   })
 
   it('reports the expansion walk road only while the walk is on', () => {
@@ -535,10 +563,9 @@ describe('joint draft analysis', () => {
     const settled = seated(new Set([first]))
     const closed = seated(blockedVertices(board.layout, [first]))
     // Sites the walk reaches only once my own settlement's neighbours stop reading as rivals.
-    const reachedUnderClosed = new Set(expansionSites(board.layout, closed, own, second)
-      .map((site) => site.vertexId))
-    const opened = expansionSites(board.layout, settled, own, second)
-      .filter((site) => !reachedUnderClosed.has(site.vertexId))
+    const reachedUnderClosed = new Set(walkSites(board.layout, closed, own, second)!.output.siteVertex)
+    const opened = walkSites(board.layout, settled, own, second)!.output.siteVertex
+      .filter((vertex) => !reachedUnderClosed.has(vertex))
     expect(opened.length).toBeGreaterThan(0)
 
     const firstTerm =
@@ -559,7 +586,6 @@ describe('joint draft analysis', () => {
     const second = top.plannedSecond[0]
     // A solo roster drafts alone, so nothing is taken between my two picks.
     expect(analysis.draft.sequence).toEqual(['aki', 'aki'])
-    expect(top.expectedTaken).toEqual([])
 
     // The same board with my first pick standing on it, where the one pick left is scored as a
     // first pick off `occupancyFromBoard`. The second pick has to read exactly that.
@@ -595,22 +621,21 @@ describe('joint draft analysis', () => {
 
     const pieces = occupancyFromBoard(board)
     const seated = (occupied: ReadonlySet<VertexId>) => ({ ...pieces, blocked: occupied, seat: 'aki' })
-    const under = (occupied: ReadonlySet<VertexId>) => scoreCandidate(
+    const under = (occupied: ReadonlySet<VertexId>) => marginalTotal(
       ctx,
       emptyHoldings(),
       candidate,
-      'aki',
-      board,
-      neutralModifier,
       null,
       seated(occupied),
-    ).total
+    )
     expect(under(new Set([taken]))).toBeLessThan(under(new Set()))
 
-    const result = rankCandidates(ctx, board, draft, [{ blocked, taken: [taken] }], requiredOptions({
-      maxResults: 54,
-      weights,
-    }))
+    const result = rankCandidates(ctx, board, draft, [{
+      blocked,
+      taken: [taken],
+      pickerIds: ['p2'],
+      uniforms: draft.sequence.map(() => 0),
+    }], 54)
     const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
     expect(entry).toBeDefined()
     expect(entry!.plannedSecond).toEqual([])
@@ -633,8 +658,13 @@ describe('joint draft analysis', () => {
       let bestScore = -Infinity
       for (const vertexId of vertexIds) {
         if (blocked.has(vertexId)) continue
-        const total = scoreCandidate(ctx, emptyHoldings(), vertexId, seat, board, neutralModifier,
-          null, { ...pieces, blocked: occupied, seat }).total
+        const total = marginalTotal(
+          ctx,
+          emptyHoldings(),
+          vertexId,
+          null,
+          { ...pieces, blocked: occupied, seat },
+        )
         if (total > bestScore) {
           best = vertexId
           bestScore = total
@@ -644,8 +674,15 @@ describe('joint draft analysis', () => {
     }
 
     const barred = blockedVertices(board.layout, ['v:0,0;1,-1;1,0' as VertexId])
-    const taken = simulateOpponentWindow(ctx, board, ['p2', 'p3'], new Map<string, Holdings>(),
-      new Set(barred), () => 0, neutralModifier)
+    const { taken } = simulateWindowDetailed(
+      ctx,
+      board,
+      ['p2', 'p3'].map((playerId) => ({ playerId, receivesGrant: false, hasLaterPick: false })),
+      new Map<string, Holdings>(),
+      new Set(barred),
+      new Set(),
+      () => 0,
+    )
     expect(taken).toHaveLength(2)
 
     // The first seat scans against an empty occupancy: nothing is settled yet, however much the
@@ -688,26 +725,6 @@ describe('joint draft analysis', () => {
       expect(other.some((value) => value !== 0)).toBe(true)
     }
   })
-
-  it('routes a per-player modifier through opponent picks', () => {
-    const board = setMe(filledBoard(3, 9), 'p2')
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
-    const neutral = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
-    const brickSpot = neutral.recommendations
-      .find((entry) => (ctx.stats.get(entry.firstPick)?.pips.brick ?? 0) > 0)!.firstPick
-    const boost: PlacementModifier = (playerId, breakdown, modifierCtx) =>
-      playerId === 'aki' && modifierCtx.vertexId === brickSpot
-        ? { ...breakdown, production: breakdown.production + 1000 }
-        : breakdown
-    const modified = analyzeBoard(board, { rollouts: 1, modifier: boost, maxResults: 54 })
-    expect(modified.takenBeforeFirstPick.map((entry) => entry.vertexId)).toContain(brickSpot)
-    expect(modified.takenBeforeFirstPick).not.toEqual(neutral.takenBeforeFirstPick)
-    const neutralBrick = neutral.recommendations.find((entry) => entry.firstPick === brickSpot)
-    const modifiedBrick = modified.recommendations.find((entry) => entry.firstPick === brickSpot)
-    expect(neutralBrick).toBeDefined()
-    expect(neutralBrick!.survival).toBe(1)
-    expect(modifiedBrick).toBeUndefined()
-  })
 })
 
 describe('hostile states and simulator seams', () => {
@@ -747,15 +764,15 @@ describe('hostile states and simulator seams', () => {
     const board = filledBoard(2)
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
     const blocked = new Set(boardGrid(board.layout).vertexIds)
-    expect(simulateOpponentWindow(
+    expect(simulateWindowDetailed(
       ctx,
       board,
-      ['p2'],
+      [{ playerId: 'p2', receivesGrant: false, hasLaterPick: false }],
       new Map<string, Holdings>(),
       blocked,
+      new Set(),
       () => 0,
-      neutralModifier,
-    )).toEqual([])
+    ).taken).toEqual([])
   })
 
   it('ranks a zero-pip port that synergizes with an existing holding', () => {
@@ -791,20 +808,20 @@ describe('hostile states and simulator seams', () => {
     const candidate = boardGrid(board.layout).vertexIds[0]
     const blocked = new Set(boardGrid(board.layout).vertexIds)
     blocked.delete(candidate)
-    const result = rankCandidates(ctx, board, draft, [{ blocked, taken: [] }], requiredOptions({
-      maxResults: 54,
-    }))
+    const result = rankCandidates(ctx, board, draft, [{
+      blocked,
+      taken: [],
+      pickerIds: [],
+      uniforms: draft.sequence.map(() => 0),
+    }], 54)
     const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
     expect(entry).toBeDefined()
     expect(entry!.plannedSecond).toEqual([])
-    expect(entry!.score).toBeCloseTo(scoreCandidate(
+    expect(entry!.score).toBeCloseTo(marginalTotal(
       ctx,
       emptyHoldings(),
       candidate,
-      'aki',
-      board,
-      neutralModifier,
-    ).total)
+    ))
   })
 
   // A recommendation only needs one surviving window to be listed, and the modal window need not
@@ -833,14 +850,21 @@ describe('hostile states and simulator seams', () => {
     const survivable = new Set(boardGrid(board.layout).vertexIds)
     survivable.delete(candidate)
     const preWindows: PreWindowResult[] = [
-      { blocked: modalBlocked, taken: [takenBySeat] },
-      { blocked: survivable, taken: [] },
+      {
+        blocked: modalBlocked,
+        taken: [takenBySeat],
+        pickerIds: ['p2'],
+        uniforms: draft.sequence.map(() => 0),
+      },
+      {
+        blocked: survivable,
+        taken: [],
+        pickerIds: [],
+        uniforms: draft.sequence.map(() => 0),
+      },
     ]
 
-    const result = rankCandidates(ctx, board, draft, preWindows, requiredOptions({
-      maxResults: 54,
-      weights,
-    }))
+    const result = rankCandidates(ctx, board, draft, preWindows, 54)
     const entry = result.recommendations.find((recommendation) => recommendation.firstPick === candidate)
     expect(entry).toBeDefined()
     expect(entry!.survival).toBe(0.5)
@@ -855,17 +879,26 @@ describe('hostile states and simulator seams', () => {
     const allBlocked = new Set(boardGrid(board.layout).vertexIds)
     const [firstTake, secondTake] = boardGrid(board.layout).vertexIds
     const preWindows: PreWindowResult[] = [
-      { blocked: new Set(allBlocked), taken: [firstTake, secondTake] },
-      { blocked: new Set(allBlocked), taken: [firstTake] },
+      {
+        blocked: new Set(allBlocked),
+        taken: [firstTake, secondTake],
+        pickerIds: ['p2', 'p2'],
+        uniforms: draft.sequence.map(() => 0),
+      },
+      {
+        blocked: new Set(allBlocked),
+        taken: [firstTake],
+        pickerIds: ['p2'],
+        uniforms: draft.sequence.map(() => 0),
+      },
     ]
-    const result = rankCandidates(ctx, board, draft, preWindows, requiredOptions({ maxResults: 54 }))
+    const result = rankCandidates(ctx, board, draft, preWindows, 54)
     expect(result.recommendations).toEqual([])
     // takenBeforeFirstPick reflects the modal (first) pre-window in pick order,
-    // each spot annotated with its frequency across all rollouts. These manual
-    // preWindows carry no pickerIds, so playerId falls back to empty.
+    // each spot annotated with its picker and frequency across all rollouts.
     expect(result.takenBeforeFirstPick).toEqual([
-      { vertexId: firstTake, playerId: '', frequency: 1 },
-      { vertexId: secondTake, playerId: '', frequency: 0.5 },
+      { vertexId: firstTake, playerId: 'p2', frequency: 1 },
+      { vertexId: secondTake, playerId: 'p2', frequency: 0.5 },
     ])
   })
 

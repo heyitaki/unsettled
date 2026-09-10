@@ -12,7 +12,6 @@ import {
 } from '../model/types'
 import { expansionTerm } from './expansion'
 import { vertexAdjacency } from './legality'
-import type { PlacementModifier } from './modifiers'
 import type { EngineWeights, SlotScale } from './weights'
 
 export interface ScoreBreakdown {
@@ -26,6 +25,16 @@ export interface ScoreBreakdown {
   /** What the sites this vertex opens are worth. See `expansion.ts::expansionTerm`. */
   expansion: number
 }
+
+export const emptyBreakdown = (): ScoreBreakdown => ({
+  production: 0,
+  scarcity: 0,
+  robber: 0,
+  diversity: 0,
+  port: 0,
+  handValue: 0,
+  expansion: 0,
+})
 
 export const breakdownTotal = (breakdown: ScoreBreakdown): number =>
   breakdown.production +
@@ -688,17 +697,7 @@ export function marginalBreakdown(
   slot: DraftSlot | null = null,
 ): ScoreBreakdown {
   const stats = ctx.stats.get(candidate)
-  if (!stats) {
-    return {
-      production: 0,
-      scarcity: 0,
-      robber: 0,
-      diversity: 0,
-      port: 0,
-      handValue: 0,
-      expansion: 0,
-    }
-  }
+  if (!stats) return emptyBreakdown()
   const precompute = precomputeFor(ctx, candidate, stats)
   const [production, scarcity, robber] = baseParts(ctx.weights, ctx.scarcity, stats)
   const scale = slotScaleOf(ctx.weights, slot)
@@ -716,10 +715,7 @@ export function marginalBreakdown(
 }
 
 /**
- * The same score as `marginalBreakdown`, without allocating the breakdown or
- * running a modifier, the form rollout scans call millions of times. It shares
- * every term with the breakdown, including pricing the same hand counts, so
- * the two cannot disagree.
+ * The same score as `marginalBreakdown`, without allocating the breakdown during rollout scans.
  */
 export function marginalTotal(
   ctx: BoardContext,
@@ -779,25 +775,4 @@ export function marginalWithoutExpansion(
       : hand === stats.setupGrant
         ? precompute.setupGrantValue
         : handValue(ctx.weights, hand))
-}
-
-export function scoreCandidate(
-  ctx: BoardContext,
-  holdings: Holdings,
-  candidate: VertexId,
-  playerId: string,
-  board: Board,
-  modifier: PlacementModifier,
-  hand: HandCounts | null = null,
-  occupancy: Occupancy = emptyOccupancy(),
-  slot: DraftSlot | null = null,
-): { breakdown: ScoreBreakdown; total: number } {
-  const marginal = marginalBreakdown(ctx, holdings, candidate, hand, occupancy, slot)
-  const breakdown = modifier(playerId, marginal, {
-    board,
-    vertexId: candidate,
-    held: holdings.vertices,
-    weights: ctx.weights,
-  })
-  return { breakdown, total: breakdownTotal(breakdown) }
 }

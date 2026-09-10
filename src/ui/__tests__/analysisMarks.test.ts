@@ -23,7 +23,6 @@ const recommendation = (firstRoad: EdgeId | null): Recommendation => ({
     handValue: 0,
     expansion: 0,
   },
-  expectedTaken: [],
 })
 
 describe('recommendationMarks', () => {

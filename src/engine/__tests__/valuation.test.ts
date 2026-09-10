@@ -9,7 +9,6 @@ import {
 } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { RESOURCES, type Board, type Port, type Resource, type VertexId } from '../../model/types'
-import { neutralModifier, type PlacementModifier } from '../modifiers'
 import {
   addToHoldings,
   breakdownTotal,
@@ -20,7 +19,6 @@ import {
   marginalTotal,
   marginalBreakdown,
   occupancyFromBoard,
-  scoreCandidate,
   type BoardContext,
   type Holdings,
   type PortAccess,
@@ -76,33 +74,14 @@ const pairScore = (
   ctx: BoardContext,
   first: VertexId,
   second: VertexId,
-  board: Board = createBoard('standard4'),
 ): number => {
-  const firstScore = scoreCandidate(ctx, emptyHoldings(), first, 'aki', board, neutralModifier).total
+  const firstScore = marginalTotal(ctx, emptyHoldings(), first)
   const holding = addToHoldings(ctx, emptyHoldings(), first)
   return firstScore +
-    scoreCandidate(ctx, holding, second, 'aki', board, neutralModifier).total
+    marginalTotal(ctx, holding, second)
 }
 
 describe('placement valuation', () => {
-  it('keeps breakdown totals exact after a non-neutral modifier', () => {
-    const vertexId = vertices[0]
-    const ctx = context([[vertexId, { brick: 4, wheat: 3 }]])
-    const modifier: PlacementModifier = (_playerId, breakdown) => ({
-      ...breakdown,
-      production: breakdown.production * 2,
-    })
-    const result = scoreCandidate(
-      ctx,
-      emptyHoldings(),
-      vertexId,
-      'aki',
-      createBoard('standard4'),
-      modifier,
-    )
-    expect(breakdownTotal(result.breakdown)).toBeCloseTo(result.total)
-  })
-
   it('values equal pips more on the board-scarce resource', () => {
     const ctx = context(
       [[vertices[0], { wood: 5 }], [vertices[1], { brick: 5 }]],
@@ -131,8 +110,8 @@ describe('placement valuation', () => {
       board = setTile(board, sites[index].coord, 'wood', index === 3 ? 8 : 6)
     }
     const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
-    const duplicateScore = pairScore(ctx, sites[0].vertexId, sites[1].vertexId, board)
-    const variedScore = pairScore(ctx, sites[2].vertexId, sites[3].vertexId, board)
+    const duplicateScore = pairScore(ctx, sites[0].vertexId, sites[1].vertexId)
+    const variedScore = pairScore(ctx, sites[2].vertexId, sites[3].vertexId)
     const duplicateHoldings = addToHoldings(ctx, emptyHoldings(), sites[0].vertexId)
     expect(marginalTotal(ctx, duplicateHoldings, sites[1].vertexId))
       .toBeCloseTo(breakdownTotal(marginalBreakdown(
@@ -538,36 +517,6 @@ describe('placement valuation', () => {
       .toBe(marginalTotal(withoutHexes, bare, vertices[1]))
   })
 
-  it('keeps the neutral modifier identity and lets a modifier boost brick spots', () => {
-    const brick = vertices[0]
-    const wood = vertices[1]
-    const ctx = context([[brick, { brick: 5 }], [wood, { wood: 5 }]])
-    const breakdown = marginalBreakdown(ctx, emptyHoldings(), brick)
-    expect(neutralModifier('aki', breakdown, {
-      board: createBoard('standard4'),
-      vertexId: brick,
-      held: [],
-      weights: DEFAULT_WEIGHTS,
-    })).toBe(breakdown)
-    const brickBoost: PlacementModifier = (_playerId, value, modifierCtx) =>
-      modifierCtx.vertexId === brick ? { ...value, production: value.production * 2 } : value
-    expect(scoreCandidate(
-      ctx,
-      emptyHoldings(),
-      brick,
-      'aki',
-      createBoard('standard4'),
-      brickBoost,
-    ).total).toBeGreaterThan(scoreCandidate(
-      ctx,
-      emptyHoldings(),
-      wood,
-      'aki',
-      createBoard('standard4'),
-      brickBoost,
-    ).total)
-  })
-
   it('keeps the allocation-free fast path equal to the full breakdown', () => {
     const ctx = context([
       [vertices[0], { wood: 4, brick: 3 }],
@@ -676,16 +625,6 @@ describe('occupancy', () => {
         .toEqual(marginalBreakdown(ctx, holding, vertexId, hand))
       expect(marginalTotal(ctx, holding, vertexId, hand, occupancy))
         .toBe(marginalTotal(ctx, holding, vertexId, hand))
-      expect(scoreCandidate(
-        ctx,
-        holding,
-        vertexId,
-        'p1',
-        board,
-        neutralModifier,
-        hand,
-        occupancy,
-      )).toEqual(scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand))
     }
   })
 })
@@ -740,19 +679,6 @@ describe('slot scales', () => {
         .toEqual(marginalBreakdown(ctx, holding, vertexId, hand, occupancy))
       expect(marginalTotal(ctx, holding, vertexId, hand, occupancy, slot))
         .toBe(marginalTotal(ctx, holding, vertexId, hand, occupancy))
-      expect(scoreCandidate(
-        ctx,
-        holding,
-        vertexId,
-        'p1',
-        board,
-        neutralModifier,
-        hand,
-        occupancy,
-        slot,
-      )).toEqual(
-        scoreCandidate(ctx, holding, vertexId, 'p1', board, neutralModifier, hand, occupancy),
-      )
     }
   })
 
