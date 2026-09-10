@@ -4,6 +4,29 @@ export interface BinaryMask {
   pixels: Set<string>
 }
 
+export function normalizeMask(mask: BinaryMask, height: number): BinaryMask {
+  if (mask.height === height) return mask
+  const scale = height / mask.height
+  const width = Math.max(1, Math.round(mask.width * scale))
+  const pixels = new Set<string>()
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = Math.min(mask.width - 1, Math.floor(x / scale))
+      const sourceY = Math.min(mask.height - 1, Math.floor(y / scale))
+      if (mask.pixels.has(`${sourceX},${sourceY}`)) pixels.add(`${x},${y}`)
+    }
+  }
+  return { width, height, pixels }
+}
+
+export function maskScore(candidate: BinaryMask, template: BinaryMask): number {
+  const normalized = normalizeMask(candidate, template.height)
+  let intersection = 0
+  for (const key of normalized.pixels) if (template.pixels.has(key)) intersection += 1
+  const union = normalized.pixels.size + template.pixels.size - intersection
+  return union === 0 ? 0 : intersection / union
+}
+
 function decodeMask(width: number, height: number, data: string): BinaryMask {
   const decoded = atob(data)
   const pixels = new Set<string>()

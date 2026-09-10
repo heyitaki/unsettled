@@ -1,6 +1,7 @@
 import { parseEdgeId } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import type { Port, Resource } from '../model/types'
+import { labelComponents } from './components'
 import { nearColor, pixel, type RgbaImage } from './image'
 import { classifyTile, type ParserPalette } from './palette'
 import type { Registration } from './registration'
@@ -36,52 +37,18 @@ export function detectPorts(
     const [centerX, centerY] = registration.center(tile)
     return (x - centerX) ** 2 + (y - centerY) ** 2 < (1.02 * registration.size) ** 2
   })
-  const seen = new Set<string>()
   const pills: Pill[] = []
-  for (let y = registration.bandTop; y <= registration.bandBottom; y += 2) {
-    for (let x = 0; x < image.width; x += 2) {
-      const key = `${x},${y}`
-      if (seen.has(key) || !isPill(x, y)) continue
-      const stack: [number, number][] = [[x, y]]
-      seen.add(key)
-      let count = 0
-      let sumX = 0
-      let sumY = 0
-      let minX = image.width
-      let maxX = 0
-      let minY = image.height
-      let maxY = 0
-      while (stack.length > 0) {
-        const current = stack.pop()
-        if (!current) break
-        const [currentX, currentY] = current
-        count += 1
-        sumX += currentX
-        sumY += currentY
-        minX = Math.min(minX, currentX)
-        maxX = Math.max(maxX, currentX)
-        minY = Math.min(minY, currentY)
-        maxY = Math.max(maxY, currentY)
-        for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]] as const) {
-          const nextX = currentX + dx
-          const nextY = currentY + dy
-          const nextKey = `${nextX},${nextY}`
-          if (nextX < 0 || nextX >= image.width || nextY < registration.bandTop ||
-            nextY > registration.bandBottom || seen.has(nextKey)) continue
-          if (isPill(nextX, nextY)) {
-            seen.add(nextKey)
-            stack.push([nextX, nextY])
-          }
-        }
-      }
-      const centerX = sumX / count
-      const centerY = sumY / count
-      const area = count * 4
-      const aspect = (maxX - minX) / Math.max(1, maxY - minY)
-      if (!insideHex(centerX, centerY) && area > 0.12 * registration.size ** 2 &&
-        area < 1.9 * registration.size ** 2 && aspect > 1.5 && aspect < 4.5) {
-        pills.push({ centerX, centerY, minX, maxX, minY, maxY })
-      }
+  for (const component of labelComponents(
+    { minX: 0, maxX: image.width - 1, minY: registration.bandTop, maxY: registration.bandBottom },
+    (x, y) => isPill(x, y) ? true : null,
+    { step: 2 },
+  )) {
+    const { x: centerX, y: centerY, minX, maxX, minY, maxY } = component
+    const area = component.area * 4
+    const aspect = (maxX - minX) / Math.max(1, maxY - minY)
+    if (!insideHex(centerX, centerY) && area > 0.12 * registration.size ** 2 &&
+      area < 1.9 * registration.size ** 2 && aspect > 1.5 && aspect < 4.5) {
+      pills.push({ centerX, centerY, minX, maxX, minY, maxY })
     }
   }
   const grid = boardGrid(registration.layout)

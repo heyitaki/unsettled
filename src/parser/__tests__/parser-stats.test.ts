@@ -4,19 +4,19 @@ import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
 import { computeStandings } from '../../engine/stats'
 import { RESOURCES } from '../../model/types'
-import { parseBoardImage, type ParseBoardImageResult, type RgbaImage } from '../index'
+import { parseScreenshot, type RgbaImage, type SourceParse } from '../index'
 
 function image(path: string): RgbaImage {
   const png = PNG.sync.read(readFileSync(fileURLToPath(new URL(path, import.meta.url))))
   return { width: png.width, height: png.height, data: new Uint8ClampedArray(png.data) }
 }
 
-const parsedImages = new Map<string, ParseBoardImageResult>()
+const parsedImages = new Map<string, SourceParse>()
 
-function parse(path: string): ParseBoardImageResult {
+function parse(path: string): SourceParse {
   const cached = parsedImages.get(path)
   if (cached) return cached
-  const result = parseBoardImage(image(path))
+  const result = parseScreenshot(image(path))
   parsedImages.set(path, result)
   return result
 }

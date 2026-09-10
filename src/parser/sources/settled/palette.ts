@@ -49,12 +49,7 @@ const SRGB_PALETTE: ParserPalette = {
   },
 }
 
-interface PaletteMatch {
-  palette: ParserPalette
-  confidence: number
-}
-
-export function matchPalette(image: RgbaImage): PaletteMatch | null {
+export function choosePalette(image: RgbaImage): ParserPalette | null {
   const nearReference = (index: number, reference: Rgb): boolean => {
     const red = image.data[index] - reference[0]
     const green = image.data[index + 1] - reference[1]
@@ -63,10 +58,8 @@ export function matchPalette(image: RgbaImage): PaletteMatch | null {
   }
   let raw = 0
   let srgb = 0
-  let samples = 0
   for (let y = 0; y < image.height; y += 16) {
     for (let x = 0; x < image.width; x += 16) {
-      samples += 1
       const index = (y * image.width + x) * 4
       if (nearReference(index, RAW_PALETTE.bgBlue)) raw += 1
       if (nearReference(index, SRGB_PALETTE.bgBlue)) srgb += 1
@@ -74,12 +67,5 @@ export function matchPalette(image: RgbaImage): PaletteMatch | null {
   }
   const matched = Math.max(raw, srgb)
   if (matched < Math.max(8, image.width * image.height / 160_000)) return null
-  return {
-    palette: raw >= srgb ? RAW_PALETTE : SRGB_PALETTE,
-    confidence: Math.min(1, 0.65 + 4 * matched / samples),
-  }
-}
-
-export function choosePalette(image: RgbaImage): ParserPalette | null {
-  return matchPalette(image)?.palette ?? null
+  return raw >= srgb ? RAW_PALETTE : SRGB_PALETTE
 }

@@ -15,30 +15,25 @@ export interface ParserPalette {
   player: Record<'red' | 'blue' | 'orange' | 'white' | 'green', Rgb>
 }
 
-export function classifyTile(color: Rgb, palette: ParserPalette): Resource | 'desert' | null {
-  let best: Resource | 'desert' | null = null
-  let distance = 25 ** 2
-  for (const [resource, reference] of Object.entries(palette.tiles) as [Resource | 'desert', Rgb][]) {
+export function nearest<Entry>(color: Rgb, entries: readonly (readonly [Entry, Rgb])[], tolerance: number): Entry | null {
+  let best: Entry | null = null
+  let distance = tolerance ** 2
+  for (const [entry, reference] of entries) {
     const candidate = colorDistanceSquared(color, reference)
     if (candidate <= distance) {
       distance = candidate
-      best = resource
+      best = entry
     }
   }
   return best
 }
 
+export function classifyTile(color: Rgb, palette: ParserPalette): Resource | 'desert' | null {
+  return nearest(color, Object.entries(palette.tiles) as [Resource | 'desert', Rgb][], 25)
+}
+
 export type PlayerSeed = keyof ParserPalette['player']
 
 export function classifyPlayerSeed(color: Rgb, palette: ParserPalette): PlayerSeed | null {
-  let best: PlayerSeed | null = null
-  let distance = 22 ** 2
-  for (const [name, reference] of Object.entries(palette.player) as [PlayerSeed, Rgb][]) {
-    const candidate = colorDistanceSquared(color, reference)
-    if (candidate <= distance) {
-      distance = candidate
-      best = name
-    }
-  }
-  return best
+  return nearest(color, Object.entries(palette.player) as [PlayerSeed, Rgb][], 22)
 }

@@ -5,7 +5,7 @@ import { PNG } from 'pngjs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parseGame, serializeGame } from '../../model/serialization'
 import { loadMap, saveMap } from '../../persistence/localStorage'
-import { parseBoardImage, type RgbaImage } from '../index'
+import { parseScreenshot, type RgbaImage } from '../index'
 
 function image(path: string): RgbaImage {
   const png = PNG.sync.read(readFileSync(fileURLToPath(new URL(path, import.meta.url))))
@@ -16,7 +16,7 @@ describe('parsed game persistence', () => {
   beforeEach(() => localStorage.clear())
 
   it('round trips non-zero parsed stats through JSON and a saved map', () => {
-    const parsed = parseBoardImage(image('../../../fixtures/board-endgame-pieces.png'))
+    const parsed = parseScreenshot(image('../../../fixtures/board-endgame-pieces.png'))
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
 

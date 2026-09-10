@@ -6,11 +6,7 @@ import { parseBoard } from '../../model/serialization'
 import { parseEdgeId } from '../../model/coords'
 import { boardGrid, defaultPortEdges } from '../../model/layouts'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
-import {
-  parseBoardImage,
-  type ParseBoardImageResult,
-  type RgbaImage,
-} from '../index'
+import { parseScreenshot, type RgbaImage, type SourceParse } from '../index'
 import { nearColor, pixel, type Rgb } from '../image'
 import type { ParserPalette } from '../palette'
 import { registerBoard } from '../registration'
@@ -78,14 +74,14 @@ function assertStableBoard(actual: Board, expected: Board) {
   expect(sorted(actual.buildings)).toEqual(sorted(expected.buildings))
 }
 
-function expectSchemaValid(result: ParseBoardImageResult): result is Extract<ParseBoardImageResult, { ok: true }> {
+function expectSchemaValid(result: SourceParse): result is Extract<SourceParse, { ok: true }> {
   expect(result.ok).toBe(true)
   if (!result.ok) return false
   expect(parseBoard(result.game.board).ok).toBe(true)
   return true
 }
 
-function assertNullTokensFlagged(result: Extract<ParseBoardImageResult, { ok: true }>) {
+function assertNullTokensFlagged(result: Extract<SourceParse, { ok: true }>) {
   for (const hex of result.game.board.hexes.filter((candidate) =>
     candidate.tile !== 'desert' && candidate.numberToken === null)) {
     const ref = `${hex.coord.q},${hex.coord.r}`
@@ -104,7 +100,7 @@ const expectedEndgameStats = {
   p5: { handUnknown: 6, devCards: 2, knights: 3, vpCards: 2 },
 } as const
 
-function assertStatsNeverGuess(result: Extract<ParseBoardImageResult, { ok: true }>) {
+function assertStatsNeverGuess(result: Extract<SourceParse, { ok: true }>) {
   for (const [playerId, expected] of Object.entries(expectedEndgameStats)) {
     const actual = result.game.stats[playerId]
     for (const key of ['handUnknown', 'devCards', 'knights', 'vpCards'] as const) {
@@ -274,11 +270,11 @@ const THREE_PLAYER_BAND = { top: 340, bottom: 552 }
 const ENDGAME_BAND = { top: 340, bottom: 764 }
 const ENDGAME_GUTTER = 289
 
-const statsIssues = (result: Extract<ParseBoardImageResult, { ok: true }>) =>
+const statsIssues = (result: Extract<SourceParse, { ok: true }>) =>
   result.issues.filter((issue) => issue.stage === 'stats')
-const rosterMessages = (result: Extract<ParseBoardImageResult, { ok: true }>) =>
+const rosterMessages = (result: Extract<SourceParse, { ok: true }>) =>
   result.issues.filter((issue) => issue.stage === 'roster').map((issue) => issue.message)
-const counterRows = (result: Extract<ParseBoardImageResult, { ok: true }>) =>
+const counterRows = (result: Extract<SourceParse, { ok: true }>) =>
   Object.entries(result.game.stats).map(([id, stats]) =>
     [id, stats.handUnknown, stats.devCards, stats.knights, stats.vpCards])
 // Reads a surviving chip's expected counters off the pinned five-player stats,
@@ -291,13 +287,13 @@ const seatCounters = (seat: keyof typeof expectedEndgameStats) => {
 describe('hostile parser inputs', () => {
   it('rejects solid color and header-only inputs without throwing', () => {
     const solid = { width: 200, height: 200, data: new Uint8ClampedArray(200 * 200 * 4).fill(255) }
-    expect(parseBoardImage(solid).ok).toBe(false)
+    expect(parseScreenshot(solid).ok).toBe(false)
     const full = load()
-    expect(parseBoardImage({ width: full.width, height: 500, data: full.data.slice(0, full.width * 500 * 4) }).ok).toBe(false)
+    expect(parseScreenshot({ width: full.width, height: 500, data: full.data.slice(0, full.width * 500 * 4) }).ok).toBe(false)
   })
 
   it('degrades schema-validly after nearest-neighbor downscaling', () => {
-    const result = parseBoardImage(nearestHalf(load()))
+    const result = parseScreenshot(nearestHalf(load()))
     if (!expectSchemaValid(result)) return
     assertStableBoard(result.game.board, expectedDraft as Board)
     // fixture1-halfscale-parse-output.txt baseline: 26 decoded tokens.
@@ -315,7 +311,7 @@ describe('hostile parser inputs', () => {
   it('synthesizes a roster when the header is cropped', () => {
     const full = load()
     const top = 520
-    const result = parseBoardImage({
+    const result = parseScreenshot({
       width: full.width,
       height: full.height - top,
       data: full.data.slice(top * full.width * 4),
@@ -328,7 +324,7 @@ describe('hostile parser inputs', () => {
     const threePlayer = load(THREE_PLAYER)
     // Settled widens the cards of a short roster, which erasing one cannot
     // reproduce, so this pins the count rather than the geometry.
-    const result = parseBoardImage(withoutSlots(threePlayer, THREE_PLAYER_BAND, [
+    const result = parseScreenshot(withoutSlots(threePlayer, THREE_PLAYER_BAND, [
       { gutterX: 452, fromX: 860, toX: threePlayer.width },
     ]))
     if (!expectSchemaValid(result)) return
@@ -355,7 +351,7 @@ describe('hostile parser inputs', () => {
   // retire once the palette learns the colour. The cards either side keep their
   // normal width, so the derived width has to survive a doubled gap.
   it('keeps the surviving counters readable when a middle card is missing', () => {
-    const result = parseBoardImage(withoutSlots(load(ENDGAME), ENDGAME_BAND, [
+    const result = parseScreenshot(withoutSlots(load(ENDGAME), ENDGAME_BAND, [
       { gutterX: ENDGAME_GUTTER, fromX: 542, toX: 790 },
     ]))
     if (!expectSchemaValid(result)) return
@@ -383,7 +379,7 @@ describe('hostile parser inputs', () => {
   it('sizes cards from the narrowest gap when the holes leave an even gap count', () => {
     // Tiled from a blank column of each seat's own card, so the dot's slot keeps
     // the chip cream around it rather than the page behind the row.
-    const result = parseBoardImage(withoutSlots(load(ENDGAME), { top: 389, bottom: 424 }, [
+    const result = parseScreenshot(withoutSlots(load(ENDGAME), { top: 389, bottom: 424 }, [
       { gutterX: 552, fromX: 566, toX: 602 },
       { gutterX: 1047, fromX: 1060, toX: 1096 },
     ]))
@@ -413,7 +409,7 @@ describe('hostile parser inputs', () => {
     const threePlayer = load(THREE_PLAYER)
     const player = fixturePalette(threePlayer).player
     const decoys = [player.red, player.blue, player.orange, player.white]
-    const result = parseBoardImage(withStampedDots(threePlayer, decoys.map((color, index) => ({
+    const result = parseScreenshot(withStampedDots(threePlayer, decoys.map((color, index) => ({
       x: 200 + 200 * index,
       y: 200,
       radius: ROSTER_DOT_RADIUS,
@@ -430,7 +426,7 @@ describe('hostile parser inputs', () => {
   // seat: counted, it would shrink the pitch and clip every card.
   it('ignores a duplicate-colour blob sitting inside the roster row', () => {
     const threePlayer = load(THREE_PLAYER)
-    const result = parseBoardImage(withStampedDots(threePlayer, [
+    const result = parseScreenshot(withStampedDots(threePlayer, [
       // Within the row's radius agreement, so the row still reads as cards and
       // the blob has to be dropped on colour rather than on size.
       {
@@ -448,7 +444,7 @@ describe('hostile parser inputs', () => {
   })
 
   it('retains all endgame pieces after nearest-neighbor downscaling', () => {
-    const result = parseBoardImage(nearestHalf(load('../../../fixtures/board-endgame-pieces.png')))
+    const result = parseScreenshot(nearestHalf(load('../../../fixtures/board-endgame-pieces.png')))
     if (!expectSchemaValid(result)) return
     assertStableBoard(result.game.board, expectedEndgame as Board)
     // fixture2-halfscale-parse-output.txt baseline: 24 decoded tokens.
@@ -466,7 +462,7 @@ describe('hostile parser inputs', () => {
     const original = load('../../../fixtures/board-endgame-pieces.png')
     const softened = bilinear(original, factor)
     expect(softened.data).not.toEqual(nearestHalf(original).data)
-    const result = parseBoardImage(softened)
+    const result = parseScreenshot(softened)
     if (!expectSchemaValid(result)) return
     assertStableBoard(result.game.board, expectedEndgame as Board)
     expect(result.issues.some((issue) => issue.stage === 'sharpness')).toBe(true)
@@ -484,13 +480,13 @@ describe('hostile parser inputs', () => {
   })
 
   it('flags a pixel-copied pill equidistant from two coastal edges', () => {
-    const result = parseBoardImage(withAmbiguousPill(load()))
+    const result = parseScreenshot(withAmbiguousPill(load()))
     if (!expectSchemaValid(result)) return
     expect(result.issues.some((issue) => issue.stage === 'ports' && issue.message.includes('equidistant'))).toBe(true)
   })
 
   it('keeps the real robber when a smaller dark-core candidate appears earlier', () => {
-    const result = parseBoardImage(withSecondRobberCandidate(load()))
+    const result = parseScreenshot(withSecondRobberCandidate(load()))
     if (!expectSchemaValid(result)) return
     expect(result.game.board.robber).toEqual((expectedDraft as Board).robber)
     expect(result.issues.some((issue) =>
@@ -499,7 +495,7 @@ describe('hostile parser inputs', () => {
   })
 
   it('warns when two detected pills claim the same coastal edge', () => {
-    const result = parseBoardImage(withDuplicateEdgePill(load()))
+    const result = parseScreenshot(withDuplicateEdgePill(load()))
     if (!expectSchemaValid(result)) return
     expect(result.issues.some((issue) =>
       issue.stage === 'ports' && issue.message.includes('duplicate port pill'),

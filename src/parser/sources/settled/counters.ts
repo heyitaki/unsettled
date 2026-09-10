@@ -1,12 +1,14 @@
 import { emptyStats, type PlayerStats } from '../../../model/game'
+import { labelPixelSet } from '../../components'
 import type { Rect, Rgb, RgbaImage } from '../../image'
 import type { ParserPalette } from '../../palette'
 import type { Registration } from '../../registration'
-import type { ParseIssue, SourceStats } from '../types'
+import type { ParseIssue } from '../types'
 import type { DetectedPlayer, SettledRoster } from './chips'
 import {
   DIGIT_TEMPLATES,
   ICON_TEMPLATES,
+  maskScore,
   PAREN_TEMPLATE,
   RIGHT_PAREN_TEMPLATE,
   type BinaryMask,
@@ -18,15 +20,13 @@ interface LocatedMask extends BinaryMask {
   y: number
 }
 
-interface ClassifiedMask extends LocatedMask {
+interface DigitMask extends LocatedMask {
   score: number
-}
-
-interface DigitMask extends ClassifiedMask {
   digit: number
 }
 
-interface IconMask extends ClassifiedMask {
+interface IconMask extends LocatedMask {
+  score: number
   icon: CounterIcon
 }
 
@@ -50,29 +50,6 @@ const ICON_SCORE = 0.64
 // evidence, not a more permissive guess.
 const DEGRADED_SCORE = 0.84
 
-function normalizeMask(mask: BinaryMask, height: number): BinaryMask {
-  if (mask.height === height) return mask
-  const scale = height / mask.height
-  const width = Math.max(1, Math.round(mask.width * scale))
-  const pixels = new Set<string>()
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const sourceX = Math.min(mask.width - 1, Math.floor(x / scale))
-      const sourceY = Math.min(mask.height - 1, Math.floor(y / scale))
-      if (mask.pixels.has(`${sourceX},${sourceY}`)) pixels.add(`${x},${y}`)
-    }
-  }
-  return { width, height, pixels }
-}
-
-function maskScore(candidate: BinaryMask, template: BinaryMask): number {
-  const normalized = normalizeMask(candidate, template.height)
-  let intersection = 0
-  for (const key of normalized.pixels) if (template.pixels.has(key)) intersection += 1
-  const union = normalized.pixels.size + template.pixels.size - intersection
-  return union === 0 ? 0 : intersection / union
-}
-
 function maskFromPixels(
   source: Set<string>,
   x: number,
@@ -90,48 +67,14 @@ function maskFromPixels(
 }
 
 function connectedMasks(ink: Set<string>, width: number, height: number): LocatedMask[] {
-  const unseen = new Set(ink)
-  const components: LocatedMask[] = []
-  while (unseen.size > 0) {
-    const next = unseen.values().next()
-    if (next.done) break
-    const first = next.value
-    const [startX, startY] = first.split(',').map(Number)
-    const stack: [number, number][] = [[startX, startY]]
-    unseen.delete(first)
-    const pixels: [number, number][] = []
-    let minX = startX
-    let maxX = startX
-    let minY = startY
-    let maxY = startY
-    while (stack.length > 0) {
-      const current = stack.pop()
-      if (!current) break
-      const [x, y] = current
-      pixels.push(current)
-      minX = Math.min(minX, x)
-      maxX = Math.max(maxX, x)
-      minY = Math.min(minY, y)
-      maxY = Math.max(maxY, y)
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        const nextX = x + dx
-        const nextY = y + dy
-        if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height) continue
-        const key = `${nextX},${nextY}`
-        if (!unseen.delete(key)) continue
-        stack.push([nextX, nextY])
-      }
-    }
-    const componentPixels = new Set(pixels.map(([x, y]) => `${x - minX},${y - minY}`))
-    components.push({
+  return labelPixelSet(ink, { minX: 0, maxX: width - 1, minY: 0, maxY: height - 1 })
+    .map(({ points, minX, maxX, minY, maxY }) => ({
       x: minX,
       y: minY,
       width: maxX - minX + 1,
       height: maxY - minY + 1,
-      pixels: componentPixels,
-    })
-  }
-  return components
+      pixels: new Set(points.map(([x, y]) => `${x - minX},${y - minY}`)),
+    }))
 }
 
 function combinedMasks(ink: Set<string>, components: LocatedMask[], glyphHeight: number): LocatedMask[] {
@@ -178,18 +121,10 @@ function scanDigit(
   glyphHeight: number,
   threshold: number,
 ): DigitMask | null {
-  const scale = glyphHeight / 28
   const matches: DigitMask[] = []
   for (const [digit, template] of Object.entries(DIGIT_TEMPLATES)) {
-    const width = Math.max(1, Math.round(template.width * scale))
-    const height = Math.max(1, Math.round(template.height * scale))
-    for (let y = Math.round(centerY - height / 2 - 0.12 * glyphHeight);
-      y <= Math.round(centerY - height / 2 + 0.12 * glyphHeight); y += 1) {
-      for (let x = Math.round(startX); x <= Math.round(endX); x += 1) {
-        const candidate = maskFromPixels(ink, x, y, width, height)
-        const score = maskScore(candidate, template)
-        if (score >= threshold) matches.push({ ...candidate, digit: Number(digit), score })
-      }
+    for (const candidate of scanWindows(ink, template, startX, endX, centerY, glyphHeight)) {
+      if (candidate.score >= threshold) matches.push({ ...candidate, digit: Number(digit) })
     }
   }
   const ranked = matches.sort((a, b) => b.score - a.score)
@@ -197,6 +132,26 @@ function scanDigit(
   const different = ranked.find((candidate) => candidate.digit !== ranked[0].digit)
   if (different && ranked[0].score - different.score < 0.06) return null
   return ranked[0]
+}
+
+function* scanWindows(
+  ink: Set<string>,
+  template: BinaryMask,
+  startX: number,
+  endX: number,
+  centerY: number,
+  glyphHeight: number,
+): Generator<LocatedMask & { score: number }> {
+  const scale = glyphHeight / 28
+  const width = Math.max(1, Math.round(template.width * scale))
+  const height = Math.max(1, Math.round(template.height * scale))
+  for (let y = Math.round(centerY - height / 2 - 0.12 * glyphHeight);
+    y <= Math.round(centerY - height / 2 + 0.12 * glyphHeight); y += 1) {
+    for (let x = Math.round(startX); x <= Math.round(endX); x += 1) {
+      const candidate = maskFromPixels(ink, x, y, width, height)
+      yield { ...candidate, score: maskScore(candidate, template) }
+    }
+  }
 }
 
 function scanTemplate(
@@ -207,15 +162,9 @@ function scanTemplate(
   centerY: number,
   glyphHeight: number,
 ): number {
-  const scale = glyphHeight / 28
-  const width = Math.max(1, Math.round(template.width * scale))
-  const height = Math.max(1, Math.round(template.height * scale))
   let best = 0
-  for (let y = Math.round(centerY - height / 2 - 0.12 * glyphHeight);
-    y <= Math.round(centerY - height / 2 + 0.12 * glyphHeight); y += 1) {
-    for (let x = Math.round(startX); x <= Math.round(endX); x += 1) {
-      best = Math.max(best, maskScore(maskFromPixels(ink, x, y, width, height), template))
-    }
+  for (const candidate of scanWindows(ink, template, startX, endX, centerY, glyphHeight)) {
+    best = Math.max(best, candidate.score)
   }
   return best
 }
@@ -468,7 +417,7 @@ export function readCounters(
   palette: ParserPalette,
   registration: Registration,
   roster: SettledRoster,
-): SourceStats {
+): { stats: Record<string, PlayerStats>; issues: ParseIssue[] } {
   const parsed = roster.players.map((entry) => [entry.player.id, parseChip(image, palette, registration, entry)] as const)
   return {
     stats: Object.fromEntries(parsed.map(([id, result]) => [id, result.stats])),

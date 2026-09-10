@@ -4,8 +4,8 @@ import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
 import { parseBoard } from '../../model/serialization'
 import type { Board } from '../../model/types'
-import { parseBoardImage, parseBoardImageWithNames } from '../index'
-import { createNodeTextReader } from '../textReader'
+import { parseScreenshot } from '../index'
+import { createNodeTextReader } from './textReader'
 
 import expectedDraft from './expected/board-draft-empty.json'
 import expectedEndgame from './expected/board-endgame-pieces.json'
@@ -35,7 +35,7 @@ describe('screenshot parser', () => {
     // not recorded in the repo, so this one is pinned raw only.
     ['three player', '../../../fixtures/board-draft-3player.png', expectedThreePlayer],
   ])('parses the %s fixture into the pinned board', (_name, path, expected) => {
-    const result = parseBoardImage(image(path))
+    const result = parseScreenshot(image(path))
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(parseBoard(result.game.board).ok).toBe(true)
@@ -43,7 +43,7 @@ describe('screenshot parser', () => {
   })
 
   it('infers the robber-occluded endgame token from the distribution', () => {
-    const result = parseBoardImage(image('../../../fixtures/board-endgame-pieces.png'))
+    const result = parseScreenshot(image('../../../fixtures/board-endgame-pieces.png'))
     expect(result.ok).toBe(true)
     if (!result.ok) return
     // The robber hides one token; the standard distribution accounts for every
@@ -57,7 +57,7 @@ describe('screenshot parser', () => {
   })
 
   it('parses the draft fixture without token review issues', () => {
-    const result = parseBoardImage(image('../../../fixtures/board-draft-empty.png'))
+    const result = parseScreenshot(image('../../../fixtures/board-draft-empty.png'))
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.issues.filter((issue) =>
@@ -77,10 +77,14 @@ describe.skipIf(!existsSync(`${tessdata}/eng.traineddata.gz`))('offline name OCR
         ['../../../fixtures/board-endgame-pieces.png', ['jen', 'you', 'ben', 'emi', 'yus'], 'p2'],
       ] as const
       for (const [path, prefixes, me] of cases) {
-        const result = await parseBoardImageWithNames(image(path), reader)
+        const source = image(path)
+        const result = parseScreenshot(source)
         expect(result.ok).toBe(true)
         if (!result.ok) continue
-        const names = result.game.board.players.map((player) => player.name.toLowerCase())
+        const names: string[] = []
+        for (const { rect } of result.nameRects) {
+          names.push((await reader.read(source, rect)).toLowerCase())
+        }
         expect(names.filter((name, index) => name.startsWith(prefixes[index])).length).toBeGreaterThanOrEqual(3)
         expect(result.game.board.mePlayerId).toBe(me)
       }

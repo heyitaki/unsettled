@@ -1,7 +1,9 @@
 import { parseEdgeId, parseVertexId } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import type { Building, Road } from '../model/types'
-import { colorDistanceSquared, pixel, type Rgb, type RgbaImage } from './image'
+import { labelComponents } from './components'
+import { pixel, type Rgb, type RgbaImage } from './image'
+import { nearest } from './palette'
 import type { Registration } from './registration'
 
 export interface PieceOwner {
@@ -29,55 +31,14 @@ export function detectPieces(
   registration: Registration,
   owners: PieceOwner[],
 ): DetectedPieces {
-  const ownerAt = (x: number, y: number): PieceOwner | null => {
-    const color = pixel(image, x, y)
-    let best: PieceOwner | null = null
-    let distance = 22 ** 2
-    for (const owner of owners) {
-      const candidate = colorDistanceSquared(color, owner.anchor)
-      if (candidate <= distance) {
-        distance = candidate
-        best = owner
-      }
-    }
-    return best
-  }
-  const seen = new Set<string>()
+  const entries = owners.map((owner) => [owner.id, owner.anchor] as const)
   const components: PieceComponent[] = []
-  for (let y = registration.bandTop; y <= registration.bandBottom; y += 1) {
-    for (let x = 0; x < image.width; x += 1) {
-      const key = `${x},${y}`
-      if (seen.has(key)) continue
-      const owner = ownerAt(x, y)
-      if (!owner) continue
-      const stack: [number, number][] = [[x, y]]
-      seen.add(key)
-      let area = 0
-      let sumX = 0
-      let sumY = 0
-      while (stack.length > 0) {
-        const current = stack.pop()
-        if (!current) break
-        const [currentX, currentY] = current
-        area += 1
-        sumX += currentX
-        sumY += currentY
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-          const nextX = currentX + dx
-          const nextY = currentY + dy
-          const nextKey = `${nextX},${nextY}`
-          if (nextX < 0 || nextX >= image.width || nextY < registration.bandTop ||
-            nextY > registration.bandBottom || seen.has(nextKey)) continue
-          if (ownerAt(nextX, nextY)?.id === owner.id) {
-            seen.add(nextKey)
-            stack.push([nextX, nextY])
-          }
-        }
-      }
-      if (area >= 0.024 * registration.size ** 2) {
-        components.push({ playerId: owner.id, x: sumX / area, y: sumY / area, area })
-      }
-    }
+  for (const component of labelComponents(
+    { minX: 0, maxX: image.width - 1, minY: registration.bandTop, maxY: registration.bandBottom },
+    (x, y) => nearest(pixel(image, x, y), entries, 22),
+  )) {
+    const { label: playerId, x, y, area } = component
+    if (area >= 0.024 * registration.size ** 2) components.push({ playerId, x, y, area })
   }
   const grid = boardGrid(registration.layout)
   const vertices = grid.vertexIds.map((vertexId) => {

@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react'
 import type { RgbaImage } from '../parser'
-import type { SourceParse } from '../parser/sources/types'
+import type { SourceParse } from '../parser'
 import type { StoreAction } from './store'
 
 export async function importNames(

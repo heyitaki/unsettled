@@ -1,9 +1,9 @@
+import { labelPixelSet } from './components'
 import { nearColor, pixel, type RgbaImage } from './image'
 import type { ParserPalette } from './palette'
 
 interface InkComponent {
   points: [number, number][]
-  red: number
   minX: number
   maxX: number
   minY: number
@@ -15,7 +15,6 @@ export interface TokenAnalysis {
   corePixels: number
   hasToken: boolean
   number: number | null
-  suspect: boolean
   redMismatch: boolean
 }
 
@@ -61,7 +60,7 @@ export function analyzeToken(
   }
   const hasToken = creamPixels > 0.18 * Math.PI * creamRadius ** 2
   if (creamPixels < 0.3 * Math.PI * creamRadius ** 2 || robber) {
-    return { robber, corePixels, number: null, hasToken, suspect: false, redMismatch: false }
+    return { robber, corePixels, number: null, hasToken, redMismatch: false }
   }
   const tokenX = creamSumX / creamPixels
   const tokenY = creamSumY / creamPixels
@@ -82,52 +81,26 @@ export function analyzeToken(
     }
   }
   const scanRadius = ringInner - 2
-  const ink = new Map<string, boolean>()
+  const ink = new Set<string>()
   for (let y = Math.round(tokenY - scanRadius); y <= Math.round(tokenY + scanRadius); y += 1) {
     for (let x = Math.round(tokenX - scanRadius); x <= Math.round(tokenX + scanRadius); x += 1) {
       if ((x - tokenX) ** 2 + (y - tokenY) ** 2 > scanRadius ** 2) continue
       const color = pixel(image, x, y)
-      if (nearColor(color, palette.inkDark, 55) || nearColor(color, palette.robberBlack, 30)) {
-        ink.set(`${x},${y}`, false)
-      } else if (nearColor(color, palette.inkRed, 35)) ink.set(`${x},${y}`, true)
+      if (nearColor(color, palette.inkDark, 55) || nearColor(color, palette.robberBlack, 30) ||
+        nearColor(color, palette.inkRed, 35)) ink.add(`${x},${y}`)
     }
   }
-  const seen = new Set<string>()
-  const components: InkComponent[] = []
-  for (const key of ink.keys()) {
-    if (seen.has(key)) continue
-    const stack = [key]
-    seen.add(key)
-    const component: InkComponent = {
-      points: [],
-      red: 0,
-      minX: image.width,
-      maxX: 0,
-      minY: image.height,
-      maxY: 0,
-    }
-    while (stack.length > 0) {
-      const current = stack.pop()
-      if (!current) break
-      const [x, y] = current.split(',').map(Number)
-      component.points.push([x, y])
-      if (ink.get(current)) component.red += 1
-      component.minX = Math.min(component.minX, x)
-      component.maxX = Math.max(component.maxX, x)
-      component.minY = Math.min(component.minY, y)
-      component.maxY = Math.max(component.maxY, y)
-      for (const [dx, dy] of neighbors) {
-        const next = `${x + dx},${y + dy}`
-        if (ink.has(next) && !seen.has(next)) {
-          seen.add(next)
-          stack.push(next)
-        }
-      }
-    }
-    if (component.points.length >= Math.max(4, 0.0008 * size ** 2)) components.push(component)
-  }
+  const components: InkComponent[] = labelPixelSet(ink)
+    .filter((component) => component.area >= Math.max(4, 0.0008 * size ** 2))
+    .map((component) => ({
+      points: component.points,
+      minX: Math.min(image.width, component.minX),
+      maxX: Math.max(0, component.maxX),
+      minY: Math.min(image.height, component.minY),
+      maxY: Math.max(0, component.maxY),
+    }))
   if (components.length === 0) {
-    return { robber, corePixels, number: null, hasToken: true, suspect: true, redMismatch: false }
+    return { robber, corePixels, number: null, hasToken: true, redMismatch: false }
   }
   const height = (component: InkComponent) => component.maxY - component.minY + 1
   const maximumHeight = Math.max(...components.map(height))
@@ -137,7 +110,7 @@ export function analyzeToken(
     (component.minY + component.maxY) / 2 > tokenY,
   )
   if (glyphs.length === 0) {
-    return { robber, corePixels, number: null, hasToken: true, suspect: true, redMismatch: false }
+    return { robber, corePixels, number: null, hasToken: true, redMismatch: false }
   }
   if (pips.length > 0) {
     const areas = pips.map((component) => component.points.length).sort((a, b) => a - b)
@@ -148,7 +121,7 @@ export function analyzeToken(
     })
     if (badShape || areas.some((area) => area < 0.6 * median || area > 1.6 * median) ||
       median < 0.0004 * size ** 2 || median > 0.003 * size ** 2) {
-      return { robber, corePixels, number: null, hasToken: true, suspect: true, redMismatch: false }
+      return { robber, corePixels, number: null, hasToken: true, redMismatch: false }
     }
   }
   let redPixels = 0
@@ -200,15 +173,8 @@ export function analyzeToken(
       if (!ink.has(key) && !backgroundSeen.has(key)) flood(x, y, true)
     }
   }
-  const pairs: Record<number, [number, number]> = {
-    1: [2, 12],
-    2: [3, 11],
-    3: [4, 10],
-    4: [5, 9],
-    5: [6, 8],
-  }
-  const pair = pairs[pips.length]
-  if (!pair) return { robber, corePixels, number: null, hasToken: true, suspect: true, redMismatch: false }
+  const pair = [[2, 12], [3, 11], [4, 10], [5, 9], [6, 8]][pips.length - 1]
+  if (!pair) return { robber, corePixels, number: null, hasToken: true, redMismatch: false }
   let number: number
   if (pair[1] >= 10) number = glyphs.length >= 2 ? pair[1] : pair[0]
   else if (pips.length === 4) number = holes >= 1 ? 9 : 5
@@ -218,7 +184,6 @@ export function analyzeToken(
     corePixels,
     number,
     hasToken: true,
-    suspect: false,
     redMismatch: (number === 6 || number === 8) !== isRed,
   }
 }
