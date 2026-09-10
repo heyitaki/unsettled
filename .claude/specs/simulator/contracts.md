@@ -108,36 +108,9 @@ heuristic-v1-trader-aware-devcards
 heuristic-v1-trader-aware-devcards-denial
 heuristic-v1-trader-aware-threat-devcards
 heuristic-v1-trader-aware-threat-devcards-denial
-heuristic-v1-trader-aware-threat-devcards-denial-legacyall
-heuristic-v1-trader-aware-threat-devcards-denial-legacyport
-heuristic-v1-trader-aware-threat-devcards-denial-legacychooser
-heuristic-v1-trader-aware-threat-devcards-denial-legacycityterms
-heuristic-v1-trader-aware-threat-devcards-denial-legacyband
-heuristic-v1-trader-aware-threat-devcards-denial-legacycitygoal
-heuristic-v1-trader-aware-threat-devcards-denial-legacycards
-heuristic-v1-trader-aware-threat-devcards-denial-legacydeck
-heuristic-v1-trader-aware-threat-devcards-denial-legacyexposure
-heuristic-v1-trader-aware-threat-devcards-denial-legacyrace
-heuristic-v1-trader-aware-threat-devcards-denial-legacyembargo
-heuristic-v1-trader-aware-threat-devcards-denial-legacypair
-heuristic-v1-trader-aware-threat-devcards-denial-legacyknight
-heuristic-v1-trader-aware-threat-devcards-denial-sbmute
-heuristic-v1-trader-aware-threat-devcards-denial-sbhold
-heuristic-v1-trader-aware-threat-devcards-denial-goalneedlo
-heuristic-v1-trader-aware-threat-devcards-denial-goalneedhi
-heuristic-v1-trader-aware-threat-devcards-denial-stagelo
-heuristic-v1-trader-aware-threat-devcards-denial-stagehi
-heuristic-v1-trader-aware-threat-devcards-denial-econlo
-heuristic-v1-trader-aware-threat-devcards-denial-econhi
-heuristic-v1-trader-aware-threat-devcards-denial-hystlo
-heuristic-v1-trader-aware-threat-devcards-denial-hysthi
-heuristic-v1-trader-aware-threat-devcards-denial-frontierlo
-heuristic-v1-trader-aware-threat-devcards-denial-frontierhi
-heuristic-v1-trader-aware-threat-devcards-denial-jall
-heuristic-v1-trader-aware-threat-devcards-denial-jnohyst
 ```
 
-Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. The `-legacy*` spellings are measurement-only ablations restoring one pre-fix behavior each (or, for `-legacyall`, the whole pre-SIM-BATCH1 valuation) and are not default-reachable policies. `heuristic-v1-noports` remains a rules-level ablation and is not crossed with the four gates. The `-sbmute` and `-sbhold` spellings are measurement-only SpecialBuild treatments (`HeuristicParams::special_build`): `-sbmute` passes every special-build decision, `-sbhold` drops special-build spends whose every payable cost variant increases the current goal's closest-variant shortfall, and the shipped default is the uniform treatment, in which special-build decisions run the ordinary action scorer under the phase's narrower legality. The `-goalneedlo` and `-goalneedhi` spellings are measurement-only trial values of the J1 goal-need vertex term (`HeuristicParams::goal_need_weight` at 0.5 and 2.0): the shipped default weight is zero, which never constructs the shared `policy::goal_need` model and keeps the pre-J1 scores bit-identical. The `-stagelo` and `-stagehi` spellings are measurement-only trial values of the J2 stage signal (`policy::stage::Stage`, one derivation per decision): the settlement expansion term is damped by `stage_expansion_weight`, the city vertex score is boosted by `stage_city_weight`, and under gated policies the denial context's top rival danger raises the stage through `stage_urgency_weight`; all three default to zero, which never derives the stage and keeps the pre-J2 scores bit-identical. The `-econlo` and `-econhi` spellings are measurement-only trial values of the two J3 piece-economy terms: `slot_return_weight` (2.0 and 8.0) adds `policy::piece_economy::SlotReturn` — proximity to the settlement cap times open-site availability, one derivation per decision — to city vertex value, and `cost_pressure_weight` (0.5 and 2.0) charges each affordable build candidate for the overlap between its cost (at the variant the payment path would spend) and the shared goal-need model's outstanding need for the selected goal; both default to zero, which never derives either model and keeps the pre-J3 scores bit-identical. The `-hystlo` and `-hysthi` spellings are measurement-only trial values of the J4 goal-hysteresis margin (`HeuristicParams::goal_hysteresis_margin` at 0.25 and 1.0): the engine records each seat's last committed goal on `GameState` (reset in `GameArena::prepare`, read through `DecisionView::incumbent_goal`), and the goal chooser boosts the incumbent's candidate by the margin in its comparisons only — the chosen goal always keeps its true score; the margin defaults to zero, which never reads the incumbent and keeps the pre-J4 selection bit-identical. The `-frontierlo` and `-frontierhi` spellings are measurement-only trial values of the J5 frontier blend (`HeuristicParams::frontier_mix` at 0.5 and 1.0): the settlement expansion count becomes `degree + mix * (frontier - degree)`, where `policy::frontier::opened` counts the vertices a settlement at the candidate newly opens — unowned neighbours the observer's road network does not already reach through an unowned edge, plus the distance-rule-open sites one further unowned edge beyond them — and the blend sits inside `vertex_score`'s expansion closure, so it reaches build candidates, the goal chooser, and the road and pair expansion credits through one expression; the mix defaults to zero, which never computes the frontier and keeps the degree count bit-identical. The `-jall` and `-jnohyst` spellings are the Phase J composite measurement labels: `-jall` applies every J term at its lo trial value (goal need 0.5, the stage triple 0.5/0.5/0.5, slot return 2.0, cost pressure 0.5, hysteresis margin 0.25, frontier mix 0.5) and `-jnohyst` the same vector with the hysteresis margin held at the shipped zero; both are measurement-only and no default-reachable policy carries any nonzero J weight. Separately, `HeuristicParams::dev_buy_scale` is one overall scale on the development-card buy score, wrapping the deck-aware and legacy deck-blind spellings alike; a value of 1.0 restores the pre-sweep expression bit-identically, the Phase-H sweep answered the buy-band question it was built for, and the Phase-I adoption (M-46) made 0.25 the default. It has no measurement label of its own.
+Within the trader family, `-threat` enables G1 robber placement, `-devcards` enables G2 pre-roll dev-card timing, `-aware` enables G3 threat-aware trading, and `-denial` enables G4 threat-aware action selection and denial. The suffixes compose independently. The `-legacy*` ablations, the `-sbmute`/`-sbhold` special-build variants and the J-seam trial labels (`-goalneed*`, `-stage*`, `-econ*`, `-hyst*`, `-frontier*`, `-jall`, `-jnohyst`) were retired once M-21 through M-30 closed; their readings stay in [measurements.md](measurements.md) and the labels no longer parse. A future ablation mints a fresh label rather than reviving one.
 
 ## Weights files
 
@@ -275,9 +248,7 @@ Ignore the `parallel efficiency` figure the bench prints. It divides by the logi
 
 The no-ports ablation is applied at the rules level, so a no-ports seat genuinely trades at the base bank rate rather than merely discounting ports when scoring locations.
 
-`HeuristicParams::legacy_valuation` is different: it is a measurement-only instrument inside the single shipped valuation implementation, not a rules-level ablation. `None` is the only default-reachable value. Six named `legacy*` policy kinds restore the complete pre-SIM-BATCH1 valuation or exactly one of its five separable expressions so paired attribution can hold the field fixed; each later gap fix adds one more kind restoring exactly that fix's pre-change behavior, on the same terms. No unnamed or default policy reaches any of them.
-
-Two preconditions on reading that attribution. The restoration is exact only where `vertex_score` is finite: the city goal's presence gate moved from "a legal city exists" to "a legal city scores finitely" and no flag restores the old form, so a params vector making every city score non-finite drops the city goal under `legacyall` as well as under the fixed scorer. Every shipped rate is clamped at two or more, so no default-reachable policy can get there, but `HeuristicParams` is `pub` and `Deserialize` and is a Phase-H sweep target. And the five flags are marginal against the fixed corner rather than isolating: the port term is not build-kind dispatched, so `legacycityterms` alone does not reconstitute a pre-batch *city* score — only `legacyall` does.
+The `legacy_valuation` instrument that let named `legacy*` policy kinds restore the pre-SIM-BATCH1 valuation, or one of its separable expressions, for paired attribution was retired with those kinds once the attributions closed; the readings and their two reading preconditions (the finite-score city gate, and the flags being marginal rather than isolating) are preserved in [measurements.md](measurements.md).
 
 ## Build valuation
 
