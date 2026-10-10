@@ -2613,3 +2613,93 @@ Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
 **Prediction against outcome.** **Right on the estimate**, predicted `+1.2pp` to `+2.0pp` centred near `+1.6pp`, delivered `+1.524pp`. **Right on the verdict**, predicted `better` at about 99%.
 
 **Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against four seats on today's vector, so **nothing here measures the world the adoption creates in the app**, where a five-seat analysis scores every seat's picks on the adopted vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same on all three domains, so the held-out readings control for seeds and not for field-overfit. The run reads the pair of changes together: the gate says the pair beats today's vector by more than the bar, and the case for carrying both halves rather than one rests on M-76's screen, retry and combine pass on `tuning3`, where each half cleared the bar alone by a thin margin and each removal read `inconclusive` rather than `worse`. Both adopted values are screening endpoints, so nothing here says either is an optimum. The verdict licenses moving these two leaves at this one seat count and nothing else.
+
+## M-79: seat-count screen at 6 seats
+
+2026-10-10, commit `04f4286e` (the preregistration commit; no default moved for this run), domain `tuning3` (seed `8796478869724336144`). Preregistered in `docs/plans/preregs/2026-10-10-m79-seats6-screen.md` (committed before the pilot). The first placement reading of any kind at six seats, and the last screen of the seat-count programme: does any of the twelve `sc_*` arms beat today's vector in the full extension game?
+
+`evaluate`, `extension6`, 6 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 2 reps, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec itself. Each arm carries one `simulator/placement/arms/sc_*.json` on the hero path with the opponent path pinned to the field's weights; the arm values are M-67's. Sized under Revision 1 of the programme's procedure: a 100-board pilot and a 120-minute cap on the screen.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# pilot, from simulator/, read blind
+target/release/unsettled-sim evaluate --layout extension6 --seats 6 --domain tuning3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm scarcity_lo=app_formula_draft:placement/arms/sc_scarcity_lo.json@placement/default-weights.json --arm scarcity_hi=app_formula_draft:placement/arms/sc_scarcity_hi.json@placement/default-weights.json --arm covscarcity_lo=app_formula_draft:placement/arms/sc_covscarcity_lo.json@placement/default-weights.json --arm covscarcity_hi=app_formula_draft:placement/arms/sc_covscarcity_hi.json@placement/default-weights.json --arm coverage_lo=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --arm coverage_hi=app_formula_draft:placement/arms/sc_coverage_hi.json@placement/default-weights.json --arm diversity_lo=app_formula_draft:placement/arms/sc_diversity_lo.json@placement/default-weights.json --arm diversity_hi=app_formula_draft:placement/arms/sc_diversity_hi.json@placement/default-weights.json --arm port_lo=app_formula_draft:placement/arms/sc_port_lo.json@placement/default-weights.json --arm port_hi=app_formula_draft:placement/arms/sc_port_hi.json@placement/default-weights.json --arm expansion_lo=app_formula_draft:placement/arms/sc_expansion_lo.json@placement/default-weights.json --arm expansion_hi=app_formula_draft:placement/arms/sc_expansion_hi.json@placement/default-weights.json --reference base --boards 100 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m79-seats6-pilot
+
+# screen, from simulator/: the pilot's command with --boards 2500 --out runs/m79-seats6-screen
+
+# retry, from simulator/
+target/release/unsettled-sim evaluate --layout extension6 --seats 6 --domain tuning3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm coverage_lo=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --arm diversity_hi=app_formula_draft:placement/arms/sc_diversity_hi.json@placement/default-weights.json --reference base --boards 10000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m79-seats6-retry
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block after the five-seat adoption commit and reported `Finished` in 0.03s on the warm check; all three invocations used it. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. Each invocation ran alone, unpiped, one after another, and each reported domain `tuning3` at seed `8796478869724336144`. **Zero illegal actions in all three, and zero draws in every arm.** `simulator/runs/` is gitignored, so this entry is the record. Other sessions loaded the machine throughout, which the load figures show, so the throughputs are contended figures; the results are deterministic and do not depend on it.
+
+Pilot, 100 boards: load before `8.67 22.49 41.70`, after `37.07 29.93 39.93`; 253.610s at 18 workers, 61.5 games/s, 15,600 games. **Read blind**: only the wall time, the illegal-action count and each arm's half-width and discordant share were printed.
+
+Sizing: the widest pilot half-width was `expansion_lo` at 2.4789pp, so the 0.35pp target wanted 5,017 boards, which rounds up to 5500; the 120-minute cap allowed 2,839, rounded down to **`B` = 2500**. The cap bound harder than at any other seat count: the pilot predicted a widest half-width of 0.496pp at that size, about 0.33pp for `coverage_lo` and about 0.38pp for `diversity_hi`, so no arm with an effect under about `+0.85pp` could read `better` at the screen.
+
+Screen, 2500 boards, 30,000 paired units over 2,500 clusters: load before `32.15 29.11 39.52`, after `35.56 36.71 37.43`; 6140.890s, 63.5 games/s, 390,000 games. `base` won 5,091 of 30,000 (`0.1697`), 1.410 binomial standard errors above the one-sixth corner, inside the preregistered 3.29, so the corner check passes.
+
+Retry, 10000 boards, 120,000 paired units, carrying `base`, `coverage_lo` and `diversity_hi`, the two arms that earned it: load before `31.01 35.69 37.06`, after `35.06 32.84 34.26`; 5674.118s, 63.4 games/s, 360,000 games. `base` won 20,253 of 120,000 (`0.168775`), 1.960 standard errors above the corner; the check passes, on the high side for the second time.
+
+Screen, pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| coverage_hi | `-0.010666666666666666` | 891 | 1211 | `[-0.0136596, -0.0076738]` | `[-0.0137351, -0.0075982]` | clustered `[-0.0137351, -0.0075982]` | 0.3068 | worse |
+| coverage_lo | `0.0057666666666666665` | 1156 | 983 | `[0.0027458, 0.0087875]` | `[0.0026636, 0.0088697]` | clustered `[0.0026636, 0.0088697]` | 0.3103 | inconclusive |
+| covscarcity_hi | `-0.0015666666666666667` | 373 | 420 | `[-0.0034064, 0.0002730]` | `[-0.0035293, 0.0003960]` | clustered `[-0.0035293, 0.0003960]` | 0.1963 | equivalent |
+| covscarcity_lo | `0.0011333333333333334` | 226 | 192 | `[-0.0002023, 0.0024690]` | `[-0.0002083, 0.0024750]` | clustered `[-0.0002083, 0.0024750]` | 0.1342 | equivalent |
+| diversity_hi | `0.0033` | 1494 | 1395 | `[-0.0002114, 0.0068114]` | `[-0.0003530, 0.0069530]` | clustered `[-0.0003530, 0.0069530]` | 0.3653 | inconclusive |
+| diversity_lo | `-0.014033333333333333` | 925 | 1346 | `[-0.0171427, -0.0109240]` | `[-0.0172665, -0.0108002]` | clustered `[-0.0172665, -0.0108002]` | 0.3233 | worse |
+| expansion_hi | `-0.0087` | 1075 | 1336 | `[-0.0119064, -0.0054936]` | `[-0.0120484, -0.0053516]` | clustered `[-0.0120484, -0.0053516]` | 0.3348 | worse |
+| expansion_lo | `-0.009433333333333334` | 2157 | 2440 | `[-0.0138616, -0.0050050]` | `[-0.0140424, -0.0048243]` | clustered `[-0.0140424, -0.0048243]` | 0.4609 | inconclusive |
+| port_hi | `-0.02263333333333333` | 1762 | 2441 | `[-0.0268611, -0.0184056]` | `[-0.0271609, -0.0181058]` | clustered `[-0.0271609, -0.0181058]` | 0.4528 | worse |
+| port_lo | `-0.0001` | 800 | 803 | `[-0.0027157, 0.0025157]` | `[-0.0027551, 0.0025551]` | clustered `[-0.0027551, 0.0025551]` | 0.2655 | equivalent |
+| scarcity_hi | `-0.0024333333333333334` | 1006 | 1079 | `[-0.0054164, 0.0005497]` | `[-0.0055086, 0.0006420]` | clustered `[-0.0055086, 0.0006420]` | 0.3075 | inconclusive |
+| scarcity_lo | `-0.0015333333333333334` | 588 | 634 | `[-0.0038171, 0.0007504]` | `[-0.0038868, 0.0008201]` | clustered `[-0.0038868, 0.0008201]` | 0.2353 | equivalent |
+
+Retry, pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| coverage_lo | `0.008533333333333334` | 4888 | 3864 | `[0.0070061, 0.0100606]` | `[0.0069409, 0.0101258]` | clustered `[0.0069409, 0.0101258]` | 0.1592 | better |
+| diversity_hi | `0.0057` | 6125 | 5441 | `[0.0039438, 0.0074562]` | `[0.0038924, 0.0075076]` | clustered `[0.0038924, 0.0075076]` | 0.1808 | inconclusive |
+
+Per-hero-seat tables, record only; hero seat equals draft slot. Percentage points. Screen:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Slot 5 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| coverage_hi | -1.067 `[-1.374, -0.760]` | 2102 | -0.94 `[-1.69, -0.19]` | -0.30 `[-1.07, +0.47]` | -1.18 `[-1.92, -0.44]` | -1.48 `[-2.26, -0.70]` | -1.46 `[-2.20, -0.72]` | -1.04 `[-1.81, -0.27]` (mcnemar) |
+| coverage_lo | +0.577 `[+0.266, +0.887]` | 2139 | +0.72 `[+0.02, +1.42]` | +0.18 `[-0.62, +0.98]` | +0.28 `[-0.47, +1.03]` | +1.02 `[+0.27, +1.77]` | +0.68 `[-0.09, +1.45]` | +0.58 `[-0.23, +1.39]` |
+| covscarcity_hi | -0.157 `[-0.353, +0.040]` | 793 | -0.16 `[-0.61, +0.29]` | +0.14 `[-0.30, +0.58]` | -0.32 `[-0.75, +0.11]` | -0.34 `[-0.82, +0.14]` | -0.24 `[-0.70, +0.22]` | -0.02 `[-0.54, +0.50]` |
+| covscarcity_lo | +0.113 `[-0.021, +0.247]` | 418 | -0.02 `[-0.27, +0.23]` (mcnemar) | +0.22 `[-0.18, +0.62]` | -0.02 `[-0.34, +0.30]` | +0.40 `[+0.09, +0.71]` (mcnemar) | +0.20 `[-0.18, +0.58]` | -0.10 `[-0.46, +0.26]` |
+| diversity_hi | +0.330 `[-0.035, +0.695]` | 2889 | +0.20 `[-0.73, +1.13]` | -0.28 `[-1.24, +0.68]` | +0.38 `[-0.46, +1.22]` | +0.50 `[-0.35, +1.35]` (mcnemar) | +0.70 `[-0.16, +1.56]` | +0.48 `[-0.39, +1.35]` |
+| diversity_lo | -1.403 `[-1.727, -1.080]` | 2271 | -1.74 `[-2.54, -0.94]` | -0.96 `[-1.77, -0.15]` | -1.72 `[-2.54, -0.90]` | -1.20 `[-1.96, -0.44]` | -1.28 `[-2.05, -0.51]` | -1.52 `[-2.29, -0.75]` |
+| expansion_hi | -0.870 `[-1.205, -0.535]` | 2411 | -0.96 `[-1.76, -0.16]` | -0.98 `[-1.87, -0.09]` | -0.94 `[-1.73, -0.15]` | -1.16 `[-2.00, -0.32]` | -0.94 `[-1.75, -0.13]` | -0.24 `[-0.99, +0.51]` |
+| expansion_lo | -0.943 `[-1.404, -0.482]` | 4597 | -0.62 `[-1.79, +0.55]` | -0.60 `[-1.70, +0.50]` | -1.66 `[-2.72, -0.60]` | -1.48 `[-2.52, -0.44]` | -0.04 `[-1.12, +1.04]` | -1.26 `[-2.39, -0.13]` (mcnemar) |
+| port_hi | -2.263 `[-2.716, -1.811]` | 4203 | -2.48 `[-3.57, -1.39]` | -2.08 `[-3.24, -0.92]` | -2.74 `[-3.80, -1.68]` | -3.12 `[-4.15, -2.09]` | -1.74 `[-2.77, -0.71]` | -1.42 `[-2.47, -0.37]` |
+| port_lo | -0.010 `[-0.276, +0.256]` | 1603 | +0.40 `[-0.31, +1.11]` | -0.12 `[-0.80, +0.56]` | -0.08 `[-0.70, +0.54]` | +0.02 `[-0.61, +0.65]` | +0.14 `[-0.50, +0.78]` | -0.42 `[-1.07, +0.23]` |
+| scarcity_hi | -0.243 `[-0.551, +0.064]` | 2085 | -0.50 `[-1.29, +0.29]` | +0.30 `[-0.47, +1.07]` | -0.50 `[-1.24, +0.24]` | +0.06 `[-0.69, +0.81]` | -0.30 `[-1.02, +0.42]` | -0.52 `[-1.24, +0.20]` |
+| scarcity_lo | -0.153 `[-0.389, +0.082]` | 1222 | +0.10 `[-0.47, +0.67]` | -0.16 `[-0.80, +0.48]` | -0.46 `[-1.04, +0.12]` | +0.10 `[-0.45, +0.65]` | -0.02 `[-0.63, +0.59]` | -0.48 `[-1.02, +0.06]` (mcnemar) |
+
+Retry:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Slot 5 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| coverage_lo | +0.853 `[+0.694, +1.013]` | 8752 | +0.68 `[+0.31, +1.04]` | +0.64 `[+0.25, +1.02]` | +0.61 `[+0.23, +0.99]` | +0.90 `[+0.51, +1.29]` | +1.35 `[+0.96, +1.74]` | +0.95 `[+0.55, +1.35]` |
+| diversity_hi | +0.570 `[+0.389, +0.751]` | 11566 | +0.40 `[-0.06, +0.87]` | +0.14 `[-0.32, +0.61]` | +0.49 `[+0.06, +0.92]` | +0.48 `[+0.05, +0.91]` | +1.00 `[+0.56, +1.44]` | +0.90 `[+0.47, +1.33]` |
+
+**One arm survives, and only on its retry: `coverage_lo`, `coverageExponent` 1.5 to 1.0.** It read `+0.577pp` on `[+0.266pp, +0.887pp]` at the screen, `inconclusive` with the bar inside the interval, and then `+0.853pp` on `[+0.694pp, +1.013pp]` over 8,752 discordant units of 120,000, `better` with 0.19pp to spare at the lower edge. Its mirror arm agrees: `coverage_hi` read `-1.067pp` on `[-1.374pp, -0.760pp]`, `worse`. Every slot is positive on the retry and every slot interval excludes zero. This is the fifth seat count of five at which linear coverage credit reads `better` than the shipped exponent.
+
+**`diversity_hi` is dropped unresolved, as it was at four seats.** `+0.330pp` on `[-0.035pp, +0.695pp]` at the screen, `inconclusive` above the `+0.25pp` retry line, then `+0.570pp` on `[+0.389pp, +0.751pp]` over 120,000 units, `inconclusive` again with the bar inside the interval. The sign is settled and positive, and `diversity_lo` read `-1.403pp`, `worse`, so the axis has a slope here too. M-67's four-seat retry read `+0.565pp`. The programme buys one retry, so the arm is dropped with a positive effect the power could not place on either side of the bar, which is a statement about power and not a null.
+
+**Both expansion arms read about a point negative.** `expansion_hi` read `-0.870pp` on `[-1.205pp, -0.535pp]`, `worse`, and `expansion_lo` read `-0.943pp` on `[-1.404pp, -0.482pp]`, `inconclusive` on the widest interval in the screen with its upper edge just above the `-0.5pp` line. The live 0.1 sits above both neighbours at a fifth seat count.
+
+**`port_hi` is again the largest effect and negative**: `-2.263pp` on `[-2.716pp, -1.811pp]`, negative at every slot. `port_lo` read `-0.010pp`, `equivalent`.
+
+**Disposition, per arm, by the preregistered rule.** `coverage_lo`: retried, `better`, survives. `diversity_hi`: retried, `inconclusive` again, dropped unresolved. `coverage_hi`, `diversity_lo`, `expansion_hi`, `port_hi`: dropped, `worse`. `covscarcity_lo`, `covscarcity_hi`, `port_lo`, `scarcity_lo`: dropped, `equivalent`. `scarcity_hi`, `expansion_lo`: dropped unresolved, `inconclusive` with negative estimates, which buy no retry. Two arms earned the retry, which is the most the `extension6` rule carries, so none was left behind. One survivor, so no combine pass: **the six-seat candidate is `simulator/placement/arms/sc_coverage_lo.json`** and it goes to `eval3`.
+
+**Prediction against outcome.** **Right on `coverage_lo`**, predicted `+0.2pp` to `+1.0pp`, delivered `+0.577pp` then `+0.853pp`. **Right on `diversity_hi`**, predicted `+0.2pp` to `+1.0pp`, delivered `+0.330pp` then `+0.570pp`. **Right on `coverage_hi`**, predicted negative. **Right on the sign of `diversity_lo` and low on its size**, predicted near `-1pp`, delivered `-1.403pp`. **Right on `port_hi`**, predicted `-2.5pp` to `-0.8pp`, delivered `-2.263pp`. **Right on `expansion_lo`**, predicted `-1.0pp` to `0pp`, delivered `-0.943pp`, and **right on `expansion_hi`**, predicted negative. **Right on all five scarcity, coverage-scarcity and `port_lo` arms**, predicted inside `+/-0.3pp`. **Right that both candidates would end the screen `inconclusive` above the retry line and that the retry would decide them.** At least one survivor was put near 65% and one survived; both surviving was put near 35% and did not happen.
+
+**Scope, and what this entry may not be cited for.** One layout, one seat count, one policy, one domain, twelve single-parameter contrasts with no multiplicity correction, at a power the wall-time cap set well below the programme's target. Each arm moves the hero's weights alone against five seats on today's vector, which was tuned at four seats on the other layout. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so no verdict here may be described as taken against a correctly specified model. Both expansion arms move the setup road as well as the settlement. The combined vector that five seats adopted in M-78 was not read here, because the rule sends only survivors to a combine pass; nothing in this entry says the pair would or would not beat the bar at six seats. A `better` on `tuning3` is a screening result: it sends one vector to `eval3` and decides nothing about what ships. Nothing here transfers to another seat count.
