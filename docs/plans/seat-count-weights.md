@@ -24,4 +24,6 @@ Run helper (not committed): `sc.py` in the session scratchpad builds each `evalu
 
 ## Per-seat state
 
-Filled as runs complete: sized `B`, survivors, verdicts, M numbers.
+Filled as runs complete: sized `B`, survivors, verdicts, M numbers. Run logs and `sc.py report` output for each run sit in the session scratchpad as `m<N>-*.log` and `m<N>-*.report`; artifacts are under `simulator/runs/` in the worktree.
+
+- **4 seats, M-67.** Pilot 150.426s for 41,600 games (276.5 games/s), widest pilot half-width 1.5784pp (`port_hi`), cap binds, `B` = 4500. Screen: 1601.185s, zero illegal actions, `base` 8843 of 36000 (z -1.911, pass). `coverage_lo` `better` (survivor). `diversity_hi` `inconclusive` at +0.667pp, retried at 18000 boards and `inconclusive` again (+0.565pp), dropped. Every other arm dropped. Candidate: `sc_coverage_lo.json`. M-67 entry written. Next: M-68 `eval3` at 18000 boards (prereg committed), then M-69 `gate3` if `better`.

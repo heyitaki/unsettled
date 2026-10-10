@@ -67,6 +67,21 @@ Each seat count goes through the same stages. Seat counts run in the order 4, 2,
 
 **Adoption mechanics.** The candidate's moved leaves go into `SEAT_WEIGHT_OVERRIDES` for that seat count, `simulator/tools/generate-placement-parity.ts` regenerates `seats-<n>.json`, and the Rust adoption table moves with it. `DEFAULT_WEIGHTS` and `default-weights.json` never move in this programme, so the field spelling keeps denoting the same field throughout and every `sc_*` arm stays a single-parameter perturbation of it.
 
+## Revision 1 to the procedure, 2026-10-10
+
+Made after the four-seat pilot was read for its wall time and widths and before any run at another seat count. It changes how the remaining four seat counts are sized and nothing about how any arm is judged. Four seats runs to completion under the procedure as first written.
+
+**Why.** The four-seat pilot played several times slower than the last four-seat draft-field throughput on record, which M-62 holds; M-67 holds the pilot's own figure. The older figure predates the SP6 adoption. Since then the field carries a nonzero `expansionWeight` on every seat's hero and opponent path, and `draft.rs::Lookahead::new` turns its row cache off whenever either path carries one, so every lookahead in every game now runs uncached. The first sizing rule was written against the old speed and contradicts itself on `extension6`, where its 2000-board floor cannot fit under its 30-minute cap.
+
+**What changes, for 2, 3, 5 and 6 seats.**
+
+- The pilot runs at 400 boards on `standard4` and at 100 on `extension6`. The sizing formula scales from whichever count the pilot used.
+- The 2000-board floor is dropped; `B` is at least 500. The screen's wall-time cap stays 30 minutes on `standard4` and is 120 minutes on `extension6`.
+- On `extension6` the retry carries at most two arms: of the arms that earn it, the two with the largest screen estimates. Any other arm that earned a retry is dropped unresolved and its entry says the cap dropped it.
+- The retry, the confirmation and the gate stay at `4B`.
+
+**What this costs.** Where a cap binds, the screen's half-widths are wider than the 0.35pp target and more arms end `inconclusive`. An `inconclusive` reading is a statement about power and never a null, and an entry under a binding cap says so.
+
 ## Outcome
 
 Filled in as each seat count closes. One row per seat count: the vector it ships and the entry that says why.
