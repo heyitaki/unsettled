@@ -2072,3 +2072,116 @@ Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
 **Prediction against outcome.** **Right on the estimate**, predicted `+0.6pp` to `+1.3pp` centred near `+0.95pp`, delivered `+0.844pp`, in the lower half of the range. **Right on the verdict**, predicted `better` at about 95%.
 
 **Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against three seats on today's vector, so **nothing here measures the world the adoption creates in the app**, where a four-seat analysis scores every seat's picks on the adopted vector. The greedy opponent model inside every hero is the one M-61 measured as misspecified against a draft-aware field, so the verdict may not be described as taken against a correctly specified model. The field is the same on all three domains, so the held-out readings control for seeds and not for field-overfit: the adopted value is a default for this simulator's composite policy against this field. The value 1.0 is the lower endpoint of the key's range in `sweep-bounds.json` and its mirror arm at 2.25 read `worse` in M-67, so the response was still rising at the bound; nothing here says 1.0 is the optimum, and probing below it means re-bracketing the range first. The verdict licenses moving this one leaf at this one seat count and nothing else.
+
+## M-70: seat-count screen at 2 seats
+
+2026-10-10, commit `904ee1c8` (the preregistration commit; no default moved for this run), domain `tuning3` (seed `8796478869724336144`). Preregistered in `docs/plans/preregs/2026-10-10-m70-seats2-screen.md` (committed before the pilot). The first placement reading ever taken at two seats: does any of the twelve `sc_*` arms beat today's vector there?
+
+`evaluate`, `standard4`, 2 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial`, no `--player-trading` so only bank and port trades exist, `--allow-unofficial`, `--threads 0`, 2 reps, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec itself, except in the combine pass, where the reference is the combined vector. Each arm carries one `simulator/placement/arms/sc_*.json` on the hero path with the opponent path pinned to the field's weights; the arm values are M-67's.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# pilot, from simulator/, read blind
+target/release/unsettled-sim evaluate --layout standard4 --seats 2 --domain tuning3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm scarcity_lo=app_formula_draft:placement/arms/sc_scarcity_lo.json@placement/default-weights.json --arm scarcity_hi=app_formula_draft:placement/arms/sc_scarcity_hi.json@placement/default-weights.json --arm covscarcity_lo=app_formula_draft:placement/arms/sc_covscarcity_lo.json@placement/default-weights.json --arm covscarcity_hi=app_formula_draft:placement/arms/sc_covscarcity_hi.json@placement/default-weights.json --arm coverage_lo=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --arm coverage_hi=app_formula_draft:placement/arms/sc_coverage_hi.json@placement/default-weights.json --arm diversity_lo=app_formula_draft:placement/arms/sc_diversity_lo.json@placement/default-weights.json --arm diversity_hi=app_formula_draft:placement/arms/sc_diversity_hi.json@placement/default-weights.json --arm port_lo=app_formula_draft:placement/arms/sc_port_lo.json@placement/default-weights.json --arm port_hi=app_formula_draft:placement/arms/sc_port_hi.json@placement/default-weights.json --arm expansion_lo=app_formula_draft:placement/arms/sc_expansion_lo.json@placement/default-weights.json --arm expansion_hi=app_formula_draft:placement/arms/sc_expansion_hi.json@placement/default-weights.json --reference base --boards 400 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --allow-unofficial --threshold 0.005 --alpha 0.05 --out runs/m70-seats2-pilot
+
+# screen, from simulator/: the pilot's command with --boards 17500 --out runs/m70-seats2-screen
+
+# retry, from simulator/
+target/release/unsettled-sim evaluate --layout standard4 --seats 2 --domain tuning3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm port_lo=app_formula_draft:placement/arms/sc_port_lo.json@placement/default-weights.json --arm scarcity_lo=app_formula_draft:placement/arms/sc_scarcity_lo.json@placement/default-weights.json --reference base --boards 70000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --allow-unofficial --threshold 0.005 --alpha 0.05 --out runs/m70-seats2-retry
+
+# combine pass, from simulator/, at commit a0a199fd
+target/release/unsettled-sim evaluate --layout standard4 --seats 2 --domain tuning3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm combined=app_formula_draft:placement/arms/sc_s2_combined.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm coverage_lo=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --arm diversity_hi=app_formula_draft:placement/arms/sc_diversity_hi.json@placement/default-weights.json --reference combined --boards 17500 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --allow-unofficial --threshold 0.005 --alpha 0.05 --out runs/m70-seats2-combine
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block after the four-seat adoption commit and reported `Finished` in 0.03s on the warm check; the pilot, screen and retry used it. It was rebuilt again after `a0a199fd`, which changed test code only, and reported `Finished` in 0.04s on the warm check before the combine pass. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. Each invocation ran alone in its command block, unpiped, one after another, and each reported domain `tuning3` at seed `8796478869724336144`. **Zero illegal actions in all four, and zero draws in every arm.** `simulator/runs/` is gitignored, so this entry is the record. Other sessions shared the machine, so the throughputs are contended figures.
+
+Pilot, 400 boards: load before `11.34 17.33 28.95`, after `16.24 18.05 28.87`; 22.810s at 18 workers, 911.9 games/s, 20,800 games. **Read blind**: only the wall time, the illegal-action count and each arm's half-width and discordant share were printed.
+
+Sizing: the widest pilot half-width was `port_hi` at 2.2862pp, so the 0.35pp target wanted 17,067 boards, rounded up to **`B` = 17500**; the 30-minute cap allowed 31,565, so the target bound and the cap did not. The pilot predicted a widest half-width of 0.346pp at that size.
+
+Screen, 17500 boards, 70,000 paired units over 17,500 clusters: load before `14.98 17.72 28.63`, after `39.05 39.59 37.33`; 998.999s, 910.9 games/s, 910,000 games. `base` won 34,995 of 70,000 (`0.49992857142857144`), 0.038 binomial standard errors below the 0.5 corner; the corner check passes.
+
+Retry, 70000 boards, 280,000 paired units, carrying `base`, `port_lo` and `scarcity_lo`: load before `31.55 37.91 36.77`, after `26.78 30.38 32.66`; 888.135s, 945.8 games/s, 840,000 games. `base` won 140,191 of 280,000 (`0.5006821428571429`), 0.722 standard errors above the corner; the check passes.
+
+Combine pass, 17500 boards, 70,000 paired units, reference `combined` (`simulator/placement/arms/sc_s2_combined.json`, the live defaults with `coverageExponent` 1.0 and `diversityWeight` 3.2), arms `base`, `coverage_lo` and `diversity_hi`: load before `7.62 6.85 7.13`, after `26.10 25.91 16.77`; 356.848s, 784.6 games/s, 280,000 games. Its boards are the screen's, so `base`, `coverage_lo` and `diversity_hi` reproduce their screen win counts exactly (34,995, 35,547 and 35,929), and the corner check on `base` is the screen's. `combined` won 36,846 of 70,000 (`0.5263714285714286`).
+
+Screen, pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| coverage_hi | `-0.012228571428571429` | 2381 | 3237 | `[-0.0143253, -0.0101319]` | `[-0.0144173, -0.0100399]` | clustered `[-0.0144173, -0.0100399]` | 0.2189 | worse |
+| coverage_lo | `0.007885714285714286` | 2975 | 2423 | `[0.0058294, 0.0099420]` | `[0.0057429, 0.0100285]` | clustered `[0.0057429, 0.0100285]` | 0.2143 | better |
+| covscarcity_hi | `-0.0054` | 983 | 1361 | `[-0.0067550, -0.0040450]` | `[-0.0068370, -0.0039630]` | clustered `[-0.0068370, -0.0039630]` | 0.1437 | inconclusive |
+| covscarcity_lo | `0.002142857142857143` | 674 | 524 | `[0.0011739, 0.0031118]` | `[0.0011338, 0.0031519]` | clustered `[0.0011338, 0.0031519]` | 0.1009 | equivalent |
+| diversity_hi | `0.013342857142857142` | 5043 | 4109 | `[0.0106661, 0.0160196]` | `[0.0105670, 0.0161187]` | clustered `[0.0105670, 0.0161187]` | 0.2776 | better |
+| diversity_lo | `-0.021342857142857143` | 2933 | 4427 | `[-0.0237397, -0.0189460]` | `[-0.0238642, -0.0188215]` | clustered `[-0.0238642, -0.0188215]` | 0.2521 | worse |
+| expansion_hi | `-0.012314285714285715` | 2851 | 3713 | `[-0.0145809, -0.0100476]` | `[-0.0147016, -0.0099269]` | clustered `[-0.0147016, -0.0099269]` | 0.2387 | worse |
+| expansion_lo | `-0.003457142857142857` | 6444 | 6686 | `[-0.0066654, -0.0002489]` | `[-0.0067055, -0.0002088]` | clustered `[-0.0067055, -0.0002088]` | 0.3248 | inconclusive |
+| port_hi | `-0.03791428571428571` | 5271 | 7925 | `[-0.0411184, -0.0347102]` | `[-0.0412845, -0.0345441]` | clustered `[-0.0412845, -0.0345441]` | 0.3370 | worse |
+| port_lo | `0.003742857142857143` | 2678 | 2416 | `[0.0017447, 0.0057411]` | `[0.0016516, 0.0058341]` | clustered `[0.0016516, 0.0058341]` | 0.2091 | inconclusive |
+| scarcity_hi | `-0.013771428571428572` | 3194 | 4158 | `[-0.0161700, -0.0113728]` | `[-0.0162900, -0.0112528]` | clustered `[-0.0162900, -0.0112528]` | 0.2519 | worse |
+| scarcity_lo | `0.0036` | 2131 | 1879 | `[0.0018271, 0.0053729]` | `[0.0017630, 0.0054370]` | clustered `[0.0017630, 0.0054370]` | 0.1837 | inconclusive |
+
+Retry, pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| port_lo | `0.0026357142857142855` | 10333 | 9595 | `[0.0016476, 0.0036238]` | `[0.0016092, 0.0036622]` | clustered `[0.0016092, 0.0036622]` | 0.1026 | equivalent |
+| scarcity_lo | `0.003867857142857143` | 8601 | 7518 | `[0.0029793, 0.0047564]` | `[0.0029395, 0.0047962]` | clustered `[0.0029395, 0.0047962]` | 0.0928 | equivalent |
+
+Combine pass, pooled, **reference `combined`**, so a negative estimate says the combined vector beats that arm:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| base | `-0.026442857142857143` | 4247 | 6098 | `[-0.0292840, -0.0236018]` | `[-0.0294060, -0.0234797]` | clustered `[-0.0294060, -0.0234797]` | 0.2963 | worse |
+| coverage_lo | `-0.01855714285714286` | 3835 | 5134 | `[-0.0212053, -0.0159090]` | `[-0.0213274, -0.0157869]` | clustered `[-0.0213274, -0.0157869]` | 0.2770 | worse |
+| diversity_hi | `-0.0131` | 2621 | 3538 | `[-0.0152952, -0.0109048]` | `[-0.0153656, -0.0108344]` | clustered `[-0.0153656, -0.0108344]` | 0.2266 | worse |
+
+Per-hero-seat tables, record only; hero seat equals draft slot. Percentage points. Screen:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 |
+| --- | --- | ---: | ---: | ---: |
+| coverage_hi | -1.223 `[-1.442, -1.004]` | 5618 | -1.47 `[-1.78, -1.17]` | -0.97 `[-1.29, -0.65]` |
+| coverage_lo | +0.789 `[+0.574, +1.003]` | 5398 | +0.52 `[+0.23, +0.81]` | +1.06 `[+0.74, +1.38]` |
+| covscarcity_hi | -0.540 `[-0.684, -0.396]` | 2344 | -0.63 `[-0.84, -0.43]` | -0.45 `[-0.65, -0.25]` |
+| covscarcity_lo | +0.214 `[+0.113, +0.315]` | 1198 | +0.18 `[+0.04, +0.32]` | +0.25 `[+0.10, +0.40]` |
+| diversity_hi | +1.334 `[+1.057, +1.612]` | 9152 | +1.45 `[+1.05, +1.86]` | +1.21 `[+0.83, +1.60]` |
+| diversity_lo | -2.134 `[-2.386, -1.882]` | 7360 | -2.54 `[-2.90, -2.18]` | -1.73 `[-2.08, -1.37]` |
+| expansion_hi | -1.231 `[-1.470, -0.993]` | 6564 | -1.78 `[-2.15, -1.41]` | -0.68 `[-1.00, -0.37]` |
+| expansion_lo | -0.346 `[-0.671, -0.021]` | 13130 | -0.37 `[-0.79, +0.06]` | -0.33 `[-0.82, +0.17]` |
+| port_hi | -3.791 `[-4.128, -3.454]` | 13196 | -4.69 `[-5.18, -4.21]` | -2.89 `[-3.36, -2.42]` |
+| port_lo | +0.374 `[+0.165, +0.583]` | 5094 | +0.30 `[+0.00, +0.60]` | +0.45 `[+0.15, +0.74]` |
+| scarcity_hi | -1.377 `[-1.629, -1.125]` | 7352 | -1.61 `[-1.98, -1.25]` | -1.14 `[-1.49, -0.79]` |
+| scarcity_lo | +0.360 `[+0.176, +0.544]` | 4010 | +0.26 `[-0.00, +0.53]` | +0.46 `[+0.20, +0.71]` |
+
+Retry:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 |
+| --- | --- | ---: | ---: | ---: |
+| port_lo | +0.264 `[+0.161, +0.366]` | 19928 | +0.30 `[+0.15, +0.44]` | +0.23 `[+0.09, +0.38]` |
+| scarcity_lo | +0.387 `[+0.294, +0.480]` | 16119 | +0.31 `[+0.18, +0.44]` | +0.47 `[+0.33, +0.60]` |
+
+Combine pass, reference `combined`:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 |
+| --- | --- | ---: | ---: | ---: |
+| base | -2.644 `[-2.941, -2.348]` | 10345 | -2.67 `[-3.10, -2.25]` | -2.61 `[-3.04, -2.19]` |
+| coverage_lo | -1.856 `[-2.133, -1.579]` | 8969 | -2.15 `[-2.55, -1.75]` | -1.56 `[-1.94, -1.17]` |
+| diversity_hi | -1.310 `[-1.537, -1.083]` | 6159 | -1.22 `[-1.53, -0.91]` | -1.40 `[-1.73, -1.07]` |
+
+**Two axes survive, and they are the two that moved at four seats.** `coverage_lo` read `+0.789pp` on `[+0.574pp, +1.003pp]` and `diversity_hi` read `+1.334pp` on `[+1.057pp, +1.612pp]`, both `better`, and each axis's other arm reads the opposite sign: `coverage_hi` `-1.223pp` and `diversity_lo` `-2.134pp`, both `worse`. `diversity_hi` was the arm M-67 retried and dropped unresolved at four seats at about `+0.57pp`; with no player trading it reads more than twice that.
+
+**The two changes stack.** Against the combined vector, removing the coverage change (leaving `diversity_hi`) reads `-1.310pp`, `worse`, and removing the diversity change (leaving `coverage_lo`) reads `-1.856pp`, `worse`, so by the preregistered rule neither axis is dropped. `base` reads `-2.644pp` on `[-2.941pp, -2.348pp]` against the combined vector, `worse`, which is the combined vector reading `better` against `base` with the whole interval beyond the `0.5pp` bar. The two single-arm estimates sum to `+2.123pp`, so the pair is worth about half a point more together than apart. **The two-seat candidate is `simulator/placement/arms/sc_s2_combined.json`** and it goes to `eval3`.
+
+**Both retried arms read `equivalent`, on intervals that exclude zero.** `port_lo` read `+0.374pp` at the screen and `+0.264pp` on `[+0.161pp, +0.366pp]` at the retry; `scarcity_lo` read `+0.360pp` and then `+0.387pp` on `[+0.294pp, +0.480pp]`. Both are real and both are under the half-point bar, so both are dropped with that answer. `covscarcity_lo` read `+0.214pp`, `equivalent`, the same way.
+
+**Every arm that raises a weight other than diversity reads negative, and `port_hi` is the largest effect in the programme so far.** Doubling `portWeight` cost `-3.791pp` on `[-4.128pp, -3.454pp]`, at a seat count where ports are the only way to trade. `scarcity_hi` read `-1.377pp`, `expansion_hi` `-1.231pp` and `coverage_hi` `-1.223pp`, all `worse`. `covscarcity_hi` read `-0.540pp` on `[-0.684pp, -0.396pp]`, `inconclusive` with a negative estimate.
+
+**`expansion_lo` is the least settled arm.** Removing `expansionWeight` read `-0.346pp` on `[-0.671pp, -0.021pp]`, `inconclusive`, on 13,130 discordant units, about as many as `port_hi`'s 13,196. The term changes the pick on almost a fifth of units at two seats and wins barely more than half of them.
+
+**Disposition, per arm, by the preregistered rule.** `coverage_lo`, `diversity_hi`: survive. `coverage_hi`, `diversity_lo`, `expansion_hi`, `port_hi`, `scarcity_hi`: dropped, `worse`. `covscarcity_lo`: dropped, `equivalent`. `covscarcity_hi`, `expansion_lo`: dropped unresolved, `inconclusive` with negative estimates. `port_lo`, `scarcity_lo`: retried, `equivalent`, dropped. Two surviving axes, so the combine pass ran, and both stay.
+
+**Prediction against outcome.** **Right on `diversity_hi`**, predicted `0pp` to `+1.5pp`, delivered `+1.334pp`. **Right on `coverage_lo`**, predicted `0pp` to `+1.5pp`, delivered `+0.789pp`. **Right on `expansion_lo`**, predicted inside `+/-0.5pp`, delivered `-0.346pp`, and **right on `expansion_hi`**, predicted negative, delivered `-1.231pp`. **Wrong on `port_hi`, and wrong in sign**: predicted `0pp` to `+1.5pp` on the argument that ports are the only trade at two seats, delivered `-3.791pp`. The argument confused needing a port with needing the scorer to pay more for one; the live weight evidently already pays enough. **Wrong on `scarcity_hi`**, predicted inside `+/-0.5pp`, delivered `-1.377pp`, and **wrong by a hair on `covscarcity_hi`**, predicted inside `+/-0.5pp`, delivered `-0.540pp`. **Right on `scarcity_lo` and `covscarcity_lo`**, both inside `+/-0.5pp`. **Right that effects run larger than at four seats**, and right on two of the three arms named as likeliest survivors.
+
+**Scope, and what this entry may not be cited for.** One layout, one seat count, one policy, one domain, twelve single-parameter contrasts and one combination with no multiplicity correction. Two seats is not an official player count and runs under `--allow-unofficial` on a board built for four. Each arm moves the hero's weights alone against one seat on today's vector, which was tuned at four seats. The greedy opponent model inside every hero was measured in M-61 at four seats only, so no verdict here may be described as taken against a correctly specified model. Both expansion arms move the setup road as well as the settlement. A `better` on `tuning3` is a screening result: it sends one vector to `eval3` and decides nothing about what ships. Nothing here transfers to another seat count.
