@@ -3,9 +3,6 @@ import { computeStandings, type PlayerStanding } from '../engine/stats'
 import { addPlayer } from '../model/board'
 import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
-import { inferDraftState } from '../engine/draft'
-import { DraftLabel } from './DraftGrid'
-import { DraftRibbon } from './DraftRibbon'
 import { CounterGlyph, GLYPH_MUTED, PlusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { RosterRow, RosterTrash } from './RosterRow'
 import { MenuSelect } from './MenuSelect'
@@ -345,12 +342,6 @@ export function PlayerPanel() {
           <PlusGlyph />
           Add player
         </button>
-      </div>
-      {/* The ribbon, not the phone's named grid: the desktop roster already
-          names every seat, so the compact bar the strip used to be is enough. */}
-      <div className="draft-section">
-        <DraftLabel analysis={{ draft: inferDraftState(board) }} />
-        <DraftRibbon />
       </div>
       <AwardControls />
     </section>

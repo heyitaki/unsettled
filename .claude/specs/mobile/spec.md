@@ -2,7 +2,7 @@
 
 What the portrait-phone UI must become. The working prototype is the normative reference for layout and interaction: **https://claude.ai/code/artifact/86ae14f6-692d-4a86-878d-f23b72bb0895** (source kept at `.claude/specs/mobile/prototype.html`). Where this file and the prototype disagree, this file wins; where this file is silent, copy the prototype.
 
-Scope is the `@media (max-width: 760px)` arm plus the React that arm needs. **Desktop is out of scope** and must not regress. Width alone picks the tree: a landscape phone is wider than 760px and gets the desktop `Workspace`; a desktop window narrower than that gets this shell whatever its orientation or pointer. There is no landscape-phone arm and no tab-gated pane layout (decided 2026-09-03, when the old shared arm was found surfacing a bottom tab bar in narrow desktop windows).
+Scope is the `@media (max-width: 760px)` arm plus the React that arm needs. **Desktop layout is out of scope** and must not regress; the shared Best picks controls in S2 and S5 apply to both trees. Width alone picks the tree: a landscape phone is wider than 760px and gets the desktop `Workspace`; a desktop window narrower than that gets this shell whatever its orientation or pointer. There is no landscape-phone arm and no tab-gated pane layout (decided 2026-09-03, when the old shared arm was found surfacing a bottom tab bar in narrow desktop windows).
 
 ## Why
 
@@ -40,7 +40,7 @@ Undo prints as `Undo`, with no stack-depth count. The count is a quantity the us
 
 ### S2 · Draft ribbon
 
-A row of numbered circles at the top of the analysis block (S5), under its heading and over the `You are` line, one per pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, the current pick is ringed, and each of your own picks carries a dot beneath it, clear of the current-pick ring. Centred in the block.
+Whenever the board has tiles, a row of numbered circles opens the analysis block (S5) under its heading and above the context line. Each circle is one pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, the current pick is ringed, and each of your own picks carries a dot beneath it, clear of the current-pick ring. Centred in the block. Each circle is a button named `Pick 3: Red` that claims its player, with `aria-pressed` reflecting the claim. Tapping the already claimed player does nothing. The slots come from draft inference without analysis predictions.
 
 It leaves with the analysis block in build mode; nothing sits between the header and the board, so entering build mode does not shift the board.
 
@@ -62,8 +62,8 @@ The `19/19 terrain` and `4 pieces` counts are removed from this line on phones. 
 
 The block below the caption, and the reason the page exists.
 
-- Heading `Draft analysis` / `Best picks`, with a `Your turn` pill on the right when it is your turn.
-- Context line: `You are <name> · picking 3 and 6 of 8`. `<name>` is a picker, so claiming yourself is reachable here as well as from the roster.
+- Heading `Draft analysis` / `Best picks`, with round `Step back one pick` and `Step forward one pick` icon buttons on the right whenever the board has tiles, including an unclaimed or finished draft. Each button has a 44px touch target. Back removes the last snake picker's last settlement and its touching roads owned by that player, falling back to the last settlement in board order when that picker has none. It is disabled with no settlements, any upgraded building, or more settlements than draft picks. Forward restores the removed pick and roads. Each step is an ordinary board edit; the local forward list survives player claims while the building and road arrays stay identical, and is discarded by a piece edit, a tab switch, or store undo/redo. Forward is disabled when that list is empty or invalid.
+- Context line: `<name> · Picking 3rd and 6th`. `<name>` is a picker, so claiming yourself is reachable here as well as from the roster.
 - Ranked recommendation cards. Each card shows the triple, the score, the survival line, the planned follow-up, and the factor pills.
 - Tapping a card draws its marks on the board **in the claimed player's colour**, with the planned second pick faded behind the first. A card may also carry a third mark, a stub of road along the edge its first pick opens; it is absent only when the pick opens nothing, or when `expansionWeight` is 0, which it has not been since the SP6 adoption put it at 0.1. If the board has been scrolled past, tapping a card scrolls the page back to it (B2).
 - When nothing is selected, all recommendations are marked at once, ranks four and up faded.
@@ -102,14 +102,14 @@ Full-screen overlay. Header: back chevron, `Players`, no dots menu (nothing to i
 **Roster.** Label reads just `ROSTER`. One row per player, each row doing three things:
 
 - **Tap the row** to claim that player as you (`setMe`). The claimed row is marked by a dark border, a white ground, and a `YOU` chip. There are no `CLAIM` buttons: four rows each carrying the same button repeated what the label said and left nothing to distinguish the claimed row.
-- **Tap the name** to rename in place. The name button is only as wide as its own text plus a few pixels, with a floor around 30px, so the rest of the row stays a claim target; the field grows with what is typed rather than filling the column. Enter commits, Escape reverts. The name carries a faint dotted underline, matching the `You are <name>` picker, because nothing else distinguishes it from the row it sits in.
+- **Tap the name** to rename in place. The name button is only as wide as its own text plus a few pixels, with a floor around 30px, so the rest of the row stays a claim target; the field grows with what is typed rather than filling the column. Enter commits, Escape reverts. The name carries a faint dotted underline, matching the context-line player picker, because nothing else distinguishes it from the row it sits in.
 - **Press and hold, or drag the grip**, to move the row to another seat. The grip starts a drag immediately; anywhere else needs a hold, and movement past a slop threshold before the hold lands cancels it so a scroll still scrolls. The lifted row tracks the finger with no easing while the rows it passes ease out of the way.
 
 Below the rows, a dashed **`Add player`** button matching `New board` on the Maps screen.
 
 **Snake draft.** Below the roster, the pick grid, derived from seat order.
 
-**Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `picking 3 and 6 of 8` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
+**Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `Picking 3rd and 6th` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
 
 The points ledger stays on desktop (O1). Below the snake draft, `Award holders` provides the same tie-correction controls as desktop D5 when anyone qualifies for an award.
 
@@ -141,7 +141,7 @@ Do not rebuild these; move or restyle them.
 | Rename a player on name click | the name-bounded field is `InlineRename.tsx`, shared by `PlayerPanel.tsx`, `ListRow.tsx` and `phone/PlayersScreen.tsx` |
 | Reorder players by drag, both mouse DnD and a coarse-pointer hold, plus the grip that lifts at once | `useRowReorder.ts` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP`, shared by `PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
 | Add and remove players | `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`, `addPlayer` / drag-to-trash |
-| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row and empty-board state, and a click on a roster row in `PlayerPanel.tsx` or `phone/PlayersScreen.tsx`, all through `setMe` |
+| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row and context picker, the `DraftRibbon.tsx` buttons, and a click on a roster row in `PlayerPanel.tsx` or `phone/PlayersScreen.tsx`, all through `setMe` |
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, under the `LibraryLists.tsx` body that `MapsPanel.tsx` and `phone/MapsScreen.tsx` both render |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
@@ -150,7 +150,7 @@ Do not rebuild these; move or restyle them.
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `GlobalNotice.tsx`, rendered by both `Workspace` and `PhoneShell` |
-| Snake draft grid and the ribbon over the board, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` under `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` under `PlayerPanel.tsx` and, on the phone, inside `AnalysisPanel.tsx` |
+| Snake draft grid and ribbon, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` with `DraftLabel` under `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` inside `AnalysisPanel.tsx` in both trees |
 
 ## Decisions
 

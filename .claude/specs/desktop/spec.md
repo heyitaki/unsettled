@@ -2,7 +2,7 @@
 
 What the desktop (and, through the shared `Workspace` tree, landscape phone, which is wider than the 760px phone arm) UI must become so it carries the design decisions the portrait phone settled in [`../mobile/spec.md`](../mobile/spec.md). Read that file first: its Surfaces, Behaviours and Decisions are the design; this file says what of it reaches the desktop, what the desktop keeps that the phone dropped, and how the two trees share code afterwards. Where this file is silent, the phone's rendering is the reference: `e2e/phoneShell.spec.ts` produces screenshots of every phone surface under `test-results/phone/`.
 
-Scope is `src/ui/` outside `src/ui/phone/`, the base rules of `src/ui/editor.css`, and the phone files only where a surface is promoted out of them. **The portrait shell must not regress**: every phone e2e test stays green and every phone screenshot stays the same in substance (selectors may change with class names, pixels do not).
+Scope is `src/ui/` outside `src/ui/phone/`, the base rules of `src/ui/editor.css`, and the phone files only where a surface is promoted out of them. **The portrait shell must not regress**: every phone e2e test stays green and phone screenshots preserve the layout except for the shared Best picks controls in D4.
 
 ## Why
 
@@ -10,7 +10,7 @@ The phone shell was built to a design that fixed decisions the desktop still con
 
 ## The model
 
-One `Workspace` tree for every viewport wider than 760px (mobile spec B8 holds; the phone shell is untouched). It has no tab bar and no pane gating at any width: the old `MobileNav` arm and the landscape side rail were deleted on 2026-09-03. Left rail: Library, then Board tools. Centre: the board in its paper stage with the layout caption under it. Right rail: Players (roster, then the draft ribbon), then Best picks. No tab strip and no footer. The site header is the brand mark and `Unsettled`, with no subtitle. Above 1120px the three columns sit side by side and the board is sticky; at 1120px and below the right rail wraps under the board as two equal columns and the board scrolls with the page, since Chromium bounds a sticky grid item by the whole grid and a pinned board would ride over the rail.
+One `Workspace` tree for every viewport wider than 760px (mobile spec B8 holds). It has no tab bar and no pane gating at any width: the old `MobileNav` arm and the landscape side rail were deleted on 2026-09-03. Left rail: Library, then Board tools. Centre: the board in its paper stage with the layout caption under it. Right rail: Players (roster and points ledger), then Best picks with the draft ribbon under its heading. No tab strip and no footer. The site header is the brand mark and `Unsettled`, with no subtitle. Above 1120px the three columns sit side by side and the board is sticky; at 1120px and below the right rail wraps under the board as two equal columns and the board scrolls with the page, since Chromium bounds a sticky grid item by the whole grid and a pinned board would ride over the rail.
 
 Everything the phone and the desktop both render is one component with one stylesheet rule. A phone surface that reaches the desktop is promoted: its component moves out of `src/ui/phone/` into `src/ui/`, its CSS moves out of the portrait arm into the base rules, and both lose the `phone-` prefix. The portrait arm keeps only the rules that differ on a phone. Anything still phone-only (`PhoneShell`, `PhoneHeader`, `PhoneOverlay`, the overlays, `PhoneBuild`, `buildMode.ts`, `revealBoard.ts`) keeps its name, its place and its prefix.
 
@@ -47,7 +47,8 @@ One code path for every pointer; the `coarse` branch and the `variant` prop go.
 Placement analysis runs in a shared worker. A changed board shows `Analyzing placements…` until its result arrives, with no old cards or predicted marks. A failed worker offers `Retry analysis`. Board editing and navigation remain available.
 
 - **Selecting a card** (click or tap) pins its marks in the claimed colour, first pick solid, planned second faded, road stub when present, and opens `Place settlement` / `Clear` under it; clicking the selected card again deselects. **Hovering** a card with a fine pointer previews its marks only while nothing is selected; leaving the list restores the resting marks. The likely-gone block behaves the same way with `Play these out` / `Clear`. A click never places a piece directly.
-- **Heading** `Draft analysis` / `Best picks` with the `Your turn` pill at the right when it is your turn. **Context line** `You are <picker> · picking X and Y of N`; the desktop's `· pick N of M, whose turn` tail goes.
+- **Heading** `Draft analysis` / `Best picks`, with round `Step back one pick` and `Step forward one pick` icon buttons on the right whenever the board has tiles, including an unclaimed or finished draft. Back removes the last snake picker's last settlement and its touching roads owned by that player, falling back to the last settlement in board order when that picker has none. It is disabled with no settlements, any upgraded building, or more settlements than draft picks. Forward restores the removed pick and roads. Each step is an ordinary board edit; the local forward list survives player claims while the building and road arrays stay identical, and is discarded by a piece edit, a tab switch, or store undo/redo. Forward is disabled when that list is empty or invalid. **Context line** `<picker> · Picking 3rd and 6th`, with the same player picker and ordinal pick numbers.
+- **Draft ribbon**: under the heading whenever the board has tiles, centred with space above the context or claim row. Each numbered circle claims its player, with `aria-pressed` and the small dot beneath both of that player's picks showing the claim. Its title and accessible name read `Pick 3: Red`. Clicking an already claimed player does nothing. Taken picks are solid, later picks faded, and the current pick ringed; ribbon slots come from draft inference without analysis predictions.
 - **No player claimed**: the hint `Tap your colour and the ranking starts` (desktop: `Pick your colour and the ranking starts`) and a row of swatch buttons, one per player, that claim on click. The `choose player` placeholder goes.
 - **Empty board** (mobile B5): heading `Nothing to rank yet` / `This board is empty` and the hint. The `Import screenshot` and `Build it by hand` buttons render only when the panel is given `onBuild`, which only the phone shell supplies; on the desktop both the import and the tools are already on screen in the left rail.
 - **Cards** are the phone's: rank circle in the claimed colour with an ink ring, the triple in Inter, the score in ink, survival as plain accent text, flat tinted factor chips. The selected card uses the `current` state. The desktop rules for the accent-red rank, the Georgia score, the blue survival pill and the bordered 8px factor pills go.
@@ -56,7 +57,7 @@ Placement analysis runs in a shared worker. A changed board shows `Analyzing pla
 
 The roster is the phone's roster (S8) plus the tally the desktop keeps (mobile O1).
 
-Below the draft ribbon, `Award holders` opens Longest road and Largest army selectors when anyone qualifies. Only tied leaders can be chosen. Imported ties start as `Unknown`, while a recorded incumbent keeps a tie. Corrections share game undo, redo and persistence.
+Below the roster, `Award holders` opens Longest road and Largest army selectors when anyone qualifies. Only tied leaders can be chosen. Imported ties start as `Unknown`, while a recorded incumbent keeps a tie. Corrections share game undo, redo and persistence.
 
 - **Heading**: eyebrow `Points ledger`, h2 `Players`. The `+` button in the heading goes; a dashed `Add player` row sits under the roster, disabled at six players.
 - **Row**, left to right: grip (`GripGlyph`, starts a drag at once), swatch (24px, the player's colour), name, `YOU` chip (visible on the claimed row, an invisible placeholder on the others so columns hold), the tally columns and VP under the existing tally bar with its view switch. The awards pill keeps its place beside the name.
@@ -65,7 +66,7 @@ Below the draft ribbon, `Award holders` opens Longest road and Largest army sele
 - **Clicking the name renames in place** (`InlineRename`, dotted underline at rest, the field bounded to the text, Enter commits, Escape reverts, `renamePlayer` on commit rather than on every keystroke).
 - **Dragging**: the rows the lifted row passes ease out of the way (`rowShift`) and the mid-drag trash row removes. The desktop's faded-card drag look goes. Fine pointers keep `useRowReorder`'s HTML5 path, where the browser's own drag image follows the pointer and the lifted row instead eases into the slot it would land in, so the list previews the order it will commit to; on a hold the lifted row tracks the finger with no easing. Every offset derives from `dragId` and `dropTarget`, which both paths supply.
 - The native drag is aimed and dropped on the **list**, not on the rows: a row under the pointer has already moved out from under it, and the gap a row leaves behind is bare list, which would refuse the drop. Both paths therefore resolve the destination with `dropIndexFor` against the layout measured when the drag started.
-- **Snake draft**: under the roster, where the strip was, the phone's ribbon (S2) promoted to `DraftRibbon` under the group label `Snake draft` with `pick n of m` (or `draft complete`) at the right (`DraftLabel`, shared with the phone's grid): one circle per pick, taken solid, later faded, current ringed, own picks dotted, click marks the pick's placed or predicted vertex. The phone's named grid (`DraftGrid`) stays on the phone's Players screen; the desktop roster already names every seat.
+- **Snake draft**: the ribbon lives in Best picks (D4). The named grid and its `DraftLabel` stay on the phone's Players screen; the desktop roster already names every seat.
 
 ### D6 · Vocabulary
 
@@ -87,7 +88,7 @@ Below the draft ribbon, `Award holders` opens Longest road and Largest army sele
 | DB3 | Roster row click claims (`setMe`); swatch click toggles the piece brush (`active-player`) without claiming. |
 | DB4 | In both lists (boards, roster) the rename hit area is the name, not the row, and the field grows with the text (mobile B6). |
 | DB5 | The board list reaches `tab-select`, `tab-close`, `tab-add` and the `useRenameTab` rule. `workspaceSync.ts` and the semantics of `e2e/workspaceSync.spec.ts` are unchanged: that spec changes only where a locator named the tab strip or the old open-boards list, never its pacing. |
-| DB6 | The ribbon renders inside the Players panel on desktop and landscape, never over the board. |
+| DB6 | The ribbon renders inside Best picks on desktop and landscape whenever the board has tiles, never in the Players panel or over the board. |
 | DB7 | A promoted component or rule loses the `phone-` prefix and the `.phone-shell` scope; `grep -rl "phone-" src/ui --include='*.ts' --include='*.tsx'` outside `src/ui/phone/` matches only `revealBoard.ts`. The phone e2e selectors follow the renames. |
 
 ## What already exists
@@ -98,8 +99,8 @@ Every row below has been moved; the paths are where each piece lives now.
 | --- | --- |
 | Name-bounded in-place rename | `ui/InlineRename.tsx` |
 | The board row, and the one list around it | `ui/ListRow.tsx` inside `ui/LibraryLists.tsx`, rendered by `ui/MapsPanel.tsx` and `phone/MapsScreen.tsx` |
-| Draft ribbon | `ui/DraftRibbon.tsx`, mounted by `ui/App.tsx` and `phone/PhoneShell.tsx` |
-| Snake draft grid and its label | `ui/DraftGrid.tsx` (`DraftGrid`, mounted by `phone/PlayersScreen.tsx`; `DraftLabel`, also over the desktop ribbon in `ui/PlayerPanel.tsx`) |
+| Draft ribbon | `ui/DraftRibbon.tsx`, mounted by `ui/AnalysisPanel.tsx` in both trees |
+| Snake draft grid and its label | `ui/DraftGrid.tsx` (`DraftGrid` and its `DraftLabel`, mounted by `phone/PlayersScreen.tsx`) |
 | Resting marks | `ui/restMarks.ts` |
 | Board colour | `ui/boardColor.ts` |
 | Board rename rule, library sort/open/delete/rename, JSON import and export | `useRenameTab.ts`, `useLibrary.ts`, `useJsonFiles.tsx` |
@@ -126,12 +127,12 @@ One row per work item. Keep the state column current; this file is the durable c
 | D1 | Promote the list vocabulary: `InlineRename`, `ListRow`, group labels, hero import, swatch, YOU chip, hint; phone e2e follows | | done |
 | D2 | Library panel replaces the tab strip and the import panel (D1 surface, DB5) | D1 | done |
 | D3 | Menus: chevron caret, tick everywhere, sheet context menu, chords and counts deleted (D6 menus, D3 count) | D2 | done |
-| D4 | Board area: ribbon promoted and mounted, resting marks, flat marks, caption trimmed, footer deleted (D2 surface, D7, DB1, DB6) | | done |
+| D4 | Board area: resting marks, flat marks, caption trimmed, footer deleted (D2 surface, D7, DB1, DB6) | | done |
 | D5 | Tool heading glyphs, destructive Clear, counts on the tool labels (D3 surface) | D4 | done |
-| D6 | Analysis behaviour: one code path, select on click, hover preview, pill, context line, claim row, empty state (D4 surface, DB2) | D1 | done |
+| D6 | Analysis behaviour: one code path, select on click, hover preview, pick step buttons, context line, claim row, empty state (D4 surface, DB2) | D1 | done |
 | D7 | Analysis card styling promoted; desktop card rules deleted (D4 cards) | D6 | done |
 | D8 | Roster rows: grip, swatch brush, rename on name, YOU chip, claim on row, dashed Add player (D5 surface, DB3, DB4) | D1 | done |
-| D9 | Drag feel and the draft grid on desktop (D5 dragging and snake draft) | D8, D4 | done |
+| D9 | Drag feel and the draft ribbon in Best picks (D5 dragging, D4 ribbon) | D8, D4 | done |
 | D10 | Vocabulary sweep: `current` and `me` states everywhere, gold pair gone, DB7 grep clean | D2, D3, D7, D9 | done |
 | D11 | Docs: `CLAUDE.md` ui bullet, the mobile spec's `What already exists` paths, this ledger | D10 | done |
 | D12 | Regression screenshots and acceptance verification | all | done |

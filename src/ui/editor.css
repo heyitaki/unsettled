@@ -75,11 +75,10 @@ button.selected.danger { color: #fff; }
 .token-tools .hot { color: #b12620; }
 .token-tools .selected.hot { color: white; }
 
-.draft-ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; height: 38px; padding: 0 var(--gutter, 0); }
+.draft-ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 0 9px; margin-bottom: 12px; }
 .draft-ribbon-slot { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .draft-ribbon-slot.pending { opacity: .34; }
 .draft-ribbon-slot.now { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
-.draft-ribbon-slot.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
 .draft-ribbon-slot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
 
 .board-stage { position: static; padding: 12px; background: var(--paper-board); }
@@ -195,7 +194,6 @@ button.selected.danger { color: #fff; }
 .stat-icon { flex: none; width: 13px; height: 13px; }
 .tally-header .stat-icon { width: 15px; height: 15px; }
 .award .stat-icon { width: 12px; height: 12px; }
-.player-panel .draft-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .draft-grid { display: grid; grid-template-columns: repeat(var(--draft-cols, 4), minmax(0, 1fr)); gap: 6px; }
 .draft-grid-slot { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 3px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; font-size: 10px; }
 .draft-grid-slot.pending { border-style: dashed; opacity: .78; }
@@ -268,6 +266,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .roster-trash > * { pointer-events: none; }
 
 /* Analysis */
+.draft-steps { display: flex; flex: none; gap: 4px; }
+.draft-step { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border-radius: 50%; color: var(--ink); }
 .analysis-context { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .analysis-context .menu-trigger { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; color: var(--ink); }
 .analysis-context .menu-trigger strong { border-bottom: 1.5px dotted var(--accent-dark); }
@@ -292,8 +292,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .analysis-placeholder { display: grid; justify-items: center; gap: 8px; padding: 28px 18px; text-align: center; border: 1px dashed rgba(60,127,191,.42); border-radius: 14px; background: rgba(60,127,191,.05); }
 .analysis-placeholder p { margin: 2px 0 0; font: 700 15px Georgia, serif; }
 .analysis-placeholder > span { max-width: 250px; color: var(--muted); font-size: 11px; line-height: 1.55; }
-.turn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: rgba(187, 76, 50, .13); color: var(--accent-dark); font-size: 11px; font-weight: 700; }
-.turn-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .claim { display: flex; flex-direction: column; gap: 10px; }
 .claim-row { display: flex; gap: 8px; }
 .claim-row button { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: #f9f5ea; font-size: 11px; font-weight: 600; }
@@ -385,9 +383,6 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .global-notice-close { min-width: 34px; min-height: 34px; }
   input, select { font-size: 16px; }
   .tally-header button { align-items: flex-end; }
-  /* The dropdown triggers are inline text ("You are aki"), so they cannot grow
-     their line box without pushing the paragraph around. The hit area grows
-     instead, which layout never sees. */
   .menu-trigger { position: relative; }
   .menu-trigger::before { content: ''; position: absolute; inset: -15px -10px; }
   .hit-layers line { stroke-width: 26; }
@@ -503,7 +498,8 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
   .phone-shell .board-canvas { aspect-ratio: min(1, var(--board-aspect)); width: 100%; height: auto; max-height: none; padding: 5px; border-radius: 24px; background: #3c7fbf; box-shadow: 0 14px 24px rgba(33, 51, 67, .24); filter: none; }
   .phone-shell .board-sea { display: none; }
   .phone-shell .board-zoom { margin-left: 0; }
-  .phone-analysis .draft-ribbon { height: auto; padding: 0; margin: 0 0 20px; }
+  .phone-analysis .draft-step { width: 44px; height: 44px; }
+  .phone-analysis .draft-ribbon { padding: 0; margin: 0 0 20px; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 18px; background: rgba(248, 243, 232, .93); box-shadow: 0 12px 34px rgba(62, 45, 21, .1), inset 0 0 0 1px var(--line); }
   .phone-block-head, .phone-block .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .phone-block-head h2, .phone-block .panel-heading h2 { margin: 2px 0 0; font: 700 19px/1.1 Georgia, serif; }
