@@ -91,5 +91,5 @@ Filled in as each seat count closes. One row per seat count: the vector it ships
 | 2 | `standard4` | today's vector with `coverageExponent` 1.0 and `diversityWeight` 3.2 | Adopted on `gate3`. M-70 screened both axes as survivors and read them `better` together, M-71 confirmed the pair on `eval3`, M-72 read `better` at the gate. |
 | 3 | `standard4` | today's vector with `coverageExponent` 1.0 and `diversityWeight` 3.2 | Adopted on `gate3`. M-73 screened one axis as a survivor and the other on its retry and read them `better` together, M-74 confirmed the pair on `eval3`, M-75 read `better` at the gate. |
 | 4 | `standard4` | today's vector with `coverageExponent` 1.0 | Adopted on `gate3`. M-67 screened it as the one survivor, M-68 confirmed it on `eval3`, M-69 read `better` at the gate. |
-| 5 | `extension6` | pending | |
+| 5 | `extension6` | today's vector with `coverageExponent` 1.0 and `diversityWeight` 3.2 | Adopted on `gate3`. M-76 screened one axis as a survivor and the other on its retry and read them `better` together, M-77 confirmed the pair on `eval3`, M-78 read `better` at the gate. |
 | 6 | `extension6` | pending | |

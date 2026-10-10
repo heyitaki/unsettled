@@ -1768,7 +1768,7 @@ mod tests {
         (2, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (3, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (4, &[("/coverageExponent", 1.0)]),
-        (5, &[]),
+        (5, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (6, &[]),
     ];
 
