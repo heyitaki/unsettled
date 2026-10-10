@@ -609,8 +609,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       <g
         key={`port:${port.edgeId}`}
         className={highlightSet.has(port.edgeId) ? 'highlighted' : ''}
-        onClick={portActive ? () => setEditingPort(port.edgeId) : undefined}
-        style={portActive ? { cursor: 'pointer' } : undefined}
+        onClick={
+          portActive ? () => setEditingPort(port.edgeId)
+            // The badge floats in the sea, clear of the edge hit line that erases its port.
+            : eraseActive ? () => dispatch({ type: 'commit', board: removePort(board, port.edgeId) })
+              : undefined
+        }
+        style={portActive ? { cursor: 'pointer' } : eraseActive ? { cursor: 'crosshair' } : undefined}
       >
         <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#f5e9cf" strokeWidth="2" strokeDasharray="5 5" />
         <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#f5e9cf" strokeWidth="2" strokeDasharray="5 5" />
@@ -618,7 +623,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
       </g>
     )
-  }), [ports, highlightSet, portActive])
+  }), [ports, highlightSet, portActive, eraseActive, board, dispatch])
   const roadLayer = useMemo(() => board.roads.map((road) => {
     const [vaId, vbId] = edgeEndpointVertexIds(road.edgeId)
     const a = vertexPoint(vaId)

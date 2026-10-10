@@ -103,3 +103,13 @@ test('award corrections survive undo, redo and reload', async ({ page }) => {
   await page.locator('.award-controls summary').click()
   await expect(holder).toContainText('Blue')
 })
+
+test('the erase tool removes a port from a click on its badge', async ({ page }) => {
+  await page.goto('')
+  const badges = page.locator('.board-canvas .port-text')
+  await expect(badges.first()).toBeVisible()
+  const count = await badges.count()
+  await page.locator('.structure-grid').getByRole('button', { name: 'erase' }).click()
+  await badges.first().click()
+  await expect(badges).toHaveCount(count - 1)
+})
