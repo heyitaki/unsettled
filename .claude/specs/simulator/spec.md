@@ -11,6 +11,7 @@ The normative specification for the Catan self-play simulator in `simulator/`. E
 | [contracts.md](contracts.md) | **C** | Invariants and guarantees. A violation is a bug. |
 | [programme.md](programme.md) | **D** | Decisions: phase order, status, rationale, what each revision replaced. Covers the opponent-model programme, phases A through J. |
 | [placement-programme.md](placement-programme.md) | **D** | Decisions for the settlement-placement programme, phases SP0 through SP6, and the verdicts behind them. |
+| [seat-count-programme.md](seat-count-programme.md) | **D** | Decisions for the seat-count weights programme: one weight vector per seat count, its field statement, screening family and run rules. |
 | [gaps.md](gaps.md) | **G** | Unmodelled scoring surfaces, each with a `SIM-GAP-NN` id. |
 | [measurements.md](measurements.md) | **M** | Append-only log of readings, one entry per reading, with provenance. |
 | [migration-ledger.md](migration-ledger.md) | — | Provenance of this extraction: one row per source claim and heading. |
