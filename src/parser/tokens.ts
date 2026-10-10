@@ -1,4 +1,4 @@
-import { labelPixelSet } from './components'
+import { labelPixelSet, neighbors } from './components'
 import { nearColor, pixel, type RgbaImage } from './image'
 import type { ParserPalette } from './palette'
 
@@ -18,7 +18,6 @@ export interface TokenAnalysis {
   redMismatch: boolean
 }
 
-const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
 
 export function analyzeToken(
   image: RgbaImage,
@@ -68,8 +67,10 @@ export function analyzeToken(
   for (let ray = 0; ray < 16; ray += 1) {
     const angle = 2 * Math.PI * ray / 16
     let run = 0
-    const minimumRun = Math.max(2, Math.round(0.025 * size))
-    for (let distance = Math.round(0.25 * size); distance < 0.55 * size; distance += 1) {
+    const minimumRun = Math.max(2, Math.round(0.02 * size))
+
+    // Start beyond the numerals so a thin ring does not match a glyph.
+    for (let distance = Math.round(0.35 * size); distance < 0.55 * size; distance += 1) {
       const color = pixel(image, tokenX + distance * Math.cos(angle), tokenY + distance * Math.sin(angle))
       if (nearColor(color, [43, 43, 43], 25)) {
         run += 1

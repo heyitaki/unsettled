@@ -12,7 +12,7 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react'
-import { createBoard, renamePlayer, setMe } from '../model/board'
+import { createBoard } from '../model/board'
 import { newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
@@ -111,7 +111,6 @@ export type StoreAction =
   // whole next Game via commit-game. Both share one undo stack of games.
   | { type: 'commit'; board: Board }
   | { type: 'commit-game'; game: Game }
-  | { type: 'import-names'; id: string; original: Board; names: { playerId: string; name: string }[] }
   | { type: 'tool'; tool: Tool }
   | { type: 'active-player'; playerId: string | null }
   | { type: 'undo' }
@@ -283,34 +282,6 @@ function unusedBoardTitle(tabs: TabState[]): string {
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
-    case 'import-names': {
-      const index = state.tabs.findIndex((tab) => tab.id === action.id)
-      if (index < 0) return state
-      const tab = state.tabs[index]
-      const originalNames = new Map(action.original.players.map((player) => [player.id, player.name]))
-      const named = (game: Game): Game => {
-        let board = game.board
-        for (const { playerId, name } of action.names) {
-          const player = board.players.find((candidate) => candidate.id === playerId)
-          if (!player || player.name !== originalNames.get(playerId)) continue
-          board = renamePlayer(board, playerId, name)
-          if (name.trim().toLowerCase() === 'you' && board.mePlayerId === action.original.mePlayerId) {
-            board = setMe(board, playerId)
-          }
-        }
-        return withBoard(game, board)
-      }
-      // The whole history, not only the live game: the names arrive outside the
-      // undo stack, and an undo of an unrelated edit must not take them back.
-      const game = named(tab.game)
-      const past = tab.past.map(named)
-      const future = tab.future.map(named)
-      const same = (a: readonly Game[], b: readonly Game[]) => a.every((entry, i) => entry === b[i])
-      if (game === tab.game && same(past, tab.past) && same(future, tab.future)) return state
-      const tabs = [...state.tabs]
-      tabs[index] = { ...tab, game, past, future }
-      return { ...state, tabs }
-    }
     case 'commit':
       return updateActiveTab(state, (tab) => {
         const game = trackAwards(tab.game, withBoard(tab.game, action.board))

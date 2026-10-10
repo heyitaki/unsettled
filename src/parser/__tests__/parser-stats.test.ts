@@ -1,125 +1,110 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
-import { computeStandings } from '../../engine/stats'
-import { RESOURCES } from '../../model/types'
-import { parseScreenshot, type RgbaImage, type SourceParse } from '../index'
+import { emptyStats } from '../../model/game'
+import { parseScreenshot } from '../index'
+import { nearColor, pixel } from '../image'
+import { registerBoard } from '../registration'
+import { detectRoster } from '../sources/settled/pills'
+import { choosePalette } from '../sources/settled/palette'
+import { copy, load, nearestScale, paint, withCounterTen } from './pillPixels'
 
-function image(path: string): RgbaImage {
-  const png = PNG.sync.read(readFileSync(fileURLToPath(new URL(path, import.meta.url))))
-  return { width: png.width, height: png.height, data: new Uint8ClampedArray(png.data) }
-}
-
-const parsedImages = new Map<string, SourceParse>()
-
-function parse(path: string): SourceParse {
-  const cached = parsedImages.get(path)
-  if (cached) return cached
-  const result = parseScreenshot(image(path))
-  parsedImages.set(path, result)
-  return result
-}
-
-const endgameStats = {
-  p1: { handUnknown: 12, devCards: 0, knights: 1, vpCards: 0 },
-  p2: { handUnknown: 4, devCards: 5, knights: 0, vpCards: 3 },
-  p3: { handUnknown: 12, devCards: 0, knights: 0, vpCards: 0 },
-  p4: { handUnknown: 3, devCards: 0, knights: 1, vpCards: 0 },
-  p5: { handUnknown: 6, devCards: 2, knights: 3, vpCards: 2 },
-} as const
-
-describe('Settled chip counters', () => {
-  it.each([
-    ['raw', '../../../fixtures/board-endgame-pieces.png'],
-    ['sRGB', './derived/board-endgame-pieces.srgb.png'],
-  ])('reads the pinned endgame stats from the %s fixture', (_name, path) => {
-    const result = parse(path)
+describe('Settled pill counters', () => {
+  it.each(['settled-2p-first-pick', 'settled-3p-pick-cards', 'settled-5p-draft-start'])('reads %s without inventing hidden stats', (name) => {
+    const result = parseScreenshot(load(name))
     expect(result.ok).toBe(true)
     if (!result.ok) return
-
-    expect(Object.fromEntries(Object.entries(result.game.stats).map(([id, stats]) => [
-      id,
-      {
-        handUnknown: stats.handUnknown,
-        devCards: stats.devCards,
-        knights: stats.knights,
-        vpCards: stats.vpCards,
-      },
-    ]))).toEqual(endgameStats)
-    for (const stats of Object.values(result.game.stats)) {
-      expect(RESOURCES.map((resource) => stats.hand[resource])).toEqual([0, 0, 0, 0, 0])
-    }
+    for (const stats of Object.values(result.game.stats)) expect(stats).toEqual(emptyStats())
     expect(result.issues.filter((issue) => issue.stage === 'stats')).toEqual([])
-
-    // The two-digit values belong to the truncated jend… and ben chips.
-    expect(result.game.stats.p1.handUnknown).toBe(12)
-    expect(result.game.stats.p3.handUnknown).toBe(12)
-    // The other truncated yush… chip includes red and dark counters.
-    expect(result.game.stats.p5).toMatchObject({ handUnknown: 6, devCards: 2, knights: 3, vpCards: 2 })
   })
 
-  it('reconciles chip VP cards with board-derived awards and structures', () => {
-    const result = parse('../../../fixtures/board-endgame-pieces.png')
+  it('warns with the player name when pill VP disagrees with the pieces', () => {
+    const image = load()
+    // White has one settlement. Copy Brown's zero over White's VP one.
+    copy(image, { x: 841, y: 347, width: 28, height: 35 }, 514, 347)
+    const palette = choosePalette(image)!
+    const roster = detectRoster(image, palette, registerBoard(image, palette)!)
+    expect(roster.players[0].vp).toBe(0)
+    const result = parseScreenshot(image)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    const standings = computeStandings(result.game)
-    const standing = (playerId: string) => standings.find((candidate) => candidate.playerId === playerId)!
-    expect(standing('p2').victoryPoints).toBe(10)
-    expect(standing('p3').victoryPoints).toBe(9)
-    expect(standing('p4').victoryPoints).toBe(6)
-    expect(standing('p5').hasLargestArmy).toBe(true)
-    expect(standing('p1').longestRoad).toBe(6)
-    expect(standing('p5').longestRoad).toBe(6)
-    expect(Number(standing('p1').hasLongestRoad) + Number(standing('p5').hasLongestRoad)).toBe(1)
-    expect(standing('p1').victoryPoints + standing('p5').victoryPoints).toBe(18)
-
-    // Settled's red road counter shows that p1 holds the award, but the board
-    // leaves p1 and p5 tied and cannot resolve the holder. The engine replays
-    // natural parser emission order, which awards this import to p5. Board
-    // output must not be reordered to change that result.
-    expect(standing('p5').hasLongestRoad).toBe(true)
+    expect(result.issues.filter((issue) => issue.stage === 'stats')).toEqual([
+      expect.objectContaining({ severity: 'warning', message: expect.stringContaining('White') }),
+    ])
   })
 
-  it.each([
-    ['raw', '../../../fixtures/board-draft-empty.png'],
-    ['sRGB', './derived/board-draft-empty.srgb.png'],
-  ])('treats absent counters as zero without unreadable issues in the %s draft', (_name, path) => {
-    const result = parse(path)
+  it('stores the hand counter independently of VP', () => {
+    const image = load()
+    paint(image, { x: 592, y: 347, width: 28, height: 35 }, [248, 243, 225])
+    copy(image, { x: 519, y: 347, width: 25, height: 35 }, 597, 347)
+    const result = parseScreenshot(image)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    for (const stats of Object.values(result.game.stats)) {
-      expect(stats).toEqual({
-        hand: { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 },
-        handUnknown: 0,
-        devCards: 0,
-        knights: 0,
-        vpCards: 0,
-      })
+    expect(result.game.stats.p1.handUnknown).toBe(1)
+  })
+
+  it.each(['hand', 'vp'] as const)('reads a pixel-copied two-digit %s counter completely', (field) => {
+    const image = withCounterTen(field)
+    const palette = choosePalette(image)!
+    const roster = detectRoster(image, palette, registerBoard(image, palette)!)
+    expect(roster.players[0][field]).toBe(10)
+    const result = parseScreenshot(image)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.issues.filter((issue) => issue.stage === 'stats' && issue.severity === 'unreadable')).toEqual([])
+    if (field === 'hand') expect(result.game.stats.p1.handUnknown).toBe(10)
+  })
+
+  it('reports an unreadable counter when ink touches its read-box edge', () => {
+    const image = load()
+    paint(image, { x: 518, y: 350, width: 1, height: 15 }, [117, 94, 66])
+    const palette = choosePalette(image)!
+    expect(detectRoster(image, palette, registerBoard(image, palette)!).players[0].vp).toBeNull()
+    const result = parseScreenshot(image)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'stats', severity: 'unreadable', message: 'Could not read victory points for White' }))
+  })
+
+  it('rejects a whole two-digit counter when one glyph is unreadable', () => {
+    const image = withCounterTen('hand')
+    paint(image, { x: 611, y: 351, width: 18, height: 26 }, [117, 94, 66])
+    const palette = choosePalette(image)!
+    expect(detectRoster(image, palette, registerBoard(image, palette)!).players[0].hand).toBeNull()
+  })
+
+  it.each(['hand', 'vp'] as const)('never guesses a wrong %s counter on a half-scale pill', (field) => {
+    const original = withCounterTen(field)
+    const image = nearestScale(original)
+    const palette = choosePalette(image)!
+    const roster = detectRoster(image, palette, registerBoard(image, palette)!)
+    expect(roster.players).toHaveLength(2)
+    const result = parseScreenshot(image)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    for (const entry of roster.players) {
+      for (const counter of ['vp', 'hand'] as const) {
+        const expected = entry.player.id === 'p1' ? counter === field ? 10 : counter === 'vp' ? 1 : 0 : 0
+        expect([null, expected]).toContain(entry[counter])
+        if (entry[counter] === null) expect(result.issues).toContainEqual(expect.objectContaining({
+          stage: 'stats', severity: 'unreadable', message: `Could not read ${counter === 'vp' ? 'victory points' : 'hand cards'} for ${entry.player.name}`,
+        }))
+      }
     }
-    expect(result.issues.filter((issue) =>
-      issue.stage === 'stats' && issue.severity === 'unreadable',
-    )).toEqual([])
   })
 
-  // A three-player roster spreads the same cards over the full row, so its
-  // counters sit further from the colour dot than the five-player fixtures'.
-  it('reads the wider cards of a three-player roster', () => {
-    const result = parse('../../../fixtures/board-draft-3player.png')
+  it('leaves the seat unclaimed when the pill highlight is painted over', () => {
+    const image = load()
+    for (let y = 300; y < 440; y += 1) {
+      for (let x = 655; x < 994; x += 1) {
+        const color = pixel(image, x, y)
+        if (nearColor(color, [171, 81, 52], 20)) paint(image, { x, y, width: 1, height: 1 }, [213, 195, 154])
+        else if (nearColor(color, [229, 215, 178], 10)) paint(image, { x, y, width: 1, height: 1 }, [248, 243, 225])
+      }
+    }
+    const result = parseScreenshot(image)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(Object.keys(result.game.stats)).toEqual(['p1', 'p2', 'p3'])
-    for (const stats of Object.values(result.game.stats)) {
-      expect(stats).toEqual({
-        hand: { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 },
-        handUnknown: 0,
-        devCards: 0,
-        knights: 0,
-        vpCards: 0,
-      })
-    }
-    expect(result.issues.filter((issue) =>
-      issue.stage === 'stats' && issue.severity === 'unreadable',
-    )).toEqual([])
+    expect(result.game.board.players).toHaveLength(2)
+    expect(result.game.board.mePlayerId).toBeNull()
+    expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'roster', message: expect.stringContaining('player to move') }))
   })
 })

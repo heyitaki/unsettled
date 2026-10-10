@@ -1,13 +1,12 @@
 import type { Game } from '../../model/game'
-import type { Rect } from '../image'
 
 export interface ParseIssue {
-  stage: 'registration' | 'sharpness' | 'tokens' | 'ports' | 'roster' | 'pieces' | 'stats' | 'ocr'
+  stage: 'registration' | 'sharpness' | 'tokens' | 'ports' | 'roster' | 'pieces' | 'stats'
   severity: 'warning' | 'unreadable'
   message: string
   ref?: string
 }
 
 export type SourceParse =
-  | { ok: true; game: Game; issues: ParseIssue[]; nameRects: { playerId: string; rect: Rect }[] }
+  | { ok: true; game: Game; issues: ParseIssue[] }
   | { ok: false; error: string }

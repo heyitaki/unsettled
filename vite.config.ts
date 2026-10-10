@@ -4,8 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Hosted under akshath.me/unsettled, so every emitted asset URL (and the
-  // BASE_URL the OCR reader reads for its tesseract/tessdata paths) is prefixed.
+  // Hosted under akshath.me/unsettled, so emitted asset URLs are prefixed.
   base: '/unsettled/',
   plugins: [
     react(),
@@ -35,21 +34,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        globIgnores: ['tesseract/**', 'tessdata/**'],
         navigateFallback: '/unsettled/index.html',
-        navigateFallbackDenylist: [/^\/unsettled\/(?:tesseract|tessdata)\//],
-        runtimeCaching: [{
-          urlPattern: /^https?:\/\/[^/]+\/unsettled\/(?:tesseract|tessdata)\//,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'unsettled-ocr',
-            expiration: {
-              maxEntries: 40,
-              maxAgeSeconds: 60 * 60 * 24 * 365,
-            },
-            cacheableResponse: { statuses: [0, 200] },
-          },
-        }],
       },
       devOptions: { enabled: false },
     }),

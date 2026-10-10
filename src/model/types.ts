@@ -67,5 +67,5 @@ export const PLAYER_PALETTE = {
   orange: '#e58331',
   white: '#ffffff',
   green: '#5d9e52',
-  brown: '#7a5230',
+  brown: '#684d43',
 } as const

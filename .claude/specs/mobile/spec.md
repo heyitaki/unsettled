@@ -52,6 +52,8 @@ The board sits in a rounded sea the full width of the pane, sharing the `--gutte
 - Content bounds include the port chips, not just the hexes.
 - No height cap. A cap makes the SVG shrink away from both gutters.
 
+Settlements show the same `i` and `ii` order badges as desktop while the draft is in progress. The badges are decoration and do not intercept taps.
+
 ### S4 · Layout caption
 
 Centred under the board, one line: **`4 player` layout ⌄**, a button opening the layout menu. 11px. No hover or press state.

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, placeBuilding, placeRoad } from '../../model/board'
+import { addPlayer, createBoard, placeBuilding, placeRoad, SUPER_CITY_VP } from '../../model/board'
 import { edgeEndpointVertexIds, hexEdgeIds, vertexTripleAt } from '../../model/coords'
 import { adjustCounter, newGame, withBoard, type Game } from '../../model/game'
 import type { Board, EdgeId, VertexId } from '../../model/types'
-import { computeStandings, longestRoadLength, SUPER_CITY_VP } from '../stats'
+import { computeStandings, longestRoadLength } from '../stats'
 
 // Edges around the center hex form a 6-cycle; edge d and edge d+1 share one
 // vertex, so consecutive slices are connected chains.

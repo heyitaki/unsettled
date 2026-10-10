@@ -145,6 +145,7 @@ button.selected.danger { color: #fff; }
 .placement-remove { fill: transparent; stroke: transparent; pointer-events: all; cursor: default; }
 .placement-remove:not(circle) { stroke-width: 14; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
+.settlement-ordinal text { font: 700 10px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; }
 .vertex-highlight { r: 12px; fill: rgba(187,76,50,.22); stroke: var(--accent-dark); stroke-width: 2.4; }
 .vertex-highlight-label { font-size: 13px; font-weight: 800; }
 .vertex-highlight.faded, .vertex-highlight-label.faded { opacity: .55; }

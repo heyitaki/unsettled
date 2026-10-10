@@ -4,7 +4,9 @@ import type { ParserPalette } from '../../palette'
 const RAW_PALETTE: ParserPalette = {
   bgBlue: [77, 125, 186],
   tokenCream: [242, 234, 210],
-  chipCream: [249, 243, 226],
+  chipCream: [248, 243, 225],
+  pillHighlight: [229, 215, 178],
+  counterInk: [117, 94, 66],
   inkDark: [56, 44, 30],
   inkRed: [161, 47, 40],
   robberBlack: [26, 26, 26],
@@ -22,13 +24,16 @@ const RAW_PALETTE: ParserPalette = {
     orange: [229, 131, 49],
     white: [255, 255, 255],
     green: [93, 158, 82],
+    brown: [104, 77, 67],
   },
 }
 
 const SRGB_PALETTE: ParserPalette = {
   bgBlue: [60, 127, 191],
   tokenCream: [244, 234, 207],
-  chipCream: [250, 243, 224],
+  chipCream: [249, 243, 223],
+  pillHighlight: [232, 214, 173],
+  counterInk: [121, 93, 62],
   inkDark: [58, 44, 28],
   inkRed: [175, 32, 32],
   robberBlack: [26, 26, 26],
@@ -46,6 +51,9 @@ const SRGB_PALETTE: ParserPalette = {
     orange: [244, 125, 2],
     white: [255, 255, 255],
     green: [68, 160, 71],
+
+    // Brown is converted from Display-P3; the same conversion reproduces the other five colours exactly.
+    brown: [109, 76, 65],
   },
 }
 

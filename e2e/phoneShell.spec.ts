@@ -498,8 +498,8 @@ test.describe('maps screen', () => {
     await expect(screen).toBeVisible()
     // A screenshot that parses becomes the active board and takes the screen with it.
     await screen.getByRole('button', { name: 'Import screenshot' }).click()
-    await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-draft-3player.png'))
-    await expect(page.locator('.phone-title')).toHaveText('board-draft-3player', { timeout: 30_000 })
+    await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/settled-3p-pick-cards.png'))
+    await expect(page.locator('.phone-title')).toHaveText('settled-3p-pick-cards', { timeout: 30_000 })
     await expect(screen).toHaveCount(0)
     await expect(importDialog).toHaveCount(0)
   })

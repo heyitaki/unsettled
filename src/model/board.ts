@@ -15,6 +15,13 @@ import {
   type VertexId,
 } from './types'
 
+export const SUPER_CITY_VP = 3
+export const AWARD_VP = 2
+
+export function buildingPoints(tier: BuildingTier): number {
+  return tier === 'settlement' ? 1 : tier === 'city' ? 2 : SUPER_CITY_VP
+}
+
 // Every mutator below returns the board it was given when the edit would change
 // nothing, and composes: an edit built from several of them (erase hits a road
 // and a port) hands back the original reference when none of them bit. The
@@ -227,6 +234,17 @@ export const removeRoad = (board: Board, edgeId: EdgeId): Board =>
   board.roads.some((road) => road.edgeId === edgeId)
     ? { ...board, roads: board.roads.filter((road) => road.edgeId !== edgeId) }
     : board
+
+export function settlementOrdinals(board: Board): Map<VertexId, 1 | 2> {
+  const ordinals = new Map<VertexId, 1 | 2>()
+  const counts = new Map<string, number>()
+  for (const building of board.buildings) {
+    const ordinal = (counts.get(building.playerId) ?? 0) + 1
+    counts.set(building.playerId, ordinal)
+    if (building.tier === 'settlement' && (ordinal === 1 || ordinal === 2)) ordinals.set(building.vertexId, ordinal)
+  }
+  return ordinals
+}
 
 export function placeBuilding(
   board: Board,

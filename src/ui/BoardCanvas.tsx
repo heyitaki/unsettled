@@ -15,6 +15,7 @@ import {
   parseVertexId,
   vertexAdjacentVertexIds,
 } from '../model/coords'
+import { draftIsComplete, inferDraftState } from '../engine/draft'
 import { boardGrid } from '../model/layouts'
 import {
   isBlank,
@@ -27,6 +28,7 @@ import {
   setLayout,
   setNumberToken,
   setRobber,
+  settlementOrdinals,
   upsertPort,
 } from '../model/board'
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
@@ -667,38 +669,51 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     )
   }), [board.roads, playerColor])
+
+  const ordinals = useMemo(() =>
+    draftIsComplete(board, inferDraftState(board)) ? new Map<VertexId, 1 | 2>() : settlementOrdinals(board), [board])
   const buildingLayer = useMemo(() => board.buildings.map((building) => {
     const point = vertexPoint(building.vertexId)
     const color = playerColor(building.playerId)
     const scale = TIER_SCALE[building.tier]
+    const ordinal = ordinals.get(building.vertexId)
     return (
-      // The shadow lives on an outer group so the tier's scale can't shrink
-      // or grow it — every piece casts the same shadow.
-      <g
-        key={`building:${building.vertexId}`}
-        filter={markedBuildings.has(building.vertexId) ? 'url(#piece-highlight)' : 'url(#piece-shadow)'}
-      >
-        <g
-          transform={`translate(${point.x} ${point.y}) scale(${scale})`}
-          fill={color}
-          stroke={markedBuildings.has(building.vertexId) ? '#100c06' : '#30271f'}
-          // paint-order draws the stroke first and the fill over it, so the
-          // inner half is covered and the thicker highlight border grows
-          // outward instead of eating into the silhouette.
-          paintOrder={markedBuildings.has(building.vertexId) ? 'stroke' : undefined}
-          strokeWidth={(markedBuildings.has(building.vertexId) ? PIECE_STROKE * 2.6 : PIECE_STROKE) / scale}
-          strokeLinejoin="round"
-        >
-          {/* One closed silhouette per tier, matching the source app's pieces:
-              a house, a house with a rectangle annex, and a twin-gable keep.
-              strokeWidth is divided by scale so every piece renders the same border. */}
-          {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
-          {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
-          {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
+      <g key={`building:${building.vertexId}`}>
+        {/* Keep the shadow independent of tier scale and the ordinal badge. */}
+        <g filter={markedBuildings.has(building.vertexId) ? 'url(#piece-highlight)' : 'url(#piece-shadow)'}>
+          <g
+            transform={`translate(${point.x} ${point.y}) scale(${scale})`}
+            fill={color}
+            stroke={markedBuildings.has(building.vertexId) ? '#100c06' : '#30271f'}
+            // paint-order draws the stroke first and the fill over it, so the
+            // inner half is covered and the thicker highlight border grows
+            // outward instead of eating into the silhouette.
+            paintOrder={markedBuildings.has(building.vertexId) ? 'stroke' : undefined}
+            strokeWidth={(markedBuildings.has(building.vertexId) ? PIECE_STROKE * 2.6 : PIECE_STROKE) / scale}
+            strokeLinejoin="round"
+          >
+            {/* One closed silhouette per tier, matching the source app's pieces:
+                a house, a house with a rectangle annex, and a twin-gable keep.
+                strokeWidth is divided by scale so every piece renders the same border. */}
+            {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
+            {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
+            {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
+          </g>
         </g>
+        {ordinal && (
+          <g
+            className="settlement-ordinal"
+            transform={`translate(${point.x + 0.33 * SIZE} ${point.y - 0.1 * SIZE})`}
+            pointerEvents="none"
+            aria-hidden="true"
+          >
+            <circle r={0.135 * SIZE} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth="1.4" />
+            <text y="3" textAnchor="middle" fill={INK_COLOR}>{ordinal === 1 ? 'i' : 'ii'}</text>
+          </g>
+        )}
       </g>
     )
-  }), [board.buildings, markedBuildings, playerColor])
+  }), [board.buildings, markedBuildings, ordinals, playerColor])
   const markLayer = useMemo(() => highlight
     .filter((mark) => (mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
     .map((mark) => {

@@ -2,11 +2,10 @@
 // off the board, hands/dev cards/knights from game.stats, and the two award
 // bonuses are auto-assigned from those. Pure functions, no React.
 
+import { AWARD_VP, buildingPoints } from '../model/board'
 import { edgeEndpointVertexIds } from '../model/coords'
 import type { AwardHolders, AwardKind, Game } from '../model/game'
 import type { Board, EdgeId, VertexId } from '../model/types'
-
-export const SUPER_CITY_VP = 3
 
 const LONGEST_ROAD_MIN = 5
 const LARGEST_ARMY_MIN = 3
@@ -225,8 +224,9 @@ function standingsFor(game: Game): PlayerStanding[] {
       ...entry,
       hasLongestRoad,
       hasLargestArmy,
-      victoryPoints: entry.settlements + 2 * entry.cities + SUPER_CITY_VP * entry.superCities +
-        (hasLongestRoad ? 2 : 0) + (hasLargestArmy ? 2 : 0) + (stats[entry.playerId]?.vpCards ?? 0),
+      victoryPoints: buildingPoints('settlement') * entry.settlements + buildingPoints('city') * entry.cities +
+        buildingPoints('superCity') * entry.superCities + (hasLongestRoad ? AWARD_VP : 0) +
+        (hasLargestArmy ? AWARD_VP : 0) + (stats[entry.playerId]?.vpCards ?? 0),
     }
   })
 }
