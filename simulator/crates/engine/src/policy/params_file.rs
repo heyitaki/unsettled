@@ -1671,6 +1671,11 @@ mod tests {
         ("sc_expansion_hi", "expansionWeight", 0.3),
     ];
 
+    /// Combined vectors, each the live defaults with every named screening arm's leaf applied.
+    /// A seat count mints one when two or more axes survive its screen.
+    const SC_COMBINED: [(&str, &[&str]); 1] =
+        [("sc_s2_combined", &["sc_coverage_lo", "sc_diversity_hi"])];
+
     /// Minted after SP6 adoption, these arms anchor to live `default-weights.json` because
     /// every seat-count run is against the live defaults. If `DEFAULT_WEIGHTS` moves, this
     /// family must be re-anchored to a snapshot the way the SP families were.
@@ -1719,6 +1724,29 @@ mod tests {
             expected.push(name);
         }
 
+        for (stem, parts) in SC_COMBINED {
+            let name = format!("{stem}.json");
+            let read = |file: &str| -> Value {
+                let source = std::fs::read_to_string(format!("{arms_dir}/{file}"))
+                    .unwrap_or_else(|_| panic!("{file} must be committed"));
+                serde_json::from_str(&source).expect("valid JSON")
+            };
+            let mut combined = base.clone();
+            for part in parts {
+                let (_, key, _) = SC_ARMS
+                    .iter()
+                    .find(|(arm, _, _)| arm == part)
+                    .unwrap_or_else(|| panic!("{name}: {part} must be a screening arm"));
+                combined[*key] = read(&format!("{part}.json"))[*key].clone();
+            }
+            assert_eq!(
+                read(&name),
+                combined,
+                "{name} must be the live defaults with exactly {parts:?} applied"
+            );
+            expected.push(name);
+        }
+
         let mut found = Vec::new();
         for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
             let name = entry
@@ -1732,7 +1760,7 @@ mod tests {
         }
         found.sort();
         expected.sort();
-        assert_eq!(found, expected, "one SC arm per declared screening value");
+        assert_eq!(found, expected, "one SC file per declared arm or combination");
     }
 
     /// Adopted leaves as JSON pointers and values, relative to the live defaults.
@@ -2070,8 +2098,8 @@ mod tests {
         }
         assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
-            weights_arms, 76,
-            "the committed weights arms are 76 files; a change to the set is a decision"
+            weights_arms, 77,
+            "the committed weights arms are 77 files; a change to the set is a decision"
         );
     }
 
