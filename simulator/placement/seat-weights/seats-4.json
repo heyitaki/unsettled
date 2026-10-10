@@ -12,7 +12,7 @@
   "scarcityClampMax": 2,
   "diversityWeight": 1.6,
   "diversityCap": 4,
-  "coverageExponent": 1.5,
+  "coverageExponent": 1,
   "coverageScarcityWeight": 0.5,
   "duplicateNumberPenalty": 0.08,
   "recipeRoadBonus": 1.5,

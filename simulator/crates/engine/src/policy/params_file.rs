@@ -1739,7 +1739,7 @@ mod tests {
     const SEAT_ADOPTIONS: [(usize, &[(&str, f64)]); 5] = [
         (2, &[]),
         (3, &[]),
-        (4, &[]),
+        (4, &[("/coverageExponent", 1.0)]),
         (5, &[]),
         (6, &[]),
     ];

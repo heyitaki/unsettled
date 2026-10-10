@@ -90,6 +90,6 @@ Filled in as each seat count closes. One row per seat count: the vector it ships
 | ---: | --- | --- | --- |
 | 2 | `standard4` | pending | |
 | 3 | `standard4` | pending | |
-| 4 | `standard4` | pending | |
+| 4 | `standard4` | today's vector with `coverageExponent` 1.0 | Adopted on `gate3`. M-67 screened it as the one survivor, M-68 confirmed it on `eval3`, M-69 read `better` at the gate. |
 | 5 | `extension6` | pending | |
 | 6 | `extension6` | pending | |
