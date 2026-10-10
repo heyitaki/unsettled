@@ -32,7 +32,7 @@ import {
   upsertPort,
 } from '../model/board'
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
-import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
 import { MenuSelect } from './MenuSelect'
@@ -605,7 +605,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }, [board.robber, board.hexes])
   const portLayer = useMemo(() => ports.map(({ port, a, b, point }) => {
-    const fill = port.resource ? TILE_COLORS[port.resource] : PAPER_COLOR
+    const fill = port.resource ? TILE_COLORS[port.resource] : '#fff'
     const ink = port.resource ? readableInk(TILE_COLORS[port.resource]) : INK_COLOR
     return (
       <g
@@ -619,9 +619,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         }
         style={portActive ? { cursor: 'pointer' } : eraseActive ? { cursor: 'crosshair' } : undefined}
       >
-        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#f5e9cf" strokeWidth="2" strokeDasharray="5 5" />
-        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#f5e9cf" strokeWidth="2" strokeDasharray="5 5" />
-        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke={INK_COLOR} strokeWidth="1.6" />
+        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
+        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
+        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke="#fff" strokeWidth="2.5" />
         <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
       </g>
     )
