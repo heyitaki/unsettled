@@ -31,7 +31,7 @@ import {
   slotScaleOf,
   type Holdings,
 } from '../valuation'
-import { DEFAULT_WEIGHTS, SEAT_WEIGHT_OVERRIDES, neutralSlotScales } from '../weights'
+import { DEFAULT_WEIGHTS, SEAT_WEIGHT_OVERRIDES, neutralSlotScales, weightsForSeats } from '../weights'
 import { PAIR_TIE } from '../analyze'
 
 const resources: readonly Resource[] = RESOURCES
@@ -178,7 +178,7 @@ function pairAwarePick(
 }
 
 function holdingsFor(board: Board, playerId: string) {
-  const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+  const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
   let holdings = emptyHoldings()
   for (const building of board.buildings) {
     if (building.playerId === playerId) holdings = addToHoldings(ctx, holdings, building.vertexId)
@@ -338,7 +338,7 @@ describe('joint draft analysis', () => {
       board = setTile(board, coord, resource, token)
     }
     board = upsertPort(board, PORT_EDGE, 'wheat', 2)
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const score = (vertexId: VertexId): number =>
       marginalTotal(ctx, emptyHoldings(), vertexId)
     const reachFor = (vertexId: VertexId): number =>
@@ -376,7 +376,7 @@ describe('joint draft analysis', () => {
 
   it('prices each first settlement in a window as a pair, taking the contested half first', () => {
     const board = filledBoard(4, 3)
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const adjacency = vertexAdjacency(board.layout)
     const pickers = ['aki', 'p2', 'p3']
     const { taken } = simulateWindowDetailed(
@@ -458,7 +458,7 @@ describe('joint draft analysis', () => {
     expect(analysis.warnings).toContain('snake-inconsistent')
     expect(analysis.draft.myRemainingPickIndices).toEqual([2])
     expect(analysis.takenBeforeFirstPick).toEqual([])
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const holdings = addToHoldings(ctx, emptyHoldings(), existing)
     expect(analysis.recommendations[0].score).toBeCloseTo(marginalTotal(
       ctx,
@@ -496,7 +496,7 @@ describe('joint draft analysis', () => {
     expect(analysis.draft.remainingPickIndices
       .filter((index) => analysis.draft.sequence[index] === 'p3')).toEqual([3])
     expect(analysis.recommendations.length).toBeGreaterThan(0)
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const [firstPickIndex, secondPickIndex] = analysis.draft.myRemainingPickIndices
     const turns = analysis.draft.remainingPickIndices
       .filter((index) => index > firstPickIndex && index < secondPickIndex)
@@ -775,7 +775,7 @@ describe('hostile states and simulator seams', () => {
 
   it('skips an opponent when no legal spot exists', () => {
     const board = filledBoard(2)
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const blocked = new Set(boardGrid(board.layout).vertexIds)
     expect(simulateWindowDetailed(
       ctx,
@@ -817,7 +817,7 @@ describe('hostile states and simulator seams', () => {
   it('scores a lone first pick when no legal second survives', () => {
     const board = filledBoard(2)
     const draft = inferDraftState(board)
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const candidate = boardGrid(board.layout).vertexIds[0]
     const blocked = new Set(boardGrid(board.layout).vertexIds)
     blocked.delete(candidate)
@@ -887,7 +887,7 @@ describe('hostile states and simulator seams', () => {
 
   it('preserves structured pre-window take frequencies when all survival is zero', () => {
     const board = filledBoard(2)
-    const ctx = computeBoardContext(board, DEFAULT_WEIGHTS)
+    const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
     const draft = inferDraftState(board)
     const allBlocked = new Set(boardGrid(board.layout).vertexIds)
     const [firstTake, secondTake] = boardGrid(board.layout).vertexIds

@@ -1765,7 +1765,7 @@ mod tests {
 
     /// Adopted leaves as JSON pointers and values, relative to the live defaults.
     const SEAT_ADOPTIONS: [(usize, &[(&str, f64)]); 5] = [
-        (2, &[]),
+        (2, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (3, &[]),
         (4, &[("/coverageExponent", 1.0)]),
         (5, &[]),

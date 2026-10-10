@@ -154,7 +154,9 @@ export const WEIGHT_SEATS = [2, 3, 4, 5, 6] as const
 // Fill an entry only after adoption on gate3; empty means today's vector.
 // The shallow merge replaces nested blocks whole.
 export const SEAT_WEIGHT_OVERRIDES: Record<number, Partial<EngineWeights>> = {
-  2: {}, 3: {},
+  // M-72: without player trading, linear coverage credit and doubled diversity read better.
+  2: { coverageExponent: 1.0, diversityWeight: 3.2 },
+  3: {},
   // M-69: linear coverage credit read better at four seats on gate3.
   4: { coverageExponent: 1.0 },
   5: {}, 6: {},
