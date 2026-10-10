@@ -1,3 +1,4 @@
+import { placeBuilding, setMe } from '../model/board'
 import { boardGrid } from '../model/layouts'
 import type { Board, EdgeId, LayoutId, VertexId } from '../model/types'
 import { draftIsComplete, inferDraftState, type DraftState, type DraftWarning } from './draft'
@@ -339,8 +340,9 @@ function bestPartners(
  *
  * The pair value assumes the planned second survives the picks in between, and prices its
  * expansion against the current occupancy with empty holdings rather than the candidate. The
- * hero's own ranking rolls the picks in between out instead, so the two views agree on the pick
- * and not to the decimal.
+ * hero's own ranking rolls the picks in between out and can choose a different pick. The outer
+ * modal pre-window uses that full ranking, and sampled pre-windows draw from the same lists while
+ * they follow the modal line. After they diverge, and in all mid-windows, they use this shortcut.
  */
 function opponentPick(
   ctx: BoardContext,
@@ -415,13 +417,22 @@ function opponentPick(
       topScores.pop()
     }
   }
+  return softmaxPick(topVertices, topScores, uniform, ctx.weights.softmaxTemperature)
+}
+
+function softmaxPick(
+  topVertices: readonly VertexId[],
+  topScores: readonly number[],
+  uniform: number,
+  temperature: number,
+): VertexId | null {
   if (topVertices.length === 0) return null
-  if (uniform <= 0 || ctx.weights.softmaxTemperature <= 0) return topVertices[0]
+  if (uniform <= 0 || temperature <= 0) return topVertices[0]
   const maximum = topScores[0]
   let total = 0
   const probabilities: number[] = []
   for (const score of topScores) {
-    const probability = Math.exp((score - maximum) / ctx.weights.softmaxTemperature)
+    const probability = Math.exp((score - maximum) / temperature)
     probabilities.push(probability)
     total += probability
   }
@@ -441,6 +452,12 @@ export function simulateWindowDetailed(
   blocked: Set<VertexId>,
   occupied: Set<VertexId>,
   nextUniform: () => number,
+  pickOverride?: (
+    taken: readonly VertexId[],
+    pickerIds: readonly string[],
+    playerId: string,
+    uniform: number,
+  ) => VertexId | undefined,
 ): WindowResult {
   const holdings = new Map(initialHoldings)
   const taken: VertexId[] = []
@@ -449,7 +466,8 @@ export function simulateWindowDetailed(
   for (const { playerId, receivesGrant, hasLaterPick } of turns) {
     const uniform = nextUniform()
     const held = holdings.get(playerId) ?? emptyHoldings()
-    const vertexId = opponentPick(
+    const forced = pickOverride?.(taken, actualPickers, playerId, uniform)
+    const vertexId = forced !== undefined && !blocked.has(forced) ? forced : opponentPick(
       ctx,
       board,
       playerId,
@@ -522,11 +540,11 @@ export function rankCandidates(
     }
   }
   const denominator = Math.max(1, preWindows.length)
-  // Show the "likely gone" spots from the deterministic (modal) rollout, where
-  // every opponent takes its top choice. Its picks are
-  // mutually legal (a real snake draft can never take two spots a single road
-  // apart), ordered by draft turn, and each carries the player who takes it.
-  // Frequency across all rollouts annotates how reliably that exact spot goes.
+  // Show the "likely gone" spots from the modal pre-window, where each rival takes its own
+  // top recommendation on the board the earlier picks leave. Sampled pre-windows draw from those
+  // same lists while they follow the modal line, then use the shortcut, as do nested analyses
+  // and unavailable recommendations. The picks are mutually legal, ordered by draft turn, and
+  // each carries its picker and frequency across all rollouts.
   const modal = preWindows[0]
   const takenBeforeFirstPick: TakenVertex[] = (modal?.taken ?? []).map((vertexId, index) => ({
     vertexId,
@@ -724,6 +742,14 @@ export function rolloutCount(
 }
 
 export function analyzeBoard(board: Board, options: AnalysisOptions = {}): DraftAnalysis {
+  return analyzeBoardInternal(board, options, true)
+}
+
+function analyzeBoardInternal(
+  board: Board,
+  options: AnalysisOptions,
+  rankModalPicks: boolean,
+): DraftAnalysis {
   const weights = options.weights ?? DEFAULT_WEIGHTS
   const draft = inferDraftState(board)
   const ctx = computeBoardContext(board, weights)
@@ -773,6 +799,7 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
     )
     const baseOccupied = boardSettlements(board)
     const preWindows: PreWindowResult[] = []
+    const modalLists: (readonly Recommendation[] | undefined)[] = []
     for (let rollout = 0; rollout < rollouts; rollout += 1) {
       const blocked = new Set(baseBlocked)
       let uniformIndex = 0
@@ -787,6 +814,33 @@ export function analyzeBoard(board: Board, options: AnalysisOptions = {}): Draft
         blocked,
         new Set(baseOccupied),
         nextUniform,
+        // Sampled pre-windows reuse the modal lists only while their earlier picks still match.
+        // Nested windows keep the shortcut to bound recursion on snake-inconsistent boards.
+        rankModalPicks ? (taken, pickerIds, playerId, uniform) => {
+          if (rollout === 0) {
+            const scratch = taken.reduce((next, vertexId, index) =>
+              placeBuilding(next, vertexId, pickerIds[index], 'settlement'), board)
+            // ponytail: one extra full ranking per rival pick ahead of mine. If the wait matters,
+            // memoize the modal line by the board's pieces; the chain is the same for any mePlayerId.
+            const analysis = analyzeBoardInternal(setMe(scratch, playerId), {
+              ...options,
+              maxResults: Math.max(1, weights.opponentTopK),
+            }, false)
+            if (analysis.status !== 'ready') return undefined
+            modalLists[taken.length] = analysis.recommendations
+            return analysis.recommendations[0]?.firstPick
+          }
+          const list = modalLists[taken.length]
+          const onModalLine = taken.every((vertexId, index) =>
+            vertexId === preWindows[0].taken[index] && pickerIds[index] === preWindows[0].pickerIds[index])
+          if (!onModalLine || list === undefined) return undefined
+          return softmaxPick(
+            list.map(({ firstPick }) => firstPick),
+            list.map(({ rankScore }) => rankScore),
+            uniform,
+            weights.softmaxTemperature,
+          ) ?? undefined
+        } : undefined,
       )
       preWindows.push({
         blocked,

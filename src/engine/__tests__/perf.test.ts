@@ -61,15 +61,14 @@ describe('rollout performance', () => {
   // SP6 gate, adopted the term at 0.1, and the walk prices every site a candidate opens with the
   // full marginal formula: about sixteen extra scorings per scored candidate, which on this board
   // is 5.8 million of them. That is what an analysis of the largest board now costs, and no
-  // rewrite of the walk closes a gap that size. It is the slowest shape the app analyzes, but only
-  // just: a four-seat `standard4` opening measures about a tenth under it, because `rolloutCount`
-  // spends a fixed budget and the smaller board buys more rollouts with it. Every filled board
-  // costs about this much, not only the six-player one.
+  // rewrite of the walk closes a gap that size. This measures the seat on the clock, with no
+  // pre-window: a four-seat `standard4` opening measures about a tenth under it, because
+  // `rolloutCount` spends a fixed budget and the smaller board buys more rollouts with it.
+  // Seats waiting on rivals also pay for their modal rankings, covered below.
   //
-  // The bound is under twice the measured cost, which one sample cannot carry: vitest runs this
-  // file alongside forty others, and a single run has come in over 3000ms on a loaded machine
-  // while an isolated one measured 1.6s. Three runs and the fastest of them, so a busy neighbour
-  // has to spoil all three before this reads as a regression.
+  // The bound is under twice the measured 1.6s cost. This file runs alone, but other processes can
+  // still add contention. Three runs and the fastest of them, so a busy neighbour has to spoil
+  // all three before this reads as a regression.
   it('analyzes the worst-case six-player opening under the CI tripwire', () => {
     const board = worstCaseBoard()
     let fastest = Infinity
@@ -84,4 +83,22 @@ describe('rollout performance', () => {
     expect(status).toBe('ready')
     expect(fastest).toBeLessThan(3000)
   })
+
+  // Three rival picks add three full rankings: the fastest of three isolated runs measured 6.33s.
+  // The 11s bound stays under twice that cost, with time for three samples before the timeout.
+  it('bounds the six-player opening with three rival rankings before my turn', () => {
+    const board = setMe(worstCaseBoard(), 'p4')
+    let fastest = Infinity
+    let status: string | null = null
+    console.time('analyzeBoard p4 x3')
+    for (let run = 0; run < 3; run += 1) {
+      const start = performance.now()
+      status = analyzeBoard(board).status
+      fastest = Math.min(fastest, performance.now() - start)
+    }
+    console.timeEnd('analyzeBoard p4 x3')
+    console.info('analyzeBoard p4 fastest (ms)', fastest)
+    expect(status).toBe('ready')
+    expect(fastest).toBeLessThan(11_000)
+  }, 45_000)
 })

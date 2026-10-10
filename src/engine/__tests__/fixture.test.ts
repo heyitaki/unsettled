@@ -5,6 +5,8 @@ import { analyzeBoard } from '../analyze'
 import { breakdownTotal } from '../valuation'
 
 describe('imported draft fixture', () => {
+  // Three rivals pick ahead of me here, so each analysis also ranks for each of them: hence the
+  // longer timeout.
   it('produces stable structural recommendations', () => {
     const board = fixture as Board
     const first = analyzeBoard(board, { seed: 7 })
@@ -23,5 +25,5 @@ describe('imported draft fixture', () => {
       }
     }
     expect(analyzeBoard(board, { seed: 7 })).toEqual(first)
-  })
+  }, 60_000)
 })
