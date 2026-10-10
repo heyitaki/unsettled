@@ -2399,3 +2399,38 @@ Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
 **Prediction against outcome.** **Right on the estimate**, predicted `+1.2pp` to `+2.2pp` centred near `+1.7pp`, delivered `+1.801pp`. **Right on the verdict**, predicted `better` at about 97%. **Right on the half-width**, predicted about `+/-0.16pp`, delivered `+/-0.160pp`. The shrinkage was smaller than the few tenths I expected.
 
 **Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against two seats on today's vector. The greedy opponent model inside every hero was measured in M-61 at four seats only, so the verdict may not be described as taken against a correctly specified model, and the field is the same here as on `tuning3`, so this run controls for seeds and not for field-overfit. The run reads the pair of changes together and says nothing about either alone; the diversity half's own case rests on M-73's retry. A `better` here confirms the screen and decides nothing about what ships; that is M-75's question on `gate3`.
+
+## M-75: 3-seat adoption gate on gate3
+
+2026-10-10, commit `dc1dcec1` (the preregistration commit; no default moved for this run), domain `gate3` (seed `7670578962881712144`). Preregistered in `docs/plans/preregs/2026-10-10-m75-seats3-gate3.md` (committed before the run). **This run is the one authorized `gate3` spend at 3 seats**, under the user's 2026-10-10 authorization quoted in `.claude/specs/simulator/seat-count-programme.md`; no further `gate3` command may run on `standard4` at 3 seats.
+
+`evaluate`, `standard4`, 3 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 42,000 boards x 2 reps, 252,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_s2_combined.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout standard4 --seats 3 --domain gate3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_s2_combined.json@placement/default-weights.json --reference base --boards 42000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m75-seats3-gate3
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.07s against a warm fingerprint. The invocation ran alone in its command block, unpiped. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate3` at seed `7670578962881712144`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `28.51 37.86 37.63`, after `13.10 34.87 41.24`, other sessions sharing the machine; 1147.049s at 18 workers, 439.4 games/s, 504,000 games. `base` won 84,109 of 252,000 (`0.333765873015873`), 0.461 binomial standard errors above the `0.3333333333333333` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 88,958 of 252,000 (`0.3530079365079365`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.01924206349206349` | 22520 | 17671 | `[0.0176846, 0.0207995]` | `[0.0176488, 0.0208353]` | clustered `[0.0176488, 0.0208353]` | 0.1593 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| candidate | +1.924 `[+1.765, +2.084]` | 40191 | +2.00 `[+1.72, +2.27]` | +2.02 `[+1.74, +2.30]` | +1.76 `[+1.49, +2.04]` |
+
+**The verdict is `better`, and it adopts the candidate as the three-seat vector.** `+1.924pp` on `[+1.765pp, +2.084pp]` over 40,191 discordant units of 252,000, the whole interval above the `+0.5pp` bar with 1.26pp to spare. By the preregistered rule `coverageExponent` moves from 1.5 to 1.0 and `diversityWeight` from 1.6 to 3.2 for three-seat rosters: `SEAT_WEIGHT_OVERRIDES[3]` in `src/engine/weights.ts` carries both leaves, `simulator/placement/seat-weights/seats-3.json` is regenerated through `simulator/tools/generate-placement-parity.ts`, and the `SEAT_ADOPTIONS` row in `params_file.rs` moves with it. `DEFAULT_WEIGHTS` and `default-weights.json` do not move.
+
+**Three readings on three disjoint seed sets agree.** `+1.929pp` on the 63,000-unit `tuning3` combine pass, `+1.801pp` on 252,000 `eval3` units and `+1.924pp` here. The two held-out readings average `+1.86pp` over 504,000 paired units. The discordant share is 15.9% on both held-out domains. Every slot is positive and every slot interval excludes zero.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+1.4pp` to `+2.2pp` centred near `+1.8pp`, delivered `+1.924pp`. **Right on the verdict**, predicted `better` at about 99%.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against two seats on today's vector, so **nothing here measures the world the adoption creates in the app**, where a three-seat analysis scores every seat's picks on the adopted vector. The greedy opponent model inside every hero was measured in M-61 at four seats only, so the verdict may not be described as taken against a correctly specified model. The field is the same on all three domains, so the held-out readings control for seeds and not for field-overfit. The run reads the pair of changes together: the gate says the pair beats today's vector by more than the bar, and the case for carrying the diversity half rather than the coverage half alone rests on M-73's retry and combine pass on `tuning3`, not on a held-out reading. Both adopted values are screening endpoints, so nothing here says either is an optimum. The verdict licenses moving these two leaves at this one seat count and nothing else.

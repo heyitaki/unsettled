@@ -156,7 +156,8 @@ export const WEIGHT_SEATS = [2, 3, 4, 5, 6] as const
 export const SEAT_WEIGHT_OVERRIDES: Record<number, Partial<EngineWeights>> = {
   // M-72: without player trading, linear coverage credit and doubled diversity read better.
   2: { coverageExponent: 1.0, diversityWeight: 3.2 },
-  3: {},
+  // M-75: the same pair read better at three seats, with player trading on.
+  3: { coverageExponent: 1.0, diversityWeight: 3.2 },
   // M-69: linear coverage credit read better at four seats on gate3.
   4: { coverageExponent: 1.0 },
   5: {}, 6: {},
