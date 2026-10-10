@@ -124,8 +124,8 @@ fn the_second_generation_domains_are_accepted_and_a_typo_is_not() {
 
     let out = output_dir("evaluate-cli-domain-typo");
     let mut arguments = valid_arguments(&out);
-    arguments[1] = "tuning3".into();
-    assert_named_error(&arguments, "unknown evaluation domain tuning3");
+    arguments[1] = "tuning4".into();
+    assert_named_error(&arguments, "unknown evaluation domain tuning4");
 }
 
 #[test]

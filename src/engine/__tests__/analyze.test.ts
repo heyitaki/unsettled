@@ -31,7 +31,7 @@ import {
   slotScaleOf,
   type Holdings,
 } from '../valuation'
-import { DEFAULT_WEIGHTS, neutralSlotScales } from '../weights'
+import { DEFAULT_WEIGHTS, SEAT_WEIGHT_OVERRIDES, neutralSlotScales } from '../weights'
 import { PAIR_TIE } from '../analyze'
 
 const resources: readonly Resource[] = RESOURCES
@@ -187,6 +187,19 @@ function holdingsFor(board: Board, playerId: string) {
 }
 
 describe('joint draft analysis', () => {
+  it('selects default weights by the board seat count', () => {
+    const board = filledBoard(3)
+    const original = SEAT_WEIGHT_OVERRIDES[3]
+    try {
+      SEAT_WEIGHT_OVERRIDES[3] = { maxResults: 1 }
+      expect(analyzeBoard(board).recommendations).toHaveLength(1)
+      SEAT_WEIGHT_OVERRIDES[3] = {}
+      expect(analyzeBoard(board).recommendations.length).toBeGreaterThan(1)
+    } finally {
+      SEAT_WEIGHT_OVERRIDES[3] = original
+    }
+  })
+
   it('survival-aware ranking strictly beats the naive top-two plan', () => {
     let witness:
       | {

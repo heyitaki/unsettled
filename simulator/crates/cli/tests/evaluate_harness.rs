@@ -7,8 +7,8 @@ use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::topology::Layout;
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
-    EVAL2_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain, GATE2_SEED, GATE_SEED,
-    TUNING2_SEED, TUNING_SEED, evaluate, evaluation_schedule,
+    EVAL2_SEED, EVAL3_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain, GATE2_SEED, GATE3_SEED, GATE_SEED,
+    TUNING2_SEED, TUNING3_SEED, TUNING_SEED, evaluate, evaluation_schedule,
     summarize_arm,
 };
 
@@ -509,6 +509,9 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
         ("tuning2", TUNING2_SEED),
         ("eval2", EVAL2_SEED),
         ("gate2", GATE2_SEED),
+        ("tuning3", TUNING3_SEED),
+        ("eval3", EVAL3_SEED),
+        ("gate3", GATE3_SEED),
     ];
     let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {
@@ -528,11 +531,11 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
     }
 }
 
-/// The six spellings the CLI parses, and the one it must not.
+/// The nine spellings the CLI parses, and the one it must not.
 ///
 /// `EvaluationDomain::seed` is the only place a run's whole seed stream is chosen, so a
 /// domain that parses to the wrong constant would silently spend a held-out set. The
-/// unknown case is pinned too: a typo like `tuning3` has to fail rather than fall back.
+/// unknown case is pinned too: a typo like `tuning4` has to fail rather than fall back.
 #[test]
 fn every_evaluation_domain_parses_to_its_own_named_seed() {
     let expected = [
@@ -542,6 +545,9 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
         ("tuning2", EvaluationDomain::Tuning2, TUNING2_SEED),
         ("eval2", EvaluationDomain::Eval2, EVAL2_SEED),
         ("gate2", EvaluationDomain::Gate2, GATE2_SEED),
+        ("tuning3", EvaluationDomain::Tuning3, TUNING3_SEED),
+        ("eval3", EvaluationDomain::Eval3, EVAL3_SEED),
+        ("gate3", EvaluationDomain::Gate3, GATE3_SEED),
     ];
     for (spelling, domain, seed) in expected {
         assert_eq!(EvaluationDomain::parse(spelling), Ok(domain));
@@ -550,8 +556,8 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
     }
 
     assert_eq!(
-        EvaluationDomain::parse("tuning3"),
-        Err("unknown evaluation domain tuning3".to_string())
+        EvaluationDomain::parse("tuning4"),
+        Err("unknown evaluation domain tuning4".to_string())
     );
 }
 

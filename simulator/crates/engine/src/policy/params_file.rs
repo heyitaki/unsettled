@@ -1656,6 +1656,153 @@ mod tests {
         );
     }
 
+    const SC_ARMS: [(&str, &str, f64); 12] = [
+        ("sc_scarcity_lo", "scarcityWeight", 0.175),
+        ("sc_scarcity_hi", "scarcityWeight", 0.7),
+        ("sc_covscarcity_lo", "coverageScarcityWeight", 0.25),
+        ("sc_covscarcity_hi", "coverageScarcityWeight", 1.0),
+        ("sc_coverage_lo", "coverageExponent", 1.0),
+        ("sc_coverage_hi", "coverageExponent", 2.25),
+        ("sc_diversity_lo", "diversityWeight", 0.8),
+        ("sc_diversity_hi", "diversityWeight", 3.2),
+        ("sc_port_lo", "portWeight", 0.275),
+        ("sc_port_hi", "portWeight", 1.1),
+        ("sc_expansion_lo", "expansionWeight", 0.0),
+        ("sc_expansion_hi", "expansionWeight", 0.3),
+    ];
+
+    /// Minted after SP6 adoption, these arms anchor to live `default-weights.json` because
+    /// every seat-count run is against the live defaults. If `DEFAULT_WEIGHTS` moves, this
+    /// family must be re-anchored to a snapshot the way the SP families were.
+    #[test]
+    fn the_sc_arm_files_are_the_committed_seat_count_perturbations() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (stem, key, value) in SC_ARMS {
+            let name = format!("{stem}.json");
+            let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let range = &bounds["placement"][key];
+            assert!(
+                value >= range["min"].as_f64().expect("min")
+                    && value <= range["max"].as_f64().expect("max"),
+                "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+            );
+            assert_ne!(
+                base[key].as_f64(),
+                Some(value),
+                "{name}: {key} at {value} is the live default, so the arm perturbs nothing"
+            );
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            assert_eq!(file[key].as_f64(), Some(value), "{name}: {key}");
+            let mut perturbed = base.clone();
+            perturbed[key] = file[key].clone();
+            assert_eq!(
+                file, perturbed,
+                "{name} must be the live defaults with only {key} moved to {value}"
+            );
+            expected.push(name);
+        }
+
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(arms_dir).expect("arms dir") {
+            let name = entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned();
+            if name.starts_with("sc_") {
+                found.push(name);
+            }
+        }
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "one SC arm per declared screening value");
+    }
+
+    /// Adopted leaves as JSON pointers and values, relative to the live defaults.
+    const SEAT_ADOPTIONS: [(usize, &[(&str, f64)]); 5] = [
+        (2, &[]),
+        (3, &[]),
+        (4, &[]),
+        (5, &[]),
+        (6, &[]),
+    ];
+
+    #[test]
+    fn the_seat_weights_files_record_the_adopted_per_seat_vectors() {
+        let seats_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/seat-weights");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (seats, adoptions) in SEAT_ADOPTIONS {
+            let name = format!("seats-{seats}.json");
+            let source = std::fs::read_to_string(format!("{seats_dir}/{name}"))
+                .unwrap_or_else(|_| panic!("{name} must be committed"));
+            let weights: EngineWeights = serde_json::from_str(&source)
+                .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+            weights
+                .validate()
+                .unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+
+            let file: Value = serde_json::from_str(&source).expect("valid JSON");
+            let mut adopted = base.clone();
+            for (key, value) in adoptions {
+                let range = bounds["placement"].pointer(key).expect("bounded leaf");
+                assert!(
+                    *value >= range["min"].as_f64().expect("min")
+                        && *value <= range["max"].as_f64().expect("max"),
+                    "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+                );
+                assert_ne!(
+                    base.pointer(key).expect("default leaf").as_f64(),
+                    Some(*value),
+                    "{name}: {key} at {value} must differ from the live default"
+                );
+                let leaf = file.pointer(key).expect("adopted leaf");
+                assert_eq!(leaf.as_f64(), Some(*value), "{name}: {key}");
+                *adopted.pointer_mut(key).expect("default leaf") = leaf.clone();
+            }
+            assert_eq!(
+                file, adopted,
+                "{name} must be the live defaults with {adoptions:?} and nothing else moved"
+            );
+            expected.push(name);
+        }
+
+        let mut found = std::fs::read_dir(seats_dir)
+            .expect("seat weights dir")
+            .map(|entry| {
+                entry.expect("entry").file_name().to_string_lossy().into_owned()
+            })
+            .collect::<Vec<_>>();
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "exactly one weights file per seat count");
+    }
+
     /// The decay pair carries the same `expansionWeight` as `sp6_expansion`, which is what makes
     /// M-62's second invocation a reading of `expansionDecay` alone rather than of two axes at
     /// once. The reference of that invocation is an expansion arm and its arms are the decay
@@ -1923,8 +2070,8 @@ mod tests {
         }
         assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
-            weights_arms, 64,
-            "the committed weights arms are 64 files; a change to the set is a decision"
+            weights_arms, 76,
+            "the committed weights arms are 76 files; a change to the set is a decision"
         );
     }
 

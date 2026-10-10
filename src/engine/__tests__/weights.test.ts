@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_WEIGHTS } from '../weights'
+import { DEFAULT_WEIGHTS, SEAT_WEIGHT_OVERRIDES, WEIGHT_SEATS, weightsForSeats } from '../weights'
 
 // The simulator reads its own copy of the app's defaults rather than importing
 // TypeScript, so `simulator/placement/default-weights.json` is a hand-maintained
@@ -15,5 +15,21 @@ describe('simulator weights mirror', () => {
   it('matches DEFAULT_WEIGHTS exactly', () => {
     const mirror: unknown = JSON.parse(readFileSync(mirrorPath, 'utf8'))
     expect(mirror).toEqual(DEFAULT_WEIGHTS)
+  })
+
+  it.each(WEIGHT_SEATS)('matches weightsForSeats(%i) exactly', (seats) => {
+    const path = new URL(`../../../simulator/placement/seat-weights/seats-${seats}.json`, import.meta.url)
+    const mirror: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    expect(mirror).toEqual(weightsForSeats(seats))
+  })
+})
+
+describe('seat-count weights', () => {
+  it.each([1, 7])('falls back to DEFAULT_WEIGHTS for %i seats', (seats) => {
+    expect(weightsForSeats(seats)).toEqual(DEFAULT_WEIGHTS)
+  })
+
+  it.each(WEIGHT_SEATS)('merges the overrides for %i seats', (seats) => {
+    expect(weightsForSeats(seats)).toEqual({ ...DEFAULT_WEIGHTS, ...SEAT_WEIGHT_OVERRIDES[seats] })
   })
 })

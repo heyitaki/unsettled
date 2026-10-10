@@ -6,7 +6,8 @@ use unsettled_engine::rules::{Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
-    EVAL2_SEED, EVAL_SEED, GATE2_SEED, GATE_SEED, TUNING2_SEED, TUNING_SEED,
+    EVAL2_SEED, EVAL3_SEED, EVAL_SEED, GATE2_SEED, GATE3_SEED, GATE_SEED,
+    TUNING2_SEED, TUNING3_SEED, TUNING_SEED,
 };
 use unsettled_sim::stats::wilson95;
 
@@ -60,7 +61,7 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
             .collect::<Vec<(Vec<Option<Resource>>, Vec<Option<u8>>, u8)>>()
     };
 
-    // Pairwise across all six domains, not just tuning/eval: a held-out domain only holds
+    // Pairwise across all nine domains, not just tuning/eval: a held-out domain only holds
     // its value as an unspent gate if it shares neither seed streams nor generated boards
     // with the domains tuning work is free to burn. Boards are compared on both layouts
     // because a domain that collided on only one of them would still leak through a run
@@ -72,6 +73,9 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
         ("tuning2", TUNING2_SEED),
         ("eval2", EVAL2_SEED),
         ("gate2", GATE2_SEED),
+        ("tuning3", TUNING3_SEED),
+        ("eval3", EVAL3_SEED),
+        ("gate3", GATE3_SEED),
     ];
     let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {

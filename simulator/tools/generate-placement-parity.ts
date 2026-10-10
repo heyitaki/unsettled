@@ -23,7 +23,9 @@ import {
 } from '../../src/engine/valuation.ts'
 import {
   DEFAULT_WEIGHTS,
+  WEIGHT_SEATS,
   neutralSlotScales,
+  weightsForSeats,
   type EngineWeights,
   type SlotScale,
   type SlotScales,
@@ -687,6 +689,10 @@ const pack = {
 export const placementFiles = [
   { path: resolve(fixtureDir, 'placement-parity.json'), contents: `${JSON.stringify(pack, encodeNonFinite, 2)}\n` },
   { path: resolve(weightsDir, 'default-weights.json'), contents: `${JSON.stringify(DEFAULT_WEIGHTS, null, 2)}\n` },
+  ...WEIGHT_SEATS.map((seats) => ({
+    path: resolve(weightsDir, 'seat-weights', `seats-${seats}.json`),
+    contents: `${JSON.stringify(weightsForSeats(seats), null, 2)}\n`,
+  })),
 ]
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

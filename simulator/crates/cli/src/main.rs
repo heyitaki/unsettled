@@ -309,7 +309,7 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
     {
         return Err("tournament boards must be draft-empty".into());
     }
-    let heuristics = parse_heuristics(&heuristic_names)?;
+    let heuristics = parse_heuristics(&heuristic_names, seats)?;
     prepare_app_formula_boards(&mut boards, &topology, &heuristics);
     let policy = parse_policy(&policy_name)?;
     let schedule = tournament_schedule(boards.len(), reps, heuristics.len());
@@ -354,10 +354,10 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
     if let Some(collision) = labels.windows(2).find(|pair| pair[0] == pair[1]) {
         return Err(format!("duplicate arm label {}", collision[0]));
     }
-    let field = parse_heuristic(&args.field)?;
+    let field = parse_heuristic(&args.field, seats)?;
     let arms = parsed_arms
         .iter()
-        .map(|(label, spec)| Ok((label.clone(), parse_heuristic(spec)?)))
+        .map(|(label, spec)| Ok((label.clone(), parse_heuristic(spec, seats)?)))
         .collect::<Result<Vec<_>, String>>()?;
     let arm_specs = parsed_arms
         .iter()
@@ -427,7 +427,7 @@ fn diagnose_command(args: DiagnoseArgs) -> Result<(), String> {
         .seats
         .unwrap_or(if layout == Layout::Standard4 { 4 } else { 6 });
     let domain = EvaluationDomain::parse(&args.domain)?;
-    let placement = parse_heuristic(&args.placement)?;
+    let placement = parse_heuristic(&args.placement, seats)?;
     let policy = parse_policy(&args.policy)?;
     let started = Instant::now();
     let diagnostics = diagnose(DiagnoseRequest {
@@ -473,7 +473,7 @@ fn simulate(args: SimulateArgs) -> Result<(), String> {
         },
     )
     .map_err(|error| error.to_string())?;
-    let heuristics = parse_heuristics(&args.heuristics)?;
+    let heuristics = parse_heuristics(&args.heuristics, board.seats())?;
     prepare_app_formula_boards(std::slice::from_mut(&mut board), &topology, &heuristics);
     let policy = parse_policy(&args.policy)?;
     let schedule = simulate_schedule(args.games, heuristics.len());
@@ -537,10 +537,10 @@ fn parse_layout(name: &str) -> Result<Layout, String> {
     }
 }
 
-fn parse_heuristics(value: &str) -> Result<Vec<PlacementKind>, String> {
+fn parse_heuristics(value: &str, seats: usize) -> Result<Vec<PlacementKind>, String> {
     let heuristics = value
         .split(',')
-        .map(parse_heuristic)
+        .map(|name| parse_heuristic(name, seats))
         .collect::<Result<Vec<_>, _>>()?;
     if heuristics.is_empty() {
         return Err("at least one heuristic is required".into());

@@ -27,7 +27,7 @@ import {
   type Occupancy,
   type ScoreBreakdown,
 } from './valuation'
-import { DEFAULT_WEIGHTS, type EngineWeights } from './weights'
+import { weightsForSeats, type EngineWeights } from './weights'
 
 export type AnalysisStatus =
   | 'ready'
@@ -724,7 +724,7 @@ export function rolloutCount(
 }
 
 export function analyzeBoard(board: Board, options: AnalysisOptions = {}): DraftAnalysis {
-  const weights = options.weights ?? DEFAULT_WEIGHTS
+  const weights = options.weights ?? weightsForSeats(board.players.length)
   const draft = inferDraftState(board)
   const ctx = computeBoardContext(board, weights)
   const legal = legalSettlementVertices(board)

@@ -34,6 +34,13 @@ pub const TUNING2_SEED: u64 = 0x7a12_5eed_2026_0902;
 pub const EVAL2_SEED: u64 = 0xe7a2_5eed_2026_0902;
 pub const GATE2_SEED: u64 = 0x6a72_5eed_2026_0902;
 
+/// Third-generation domains, minted for the seat-count weights programme because all six
+/// earlier domains are spent. One generation serves all five seat counts: board generation
+/// consumes layout and seat count, so each seat count draws its own boards.
+pub const TUNING3_SEED: u64 = 0x7a13_5eed_2026_1010;
+pub const EVAL3_SEED: u64 = 0xe7a3_5eed_2026_1010;
+pub const GATE3_SEED: u64 = 0x6a73_5eed_2026_1010;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EvaluationDomain {
     Tuning,
@@ -42,6 +49,9 @@ pub enum EvaluationDomain {
     Tuning2,
     Eval2,
     Gate2,
+    Tuning3,
+    Eval3,
+    Gate3,
 }
 
 impl EvaluationDomain {
@@ -53,6 +63,9 @@ impl EvaluationDomain {
             "tuning2" => Ok(Self::Tuning2),
             "eval2" => Ok(Self::Eval2),
             "gate2" => Ok(Self::Gate2),
+            "tuning3" => Ok(Self::Tuning3),
+            "eval3" => Ok(Self::Eval3),
+            "gate3" => Ok(Self::Gate3),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
     }
@@ -65,6 +78,9 @@ impl EvaluationDomain {
             Self::Tuning2 => "tuning2",
             Self::Eval2 => "eval2",
             Self::Gate2 => "gate2",
+            Self::Tuning3 => "tuning3",
+            Self::Eval3 => "eval3",
+            Self::Gate3 => "gate3",
         }
     }
 
@@ -76,6 +92,9 @@ impl EvaluationDomain {
             Self::Tuning2 => TUNING2_SEED,
             Self::Eval2 => EVAL2_SEED,
             Self::Gate2 => GATE2_SEED,
+            Self::Tuning3 => TUNING3_SEED,
+            Self::Eval3 => EVAL3_SEED,
+            Self::Gate3 => GATE3_SEED,
         }
     }
 }

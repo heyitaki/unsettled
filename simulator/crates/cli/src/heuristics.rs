@@ -6,7 +6,8 @@ use unsettled_engine::placement::{
     PlacementKind, register_app_formula, register_app_formula_draft,
 };
 
-pub fn parse_heuristic(name: &str) -> Result<PlacementKind, String> {
+pub fn parse_heuristic(name: &str, seats: usize) -> Result<PlacementKind, String> {
+    let name = name.replace("{seats}", &seats.to_string());
     if let Some(spec) = name.strip_prefix("app_formula_draft:") {
         // Two paths, hero first: the arm sweeps the hero formula and pins the opponent model the
         // lookahead replays the rest of the field with.
@@ -24,7 +25,7 @@ pub fn parse_heuristic(name: &str) -> Result<PlacementKind, String> {
         );
     }
     let Some(path) = name.strip_prefix("app_formula:") else {
-        return PlacementKind::parse(name).ok_or_else(|| format!("unknown heuristic {name}"));
+        return PlacementKind::parse(&name).ok_or_else(|| format!("unknown heuristic {name}"));
     };
     let (stem, weights) = load_weights(path, "app_formula")?;
     register_app_formula(format!("app_formula:{stem}"), weights)
@@ -64,14 +65,14 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../../placement/default-weights.json"
         );
-        let kind = parse_heuristic(&format!("app_formula_draft:{path}@{path}"))
+        let kind = parse_heuristic(&format!("app_formula_draft:{path}@{path}"), 4)
             .expect("the committed weights load on both sides");
         assert_eq!(
             kind.name(),
             "app_formula_draft:default-weights@default-weights"
         );
 
-        let error = parse_heuristic(&format!("app_formula_draft:{path}"))
+        let error = parse_heuristic(&format!("app_formula_draft:{path}"), 4)
             .expect_err("a draft spec with no opponent path must not parse");
         assert!(error.contains("<hero weights>@<opponent weights>"), "{error}");
     }
@@ -95,9 +96,24 @@ mod tests {
             std::process::id()
         ));
         std::fs::write(&path, weights.to_string()).expect("write temp weights");
-        let error = parse_heuristic(&format!("app_formula:{}", path.display()))
+        let error = parse_heuristic(&format!("app_formula:{}", path.display()), 4)
             .expect_err("out-of-domain weights must not parse");
         assert!(error.contains("genericPortFactor >= 0"), "{error}");
         std::fs::remove_file(path).expect("cleanup");
+    }
+
+    #[test]
+    fn the_seat_placeholder_resolves_both_draft_paths_before_loading() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/seat-weights");
+        let spec = format!("app_formula_draft:{dir}/seats-{{seats}}.json@{dir}/seats-{{seats}}.json");
+        let kind = parse_heuristic(&spec, 2).expect("the committed two-seat weights load");
+        assert_eq!(kind.name(), "app_formula_draft:seats-2@seats-2");
+
+        let error = parse_heuristic(&spec, 7).expect_err("no seven-seat weights are committed");
+        assert!(
+            error.contains("failed to read app formula weights"),
+            "{error}"
+        );
+        assert!(error.contains("seats-7.json"), "{error}");
     }
 }

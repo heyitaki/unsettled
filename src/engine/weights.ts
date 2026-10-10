@@ -148,3 +148,15 @@ export const DEFAULT_WEIGHTS: EngineWeights = {
   maxResults: 8,
   slotScales: neutralSlotScales(),
 }
+
+export const WEIGHT_SEATS = [2, 3, 4, 5, 6] as const
+
+// Fill an entry only after adoption on gate3; empty means today's vector.
+// The shallow merge replaces nested blocks whole.
+export const SEAT_WEIGHT_OVERRIDES: Record<number, Partial<EngineWeights>> = {
+  2: {}, 3: {}, 4: {}, 5: {}, 6: {},
+}
+
+export const weightsForSeats = (seats: number): EngineWeights => ({
+  ...DEFAULT_WEIGHTS, ...SEAT_WEIGHT_OVERRIDES[seats],
+})
