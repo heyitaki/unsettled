@@ -2002,3 +2002,38 @@ Per-seat `n` sums to the pooled `n` and per-seat `b + c` to the pooled `b + c` i
 **Prediction against outcome.** **Wrong on the headline**: predicted no survivor at about 90%, delivered one. **Right on `expansion_lo`**, predicted `-1.3pp` to `-0.5pp` and `worse` or `inconclusive`, delivered `-0.717pp` `inconclusive`. **Right on `expansion_hi`**, predicted `-0.9pp` to `0pp`, delivered `-0.453pp`. **Right on `diversity_lo`**, predicted `-1.0pp` to `0pp`, delivered `-0.925pp`. **Wrong on `diversity_hi`**, predicted `-0.2pp` to `+0.5pp` and `equivalent`, delivered `+0.667pp` then `+0.565pp`, `inconclusive` twice. **Right on five of the eight scarcity, coverage-scarcity and port arms and wrong on three**: both `scarcityWeight` arms, both `coverageScarcityWeight` arms and `port_lo` landed inside `+/-0.5pp` as predicted, while `coverage_lo`, `coverage_hi` and `port_hi` landed well outside it. The prediction named `port_hi` and `coverage_lo` as the two arms the Phase-H argument was least to be trusted on, and those are two of the three it got wrong.
 
 **Scope, and what this entry may not be cited for.** One layout, one seat count, one policy, one domain, twelve single-parameter contrasts with no multiplicity correction, at a power the wall-time cap set below the programme's target. Each arm moves the hero's weights alone against three seats on today's vector. The greedy opponent model inside every hero is the one M-61 measured at 39.4% of intervening picks named exactly, so no verdict here may be described as taken against a correctly specified model. Both expansion arms move the setup road as well as the settlement. A `better` on `tuning3` is a screening result: it sends one vector to `eval3` and decides nothing about what ships. Nothing here transfers to another seat count.
+
+## M-68: 4-seat confirmation on eval3
+
+2026-10-10, commit `34921fd3` (the preregistration commit; no default moved for this run), domain `eval3` (seed `16691289016504815632`). Preregistered in `docs/plans/preregs/2026-10-10-m68-seats4-eval3.md` (committed before the run). **This run is the one authorized `eval3` spend at 4 seats**, under the user's 2026-10-10 authorization quoted in `.claude/specs/simulator/seat-count-programme.md`; no further `eval3` command may run on `standard4` at 4 seats.
+
+`evaluate`, `standard4`, 4 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 18,000 boards x 2 reps, 144,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_coverage_lo.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout standard4 --seats 4 --domain eval3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --reference base --boards 18000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m68-seats4-eval3
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.03s against a warm fingerprint. The invocation ran alone in its command block, unpiped. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `eval3` at seed `16691289016504815632`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `13.33 29.08 33.82`, after `21.03 40.17 40.44`, other sessions sharing the machine; 1007.176s at 18 workers, 285.9 games/s, 288,000 games. `base` won 35,775 of 144,000 (`0.2484375`), 1.369 binomial standard errors below the `0.25` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 37,182 of 144,000 (`0.2582083333333333`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.009770833333333333` | 6867 | 5460 | `[0.0082605, 0.0112812]` | `[0.0082251, 0.0113166]` | clustered `[0.0082251, 0.0113166]` | 0.1546 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| candidate | +0.977 `[+0.823, +1.132]` | 12327 | +0.67 `[+0.38, +0.96]` | +0.96 `[+0.64, +1.27]` | +1.31 `[+0.99, +1.62]` | +0.97 `[+0.65, +1.29]` |
+
+**The verdict is `better`, so the candidate goes to the gate.** `+0.977pp` on `[+0.823pp, +1.132pp]` over 12,327 discordant units of 144,000, the whole interval above the `+0.5pp` bar with 0.323pp to spare at the lower edge. The screen in M-67 read `+1.083pp` on 36,000 `tuning3` units, so the estimate shrank by about a tenth of a point on seeds it was not selected on, which is the size of shrinkage a pick of the best of twelve should show and no more. The discordant share is 8.56% here against 8.68% on the screen: the arm changes the pick at the same rate on boards it has never seen. Every slot is positive and every slot interval excludes zero.
+
+**One deviation of form, with no effect on the reading.** The invocation was first launched in the same shell command as the warm rebuild, which the preregistration forbids. That process was killed seconds after it started, before it wrote any artifact, and the identical command was relaunched alone. Nothing was read from the killed process and the run is deterministic, so the reading above is the only one that exists.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+0.4pp` to `+1.3pp` centred near `+0.85pp`, delivered `+0.977pp`. **Right on the verdict**, predicted `better` at about 75%. **Right on the half-width**, predicted about `+/-0.16pp`, delivered `+/-0.155pp`.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against three seats on today's vector. The greedy opponent model inside every hero is the one M-61 measured as misspecified against a draft-aware field, so the verdict may not be described as taken against a correctly specified model, and the field is the same here as on `tuning3`, so this run controls for seeds and not for field-overfit. A `better` here confirms the screen and decides nothing about what ships; that is M-69's question on `gate3`.
