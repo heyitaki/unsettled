@@ -122,6 +122,22 @@ describe('viewing another player in Best picks', () => {
     expect(jobs.at(-1)!.request.board).toBe(board())
   })
 
+  it('shows a pick already analysed without rendering the pending state first', async () => {
+    await click(button('Pick 2: Blue'))
+    await reply()
+    await click(button('Pick 7: Blue'))
+    await reply()
+    const added: Node[] = []
+    const observer = new MutationObserver((records) => added.push(...records.flatMap((record) => [...record.addedNodes])))
+    observer.observe(container, { childList: true, subtree: true })
+    const asked = jobs.length
+    await click(button('Pick 2: Blue'))
+    observer.disconnect()
+    expect(jobs).toHaveLength(asked)
+    expect(container.querySelector('.analysis-row')).not.toBeNull()
+    expect(added.some((node) => node instanceof Element && node.matches('[role="status"]'))).toBe(false)
+  })
+
   it.each(['Play these out', 'Place settlement'])('keeps the claim when using %s on a rival view', async (action) => {
     const original = board()
     const pickers = ['aki', 'b', 'c', 'd', 'd', 'c']

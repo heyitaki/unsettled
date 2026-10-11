@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Recommendation } from '../engine/analyze'
 import { draftIsComplete } from '../engine/draft'
 import { placeBuilding, setMe } from '../model/board'
@@ -169,8 +169,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
 
   // Reset the board marks whenever the board or viewed pick changes: the
   // previous window's circles are stale. The shell's resting marks show through
-  // the cleared highlight (spec S5).
-  useEffect(() => {
+  // the cleared highlight (spec S5). A layout effect, so the next ranking is
+  // never painted with the last one's card still open.
+  useLayoutEffect(() => {
     setSelectedPick(null)
     setSelectedLikelyGone(false)
     own.current = null

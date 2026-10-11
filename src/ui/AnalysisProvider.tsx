@@ -33,7 +33,11 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     const draft = inferDraftState(analysisBoard)
     return { status: 'no-production', draft, warnings: draft.warnings, recommendations: [], takenBeforeFirstPick: [] }
   }, [analysisBoard])
-  const result = completed?.board === analysisBoard && completed.targetPick === targetPick ? completed.result : null
+  // A cached result is read during render: waiting for the effect to report it
+  // would paint one frame of the pending state between two rankings.
+  const cached = useMemo(() => client.peek(analysisBoard, targetPick), [client, analysisBoard, targetPick])
+  const result = completed?.board === analysisBoard && completed.targetPick === targetPick ? completed.result
+    : cached ? { analysis: cached } : null
   const value: AnalysisState = {
     analysis: result && 'analysis' in result ? result.analysis : placeholder,
     pending: result === null,

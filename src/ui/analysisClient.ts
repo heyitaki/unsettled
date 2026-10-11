@@ -65,6 +65,8 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
   }
   const keyOf = (board: Board, targetPick: number | null) => `${targetPick}|${hash(JSON.stringify(board))}`
   return {
+    /** A result already held, read without a worker so a render can show it at once. */
+    peek: (board: Board, targetPick: number | null = null): DraftAnalysis | undefined => cache.get(keyOf(board, targetPick)),
     run(board: Board, report: (result: AnalysisResult) => void, targetPick: number | null = null): () => void {
       if (active) stop()
       const key = keyOf(board, targetPick)
