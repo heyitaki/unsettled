@@ -19,6 +19,7 @@
 use std::ops::Range;
 
 use super::app_formula::{AppFormulaScorer, js_max};
+use super::expansion;
 use crate::game::{can_place_settlement, setup_order};
 use crate::state::EMPTY;
 use crate::topology::{Edge, Topology, Vertex};
@@ -83,15 +84,27 @@ impl ScoreRows {
         if self.reusable {
             return self.row(scorer, vertex_owner, edge_owner, seat, grant);
         }
+        let holdings = scorer.holdings_for_owner(vertex_owner, seat);
+        let holdings_total = scorer.holdings_diversity_total(&holdings);
+        let scale = scorer.slot_scale(seat);
+        let occupancy = expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
         self.scratch.clear();
-        self.scratch.extend((0..self.vertices).map(|index| {
-            let vertex = index as Vertex;
-            if legal_with_vacancy(topology, vertex_owner, vacated, vertex) {
-                scorer.score_for_owner(vertex_owner, edge_owner, seat, vertex, grant)
-            } else {
-                f64::NEG_INFINITY
-            }
-        }));
+        expansion::PRICE_MEMO.with_borrow_mut(|memo| {
+            let serial = memo.serial(scorer.id, occupancy.own_vertices);
+            self.scratch.extend((0..self.vertices).map(|index| {
+                let vertex = index as Vertex;
+                if legal_with_vacancy(topology, vertex_owner, vacated, vertex) {
+                    scorer.scaled_total_with_diversity(
+                        holdings, vertex, grant, scale.diversity, holdings_total,
+                    ) + scale.expansion * expansion::row_value(
+                        scorer, &holdings, vertex_owner, edge_owner, seat, vertex,
+                        &occupancy, memo, serial,
+                    )
+                } else {
+                    f64::NEG_INFINITY
+                }
+            }));
+        });
         &self.scratch
     }
 
@@ -1007,6 +1020,64 @@ mod tests {
             }
         }
         assert!(compared > 20_000, "the boards must leave plenty to compare, got {compared}");
+    }
+
+    /// Owner-array padding is outside the graph and cannot block any expansion site.
+    #[test]
+    fn uncached_rows_ignore_rival_owners_past_the_graph() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let mut vertices = vec![EMPTY; topology.vertex_count() + 1];
+        vertices[topology.vertex_count()] = 1;
+        let edges = vec![EMPTY; topology.edge_count()];
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), vertices.len(), false);
+        let row = rows.legal_row(&scorer, &topology, &vertices, &edges, 0, false, None);
+        for vertex in 0..topology.vertex_count() as Vertex {
+            let direct = scorer.score_for_owner(&vertices, &edges, 0, vertex, false);
+            assert_eq!(row[usize::from(vertex)].to_bits(), direct.to_bits());
+        }
+    }
+
+    /// Degenerate weights preserve score bits on both reach paths and under a legality vacancy.
+    #[test]
+    fn uncached_rows_preserve_degenerate_weight_bits() {
+        let (topology, board) = fixture();
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+        for weight in [0.0, -0.0, -0.4, f64::NAN] {
+            for decay in [0.0, -0.0, -0.5, f64::NAN] {
+                let mut weights = default_weights();
+                weights.expansion_weight = weight;
+                weights.expansion_decay = decay;
+                weights.resource_value.wheat = -2.0;
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                let mut vertices = vec![EMPTY; topology.vertex_count()];
+                vertices[3] = 0;
+                vertices[15] = 1;
+                let mut edges = vec![EMPTY; topology.edge_count()];
+                for own_roads in [false, true] {
+                    if own_roads {
+                        for edge in (0..edges.len()).step_by(3) {
+                            edges[edge] = 0;
+                        }
+                    }
+                    for vacated in [None, Some(3), Some(15)] {
+                        let row =
+                            rows.legal_row(&scorer, &topology, &vertices, &edges, 0, true, vacated);
+                        for vertex in 0..topology.vertex_count() as Vertex {
+                            if legal_with_vacancy(&topology, &vertices, vacated, vertex) {
+                                let direct =
+                                    scorer.score_for_owner(&vertices, &edges, 0, vertex, true);
+                                assert_eq!(
+                                    row[usize::from(vertex)].to_bits(),
+                                    direct.to_bits(),
+                                    "weight {weight} decay {decay} vertex {vertex} roads {own_roads}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// The lookahead with SP3's expansion term switched on, which is the combination no committed

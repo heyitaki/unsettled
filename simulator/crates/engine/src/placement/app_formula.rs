@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Deserialize;
 
@@ -10,6 +11,7 @@ use crate::topology::{Edge, Topology, Vertex};
 use crate::view::pips;
 
 const COVERAGE_MEMO_BITS: u32 = 6;
+static NEXT_SCORER_ID: AtomicU64 = AtomicU64::new(1);
 
 thread_local! {
     /// Per-thread direct-mapped memo for coverage powers. Both operand bit patterns key the
@@ -320,6 +322,9 @@ const VERTEX_FANOUT: usize = 3;
 
 #[derive(Clone, Debug)]
 pub struct AppFormulaScorer {
+    pub(super) id: u64,
+    pub(super) reach: expansion::ReachTable,
+    pub(super) decay_pow: [f64; 3],
     weights: EngineWeights,
     scarcity: [f64; RESOURCE_COUNT],
     coverage_value: [f64; RESOURCE_COUNT],
@@ -401,6 +406,8 @@ impl Holdings {
 
 impl AppFormulaScorer {
     pub fn new(board: &SimBoard, topology: &Topology, weights: EngineWeights) -> Self {
+        debug_assert!(topology.vertex_count() <= 128, "vertex masks are 128 bits wide");
+        debug_assert!(topology.edge_count() <= 128, "edge masks are 128 bits wide");
         let mut board_pips = [0.0; RESOURCE_COUNT];
         for resource in Resource::ALL {
             board_pips[resource.index()] = f64::from(board.resource_pips()[resource.index()]);
@@ -524,7 +531,10 @@ impl AppFormulaScorer {
                     .collect()
             })
             .unwrap_or_default();
-        Self {
+        let mut scorer = Self {
+            id: NEXT_SCORER_ID.fetch_add(1, Ordering::Relaxed),
+            reach: expansion::ReachTable::default(),
+            decay_pow: std::array::from_fn(|k| weights.expansion_decay.powf(k as f64)),
             weights,
             scarcity,
             coverage_value,
@@ -532,7 +542,9 @@ impl AppFormulaScorer {
             links,
             hex_pips,
             slot_scales,
-        }
+        };
+        scorer.reach = expansion::ReachTable::new(&scorer, topology.vertex_count());
+        scorer
     }
 
     /// The scales this board's `slotScales` row gives a seat, or 1 everywhere for a seat count the
@@ -664,7 +676,7 @@ impl AppFormulaScorer {
 
     /// The seat's own buildings, folded in ascending vertex order, which is the order the
     /// TypeScript scorer's callers list them in.
-    fn holdings_for_owner(&self, vertex_owner: &[u8], seat: u8) -> Holdings {
+    pub(super) fn holdings_for_owner(&self, vertex_owner: &[u8], seat: u8) -> Holdings {
         self.build_holdings(
             vertex_owner
                 .iter()
@@ -1031,7 +1043,7 @@ impl AppFormulaScorer {
         )
     }
 
-    fn scaled_total_with_diversity(
+    pub(super) fn scaled_total_with_diversity(
         &self,
         holdings: Holdings,
         candidate: Vertex,

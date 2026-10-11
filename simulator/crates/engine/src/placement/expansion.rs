@@ -5,6 +5,7 @@
 //! is the one component that depends on where everybody else's pieces stand.
 
 use super::app_formula::{AppFormulaScorer, Holdings, js_max};
+use crate::rng::mix64;
 use crate::state::EMPTY;
 use crate::topology::{Edge, Vertex};
 
@@ -31,12 +32,264 @@ const NO_EXPANSION: ExpansionValue = ExpansionValue {
     road: None,
 };
 
-// Times this thread entered the walk, so a test can pin that weight 0 never reaches it and the
-// shipped weight does. Thread-local rather than global: tests run in parallel and would otherwise move
-// each other's count.
+#[derive(Clone, Debug)]
+struct ReachEntry {
+    site: Vertex,
+    paid_builds: usize,
+    edges: u128,
+    through: u128,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct ReachTable {
+    entries: Vec<ReachEntry>,
+    spans: Vec<std::ops::Range<usize>>,
+    near_edges: Vec<u128>,
+}
+
+impl ReachTable {
+    pub(super) fn new(scorer: &AppFormulaScorer, vertices: usize) -> Self {
+        let mut table = Self::default();
+        for index in 0..vertices {
+            let vertex = index as Vertex;
+            let start = table.entries.len();
+            let mut near_edges = 0;
+            let is_site = |site| site != vertex && !scorer.vertex_adjacent(vertex).contains(&site);
+            for (first, a) in scorer.steps(vertex) {
+                near_edges |= 1 << first;
+                for (second, b) in scorer.steps(a) {
+                    near_edges |= 1 << second;
+                    let edges = (1 << first) | (1 << second);
+                    if is_site(b) {
+                        table.entries.push(ReachEntry {
+                            site: b,
+                            paid_builds: 1,
+                            edges,
+                            through: 1 << a,
+                        });
+                    }
+                    for (third, c) in scorer.steps(b) {
+                        near_edges |= 1 << third;
+                        for (edge, _) in scorer.steps(c) {
+                            near_edges |= 1 << edge;
+                        }
+                        if is_site(c) {
+                            table.entries.push(ReachEntry {
+                                site: c,
+                                paid_builds: 2,
+                                edges: edges | (1 << third),
+                                through: (1 << a) | (1 << b),
+                            });
+                        }
+                    }
+                }
+            }
+            table.spans.push(start..table.entries.len());
+            table.near_edges.push(near_edges);
+        }
+        table
+    }
+
+    fn sites(&self, candidate: Vertex, occupancy: &Occupancy) -> [u128; 3] {
+        let mut sites = [0; 3];
+        for entry in &self.entries[self.spans[usize::from(candidate)].clone()] {
+            let bit = 1 << entry.site;
+            if bit & occupancy.blocked == 0
+                && entry.edges & occupancy.rival_edges == 0
+                && entry.through & occupancy.rival_vertices == 0
+            {
+                sites[entry.paid_builds] |= bit;
+            }
+        }
+        sites[2] &= !sites[1];
+        sites
+    }
+}
+
+#[derive(Default)]
+pub(super) struct Occupancy {
+    rival_vertices: u128,
+    blocked: u128,
+    rival_edges: u128,
+    own_edges: u128,
+    pub(super) own_vertices: u128,
+}
+
+impl Occupancy {
+    pub(super) fn new(
+        scorer: &AppFormulaScorer,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+    ) -> Self {
+        debug_assert!(vertex_owner.len() <= 128, "vertex masks are 128 bits wide");
+        debug_assert!(edge_owner.len() <= 128, "edge masks are 128 bits wide");
+        let mut masks = Self::default();
+        for (vertex, owner) in vertex_owner
+            .iter()
+            .take(scorer.reach.spans.len())
+            .enumerate()
+        {
+            if *owner == EMPTY {
+                continue;
+            }
+            let bit = 1 << vertex;
+            if *owner == seat {
+                masks.own_vertices |= bit;
+            } else {
+                masks.rival_vertices |= bit;
+            }
+            masks.blocked |= bit;
+            for adjacent in scorer.vertex_adjacent(vertex as Vertex) {
+                masks.blocked |= 1 << adjacent;
+            }
+        }
+        for (edge, owner) in edge_owner.iter().enumerate() {
+            if *owner == seat {
+                masks.own_edges |= 1 << edge;
+            } else if *owner != EMPTY {
+                masks.rival_edges |= 1 << edge;
+            }
+        }
+        masks
+    }
+}
+
+pub(super) struct PriceMemo {
+    contexts: [(u64, u128, u32); 256],
+    prices: Vec<(u64, f64)>,
+    next_serial: u32,
+}
+
+impl Default for PriceMemo {
+    fn default() -> Self {
+        Self {
+            contexts: [(0, 0, 0); 256],
+            prices: vec![(0, 0.0); 16_384],
+            next_serial: 1,
+        }
+    }
+}
+
+impl PriceMemo {
+    pub(super) fn serial(&mut self, scorer: u64, own: u128) -> u32 {
+        let hash = mix64(scorer ^ mix64(own as u64) ^ mix64((own >> 64) as u64).rotate_left(32));
+        let index = hash as usize & (self.contexts.len() - 1);
+        let (held_scorer, held_own, serial) = self.contexts[index];
+        if held_scorer == scorer && held_own == own {
+            return serial;
+        }
+        if self.next_serial == u32::MAX {
+            self.contexts.fill((0, 0, 0));
+            self.prices.fill((0, 0.0));
+            self.next_serial = 1;
+        }
+        let serial = self.next_serial;
+        self.next_serial += 1;
+        self.contexts[index] = (scorer, own, serial);
+        serial
+    }
+
+    fn price(&mut self, key: u64, compute: impl FnOnce() -> f64) -> f64 {
+        let index = (key.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 50) as usize;
+        let entry = &mut self.prices[index];
+        if entry.0 != key {
+            *entry = (key, compute());
+        }
+        entry.1
+    }
+}
+
+thread_local! {
+    pub(super) static PRICE_MEMO: std::cell::RefCell<PriceMemo> =
+        std::cell::RefCell::new(PriceMemo::default());
+}
+
+/// Rows need the sites' value alone, so first-edge road comparisons can be omitted.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn row_value(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+    occupancy: &Occupancy,
+    memo: &mut PriceMemo,
+    serial: u32,
+) -> f64 {
+    if scorer.weights().expansion_weight == 0.0 {
+        return 0.0;
+    }
+    let sites = if occupancy.own_edges & scorer.reach.near_edges[usize::from(candidate)] == 0 {
+        #[cfg(test)]
+        {
+            WALK_CALLS.with(|calls| calls.set(calls.get() + 1));
+            FAST_PATH_CALLS.with(|calls| calls.set(calls.get() + 1));
+        }
+        scorer.reach.sites(candidate, occupancy)
+    } else {
+        SCRATCH.with_borrow_mut(|scratch| {
+            walk(scratch, scorer, vertex_owner, edge_owner, seat, candidate);
+            let mut sites = [0; 3];
+            for site in &scratch.sites {
+                sites[site.paid_builds as usize] |= 1 << site.vertex;
+            }
+            sites[1] &= !sites[0];
+            sites[2] &= !(sites[0] | sites[1]);
+            sites
+        })
+    };
+    let mut rest = sites[0] | sites[1] | sites[2];
+    if rest == 0 {
+        return 0.0;
+    }
+    let mut with_candidate = *holdings;
+    scorer.add_to_holdings(&mut with_candidate, candidate);
+    let mut holdings_total = None;
+    let mut first = f64::NEG_INFINITY;
+    let mut second = f64::NEG_INFINITY;
+    while rest != 0 {
+        let site = rest.trailing_zeros() as Vertex;
+        let bit = 1 << site;
+        rest &= rest - 1;
+        let cost = if sites[0] & bit != 0 {
+            0
+        } else if sites[1] & bit != 0 {
+            1
+        } else {
+            2
+        };
+        let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
+        let price = memo.price(key, || {
+            let total = *holdings_total
+                .get_or_insert_with(|| scorer.holdings_diversity_total(&with_candidate));
+            scorer.site_total_with_holdings(with_candidate, site, total)
+        });
+        let value = price * scorer.decay_pow[cost];
+        if value > first {
+            second = first;
+            first = value;
+        } else if value > second {
+            second = value;
+        }
+    }
+    let total = if first == f64::NEG_INFINITY {
+        0.0
+    } else if second == f64::NEG_INFINITY {
+        first
+    } else {
+        first + second
+    };
+    scorer.weights().expansion_weight * total
+}
+
+// Count candidates on either reach path, so tests pin weight 0 and legal-only row scoring.
+// Thread-local because tests run in parallel.
 #[cfg(test)]
 thread_local! {
     static WALK_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static FAST_PATH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -386,6 +639,140 @@ mod tests {
         )
         .unwrap();
         (topology, board)
+    }
+
+    /// Table reach preserves the walk's cheapest sites through rival roads and settlements.
+    #[test]
+    fn table_reach_matches_walk_without_own_roads() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let mut scratch = Scratch::default();
+        for state in 0..32 {
+            let mut vertices = vec![EMPTY; topology.vertex_count()];
+            let mut edges = vec![EMPTY; topology.edge_count()];
+            if state != 0 {
+                for (index, owner) in vertices.iter_mut().enumerate() {
+                    if (index * 17 + state * 11) % 23 < 2 {
+                        *owner = (index % 3) as u8;
+                    }
+                }
+                for (index, owner) in edges.iter_mut().enumerate() {
+                    if (index * 13 + state * 7) % 19 < 3 {
+                        *owner = 1;
+                    }
+                }
+            }
+            let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+            for candidate in 0..topology.vertex_count() as Vertex {
+                walk(&mut scratch, &scorer, &vertices, &edges, 0, candidate);
+                let mut expected = [0_u128; 3];
+                for site in 0..topology.vertex_count() as Vertex {
+                    if let Some(cost) = scratch
+                        .sites
+                        .iter()
+                        .filter(|entry| entry.vertex == site)
+                        .map(|entry| entry.paid_builds)
+                        .min()
+                    {
+                        expected[cost as usize] |= 1 << site;
+                    }
+                }
+                assert_eq!(
+                    scorer.reach.sites(candidate, &occupancy),
+                    expected,
+                    "state {state} candidate {candidate}"
+                );
+            }
+        }
+    }
+
+    /// An own road in reach selects the original walk, including free travel over long chains.
+    #[test]
+    fn row_expansion_uses_walk_for_nearby_own_roads() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let mut edges = vec![EMPTY; topology.edge_count()];
+        let holdings = Holdings::empty();
+        let mut memo = PriceMemo::default();
+        let serial = memo.serial(scorer.id, 0);
+        for candidate in 0..topology.vertex_count() as Vertex {
+            edges.fill(EMPTY);
+            for (edge, next) in scorer.steps(candidate) {
+                edges[usize::from(edge)] = 0;
+                for (edge, _) in scorer.steps(next) {
+                    edges[usize::from(edge)] = 0;
+                }
+            }
+            let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+            assert_ne!(
+                occupancy.own_edges & scorer.reach.near_edges[usize::from(candidate)],
+                0
+            );
+            let before = walk_calls();
+            let fast_before = FAST_PATH_CALLS.with(std::cell::Cell::get);
+            let value = row_value(
+                &scorer, &holdings, &vertices, &edges, 0, candidate, &occupancy, &mut memo, serial,
+            );
+            assert_eq!(walk_calls(), before + 1);
+            assert_eq!(FAST_PATH_CALLS.with(std::cell::Cell::get), fast_before);
+            let direct = term(&scorer, &holdings, &vertices, &edges, 0, candidate).value;
+            assert_eq!(value.to_bits(), direct.to_bits());
+        }
+    }
+
+    /// A memo hit retains direct price bits and never crosses scorer or holdings identities.
+    #[test]
+    fn price_memo_separates_scorers_and_holdings() {
+        let (topology, board) = fixture();
+        let mut different = default_weights();
+        different.resource_value.wheat *= -2.0;
+        let scorers = [
+            AppFormulaScorer::new(&board, &topology, default_weights()),
+            AppFormulaScorer::new(&board, &topology, different),
+        ];
+        assert_ne!(scorers[0].id, scorers[1].id);
+        assert_eq!(scorers[0].id, scorers[0].clone().id);
+        let mut memo = PriceMemo::default();
+        for scorer in &scorers {
+            for own in [0, 1_u128 << 9, (1_u128 << 9) | (1_u128 << 60)] {
+                let serial = memo.serial(scorer.id, own);
+                assert_eq!(memo.serial(scorer.id, own), serial);
+                let mut holdings = Holdings::empty();
+                for vertex in 0..topology.vertex_count() as Vertex {
+                    if own & (1 << vertex) != 0 {
+                        scorer.add_to_holdings(&mut holdings, vertex);
+                    }
+                }
+                scorer.add_to_holdings(&mut holdings, 3);
+                let total = scorer.holdings_diversity_total(&holdings);
+                for site in 0..topology.vertex_count() as Vertex {
+                    let direct = scorer.site_total_with_holdings(holdings, site, total);
+                    let key = (u64::from(serial) << 16) | (3 << 8) | u64::from(site);
+                    assert_eq!(memo.price(key, || direct).to_bits(), direct.to_bits());
+                    assert_eq!(
+                        memo.price(key, || panic!("expected a memo hit")).to_bits(),
+                        direct.to_bits()
+                    );
+                }
+            }
+        }
+    }
+
+    /// Serial rollover clears prices before reusing an identity, including direct-map collisions.
+    #[test]
+    fn price_memo_clears_on_serial_rollover() {
+        let mut memo = PriceMemo::default();
+        assert_eq!(memo.serial(1, 0), 1);
+        let key = (1_u64 << 16) | (3 << 8) | 4;
+        assert_eq!(memo.price(key, || 17.0), 17.0);
+        for id in 2..=258 {
+            assert_eq!(memo.serial(id, 0), id as u32);
+        }
+        assert!(memo.serial(1, 0) > 1);
+        memo.next_serial = u32::MAX;
+        assert_eq!(memo.serial(999, 0), 1);
+        assert_eq!(memo.price(key, || -23.0), -23.0);
     }
 
     fn default_weights() -> EngineWeights {
