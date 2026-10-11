@@ -15,12 +15,38 @@ export interface PlayerStats {
   vpCards: number
 }
 
+export const DEV_KINDS = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly'] as const
+export type DevKind = (typeof DEV_KINDS)[number]
+
+export interface TurnState {
+  /** Whose turn it is. Advice and recorded actions are for this player. */
+  playerId: string
+  /** This turn's dice total, null before the roll. */
+  rolled: number | null
+  /** A dev card was played this turn. */
+  devPlayed: boolean
+  /** Progress cards (not knights) recorded as played over the whole game: they have left the dev deck. */
+  progressPlayed: Record<Exclude<DevKind, 'knight'>, number>
+}
+
+/** The claimed player's dev cards by type. VP cards stay in PlayerStats.vpCards. */
+export interface DevHand {
+  playerId: string
+  playable: Record<DevKind, number>
+  /** Bought this turn, so not playable until the turn ends. */
+  bought: Record<DevKind, number>
+}
+
 export interface Game {
   schemaVersion: 1
   board: Board
   stats: Record<string, PlayerStats>
   /** Absent in legacy snapshots. Null records an award with no known holder. */
   awards?: AwardHolders
+  /** Absent in games saved before turn tracking: the claimed player's turn, not yet rolled. */
+  turn?: TurnState
+  /** Absent until the claimed player's dev cards are entered by type. */
+  devHand?: DevHand
 }
 
 export interface AwardHolders {
@@ -35,6 +61,10 @@ export type StatCounter = 'handUnknown' | 'devCards' | 'knights' | 'vpCards'
 export function emptyStats(): PlayerStats {
   const hand = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
   return { hand, handUnknown: 0, devCards: 0, knights: 0, vpCards: 0 }
+}
+
+export function devHandTotal(hand: DevHand): number {
+  return DEV_KINDS.reduce((sum, kind) => sum + hand.playable[kind] + hand.bought[kind], 0)
 }
 
 /**
@@ -70,19 +100,28 @@ export const newGame = (board: Board): Game => ({
  */
 export function withBoard(game: Game, board: Board): Game {
   const stats = reconcileStats(game.stats, board.players)
-  if (board === game.board && stats === game.stats) return game
-  return { ...game, board, stats }
+  const dropTurn = game.turn !== undefined && !Object.hasOwn(stats, game.turn.playerId)
+  const dropDevHand = game.devHand !== undefined && !Object.hasOwn(stats, game.devHand.playerId)
+  if (board === game.board && stats === game.stats && !dropTurn && !dropDevHand) return game
+  const next = { ...game, board, stats }
+  if (dropTurn) delete next.turn
+  if (dropDevHand) delete next.devHand
+  return next
 }
 
-function ensureStats(game: Game, playerId: string): PlayerStats {
+export function ensureStats(game: Game, playerId: string): PlayerStats {
   if (!Object.hasOwn(game.stats, playerId)) throw new RangeError(`Unknown player ${playerId}`)
   return game.stats[playerId]
 }
 
-const withPlayerStats = (game: Game, playerId: string, stats: PlayerStats): Game => ({
-  ...game,
-  stats: { ...game.stats, [playerId]: stats },
-})
+function withPlayerStats(game: Game, playerId: string, stats: PlayerStats): Game {
+  const next = { ...game, stats: { ...game.stats, [playerId]: stats } }
+  const hand = game.devHand
+
+  // The public count is authoritative when the entered types no longer fit.
+  if (hand?.playerId === playerId && devHandTotal(hand) > stats.devCards) delete next.devHand
+  return next
+}
 
 // Deltas clamp at zero rather than throwing: steppers in the UI can always
 // fire a decrement without first checking the current count.

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeBoard } from '../../engine/analyze'
+import { inferDraftState } from '../../engine/draft'
 import { addPlayer, createBoard, placeBuilding, randomizeBoard, setMe } from '../../model/board'
 import { boardGrid } from '../../model/layouts'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { draftSlots } from '../draftSlots'
 
-const slotsOf = (board: Board) => draftSlots(board, analyzeBoard(board))
+const slotsOf = (board: Board) => draftSlots(board, inferDraftState(board))
 
 function fourPlayers(): Board {
   let board = createBoard('standard4')
@@ -19,7 +19,7 @@ describe('draftSlots', () => {
   it('reads a blank board as eight unplaced picks with the first one current', () => {
     const slots = slotsOf(fourPlayers())
     expect(slots).toHaveLength(8)
-    expect(slots.every((slot) => !slot.placed && slot.vertex === undefined)).toBe(true)
+    expect(slots.every((slot) => !slot.placed)).toBe(true)
     expect(slots.map((slot) => slot.current)).toEqual([true, false, false, false, false, false, false, false])
   })
 
@@ -34,32 +34,14 @@ describe('draftSlots', () => {
     const board = fourPlayers()
     const vertex = boardGrid('standard4').vertexIds[0]
     const slots = slotsOf(placeBuilding(board, vertex, 'aki', 'settlement'))
-    expect(slots[0]).toMatchObject({ playerId: 'aki', placed: true, vertex, current: false })
+    expect(slots[0]).toMatchObject({ playerId: 'aki', placed: true, current: false })
     expect(slots[1]).toMatchObject({ placed: false, current: true })
     expect(slots.filter((slot) => slot.placed)).toHaveLength(1)
   })
 
-  it('predicts my picks from the top recommendation and the opponents before it from the rollout', () => {
-    const board = randomizeBoard(fourPlayers())
-    const analysis = analyzeBoard(board)
-    expect(analysis.status).toBe('ready')
-    const slots = draftSlots(board, analysis)
-    const top = analysis.recommendations[0]
-    // Cee picks third and sixth.
-    expect(slots[2].vertex).toBe(top.firstPick)
-    expect(slots[5].vertex).toBe(top.plannedSecond[0])
-    // The two opponents ahead of me take the rollout's spots, in draft order.
-    expect(analysis.takenBeforeFirstPick).toHaveLength(2)
-    expect(slots[0].vertex).toBe(analysis.takenBeforeFirstPick[0].vertexId)
-    expect(slots[1].vertex).toBe(analysis.takenBeforeFirstPick[1].vertexId)
-    // Opponent picks after my first have no prediction.
-    expect(slots.slice(3, 5).every((slot) => slot.vertex === undefined)).toBe(true)
-    expect(slots.every((slot) => !slot.placed)).toBe(true)
-  })
-
   it('still binds a settlement upgraded to a city once the draft is complete', () => {
     let board = randomizeBoard(fourPlayers())
-    const order = analyzeBoard(board).draft.sequence
+    const order = inferDraftState(board).sequence
     // Play the whole snake out on vertices spaced well apart.
     const chosen = boardGrid('standard4').vertexIds.filter((_, index) => index % 6 === 0).slice(0, order.length)
     order.forEach((playerId, pick) => {
@@ -68,6 +50,5 @@ describe('draftSlots', () => {
     const upgraded = placeBuilding(board, chosen[0], order[0], 'city')
     const slots = slotsOf(upgraded)
     expect(slots.every((slot) => slot.placed)).toBe(true)
-    expect(slots.map((slot) => slot.vertex)).toEqual(chosen)
   })
 })

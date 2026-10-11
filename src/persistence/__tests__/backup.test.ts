@@ -122,3 +122,26 @@ describe('library backup', () => {
     } finally { write.mockRestore() }
   })
 })
+
+it('a backup round-trips turn and devHand', () => {
+  const tracked = {
+    ...game,
+    turn: { playerId: 'aki', rolled: 8, devPlayed: true, progressPlayed: { roadBuilding: 1, yearOfPlenty: 0, monopoly: 1 } },
+    devHand: {
+      playerId: 'aki',
+      playable: { knight: 2, roadBuilding: 1, yearOfPlenty: 0, monopoly: 0 },
+      bought: { knight: 0, roadBuilding: 0, yearOfPlenty: 1, monopoly: 0 },
+    },
+  }
+  const saved = saveMap('Tracked', tracked)
+  if (!saved.ok) throw new Error(saved.error)
+  const blob = createLibraryBackup([])
+  localStorage.clear()
+  expect(restoreLibraryBackup(blob)).toEqual({ ok: true, count: 1 })
+  expect(loadMap(saved.id)).toEqual({ ok: true, game: tracked })
+  const open = { ...tracked, turn: { ...tracked.turn, progressPlayed: { roadBuilding: 1, yearOfPlenty: 1, monopoly: 1 } } }
+  const unsaved = createLibraryBackup([{ id: 'open', title: 'Open', game: open }])
+  localStorage.clear()
+  expect(restoreLibraryBackup(unsaved)).toEqual({ ok: true, count: 2 })
+  expect(loadMap('open')).toEqual({ ok: true, game: open })
+})

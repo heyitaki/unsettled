@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 48">
-  <!-- The .brand-mark hexes from editor.css: same layout, sizes, and colors. -->
+  <!-- The .brand-mark hexes from editor.css: same layout and colors, at the mark's original size. -->
   <polygon points="14,0 28,8 28,24 14,32 0,24 0,8" fill="#3d7cb7"/>
   <polygon points="36,0 50,8 50,24 36,32 22,24 22,8" fill="#c55a3c"/>
   <polygon points="25,16 39,24 39,40 25,48 11,40 11,24" fill="#d2a13d"/>

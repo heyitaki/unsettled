@@ -6,8 +6,7 @@ use crate::placement::{self, PlacementKind, choose};
 use crate::policy::{self, PolicyKind, PolicyScratch};
 use crate::rng::Streams;
 use crate::rules::{
-    Buildable, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource,
-    RuleConfig,
+    Buildable, FlattenedRules, OwnedPort, PlayerModifiers, RESOURCE_COUNT, Resource, RuleConfig,
 };
 use crate::state::{
     DEV_KNIGHT, DEV_MONOPOLY, DEV_ROAD_BUILDING, DEV_VP, DEV_YEAR_OF_PLENTY, EMPTY, GameState,
@@ -291,6 +290,11 @@ impl GameArena {
             .deck
             .shuffle(&mut self.dev_deck[..self.dev_len]);
         self.dev_cursor = 0;
+    }
+
+    pub(crate) fn set_dev_state(&mut self, removed: usize, played: bool) {
+        self.dev_cursor = removed.min(self.dev_len);
+        self.dev_played_this_turn = played;
     }
 
     pub fn decision_view<'a>(
@@ -1205,7 +1209,7 @@ impl GameArena {
         }
     }
 
-    fn produce(
+    pub(crate) fn produce(
         &mut self,
         board: &SimBoard,
         topology: &Topology,
@@ -1407,7 +1411,12 @@ impl GameArena {
         )
     }
 
-    fn recompute_all_roads(&mut self, topology: &Topology, rules: &RuleConfig, seats: usize) {
+    pub(crate) fn recompute_all_roads(
+        &mut self,
+        topology: &Topology,
+        rules: &RuleConfig,
+        seats: usize,
+    ) {
         for seat in 0..seats {
             self.state.players[seat].longest_road_len = self.road_length(topology, seat);
         }
@@ -1439,7 +1448,12 @@ impl GameArena {
         }
     }
 
-    fn adjust_holder_vp(&mut self, before: Option<usize>, after: Option<usize>, amount: u8) {
+    pub(crate) fn adjust_holder_vp(
+        &mut self,
+        before: Option<usize>,
+        after: Option<usize>,
+        amount: u8,
+    ) {
         if let Some(seat) = before {
             self.state.players[seat].vp_public =
                 self.state.players[seat].vp_public.saturating_sub(amount);

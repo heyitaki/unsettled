@@ -8,15 +8,14 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run --exclude src/engine/__tests__/perf.test.ts && vitest run src/engine/__tests__/perf.test.ts",
+    "test": "vitest run --exclude src/engine/__tests__/perf.test.ts --exclude src/engine/advice/__tests__/advicePerf.test.ts && vitest run src/engine/__tests__/perf.test.ts && vitest run src/engine/advice/__tests__/advicePerf.test.ts",
     "test:e2e": "playwright test",
     "test:pwa": "playwright test --config playwright.production.config.ts",
     "typecheck": "tsc -b"
   },
   "dependencies": {
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tesseract.js": "^7.0.0"
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

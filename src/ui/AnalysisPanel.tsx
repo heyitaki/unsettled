@@ -1,13 +1,16 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Recommendation } from '../engine/analyze'
+import { draftIsComplete } from '../engine/draft'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { useAnalysis } from './useAnalysis'
+import { useDraftSteps } from './useDraftSteps'
 import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
-import { PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { BestMovesPanel } from './BestMovesPanel'
+import { PencilGlyph, PhotoGlyph, RedoGlyph, ResourceGlyph, StructureGlyph, UndoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
@@ -115,6 +118,8 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
 /** No hex carries a tile (spec B5): there is nothing to rank, only ways to fill the board. */
 const boardIsEmpty = (board: Board): boolean => board.hexes.every((hex) => hex.tile === null)
 
+const ordinal = (pick: number): string => `${pick}${['st', 'nd', 'rd'][pick - 1] ?? 'th'}`
+
 /**
  * The ranked picks (mobile spec S5, desktop D4). One rendering for every
  * pointer and both trees: a click or a tap selects a card, which pins its marks
@@ -133,21 +138,20 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const { state, dispatch } = useStore()
   const board = activeTab(state).game.board
   const { analysis, pending, error, retry } = useAnalysis()
+  const { canStepBack, canStepForward, stepBack, stepForward } = useDraftSteps()
   const recommendations = analysis.recommendations.slice(0, LISTED_PICKS)
   const [selectedPick, setSelectedPick] = useState<VertexId | null>(null)
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  // The marks this panel last put on the board. A click elsewhere (the ribbon
-  // marking a pick) replaces them, and the selection that drew them has to drop
-  // with them rather than sit on a card whose marks are gone.
+
+  // External highlights, such as import issues, replace the selected card's marks.
   const own = useRef<readonly HighlightMark[] | null>(null)
   const mark = (marks: HighlightMark[] | null) => {
     own.current = marks
     dispatch({ type: 'highlight', marks })
   }
-  // Marks put up by anyone else (a ribbon slot) count as pinned too: both write
-  // the one highlight slot, so a hover here would otherwise take the ribbon's
-  // selection with it.
+
+  // Hover must leave highlights from other panels in place.
   const pinned = selectedPick !== null
     || selectedLikelyGone
     || (state.highlight !== null && state.highlight !== own.current)
@@ -181,8 +185,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     board.players.find((player) => player.id === id)?.color ?? '#8a7a63'
   const clearHighlight = () => mark(null)
 
-  const pickText = analysis.draft.myPickIndices.map((index) => index + 1).join(' and ')
-  const yourTurn = me !== undefined && analysis.draft.currentPlayerId === me.id
+  const pickText = analysis.draft.myPickIndices.map((index) => ordinal(index + 1)).join(' and ')
   // The picks that fall before my next turn, taken from the modal simulation, so
   // each spot is mutually legal and attributed to the player who takes it.
   const likelyGone = analysis.takenBeforeFirstPick
@@ -236,7 +239,6 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const emptyMessage: Partial<Record<typeof analysis.status, string>> = {
     'no-availability': 'No spot is likely to survive until your pick.',
     'no-production': 'Add number tokens to the board to analyze placements.',
-    complete: 'The draft is finished. Every starting settlement is placed.',
     'me-done': 'Your starting settlements are placed. Waiting on the rest of the draft.',
   }
 
@@ -248,7 +250,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         </p>
       )}
       {analysis.warnings.includes('solo-roster') && (
-        <p className="analysis-warning">Only one player on the board.</p>
+        <p className="analysis-warning quiet">Only one player on the board.</p>
       )}
     </>
   )
@@ -381,23 +383,26 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   )
 
   const empty = boardIsEmpty(board)
-  return (
+  const panel = (
     <section className={className}>
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">{empty ? 'Nothing to rank yet' : 'Draft analysis'}</span>
-          <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
-        </div>
-        {!empty && yourTurn && <span className="turn-pill"><i />Your turn</span>}
+        <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
+        {!empty && (
+          <div className="draft-steps">
+            <button type="button" className="draft-step" aria-label="Step back one pick" title="Step back one pick" disabled={!canStepBack} onClick={stepBack}>
+              <UndoGlyph />
+            </button>
+            <button type="button" className="draft-step" aria-label="Step forward one pick" title="Step forward one pick" disabled={!canStepForward} onClick={stepForward}>
+              <RedoGlyph />
+            </button>
+          </div>
+        )}
       </div>
-      {/* The desktop's ribbon sits under the roster; the phone's block is the
-          one place the draft is read, so the ribbon opens it (spec S2). */}
-      {onBuild && !empty && <DraftRibbon />}
+      {!empty && <DraftRibbon />}
       {empty ? (
         <div className="claim">
           <p className="hint">
-            Nothing has been laid out yet. Import a screenshot and the parser reads the tiles,
-            numbers and players off it, or place them yourself.
+            Import a screenshot to read the tiles, numbers and players off it, or place them yourself.
           </p>
           {/* The desktop's import and tools are already on screen in the left
               rail, so only the phone needs the two ways in from here (spec D4). */}
@@ -429,7 +434,6 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
       ) : (
         <>
           <p className="analysis-context">
-            You are{' '}
             <MenuSelect
               ariaLabel="Which player is you"
               value={board.mePlayerId}
@@ -438,7 +442,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             >
               <strong>{me.name}</strong>
             </MenuSelect>
-            {` · picking ${pickText} of ${analysis.draft.sequence.length}`}
+            {` · Picking ${pickText}`}
           </p>
           {warnings}
           {pending ? <p role="status">Analyzing placements…</p> : error ? (
@@ -449,10 +453,15 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
           ) : body}
         </>
       )}
-      {/* Outside the empty branch: a successful import replaces the board
-          and drops that branch, and the dialog must outlive it to show any
-          parse issues. */}
-      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </section>
+  )
+  // The dialog is the panel's sibling at a fixed position: a successful import replaces the
+  // board, which drops the empty branch or swaps the whole panel for Best moves, and the
+  // dialog must outlive both to show any parse issues.
+  return (
+    <>
+      {!empty && draftIsComplete(board, analysis.draft) ? <BestMovesPanel className={className} /> : panel}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
+    </>
   )
 }

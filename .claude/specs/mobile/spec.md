@@ -1,8 +1,8 @@
-# Portrait phone shell — specification
+# Portrait phone shell: specification
 
 What the portrait-phone UI must become. The working prototype is the normative reference for layout and interaction: **https://claude.ai/code/artifact/86ae14f6-692d-4a86-878d-f23b72bb0895** (source kept at `.claude/specs/mobile/prototype.html`). Where this file and the prototype disagree, this file wins; where this file is silent, copy the prototype.
 
-Scope is the `@media (max-width: 760px)` arm plus the React that arm needs. **Desktop is out of scope** and must not regress. Width alone picks the tree: a landscape phone is wider than 760px and gets the desktop `Workspace`; a desktop window narrower than that gets this shell whatever its orientation or pointer. There is no landscape-phone arm and no tab-gated pane layout (decided 2026-09-03, when the old shared arm was found surfacing a bottom tab bar in narrow desktop windows).
+Scope is the `@media (max-width: 760px)` arm plus the React that arm needs. **Desktop layout is out of scope** and must not regress; the shared Best picks controls in S2 and S5 apply to both trees. Width alone picks the tree: a landscape phone is wider than 760px and gets the desktop `Workspace`; a desktop window narrower than that gets this shell whatever its orientation or pointer. There is no landscape-phone arm and no tab-gated pane layout (decided 2026-09-03, when the old shared arm was found surfacing a bottom tab bar in narrow desktop windows).
 
 ## Why
 
@@ -23,61 +23,63 @@ One board. One scrolling document. No bottom nav.
 - **Maps** and **Players** are full-screen overlays that slide in from the right and return you to exactly where you were. They are screens you go to and come back from, not drawers that share the page.
 - Nothing below the board has its own `overflow-y`. Nothing overflows horizontally except deliberately sideways-scrolling tool rows.
 
-This restores the layout contract already recorded for this arm (one scroller, one paper tone, no nested scrollers, no sticky board) which the tab bar had been sitting on top of.
+This restores the layout contract already recorded for this arm (one scroller, a flat Sand page (`#efe8d9`), no nested scrollers, no sticky board) which the tab bar had been sitting on top of.
 
 ## Surfaces
 
 ### S1 · Header
 
-Two rows. The **brand row** (the three-hex mark and `Unsettled`, the desktop site header's `Brand`) sits at the top of the page and scrolls away with it. The **controls row** under it is sticky: it rides up with the page until it meets the top of the viewport, then stays, opaque (not frosted: scrolled content read through the blur as smudge), taking a ground and a shadow only once the page is sliding under it. Four things in the controls row, left to right:
+Two rows. The **brand row** (the 26px by 25px three-hex mark and 20px Georgia `Unsettled`, the desktop site header's `Brand`) sits at the top of the page and scrolls away with it. The **controls row** under it is sticky: it rides up with the page until it meets the top of the viewport, then takes the page ground and a 1px bottom hairline once the page slides under it. Header buttons have opaque surface grounds and hairline borders, with 10px radii except the pill-shaped player cluster. Four things in the controls row, left to right:
 
-1. **Board title** — the active tab's `title`, preceded by a hex in that board's colour (see B4) and followed by a chevron. The whole thing is one button that opens the Maps screen. This is the phone's document switcher.
-2. **Player dots** — one dot per player in roster order, the claimed player ringed. One button; opens the Players screen.
-3. **Pencil** — toggles build mode (S6). `aria-pressed` reflects the mode.
-4. **Dots menu** — undo, redo, randomize board, export JSON, clear board. Undo and redo sit together as a pair at the top of the menu, the rest below a rule. Clear board is styled as destructive.
+1. **Board title**: the active tab's `title`, preceded by a hex in that board's colour (see B4) and followed by a chevron. The whole thing is one button that opens the Maps screen. This is the phone's document switcher.
+2. **Player dots**: one dot per player in roster order, the claimed player ringed. One button; opens the Players screen. The unclaimed pulse uses a translucent accent ring.
+3. **Pencil**: toggles build mode (S6). `aria-pressed` reflects the mode.
+4. **Dots menu**: undo, redo, randomize board, export JSON, clear board. Undo and redo sit together as a pair at the top of the menu, the rest below a rule. Clear board uses the danger red. The popup is a plain surface sheet with a hairline border, 14px radius and the shared floating shadow.
 
 Undo prints as `Undo`, with no stack-depth count. The count is a quantity the user cannot act on and reads as a badge.
 
 ### S2 · Draft ribbon
 
-A row of numbered circles at the top of the analysis block (S5), under its heading and over the `You are` line, one per pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, the current pick is ringed, and each of your own picks carries a dot beneath it, clear of the current-pick ring. Centred in the block.
+Whenever the board has tiles, a row of numbered circles opens the analysis block (S5) under its heading and above the context line. Each circle is one pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, and the current pick is ringed; nothing marks your own picks, since the cards below are already yours. Centred in the block. Each circle is a button named `Pick 3: Red` that claims its player, with `aria-pressed` reflecting the claim. Tapping the already claimed player does nothing. The slots come from draft inference without analysis predictions.
 
 It leaves with the analysis block in build mode; nothing sits between the header and the board, so entering build mode does not shift the board.
 
 ### S3 · Board frame
 
-The board sits in a rounded sea the full width of the pane, sharing the `--gutter` the sections below use.
+The board sits in a sea frame with a 14px radius and no shadow, the full width of the pane, sharing the `--gutter` the sections below use. The SVG paint stays fixed.
 
 - The frame is **square when the board's own content is wider than it is tall, and takes the content's proportions when it is not**: `aspect-ratio: min(1, contentWidth / contentHeight)`. `standard4` is wider than tall, so it keeps the square that gives it even margins; `extension6` is taller, so it gets a taller frame instead of shrinking to fit a square (which clipped its harbours).
 - Content bounds include the port chips, not just the hexes.
 - No height cap. A cap makes the SVG shrink away from both gutters.
 
+Settlements show the same `i` and `ii` order badges as desktop while the draft is in progress. The badges are decoration and do not intercept taps.
+
 ### S4 · Layout caption
 
-Centred under the board, one line: **`4 player` layout ⌄**, a button opening the layout menu. 11px. No hover or press state.
+Centred under the board, one line: **`4 player` ⌄**, a button opening the layout menu. 11px. No hover or press state.
 
 The `19/19 terrain` and `4 pieces` counts are removed from this line on phones. They are a build-time detail competing with the one control that is here.
 
 ### S5 · Analysis block
 
-The block below the caption, and the reason the page exists.
+The block below the caption uses the opaque surface (`#fbf8f1`), a hairline border (`#ddd3bf`), a 14px radius and no shadow. An off-red (`#cd5037`) is the accent, `#a33d29` the dark accent, `#f3eee2` the neutral tint and `#a33428` the separate danger red. Overlays stay on the surface ground. Controls use 6px radii, rows and cards 10px, and panels, dialogs and sheets 14px; circles and pills stay round. Dialog backdrops are dim without blur, and the shadow sits on the modal wrapper and on the port popover. Georgia headings, the Inter-first body stack and Charter number tokens stay fixed. Inter ships with the app as `src/ui/fonts/Inter.woff2`, cut down to the characters the UI prints (ASCII plus `· × − – — …`), weights 400 to 800, kerning and tabular figures; a new non-ASCII character in a UI string needs the file cut again or it falls back to the system font. Tool and group labels are sentence case, muted, 12px and weight 600. Other chrome text has an 11px floor except fixed-shape badges and numerals; `YOU` and `VP` stay capitals. Buttons keep their explicit phone hover cases without lifting or cast shadows.
 
-- Heading `Draft analysis` / `Best picks`, with a `Your turn` pill on the right when it is your turn.
-- Context line: `You are <name> · picking 3 and 6 of 8`. `<name>` is a picker, so claiming yourself is reachable here as well as from the roster.
-- Ranked recommendation cards. Each card shows the triple, the score, the survival line, the planned follow-up, and the factor pills.
+- Heading `Best picks`, with round `Step back one pick` and `Step forward one pick` icon buttons on the right whenever the board has tiles, including an unclaimed draft. A finished draft shows Best moves (S10) instead, whose heading holds `Undo` and `Redo`. Each button has a 44px touch target. Back removes the last snake picker's last settlement and its touching roads owned by that player, falling back to the last settlement in board order when that picker has none. It is disabled with no settlements, any upgraded building, or more settlements than draft picks. Forward restores the removed pick and roads. Each step is an ordinary board edit; the local forward list survives player claims while the building and road arrays stay identical, and is discarded by a piece edit, a tab switch, or store undo/redo. Forward is disabled when that list is empty or invalid.
+- Context line: `<name> · Picking 3rd and 6th`. `<name>` is a picker, so claiming yourself is reachable here as well as from the roster.
+- Ranked recommendation cards have a surface ground, hairline border and 10px radius. The selected card uses an accent border with a 1px accent ring; the current slot in the draft ribbon keeps its ink ring, and the current slot in the Players screen's draft grid takes the accent border and ring. Each card shows the triple, score, survival line in `--accent-dark`, planned follow-up and factor pills on the neutral tint. The likely-gone block has a solid hairline border and surface ground; placeholders use the neutral tint. Card action strips have a top hairline without a tinted ground.
 - Tapping a card draws its marks on the board **in the claimed player's colour**, with the planned second pick faded behind the first. A card may also carry a third mark, a stub of road along the edge its first pick opens; it is absent only when the pick opens nothing, or when `expansionWeight` is 0, which it has not been since the SP6 adoption put it at 0.1. If the board has been scrolled past, tapping a card scrolls the page back to it (B2).
 - When nothing is selected, all recommendations are marked at once, ranks four and up faded.
 
 **Factor pills are one word each.** `Diversity+recipes+numbers` becomes **`Balance`** and `Starting cards` becomes **`Hand`**; `Production`, `Scarcity`, `Port`, `Robber` and `Expansion` are already one word. This is a change to `displayedFactors` in `src/ui/AnalysisPanel.tsx` and applies on desktop too.
 
-**Empty board (B5).** When no hex on the board carries a tile, this block is replaced entirely: heading becomes `Nothing to rank yet` / `This board is empty`, followed by one line of copy and two stacked buttons, `Import screenshot` (filled) and `Build it by hand` (outline, enters build mode). The trigger is "no tiles", not "wrong layout", so an emptied standard board gets it too. A partly-filled board keeps the existing `no-production` message.
+**Empty board (B5).** When no hex on the board carries a tile, this block is replaced entirely: heading becomes `This board is empty`, followed by `Import a screenshot to read the tiles, numbers and players off it, or place them yourself.` and two stacked buttons, `Import screenshot` (filled) and `Build it by hand` (outline, enters build mode). The trigger is "no tiles", not "wrong layout", so an emptied standard board gets it too. A partly-filled board keeps the existing `no-production` message.
 
 ### S6 · Build mode
 
 The pencil replaces the analysis block with the board tools in the same slot. Everything above the block stays put, so nothing jumps.
 
 - Four sideways-scrolling rows: Terrain, Number token, Structures, Player. The Player row picks whose piece a structure tool places; on desktop that brush is the roster row's swatch (D5, DB3); the phone roster (S8) shows a swatch but does not use it as a brush.
-- `Done` and `Cancel` live inside the block, in a footer strip on its own tint, not floating below it.
+- The block heading is `Board tools`, with no label above it. `Done` and `Cancel` live inside the block, in a footer strip separated by a top hairline with no tinted ground.
 - Randomize, clear, undo and redo are **not** repeated here; they are in the header's dots menu.
 
 **Cancel needs a snapshot (B1).** Board edits commit immediately today, with undo as the way back, so Cancel currently has nothing to restore. Entering build mode must snapshot the tab's game; Cancel restores it, Done keeps it. Both leave build mode.
@@ -86,8 +88,8 @@ The pencil replaces the analysis block with the board tools in the same slot. Ev
 
 Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON`, `Export JSON`, `Back up library` and `Restore library backup`. Backup includes current unsaved games, leaving out an unlinked board still blank. Restore merges without overwriting, skips content already restored under its name or a `name (n)` copy, and refuses to evict boards at the cap. Body, in order:
 
-1. **`Import screenshot`** — the filled accent button, first on the page. It is why the screen was opened.
-2. **`BOARDS (n)`** with a sort control on the right of the label — the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. The board on screen is marked with an accent border and a white ground. Below the rows, a dashed **`New board`** button.
+1. **`Import screenshot`**: the filled accent button, first on the page. It is why the screen was opened.
+2. **`Boards (n)`** with a sort control on the right of the label: the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. Rows have transparent grounds and transparent 1px borders. The board on screen has the neutral tint. Below the rows, a plain, left-aligned, 36px **`New board`** text button.
 
 Every board autosaves into a map (O2), so an open board and its saved map are one thing and the list shows it once. Nothing marks a map as loaded: tapping one already loaded just switches to it. An unsaved board carries no timestamp, because it has nothing saved; the timestamp answers "can I delete this?". The trash deletes the map and drops the board loaded from it in one gesture (an unsaved board is simply dropped, pending edit included). The library keeps the 50 most recently touched boards; older ones leave the list on their own, board and map together (desktop D1). Desktop spec D1 holds the store actions each row reaches.
 
@@ -99,25 +101,37 @@ This screen is the phone's document switcher, so it must reach `tab-select`, `ta
 
 Full-screen overlay. Header: back chevron, `Players`, no dots menu (nothing to import here; the button keeps its slot invisibly rather than shifting the title).
 
-**Roster.** Label reads just `ROSTER`. One row per player, each row doing three things:
+**Roster.** Label reads `Roster`, in muted 12px type at weight 600. One row per player, each row doing three things:
 
-- **Tap the row** to claim that player as you (`setMe`). The claimed row is marked by a dark border, a white ground, and a `YOU` chip. There are no `CLAIM` buttons: four rows each carrying the same button repeated what the label said and left nothing to distinguish the claimed row.
-- **Tap the name** to rename in place. The name button is only as wide as its own text plus a few pixels, with a floor around 30px, so the rest of the row stays a claim target; the field grows with what is typed rather than filling the column. Enter commits, Escape reverts. The name carries a faint dotted underline, matching the `You are <name>` picker, because nothing else distinguishes it from the row it sits in.
+- **Tap the row** to claim that player as you (`setMe`). Rows have transparent grounds and transparent 1px borders. The claimed row has the neutral tint and a `YOU` chip. There are no `CLAIM` buttons: four rows each carrying the same button repeated what the label said and left nothing to distinguish the claimed row.
+- **Tap the name** to rename in place. The name button is only as wide as its own text plus a few pixels, with a floor around 30px, so the rest of the row stays a claim target; the field grows with what is typed rather than filling the column. Enter commits, Escape reverts. The name carries a faint dotted underline, matching the context-line player picker, because nothing else distinguishes it from the row it sits in.
 - **Press and hold, or drag the grip**, to move the row to another seat. The grip starts a drag immediately; anywhere else needs a hold, and movement past a slop threshold before the hold lands cancels it so a scroll still scrolls. The lifted row tracks the finger with no easing while the rows it passes ease out of the way.
 
-Below the rows, a dashed **`Add player`** button matching `New board` on the Maps screen.
+Below the rows, a plain, left-aligned, 36px **`Add player`** text button matching `New board` on the Maps screen.
 
 **Snake draft.** Below the roster, the pick grid, derived from seat order.
 
-**Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `picking 3 and 6 of 8` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
+**Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `Picking 3rd and 6th` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
 
 The points ledger stays on desktop (O1). Below the snake draft, `Award holders` provides the same tie-correction controls as desktop D5 when anyone qualifies for an award.
 
 ### S9 · Toast
 
-Bottom of the screen, above the safe area. With the nav bar gone it no longer has to clear it.
+Bottom of the screen, above the safe area, with an ink ground, surface text and the shared floating shadow.
 
 Save failures stay visible until resolved, with `Retry saving` and `Export backup` actions. A board saved again after it closed says so, and its rescued edits land as a separate board rather than over the newer save. Ordinary notices still dismiss automatically.
+
+### S10 · Best moves
+
+Once every starting settlement is placed the analysis block becomes Best moves: the same component and the same order as desktop D8 (heading, turn order, context line, table, action bar, recommendations, notes), on the main page so the table is in view while choosing a move. The Players screen stays for the roster.
+
+What differs on the phone:
+
+- `Undo` and `Redo` in the heading and every turn-order circle have a 44px touch target.
+- The dice are two rows of six rather than one row of eleven, each 44px tall, and the action bar buttons are 44px tall.
+- A card's cost chips show without selecting it, since there is no hover.
+- The table's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
+- A build or a robber move that needs a spot scrolls the board into view, as selecting a card does (S5).
 
 ## Behaviours that are not CSS
 
@@ -126,7 +140,7 @@ Save failures stay visible until resolved, with `Retry saving` and `Export backu
 | B1 | Build mode snapshots the tab's game on entry; `Cancel` restores it, `Done` keeps it. |
 | B2 | Selecting a recommendation whose board is scrolled out of view returns the page to the board, and only then. Use CSS `scroll-behavior: smooth` plus a plain `scrollTop` assignment; `scrollTo({behavior:'smooth'})` silently no-ops on a nested scroller in Chrome. Honour `prefers-reduced-motion`. |
 | B3 | Roster order is the source of the snake draft. A reorder re-runs the analysis. |
-| B4 | A board's hex colour is a pure function of its name: hash the name, index a fixed palette. The same board wears the same colour in the header and the board list. The palette needs enough distinct hues that two boards open together do not collide — six was not enough in the prototype; ten was. |
+| B4 | A board's hex colour is a pure function of its name: hash the name, index a fixed palette. The same board wears the same colour in the header and the board list. The palette needs enough distinct hues that two boards open together do not collide: six was not enough in the prototype; ten was. |
 | B5 | Empty board (`board.hexes.every(hex => hex.tile === null)`) replaces the analysis block with the two ways to fill it. |
 | B6 | The roster name's hit area is the name, not the column. |
 | B7 | Boards save themselves. Every edit made in this document autosaves the tab into its library map, debounced; an unlinked tab links itself to a new map on its first non-blank edit, so blank new boards never reach the library. Adopting another window's workspace never triggers a write. Undo is the way back from an unwanted change. The explicit save UI (tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row) goes, on desktop too. |
@@ -141,7 +155,7 @@ Do not rebuild these; move or restyle them.
 | Rename a player on name click | the name-bounded field is `InlineRename.tsx`, shared by `PlayerPanel.tsx`, `ListRow.tsx` and `phone/PlayersScreen.tsx` |
 | Reorder players by drag, both mouse DnD and a coarse-pointer hold, plus the grip that lifts at once | `useRowReorder.ts` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP`, shared by `PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
 | Add and remove players | `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`, `addPlayer` / drag-to-trash |
-| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row and empty-board state, and a click on a roster row in `PlayerPanel.tsx` or `phone/PlayersScreen.tsx`, all through `setMe` |
+| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row and context picker, the `DraftRibbon.tsx` buttons, and a click on a roster row in `PlayerPanel.tsx` or `phone/PlayersScreen.tsx`, all through `setMe` |
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, under the `LibraryLists.tsx` body that `MapsPanel.tsx` and `phone/MapsScreen.tsx` both render |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
@@ -150,13 +164,13 @@ Do not rebuild these; move or restyle them.
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
 | Toast | `GlobalNotice.tsx`, rendered by both `Workspace` and `PhoneShell` |
-| Snake draft grid and the ribbon over the board, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` under `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` under `PlayerPanel.tsx` and, on the phone, inside `AnalysisPanel.tsx` |
+| Snake draft grid and ribbon, both off the slot derivation in `draftSlots.ts` | `DraftGrid.tsx` with `DraftLabel` under `phone/PlayersScreen.tsx`; `DraftRibbon.tsx` inside `AnalysisPanel.tsx` in both trees |
 
 ## Decisions
 
 Resolved 2026-09-02; the open questions they close are kept for the record.
 
-**O1 · Points ledger: not on the phone.** The Players screen carries the roster and the snake draft only. The ledger (tally columns, resource steppers, view switch) stays a desktop-only part of `PlayerPanel`. M10 is dropped.
+**O1 · Points ledger: not on the phone.** The Players screen carries the roster and the snake draft only. The ledger (tally columns, view switch) stays a desktop-only part of `PlayerPanel`; its resource steppers were removed from the desktop too, in favour of the Best moves row editor. M10 is dropped.
 
 **O2 · Saving: automatic (B7).** No save control on the phone or on the desktop. Every edit autosaves the tab into its map; the first non-blank edit of an unlinked tab creates the map and links the tab. The desktop tab menu's `Save to library`, the dirty dots, the save-and-close prompt and the `MapsPanel` name field and button are removed.
 

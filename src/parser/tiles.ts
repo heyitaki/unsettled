@@ -1,7 +1,7 @@
 import type { TileKind } from '../model/types'
 import { labelComponents } from './components'
-import { pixel, type RgbaImage } from './image'
-import { classifyTile, type ParserPalette } from './palette'
+import { pixel, type Rgb, type RgbaImage } from './image'
+import { nearest, type ParserPalette } from './palette'
 
 export interface TileComponent {
   tile: TileKind
@@ -13,12 +13,11 @@ export interface TileComponent {
 export function findTileComponents(
   image: RgbaImage,
   palette: ParserPalette,
-  bandTop: number,
-  bandBottom: number,
 ): { components: TileComponent[]; maxArea: number } | null {
+  const entries = Object.entries(palette.tiles) as [TileKind, Rgb][]
   const raw = [...labelComponents(
-    { minX: 0, maxX: image.width - 1, minY: bandTop, maxY: bandBottom },
-    (x, y) => classifyTile(pixel(image, x, y), palette),
+    { minX: 0, maxX: image.width - 1, minY: 0, maxY: image.height - 1 },
+    (x, y) => nearest(pixel(image, x, y), entries, 25),
     { discardAdjacent: true },
   )]
   const aspectPassing = raw.filter((component) => {

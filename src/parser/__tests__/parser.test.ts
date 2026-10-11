@@ -1,95 +1,76 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
 import { parseBoard } from '../../model/serialization'
 import type { Board } from '../../model/types'
 import { parseScreenshot } from '../index'
-import { createNodeTextReader } from './textReader'
+import { colored, load, sorted, toSrgb } from './pillPixels'
 
-import expectedDraft from './expected/board-draft-empty.json'
+import expectedTwo from './expected/settled-2p-first-pick.json'
+import expectedThree from './expected/settled-3p-pick-cards.json'
+import expectedFive from './expected/settled-5p-draft-start.json'
 import expectedEndgame from './expected/board-endgame-pieces.json'
-import expectedThreePlayer from './expected/board-draft-3player.json'
+import endgameRoadOrder from './expected/board-endgame-road-order.json'
 
 function image(path: string) {
   const png = PNG.sync.read(readFileSync(fileURLToPath(new URL(path, import.meta.url))))
   return { width: png.width, height: png.height, data: new Uint8ClampedArray(png.data) }
 }
 
-function normalized(board: Board): Board {
-  return {
-    ...board,
-    ports: [...board.ports].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
-    roads: [...board.roads].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
-    buildings: [...board.buildings].sort((a, b) => a.vertexId.localeCompare(b.vertexId)),
-  }
-}
-
 describe('screenshot parser', () => {
   it.each([
-    ['draft', '../../../fixtures/board-draft-empty.png', expectedDraft],
-    ['endgame', '../../../fixtures/board-endgame-pieces.png', expectedEndgame],
-    ['draft sRGB', './derived/board-draft-empty.srgb.png', expectedDraft],
-    ['endgame sRGB', './derived/board-endgame-pieces.srgb.png', expectedEndgame],
-    // No sRGB twin: the conversion that produced the two derived fixtures is
-    // not recorded in the repo, so this one is pinned raw only.
-    ['three player', '../../../fixtures/board-draft-3player.png', expectedThreePlayer],
-  ])('parses the %s fixture into the pinned board', (_name, path, expected) => {
-    const result = parseScreenshot(image(path))
+    ['settled-2p-first-pick', expectedTwo],
+    ['settled-3p-pick-cards', expectedThree],
+    ['settled-5p-draft-start', expectedFive],
+  ])('parses %s into the pinned board in draft order', (name, expected) => {
+    const result = parseScreenshot(image(`../../../fixtures/${name}.png`))
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(parseBoard(result.game.board).ok).toBe(true)
-    expect(normalized(result.game.board)).toEqual(normalized(expected as Board))
+    expect(result.game.board).toEqual(expected)
+    expect(result.issues).toEqual([])
+  })
+
+  it.each([
+    ['raw', '../../../fixtures/board-endgame-pieces.png'],
+    ['sRGB', './derived/board-endgame-pieces.srgb.png'],
+  ])('preserves the %s endgame board with a roster synthesized from pieces', (_name, path) => {
+    const result = parseScreenshot(image(path))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const board = result.game.board
+    const expected = expectedEndgame as Board
+    expect(parseBoard(board).ok).toBe(true)
+    expect(board.hexes).toEqual(expected.hexes)
+    expect(sorted(board.ports)).toEqual(sorted(expected.ports))
+    expect(board.robber).toEqual(expected.robber)
+
+    // Road insertion order breaks Longest Road ties.
+    const expectedRoads = endgameRoadOrder.map((edgeId) => expected.roads.find((road) => road.edgeId === edgeId)!)
+    expect(colored(board, board.roads)).toEqual(colored(expected, expectedRoads))
+    expect(sorted(colored(board, board.buildings))).toEqual(sorted(colored(expected, expected.buildings)))
+    expect(board.mePlayerId).toBeNull()
+    expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'roster', message: 'Roster was synthesized from detected pieces' }))
+  })
+
+  it('parses converted sRGB pills, counters and pieces like the raw screenshot', () => {
+    const raw = parseScreenshot(load())
+    const converted = parseScreenshot(toSrgb(load()))
+    expect(raw.ok).toBe(true)
+    expect(converted.ok).toBe(true)
+    if (!raw.ok || !converted.ok) return
+    expect(converted.game).toEqual(raw.game)
+    expect(converted.issues).toEqual([])
   })
 
   it('infers the robber-occluded endgame token from the distribution', () => {
     const result = parseScreenshot(image('../../../fixtures/board-endgame-pieces.png'))
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    // The robber hides one token; the standard distribution accounts for every
-    // other number, so the gap at (-3,1) must be a 6 — recovered, not unreadable.
     expect(result.issues.filter((issue) => issue.severity === 'unreadable')).toEqual([])
     const occluded = result.game.board.hexes.find((hex) => hex.coord.q === -3 && hex.coord.r === 1)
     expect(occluded?.numberToken).toBe(6)
-    expect(result.issues).toContainEqual(
-      expect.objectContaining({ stage: 'tokens', ref: '-3,1', severity: 'warning' }),
-    )
+    expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'tokens', ref: '-3,1', severity: 'warning' }))
   })
-
-  it('parses the draft fixture without token review issues', () => {
-    const result = parseScreenshot(image('../../../fixtures/board-draft-empty.png'))
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.issues.filter((issue) =>
-      issue.severity === 'unreadable' || issue.message.toLowerCase().includes('review'),
-    )).toEqual([])
-  })
-})
-
-const tessdata = fileURLToPath(new URL('../../../public/tessdata', import.meta.url))
-
-describe.skipIf(!existsSync(`${tessdata}/eng.traineddata.gz`))('offline name OCR', () => {
-  it('reads both chip rows with the committed local language data', async () => {
-    const reader = await createNodeTextReader(tessdata)
-    try {
-      const cases = [
-        ['../../../fixtures/board-draft-empty.png', ['ben', 'yus', 'jen', 'you', 'emi'], 'p4'],
-        ['../../../fixtures/board-endgame-pieces.png', ['jen', 'you', 'ben', 'emi', 'yus'], 'p2'],
-      ] as const
-      for (const [path, prefixes, me] of cases) {
-        const source = image(path)
-        const result = parseScreenshot(source)
-        expect(result.ok).toBe(true)
-        if (!result.ok) continue
-        const names: string[] = []
-        for (const { rect } of result.nameRects) {
-          names.push((await reader.read(source, rect)).toLowerCase())
-        }
-        expect(names.filter((name, index) => name.startsWith(prefixes[index])).length).toBeGreaterThanOrEqual(3)
-        expect(result.game.board.mePlayerId).toBe(me)
-      }
-    } finally {
-      await reader.terminate?.()
-    }
-  }, 30_000)
 })

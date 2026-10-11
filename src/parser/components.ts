@@ -18,7 +18,7 @@ interface LabelOptions {
   visit?: (x: number, y: number) => void
 }
 
-const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
+export const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
 
 export function* labelComponents<Label>(
   bounds: Bounds,
@@ -52,7 +52,6 @@ export function* labelComponents<Label>(
 
 export function labelPixelSet(
   pixels: ReadonlySet<string>,
-  bounds?: Bounds,
 ): (Component<true> & { points: [number, number][] })[] {
   const unseen = new Set(pixels)
   const components: (Component<true> & { points: [number, number][] })[] = []
@@ -60,11 +59,7 @@ export function labelPixelSet(
     const [x, y] = key.split(',').map(Number)
     unseen.delete(key)
     const points: [number, number][] = []
-    const claim = (nextX: number, nextY: number): boolean => {
-      if (bounds && (nextX < bounds.minX || nextX > bounds.maxX ||
-        nextY < bounds.minY || nextY > bounds.maxY)) return false
-      return unseen.delete(`${nextX},${nextY}`)
-    }
+    const claim = (nextX: number, nextY: number): boolean => unseen.delete(`${nextX},${nextY}`)
     const component = floodComponent<true>(x, y, true, claim, 1, (px, py) => points.push([px, py]))
     components.push({ ...component, points })
   }

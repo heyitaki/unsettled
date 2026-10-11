@@ -1,12 +1,11 @@
 import type { CSSProperties } from 'react'
-import { inferDraftState } from '../engine/draft'
-import type { DraftAnalysis } from '../engine/analyze'
+import { inferDraftState, type DraftState } from '../engine/draft'
 import type { Board } from '../model/types'
 import { readableInk } from './colors'
 import { draftSlots } from './draftSlots'
 
-export function DraftLabel({ analysis }: { analysis: Pick<DraftAnalysis, 'draft'> }) {
-  const { turnIndex, sequence } = analysis.draft
+function DraftLabel({ draft }: { draft: DraftState }) {
+  const { turnIndex, sequence } = draft
   return (
     <div className="group-label">
       <span>Snake draft</span>
@@ -18,17 +17,15 @@ export function DraftLabel({ analysis }: { analysis: Pick<DraftAnalysis, 'draft'
 /**
  * The snake draft on the phone's Players screen (spec S8): one column per
  * player, so the two rounds read as two rows, with the taken picks solid, the
- * current one outlined and the rest dashed. Static on purpose: marking a pick
- * on the board is the ribbon's job.
+ * current one outlined and the rest dashed. Player claiming stays in the
+ * roster and the analysis ribbon.
  */
 export function DraftGrid({ board }: { board: Board }) {
-  const analysis: DraftAnalysis = {
-    draft: inferDraftState(board), status: 'no-production', recommendations: [], takenBeforeFirstPick: [], warnings: [],
-  }
-  const slots = draftSlots(board, analysis)
+  const draft = inferDraftState(board)
+  const slots = draftSlots(board, draft)
   return (
     <div className="draft-section">
-      <DraftLabel analysis={analysis} />
+      <DraftLabel draft={draft} />
       <div className="draft-grid" style={{ '--draft-cols': board.players.length } as CSSProperties}>
         {slots.map((slot, index) => {
           const player = board.players.find((candidate) => candidate.id === slot.playerId)

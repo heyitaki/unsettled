@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
-import { seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
+import { createBoard, placeBuilding, setHexTile } from '../src/model/board'
+import { boardGrid } from '../src/model/layouts'
+import { seedBoard, seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
  * The phone shell, in the one emulation that makes both `(max-width: 760px)`
@@ -84,6 +86,45 @@ test('the analysis block opens with a ribbon of every pick and the board sits in
   await snap(page, 'ribbon-board')
 })
 
+test('ribbon dots claim a player and the heading steps back and forward one pick', async ({ page }) => {
+  await open(page)
+  let board = setHexTile({ ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: 'p1' }, { q: 0, r: 0 }, 'ore')
+  const vertices = boardGrid(board.layout).vertexIds
+  board = placeBuilding(board, vertices[0], 'p1', 'settlement')
+  board = placeBuilding(board, vertices[10], 'p2', 'settlement')
+  await seedBoard(page, board)
+
+  const panel = page.locator('.phone-analysis')
+  const slots = panel.locator('.draft-ribbon-slot')
+  await panel.getByRole('button', { name: 'Pick 2: Blue', exact: true }).click()
+  await expect(panel.locator('.analysis-context')).toHaveText('Blue · Picking 2nd and 7th', { useInnerText: true })
+  await expect(slots.nth(0)).toHaveAttribute('aria-pressed', 'false')
+  await expect(slots.nth(1)).toHaveAttribute('aria-pressed', 'true')
+  await expect(slots.nth(6)).toHaveAttribute('aria-pressed', 'true')
+  await expect(panel.locator('.draft-ribbon-slot[aria-pressed="true"]')).toHaveCount(2)
+
+  const back = panel.getByRole('button', { name: 'Step back one pick' })
+  const forward = panel.getByRole('button', { name: 'Step forward one pick' })
+  for (const button of [back, forward]) {
+    const box = (await button.boundingBox())!
+    expect(box.width).toBeGreaterThanOrEqual(44)
+    expect(box.height).toBeGreaterThanOrEqual(44)
+  }
+  const blue = page.locator('.board-canvas g[fill="#3063ba"]')
+  await expect(blue).toHaveCount(1)
+  const placement = await blue.getAttribute('transform')
+  await expect(forward).toBeDisabled()
+  await back.click()
+  await expect(blue).toHaveCount(0)
+  await panel.getByRole('button', { name: 'Pick 1: Red', exact: true }).click()
+  await expect(forward).toBeEnabled()
+  await forward.click()
+  await expect(blue).toHaveCount(1)
+  await expect(blue).toHaveAttribute('transform', placement!)
+  await expect(forward).toBeDisabled()
+  await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Red')
+})
+
 test('the six-player layout gets a taller frame from an unmoved top and a bare caption', async ({ page }) => {
   await open(page)
   const frameTop = (await page.locator('.board-canvas').boundingBox())!.y
@@ -108,7 +149,6 @@ async function seedUnclaimedRoster(page: Page) {
 test('an empty board offers the two ways to fill it', async ({ page }) => {
   await open(page)
   const block = page.locator('.phone-analysis')
-  await expect(block.locator('.eyebrow')).toHaveText('Nothing to rank yet')
   await expect(block.locator('h2')).toHaveText('This board is empty')
   await expect(block.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
   const build = block.getByRole('button', { name: 'Build it by hand' })
@@ -134,7 +174,8 @@ test('an import with parse issues keeps its dialog over the new board, and close
   // survive that to show the warning.
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
   await expect(page.locator('.phone-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
-  await expect(block.locator('h2')).toHaveText('Best picks')
+  // The fixture is a finished draft, so the block is the move adviser.
+  await expect(block.locator('h2')).toHaveText('Best moves')
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.issue-list button.warning')).not.toHaveCount(0)
   await snap(page, 'import-issues')
@@ -160,7 +201,7 @@ test('a filled board asks who you are, and a tapped swatch claims that seat', as
   await expect(swatches).toHaveCount(4)
   await snap(page, 'claim-row')
   await swatches.first().click()
-  await expect(block.locator('.analysis-context')).toHaveText(/^You are/)
+  await expect(block.locator('.analysis-context')).toHaveText('Red · Picking 1st and 8th', { useInnerText: true })
   await expect(page.locator('.phone-dot').first()).toHaveClass(/\bme\b/)
   await expect(block.locator('.analysis-row').first()).toBeVisible()
   await snap(page, 'best-picks')
@@ -180,7 +221,7 @@ test.describe('reveal on select', () => {
     await page.getByRole('button', { name: 'Board options' }).click()
     await page.getByRole('menuitem', { name: 'Randomize board' }).click()
     const block = page.locator('.phone-analysis')
-    await expect(block.locator('.analysis-context')).toHaveText(/^You are/)
+    await expect(block.locator('.analysis-context')).toHaveText('aki · Picking 1st and 2nd', { useInnerText: true })
     const marks = page.locator('.vertex-highlight')
     await expect(marks).toHaveCount(5)
     await expect(page.locator('.vertex-highlight.faded')).toHaveCount(2)
@@ -286,7 +327,7 @@ test.describe('build mode', () => {
     await expect(pencil).toHaveAttribute('aria-pressed', 'false')
     const analysis = page.locator('.phone-analysis')
     await expect(analysis.locator('h2')).toHaveText('Best picks')
-    await expect(analysis.locator('.analysis-context')).toHaveText(/^You are/)
+    await expect(analysis.locator('.analysis-context')).toHaveText('aki · Picking 1st and 2nd', { useInnerText: true })
     await page.getByRole('button', { name: 'Board options' }).click()
     await expect(page.getByRole('menuitem', { name: 'Undo' })).toBeEnabled()
     await page.keyboard.press('Escape')
@@ -457,8 +498,8 @@ test.describe('maps screen', () => {
     await expect(screen).toBeVisible()
     // A screenshot that parses becomes the active board and takes the screen with it.
     await screen.getByRole('button', { name: 'Import screenshot' }).click()
-    await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-draft-3player.png'))
-    await expect(page.locator('.phone-title')).toHaveText('board-draft-3player', { timeout: 30_000 })
+    await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/settled-3p-pick-cards.png'))
+    await expect(page.locator('.phone-title')).toHaveText('settled-3p-pick-cards', { timeout: 30_000 })
     await expect(screen).toHaveCount(0)
     await expect(importDialog).toHaveCount(0)
   })
@@ -490,7 +531,7 @@ test.describe('players screen', () => {
     await expect(rows.nth(1).locator('.you-chip')).toBeVisible()
     await expect(rows.nth(0).locator('.you-chip')).toBeHidden()
     await expect(page.locator('.phone-dot').nth(1)).toHaveClass(/\bme\b/)
-    await expect(context).toHaveText(/picking 2 and 7 of 8/)
+    await expect(context).toHaveText(/Picking 2nd and 7th/)
 
     await rows.nth(1).getByRole('button', { name: 'Rename Blue', exact: true }).click()
     const field = screen.getByRole('textbox', { name: 'Rename Blue' })
@@ -524,7 +565,7 @@ test.describe('players screen', () => {
     await expect(screen.locator('.roster-trash')).toHaveCount(0)
     await expect(rows.nth(2)).toHaveClass(/\bme\b/)
     await expect(page.locator('.draft-ribbon-slot').first()).toHaveCSS('background-color', 'rgb(255, 255, 255)')
-    await expect(context).toHaveText(/picking 3 and 6 of 8/)
+    await expect(context).toHaveText(/Picking 3rd and 6th/)
     await expect(screen.locator('.draft-grid-name').first()).toHaveText('White')
     await snap(page, 'players-reordered')
 

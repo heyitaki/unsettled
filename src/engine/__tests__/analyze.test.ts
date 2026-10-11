@@ -370,7 +370,18 @@ describe('joint draft analysis', () => {
     // aki picks first and again last, so its first settlement is worth the pair it leads to; on
     // this board that is not the vertex that scores best alone, which is what makes the case bite.
     expect(pick).not.toBe(greedy)
-    expect(analysis.takenBeforeFirstPick[0]).toMatchObject({ vertexId: pick, playerId: 'aki' })
+    // Asked of the window itself: the likely-gone line takes aki's own ranking, not this shortcut.
+    const { taken } = simulateWindowDetailed(
+      ctx,
+      board,
+      [{ playerId: 'aki', receivesGrant: false, hasLaterPick: true }],
+      new Map(),
+      new Set(),
+      new Set(),
+      () => 0,
+    )
+    expect(taken).toEqual([pick])
+    expect(analysis.takenBeforeFirstPick[0]).toMatchObject({ playerId: 'aki' })
     expect(analysis.recommendations.every((entry) => entry.survival > 0)).toBe(true)
   })
 
@@ -411,8 +422,16 @@ describe('joint draft analysis', () => {
     const { pick, mate, ownScore } = pairAwarePick(ctx, board, 'aki', new Set(), [])
     expect(mate).not.toBeNull()
     expect(ownScore(pick)).toBeLessThan(ownScore(mate!))
-    const analysis = analyzeBoard(board, { rollouts: 1, weights })
-    expect(analysis.takenBeforeFirstPick[0]).toMatchObject({ vertexId: pick, playerId: 'aki' })
+    const { taken } = simulateWindowDetailed(
+      ctx,
+      board,
+      [{ playerId: 'aki', receivesGrant: false, hasLaterPick: true }],
+      new Map(),
+      new Set(),
+      new Set(),
+      () => 0,
+    )
+    expect(taken[0]).toBe(pick)
   })
 
   it('conditions a one-pick remainder on the existing settlement', () => {

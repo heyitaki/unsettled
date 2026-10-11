@@ -12,13 +12,14 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react'
-import { createBoard, renamePlayer, setMe } from '../model/board'
+import { createBoard } from '../model/board'
 import { newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
 import type {
   Board,
   BuildingTier,
+  EdgeId,
   Resource,
   TileKind,
 } from '../model/types'
@@ -67,8 +68,14 @@ export interface HighlightMark {
   color?: string
   label?: string
   faded?: boolean
-  kind?: 'road'
+  kind?: 'road' | 'hex'
 }
+
+export type PickTarget =
+  | { want: 'vertex'; piece: 'settlement' | 'city' }
+  | { want: 'edge'; edges?: readonly EdgeId[] }
+  | { want: 'hex' }
+export type BoardPick = PickTarget & { ref?: string }
 
 export interface TabState {
   id: string
@@ -100,6 +107,7 @@ export interface StoreState {
   // when the same message text is shown twice in a row.
   noticeSeq: number
   highlight: readonly HighlightMark[] | null
+  pick?: BoardPick | null
   // Bumped whenever the library changes, here or in another document. The maps
   // blob lives outside React, so panels that read it re-render off this.
   mapsRevision: number
@@ -111,13 +119,15 @@ export type StoreAction =
   // whole next Game via commit-game. Both share one undo stack of games.
   | { type: 'commit'; board: Board }
   | { type: 'commit-game'; game: Game }
-  | { type: 'import-names'; id: string; original: Board; names: { playerId: string; name: string }[] }
   | { type: 'tool'; tool: Tool }
   | { type: 'active-player'; playerId: string | null }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
   | { type: 'highlight'; marks: readonly HighlightMark[] | null }
+  | { type: 'pick'; target: PickTarget }
+  | { type: 'pick-clear' }
+  | { type: 'picked'; ref: string }
   | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -242,6 +252,7 @@ function initialState(): StoreState {
     notice: restored.ok ? restored.warning ?? null : null,
     noticeSeq: 0,
     highlight: null,
+    pick: null,
     mapsRevision: 0,
   }
 }
@@ -283,34 +294,6 @@ function unusedBoardTitle(tabs: TabState[]): string {
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
-    case 'import-names': {
-      const index = state.tabs.findIndex((tab) => tab.id === action.id)
-      if (index < 0) return state
-      const tab = state.tabs[index]
-      const originalNames = new Map(action.original.players.map((player) => [player.id, player.name]))
-      const named = (game: Game): Game => {
-        let board = game.board
-        for (const { playerId, name } of action.names) {
-          const player = board.players.find((candidate) => candidate.id === playerId)
-          if (!player || player.name !== originalNames.get(playerId)) continue
-          board = renamePlayer(board, playerId, name)
-          if (name.trim().toLowerCase() === 'you' && board.mePlayerId === action.original.mePlayerId) {
-            board = setMe(board, playerId)
-          }
-        }
-        return withBoard(game, board)
-      }
-      // The whole history, not only the live game: the names arrive outside the
-      // undo stack, and an undo of an unrelated edit must not take them back.
-      const game = named(tab.game)
-      const past = tab.past.map(named)
-      const future = tab.future.map(named)
-      const same = (a: readonly Game[], b: readonly Game[]) => a.every((entry, i) => entry === b[i])
-      if (game === tab.game && same(past, tab.past) && same(future, tab.future)) return state
-      const tabs = [...state.tabs]
-      tabs[index] = { ...tab, game, past, future }
-      return { ...state, tabs }
-    }
     case 'commit':
       return updateActiveTab(state, (tab) => {
         const game = trackAwards(tab.game, withBoard(tab.game, action.board))
@@ -373,10 +356,15 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
       return { ...state, notice: action.message, noticeSeq: state.noticeSeq + 1 }
     case 'highlight':
       // Marks are rebuilt per hover, so only the identical value (null to null,
-      // most of all) is a no-op; sweeping the draft ribbon clears an already
-      // empty highlight once per slot, and each of those would otherwise
-      // re-render every consumer of the store.
+      // most of all) is a no-op; clearing an already empty highlight would
+      // otherwise re-render every consumer of the store.
       return action.marks === state.highlight ? state : { ...state, highlight: action.marks }
+    case 'pick':
+      return { ...state, pick: action.target }
+    case 'pick-clear':
+      return state.pick == null ? state : { ...state, pick: null }
+    case 'picked':
+      return state.pick == null || state.pick.ref !== undefined ? state : { ...state, pick: { ...state.pick, ref: action.ref } }
     case 'tab-add': {
       const tab = createTab({
         game: action.game,
@@ -388,11 +376,12 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
         ...state,
         tabs: [...state.tabs, tab],
         activeTabId: tab.id,
+        pick: null,
       }
     }
     case 'tab-select':
       if (!state.tabs.some((tab) => tab.id === action.id)) return state
-      return action.id === state.activeTabId ? state : { ...state, activeTabId: action.id }
+      return action.id === state.activeTabId ? state : { ...state, activeTabId: action.id, pick: null }
     case 'tab-rename': {
       if (action.title.trim().length === 0) return state
       const index = state.tabs.findIndex((tab) => tab.id === action.id)
@@ -428,13 +417,14 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
       const tabs = state.tabs.filter((_, tabIndex) => tabIndex !== index)
       if (tabs.length === 0) {
         const tab = createTab()
-        return { ...state, tabs: [tab], activeTabId: tab.id }
+        return { ...state, tabs: [tab], activeTabId: tab.id, pick: null }
       }
       if (action.id !== state.activeTabId) return { ...state, tabs }
       return {
         ...state,
         tabs,
         activeTabId: (tabs[index] ?? tabs.at(-1)).id,
+        pick: null,
       }
     }
     case 'workspace-adopt': {
@@ -492,6 +482,7 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
       return {
         ...state,
         tabs: settled,
+        pick: null,
         activeTabId: settled.some((tab) => tab.id === state.activeTabId)
           ? state.activeTabId
           : settled[0].id,

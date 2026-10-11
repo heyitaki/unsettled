@@ -66,8 +66,7 @@ export interface RowReorder {
    * follows the pointer on the hold path, and on the native path (where the
    * browser owns the pointer and draws its own drag image) sits in the slot it
    * would land in, so its own slot is free for the rows sliding into it.
-   * Measured rather than assumed, because a list can put a block (the brush
-   * player's steppers) between two rows and space them unevenly.
+   * Measured rather than assumed, so a list is free to space its rows unevenly.
    */
   offsetFor: (index: number) => number
   rowProps: (id: string) => RowHandlers

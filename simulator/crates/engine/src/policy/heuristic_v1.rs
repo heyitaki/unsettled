@@ -594,7 +594,7 @@ pub fn discard(
 /// positive — a 2:1 trade from eight cards to seven pays one card against roughly two expected
 /// — and never out of the goal's own cost. The received resource is the most goal-needed one,
 /// then the hardest to produce, then the scarcest in the bank.
-fn shed_trade(
+pub(crate) fn shed_trade(
     view: &DecisionView<'_>,
     params: &HeuristicParams,
     goal: Option<Goal>,
@@ -733,6 +733,29 @@ pub fn vertex_score(
     params: &HeuristicParams,
     kind: BuildKind,
 ) -> f32 {
+    vertex_terms(view, vertex, params, kind).total()
+}
+
+pub(crate) struct VertexTerms {
+    pub(crate) production: f32,
+    pub(crate) scarcity: f32,
+    pub(crate) diversity: f32,
+    pub(crate) port: f32,
+    pub(crate) expansion: f32,
+}
+
+impl VertexTerms {
+    pub(crate) fn total(&self) -> f32 {
+        self.production + self.scarcity + self.diversity + self.port + self.expansion
+    }
+}
+
+pub(crate) fn vertex_terms(
+    view: &DecisionView<'_>,
+    vertex: u8,
+    params: &HeuristicParams,
+    kind: BuildKind,
+) -> VertexTerms {
     let board_totals = view.board_resource_pips();
     let own = view.production_pips(view.observer());
     let mut production = [0_u16; RESOURCE_COUNT];
@@ -790,11 +813,13 @@ pub fn vertex_score(
             .count() as f32,
         BuildKind::City => 0.0,
     };
-    f32::from(raw) * params.production_weight
-        + scarcity * params.scarcity_weight * 10.0
-        + diversity * params.diversity_bonus
-        + port_synergy * params.port_weight
-        + expansion * params.expansion_weight
+    VertexTerms {
+        production: f32::from(raw) * params.production_weight,
+        scarcity: scarcity * params.scarcity_weight * 10.0,
+        diversity: diversity * params.diversity_bonus,
+        port: port_synergy * params.port_weight,
+        expansion: expansion * params.expansion_weight,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -946,7 +971,7 @@ fn best_road(
     best
 }
 
-fn expansion_road_score(
+pub(crate) fn expansion_road_score(
     view: &DecisionView<'_>,
     first: u8,
     params: &HeuristicParams,
@@ -988,7 +1013,7 @@ fn expansion_road_score(
 /// components into `a + b + 1`, and every seat starts setup with two separate road stubs, so that
 /// tighter-looking bound is false and would skip roads that win the card outright. The slack of 2
 /// keeps the near-miss progress branch of `longest_road_value` reachable.
-fn longest_road_reachable(view: &DecisionView<'_>, added: u8, gated: Gated<'_>) -> bool {
+pub(crate) fn longest_road_reachable(view: &DecisionView<'_>, added: u8, gated: Gated<'_>) -> bool {
     if view.longest_road_holder() == Some(view.observer()) {
         return gated.is_some_and(|(ctx, _)| denial::should_defend(ctx).is_some());
     }
@@ -1012,7 +1037,7 @@ fn longest_road_target(view: &DecisionView<'_>) -> u8 {
 /// seat's current length, and it wins the card at or above the target. Every length beyond the
 /// target scores the same, so the search may stop there -- which is precisely where a long
 /// late-game network gets expensive to walk.
-fn road_length_cap(view: &DecisionView<'_>, gated: Gated<'_>) -> u8 {
+pub(crate) fn road_length_cap(view: &DecisionView<'_>, gated: Gated<'_>) -> u8 {
     let current = view.longest_road_len(view.observer());
     let base = longest_road_target(view).max(current.saturating_add(1));
     match gated {
@@ -1026,7 +1051,7 @@ fn road_length_cap(view: &DecisionView<'_>, gated: Gated<'_>) -> u8 {
 /// How far below the card's threshold `longest_road_value` still pays a progress bonus.
 const PROGRESS_SLACK: u8 = 2;
 
-fn longest_road_value(
+pub(crate) fn longest_road_value(
     view: &DecisionView<'_>,
     new_length: u8,
     gated: Gated<'_>,
@@ -1436,13 +1461,13 @@ pub(crate) fn missing_units(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_C
         .sum()
 }
 
-fn trade_completes(view: &DecisionView<'_>, goal: Buildable, trade: Action) -> bool {
+pub(crate) fn trade_completes(view: &DecisionView<'_>, goal: Buildable, trade: Action) -> bool {
     view.costs(goal)
         .iter()
         .any(|cost| trade_completes_cost(view, cost, trade))
 }
 
-fn trade_completes_cost(
+pub(crate) fn trade_completes_cost(
     view: &DecisionView<'_>,
     cost: &[u8; RESOURCE_COUNT],
     trade: Action,

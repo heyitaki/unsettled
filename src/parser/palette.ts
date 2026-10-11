@@ -1,4 +1,4 @@
-import type { Resource } from '../model/types'
+import { PLAYER_PALETTE, type Player, type Resource } from '../model/types'
 import {
   colorDistanceSquared,
   type Rgb,
@@ -9,10 +9,12 @@ export interface ParserPalette {
   tiles: Record<Resource | 'desert', Rgb>
   tokenCream: Rgb
   chipCream: Rgb
+  pillHighlight: Rgb
+  counterInk: Rgb
   inkDark: Rgb
   inkRed: Rgb
   robberBlack: Rgb
-  player: Record<'red' | 'blue' | 'orange' | 'white' | 'green', Rgb>
+  player: Record<keyof typeof PLAYER_PALETTE, Rgb>
 }
 
 export function nearest<Entry>(color: Rgb, entries: readonly (readonly [Entry, Rgb])[], tolerance: number): Entry | null {
@@ -32,7 +34,11 @@ export function classifyTile(color: Rgb, palette: ParserPalette): Resource | 'de
   return nearest(color, Object.entries(palette.tiles) as [Resource | 'desert', Rgb][], 25)
 }
 
-export type PlayerSeed = keyof ParserPalette['player']
+type PlayerSeed = keyof ParserPalette['player']
+
+export function playerFromSeed(id: string, seed: PlayerSeed): Player {
+  return { id, name: seed[0].toUpperCase() + seed.slice(1), color: PLAYER_PALETTE[seed] }
+}
 
 export function classifyPlayerSeed(color: Rgb, palette: ParserPalette): PlayerSeed | null {
   return nearest(color, Object.entries(palette.player) as [PlayerSeed, Rgb][], 22)

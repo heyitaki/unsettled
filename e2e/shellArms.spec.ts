@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
+import { createBoard, draftOrder, placeBuilding, placeRoad, setHexTile } from '../src/model/board'
+import { edgeEndpointVertexIds } from '../src/model/coords'
+import { boardGrid } from '../src/model/layouts'
 import { LISTED_PICKS } from '../src/ui/restMarks'
-import { seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
+import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
  * The `Workspace` tree, which every viewport wider than 760px gets (spec B8),
@@ -92,14 +95,20 @@ test.describe('desktop', () => {
     expect(nativeDialogs).toBe(0)
   })
 
-  test('draws the draft ribbon over a board wearing the resting marks, under a bare caption', async ({ page }) => {
+  test('claims a player from the draft ribbon while the board wears resting marks', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('footer')).toHaveCount(0)
+    await seedUnclaimedRoster(page)
     await randomize(page)
+    await page.locator('.claim-row button').first().click()
 
     // Two picks per player, the first one up (spec D4).
     const players = await page.locator('.player-list .roster-row').count()
-    const slots = page.locator('.draft-ribbon .draft-ribbon-slot')
+    const ribbon = page.locator('.analysis-panel .draft-ribbon')
+    const slots = ribbon.locator('.draft-ribbon-slot')
+    await expect(ribbon).toHaveCount(1)
+    await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(0)
+    await page.mouse.move(0, 0)
     await expect(slots).toHaveCount(players * 2)
     await expect(slots.first()).toHaveClass(/\bnow\b/)
 
@@ -114,26 +123,93 @@ test.describe('desktop', () => {
     expect(caption).not.toMatch(/terrain|pieces/)
     await snap(page, 'desktop-ribbon')
 
-    // Nothing is hovered, so the slot's own mark is all the board carries.
-    await slots.first().click()
-    await expect(slots.first()).toHaveClass(/\bselected\b/)
-    await expect(marks).toHaveCount(1)
+    await slots.nth(1).click()
+    await expect(page.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
+    await expect(page.locator('.analysis-context')).toHaveText('Blue · Picking 2nd and 7th', { useInnerText: true })
+    await expect(slots.nth(0)).toHaveAttribute('aria-pressed', 'false')
+    await expect(slots.nth(1)).toHaveAttribute('aria-pressed', 'true')
+    await expect(slots.nth(6)).toHaveAttribute('aria-pressed', 'true')
+    await expect(ribbon.locator('[aria-pressed="true"]')).toHaveCount(2)
+    await expect(slots.nth(1)).toHaveAccessibleName('Pick 2: Blue')
 
-    // Clicking the same slot again drops the mark back to the resting ones.
     await slots.first().click()
-    await expect(slots.first()).not.toHaveClass(/\bselected\b/)
+    await expect(page.locator('.analysis-context .menu-trigger strong')).toHaveText('Red')
     await expect(marks).toHaveCount(LISTED_PICKS)
-
-    // A card selected in Best picks owns the board's marks, so the ribbon's
-    // outline goes with them; a hover over a card must not take them (spec DB2).
-    await slots.first().click()
-    await expect(slots.first()).toHaveClass(/\bselected\b/)
-    await page.locator('.analysis-row').first().hover()
-    await expect(slots.first()).toHaveClass(/\bselected\b/)
-    await expect(marks).toHaveCount(1)
-    await page.locator('.analysis-row').first().locator('.analysis-row-select').click()
-    await expect(slots.first()).not.toHaveClass(/\bselected\b/)
+    await page.locator('.analysis-row-select').first().click()
+    await expect(page.locator('.analysis-row.current')).toHaveCount(1)
     await expect(marks).toHaveCount(2)
+
+    // Claiming the same player leaves the pinned card alone.
+    await slots.first().click()
+    await expect(slots.first()).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('.analysis-row.current')).toHaveCount(1)
+    await expect(marks).toHaveCount(2)
+  })
+
+  test('steps back and forward through a draft without a claimed player', async ({ page }) => {
+    await page.goto('')
+    await expect(page.locator('.workspace')).toBeVisible()
+    let board = setHexTile({ ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: null }, { q: 0, r: 0 }, 'ore')
+    const grid = boardGrid(board.layout)
+    const vertices = grid.vertexIds.filter((_, index) => index % 6 === 0).slice(0, 8)
+    // One pick short of done: a finished draft shows Best moves, which has no step buttons.
+    draftOrder(board).slice(0, 7).forEach((playerId, index) => {
+      board = placeBuilding(board, vertices[index], playerId, 'settlement')
+    })
+    const edge = grid.edgeIds.find((edgeId) => edgeEndpointVertexIds(edgeId).includes(vertices[6]))!
+    board = placeRoad(board, edge, 'p2')
+    await seedBoard(page, board)
+
+    const panel = page.locator('.analysis-panel')
+    const back = panel.getByRole('button', { name: 'Step back one pick' })
+    const forward = panel.getByRole('button', { name: 'Step forward one pick' })
+    const blue = page.locator('.board-canvas g[fill="#3063ba"]')
+    const orange = page.locator('.board-canvas g[fill="#e58331"]')
+    const road = page.locator('.board-canvas rect[fill="#3063ba"]')
+    await expect(panel.locator('.analysis-context')).toHaveCount(0)
+    await expect(back).toBeEnabled()
+    await expect(forward).toBeDisabled()
+    await expect(blue).toHaveCount(2)
+    await expect(road).toHaveCount(1)
+    const placements = await blue.evaluateAll((pieces) => pieces.map((piece) => piece.getAttribute('transform')))
+    await back.click()
+    await expect(blue).toHaveCount(1)
+    await expect(road).toHaveCount(0)
+    await back.click()
+    await expect(orange).toHaveCount(1)
+    await forward.click()
+    await expect(orange).toHaveCount(2)
+
+    await panel.getByRole('button', { name: 'Pick 2: Blue', exact: true }).click()
+    await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
+    await expect(forward).toBeEnabled()
+    await forward.click()
+    await expect(blue).toHaveCount(2)
+    await expect(road).toHaveCount(1)
+    expect(await blue.evaluateAll((pieces) => pieces.map((piece) => piece.getAttribute('transform')))).toEqual(placements)
+    await expect(forward).toBeDisabled()
+
+    await back.click()
+    await panel.getByRole('button', { name: 'Pick 1: Red', exact: true }).click()
+    await page.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Undo' }).click()
+    await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
+    await expect(forward).toBeDisabled()
+    await page.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Redo' }).click()
+    await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Red')
+    await expect(forward).toBeDisabled()
+
+    await back.click()
+    await expect(forward).toBeEnabled()
+    await page.getByRole('button', { name: 'New board' }).click()
+    await page.getByRole('button', { name: 'Switch to Board 1', exact: true }).click()
+    await expect(forward).toBeDisabled()
+    await back.click()
+    await expect(forward).toBeEnabled()
+    await randomize(page)
+    await expect(back).toBeDisabled()
+    await expect(forward).toBeDisabled()
   })
 
   test('the tool heading is a dots menu like the phone header, and the labels carry the counts the caption lost', async ({ page }) => {
@@ -185,11 +261,10 @@ test.describe('desktop', () => {
     await expect(others).toBeHidden()
     await page.keyboard.press('Escape')
 
-    // The dots menu is the phone's sheet, tail and all (spec D6 menus).
+    // The dots menu is the phone's sheet (spec D6 menus).
     await page.getByRole('button', { name: 'Import and export files' }).click()
     const sheet = page.getByRole('menu', { name: 'Import and export files' })
     await expect(sheet).toHaveClass(/\bsheet-menu\b/)
-    await expect(sheet.locator('.menu-tail')).toBeVisible()
     await expect(sheet.getByRole('menuitem').first().locator('.menu-icon')).toBeVisible()
     await snap(page, 'desktop-menus', false)
   })
@@ -197,7 +272,6 @@ test.describe('desktop', () => {
   test('an empty board says so and offers nothing: the import and the tools are already in the left rail', async ({ page }) => {
     await page.goto('')
     const panel = page.locator('.analysis-panel')
-    await expect(panel.locator('.eyebrow')).toHaveText('Nothing to rank yet')
     await expect(panel.locator('h2')).toHaveText('This board is empty')
     await expect(panel.locator('.hint')).toBeVisible()
     // Both ways in are on screen already, so the phone's two buttons stay on the phone (spec D4).
@@ -223,10 +297,10 @@ test.describe('desktop', () => {
 
     // The context line names the seat and its picks, and nothing about whose turn it is.
     const context = panel.locator('.analysis-context')
-    await expect(context).toHaveText(/^You are/)
-    await expect(context).toHaveText(/of 8$/)
+    await expect(context).toHaveText('Red · Picking 1st and 8th', { useInnerText: true })
     await expect(context).not.toContainText('turn')
-    await expect(panel.locator('.panel-heading .turn-pill')).toHaveText('Your turn')
+    await expect(panel.getByRole('button', { name: 'Step back one pick' })).toBeDisabled()
+    await expect(panel.getByRole('button', { name: 'Step forward one pick' })).toBeDisabled()
 
     const cards = panel.locator('.analysis-row')
     const marks = page.locator('.vertex-highlight')
@@ -321,7 +395,7 @@ test.describe('desktop', () => {
     const rows = panel.locator('.roster-row')
     await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
     await expect(panel.locator('.roster-row.me')).toHaveCount(0)
-    // The heading's + moved to the dashed row under the roster (spec D5).
+    // The heading's + moved to the row under the roster (spec D5).
     await expect(panel.locator('.panel-heading button')).toHaveCount(0)
     await randomize(page)
 
@@ -335,11 +409,6 @@ test.describe('desktop', () => {
     const swatch = rows.nth(2).locator('.swatch')
     await swatch.click()
     await expect(swatch).toHaveAttribute('aria-pressed', 'true')
-    const steppers = panel.locator('.player-steppers')
-    await expect(steppers).toHaveCount(1)
-    const brushed = await steppers.evaluate((el) =>
-      el.previousElementSibling?.querySelector('.list-row-name')?.textContent)
-    expect(brushed).toBe('Orange')
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
     await expect(rows.nth(2)).not.toHaveClass(/\bme\b/)
     await snap(page, 'desktop-roster')
@@ -360,7 +429,7 @@ test.describe('desktop', () => {
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
     await expect(page.locator('.draft-ribbon-slot').first()).toHaveAttribute('title', /Mara/)
 
-    // The dashed row is the only way to add, and it stops at six seats.
+    // The row under the roster is the only way to add, and it stops at six seats.
     const add = panel.getByRole('button', { name: 'Add player' })
     await add.click()
     await add.click()
@@ -412,18 +481,20 @@ test.describe('desktop', () => {
     }
   })
 
-  test('the snake draft ribbon sits under the roster, and a grip drag reseats it', async ({ page }) => {
+  test('the snake draft ribbon sits in Best picks, and a grip drag reseats it', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
     const panel = page.locator('.player-panel')
-    const ribbon = panel.locator('.draft-section .draft-ribbon')
+    await randomize(page)
+    const ribbon = page.locator('.analysis-panel .draft-ribbon')
     const slots = ribbon.locator('.draft-ribbon-slot')
 
-    // The ribbon is the phone's, two picks per player, in the Players panel and nowhere else.
+    // Both trees read the draft in Best picks.
     await expect(slots).toHaveCount(UNCLAIMED_ROSTER.length * 2)
     await expect(ribbon.locator('.draft-ribbon-slot.now')).toHaveCount(1)
     await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
-    await expect(panel.locator('.draft-section .group-label')).toContainText('pick 1 of 8')
+    await expect(panel.locator('.draft-section')).toHaveCount(0)
+    await expect(panel.locator('.draft-ribbon')).toHaveCount(0)
     await snap(page, 'desktop-draft-ribbon')
 
     // Seat order is draft order, so a reorder repaints the ribbon.
@@ -543,9 +614,13 @@ test.describe('landscape phone', () => {
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.board-tabs')).toHaveCount(0)
     await expect(page.locator('.maps-panel')).toBeVisible()
-    // The ribbon lives in the Players panel here too, never over the board (spec DB6).
+    // Seeded, not randomized: at this height the menu's items open outside the viewport.
+    await seedBoard(page, setHexTile(createBoard('standard4'), { q: 0, r: 0 }, 'ore'))
+
+    // The ribbon opens Best picks on every workspace width (spec DB6).
     await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
-    await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(1)
+    await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(0)
+    await expect(page.locator('.analysis-panel .draft-ribbon')).toHaveCount(1)
     await expect(page.locator('footer')).toHaveCount(0)
     await snap(page, 'landscape')
   })

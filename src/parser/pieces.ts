@@ -1,9 +1,9 @@
 import { parseEdgeId, parseVertexId } from '../model/coords'
 import { boardGrid } from '../model/layouts'
-import type { Building, Road } from '../model/types'
-import { labelComponents } from './components'
-import { pixel, type Rgb, type RgbaImage } from './image'
-import { nearest } from './palette'
+import type { Building, Road, VertexId } from '../model/types'
+import { labelComponents, neighbors } from './components'
+import { nearColor, pixel, type Rgb, type RgbaImage } from './image'
+import { nearest, type ParserPalette } from './palette'
 import type { Registration } from './registration'
 
 export interface PieceOwner {
@@ -28,26 +28,45 @@ interface PieceComponent {
 
 export function detectPieces(
   image: RgbaImage,
+  palette: ParserPalette,
   registration: Registration,
   owners: PieceOwner[],
 ): DetectedPieces {
   const entries = owners.map((owner) => [owner.id, owner.anchor] as const)
   const components: PieceComponent[] = []
+  const points: [number, number][] = []
+  const classify = (x: number, y: number) => nearest(pixel(image, x, y), entries, 22)
   for (const component of labelComponents(
-    { minX: 0, maxX: image.width - 1, minY: registration.bandTop, maxY: registration.bandBottom },
-    (x, y) => nearest(pixel(image, x, y), entries, 22),
+    { minX: registration.bandLeft, maxX: registration.bandRight, minY: registration.bandTop, maxY: registration.bandBottom },
+    classify,
+    { visit: (x, y) => points.push([x, y]) },
   )) {
     const { label: playerId, x, y, area } = component
-    if (area >= 0.024 * registration.size ** 2) components.push({ playerId, x, y, area })
+    if (area >= 0.024 * registration.size ** 2) {
+      let perimeter = 0
+      let outlined = 0
+      for (const [px, py] of points) {
+        for (const [dx, dy] of neighbors) {
+          if (classify(px + dx, py + dy) === playerId) continue
+          perimeter += 1
+          for (let distance = 1; distance <= Math.ceil(0.03 * registration.size); distance += 1) {
+            if (nearColor(pixel(image, px + dx * distance, py + dy * distance), palette.inkDark, 35)) {
+              outlined += 1
+              break
+            }
+          }
+        }
+      }
+
+      // Blinking placement discs can match a seat colour but have no outline.
+      if (outlined > 0.6 * perimeter) components.push({ playerId, x, y, area })
+    }
+    points.length = 0
   }
   const grid = boardGrid(registration.layout)
   const vertices = grid.vertexIds.map((vertexId) => {
-    const centers = parseVertexId(vertexId).map(registration.center)
-    return {
-      vertexId,
-      x: centers.reduce((sum, center) => sum + center[0], 0) / 3,
-      y: centers.reduce((sum, center) => sum + center[1], 0) / 3,
-    }
+    const [x, y] = vertexPoint(registration, vertexId)
+    return { vertexId, x, y }
   })
   const edges = grid.edgeIds.map((edgeId) => {
     const centers = parseEdgeId(edgeId).map(registration.center)
@@ -105,4 +124,79 @@ export function detectPieces(
     ignored,
     duplicates,
   }
+}
+
+export function orderDraftSettlements(
+  image: RgbaImage,
+  palette: ParserPalette,
+  registration: Registration,
+  buildings: Building[],
+  seatIds: string[],
+): { buildings: Building[]; unorderedPlayerIds: string[] } {
+  const byPlayer = seatIds.map((id) => buildings.filter((building) => building.playerId === id))
+  const draftShape = buildings.every((building) => building.tier === 'settlement') &&
+    byPlayer.every((placed) => placed.length <= 2)
+  if (!draftShape) return { buildings, unorderedPlayerIds: [] }
+  const incomplete = byPlayer.some((placed) => placed.length < 2)
+  const unorderedPlayerIds: string[] = []
+  for (const placed of byPlayer) {
+    if (placed.length !== 2) continue
+    const [first, second] = placed.map((building) => readSettlementOrdinal(image, palette, registration, building.vertexId))
+    if (first === second) {
+      if (incomplete) unorderedPlayerIds.push(placed[0].playerId)
+    } else if (first === 2 || second === 1) placed.reverse()
+  }
+  const ordered: Building[] = []
+  for (const placed of byPlayer) if (placed[0]) ordered.push(placed[0])
+  for (const placed of [...byPlayer].reverse()) if (placed[1]) ordered.push(placed[1])
+  return { buildings: ordered, unorderedPlayerIds }
+}
+
+export function vertexPoint(registration: Registration, vertexId: VertexId): [number, number] {
+  const centers = parseVertexId(vertexId).map(registration.center)
+  return [
+    centers.reduce((sum, center) => sum + center[0], 0) / 3,
+    centers.reduce((sum, center) => sum + center[1], 0) / 3,
+  ]
+}
+
+export function readSettlementOrdinal(
+  image: RgbaImage,
+  palette: ParserPalette,
+  registration: Registration,
+  vertexId: VertexId,
+): 1 | 2 | null {
+  const [x, y] = vertexPoint(registration, vertexId)
+  const size = registration.size
+  const bounds = {
+    minX: Math.max(0, Math.round(x + 0.08 * size)),
+    maxX: Math.min(image.width - 1, Math.round(x + 0.55 * size)),
+    minY: Math.max(0, Math.round(y - 0.45 * size)),
+    maxY: Math.min(image.height - 1, Math.round(y + 0.1 * size)),
+  }
+  if (bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) return null
+  for (const disc of labelComponents(
+    bounds,
+    (px, py) => nearColor(pixel(image, px, py), palette.tokenCream, 18) ? true : null,
+  )) {
+    const width = disc.maxX - disc.minX + 1
+    const height = disc.maxY - disc.minY + 1
+    if (width < 0.2 * size || width > 0.34 * size || Math.abs(width / height - 1) > 0.2) continue
+    const bars = [...labelComponents(
+      {
+        minX: Math.ceil(disc.minX + 0.2 * width),
+        maxX: Math.floor(disc.maxX - 0.2 * width),
+        minY: Math.ceil(disc.minY + 0.2 * height),
+        maxY: Math.floor(disc.maxY - 0.2 * height),
+      },
+      (px, py) => nearColor(pixel(image, px, py), palette.inkDark, 55) ? true : null,
+    )].filter((bar) => {
+      const barHeight = bar.maxY - bar.minY + 1
+      const barWidth = bar.maxX - bar.minX + 1
+      const tallEnough = barHeight > 0.25 * height && barHeight < 0.65 * height
+      return tallEnough && barWidth < 0.5 * barHeight
+    })
+    if (bars.length === 1 || bars.length === 2) return bars.length
+  }
+  return null
 }

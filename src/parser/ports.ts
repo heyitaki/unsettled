@@ -39,7 +39,7 @@ export function detectPorts(
   })
   const pills: Pill[] = []
   for (const component of labelComponents(
-    { minX: 0, maxX: image.width - 1, minY: registration.bandTop, maxY: registration.bandBottom },
+    { minX: registration.bandLeft, maxX: registration.bandRight, minY: registration.bandTop, maxY: registration.bandBottom },
     (x, y) => isPill(x, y) ? true : null,
     { step: 2 },
   )) {
@@ -58,7 +58,7 @@ export function detectPorts(
     const bp = registration.center(b)
     return [(ap[0] + bp[0]) / 2, (ap[1] + bp[1]) / 2]
   }
-  const detected = pills.map((pill) => {
+  const detected = pills.flatMap((pill): DetectedPort[] => {
     const votes = new Map<Resource | 'desert', number>()
     const dotRegionRight = pill.minX + 0.4 * (pill.maxX - pill.minX)
     for (let y = pill.minY; y <= pill.maxY; y += 1) {
@@ -73,12 +73,13 @@ export function detectPorts(
       const [x, y] = midpoint(edgeId)
       return { edgeId, distance: Math.hypot(x - pill.centerX, y - pill.centerY) }
     }).sort((a, b) => a.distance - b.distance)
-    return {
+    if (ranked[0].distance > 1.1 * registration.size) return []
+    return [{
       edgeId: ranked[0].edgeId,
       resource,
       rate: resource ? 2 : 3,
       ambiguous: ranked[1].distance / ranked[0].distance < 1.15,
-    }
+    }]
   })
   const ports: DetectedPort[] = []
   const duplicateEdgeIds: Port['edgeId'][] = []

@@ -11,10 +11,12 @@ import {
   axialKey,
   axialToPixel,
   edgeEndpointVertexIds,
+  parseAxialKey,
   parseEdgeId,
   parseVertexId,
-  vertexAdjacentVertexIds,
 } from '../model/coords'
+import { draftIsComplete, inferDraftState } from '../engine/draft'
+import { activePlayerId } from '../model/turn'
 import { boardGrid } from '../model/layouts'
 import {
   isBlank,
@@ -27,15 +29,17 @@ import {
   setLayout,
   setNumberToken,
   setRobber,
+  settlementOrdinals,
   upsertPort,
 } from '../model/board'
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
-import { INK_COLOR, PAPER_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
+import { buildingSlots, roadSlots } from './placementSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
 import {
   IDENTITY,
@@ -107,11 +111,11 @@ function vertexPoint(vertexId: VertexId) {
   }
 }
 
-function hexPoints(coord: AxialCoord): string {
+function hexPoints(coord: AxialCoord, radius = SIZE): string {
   const point = center(coord)
   return Array.from({ length: 6 }, (_, index) => {
     const angle = (-90 + index * 60) * Math.PI / 180
-    return `${point.x + SIZE * Math.cos(angle)},${point.y + SIZE * Math.sin(angle)}`
+    return `${point.x + radius * Math.cos(angle)},${point.y + radius * Math.sin(angle)}`
   }).join(' ')
 }
 
@@ -181,7 +185,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   // that happens to run along a port edge must not light the port up.
   const highlightSet = useMemo(
     () => new Set(highlight
-      .filter((mark) => mark.kind !== 'road')
+      .filter((mark) => mark.kind === undefined)
       .map((mark) => mark.ref)),
     [highlight],
   )
@@ -269,41 +273,19 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       : clampTransform(transformRef.current, { x: fitX, y: fitY, width: fitWidth, height: fitHeight }))
   }, [state.activeTabId, board.layout, fitX, fitY, fitWidth, fitHeight])
   const renderedViewBox = transformedViewBox(viewBox, transform)
-  // Placement dots (and click gate) for the active building tool: any tier drops
-  // straight onto a distance-legal empty vertex — these are admin controls for
-  // mirroring a live game, so a city needs no settlement under it — or re-tiers
-  // one of your own pieces.
+  const pick = state.pick
+
+  // A pick places for the turn player; a tool places for the editor's selected player.
+  const placementPlayer = pick ? activePlayerId(tab.game) : tab.activePlayerId
   const placeableVertices = useMemo<VertexId[]>(() => {
+    if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
     if (state.tool.kind !== 'piece' || state.tool.tier === 'road') return []
-    // With nobody selected there is no owner to place for; the empty-vertex branch
-    // below is legality-only, so it would otherwise light up every empty vertex.
-    if (tab.activePlayerId === null) return []
-    const tier = state.tool.tier
-    const byVertex = new Map(board.buildings.map((building) => [building.vertexId, building] as const))
-    return grid.vertexIds.filter((vertexId) => {
-      const here = byVertex.get(vertexId)
-      if (!here) return vertexAdjacentVertexIds(vertexId).every((adj) => !byVertex.has(adj))
-      // Own pieces only, or the city tool would take over an opponent's settlement
-      // and its VP. Same-tier is left to the toggle-off targets below, which draw
-      // no dot over the piece.
-      return here.playerId === tab.activePlayerId && here.tier !== tier
-    })
-  }, [state.tool, board.buildings, tab.activePlayerId, grid])
-  // Edges where the active player may legally build a road: empty and touching
-  // their own building, or their own road via a vertex no opponent building blocks.
+    return buildingSlots(board, placementPlayer, state.tool.tier, 'edit')
+  }, [state.tool, board, placementPlayer, pick])
   const placeableEdges = useMemo<EdgeId[]>(() => {
-    if (state.tool.kind !== 'piece' || state.tool.tier !== 'road') return []
-    if (tab.activePlayerId === null) return []
-    const roadEdges = new Set(board.roads.map((road) => road.edgeId))
-    const mine = tab.activePlayerId
-    const myBuildings = new Set(board.buildings.filter((b) => b.playerId === mine).map((b) => b.vertexId))
-    const oppBuildings = new Set(board.buildings.filter((b) => b.playerId !== mine).map((b) => b.vertexId))
-    const myRoadVerts = new Set(board.roads.filter((r) => r.playerId === mine).flatMap((r) => edgeEndpointVertexIds(r.edgeId)))
-    return grid.edgeIds.filter((edgeId) => {
-      if (roadEdges.has(edgeId)) return false
-      return edgeEndpointVertexIds(edgeId).some((v) => myBuildings.has(v) || (myRoadVerts.has(v) && !oppBuildings.has(v)))
-    })
-  }, [state.tool, board.roads, board.buildings, tab.activePlayerId, grid])
+    if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece' || state.tool.tier !== 'road') return []
+    return roadSlots(board, placementPlayer, pick?.want === 'edge' ? pick.edges : undefined)
+  }, [state.tool, board, placementPlayer, pick])
   // Stable across renders that don't change the roster, so the piece layers
   // below can list it as a dependency without re-rendering on every render.
   const playerColor = useCallback(
@@ -318,6 +300,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     else setPendingLayout(layout)
   }
   const onHex = (coord: AxialCoord) => {
+    if (pick) {
+      if (pick.want === 'hex') dispatch({ type: 'picked', ref: axialKey(coord) })
+      return
+    }
     const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))
     if (!hex) return
     if (state.tool.kind === 'tile') commit(setHexTile(board, coord, state.tool.tile))
@@ -338,6 +324,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     }
   }
   const onEdge = (edgeId: EdgeId) => {
+    if (pick) {
+      if (pick.want === 'edge') dispatch({ type: 'picked', ref: edgeId })
+      return
+    }
     if (state.tool.kind === 'piece' && state.tool.tier === 'road' && tab.activePlayerId !== null) {
       // Clicking your own road again toggles it off.
       const existing = board.roads.find((road) => road.edgeId === edgeId)
@@ -348,6 +338,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     } else if (state.tool.kind === 'port' && grid.coastalEdgeIds.includes(edgeId)) setEditingPort(edgeId)
   }
   const onVertex = (vertexId: VertexId) => {
+    if (pick) {
+      if (pick.want === 'vertex') dispatch({ type: 'picked', ref: vertexId })
+      return
+    }
     if (state.tool.kind === 'piece' && state.tool.tier !== 'road' && tab.activePlayerId !== null) {
       // Clicking your own building of the same tier toggles it off; a different
       // tier upgrades it. placeableVertices keeps opponents' pieces unreachable.
@@ -357,12 +351,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       } else commit(placeBuilding(board, vertexId, tab.activePlayerId, state.tool.tier))
     } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
   }
-  const buildTier = state.tool.kind === 'piece' && state.tool.tier !== 'road' ? state.tool.tier : null
-  const buildActive = buildTier !== null
-  const roadActive = state.tool.kind === 'piece' && state.tool.tier === 'road'
-  const eraseActive = state.tool.kind === 'erase'
-  const portActive = state.tool.kind === 'port'
-  const hexActive = state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
+  const buildTier = !pick && state.tool.kind === 'piece' && state.tool.tier !== 'road' ? state.tool.tier : null
+  const buildActive = pick ? pick.want === 'vertex' : buildTier !== null
+  const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece' && state.tool.tier === 'road'
+  const eraseActive = !pick && state.tool.kind === 'erase'
+  const portActive = !pick && state.tool.kind === 'port'
+  const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
   const gesturesBlocked = editingPort !== null || pendingLayout !== null
   const overlayBlocksGestures = () =>
     gesturesBlocked || overlayOpen()
@@ -467,7 +461,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     // tool selected, taps place and pinch is the way to zoom. Clearing the
     // stored tap keeps one made under a tool from later pairing with a tap made
     // after the tool was dropped.
-    if (state.tool.kind !== 'none') {
+    if (pick || state.tool.kind !== 'none') {
       lastTap.current = null
       return
     }
@@ -603,7 +597,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }, [board.robber, board.hexes])
   const portLayer = useMemo(() => ports.map(({ port, a, b, point }) => {
-    const fill = port.resource ? TILE_COLORS[port.resource] : PAPER_COLOR
+    const fill = port.resource ? TILE_COLORS[port.resource] : TOKEN_COLOR
     const ink = port.resource ? readableInk(TILE_COLORS[port.resource]) : INK_COLOR
     return (
       <g
@@ -617,9 +611,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         }
         style={portActive ? { cursor: 'pointer' } : eraseActive ? { cursor: 'crosshair' } : undefined}
       >
-        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#f5e9cf" strokeWidth="2" strokeDasharray="5 5" />
-        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#f5e9cf" strokeWidth="2" strokeDasharray="5 5" />
-        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke={INK_COLOR} strokeWidth="1.6" />
+        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
+        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
+        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke="#fff" strokeWidth="2.5" />
         <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
       </g>
     )
@@ -667,41 +661,55 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     )
   }), [board.roads, playerColor])
+
+  const ordinals = useMemo(() =>
+    draftIsComplete(board, inferDraftState(board)) ? new Map<VertexId, 1 | 2>() : settlementOrdinals(board), [board])
   const buildingLayer = useMemo(() => board.buildings.map((building) => {
     const point = vertexPoint(building.vertexId)
     const color = playerColor(building.playerId)
     const scale = TIER_SCALE[building.tier]
+    const ordinal = ordinals.get(building.vertexId)
     return (
-      // The shadow lives on an outer group so the tier's scale can't shrink
-      // or grow it — every piece casts the same shadow.
-      <g
-        key={`building:${building.vertexId}`}
-        filter={markedBuildings.has(building.vertexId) ? 'url(#piece-highlight)' : 'url(#piece-shadow)'}
-      >
-        <g
-          transform={`translate(${point.x} ${point.y}) scale(${scale})`}
-          fill={color}
-          stroke={markedBuildings.has(building.vertexId) ? '#100c06' : '#30271f'}
-          // paint-order draws the stroke first and the fill over it, so the
-          // inner half is covered and the thicker highlight border grows
-          // outward instead of eating into the silhouette.
-          paintOrder={markedBuildings.has(building.vertexId) ? 'stroke' : undefined}
-          strokeWidth={(markedBuildings.has(building.vertexId) ? PIECE_STROKE * 2.6 : PIECE_STROKE) / scale}
-          strokeLinejoin="round"
-        >
-          {/* One closed silhouette per tier, matching the source app's pieces:
-              a house, a house with a rectangle annex, and a twin-gable keep.
-              strokeWidth is divided by scale so every piece renders the same border. */}
-          {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
-          {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
-          {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
+      <g key={`building:${building.vertexId}`}>
+        {/* Keep the shadow independent of tier scale and the ordinal badge. */}
+        <g filter={markedBuildings.has(building.vertexId) ? 'url(#piece-highlight)' : 'url(#piece-shadow)'}>
+          <g
+            transform={`translate(${point.x} ${point.y}) scale(${scale})`}
+            fill={color}
+            stroke={markedBuildings.has(building.vertexId) ? '#100c06' : '#30271f'}
+            // paint-order draws the stroke first and the fill over it, so the
+            // inner half is covered and the thicker highlight border grows
+            // outward instead of eating into the silhouette.
+            paintOrder={markedBuildings.has(building.vertexId) ? 'stroke' : undefined}
+            strokeWidth={(markedBuildings.has(building.vertexId) ? PIECE_STROKE * 2.6 : PIECE_STROKE) / scale}
+            strokeLinejoin="round"
+          >
+            {/* One closed silhouette per tier, matching the source app's pieces:
+                a house, a house with a rectangle annex, and a twin-gable keep.
+                strokeWidth is divided by scale so every piece renders the same border. */}
+            {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
+            {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
+            {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
+          </g>
         </g>
+        {ordinal && (
+          <g
+            className="settlement-ordinal"
+            transform={`translate(${point.x + 0.33 * SIZE} ${point.y - 0.1 * SIZE})`}
+            pointerEvents="none"
+            aria-hidden="true"
+          >
+            <circle r={0.135 * SIZE} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth="1.4" />
+            <text y="3" textAnchor="middle" fill={INK_COLOR}>{ordinal === 1 ? 'i' : 'ii'}</text>
+          </g>
+        )}
       </g>
     )
-  }), [board.buildings, markedBuildings, playerColor])
+  }), [board.buildings, markedBuildings, ordinals, playerColor])
   const markLayer = useMemo(() => highlight
-    .filter((mark) => (mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
+    .filter((mark) => (mark.kind === 'hex' ? grid.landKeys : mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
     .map((mark) => {
+      if (mark.kind === 'hex') return <polygon key={`hl:${mark.ref}`} className="hex-highlight" points={hexPoints(parseAxialKey(mark.ref), SIZE - 6)} fill="none" stroke={mark.color ?? INK_COLOR} strokeWidth="3.5" strokeDasharray="7 4" pointerEvents="none" />
       // A road mark is a direction, not a place: the analysis panel's road recommendation.
       // Draw it as a stub of road along the edge, short enough to leave both endpoints clear of
       // the vertex circles the same recommendation puts there. Every other mark is a place, and
@@ -762,7 +770,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           )}
         </g>
       )
-    }), [highlight, gridEdgeSet, gridVertexSet, markedBuildings])
+    }), [highlight, grid, gridEdgeSet, gridVertexSet, markedBuildings])
   return (
     // The fitted box's proportions, for the phone arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.
@@ -853,11 +861,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           <g className="placement-layer">
             {buildActive && placeableVertices.map((vertexId) => {
               const point = vertexPoint(vertexId)
-              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onVertex(vertexId)} />
+              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onVertex(vertexId)} />
             })}
             {roadActive && placeableEdges.map((edgeId) => {
               const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
-              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(tab.activePlayerId)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onEdge(edgeId)} />
+              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onEdge(edgeId)} />
             })}
             {/* Invisible targets over the active player's own same-tier pieces so
                 clicking one with the same tool still toggles it off (onVertex /
@@ -868,7 +876,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
                 const point = vertexPoint(piece.vertexId)
                 return <circle key={`rm:${piece.vertexId}`} className="placement-remove" cx={point.x} cy={point.y} r={coarse ? 18 : 12} onClick={() => onVertex(piece.vertexId)} />
               })}
-            {roadActive && board.roads
+            {roadActive && !pick && board.roads
               .filter((road) => road.playerId === tab.activePlayerId)
               .map((road) => {
                 const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
@@ -918,7 +926,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           onSelect={choose}
           align="center"
         >
-          <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
+          <strong>{LAYOUT_LABEL[board.layout]}</strong>
         </MenuSelect>
         {transform.scale > 1 && (
           <span className="board-zoom">

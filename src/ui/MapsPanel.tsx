@@ -15,10 +15,7 @@ export function MapsPanel() {
   return (
     <section className="panel maps-panel">
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Library</span>
-          <h2>Maps</h2>
-        </div>
+        <h2>Maps</h2>
         <button
           type="button"
           className="panel-dots"

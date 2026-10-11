@@ -1,0 +1,73 @@
+import type { AdviceRequest, AdviceResponse, Decision } from '../engine/advice/protocol'
+import type { Game } from '../model/game'
+
+export function decisionKey(decision: Decision): string {
+  switch (decision.kind) {
+    case 'produce': return JSON.stringify({ kind: decision.kind, total: decision.total })
+    case 'tradeResponse': return JSON.stringify({ kind: decision.kind, proposer: decision.proposer, give: decision.give, get: decision.get, count: decision.count })
+    default: return JSON.stringify({ kind: decision.kind })
+  }
+}
+
+export function createAdviceClient(factory: () => Worker) {
+  const cache = new WeakMap<Game, Map<string, AdviceResponse>>()
+  const pending = new Map<number, { request: AdviceRequest; key: string; resolve: (response: AdviceResponse) => void }>()
+  let worker: Worker | null = null
+  let sequence = 0
+  const dispose = () => {
+    pending.clear()
+    worker?.terminate()
+    worker = null
+  }
+  const fail = (error: string) => {
+    const waiting = [...pending.values()]
+    dispose()
+    for (const request of waiting) request.resolve({ error })
+  }
+  return {
+    request(request: AdviceRequest): Promise<AdviceResponse> {
+      const key = JSON.stringify([request.observer, decisionKey(request.decision)])
+      const cached = cache.get(request.game)?.get(key)
+      if (cached) return Promise.resolve(cached)
+      return new Promise((resolve) => {
+        const id = ++sequence
+        pending.set(id, { request, key, resolve })
+        try {
+          if (worker === null) {
+            worker = factory()
+            const started = worker
+            worker.onmessage = (event: MessageEvent<{ id: number; response: AdviceResponse }>) => {
+              if (worker !== started) return
+              const job = pending.get(event.data.id)
+              if (!job) return
+              pending.delete(event.data.id)
+              const { response } = event.data
+              if (!('error' in response)) {
+                let entries = cache.get(job.request.game)
+                if (!entries) {
+                  entries = new Map()
+                  cache.set(job.request.game, entries)
+                }
+                entries.set(job.key, response)
+              }
+              job.resolve(response)
+            }
+            worker.onerror = (event) => {
+              event.preventDefault()
+              if (worker !== started) return
+              fail(event.message || 'Advice stopped unexpectedly')
+            }
+            worker.onmessageerror = () => {
+              if (worker === started) fail('Unable to read advice')
+            }
+          }
+          worker.postMessage({ id, request })
+        } catch (error) {
+          fail(error instanceof Error ? error.message : 'Unable to start advice')
+        }
+      })
+    },
+    cancelAll: () => { if (pending.size > 0) dispose() },
+    dispose,
+  }
+}

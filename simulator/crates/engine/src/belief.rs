@@ -20,6 +20,18 @@ impl BeliefState {
         }
     }
 
+    pub(crate) fn set_known_hand(
+        &mut self,
+        seat: usize,
+        known: [u16; RESOURCE_COUNT],
+        unknown: u16,
+    ) {
+        self.totals[seat] =
+            known.iter().map(|count| u32::from(*count)).sum::<u32>() + u32::from(unknown);
+        self.lo[seat] = known;
+        self.hi[seat] = known.map(|count| count + unknown);
+    }
+
     pub const fn total(&self, seat: usize) -> u32 {
         self.totals[seat]
     }

@@ -108,3 +108,29 @@ describe('game state', () => {
     expect(validateGameStats(missing).map((issue) => issue.code)).toContain('stats-missing-player')
   })
 })
+
+it('withBoard drops turn and devHand when their player leaves', () => {
+  const game = {
+    ...newGame(addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' })),
+    turn: { playerId: 'b', rolled: 6, devPlayed: true, progressPlayed: { roadBuilding: 1, yearOfPlenty: 0, monopoly: 1 } },
+    devHand: {
+      playerId: 'b',
+      playable: { knight: 1, roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 },
+      bought: { knight: 0, roadBuilding: 0, yearOfPlenty: 0, monopoly: 1 },
+    },
+  }
+  expect(withBoard(game, game.board)).toBe(game)
+  const board = removePlayer(game.board, 'b')
+  const removed = withBoard(game, board)
+  expect(Object.hasOwn(removed, 'turn')).toBe(false)
+  expect(Object.hasOwn(removed, 'devHand')).toBe(false)
+  expect(removed.stats).toEqual({ aki: emptyStats() })
+  const myTurn = withBoard({ ...game, turn: { ...game.turn, playerId: 'aki' } }, board)
+  expect(myTurn.turn?.playerId).toBe('aki')
+  expect(Object.hasOwn(myTurn, 'devHand')).toBe(false)
+  const myHand = withBoard({ ...game, devHand: { ...game.devHand, playerId: 'aki' } }, board)
+  expect(myHand.devHand?.playerId).toBe('aki')
+  expect(Object.hasOwn(myHand, 'turn')).toBe(false)
+  expect(withBoard(game, { ...game.board }).turn).toBe(game.turn)
+  expect(withBoard(game, { ...game.board }).devHand).toBe(game.devHand)
+})

@@ -94,7 +94,6 @@ export function ContextMenu({ ariaLabel, trigger, items, history, className, onC
         }
       }}
     >
-      <span className="menu-tail" aria-hidden="true" />
       {history && <div className="menu-history">{history.map(renderItem)}</div>}
       {items.map(renderItem)}
     </div>

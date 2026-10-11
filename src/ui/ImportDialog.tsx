@@ -5,13 +5,11 @@ import {
   type RgbaImage,
 } from '../parser'
 import { listMaps } from '../persistence/localStorage'
-import { newId } from '../model/ids'
 import { firstFreeName } from '../model/names'
 import { fileTitle } from './boardFiles'
 import { useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 import { ModalDialog } from './ModalDialog'
-import { importNames } from './importNames'
 
 async function decodeImage(file: File): Promise<RgbaImage> {
   let bitmap: ImageBitmap
@@ -73,13 +71,11 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
                   ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
                 ])
                 const importTitle = firstFreeName(fileTitle(file.name), reserved)
-                const id = newId()
-                dispatch({ type: 'tab-add', id, game: result.game, title: importTitle })
+                dispatch({ type: 'tab-add', game: result.game, title: importTitle })
                 onImported?.()
                 notice(`Imported ${file.name}`)
                 setIssues(result.issues)
                 if (result.issues.length === 0) onClose()
-                void importNames(id, image, result, dispatch)
               } else notice(`Screenshot import failed: ${result.error}`)
             } catch (error) {
               notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)

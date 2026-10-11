@@ -1,14 +1,15 @@
+import { AWARD_VP, buildingPoints } from '../model/board'
 import { axialKey } from '../model/coords'
-import { newGame, reconcileStats, type Game } from '../model/game'
+import { newGame } from '../model/game'
 import { defaultPortEdges, inferMissingNumberToken } from '../model/layouts'
 import { parseBoard } from '../model/serialization'
-import { PLAYER_PALETTE, type Board, type Hex, type Player } from '../model/types'
+import type { Board, Hex, Player } from '../model/types'
 import type { RgbaImage } from './image'
-import { detectPieces, type PieceOwner } from './pieces'
+import { playerFromSeed } from './palette'
+import { detectPieces, orderDraftSettlements, type PieceOwner } from './pieces'
 import { detectPorts } from './ports'
 import { registerBoard } from './registration'
-import { detectRoster } from './sources/settled/chips'
-import { readCounters } from './sources/settled/counters'
+import { detectRoster } from './sources/settled/pills'
 import { choosePalette } from './sources/settled/palette'
 import type { ParseIssue, SourceParse } from './sources/types'
 
@@ -17,7 +18,6 @@ import { analyzeToken } from './tokens'
 
 export type { RgbaImage } from './image'
 export type { ParseIssue } from './sources/types'
-export type { TextReader } from './textReader'
 
 export function parseScreenshot(image: RgbaImage): SourceParse {
   const failure = (error: string): SourceParse => ({ ok: false, error })
@@ -51,14 +51,11 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
       })
     }
     const roster = detectRoster(image, palette, registration)
+    issues.push(...roster.issues)
     const fallbackColors = Object.entries(palette.player).map(([name, anchor]): PieceOwner & { player: Player } => ({
       id: `s-${name}`,
       anchor,
-      player: {
-        id: `s-${name}`,
-        name: name[0].toUpperCase() + name.slice(1),
-        color: PLAYER_PALETTE[name as keyof typeof palette.player],
-      },
+      player: playerFromSeed(`s-${name}`, name as keyof typeof palette.player),
     }))
     const rosterOwners = roster.players.map((entry) => ({ id: entry.player.id, anchor: entry.anchor }))
     const rosterColors = new Set(roster.players.map((entry) => entry.player.color))
@@ -66,7 +63,7 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
     const owners: PieceOwner[] = roster.players.length > 0
       ? [...rosterOwners, ...missingColorOwners]
       : fallbackColors
-    const pieces = detectPieces(image, registration, owners)
+    const pieces = detectPieces(image, palette, registration, owners)
     let players: Player[]
     let mePlayerId: string | null
     if (roster.players.length > 0) {
@@ -81,19 +78,31 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
           })
         }
       }
-      mePlayerId = roster.mePlayerId
+      mePlayerId = roster.turnPlayerId
       if (mePlayerId === null) {
-        issues.push({ stage: 'roster', severity: 'warning', message: 'Could not identify the You chip' })
+        issues.push({
+          stage: 'roster',
+          severity: 'warning',
+          message: 'The player to move could not be identified',
+        })
       }
     } else {
       players = fallbackColors.filter((entry) => pieces.usedPlayerIds.has(entry.id)).map((entry) => entry.player)
       if (players.length === 0) players = [fallbackColors[0].player]
       mePlayerId = null
-      issues.push({ stage: 'roster', severity: 'warning', message: 'Roster was synthesized from detected pieces' })
+      issues.push({
+        stage: 'roster',
+        severity: 'warning',
+        message: 'Roster was synthesized from detected pieces',
+      })
     }
     const playerIds = new Set(players.map((player) => player.id))
     const roads = pieces.roads.filter((road) => playerIds.has(road.playerId))
-    const buildings = pieces.buildings.filter((building) => playerIds.has(building.playerId))
+    const { buildings, unorderedPlayerIds } = orderDraftSettlements(
+      image, palette, registration,
+      pieces.buildings.filter((building) => playerIds.has(building.playerId)),
+      players.map((player) => player.id),
+    )
     if (pieces.ignored > 0) {
       issues.push({
         stage: 'pieces',
@@ -174,9 +183,17 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
       })
     }
     if (robberCandidates.length === 0) {
-      issues.push({ stage: 'tokens', severity: 'warning', message: 'No robber was detected' })
+      issues.push({
+        stage: 'tokens',
+        severity: 'warning',
+        message: 'No robber was detected',
+      })
     } else if (robberCandidates.length > 1) {
-      issues.push({ stage: 'tokens', severity: 'warning', message: 'Multiple robber candidates were detected' })
+      issues.push({
+        stage: 'tokens',
+        severity: 'warning',
+        message: 'Multiple robber candidates were detected',
+      })
     }
     const robber = robberCandidates.sort((a, b) => b.corePixels - a.corePixels)[0]?.coord ?? null
 
@@ -189,7 +206,7 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
       const issue = issues.find((candidate) => candidate.stage === 'tokens' && candidate.ref === ref)
       if (issue) {
         issue.severity = 'warning'
-        issue.message = `Number token was hidden — inferred ${inferred.number} from the standard number distribution`
+        issue.message = `Number token was hidden, inferred ${inferred.number} from the standard number distribution`
       }
     }
     const board: Board = {
@@ -205,17 +222,42 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
     }
     const validated = parseBoard(board)
     if (!validated.ok) return failure(`Parsed board was invalid: ${validated.errors.join('; ')}`)
-    const statDetection = readCounters(image, palette, registration, roster)
-    const game: Game = {
-      ...newGame(board),
-      stats: reconcileStats(statDetection.stats, players),
+    const game = newGame(board)
+    for (const entry of roster.players) {
+      if (entry.hand !== null) game.stats[entry.player.id].handUnknown = entry.hand
+      else issues.push({
+        stage: 'stats',
+        severity: 'unreadable',
+        message: `Could not read hand cards for ${entry.player.name}`,
+      })
+      if (entry.vp === null) {
+        issues.push({
+          stage: 'stats',
+          severity: 'unreadable',
+          message: `Could not read victory points for ${entry.player.name}`,
+        })
+      } else {
+        const buildingVP = buildings.filter((building) => building.playerId === entry.player.id)
+          .reduce((sum, building) => sum + buildingPoints(building.tier), 0)
+        if (![0, AWARD_VP, 2 * AWARD_VP].includes(entry.vp - buildingVP)) {
+          issues.push({
+            stage: 'stats',
+            severity: 'warning',
+            message: `Victory points disagree with parsed buildings for ${entry.player.name}`,
+          })
+        }
+      }
     }
-    return {
-      ok: true,
-      game,
-      issues: [...issues, ...statDetection.issues],
-      nameRects: roster.players.map((entry) => ({ playerId: entry.player.id, rect: entry.labelRect })),
+
+    for (const playerId of unorderedPlayerIds) {
+      const player = players.find((candidate) => candidate.id === playerId)
+      if (player) issues.push({
+        stage: 'pieces',
+        severity: 'warning',
+        message: `Could not determine settlement order for ${player.name}`,
+      })
     }
+    return { ok: true, game, issues }
   } catch {
     return failure('could not parse this image')
   }

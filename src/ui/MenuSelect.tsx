@@ -17,7 +17,7 @@ const optionId = (baseId: string, index: number) => `${baseId}-option-${index}`
  * The shared popup-listbox dropdown: a transparent trigger showing the current
  * value, a fixed full-screen backdrop that closes on any outside click, and an
  * absolutely-positioned option menu. Used by the board header's layout picker
- * and the analysis panel's "You are …" selector so both look identical.
+ * and the analysis panel's player selector so both look identical.
  *
  * Keyboard: the popup itself takes focus and holds the single tab stop, moving
  * an `aria-activedescendant` marker rather than focus between options, so the

@@ -52,6 +52,8 @@ jobs:
       - name: Test simulator and placement parity
         working-directory: simulator
         run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
+      - name: Check the committed wasm is current
+        run: simulator/tools/build-wasm.sh --check
   notify:
     needs: [app, rust]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

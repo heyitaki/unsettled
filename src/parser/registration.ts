@@ -10,6 +10,8 @@ export interface RegisteredTile extends AxialCoord {
 
 export interface Registration {
   layout: LayoutId
+  bandLeft: number
+  bandRight: number
   bandTop: number
   bandBottom: number
   size: number
@@ -23,28 +25,8 @@ export interface Registration {
   center(coord: AxialCoord): [number, number]
 }
 
-function findBoardBand(image: RgbaImage, bg: Rgb): [number, number] | null {
-  let top = -1
-  let bottom = -1
-  for (let y = 0; y < image.height; y += 4) {
-    let matches = 0
-    let samples = 0
-    for (let x = 0; x < image.width; x += 8) {
-      samples += 1
-      if (nearColor(pixel(image, x, y), bg, 12)) matches += 1
-    }
-    if (matches / samples > 0.3) {
-      if (top < 0) top = y
-      bottom = y
-    }
-  }
-  return top < 0 ? null : [top, bottom]
-}
-
 export function registerBoard(image: RgbaImage, palette: ParserPalette): Registration | null {
-  const band = findBoardBand(image, palette.bgBlue)
-  if (!band) return null
-  const found = findTileComponents(image, palette, band[0], band[1])
+  const found = findTileComponents(image, palette)
   if (!found) return null
   const tolerance = 0.35 * Math.sqrt(found.maxArea)
   const rows: { y: number; tiles: TileComponent[] }[] = []
@@ -107,24 +89,35 @@ export function registerBoard(image: RgbaImage, palette: ParserPalette): Registr
   ]
   let hits = 0
   let total = 0
-  for (let y = band[0]; y <= band[1]; y += 4) {
-    for (let x = 0; x < image.width; x += 4) {
-      total += 1
-      if (references.some((reference) => nearColor(pixel(image, x, y), reference, 10))) hits += 1
+
+  // Interior discs exclude vertex overlays and edge pieces while retaining token antialiasing.
+  const radius = 0.65 * size
+  for (const tile of observations) {
+    const [cx, cy] = center(tile)
+    for (let y = Math.round(cy - radius); y <= cy + radius; y += 4) {
+      for (let x = Math.round(cx - radius); x <= cx + radius; x += 4) {
+        if ((x - cx) ** 2 + (y - cy) ** 2 > radius ** 2) continue
+        total += 1
+        if (references.some((reference) => nearColor(pixel(image, x, y), reference, 10))) hits += 1
+      }
     }
   }
   const sharpness = hits / total
+  const xs = observations.map((tile) => center(tile)[0])
+  const ys = observations.map((tile) => center(tile)[1])
   return {
     layout,
-    bandTop: band[0],
-    bandBottom: band[1],
+    bandLeft: Math.max(0, Math.floor(Math.min(...xs) - hexWidth / 2 - 0.7 * size)),
+    bandRight: Math.min(image.width - 1, Math.ceil(Math.max(...xs) + hexWidth / 2 + 0.7 * size)),
+    bandTop: Math.max(0, Math.floor(Math.min(...ys) - 1.7 * size)),
+    bandBottom: Math.min(image.height - 1, Math.ceil(Math.max(...ys) + 1.7 * size)),
     size,
     hexWidth,
     originX,
     originY,
     tiles: observations.map(({ q, r, tile }) => ({ q, r, tile })),
     sharpness,
-    softInput: sharpness < 0.96,
+    softInput: sharpness < 0.94,
     maxResidual,
     center,
   }

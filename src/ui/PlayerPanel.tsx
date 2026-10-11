@@ -1,11 +1,8 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { computeStandings, type PlayerStanding } from '../engine/stats'
 import { addPlayer } from '../model/board'
-import { adjustCounter, adjustHand, type Game, type PlayerStats, type StatCounter } from '../model/game'
+import type { PlayerStats } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
-import { inferDraftState } from '../engine/draft'
-import { DraftLabel } from './DraftGrid'
-import { DraftRibbon } from './DraftRibbon'
 import { CounterGlyph, GLYPH_MUTED, PlusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { RosterRow, RosterTrash } from './RosterRow'
 import { MenuSelect } from './MenuSelect'
@@ -116,25 +113,6 @@ const vpBreakdown = (standing: PlayerStanding, vpCards: number): string => [
   ...(vpCards > 0 ? [`${vpCards} × VP card`] : []),
 ].join(' · ')
 
-/** One −/count/+ stepper for a hand resource or a counter stat. */
-function StatChip({ label, icon, count, adjust }: {
-  label: string
-  icon: ReactNode
-  count: number
-  adjust: (delta: number) => void
-}) {
-  return (
-    <span className="stat-chip" title={label}>
-      <button type="button" aria-label={`Remove ${label}`} disabled={count === 0} onClick={() => adjust(-1)}>−</button>
-      <span className="stat-face" aria-label={`${label}: ${count}`}>
-        {icon}
-        {count}
-      </span>
-      <button type="button" aria-label={`Add ${label}`} onClick={() => adjust(1)}>+</button>
-    </span>
-  )
-}
-
 
 export function PlayerPanel() {
   const { state, dispatch } = useStore()
@@ -143,7 +121,6 @@ export function PlayerPanel() {
   const { game } = tab
   const { board } = game
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
-  const commitGame = (nextGame: Game) => dispatch({ type: 'commit-game', game: nextGame })
   const standings = computeStandings(game)
   // The super-city tally only appears once one is on the board, the base game
   // never has them, so the column would be noise.
@@ -167,10 +144,7 @@ export function PlayerPanel() {
   return (
     <section className="panel player-panel">
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Points ledger</span>
-          <h2>Players</h2>
-        </div>
+        <h2>Players</h2>
       </div>
       <div
         className={dragId !== null ? 'player-list roster reordering' : 'player-list roster'}
@@ -225,119 +199,81 @@ export function PlayerPanel() {
           const standing = standings[index]
           const stats = game.stats[player.id]
           const active = tab.activePlayerId === player.id
-          const isMe = board.mePlayerId === player.id
           return (
-            <Fragment key={player.id}>
-              <RosterRow
-                player={player}
-                index={index}
-                roster={roster}
-                swatch={
-                  <button
-                    className="swatch"
-                    type="button"
-                    title={active ? 'Deselect this player' : 'Use this player for new pieces'}
-                    aria-label={`Use ${player.name} for new pieces`}
-                    aria-pressed={active}
-                    style={{ background: player.color }}
-                    onClick={() => {
-                      dispatch({ type: 'active-player', playerId: active ? null : player.id })
-                    }}
-                  />
-                }
-                awards={
-                  <span className="player-awards">
-                    {standing.hasLargestArmy && (
-                      <span
-                        className="award"
-                        title={`Largest army (${stats.knights}) · +2 VP`}
-                        aria-label={`Largest army: ${stats.knights} knights, +2 victory points`}
-                      >
-                        <CounterGlyph shape="knight" color="#fff" />
-                      </span>
-                    )}
-                  </span>
-                }
-              >
-                <div className="player-tally">
-                  {columns.map((column) => {
-                    const count = column.value(standing, stats)
-                    const detail = column.detail?.(standing)
-                    return (
-                      <span
-                        key={column.key}
-                        className={[
-                          count === 0 ? 'zero' : '',
-                          column.emphasize?.(standing) ? 'strong' : '',
-                        ].join(' ').trim()}
-                        title={detail ? `${column.label}: ${count} (${detail})` : `${column.label}: ${count}`}
-                        aria-label={`${column.label}: ${count}`}
-                      >
-                        {count}
-                      </span>
-                    )
-                  })}
-                </div>
-                {coarse ? (
-                  <button
-                    type="button"
-                    className="roster-vp"
-                    aria-label={`Victory points: ${standing.victoryPoints}`}
-                    onClick={() => {
-                      const text = vpBreakdown(standing, stats.vpCards)
-                      setCaption((current) =>
-                        current?.key === `vp:${player.id}` ? null : { key: `vp:${player.id}`, text })
-                    }}
-                  >
-                    {standing.victoryPoints}
-                  </button>
-                ) : (
-                  <span
-                    className="roster-vp"
-                    title={`Victory points: ${vpBreakdown(standing, stats.vpCards)}`}
-                    aria-label={`Victory points: ${standing.victoryPoints}`}
-                  >
-                    {standing.victoryPoints}
-                  </span>
-                )}
-              </RosterRow>
-              {active && (
-                <div className="player-steppers">
-                  {RESOURCES.map((resource) => (
-                    <StatChip
-                      key={resource}
-                      label={RESOURCE_LABELS[resource]}
-                      icon={<ResourceGlyph resource={resource} />}
-                      count={stats.hand[resource]}
-                      adjust={(delta) => commitGame(adjustHand(game, player.id, resource, delta))}
-                    />
-                  ))}
-                  <StatChip
-                    label="Unknown"
-                    icon={<CounterGlyph shape="unknownCard" />}
-                    count={stats.handUnknown}
-                    adjust={(delta) => commitGame(adjustCounter(game, player.id, 'handUnknown', delta))}
-                  />
-                  {(['devCards', 'knights'] as StatCounter[]).map((counter) => (
-                    <StatChip
-                      key={counter}
-                      label={counter === 'devCards' ? 'Development cards' : 'Knights played'}
-                      icon={<CounterGlyph shape={counter === 'devCards' ? 'devCard' : 'knight'} />}
-                      count={stats[counter]}
-                      adjust={(delta) => commitGame(adjustCounter(game, player.id, counter, delta))}
-                    />
-                  ))}
-                  {isMe && (
-                    <StatChip
-                      label="VP card"
-                      icon={<CounterGlyph shape="vpCard" />}
-                      count={stats.vpCards}
-                      adjust={(delta) => commitGame(adjustCounter(game, player.id, 'vpCards', delta))}
-                    />
+            <RosterRow
+              key={player.id}
+              player={player}
+              index={index}
+              roster={roster}
+              swatch={
+                <button
+                  className="swatch"
+                  type="button"
+                  title={active ? 'Deselect this player' : 'Use this player for new pieces'}
+                  aria-label={`Use ${player.name} for new pieces`}
+                  aria-pressed={active}
+                  style={{ background: player.color }}
+                  onClick={() => {
+                    dispatch({ type: 'active-player', playerId: active ? null : player.id })
+                  }}
+                />
+              }
+              awards={
+                <span className="player-awards">
+                  {standing.hasLargestArmy && (
+                    <span
+                      className="award"
+                      title={`Largest army (${stats.knights}) · +2 VP`}
+                      aria-label={`Largest army: ${stats.knights} knights, +2 victory points`}
+                    >
+                      <CounterGlyph shape="knight" color="#fff" />
+                    </span>
                   )}
-                </div>
+                </span>
+              }
+            >
+              <div className="player-tally">
+                {columns.map((column) => {
+                  const count = column.value(standing, stats)
+                  const detail = column.detail?.(standing)
+                  return (
+                    <span
+                      key={column.key}
+                      className={[
+                        count === 0 ? 'zero' : '',
+                        column.emphasize?.(standing) ? 'strong' : '',
+                      ].join(' ').trim()}
+                      title={detail ? `${column.label}: ${count} (${detail})` : `${column.label}: ${count}`}
+                      aria-label={`${column.label}: ${count}`}
+                    >
+                      {count}
+                    </span>
+                  )
+                })}
+              </div>
+              {coarse ? (
+                <button
+                  type="button"
+                  className="roster-vp"
+                  aria-label={`Victory points: ${standing.victoryPoints}`}
+                  onClick={() => {
+                    const text = vpBreakdown(standing, stats.vpCards)
+                    setCaption((current) =>
+                      current?.key === `vp:${player.id}` ? null : { key: `vp:${player.id}`, text })
+                  }}
+                >
+                  {standing.victoryPoints}
+                </button>
+              ) : (
+                <span
+                  className="roster-vp"
+                  title={`Victory points: ${vpBreakdown(standing, stats.vpCards)}`}
+                  aria-label={`Victory points: ${standing.victoryPoints}`}
+                >
+                  {standing.victoryPoints}
+                </span>
               )}
-            </Fragment>
+            </RosterRow>
           )
         })}
         <RosterTrash roster={roster} playerCount={board.players.length} />
@@ -345,12 +281,6 @@ export function PlayerPanel() {
           <PlusGlyph />
           Add player
         </button>
-      </div>
-      {/* The ribbon, not the phone's named grid: the desktop roster already
-          names every seat, so the compact bar the strip used to be is enough. */}
-      <div className="draft-section">
-        <DraftLabel analysis={{ draft: inferDraftState(board) }} />
-        <DraftRibbon />
       </div>
       <AwardControls />
     </section>
