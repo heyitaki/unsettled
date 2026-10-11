@@ -74,6 +74,7 @@ pub(crate) fn score_offers(
     trading_params: &trading::TradeParams,
     collect: impl FnMut(ScoredAction),
 ) {
+    // Mirrors legal_offer_trade's offer-independent clauses: no legal offer means no rival pricing.
     if view.phase() != DecisionPhase::Action
         || view.trade_config().is_none()
         || view.offers_remaining_this_turn() == 0

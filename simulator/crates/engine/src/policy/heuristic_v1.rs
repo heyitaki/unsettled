@@ -843,6 +843,7 @@ pub(crate) fn best_goal(
     best_goal_with(view, params, best_road(view, params, gated))
 }
 
+/// True exactly when `best_goal` is `Some` for the same view and parameters.
 pub(crate) fn has_goal(view: &DecisionView<'_>, params: &HeuristicParams) -> bool {
     for kind in [BuildKind::City, BuildKind::Settlement] {
         for vertex in 0..view.topology().vertex_count() as u8 {

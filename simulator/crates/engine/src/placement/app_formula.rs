@@ -329,9 +329,12 @@ pub(super) const VERTEX_FANOUT: usize = 3;
 
 #[derive(Clone, Debug)]
 pub struct AppFormulaScorer {
+    /// Immutable scorer identity, deliberately shared by clones for memo reuse.
     pub(super) id: u64,
+    /// Reach depends only on adjacency and is shared across matching scorers.
     pub(super) reach: Arc<expansion::ReachTable>,
-    pub(super) decay_pow: [f64; 3],
+    /// Runtime libm powers indexed by paid builds, preserving the reference's bits.
+    pub(super) decay_pow: [f64; expansion::MAX_PAID_BUILDS + 1],
     weights: EngineWeights,
     scarcity: [f64; RESOURCE_COUNT],
     coverage_value: [f64; RESOURCE_COUNT],
@@ -420,12 +423,15 @@ impl Holdings {
     }
 }
 
+/// Fixed-holdings pricing mirrors `site_total_with_holdings`, reusing only whole operands.
+/// The `* 1.0`, `1.0 *` and `+ 0.0` preserve its bits, including -0.0 becoming +0.0.
 pub(super) struct SitePricer<'a> {
     scorer: &'a AppFormulaScorer,
     holdings: Holdings,
     covers: [f64; RESOURCE_COUNT],
     total: f64,
     port_products: [f64; RESOURCE_COUNT],
+    /// Separate recipe caps or port coverage deficits require the full reference calculation.
     fallback: bool,
 }
 
@@ -983,6 +989,7 @@ impl AppFormulaScorer {
         overlap * self.weights.duplicate_number_penalty
     }
 
+    /// Same terms and order as the dense loop, which stays on the reference path for x86-64 speed.
     fn sparse_duplicate_number_penalty(&self, holdings: &Holdings, candidate: &VertexStats) -> f64 {
         let mut overlap = 0.0;
         for number in &candidate.token_numbers[..usize::from(candidate.token_numbers_len)] {

@@ -82,7 +82,6 @@ pub fn counterparty_score(
     params: &TradeParams,
     delta: &[f64; RESOURCE_COUNT],
 ) -> f64 {
-    assert_params(params);
     let base = etw::expected_turns_to_win(inputs);
     counterparty_score_with_base(inputs, params, delta, base)
 }
@@ -410,5 +409,4 @@ mod tests {
         );
         assert_ne!(first, second);
     }
-
 }
