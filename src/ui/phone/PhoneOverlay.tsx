@@ -7,9 +7,8 @@ import { isTextEntry, overlayOpen } from '../overlayPosition'
  * A full-screen screen you go to and come back from (spec S7, S8): fixed over
  * the page, sliding in from the right, closed by the back chevron or Escape.
  * The page under it is never scrolled or re-laid out, so it returns exactly as
- * it was. The dots button keeps its slot invisibly when a screen has no menu,
- * so the title sits at the same place on both screens. A screen's own
- * `action` button sits before the dots.
+ * it was. A screen's own `action` button sits in the right corner, before
+ * the dots when the screen has a menu.
  */
 export function PhoneOverlay({ title, action, menu, menuLabel, onClose, children }: {
   title: string
@@ -44,16 +43,18 @@ export function PhoneOverlay({ title, action, menu, menuLabel, onClose, children
         </button>
         <span className="phone-overlay-title">{title}</span>
         {action}
-        <button
-          type="button"
-          className={menu ? 'phone-ohead-btn' : 'phone-ohead-btn invisible'}
-          aria-label={menuLabel}
-          aria-haspopup="menu"
-          aria-expanded={menuTrigger !== null}
-          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
-        >
-          <DotsGlyph />
-        </button>
+        {menu && (
+          <button
+            type="button"
+            className="phone-ohead-btn"
+            aria-label={menuLabel}
+            aria-haspopup="menu"
+            aria-expanded={menuTrigger !== null}
+            onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
+          >
+            <DotsGlyph />
+          </button>
+        )}
       </div>
       <div className="phone-overlay-body">{children}</div>
       {menuTrigger && menu && menuLabel && (

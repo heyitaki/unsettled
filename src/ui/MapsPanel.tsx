@@ -21,7 +21,7 @@ export function MapsPanel() {
         <div className="panel-actions">
           <button
             type="button"
-            className="panel-dots head-add"
+            className="panel-dots"
             aria-label="New board"
             onClick={() => dispatch({ type: 'tab-add' })}
           >

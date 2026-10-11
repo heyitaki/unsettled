@@ -48,7 +48,6 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .maps-panel > :not(.library-boards) { flex: none; }
 .maps-panel .panel-heading { margin-bottom: 0; }
 .panel-actions { display: flex; gap: 2px; }
-.head-add svg { width: 15px; height: 15px; stroke-width: 1.4; }
 .panel-dots { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-control); background: transparent; color: var(--muted); }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel { padding: 17px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); }
@@ -236,9 +235,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .list-row-rename:focus { outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 0; }
 .list-row-meta { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .list-row-x { position: relative; flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--r-control); background: transparent; color: var(--muted); }
-.list-add { width: 100%; display: flex; align-items: center; justify-content: flex-start; gap: 7px; height: 36px; padding: 0 11px 0 20px; border: 0; border-radius: var(--r-row); background: transparent; color: var(--muted); font-size: 12px; font-weight: 400; }
-/* Align the add label with row text after the fixed glyphs and row gaps. */
-.roster > .list-add { padding-left: calc(25px + 2 * var(--row-gap, 9px)); }
 .hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent); }
 .you-chip { padding: 3px 8px; border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; pointer-events: none; }
@@ -410,7 +406,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .list-row-x:hover:not(:disabled) { color: var(--ink); background: transparent; }
   .token-tools button:hover:not(:disabled), .token-tools button.selected:hover:not(:disabled) { background: none; }
   .token-tools button:hover:not(.selected, :where(.phone-shell *)) .token-disc { fill: var(--tint); }
-  .list-add:hover:not(:disabled) { color: var(--ink); background: transparent; }
   .tools-manual > summary:hover { color: var(--ink); }
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }
@@ -492,7 +487,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 @media (min-width: 1121px) {
   .player-list { --tally-col: 18px; --row-gap: 4px; }
   .roster-row .list-row-main { margin-left: 4px; }
-  .roster > .list-add { padding-left: calc(29px + 2 * var(--row-gap)); }
 }
 
 /* The phone arm: App mounts PhoneShell here, so nothing of the Workspace tree is styled. */
@@ -534,7 +528,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   @media (hover: hover) {
     .phone-shell .analysis-row:hover:not(.current) { border-color: var(--line); }
     .phone-shell .primary:hover:not(:disabled), .phone-shell .hero-import:hover { background: var(--accent-dark); }
-    .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover { color: var(--ink); background: var(--tint); }
+    .phone-shell .empty-actions button:not(.primary):hover, .phone-shell .phone-ohead-btn:hover:not(:disabled) { color: var(--ink); background: var(--tint); }
   }
   .phone-brand { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 4px; }
   .phone-brand h1 { margin: 0; font-size: 20px; }
@@ -588,7 +582,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .phone-overlay-title { flex: 1; min-width: 0; font: 700 19px/1 Georgia, serif; }
   .phone-ohead-btn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
   .phone-ohead-btn.back { margin-left: -6px; color: var(--ink); }
-  .phone-ohead-btn.invisible { visibility: hidden; pointer-events: none; }
   .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .phone-overlay-body::-webkit-scrollbar { display: none; }
   /* No tally here, so the row drops the desktop's two trailing cells. */

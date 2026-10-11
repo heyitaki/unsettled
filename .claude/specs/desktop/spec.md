@@ -61,7 +61,7 @@ The roster is the phone's roster (S8) plus the tally the desktop keeps (mobile O
 
 Below the roster, `Award holders` opens Longest road and Largest army selectors when anyone qualifies. Only tied leaders can be chosen. Imported ties start as `Unknown`, while a recorded incumbent keeps a tie. Corrections share game undo, redo and persistence.
 
-- **Heading**: h2 `Players`. A plain, left-aligned, 36px `Add player` text button sits under the roster, disabled at six players.
+- **Heading**: h2 `Players`, and at the right a plus button (`PlusGlyph`, `aria-label="Add player"`), disabled at six players.
 - **Row**, left to right: grip (`GripGlyph`, starts a drag at once), swatch (24px, the player's colour), name, `YOU` chip (visible on the claimed row, an invisible placeholder on the others so columns hold), the tally columns and VP under the existing tally bar with its view switch. The awards pill keeps its place beside the name.
 - The name is the row's only flexing cell, so every fixed cell added to its right comes straight out of it, and it must never be squeezed to nothing: the right rail's floor and ceiling both carry the `YOU` column's width, the tally and the row gap narrow across the whole three-column arm (the rail reaches its ceiling around 1300px and the workspace caps at 1580px, so a width threshold would only take the pixels back off the name as the window grows), and the name clips inside its cell rather than keeping the phone's 30px floor and overflowing onto the chip.
 - **Clicking the row claims** that player (`setMe`); the claimed row is `me` (neutral tint, transparent 1px border). The claim is the phone's row-wide `list-row-select` button rather than a handler on the row, so it is reachable by keyboard and carries the claimed state (`aria-pressed`); the grip, swatch, name, tally and VP are positioned to paint over it and keep their own clicks and tooltips. **Clicking the swatch toggles the piece brush** (`active-player`), carried by `aria-pressed` with no ring on the swatch: the Structures tools take the brush player's colour, and the brush does not tint the row. The roster has no hand or dev card steppers: the Best moves table's row editor (D8) is the one place to correct them.
@@ -157,7 +157,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | D5 | Tool heading glyphs, destructive Clear, counts on the tool labels (D3 surface) | D4 | done |
 | D6 | Analysis behaviour: one code path, select on click, hover preview, pick step buttons, context line, claim row, empty state (D4 surface, DB2) | D1 | done |
 | D7 | Analysis card styling promoted; desktop card rules deleted (D4 cards) | D6 | done |
-| D8 | Roster rows: grip, swatch brush, rename on name, YOU chip, claim on row, plain Add player (D5 surface, DB3, DB4) | D1 | done |
+| D8 | Roster rows: grip, swatch brush, rename on name, YOU chip, claim on row, Add player plus in the heading (D5 surface, DB3, DB4) | D1 | done |
 | D9 | Drag feel and the draft ribbon in Best picks (D5 dragging, D4 ribbon) | D8, D4 | done |
 | D10 | Vocabulary sweep: `current` and `me` states everywhere, gold pair gone, DB7 grep clean | D2, D3, D7, D9 | done |
 | D11 | Docs: `CLAUDE.md` ui bullet, the mobile spec's `What already exists` paths, this ledger | D10 | done |

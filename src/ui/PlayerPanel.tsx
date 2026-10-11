@@ -145,6 +145,15 @@ export function PlayerPanel() {
     <section className="panel player-panel">
       <div className="panel-heading">
         <h2>Players</h2>
+        <button
+          type="button"
+          className="panel-dots"
+          aria-label="Add player"
+          disabled={board.players.length >= 6}
+          onClick={addSeat}
+        >
+          <PlusGlyph />
+        </button>
       </div>
       <div
         className={dragId !== null ? 'player-list roster reordering' : 'player-list roster'}
@@ -277,10 +286,6 @@ export function PlayerPanel() {
           )
         })}
         <RosterTrash roster={roster} playerCount={board.players.length} />
-        <button type="button" className="list-add" disabled={board.players.length >= 6} onClick={addSeat}>
-          <PlusGlyph />
-          Add player
-        </button>
       </div>
       <AwardControls />
     </section>

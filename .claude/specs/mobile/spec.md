@@ -99,15 +99,13 @@ This screen is the phone's document switcher, so it must reach `tab-select`, `ta
 
 ### S8 · Players screen
 
-Full-screen overlay. Header: back chevron, `Players`, no dots menu (nothing to import here; the button keeps its slot invisibly rather than shifting the title).
+Full-screen overlay. Header: back chevron, `Players`, then in the right corner a plus button (`Add player`, disabled at six players). No dots menu: there is nothing to import here.
 
 **Roster.** Label reads `Roster`, in muted 12px type at weight 600. One row per player, each row doing three things:
 
 - **Tap the row** to claim that player as you (`setMe`). Rows have transparent grounds and transparent 1px borders. The claimed row has the neutral tint and a `YOU` chip. There are no `CLAIM` buttons: four rows each carrying the same button repeated what the label said and left nothing to distinguish the claimed row.
 - **Tap the name** to rename in place. The name button is only as wide as its own text plus a few pixels, with a floor around 30px, so the rest of the row stays a claim target; the field grows with what is typed rather than filling the column. Enter commits, Escape reverts. The name carries a faint dotted underline, matching the context-line player picker, because nothing else distinguishes it from the row it sits in.
 - **Press and hold, or drag the grip**, to move the row to another seat. The grip starts a drag immediately; anywhere else needs a hold, and movement past a slop threshold before the hold lands cancels it so a scroll still scrolls. The lifted row tracks the finger with no easing while the rows it passes ease out of the way.
-
-Below the rows, a plain, left-aligned, 36px **`Add player`** text button.
 
 **Snake draft.** Below the roster, the pick grid, derived from seat order.
 

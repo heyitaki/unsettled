@@ -29,7 +29,21 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
     commit(addPlayer(board, { name: `Player ${index + 1}`, color: colors[index % colors.length] }))
   }
   return (
-    <PhoneOverlay title="Players" onClose={onClose}>
+    <PhoneOverlay
+      title="Players"
+      action={
+        <button
+          type="button"
+          className="phone-ohead-btn"
+          aria-label="Add player"
+          disabled={board.players.length >= 6}
+          onClick={add}
+        >
+          <PlusGlyph />
+        </button>
+      }
+      onClose={onClose}
+    >
       <div>
         <div className="group-label">
           <span>Roster</span>
@@ -47,10 +61,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
             </RosterRow>
           ))}
           <RosterTrash roster={roster} playerCount={board.players.length} />
-          <button type="button" className="list-add" disabled={board.players.length >= 6} onClick={add}>
-            <PlusGlyph />
-            Add player
-          </button>
         </div>
       </div>
       <DraftGrid board={board} />

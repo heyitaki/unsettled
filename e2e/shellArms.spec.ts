@@ -422,8 +422,9 @@ test.describe('desktop', () => {
     const rows = panel.locator('.roster-row')
     await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
     await expect(panel.locator('.roster-row.me')).toHaveCount(0)
-    // The heading's + moved to the row under the roster (spec D5).
-    await expect(panel.locator('.panel-heading button')).toHaveCount(0)
+    // Add player is the heading's + (spec D5); no text row sits under the roster.
+    await expect(panel.locator('.panel-heading').getByRole('button', { name: 'Add player' })).toBeVisible()
+    await expect(panel.locator('.roster button', { hasText: 'Add player' })).toHaveCount(0)
     await randomize(page)
 
     await rows.nth(1).click()
@@ -456,7 +457,7 @@ test.describe('desktop', () => {
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
     await expect(page.locator('.draft-ribbon-slot').first()).toHaveAttribute('title', /Mara/)
 
-    // The row under the roster is the only way to add, and it stops at six seats.
+    // The heading's plus is the only way to add, and it stops at six seats.
     const add = panel.getByRole('button', { name: 'Add player' })
     await add.click()
     await add.click()

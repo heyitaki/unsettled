@@ -19,7 +19,7 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
       action={
         <button
           type="button"
-          className="phone-ohead-btn head-add"
+          className="phone-ohead-btn"
           aria-label="New board"
           onClick={() => {
             dispatch({ type: 'tab-add' })

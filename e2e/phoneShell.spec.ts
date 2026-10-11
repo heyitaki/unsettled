@@ -517,7 +517,9 @@ test.describe('players screen', () => {
     await page.getByRole('button', { name: 'Players', exact: true }).click()
     await expect(screen).toBeVisible()
     await expect(screen.locator('.phone-overlay-title')).toHaveText('Players')
-    await expect(screen.locator('.phone-ohead-btn.invisible')).toHaveCount(1)
+    // Back and Add player only: the Players screen has no dots menu.
+    await expect(screen.locator('.phone-overlay-head').getByRole('button', { name: 'Add player' })).toBeVisible()
+    await expect(screen.locator('.phone-overlay-head button')).toHaveCount(2)
     await expect(rows).toHaveCount(4)
     await expect(rows.locator('.list-row-name')).toHaveText(['Red', 'Blue', 'Orange', 'White'])
     await expect(screen.locator('.roster-row.me')).toHaveCount(0)
