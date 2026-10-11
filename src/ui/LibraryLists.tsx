@@ -76,7 +76,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="library-boards">
       <div className="group-label">
-        <span>Boards <span className="count">({rowCount})</span></span>
+        <span>Boards ({rowCount})</span>
         <MenuSelect
           ariaLabel="Sort boards"
           value={sortKey}

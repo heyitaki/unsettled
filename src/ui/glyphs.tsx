@@ -14,9 +14,10 @@ const PIECE_INK = '#30271f'
 const PAPER = '#fbf8f1'
 /**
  * Default body colour for glyphs with no player/tool colour of their own: the
- * page's muted ink, so a flat shape still reads on the parchment.
+ * page's icon grey (--glyph in editor.css), a step lighter than muted text
+ * because a filled shape reads heavier than lettering in the same colour.
  */
-export const GLYPH_MUTED = '#776f64'
+export const GLYPH_MUTED = '#8e867a'
 
 export type StructureShape =
   | 'road' | 'settlement' | 'city' | 'superCity' | 'robber' | 'port' | 'erase'
