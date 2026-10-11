@@ -248,7 +248,7 @@ function initialState(): StoreState {
   return {
     tabs,
     activeTabId: bootActiveTab(tabs),
-    tool: { kind: 'tile', tile: 'wood' },
+    tool: { kind: 'none' },
     notice: restored.ok ? restored.warning ?? null : null,
     noticeSeq: 0,
     highlight: null,

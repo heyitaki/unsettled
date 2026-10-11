@@ -280,7 +280,7 @@ test.describe('desktop', () => {
     const box = (await page.locator('.board-canvas').boundingBox())!
     const clickBoard = () => page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
     await expect(tools.locator('.terrain-grid')).toBeHidden()
-    // The store boots with a tile tool; folded away, it must not paint (spec D3).
+    // No tool is picked on boot, so a board click must not paint (spec D3).
     await clickBoard()
     await expect(terrain).toHaveText('0/19')
 
@@ -293,6 +293,15 @@ test.describe('desktop', () => {
 
     // Folding drops the tool, so opening again starts with none picked.
     await toggle.click()
+    await toggle.click()
+    await expect(tools.locator('.terrain-grid')).toBeVisible()
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+
+    // Nor does a tool outlive a trip through the phone tree, which never showed it.
+    await tools.getByRole('button', { name: 'wood' }).click()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.locator('.phone-shell')).toBeVisible()
+    await page.setViewportSize({ width: 1280, height: 900 })
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
     await expect(tools.locator('button.selected')).toHaveCount(0)

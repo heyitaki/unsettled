@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { AnalysisProvider } from './AnalysisProvider'
 import { AdviceProvider } from './AdviceProvider'
 import { useAnalysis } from './useAnalysis'
@@ -48,7 +48,15 @@ function Workspace() {
 // Two React trees over one store (spec B8): a phone-width viewport gets the
 // shell built for it, everything wider keeps the workspace with its rails.
 function Shell() {
-  return usePhone() ? <PhoneShell /> : <Workspace />
+  const { dispatch } = useStore()
+  const phone = usePhone()
+  // A tool belongs to the tree that offered it, the phone's build block or the
+  // desktop's open tool rows, so a swap drops it: the other tree shows no tool
+  // and a board tap there must not paint.
+  useEffect(() => {
+    dispatch({ type: 'tool', tool: { kind: 'none' } })
+  }, [phone, dispatch])
+  return phone ? <PhoneShell /> : <Workspace />
 }
 
 export function App() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { boardMenu } from './boardMenu'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
@@ -124,12 +124,6 @@ export function ToolPalette() {
   const tab = activeTab(state)
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   const { history, items } = boardMenu(tab, dispatch)
-  // A tool nobody can see must not paint. The store boots with a tile tool and
-  // a rotated phone can hand over a live one, so the tool is dropped on mount
-  // and again whenever the rows fold away.
-  useEffect(() => {
-    dispatch({ type: 'tool', tool: { kind: 'none' } })
-  }, [dispatch])
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -148,6 +142,7 @@ export function ToolPalette() {
       <ImportButton />
       <details
         className="tools-manual"
+        // A tool nobody can see must not paint, so folding the rows drops it.
         onToggle={(event) => {
           if (!event.currentTarget.open) dispatch({ type: 'tool', tool: { kind: 'none' } })
         }}

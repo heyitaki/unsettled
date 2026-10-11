@@ -57,11 +57,6 @@ export function PhoneShell() {
     () => building ? null : restingMarks(board, analysis),
     [board, building, analysis],
   )
-  // The store boots with the desktop's default tile tool. Here the pencil is the
-  // only way into editing, so a board tap in analyze mode must not paint.
-  useEffect(() => {
-    dispatch({ type: 'tool', tool: { kind: 'none' } })
-  }, [dispatch])
   // The board under the tools was replaced (tab switch, import, layout change):
   // that exit is a Done, so the session is dropped without a restore.
   useEffect(() => {
