@@ -913,6 +913,102 @@ mod tests {
         assert_eq!(legal_only, whole);
     }
 
+    /// The uncached row against a direct score on boards a draft can and cannot reach: several
+    /// settlements per seat, road chains of the scoring seat's own, rival roads across the walk,
+    /// and a vacated vertex. One `ScoreRows` serves every state and both formulas, so anything it
+    /// remembers between calls has to be keyed by all of what it was computed from.
+    #[test]
+    fn an_uncached_row_matches_direct_scores_on_scrambled_boards() {
+        let (topology, board) = fixture();
+        let mut far = default_weights();
+        far.expansion_decay = 0.35;
+        far.expansion_weight = 0.4;
+        let scorers = [
+            AppFormulaScorer::new(&board, &topology, default_weights()),
+            AppFormulaScorer::new(&board, &topology, far),
+        ];
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        let mut draw = |bound: usize| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            ((state >> 33) as usize) % bound
+        };
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+        let mut compared = 0_usize;
+        for board_index in 0..120 {
+            let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
+            let mut edge_owner = vec![EMPTY; topology.edge_count()];
+            for _ in 0..draw(11) {
+                let seat = draw(6) as u8;
+                let legal: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
+                    .filter(|vertex| can_place_settlement(&topology, &vertex_owner, *vertex))
+                    .collect();
+                if legal.is_empty() {
+                    break;
+                }
+                let vertex = legal[draw(legal.len())];
+                vertex_owner[usize::from(vertex)] = seat;
+                // A chain of up to three roads out of the settlement, so a seat's own roads reach
+                // well into the region another candidate's walk covers.
+                let mut end = vertex;
+                for _ in 0..draw(4) {
+                    let edges = topology.vertex_edges(end);
+                    let edge = edges[draw(edges.len())];
+                    if edge_owner[usize::from(edge)] != EMPTY {
+                        break;
+                    }
+                    edge_owner[usize::from(edge)] = seat;
+                    let endpoints = topology.edge_endpoints(edge);
+                    end = if endpoints[0] == end {
+                        endpoints[1]
+                    } else {
+                        endpoints[0]
+                    };
+                }
+            }
+            let occupied: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
+                .filter(|vertex| vertex_owner[usize::from(*vertex)] != EMPTY)
+                .collect();
+            let vacancies = [
+                None,
+                (!occupied.is_empty()).then(|| occupied[draw(occupied.len())]),
+            ];
+            for seat in 0..6_u8 {
+                let scorer = &scorers[(board_index + usize::from(seat)) % 2];
+                let grant = (board_index + usize::from(seat)) % 3 == 0;
+                for vacated in vacancies {
+                    let row = rows
+                        .legal_row(
+                            scorer,
+                            &topology,
+                            &vertex_owner,
+                            &edge_owner,
+                            seat,
+                            grant,
+                            vacated,
+                        )
+                        .to_vec();
+                    assert_eq!(row.len(), topology.vertex_count());
+                    for vertex in 0..topology.vertex_count() as Vertex {
+                        if !legal_with_vacancy(&topology, &vertex_owner, vacated, vertex) {
+                            continue;
+                        }
+                        let direct =
+                            scorer.score_for_owner(&vertex_owner, &edge_owner, seat, vertex, grant);
+                        assert_eq!(
+                            row[usize::from(vertex)].to_bits(),
+                            direct.to_bits(),
+                            "board {board_index} seat {seat} vertex {vertex} vacated {vacated:?}"
+                        );
+                        compared += 1;
+                    }
+                }
+            }
+        }
+        assert!(compared > 20_000, "the boards must leave plenty to compare, got {compared}");
+    }
+
     /// The lookahead with SP3's expansion term switched on, which is the combination no committed
     /// arm carries and the one that turns the row cache off.
     ///
