@@ -2,7 +2,7 @@
 
 Class **G**: statements that the code does not do something, or does it wrong. Fixing the code makes the entry false — closing a gap means deleting its entry and saying so in the commit, not editing it into a contract. See [spec.md](spec.md) for the class rules and [programme.md](programme.md) for how to read this inventory.
 
-Ids are stable and assigned in increasing order as gaps are recorded; an entry then sits under the topic heading it belongs to, so file order and id order do not agree and are not meant to. (Ids 01 through 33 were assigned in the order their claims appeared in `simulator/README.md`, which is what [migration-ledger.md](migration-ledger.md) means by source order; that was a property of the one-time extraction and does not govern ids minted after it.) A closed gap's id is retired, not reused.
+Ids are stable and assigned in increasing order as gaps are recorded; an entry then sits under the topic heading it belongs to, so file order and id order do not agree and are not meant to. A closed gap's id is retired, not reused.
 
 ## Initial placement
 

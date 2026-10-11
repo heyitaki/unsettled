@@ -15,13 +15,3 @@ Approved on 2026-09-05. Work through every unblocked item. Existing analyzer, va
 ## Validation
 
 Write new behavior tests before implementation. Preserve existing tests unless an approved item specifically requires changing their contract. Run focused checks as each item lands, then build, lint, unit tests and browser tests. Run Rust tests in debug and release for the CI gate without running an experiment or spending any seed domain. Commit only with explicit approval. Do not push without a separate request.
-
-Verified locally:
-
-- `npm run build`, `npm run typecheck` and `npm run lint` pass.
-- `npm test`: 520 tests pass, including the three isolated performance tests.
-- `npm run test:e2e`: 44 tests pass.
-- Production coverage now has three tests: offline import, dismissing import warnings before editing, and navigation during worker loading. The revised specs await a browser run.
-- Desktop selection regression: three consecutive runs pass.
-- `cargo test --workspace` and `cargo test --workspace --release` pass with the existing intentionally ignored tests left ignored.
-- Workflow YAML parses and `git diff --check` passes. GitHub Actions has not run remotely. The user approved local commits on 2026-09-06. No push was requested.

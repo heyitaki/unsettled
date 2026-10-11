@@ -2962,7 +2962,7 @@ Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
 
 ## M-87: where a game's time goes after M-66, and the setup lookahead at half its cost
 
-2026-10-11, base commit `f4f11422`, candidate commit `9406c86a` (measured before it was committed, as commit object `49a5bd92` carrying the same simulator sources on `f4f11422`). No seed domain: `bench` runs on `PERF_SEED` and the profiles on a plain `--seed 7`. Plan in `docs/plans/simulator-lookahead-speed.md`. **Admissible: yes for the instruction counts and the hashes. The local wall times were taken under load averages of 6 to 7 and are a cross-check only.**
+2026-10-11, base commit `f4f11422`, candidate commit `9406c86a` (measured before it was committed, as commit object `49a5bd92` carrying the same simulator sources on `f4f11422`). No seed domain: `bench` runs on `PERF_SEED` and the profiles on a plain `--seed 7`. Plan in `docs/plans/completed/simulator-lookahead-speed.md`. **Admissible: yes for the instruction counts and the hashes. The local wall times were taken under load averages of 6 to 7 and are a cross-check only.**
 
 ```text
 # profile, from simulator/, one thread, sampled for 10 seconds with /usr/bin/sample

@@ -2,7 +2,7 @@
 
 The normative specification for the Catan self-play simulator in `simulator/`. Extracted from `simulator/README.md`, which survives as the operator's guide.
 
-**Two homes, split by claim class, not by topic.** `simulator/README.md` tells you what to type. This tree says what must be true. The split is deliberately not the old section boundary: the README's CLI section held seed-domain discipline, the domain constants and their disjointness assertion, the paired-statistics rules and the byte-identity guarantee, while its "Measured performance" section held the four `RoadNetwork` invariants. Those are contracts filed under an operational heading; a topic split would have preserved that error.
+**Two homes, split by claim class, not by topic.** `simulator/README.md` tells you what to type. This tree says what must be true.
 
 ## Files
 
@@ -14,9 +14,8 @@ The normative specification for the Catan self-play simulator in `simulator/`. E
 | [seat-count-programme.md](seat-count-programme.md) | **D** | Decisions for the seat-count weights programme: one weight vector per seat count, its field statement, screening family and run rules. |
 | [gaps.md](gaps.md) | **G** | Unmodelled scoring surfaces, each with a `SIM-GAP-NN` id. |
 | [measurements.md](measurements.md) | **M** | Append-only log of readings, one entry per reading, with provenance. |
-| [migration-ledger.md](migration-ledger.md) | — | Provenance of this extraction: one row per source claim and heading. |
 
-`simulator/README.md` is class **O** — build, run, flags, config schema, which files are written, and how to extend.
+`simulator/README.md` is class **O** — build, run, flags, which files are written, and how to extend.
 
 ## Classes and precedence
 

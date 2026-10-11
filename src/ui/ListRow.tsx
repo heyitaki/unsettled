@@ -18,7 +18,7 @@ export function ListRow({ current, color, name, meta, selectLabel, selectDisable
   /** The rename field's text while renaming, or null when the name is at rest. */
   draft: string | null
   onDraft: (next: string) => void
-  /** Absent when the entry cannot be addressed, which leaves the name plain text. */
+  /** Absent when the entry has no name to edit, which leaves the name plain text. */
   onStartRename?: () => void
   onCommit: () => void
   onCancel: () => void
