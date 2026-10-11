@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { boardMenu } from './boardMenu'
+import { pips } from '../model/board'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
 import { ContextMenu } from './ContextMenu'
@@ -80,6 +81,7 @@ export function ToolGroups() {
               onClick={() => selectTool({ kind: 'token', number })}
             >
               {number}
+              <span className="token-pips" style={{ width: pips(number) * 4.5 }} />
             </button>
           ))}
         </div>

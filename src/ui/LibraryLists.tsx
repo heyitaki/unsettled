@@ -101,7 +101,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
             onSelect={setSortKey}
             caret={<SortGlyph className="menu-sort-glyph" />}
           >
-            <strong>{SORT_MENU_LABEL[sortKey]}</strong>
+            {SORT_MENU_LABEL[sortKey]}
           </MenuSelect>
         </div>
         {listed.warning && <p className="hint">{listed.warning}</p>}

@@ -56,7 +56,7 @@ Settlements show the same `i` and `ii` order badges as desktop while the draft i
 
 ### S4 · Layout caption
 
-Centred under the board, one line: **`4 player` layout ⌄**, a button opening the layout menu. 11px. No hover or press state.
+Centred under the board, one line: **`4 player` ⌄**, a button opening the layout menu. 11px. No hover or press state.
 
 The `19/19 terrain` and `4 pieces` counts are removed from this line on phones. They are a build-time detail competing with the one control that is here.
 
@@ -170,7 +170,7 @@ Do not rebuild these; move or restyle them.
 
 Resolved 2026-09-02; the open questions they close are kept for the record.
 
-**O1 · Points ledger: not on the phone.** The Players screen carries the roster and the snake draft only. The ledger (tally columns, resource steppers, view switch) stays a desktop-only part of `PlayerPanel`. M10 is dropped.
+**O1 · Points ledger: not on the phone.** The Players screen carries the roster and the snake draft only. The ledger (tally columns, view switch) stays a desktop-only part of `PlayerPanel`; its resource steppers were removed from the desktop too, in favour of the Best moves row editor. M10 is dropped.
 
 **O2 · Saving: automatic (B7).** No save control on the phone or on the desktop. Every edit autosaves the tab into its map; the first non-blank edit of an unlinked tab creates the map and links the tab. The desktop tab menu's `Save to library`, the dirty dots, the save-and-close prompt and the `MapsPanel` name field and button are removed.
 

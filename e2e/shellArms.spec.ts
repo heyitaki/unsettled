@@ -409,11 +409,6 @@ test.describe('desktop', () => {
     const swatch = rows.nth(2).locator('.swatch')
     await swatch.click()
     await expect(swatch).toHaveAttribute('aria-pressed', 'true')
-    const steppers = panel.locator('.player-steppers')
-    await expect(steppers).toHaveCount(1)
-    const brushed = await steppers.evaluate((el) =>
-      el.previousElementSibling?.querySelector('.list-row-name')?.textContent)
-    expect(brushed).toBe('Orange')
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
     await expect(rows.nth(2)).not.toHaveClass(/\bme\b/)
     await snap(page, 'desktop-roster')

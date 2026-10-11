@@ -597,7 +597,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }, [board.robber, board.hexes])
   const portLayer = useMemo(() => ports.map(({ port, a, b, point }) => {
-    const fill = port.resource ? TILE_COLORS[port.resource] : '#fff'
+    const fill = port.resource ? TILE_COLORS[port.resource] : TOKEN_COLOR
     const ink = port.resource ? readableInk(TILE_COLORS[port.resource]) : INK_COLOR
     return (
       <g
@@ -926,7 +926,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           onSelect={choose}
           align="center"
         >
-          <strong>{LAYOUT_LABEL[board.layout]}</strong> layout
+          <strong>{LAYOUT_LABEL[board.layout]}</strong>
         </MenuSelect>
         {transform.scale > 1 && (
           <span className="board-zoom">
