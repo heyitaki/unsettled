@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use super::*;
 
@@ -12,6 +12,7 @@ pub(super) struct DecisionCall {
 }
 
 thread_local! {
+    pub(super) static ADVICE_PARSES: Cell<usize> = const { Cell::new(0) };
     pub(super) static E2E_PASSES: RefCell<Vec<(String, usize)>> = const { RefCell::new(Vec::new()) };
     pub(super) static PRIMING: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
     pub(super) static DECISIONS: RefCell<Vec<DecisionCall>> = const { RefCell::new(Vec::new()) };
@@ -758,4 +759,117 @@ fn insufficient_stress_samples_are_skipped() {
         };
         assert!(reason.contains("below required"));
     }
+}
+
+#[test]
+fn advise_rows_use_named_requests_and_first_responses() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../fixtures/advice-parity.json")).unwrap();
+    let base = request();
+    for (layout, prefix) in [
+        (Layout::Standard4, "standard4-11"),
+        (Layout::Extension6, "extension6-23"),
+    ] {
+        for (kind, fixture_kind) in [
+            ("turn", "turn"),
+            ("pre_roll", "preRoll"),
+            ("discard", "discard"),
+            ("robber", "robber"),
+            ("trade_response", "tradeResponse"),
+            ("produce", "produce"),
+        ] {
+            let id = format!("advise/{}/{kind}", layout.as_str());
+            let name = format!("{prefix}-{fixture_kind}");
+            let case = fixture["cases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|case| case["name"] == name)
+                .unwrap();
+            let text = case["request"].to_string();
+            let mut state = Fingerprint(PERF_SEED);
+            state.bytes(text.as_bytes());
+            let response = unsettled_engine::advice::advise(&text);
+            assert!(
+                serde_json::from_str::<serde_json::Value>(&response)
+                    .unwrap()
+                    .get("error")
+                    .is_none()
+            );
+            let mut decision = Fingerprint(scenario_seed(&id));
+            decision.bytes(response.as_bytes());
+            let mut request = BenchRequest {
+                filter: Some(&id),
+                calls: Some(2),
+                ..base
+            };
+            for repeats in [1, 2] {
+                request.repeats = repeats;
+                let mut result = result();
+                advise_scenarios(&mut result, &request, layout, &OnceCell::new()).unwrap();
+                assert_eq!(result.scenarios.len(), 1);
+                let row = &result.scenarios[0];
+                assert_eq!(row.id, id);
+                assert_eq!(row.group, "advise");
+                let Outcome::Measured { measurement, .. } = &row.outcome else {
+                    panic!("{id} skipped");
+                };
+                assert_eq!(measurement.state_hash, format!("{:016x}", state.0), "{id}");
+                assert_eq!(
+                    measurement.decision_hash,
+                    format!("{:016x}", decision.0),
+                    "{id}, repeats {repeats}"
+                );
+                assert_eq!(measurement.calls, 2);
+                assert_eq!(measurement.repeats, repeats);
+            }
+        }
+    }
+}
+
+#[test]
+fn advise_missing_case_is_a_named_error() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../fixtures/advice-parity.json")).unwrap();
+    let name = "extension6-absent-turn";
+    let error = advice_request(&fixture, name).expect_err("a missing case must fail");
+    assert!(error.contains(name), "{error}");
+
+    let fixture = OnceCell::from(Ok(serde_json::json!({"cases":[]})));
+    let mut request = request();
+    request.filter = Some("advise/extension6/turn");
+    let error = advise_scenarios(&mut result(), &request, Layout::Extension6, &fixture)
+        .expect_err("a missing row must fail");
+    assert!(error.contains("extension6-23-turn"), "{error}");
+}
+
+#[test]
+fn advise_errors_name_the_row() {
+    let fixture = OnceCell::from(Ok(serde_json::json!({"cases":[{
+        "name":"extension6-23-turn", "request":null
+    }]})));
+    let mut request = request();
+    request.filter = Some("advise/extension6/turn");
+    let error = advise_scenarios(&mut result(), &request, Layout::Extension6, &fixture)
+        .expect_err("an error response must fail");
+    assert!(error.contains("advise/extension6/turn"), "{error}");
+}
+
+#[test]
+fn advise_fixture_is_lazy_and_shared() {
+    let fixture = OnceCell::new();
+    let mut request = request();
+    request.filter = Some("e2e/");
+    ADVICE_PARSES.set(0);
+    for layout in [Layout::Standard4, Layout::Extension6] {
+        advise_scenarios(&mut result(), &request, layout, &fixture).unwrap();
+    }
+    assert!(fixture.get().is_none());
+    assert_eq!(ADVICE_PARSES.get(), 0);
+    request.filter = Some("advise/");
+    for layout in [Layout::Standard4, Layout::Extension6] {
+        advise_scenarios(&mut result(), &request, layout, &fixture).unwrap();
+    }
+    assert!(fixture.get().is_some());
+    assert_eq!(ADVICE_PARSES.get(), 1);
 }

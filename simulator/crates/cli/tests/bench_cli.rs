@@ -33,6 +33,15 @@ const DECISION_KINDS: [&str; 6] = [
 const STAGES: [&str; 3] = ["early", "mid", "late"];
 const ACTION_STRESS: [&str; 2] = ["long_road", "full_hand"];
 const END_TO_END: [&str; 2] = ["single_core", "all_cores"];
+// One row per decision the app can ask the adviser about.
+const ADVISE: [&str; 6] = [
+    "turn",
+    "pre_roll",
+    "discard",
+    "robber",
+    "trade_response",
+    "produce",
+];
 
 fn simulator_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -54,6 +63,9 @@ fn expected_ids() -> BTreeSet<String> {
         }
         for name in END_TO_END {
             ids.insert(format!("e2e/{layout}/{name}"));
+        }
+        for kind in ADVISE {
+            ids.insert(format!("advise/{layout}/{kind}"));
         }
     }
     ids
@@ -319,6 +331,39 @@ fn candidate_weights_move_placements_and_never_states() {
             "--weights never reached the {chooser} chooser"
         );
     }
+}
+
+// The adviser chooses its own policy and weights, so a candidate reaches none of its rows. Each
+// row is one request of its own: two rows sharing a state hash would be one request timed twice.
+#[test]
+fn advise_rows_are_measured_and_out_of_a_candidates_reach() {
+    let rows = LAYOUTS.len() * ADVISE.len();
+    let candidate = bench(
+        "advise",
+        &[
+            "--filter",
+            "advise/",
+            "--policy",
+            "random-legal",
+            "--weights",
+            "placement/arms/flat_swamp.json",
+        ],
+    );
+    assert_eq!(scenarios(&candidate).len(), rows);
+    for field in ["stateHash", "decisionHash"] {
+        let reference = hashes(reference(), field);
+        let candidate = hashes(&candidate, field);
+        assert_eq!(candidate.len(), rows, "an advise row was not measured");
+        for (id, hash) in &candidate {
+            assert_eq!(&reference[id], hash, "{id} {field}");
+        }
+    }
+    let states = hashes(&candidate, "stateHash");
+    assert_eq!(
+        states.values().collect::<BTreeSet<_>>().len(),
+        rows,
+        "two advise rows share a request"
+    );
 }
 
 // A state hash covers the inputs alone, so two rows of one decision kind that sampled the same

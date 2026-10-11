@@ -93,7 +93,7 @@ cargo run --release -p unsettled-sim -- simulate \
 
 ## Speed suite
 
-`bench` measures placement, policy decisions, and whole-game throughput on both layouts (four seats on `standard4`, six on `extension6`). Use `--filter` to keep scenario IDs containing a substring.
+`bench` measures placement, policy decisions, the adviser call, and whole-game throughput on both layouts (four seats on `standard4`, six on `extension6`). Use `--filter` to keep scenario IDs containing a substring.
 
 ```sh
 cargo run --release -p unsettled-sim -- bench --quick
@@ -119,6 +119,8 @@ Without `--calls` or `--quick`, placement and decision rows automatically double
 All counts must be positive, and a `--filter` that matches no scenario is an error. Placement scenarios cover fresh board preparation, scores for every legal empty-board vertex, greedy picks at slots 0, halfway through round one, the first pick of round two, and the final pick, draft-aware first and middle picks, and a full draft. Earlier occupancy always comes from the default greedy formula.
 
 Decision scenarios cover `pre_roll`, `action`, `discard`, `robber`, `respond_trade`, and `select_counterparty` at early, mid, and late stages, plus `action/long_road` and `action/full_hand`. The stages use 25%, 50%, and 75% of each reference game's length, rounded down to whole rounds. A scenario with no legal decision is reported as skipped, with a reason.
+
+Advise scenarios time the app's adviser call, `advice.rs::advise`, from request JSON to response JSON, once per decision the app can ask about: `turn`, `pre_roll`, `discard`, `robber`, `trade_response`, and `produce`. `--policy` and `--weights` do not reach them, and the timing is native, not WebAssembly.
 
 The table reports minimum and median nanoseconds per call, plus games per second for e2e rows. E2e games use the measured policy and draft-aware weights in every seat, with trading enabled.
 

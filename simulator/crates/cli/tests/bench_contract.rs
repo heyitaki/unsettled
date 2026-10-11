@@ -137,6 +137,7 @@ fn sampling_counts_do_not_change_hashes() {
         "placement/standard4/",
         "decision/standard4/",
         "e2e/standard4/",
+        "advise/",
     ] {
         let quick = bench("counts-quick", &["--quick", "--filter", filter]);
         for row in quick["scenarios"].as_array().unwrap() {
@@ -368,4 +369,33 @@ fn generate_bench_hashes() {
         }
         Err(error) => panic!("REFUSED: {error}"),
     }
+}
+
+#[test]
+fn advise_fixture_is_embedded() {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("bench-advise-embedded");
+    fs::create_dir_all(directory.join("placement")).unwrap();
+    fs::copy(
+        root().join("placement/default-weights.json"),
+        directory.join("placement/default-weights.json"),
+    )
+    .unwrap();
+    assert!(!directory.join("fixtures").exists());
+    let output_path = directory.join("result.json");
+    let _ = fs::remove_file(&output_path);
+    let output = Command::new(env!("CARGO_BIN_EXE_unsettled-sim"))
+        .current_dir(&directory)
+        .args(["bench", "--quick", "--filter", "advise/", "--json"])
+        .arg(&output_path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let document: Value = serde_json::from_slice(&fs::read(output_path).unwrap()).unwrap();
+    let reference = bench("embedded-reference", &["--quick", "--filter", "advise/"]);
+    assert_eq!(hashes(&document), hashes(&reference));
+    assert_eq!(document["scenarios"].as_array().unwrap().len(), 12);
 }

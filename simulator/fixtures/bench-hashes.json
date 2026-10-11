@@ -1,4 +1,52 @@
 {
+  "advise/extension6/discard": {
+    "decisionHash": "9623d8a671a88da5",
+    "stateHash": "15df7a42c896cdad"
+  },
+  "advise/extension6/pre_roll": {
+    "decisionHash": "fb581d73da5fcc39",
+    "stateHash": "9b373b49d256e6fd"
+  },
+  "advise/extension6/produce": {
+    "decisionHash": "79d6b5db65fae53c",
+    "stateHash": "af0250ff6eaac71b"
+  },
+  "advise/extension6/robber": {
+    "decisionHash": "aa7313b3d2970792",
+    "stateHash": "34f2a7c30959faac"
+  },
+  "advise/extension6/trade_response": {
+    "decisionHash": "25a73e08888d585e",
+    "stateHash": "7700817d27411c75"
+  },
+  "advise/extension6/turn": {
+    "decisionHash": "154bdcb7b31fcee6",
+    "stateHash": "20fa06f37267d6fd"
+  },
+  "advise/standard4/discard": {
+    "decisionHash": "e242a848388e7794",
+    "stateHash": "4226c1ea340a6dbd"
+  },
+  "advise/standard4/pre_roll": {
+    "decisionHash": "82004ba653ee07e2",
+    "stateHash": "e2ae0188fa8bd383"
+  },
+  "advise/standard4/produce": {
+    "decisionHash": "0e89286cd36bafc9",
+    "stateHash": "665ceb579ef707dd"
+  },
+  "advise/standard4/robber": {
+    "decisionHash": "f44ea5a82f8cef8b",
+    "stateHash": "8cff0fe044dc5aef"
+  },
+  "advise/standard4/trade_response": {
+    "decisionHash": "8d0f7d9731376162",
+    "stateHash": "392ba7e72fc647dc"
+  },
+  "advise/standard4/turn": {
+    "decisionHash": "9407c5977f391fe3",
+    "stateHash": "cd0cf1855b10fa48"
+  },
   "decision/extension6/action/early": {
     "decisionHash": "903eea6647d756bf",
     "stateHash": "4fa8d697658623dc"

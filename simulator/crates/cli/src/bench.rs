@@ -1,9 +1,11 @@
-use std::cell::LazyCell;
+use std::cell::{LazyCell, OnceCell};
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 use serde::Serialize;
+use serde_json::Value;
+use unsettled_engine::advice::advise;
 use unsettled_engine::board::SimBoard;
 use unsettled_engine::game::{
     GameArena, GameConfig, GameResult, can_place_settlement, setup_order,
@@ -169,6 +171,7 @@ pub fn benchmark(request: &BenchRequest<'_>) -> Result<BenchResult, String> {
         weights: request.weights.to_owned(),
         scenarios: Vec::new(),
     };
+    let advice_fixture = OnceCell::new();
     for (layout, seats) in [(Layout::Standard4, 4), (Layout::Extension6, 6)] {
         if !scenario_ids(layout).any(|id| matches_filter(request, &id)) {
             continue;
@@ -192,6 +195,7 @@ pub fn benchmark(request: &BenchRequest<'_>) -> Result<BenchResult, String> {
         );
         decision_scenarios(&mut result, request, &board, &topology, reference_greedy);
         e2e_scenarios(&mut result, request, &board, &topology)?;
+        advise_scenarios(&mut result, request, layout, &advice_fixture)?;
     }
     Ok(result)
 }
@@ -216,6 +220,18 @@ const STRESS_SCENARIOS: [StressScenario; 2] = [
     },
 ];
 const E2E_MODES: [&str; 2] = ["single_core", "all_cores"];
+const ADVISE_KINDS: [(&str, &str); 6] = [
+    ("turn", "turn"),
+    ("pre_roll", "preRoll"),
+    ("discard", "discard"),
+    ("robber", "robber"),
+    ("trade_response", "tradeResponse"),
+    ("produce", "produce"),
+];
+
+fn advise_id(layout: Layout, kind: &str) -> String {
+    format!("advise/{}/{kind}", layout.as_str())
+}
 
 fn placement_id(layout: Layout, suffix: &str) -> String {
     format!("placement/{}/{suffix}", layout.as_str())
@@ -260,6 +276,11 @@ fn scenario_ids(layout: Layout) -> impl Iterator<Item = String> {
     .map(move |stage| placement_id(layout, stage))
     .chain(decision_ids(layout))
     .chain(E2E_MODES.into_iter().map(move |mode| e2e_id(layout, mode)))
+    .chain(
+        ADVISE_KINDS
+            .into_iter()
+            .map(move |(kind, _)| advise_id(layout, kind)),
+    )
 }
 
 fn matches_filter(request: &BenchRequest<'_>, id: &str) -> bool {
@@ -1360,6 +1381,66 @@ fn e2e_scenarios(
                 games_per_second,
             },
         );
+    }
+    Ok(())
+}
+
+fn advice_request(fixture: &Value, name: &str) -> Result<String, String> {
+    fixture
+        .get("cases")
+        .and_then(Value::as_array)
+        .and_then(|cases| cases.iter().find(|case| case["name"] == name))
+        .and_then(|case| case.get("request"))
+        .map(Value::to_string)
+        .ok_or_else(|| format!("bench advice fixture is missing case {name}"))
+}
+
+fn advise_scenarios(
+    result: &mut BenchResult,
+    request: &BenchRequest<'_>,
+    layout: Layout,
+    fixture: &OnceCell<Result<Value, String>>,
+) -> Result<(), String> {
+    // These cases pin four and six seats without depending on a candidate or the working directory.
+    let prefix = match layout {
+        Layout::Standard4 => "standard4-11",
+        Layout::Extension6 => "extension6-23",
+    };
+    for (kind, fixture_kind) in ADVISE_KINDS {
+        let id = advise_id(layout, kind);
+        if !matches_filter(request, &id) {
+            continue;
+        }
+        let fixture = fixture
+            .get_or_init(|| {
+                #[cfg(test)]
+                tests::ADVICE_PARSES.set(tests::ADVICE_PARSES.get() + 1);
+                serde_json::from_str(include_str!("../../../fixtures/advice-parity.json"))
+                    .map_err(|error| format!("invalid bench advice fixture: {error}"))
+            })
+            .as_ref()
+            .map_err(Clone::clone)?;
+        let request_text = advice_request(fixture, &format!("{prefix}-{fixture_kind}"))?;
+        let mut state = Fingerprint(PERF_SEED);
+        state.bytes(request_text.as_bytes());
+        let mut response = String::new();
+        let outcome = measure(
+            request,
+            &id,
+            state,
+            |_| (),
+            |_, _| advise(black_box(&request_text)),
+            |hash, first, _| {
+                hash.bytes(first.as_bytes());
+                response = first;
+            },
+        );
+        let value: Value = serde_json::from_str(&response)
+            .map_err(|error| format!("{id}: invalid advice response: {error}"))?;
+        if let Some(error) = value.get("error") {
+            return Err(format!("{id}: advice failed: {error}"));
+        }
+        result.push(id, layout, outcome);
     }
     Ok(())
 }
