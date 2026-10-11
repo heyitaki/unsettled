@@ -47,6 +47,37 @@ pub const TUNING4_SEED: u64 = 0x7a14_5eed_2026_1010;
 pub const EVAL4_SEED: u64 = 0xe7a4_5eed_2026_1010;
 pub const GATE4_SEED: u64 = 0x6a74_5eed_2026_1010;
 
+/// Performance-only domain, disjoint from every evaluation generation. Reusable for
+/// timing and deterministic benchmark fixtures, never for screening or adoption evidence.
+pub const PERF_SEED: u64 = 0x9e4f_5eed_2026_1010;
+
+const _: () = {
+    let domains = [
+        TUNING_SEED,
+        EVAL_SEED,
+        GATE_SEED,
+        TUNING2_SEED,
+        EVAL2_SEED,
+        GATE2_SEED,
+        TUNING3_SEED,
+        EVAL3_SEED,
+        GATE3_SEED,
+        TUNING4_SEED,
+        EVAL4_SEED,
+        GATE4_SEED,
+        PERF_SEED,
+    ];
+    let mut left = 0;
+    while left < domains.len() {
+        let mut right = left + 1;
+        while right < domains.len() {
+            assert!(domains[left] != domains[right]);
+            right += 1;
+        }
+        left += 1;
+    }
+};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EvaluationDomain {
     Tuning,

@@ -1,0 +1,250 @@
+{
+  "decision/extension6/action/early": {
+    "decisionHash": "903eea6647d756bf",
+    "stateHash": "4fa8d697658623dc"
+  },
+  "decision/extension6/action/full_hand": {
+    "decisionHash": "721d2636e43e66ae",
+    "stateHash": "c5fceed32018e9df"
+  },
+  "decision/extension6/action/late": {
+    "decisionHash": "97bdf7506c1d9b44",
+    "stateHash": "06ce8b2a6c226d90"
+  },
+  "decision/extension6/action/long_road": {
+    "decisionHash": "4c5bf87ce0c2294f",
+    "stateHash": "1afa82f80721ca90"
+  },
+  "decision/extension6/action/mid": {
+    "decisionHash": "e83072220997d745",
+    "stateHash": "07a399ff464d71e3"
+  },
+  "decision/extension6/discard/early": {
+    "decisionHash": "6589a3c645aeef1c",
+    "stateHash": "f10741f00f95fa85"
+  },
+  "decision/extension6/discard/late": {
+    "decisionHash": "99f3ce48ac8b0c06",
+    "stateHash": "0cd8f7eeb1f2cc64"
+  },
+  "decision/extension6/discard/mid": {
+    "decisionHash": "0ef6b073f2a27701",
+    "stateHash": "f896480b2920b4ed"
+  },
+  "decision/extension6/pre_roll/early": {
+    "decisionHash": "eab2f1ef72b25a59",
+    "stateHash": "891e3e92ee45181c"
+  },
+  "decision/extension6/pre_roll/late": {
+    "decisionHash": "413897b92f9567cb",
+    "stateHash": "72e22f0606bff04e"
+  },
+  "decision/extension6/pre_roll/mid": {
+    "decisionHash": "c56c122c306605db",
+    "stateHash": "ee42ca7bc705126c"
+  },
+  "decision/extension6/respond_trade/early": {
+    "decisionHash": "f4fd4e1aadd7702e",
+    "stateHash": "80de6cc6788f38fe"
+  },
+  "decision/extension6/respond_trade/late": {
+    "decisionHash": "ec9a33f53b49b0c5",
+    "stateHash": "d21c5e39d46133fb"
+  },
+  "decision/extension6/respond_trade/mid": {
+    "decisionHash": "3116f319ce594e40",
+    "stateHash": "dd7c96939725cc07"
+  },
+  "decision/extension6/robber/early": {
+    "decisionHash": "6504edb68fbf44aa",
+    "stateHash": "4fa8d697658623dc"
+  },
+  "decision/extension6/robber/late": {
+    "decisionHash": "1f82ada3d6fda9cc",
+    "stateHash": "06ce8b2a6c226d90"
+  },
+  "decision/extension6/robber/mid": {
+    "decisionHash": "6ba08144dee88ea7",
+    "stateHash": "07a399ff464d71e3"
+  },
+  "decision/extension6/select_counterparty/early": {
+    "decisionHash": "87fa1e523bd5ba82",
+    "stateHash": "a9ce34c8537acb9e"
+  },
+  "decision/extension6/select_counterparty/late": {
+    "decisionHash": "79e4b2db0a061a6d",
+    "stateHash": "0ea9f42c4b6b2b42"
+  },
+  "decision/extension6/select_counterparty/mid": {
+    "decisionHash": "07989f30fdfda82f",
+    "stateHash": "5d702f69cbcbc974"
+  },
+  "decision/standard4/action/early": {
+    "decisionHash": "b267d284e331c179",
+    "stateHash": "075f0e0550d5226a"
+  },
+  "decision/standard4/action/full_hand": {
+    "decisionHash": "3bd7bf9507c04c35",
+    "stateHash": "d2100278d2b86279"
+  },
+  "decision/standard4/action/late": {
+    "decisionHash": "efd8df0bcbb9ff22",
+    "stateHash": "303a8251ffcb6fb1"
+  },
+  "decision/standard4/action/long_road": {
+    "decisionHash": "e1acbaa4538f49ae",
+    "stateHash": "2422498a9c4b846e"
+  },
+  "decision/standard4/action/mid": {
+    "decisionHash": "219c178e0ce658cd",
+    "stateHash": "4d3ed396b3c3f8e9"
+  },
+  "decision/standard4/discard/early": {
+    "decisionHash": "679324dea3423695",
+    "stateHash": "c0ba55ba9212d11b"
+  },
+  "decision/standard4/discard/late": {
+    "decisionHash": "5664a99b1cbfd7a2",
+    "stateHash": "9c798c490e3f7ccf"
+  },
+  "decision/standard4/discard/mid": {
+    "decisionHash": "068c4195d5305e19",
+    "stateHash": "63ab4be3905ce2a8"
+  },
+  "decision/standard4/pre_roll/early": {
+    "decisionHash": "9cefdcad2cfed563",
+    "stateHash": "1fa53e1802485005"
+  },
+  "decision/standard4/pre_roll/late": {
+    "decisionHash": "0f4b3e514490edfa",
+    "stateHash": "11d8db9308f34c4b"
+  },
+  "decision/standard4/pre_roll/mid": {
+    "decisionHash": "26e399d68006a1ad",
+    "stateHash": "3f901c0178c8c7d6"
+  },
+  "decision/standard4/respond_trade/early": {
+    "decisionHash": "56699e33327a21ad",
+    "stateHash": "35f3e09bdbcf60eb"
+  },
+  "decision/standard4/respond_trade/late": {
+    "decisionHash": "787d188be2fdcb21",
+    "stateHash": "bbc9b778fed6b53a"
+  },
+  "decision/standard4/respond_trade/mid": {
+    "decisionHash": "88b450b85461fce1",
+    "stateHash": "f3466319c08c7bc1"
+  },
+  "decision/standard4/robber/early": {
+    "decisionHash": "6858cce0b62d0334",
+    "stateHash": "075f0e0550d5226a"
+  },
+  "decision/standard4/robber/late": {
+    "decisionHash": "32a92d5b7f9d5aa6",
+    "stateHash": "303a8251ffcb6fb1"
+  },
+  "decision/standard4/robber/mid": {
+    "decisionHash": "171c6031523e20f9",
+    "stateHash": "4d3ed396b3c3f8e9"
+  },
+  "decision/standard4/select_counterparty/early": {
+    "decisionHash": "7a49b00b4fdadf35",
+    "stateHash": "f8360784ad2bc3ed"
+  },
+  "decision/standard4/select_counterparty/late": {
+    "decisionHash": "bb0e482c96e032a5",
+    "stateHash": "f7a9d5e69926674a"
+  },
+  "decision/standard4/select_counterparty/mid": {
+    "decisionHash": "b74e0ead27c2e79d",
+    "stateHash": "73c35ee9dfae1ee8"
+  },
+  "e2e/extension6/all_cores": {
+    "decisionHash": "5077e11e20e375f5",
+    "stateHash": "31bda38729d74bfd"
+  },
+  "e2e/extension6/single_core": {
+    "decisionHash": "5077e11e20e375f5",
+    "stateHash": "31bda38729d74bfd"
+  },
+  "e2e/standard4/all_cores": {
+    "decisionHash": "3c78a801d8320fc3",
+    "stateHash": "29e565f4908e521c"
+  },
+  "e2e/standard4/single_core": {
+    "decisionHash": "3c78a801d8320fc3",
+    "stateHash": "29e565f4908e521c"
+  },
+  "placement/extension6/draft/first": {
+    "decisionHash": "e15b480df2288df0",
+    "stateHash": "e12ec8f7df4dcd87"
+  },
+  "placement/extension6/draft/middle": {
+    "decisionHash": "44894f68111757ce",
+    "stateHash": "b3ba6c976d0234f9"
+  },
+  "placement/extension6/full_draft": {
+    "decisionHash": "9f621f97ccbab8b0",
+    "stateHash": "e12ec8f7df4dcd87"
+  },
+  "placement/extension6/greedy/first": {
+    "decisionHash": "70dfba3dcf87e797",
+    "stateHash": "e12ec8f7df4dcd87"
+  },
+  "placement/extension6/greedy/last": {
+    "decisionHash": "0e9eb7a018b5c167",
+    "stateHash": "f335956aeed5c3fb"
+  },
+  "placement/extension6/greedy/middle": {
+    "decisionHash": "04d28b5c1dc5256c",
+    "stateHash": "b3ba6c976d0234f9"
+  },
+  "placement/extension6/greedy/turn": {
+    "decisionHash": "3c0f88685f9f5b53",
+    "stateHash": "02e99c90b8411790"
+  },
+  "placement/extension6/prepare": {
+    "decisionHash": "a3be0693fceeb17b",
+    "stateHash": "fe04023b1639f4d5"
+  },
+  "placement/extension6/score_all": {
+    "decisionHash": "ed47722dce5d8feb",
+    "stateHash": "e12ec8f7df4dcd87"
+  },
+  "placement/standard4/draft/first": {
+    "decisionHash": "cfaa1cf19b2971a0",
+    "stateHash": "3974ecc0adcd3f16"
+  },
+  "placement/standard4/draft/middle": {
+    "decisionHash": "9104c68a84ac4fd5",
+    "stateHash": "72a5418acff93faa"
+  },
+  "placement/standard4/full_draft": {
+    "decisionHash": "5b7b171ec8a9d795",
+    "stateHash": "3974ecc0adcd3f16"
+  },
+  "placement/standard4/greedy/first": {
+    "decisionHash": "28f130849d5915c8",
+    "stateHash": "3974ecc0adcd3f16"
+  },
+  "placement/standard4/greedy/last": {
+    "decisionHash": "26288bdb849a33a3",
+    "stateHash": "26a75aa208fe4218"
+  },
+  "placement/standard4/greedy/middle": {
+    "decisionHash": "dd9d9459a62a1522",
+    "stateHash": "72a5418acff93faa"
+  },
+  "placement/standard4/greedy/turn": {
+    "decisionHash": "04bb3ae8f00194d6",
+    "stateHash": "0e5d297c0d0b55d4"
+  },
+  "placement/standard4/prepare": {
+    "decisionHash": "720c5a90f09a2833",
+    "stateHash": "bb8c12802dd632ea"
+  },
+  "placement/standard4/score_all": {
+    "decisionHash": "f2c76377524716a7",
+    "stateHash": "3974ecc0adcd3f16"
+  }
+}

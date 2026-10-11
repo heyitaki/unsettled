@@ -434,6 +434,11 @@ impl GameArena {
     }
 
     #[doc(hidden)]
+    pub fn reset_turn_for_test(&mut self, seat: usize) {
+        self.reset_turn(seat);
+    }
+
+    #[doc(hidden)]
     pub fn dice_trace_for_test<const N: usize>(&self) -> [u8; N] {
         let mut dice = self.streams.dice.clone();
         std::array::from_fn(|_| (dice.range(6) + dice.range(6) + 2) as u8)
@@ -761,14 +766,18 @@ impl GameArena {
         config: &GameConfig,
         seat: usize,
     ) -> bool {
-        self.promote_dev(seat);
-        self.dev_played_this_turn = false;
-        self.offers_this_turn = 0;
+        self.reset_turn(seat);
         if self.total_vp(seat) >= rules.win_vp {
             return true;
         }
         self.run_pre_roll(board, topology, rules, config, seat);
         self.total_vp(seat) >= rules.win_vp
+    }
+
+    fn reset_turn(&mut self, seat: usize) {
+        self.promote_dev(seat);
+        self.dev_played_this_turn = false;
+        self.offers_this_turn = 0;
     }
 
     fn offers_remaining(&self, seat: usize) -> u8 {

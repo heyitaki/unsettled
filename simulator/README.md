@@ -91,11 +91,51 @@ cargo run --release -p unsettled-sim -- simulate \
   --out runs/real
 ```
 
-Measure throughput:
+## Speed suite
+
+`bench` measures placement, policy decisions, and whole-game throughput on both layouts (four seats on `standard4`, six on `extension6`). Use `--filter` to keep scenario IDs containing a substring.
 
 ```sh
-cargo run --release -p unsettled-sim -- bench --layout standard4 --games 20000
+cargo run --release -p unsettled-sim -- bench --quick
+cargo run --release -p unsettled-sim -- bench --filter placement/standard4/ --calls 10 --repeats 5 --json /tmp/placement-bench.json
+cargo run --release -p unsettled-sim -- bench --filter e2e/ --games 50 --threads 0
 ```
+
+| Flag | Meaning |
+| --- | --- |
+| `--json <path>` | Write one JSON document instead of the stdout table. |
+| `--filter <substring>` | Keep matching scenario IDs. |
+| `--quick` | Default to one call, one repeat, and one game per e2e repeat, with no warm-up pass. Explicit counts take precedence. |
+| `--calls <n>` | Fix calls per placement or decision repeat and disable automatic calibration. |
+| `--min-pass-ms <n>` | Target duration for automatic calibration, default 20 milliseconds. |
+| `--repeats <n>` | Measured repeats, default 5. Placement and decision rows warm up first; quick mode and e2e rows skip warm-up. |
+| `--games <n>` | Games per e2e repeat, default 20. |
+| `--threads <n>` | Workers for `e2e/*/all_cores` only. Default 0 uses all logical cores. |
+| `--policy <spec>` | Measured policy, default `heuristic-v1-trader-aware-threat-devcards-denial`. Accepts the same `<base>@<params.json>` specs as other commands, except policies with rule-level effects such as `heuristic-v1-noports`. |
+| `--weights <path>` | Measured app-formula weights, default `placement/default-weights.json`. Draft-aware opponents keep the shipped defaults. One file serves both layouts, so the `{seats}` placeholder is refused: pass a seat-specific file together with `--filter <layout>`. |
+
+Without `--calls` or `--quick`, placement and decision rows automatically double calls from 1 until a pass reaches `--min-pass-ms` or 65,536 calls. The final calibration pass serves as warm-up, and the selected count is reported as `calls`.
+
+All counts must be positive, and a `--filter` that matches no scenario is an error. Placement scenarios cover fresh board preparation, scores for every legal empty-board vertex, greedy picks at slots 0, halfway through round one, the first pick of round two, and the final pick, draft-aware first and middle picks, and a full draft. Earlier occupancy always comes from the default greedy formula.
+
+Decision scenarios cover `pre_roll`, `action`, `discard`, `robber`, `respond_trade`, and `select_counterparty` at early, mid, and late stages, plus `action/long_road` and `action/full_hand`. The stages use 25%, 50%, and 75% of each reference game's length, rounded down to whole rounds. A scenario with no legal decision is reported as skipped, with a reason.
+
+The table reports minimum and median nanoseconds per call, plus games per second for e2e rows. E2e games use the measured policy and draft-aware weights in every seat, with trading enabled.
+
+JSON records `seed`, `policy`, `weights`, and the ordered `scenarios`. Measured rows include `calls`, `repeats`, `nsPerCallMin`, `nsPerCallMedian`, `stateHash`, and `decisionHash`; e2e rows also include `gamesPerSecond`. Skipped rows carry `reason`. What the two hashes guarantee, and when a row's timings do not compare, are contracts: see [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Benchmark reporting".
+
+After a change that moves `fixtures/bench-hashes.json`, delete it, publish it once in debug with `cargo test -p unsettled-sim --test bench_contract generate_bench_hashes -- --ignored --nocapture`, then run the same command with `--release` to verify it. The generator uses create-new and refuses to overwrite a differing or empty fixture.
+
+`box/bench/` is a `box` job that builds two commits on one remote machine, times the suite on each in alternation, counts instructions per call under callgrind, and prints the ratio for every scenario. It needs the `box` CLI and the repo-root `box.json`, and unlike the commands above it is run from the repo root.
+
+```sh
+box run simulator/box/bench --ref base=main --ref cand=HEAD --node none
+box run simulator/box/bench --ref base=HEAD --ref cand=HEAD --node none -- --weights placement/arms/flat_swamp.json
+```
+
+Arguments after `--` go to the candidate's runs only and may be `--policy` and `--weights`, so one commit under both names measures a weights or policy candidate and two commits measure a code change. Both commits must contain the suite, and a `--weights` path must be committed in the candidate. The joined rows are written to `summary.json` in the run directory. A ratio under 1 means the candidate is cheaper. `ONE SIDE ONLY` marks a scenario one commit measured and the other skipped; `STATES DIFFER` is explained in `contracts.md` under "Benchmark reporting".
+
+## Placement and policy specs
 
 `app_formula:<path/to/weights.json>` loads the app's settlement formula at run time and reports it as `app_formula:<file-stem>`, so multiple weights files with distinct stems can be arms in the same run. Its setup road follows `expansionWeight`: at 0 it scores each incident edge's far endpoint and breaks ties at random, as it always has; above 0, which the shipped vector has been since the SP6 adoption, it lays the first edge of the cheapest path to the best site the settlement opens, which is the direction the score just paid for, with ties broken deterministically. A settlement that opens nothing falls back to the far-endpoint rule either way.
 

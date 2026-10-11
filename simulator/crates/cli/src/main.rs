@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand};
 use unsettled_engine::board::{ConversionOptions, SimBoard};
@@ -11,6 +11,7 @@ use unsettled_engine::rng::mix64;
 use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_engine::wire::WireBoard;
+use unsettled_sim::bench::{BenchRequest, DEFAULT_WEIGHTS, benchmark, reference_policy_name};
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::diagnose::{DiagnoseRequest, diagnose, write_diagnostic_outputs};
 use unsettled_sim::evaluate::{
@@ -18,7 +19,7 @@ use unsettled_sim::evaluate::{
     write_evaluation_outputs,
 };
 use unsettled_sim::heuristics::parse_heuristic;
-use unsettled_sim::runner::{RunRequest, benchmark, run};
+use unsettled_sim::runner::{RunRequest, run};
 use unsettled_sim::schedule::{simulate_schedule, tournament_schedule};
 
 #[derive(Parser)]
@@ -42,7 +43,7 @@ enum Command {
     Diagnose(DiagnoseArgs),
     /// Simulate games from an app-exported Board JSON file.
     Simulate(SimulateArgs),
-    /// Measure single-core and parallel game throughput.
+    /// Measure placement, policy decisions, and whole-game throughput on both layouts.
     Bench(BenchArgs),
 }
 
@@ -169,12 +170,26 @@ struct DiagnoseArgs {
 
 #[derive(Args)]
 struct BenchArgs {
-    #[arg(long, default_value = "standard4")]
-    layout: String,
-    #[arg(long, default_value_t = 20_000)]
-    games: usize,
+    #[arg(long)]
+    json: Option<PathBuf>,
+    #[arg(long)]
+    filter: Option<String>,
+    #[arg(long)]
+    quick: bool,
+    #[arg(long)]
+    calls: Option<usize>,
+    #[arg(long, default_value_t = 20)]
+    min_pass_ms: u64,
+    #[arg(long)]
+    repeats: Option<usize>,
+    #[arg(long)]
+    games: Option<usize>,
     #[arg(long, default_value_t = 0)]
     threads: usize,
+    #[arg(long, default_value_t = reference_policy_name())]
+    policy: String,
+    #[arg(long, default_value = DEFAULT_WEIGHTS)]
+    weights: String,
 }
 
 #[derive(Args, Clone, Copy, Default)]
@@ -497,20 +512,41 @@ fn simulate(args: SimulateArgs) -> Result<(), String> {
 }
 
 fn bench(args: BenchArgs) -> Result<(), String> {
-    let layout = parse_layout(&args.layout)?;
-    let topology = Topology::load(layout)?;
-    let board = generate_board(layout, if layout == Layout::Standard4 { 4 } else { 6 }, 1)?;
-    let result = benchmark(&board, &topology, args.games, args.threads)?;
-    println!("total games: {}", result.total_games);
-    println!("elapsed seconds: {:.6}", result.elapsed_seconds);
-    println!("logical cores: {}", result.logical_cores);
-    println!("configured workers: {}", result.workers);
-    println!("single-core games/sec: {:.2}", result.single_core_rate);
-    println!("all-core games/sec: {:.2}", result.all_core_rate);
-    println!(
-        "parallel efficiency: {:.2}%",
-        result.parallel_efficiency() * 100.0
-    );
+    let policy = parse_policy(&args.policy)?;
+    // One parsed kind serves both layouts, so a per-seat path has no seat count to resolve to.
+    if args.weights.contains("{seats}") {
+        return Err(
+            "bench --weights takes one file for both layouts, so {seats} is not supported: \
+             pass a seat-specific file with --filter <layout>"
+                .into(),
+        );
+    }
+    let greedy = parse_heuristic(&format!("app_formula:{}", args.weights), 0)?;
+    let draft = parse_heuristic(
+        &format!("app_formula_draft:{}@{DEFAULT_WEIGHTS}", args.weights),
+        0,
+    )?;
+    let result = benchmark(&BenchRequest {
+        filter: args.filter.as_deref(),
+        quick: args.quick,
+        calls: args.calls,
+        min_pass: Duration::from_millis(args.min_pass_ms),
+        repeats: args.repeats.unwrap_or(if args.quick { 1 } else { 5 }),
+        games: args.games.unwrap_or(if args.quick { 1 } else { 20 }),
+        threads: args.threads,
+        policy,
+        policy_name: &args.policy,
+        weights: &args.weights,
+        greedy,
+        draft,
+    })?;
+    if let Some(path) = args.json {
+        let mut json = serde_json::to_string_pretty(&result).map_err(|error| error.to_string())?;
+        json.push('\n');
+        fs::write(path, json).map_err(|error| error.to_string())?;
+    } else {
+        result.print_table();
+    }
     Ok(())
 }
 

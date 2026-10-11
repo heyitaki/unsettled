@@ -1,3 +1,4 @@
+pub mod bench;
 pub mod boardgen;
 pub mod coastal;
 pub mod diagnose;
