@@ -162,7 +162,8 @@ export const SEAT_WEIGHT_OVERRIDES: Record<number, Partial<EngineWeights>> = {
   4: { coverageExponent: 1.0 },
   // M-78: the same pair read better at five seats on the extension board.
   5: { coverageExponent: 1.0, diversityWeight: 3.2 },
-  6: {},
+  // M-81: linear coverage credit read better at six seats too, narrowly.
+  6: { coverageExponent: 1.0 },
 }
 
 export const weightsForSeats = (seats: number): EngineWeights => ({

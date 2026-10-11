@@ -2736,3 +2736,40 @@ Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
 **Prediction against outcome.** **Right on the estimate**, predicted `+0.4pp` to `+1.1pp` centred near `+0.75pp`, delivered `+0.782pp`. **Right on the verdict**, predicted `better` at about 65%. **Right on the half-width**, predicted about `+/-0.16pp`, delivered `+/-0.157pp`.
 
 **Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against five seats on today's vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model, and the field is the same here as on `tuning3`, so this run controls for seeds and not for field-overfit. A `better` here confirms the screen and decides nothing about what ships; that is M-81's question on `gate3`.
+
+## M-81: 6-seat adoption gate on gate3
+
+2026-10-10, commit `97e51966` (the preregistration commit; no default moved for this run), domain `gate3` (seed `7670578962881712144`). Preregistered in `docs/plans/preregs/2026-10-10-m81-seats6-gate3.md` (committed before the run). **This run is the one authorized `gate3` spend at 6 seats**, under the user's 2026-10-10 authorization quoted in `.claude/specs/simulator/seat-count-programme.md`; no further `gate3` command may run on `extension6` at 6 seats.
+
+`evaluate`, `extension6`, 6 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 10,000 boards x 2 reps, 120,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_coverage_lo.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout extension6 --seats 6 --domain gate3 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --reference base --boards 10000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m81-seats6-gate3
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.10s against a warm fingerprint. The invocation ran alone in its command block, unpiped. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate3` at seed `7670578962881712144`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `35.27 48.09 44.01`, after `34.32 39.99 43.31`, other sessions sharing the machine; 4771.874s at 18 workers, 50.3 games/s, 240,000 games. `base` won 19,922 of 120,000 (`0.16601666666666667`), 0.604 binomial standard errors below the `0.16666666666666666` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 20,749 of 120,000 (`0.17290833333333333`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.006891666666666667` | 4782 | 3955 | `[0.0053655, 0.0084178]` | `[0.0053168, 0.0084666]` | clustered `[0.0053168, 0.0084666]` | 0.1575 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Slot 5 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| candidate | +0.689 `[+0.532, +0.847]` | 8737 | +0.48 `[+0.13, +0.84]` | +0.82 `[+0.43, +1.21]` | +0.46 `[+0.08, +0.84]` | +0.95 `[+0.54, +1.35]` | +0.63 `[+0.24, +1.02]` | +0.80 `[+0.41, +1.18]` |
+
+**The verdict is `better`, and it adopts the candidate as the six-seat vector, by the thinnest margin of the five gates.** `+0.689pp` on `[+0.532pp, +0.847pp]` over 8,737 discordant units of 120,000, the whole interval above the `+0.5pp` bar with 0.03pp to spare at the lower edge. By the preregistered rule `coverageExponent` moves from 1.5 to 1.0 for six-seat rosters: `SEAT_WEIGHT_OVERRIDES[6]` in `src/engine/weights.ts` carries the leaf, `simulator/placement/seat-weights/seats-6.json` is regenerated through `simulator/tools/generate-placement-parity.ts`, and the `SEAT_ADOPTIONS` row in `params_file.rs` moves with it. `DEFAULT_WEIGHTS` and `default-weights.json` do not move.
+
+**Three readings at the same power on three disjoint seed sets fall in order.** `+0.853pp` on the `tuning3` retry, `+0.782pp` on `eval3` and `+0.689pp` here, each on 120,000 paired units. The first was read on seeds that include the ones the arm was selected on. The two held-out readings average `+0.74pp` over 240,000 paired units, and their difference of 0.09pp is about one standard error of a single run's estimate. The discordant share is 7.28% here against 7.30% on `eval3`. Every slot is positive and every slot interval excludes zero.
+
+**The rule adopts, and the size is small.** The decision was fixed before the run as the whole interval above the bar, and it is. A reader should carry the size as about three quarters of a point, with the bar inside the uncertainty of where the true effect sits: an estimate 0.04pp lower would have read `inconclusive` and left six seats on today's vector.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+0.5pp` to `+1.1pp` centred near `+0.8pp`, delivered `+0.689pp`, in the lower half of the range. **Right on the verdict**, predicted `better` at about 88%, and right that this was the gate most likely to miss.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against five seats on today's vector, so **nothing here measures the world the adoption creates in the app**, where a six-seat analysis scores every seat's picks on the adopted vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same on all three domains, so the held-out readings control for seeds and not for field-overfit. The adopted value is the lower endpoint of the key's range in `simulator/placement/sweep-bounds.json` and the only value below the shipped one that was read, so nothing here says it is an optimum. `diversityWeight` stays at 1.6 at six seats because M-79 dropped its arm unresolved at `+0.570pp`, which is a statement about power and not a finding that five and six seats differ. The verdict licenses moving this one leaf at this one seat count and nothing else.

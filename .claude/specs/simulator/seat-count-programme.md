@@ -92,4 +92,16 @@ Filled in as each seat count closes. One row per seat count: the vector it ships
 | 3 | `standard4` | today's vector with `coverageExponent` 1.0 and `diversityWeight` 3.2 | Adopted on `gate3`. M-73 screened one axis as a survivor and the other on its retry and read them `better` together, M-74 confirmed the pair on `eval3`, M-75 read `better` at the gate. |
 | 4 | `standard4` | today's vector with `coverageExponent` 1.0 | Adopted on `gate3`. M-67 screened it as the one survivor, M-68 confirmed it on `eval3`, M-69 read `better` at the gate. |
 | 5 | `extension6` | today's vector with `coverageExponent` 1.0 and `diversityWeight` 3.2 | Adopted on `gate3`. M-76 screened one axis as a survivor and the other on its retry and read them `better` together, M-77 confirmed the pair on `eval3`, M-78 read `better` at the gate. |
-| 6 | `extension6` | pending | |
+| 6 | `extension6` | today's vector with `coverageExponent` 1.0 | Adopted on `gate3`. M-79 screened it as the one survivor, on its retry, M-80 confirmed it on `eval3`, M-81 read `better` at the gate with 0.03pp to spare. `diversity_hi` was retried and dropped unresolved at `+0.570pp`. |
+
+**The programme is closed, 2026-10-10: every seat count adopted, and all five carry `coverageExponent` 1.0.** Two, three and five seats also carry `diversityWeight` 3.2. No other screened axis produced a survivor: no arm on `scarcityWeight`, `coverageScarcityWeight`, `portWeight` or `expansionWeight` read `better` at any seat count, the higher `portWeight` arm read `worse` at every one, and both `expansionWeight` arms read negative at every one.
+
+What the outcome does not say, for whoever reads the table next:
+
+- **The split on `diversityWeight` is a statement about power, not a finding that four and six seats differ from the rest.** `diversity_hi` read positive at every seat count. At four and six seats it read `+0.565pp` and `+0.570pp` on its retry, `inconclusive` with the bar inside the interval both times, and the rule dropped it unresolved. At five seats it read `better` once, at the screen, with 0.03pp to spare, and was never retried alone; the five-seat gate then read the pair together.
+- **Both adopted values are screening endpoints.** 1.0 is the lower bound of `coverageExponent` in `sweep-bounds.json` and the only value below 1.5 that was read; 3.2 is the only value above 1.6 that was read. Neither is known to be an optimum, and a value below 1.0 is outside the declared range.
+- **Every gate moved the hero alone.** The app applies a seat count's vector to every seat it scores, and no run measured a table where all seats carry the adopted vector.
+- **The `resourceValue` spread and `genericPortFactor` were not screened**, for the reason given under "The screening family".
+- **Power on `extension6` was set by the wall-time cap**, at 4500 boards for five seats and 2500 for six against targets of 6000 and 5500, and the six-seat gate cleared the bar by 0.03pp.
+
+All three third-generation domains are now used at every seat count; the ledger is in [programme.md](programme.md).

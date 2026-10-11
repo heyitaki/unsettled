@@ -1769,7 +1769,7 @@ mod tests {
         (3, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (4, &[("/coverageExponent", 1.0)]),
         (5, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
-        (6, &[]),
+        (6, &[("/coverageExponent", 1.0)]),
     ];
 
     #[test]
