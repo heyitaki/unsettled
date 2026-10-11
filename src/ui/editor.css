@@ -407,7 +407,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   button.selected:hover:not(:disabled, :where(.phone-shell *)) { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
   .menu-trigger:hover:not(:disabled), .panel-dots:hover:not(:disabled) { color: var(--accent-dark); }
   .group-label .menu-trigger:hover:not(:disabled) { color: var(--ink); background: var(--tint); }
-  .list-row-x:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .list-row-x:hover:not(:disabled) { color: var(--ink); background: transparent; }
   .token-tools button:hover:not(:disabled), .token-tools button.selected:hover:not(:disabled) { background: none; }
   .token-tools button:hover:not(.selected, :where(.phone-shell *)) .token-disc { fill: var(--tint); }
   .list-add:hover:not(:disabled) { color: var(--ink); background: transparent; }
