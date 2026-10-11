@@ -270,9 +270,6 @@ test.describe('desktop', () => {
     await snap(page, 'desktop-menus', false)
   })
 
-  test('an empty board says so and offers nothing: the import and the tools are already in the left rail', async ({ page }) => {
-    await page.goto('')
-    const panel = page.locator('.analysis-panel')
   test('the tool rows fold behind Edit manually, and a folded tool never paints', async ({ page }) => {
     await page.goto('')
     const tools = page.locator('.tools-panel')
@@ -288,6 +285,7 @@ test.describe('desktop', () => {
     await toggle.click()
     await expect(tools.locator('button.selected')).toHaveCount(0)
     await tools.getByRole('button', { name: 'wood' }).click()
+    await expect(tools.locator('button.selected')).toHaveCount(1)
     await clickBoard()
     await expect(terrain).toHaveText('1/19')
 
@@ -298,6 +296,9 @@ test.describe('desktop', () => {
     await expect(tools.locator('button.selected')).toHaveCount(0)
   })
 
+  test('an empty board says so and offers nothing: the import and the way into the tools are already in the left rail', async ({ page }) => {
+    await page.goto('')
+    const panel = page.locator('.analysis-panel')
     await expect(panel.locator('h2')).toHaveText('This board is empty')
     await expect(panel.locator('.hint')).toBeVisible()
     // Both ways in are on screen already, so the phone's two buttons stay on the phone (spec D4).
@@ -573,7 +574,7 @@ test.describe('desktop', () => {
     await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
   })
 
-  test('a library of maps scrolls inside the rail instead of pushing the tools off the page', async ({ page }) => {
+  test('a library of maps scrolls inside the rail instead of running it off the page', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('.maps-panel')).toBeVisible()
     await seedSavedMaps(page, 25)
@@ -587,11 +588,11 @@ test.describe('desktop', () => {
     expect(list.scroll).toBeGreaterThan(list.client)
     await expect(saved).toHaveClass(/fade-bottom/)
 
-    // So the rail's panels stay on screen however long the library grows.
+    // So the Maps panel, last in the rail, ends on screen however long the library grows.
     const viewport = page.viewportSize()!
-    const toolsTop = await page.locator('.tools-panel')
-      .evaluate((el) => el.getBoundingClientRect().top)
-    expect(toolsTop).toBeLessThan(viewport.height)
+    const mapsBottom = await page.locator('.maps-panel')
+      .evaluate((el) => el.getBoundingClientRect().bottom)
+    expect(mapsBottom).toBeLessThan(viewport.height)
   })
 
   /* The narrowest three-column width, where every workspace track sits on its

@@ -404,8 +404,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
           <p className="hint">
             Import a screenshot to read the tiles, numbers and players off it, or place them yourself.
           </p>
-          {/* The desktop's import and tools are already on screen in the left
-              rail, so only the phone needs the two ways in from here (spec D4). */}
+          {/* The desktop's import button and `Edit manually` fold are already on screen
+              in the left rail, so only the phone needs the two ways in from here (spec D4). */}
           {onBuild && (
             <div className="empty-actions">
               <button type="button" className="primary" onClick={() => setImportOpen(true)}>
