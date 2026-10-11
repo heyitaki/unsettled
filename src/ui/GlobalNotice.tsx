@@ -21,7 +21,7 @@ export function GlobalNotice() {
   // Keyed on noticeSeq so an identical repeat message still restarts the timer.
   useEffect(() => {
     if (!state.notice || hover) return
-    const timeout = window.setTimeout(() => dispatch({ type: 'notice', message: null }), 3500)
+    const timeout = window.setTimeout(() => dispatch({ type: 'notice', message: null }), 1000)
     return () => window.clearTimeout(timeout)
   }, [state.notice, state.noticeSeq, hover, dispatch])
   useEffect(() => {
