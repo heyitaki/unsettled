@@ -4,6 +4,7 @@ import { AdviceProvider } from './AdviceProvider'
 import { useAnalysis } from './useAnalysis'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
+import { viewedPlayerId } from './draftSlots'
 import { Brand } from './Brand'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
@@ -21,7 +22,8 @@ function Workspace() {
   // picks the phone rests on.
   const { board } = activeTab(state).game
   const { analysis } = useAnalysis()
-  const restMarks = useMemo(() => restingMarks(board, analysis), [board, analysis])
+  const playerId = viewedPlayerId(board, state.viewedPick)
+  const restMarks = useMemo(() => restingMarks(board, analysis, playerId), [board, analysis, playerId])
   return (
     <div className="app-shell">
       <header className="site-header">

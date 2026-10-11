@@ -54,9 +54,9 @@ export function RosterRow({ player, index, roster, swatch, awards, children }: {
       {swatch ?? <span className="swatch" style={{ background: player.color }} />}
       <span className="list-row-main">
         <InlineRename {...roster.renameProps(player)} />
+        {me && <span className="you-chip">You</span>}
         {awards}
       </span>
-      <span className={me ? 'you-chip' : 'you-chip none'}>You</span>
       {children}
     </div>
   )

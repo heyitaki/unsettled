@@ -4,6 +4,7 @@ import type { DraftAnalysis } from './analyze'
 export interface AnalysisRequest {
   id: number
   board: Board
+  targetPick?: number
 }
 
 export type AnalysisResult = { analysis: DraftAnalysis } | { error: string }

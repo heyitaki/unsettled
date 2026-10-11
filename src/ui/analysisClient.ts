@@ -63,10 +63,11 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
     worker?.terminate()
     worker = null
   }
+  const keyOf = (board: Board, targetPick: number | null) => `${targetPick}|${hash(JSON.stringify(board))}`
   return {
-    run(board: Board, report: (result: AnalysisResult) => void): () => void {
+    run(board: Board, report: (result: AnalysisResult) => void, targetPick: number | null = null): () => void {
       if (active) stop()
-      const key = hash(JSON.stringify(board))
+      const key = keyOf(board, targetPick)
       const cached = cache.get(key)
       if (cached) {
         cache.delete(key)
@@ -98,7 +99,7 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
           stop()
           pending?.report({ error: event.message || 'Analysis stopped unexpectedly' })
         }
-        const request: AnalysisRequest = { id, board }
+        const request: AnalysisRequest = { id, board, targetPick: targetPick ?? undefined }
         worker.postMessage(request)
       } catch (error) {
         stop()

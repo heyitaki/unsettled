@@ -16,6 +16,7 @@ import { createBoard } from '../model/board'
 import { newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
+import { inferDraftState } from '../engine/draft'
 import type {
   Board,
   BuildingTier,
@@ -108,6 +109,7 @@ export interface StoreState {
   noticeSeq: number
   highlight: readonly HighlightMark[] | null
   pick?: BoardPick | null
+  viewedPick?: number | null
   // Bumped whenever the library changes, here or in another document. The maps
   // blob lives outside React, so panels that read it re-render off this.
   mapsRevision: number
@@ -128,6 +130,7 @@ export type StoreAction =
   | { type: 'pick'; target: PickTarget }
   | { type: 'pick-clear' }
   | { type: 'picked'; ref: string }
+  | { type: 'view-pick'; slot: number | null }
   | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -293,7 +296,29 @@ function unusedBoardTitle(tabs: TabState[]): string {
 }
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
+  const next = reduceAction(state, action)
+  if (next === state || next.viewedPick == null) return next
+  if (next.activeTabId !== state.activeTabId) return withViewedPick(next, null)
+  const board = activeTab(next).game.board
+  const previous = activeTab(state).game.board
+  if (board.mePlayerId !== previous.mePlayerId) return withViewedPick(next, null)
+  return board === previous ? next : withViewedPick(next, next.viewedPick)
+}
+
+function withViewedPick(state: StoreState, slot: number | null): StoreState {
+  const board = activeTab(state).game.board
+  const draft = inferDraftState(board)
+  const viewedPick = board.mePlayerId !== null && slot !== null &&
+    draft.remainingPickIndices.includes(slot) && slot !== draft.myRemainingPickIndices[0]
+    ? slot
+    : null
+  return viewedPick === (state.viewedPick ?? null) ? state : { ...state, viewedPick }
+}
+
+function reduceAction(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
+    case 'view-pick':
+      return withViewedPick(state, action.slot)
     case 'commit':
       return updateActiveTab(state, (tab) => {
         const game = trackAwards(tab.game, withBoard(tab.game, action.board))

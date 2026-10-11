@@ -36,7 +36,7 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .brand-mark span:nth-child(2) { left: calc(22px * var(--mark)); top: 0; background: #c55a3c; }
 .brand-mark span:nth-child(3) { left: calc(11px * var(--mark)); top: calc(16px * var(--mark)); background: #d2a13d; }
 
-/* Both of the right rail's bounds pay for the roster's YOU column: the row now
+/* Both of the right rail's bounds pay for the roster's YOU chip: the claimed row
    spends 47px on the chip that the player's name used to have. The ceiling comes
    out of the board's slack, and at the narrowest desktop width, where every
    track sits on its floor, the floors trade the same 26px straight across. */
@@ -79,8 +79,7 @@ button.danger { color: var(--danger); }
 .draft-ribbon { container-type: inline-size; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
 .draft-ribbon-slot { --size: min(30px, 100cqw / (var(--slots) * 1.27 - .27)); flex: none; width: var(--size); height: var(--size); min-height: 0; padding: 0; border: 1.5px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font: 800 calc(var(--size) * .43) Inter, sans-serif; }
 .draft-ribbon-slot + .draft-ribbon-slot { margin-left: calc(var(--size) * .27); }
-.draft-ribbon-slot.pending { opacity: .34; }
-.draft-ribbon-slot.now { box-shadow: 0 0 0 calc(var(--size) * .1) var(--surface), 0 0 0 calc(var(--size) * .167) var(--ink); }
+.draft-ribbon-slot.viewing { box-shadow: 0 0 0 calc(var(--size) * .1) var(--surface), 0 0 0 calc(var(--size) * .167) var(--ink); }
 
 .board-stage { position: relative; }
 .board-status { position: absolute; inset: 10px 10px auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; pointer-events: none; }
@@ -157,7 +156,7 @@ button.danger { color: var(--danger); }
 .player-list .roster-row { gap: var(--row-gap); height: 34px; padding: 0 var(--card-pad) 0 7px; cursor: pointer; }
 /* The phone's 30px floor keeps a name tappable in a cell that is never tight.
    Here the fixed columns can starve the name cell outright, and the floor would
-   make the name overflow it and paint over the YOU chip instead of clipping. */
+   make the name overflow it and push the YOU chip out instead of clipping. */
 .player-list .roster-row .list-row-name, .player-list .roster-row .list-row-rename { min-width: 0; }
 /* Tighter than the phone's chip: every pixel here comes straight off the name. */
 .player-list .you-chip { padding: 3px 6px; letter-spacing: .03em; }
@@ -242,11 +241,10 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
 .swatch { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent); }
 .you-chip { padding: 3px 8px; border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; pointer-events: none; }
-.you-chip.none { visibility: hidden; }
+.list-row-main .you-chip { flex: none; margin: 0 6px; }
 /* The roster row (spec D5): the phone's row, with the tally and the VP in the
    two cells the desktop adds before the right edge. */
-.roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid transparent; border-radius: var(--r-row); background: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
-.roster-row.me { background: var(--tint); }
+.roster-row { position: relative; display: grid; grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; height: 44px; padding: 0 11px 0 7px; border: 1px solid transparent; border-radius: var(--r-row); background: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .17s cubic-bezier(.2, .7, .3, 1), box-shadow .17s ease; }
 .roster.reordering { touch-action: none; }
 .roster-row.dragging { z-index: 2; border-color: var(--ink); background: var(--surface); box-shadow: var(--shadow-float); }
 .roster-row.drag-over { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -586,7 +584,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .phone-overlay-body::-webkit-scrollbar { display: none; }
   /* No tally here, so the row drops the desktop's two trailing cells. */
-  .roster-row { grid-template-columns: 12px 24px minmax(0, 1fr) auto auto; }
+  .roster-row { grid-template-columns: 12px 24px minmax(0, 1fr) auto; }
   .roster-row .swatch { pointer-events: none; }
   .roster-vp { font-size: 14px; pointer-events: none; }
 }

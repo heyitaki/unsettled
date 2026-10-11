@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAnalysis } from '../useAnalysis'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { BoardCanvas } from '../BoardCanvas'
+import { viewedPlayerId } from '../draftSlots'
 import { GlobalNotice } from '../GlobalNotice'
 import { restingMarks } from '../restMarks'
 import { activeTab, useStore } from '../store'
@@ -53,9 +54,10 @@ export function PhoneShell() {
   // What the board shows while nothing is selected (spec S5); bare in build
   // mode, where the analysis block is not on the page.
   const { board } = tab.game
+  const playerId = viewedPlayerId(board, state.viewedPick)
   const restMarks = useMemo(
-    () => building ? null : restingMarks(board, analysis),
-    [board, building, analysis],
+    () => building ? null : restingMarks(board, analysis, playerId),
+    [board, building, analysis, playerId],
   )
   // The board under the tools was replaced (tab switch, import, layout change):
   // that exit is a Done, so the session is dropped without a restore.

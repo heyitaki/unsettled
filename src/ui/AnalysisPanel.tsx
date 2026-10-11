@@ -9,6 +9,7 @@ import { useAnalysis } from './useAnalysis'
 import { useDraftSteps } from './useDraftSteps'
 import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
+import { viewedPlayerId } from './draftSlots'
 import { BestMovesPanel } from './BestMovesPanel'
 import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
@@ -162,10 +163,11 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     if (!pinned) mark(marks)
   }
 
-  const me = board.players.find((player) => player.id === board.mePlayerId)
-  const myColor = me?.color ?? '#8a7a63'
+  const playerId = viewedPlayerId(board, state.viewedPick)
+  const viewedPlayer = board.players.find((player) => player.id === playerId)
+  const viewedColor = viewedPlayer?.color ?? '#8a7a63'
 
-  // Reset the board marks whenever the board changes: after a placement, the
+  // Reset the board marks whenever the board or viewed pick changes: the
   // previous window's circles are stale. The shell's resting marks show through
   // the cleared highlight (spec S5).
   useEffect(() => {
@@ -174,7 +176,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     own.current = null
     dispatch({ type: 'highlight', marks: null })
     return () => dispatch({ type: 'highlight', marks: null })
-  }, [board, dispatch])
+  }, [board, state.viewedPick, dispatch])
   useEffect(() => {
     if (state.highlight === own.current) return
     setSelectedPick(null)
@@ -185,13 +187,14 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     board.players.find((player) => player.id === id)?.color ?? '#8a7a63'
   const clearHighlight = () => mark(null)
 
-  const pickText = analysis.draft.myPickIndices.map((index) => ordinal(index + 1)).join(' and ')
-  // The picks that fall before my next turn, taken from the modal simulation, so
+  const pickText = state.viewedPick == null || state.viewedPick === analysis.draft.myRemainingPickIndices[0]
+    ? analysis.draft.myPickIndices.map((index) => ordinal(index + 1)).join(' and ')
+    : ordinal(state.viewedPick + 1)
+  // The picks before the viewed pick, taken from the modal simulation, so
   // each spot is mutually legal and attributed to the player who takes it.
   const likelyGone = analysis.takenBeforeFirstPick
   // Numbered in draft order and tinted to each picker so selecting shows who goes
-  // where, and playing them out puts those settlements on the board (advancing the
-  // draft to my turn, or between my two picks).
+  // where, and playing them out advances the draft to the viewed pick.
   const likelyGoneMarks: HighlightMark[] = likelyGone.map(({ vertexId, playerId }, index) => ({
     ref: vertexId,
     color: playerColor(playerId),
@@ -207,14 +210,14 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     clearHighlight()
   }
   const placeRecommendation = (recommendation: Recommendation) => {
-    if (board.mePlayerId === null) return
+    if (playerId === null) return
     let next = board
     for (const { vertexId, playerId } of likelyGone) {
       if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
     }
     dispatch({
       type: 'commit',
-      board: placeBuilding(next, recommendation.firstPick, board.mePlayerId, 'settlement'),
+      board: placeBuilding(next, recommendation.firstPick, playerId, 'settlement'),
     })
     setSelectedPick(null)
     clearHighlight()
@@ -223,7 +226,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     const next = selectedPick === recommendation.firstPick ? null : recommendation.firstPick
     setSelectedPick(next)
     setSelectedLikelyGone(false)
-    mark(next === null ? null : recommendationMarks(recommendation, myColor))
+    mark(next === null ? null : recommendationMarks(recommendation, viewedColor))
     // A mark moved on a board scrolled out of view is a change nobody sees
     // (spec B2), and only the phone's one document can scroll past the board.
     if (onBuild && next !== null) revealBoardIfScrolledPast()
@@ -235,9 +238,13 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     mark(next ? likelyGoneMarks : null)
   }
   const claim = (playerId: string) => dispatch({ type: 'commit', board: setMe(board, playerId) })
+  const viewPlayer = (playerId: string) => {
+    const slot = analysis.draft.remainingPickIndices.find((index) => analysis.draft.sequence[index] === playerId)
+    if (slot !== undefined) dispatch({ type: 'view-pick', slot })
+  }
 
   const emptyMessage: Partial<Record<typeof analysis.status, string>> = {
-    'no-availability': 'No spot is likely to survive until your pick.',
+    'no-availability': 'No spot is likely to survive until this pick.',
     'no-production': 'Add number tokens to the board to analyze placements.',
     'me-done': 'Your starting settlements are placed. Waiting on the rest of the draft.',
   }
@@ -278,7 +285,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             onClick={selectLikelyGone}
             onMouseEnter={() => preview(likelyGoneMarks)}
           >
-            <span className="analysis-likely-gone-title">Likely gone before your turn</span>
+            <span className="analysis-likely-gone-title">Likely gone before this pick</span>
             {joined(likelyGone.map(({ vertexId, playerId, frequency }, index) => {
               const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
               return (
@@ -322,11 +329,11 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 className="analysis-row-select"
                 title={vertexDescription(board, recommendation.firstPick)}
                 onClick={() => selectRecommendation(recommendation)}
-                onMouseEnter={() => preview(recommendationMarks(recommendation, myColor))}
+                onMouseEnter={() => preview(recommendationMarks(recommendation, viewedColor))}
               >
                 <span
                   className="analysis-rank"
-                  style={{ background: myColor, color: readableInk(myColor) }}
+                  style={{ background: viewedColor, color: readableInk(viewedColor) }}
                 >
                   {index + 1}
                 </span>
@@ -419,7 +426,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             </div>
           )}
         </div>
-      ) : !me ? (
+      ) : board.mePlayerId === null ? (
         <div className="claim">
           <p className="hint">{onBuild ? 'Tap' : 'Pick'} your colour and the ranking starts.</p>
           <div className="claim-row">
@@ -435,12 +442,15 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         <>
           <div className="analysis-context">
             <MenuSelect
-              ariaLabel="Which player is you"
-              value={board.mePlayerId}
-              options={board.players.map((player) => ({ value: player.id, label: player.name }))}
-              onSelect={claim}
+              ariaLabel="Whose picks to show"
+              value={playerId}
+              options={board.players
+                .filter((player) => player.id === playerId || analysis.draft.remainingPickIndices
+                  .some((index) => analysis.draft.sequence[index] === player.id))
+                .map((player) => ({ value: player.id, label: player.name }))}
+              onSelect={viewPlayer}
             >
-              <strong>{me.name}</strong>
+              <strong>{viewedPlayer?.name}</strong>
             </MenuSelect>
             {` · Picking ${pickText}`}
           </div>

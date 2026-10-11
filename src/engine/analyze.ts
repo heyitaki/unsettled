@@ -63,6 +63,9 @@ export interface AnalysisOptions {
   rollouts?: number
   weights?: EngineWeights
   maxResults?: number
+  targetPick?: number
+  /** Nested modal rankings, reusable only across calls sharing seed, rollouts and weights. */
+  modalCache?: Map<string, DraftAnalysis>
 }
 
 export interface DraftAnalysis {
@@ -530,6 +533,7 @@ export function rankCandidates(
   draft: DraftState,
   preWindows: readonly PreWindowResult[],
   maxResults: number,
+  targetPick?: number,
 ): { recommendations: Recommendation[]; takenBeforeFirstPick: TakenVertex[] } {
   const grid = boardGrid(board.layout)
   const gridIndex = new Map(grid.vertexIds.map((vertexId, index) => [vertexId, index]))
@@ -540,7 +544,7 @@ export function rankCandidates(
     }
   }
   const denominator = Math.max(1, preWindows.length)
-  // Show the "likely gone" spots from the modal pre-window, where each rival takes its own
+  // Show the "likely gone" spots from the modal pre-window, where each picker takes its own
   // top recommendation on the board the earlier picks leave. Sampled pre-windows draw from those
   // same lists while they follow the modal line, then use the shortcut, as do nested analyses
   // and unavailable recommendations. The picks are mutually legal, ordered by draft turn, and
@@ -551,19 +555,20 @@ export function rankCandidates(
     playerId: modal.pickerIds[index],
     frequency: (takenCounts.get(vertexId) ?? 0) / denominator,
   }))
-  const firstPickIndex = draft.myRemainingPickIndices[0]
+  const pickOffset = targetPick === undefined ? 0 : Math.max(0, draft.myRemainingPickIndices.indexOf(targetPick))
+  const firstPickIndex = draft.myRemainingPickIndices[pickOffset]
   if (firstPickIndex === undefined || preWindows.length === 0 || board.mePlayerId === null) {
     return { recommendations: [], takenBeforeFirstPick }
   }
   const me = board.mePlayerId
-  const secondPickIndex = draft.myRemainingPickIndices[1]
+  const secondPickIndex = draft.myRemainingPickIndices[pickOffset + 1]
   const midTurns = secondPickIndex === undefined
     ? []
     : remainingTurns(draft, firstPickIndex + 1, secondPickIndex, me)
   const candidates = legalSettlementVertices(board)
   const myHoldings = holdingsFromBoard(ctx, board).get(me) ?? emptyHoldings()
   const firstReceivesGrant = receivesSecondSettlementGrant(draft, firstPickIndex)
-  // Both of my picks come off the same slot: the snake reverses the order seats pick in, never
+  // Both of my picks use the same seat scale: the snake reverses the order seats pick in, never
   // which seat I am.
   const mySlot = draftSlotOf(board, me)
   const aggregates = new Map<VertexId, CandidateAggregate>()
@@ -579,6 +584,8 @@ export function rankCandidates(
     rolloutOccupancy(board, occupied, me))
   const preWindowHoldings = preWindows.map((preWindow) =>
     replayPreWindowHoldings(ctx, board, preWindow))
+  const preWindowMyHoldings = preWindowHoldings.map((holdings) =>
+    pickOffset === 0 ? myHoldings : holdings.get(me) ?? myHoldings)
 
   for (const candidate of candidates) {
     const aggregate: CandidateAggregate = {
@@ -591,11 +598,11 @@ export function rankCandidates(
       if (preWindow.blocked.has(candidate)) continue
       aggregate.survived += 1
       // Scored per window rather than once against the bare board: by the time I pick, the seats
-      // ahead of me have taken the vertices this window records, and the expansion walk reads
-      // those as occupied.
+      // ahead of this pick have taken the vertices this window records, and the expansion walk
+      // distinguishes my earlier settlements through the window's holdings.
       const firstScore = marginalBreakdown(
         ctx,
-        myHoldings,
+        preWindowMyHoldings[windowIndex],
         candidate,
         firstHand,
         preWindowOccupancy[windowIndex],
@@ -610,7 +617,7 @@ export function rankCandidates(
       // settlement standing by then.
       const occupied = new Set(preWindowOccupied[windowIndex])
       occupied.add(candidate)
-      const firstHoldings = addToHoldings(ctx, myHoldings, candidate)
+      const firstHoldings = addToHoldings(ctx, preWindowMyHoldings[windowIndex], candidate)
       const opponentHoldings = preWindowHoldings[windowIndex]
       let uniformIndex = 0
       const nextUniform = () =>
@@ -699,7 +706,7 @@ export function rankCandidates(
       ...recommendation,
       firstRoad: expansionTerm(
         ctx,
-        myHoldings,
+        preWindowMyHoldings[firstSurvivingWindow(preWindows, recommendation.firstPick)],
         preWindowOccupancy[firstSurvivingWindow(preWindows, recommendation.firstPick)],
         recommendation.firstPick,
       ).road,
@@ -752,6 +759,8 @@ function analyzeBoardInternal(
 ): DraftAnalysis {
   const weights = options.weights ?? weightsForSeats(board.players.length)
   const draft = inferDraftState(board)
+  const pickOffset = options.targetPick === undefined ? 0 : Math.max(0, draft.myRemainingPickIndices.indexOf(options.targetPick))
+  const targetPick = pickOffset > 0 ? options.targetPick : undefined
   const ctx = computeBoardContext(board, weights)
   const legal = legalSettlementVertices(board)
   const complete = draftIsComplete(board, draft)
@@ -764,7 +773,7 @@ function analyzeBoardInternal(
   const baseHoldings = holdingsFromBoard(ctx, board)
   const myHoldings = me === null ? emptyHoldings() : baseHoldings.get(me) ?? emptyHoldings()
   const canRank = !complete && meValid && !meDone && legal.length > 0 && me !== null
-  const pendingPickIndex = draft.myRemainingPickIndices[0]
+  const pendingPickIndex = draft.myRemainingPickIndices[pickOffset]
   const pendingReceivesGrant = pendingPickIndex !== undefined &&
     receivesSecondSettlementGrant(draft, pendingPickIndex)
   const hasPositiveScore = canRank && legal.some((vertexId) =>
@@ -781,10 +790,10 @@ function analyzeBoardInternal(
   let takenBeforeFirstPick: TakenVertex[] = []
 
   if (shouldRank && me !== null) {
-    const firstPickIndex = draft.myRemainingPickIndices[0]
-    const secondPickIndex = draft.myRemainingPickIndices[1]
+    const firstPickIndex = draft.myRemainingPickIndices[pickOffset]
+    const secondPickIndex = draft.myRemainingPickIndices[pickOffset + 1]
     const turnIndex = draft.turnIndex ?? firstPickIndex
-    const preTurns = remainingTurns(draft, turnIndex, firstPickIndex, me)
+    const preTurns = remainingTurns(draft, turnIndex, firstPickIndex, targetPick === undefined ? me : null)
     const midPicks = secondPickIndex === undefined
       ? 0
       : remainingTurns(draft, firstPickIndex + 1, secondPickIndex, me).length
@@ -820,12 +829,16 @@ function analyzeBoardInternal(
           if (rollout === 0) {
             const scratch = taken.reduce((next, vertexId, index) =>
               placeBuilding(next, vertexId, pickerIds[index], 'settlement'), board)
-            // ponytail: one extra full ranking per rival pick ahead of mine. If the wait matters,
-            // memoize the modal line by the board's pieces; the chain is the same for any mePlayerId.
-            const analysis = analyzeBoardInternal(setMe(scratch, playerId), {
-              ...options,
-              maxResults: Math.max(1, weights.opponentTopK),
-            }, false)
+            const key = options.modalCache ? JSON.stringify({ ...scratch, mePlayerId: playerId }) : ''
+            let analysis = options.modalCache?.get(key)
+            if (!analysis) {
+              analysis = analyzeBoardInternal(setMe(scratch, playerId), {
+                ...options,
+                targetPick: undefined,
+                maxResults: Math.max(1, weights.opponentTopK),
+              }, false)
+              options.modalCache?.set(key, analysis)
+            }
             if (analysis.status !== 'ready') return undefined
             modalLists[taken.length] = analysis.recommendations
             return analysis.recommendations[0]?.firstPick
@@ -851,7 +864,7 @@ function analyzeBoardInternal(
           : uniforms[rollout],
       })
     }
-    const ranked = rankCandidates(ctx, board, draft, preWindows, options.maxResults ?? weights.maxResults)
+    const ranked = rankCandidates(ctx, board, draft, preWindows, options.maxResults ?? weights.maxResults, targetPick)
     recommendations = ranked.recommendations
     takenBeforeFirstPick = ranked.takenBeforeFirstPick
   }

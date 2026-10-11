@@ -113,7 +113,7 @@ test.describe('desktop', () => {
     await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(0)
     await page.mouse.move(0, 0)
     await expect(slots).toHaveCount(players * 2)
-    await expect(slots.first()).toHaveClass(/\bnow\b/)
+    await expect(slots.first()).toHaveClass(/\bviewing\b/)
 
     // The board rests on the ranked picks, the lower ranks faded (spec D4).
     const marks = page.locator('.vertex-highlight')
@@ -133,6 +133,9 @@ test.describe('desktop', () => {
     await expect(slots.nth(1)).toHaveAttribute('aria-pressed', 'true')
     await expect(slots.nth(6)).toHaveAttribute('aria-pressed', 'true')
     await expect(ribbon.locator('[aria-pressed="true"]')).toHaveCount(2)
+    // The ring follows the claim onto a pick that is still to come.
+    await expect(slots.nth(1)).toHaveClass(/\bviewing\b/)
+    await expect(ribbon.locator('.viewing')).toHaveCount(1)
     await expect(slots.nth(1)).toHaveAccessibleName('Pick 2: Blue')
 
     await slots.first().click()
@@ -147,6 +150,72 @@ test.describe('desktop', () => {
     await expect(slots.first()).toHaveAttribute('aria-pressed', 'true')
     await expect(page.locator('.analysis-row.current')).toHaveCount(1)
     await expect(marks).toHaveCount(2)
+  })
+
+  test('a later pick is viewed from its own circle, behind every pick before it', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    await randomize(page)
+    await page.locator('.claim-row button').first().click()
+    const panel = page.locator('.analysis-panel')
+    const slots = panel.locator('.draft-ribbon-slot')
+    const context = panel.locator('.analysis-context')
+    const gone = panel.locator('.analysis-likely-gone')
+    await expect(context).toHaveText('Red · Picking 1st and 8th', { useInnerText: true })
+    await expect(gone).toHaveCount(0)
+
+    // Red's second pick closes the snake: seven picks stand before it, Red's own first among them.
+    await slots.nth(7).click()
+    await expect(slots.nth(7)).toHaveClass(/\bviewing\b/)
+    await expect(panel.locator('.draft-ribbon-slot.viewing')).toHaveCount(1)
+    await expect(context).toHaveText('Red · Picking 8th', { useInnerText: true })
+    await expect(gone).toContainText('7. Blue:', { timeout: 60_000 })
+    await expect(gone).toContainText('1. Red:')
+    await expect(panel.locator('.analysis-row').first()).toBeVisible()
+
+    // A rival's circle shows that rival's pick and leaves YOU on Red.
+    const rows = page.locator('.player-list .roster-row')
+    await slots.nth(1).click()
+    await expect(slots.nth(1)).toHaveClass(/\bviewing\b/)
+    await expect(slots.nth(1)).toHaveAttribute('aria-pressed', 'true')
+    await expect(slots.nth(0)).toHaveAttribute('aria-pressed', 'false')
+    await expect(context).toHaveText('Blue · Picking 2nd and 7th', { useInnerText: true })
+    await expect(gone).toContainText('1. Red:', { timeout: 60_000 })
+    await expect(rows.nth(0)).toHaveClass(/\bme\b/)
+    await expect(rows.locator('.you-chip')).toHaveCount(1)
+    await expect(rows.nth(0).locator('.you-chip')).toBeVisible()
+    // The marks on the board are in the viewed player's colour.
+    await expect(page.locator('.vertex-highlight').first()).toHaveCSS('fill', 'rgb(48, 99, 186)')
+
+    // So does the rival's later pick, behind their own first.
+    await slots.nth(6).click()
+    await expect(slots.nth(6)).toHaveClass(/\bviewing\b/)
+    await expect(context).toHaveText('Blue · Picking 7th', { useInnerText: true })
+    await expect(gone).toContainText('6. Orange:', { timeout: 60_000 })
+    await expect(gone).toContainText('2. Blue:')
+    await expect(rows.nth(0)).toHaveClass(/\bme\b/)
+
+    // The name menu switches the view the same way.
+    await context.locator('.menu-trigger').click()
+    await page.getByRole('option', { name: 'Orange' }).click()
+    await expect(slots.nth(2)).toHaveClass(/\bviewing\b/)
+    await expect(context).toHaveText('Orange · Picking 3rd and 6th', { useInnerText: true })
+    await expect(rows.nth(0)).toHaveClass(/\bme\b/)
+
+    // Claiming in Players moves YOU and brings the view back to it.
+    await rows.nth(3).click()
+    await expect(rows.nth(3).locator('.you-chip')).toBeVisible()
+    await expect(rows.locator('.you-chip')).toHaveCount(1)
+    await expect(slots.nth(3)).toHaveClass(/\bviewing\b/)
+    await expect(context).toHaveText('White · Picking 4th and 5th', { useInnerText: true })
+
+    // Red is a rival now and still viewable; White's own circle returns to the default view.
+    await slots.nth(0).click()
+    await expect(context).toHaveText('Red · Picking 1st and 8th', { useInnerText: true })
+    await expect(gone).toHaveCount(0)
+    await slots.nth(3).click()
+    await expect(slots.nth(3)).toHaveClass(/\bviewing\b/)
+    await expect(context).toHaveText('White · Picking 4th and 5th', { useInnerText: true })
   })
 
   test('steps back and forward through a draft without a claimed player', async ({ page }) => {
@@ -193,7 +262,8 @@ test.describe('desktop', () => {
     await expect(forward).toBeDisabled()
 
     await back.click()
-    await panel.getByRole('button', { name: 'Pick 1: Red', exact: true }).click()
+    // The claim moves in Players; a ribbon circle only changes the view, which is no edit to undo.
+    await page.locator('.player-list .roster-row').first().click()
     await page.getByRole('button', { name: 'Board options' }).click()
     await page.getByRole('menuitem', { name: 'Undo' }).click()
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
@@ -530,7 +600,8 @@ test.describe('desktop', () => {
 
     // Both trees read the draft in Best picks.
     await expect(slots).toHaveCount(UNCLAIMED_ROSTER.length * 2)
-    await expect(ribbon.locator('.draft-ribbon-slot.now')).toHaveCount(1)
+    // Nobody is claimed, so no pick is being viewed.
+    await expect(ribbon.locator('.draft-ribbon-slot.viewing')).toHaveCount(0)
     await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
     await expect(panel.locator('.draft-section')).toHaveCount(0)
     await expect(panel.locator('.draft-ribbon')).toHaveCount(0)
@@ -609,8 +680,8 @@ test.describe('desktop', () => {
 
   /* The narrowest three-column width, where every workspace track sits on its
      floor and the roster row has the least to give. The name shares the row
-     with a grip, a swatch, the YOU column, the tally and the VP, and it is the
-     only cell that flexes, so this is where it gets squeezed out. */
+     with a grip, a swatch, the tally and the VP, and on the claimed row its own
+     cell with the YOU chip, so this is where it gets squeezed out. */
   test.describe('at the narrowest three-column width', () => {
     test.use({ viewport: { width: 1121, height: 900 } })
 
@@ -634,7 +705,7 @@ test.describe('desktop', () => {
       await snap(page, 'desktop-draft-ribbon-six', false)
     })
 
-    test('leaves the roster name a cell of its own instead of running it under the YOU chip', async ({ page }) => {
+    test('leaves the roster name room beside the YOU chip instead of running it under', async ({ page }) => {
       await page.goto('')
       await seedUnclaimedRoster(page)
       const rows = page.locator('.player-list .roster-row')
@@ -650,12 +721,19 @@ test.describe('desktop', () => {
         const boxes = await rows.evaluateAll((elements) => elements.map((row) => ({
           cell: row.querySelector('.list-row-main')!.getBoundingClientRect().width,
           nameRight: row.querySelector('.list-row-name')!.getBoundingClientRect().right,
-          chipLeft: row.querySelector('.you-chip')!.getBoundingClientRect().left,
+          nameWidth: row.querySelector('.list-row-name')!.getBoundingClientRect().width,
+          cellRight: row.querySelector('.list-row-main')!.getBoundingClientRect().right,
+          // Only the claimed row draws the chip, inside the name's cell.
+          chip: row.querySelector('.you-chip')?.getBoundingClientRect() ?? null,
         })))
         expect(boxes.length).toBeGreaterThan(1)
+        expect(boxes.filter((box) => box.chip).length).toBe(1)
         for (const box of boxes) {
           expect(box.cell).toBeGreaterThan(0)
-          expect(box.nameRight).toBeLessThanOrEqual(box.chipLeft)
+          expect(box.nameWidth).toBeGreaterThan(0)
+          if (!box.chip) continue
+          expect(box.nameRight).toBeLessThanOrEqual(box.chip.left)
+          expect(box.chip.right).toBeLessThanOrEqual(box.cellRight + 0.5)
         }
       }
       await snap(page, 'desktop-narrow')

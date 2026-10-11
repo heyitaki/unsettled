@@ -79,7 +79,7 @@ test('the analysis block opens with a ribbon of every pick and the board sits in
   const players = await page.locator('.phone-dot').count()
   const slots = page.locator('.phone-analysis .draft-ribbon-slot')
   await expect(slots).toHaveCount(players * 2)
-  await expect(slots.first()).toHaveClass(/\bnow\b/)
+  await expect(slots.first()).toHaveClass(/\bviewing\b/)
   const frame = await page.locator('.board-canvas').boundingBox()
   expect(frame).not.toBeNull()
   expect(Math.abs(frame!.width - frame!.height)).toBeLessThanOrEqual(1)
