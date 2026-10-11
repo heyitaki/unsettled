@@ -141,8 +141,7 @@ impl ScoreRows {
             } else {
                 0
             };
-            debug_assert!(seat < 64, "base keys reserve six bits for the seat");
-            let base_tag = u64::from(0x80 | (seat << 1) | u8::from(grant));
+            let base_tag = expansion::base_tag(seat, grant);
             self.scratch.extend((0..self.vertices).map(|index| {
                 let vertex = index as Vertex;
                 if legal_with_vacancy(topology, vertex_owner, vacated, vertex) {
@@ -154,7 +153,7 @@ impl ScoreRows {
                         )
                     };
                     let base = if use_value_memo {
-                        let key = (u64::from(serial) << 16) | (u64::from(vertex) << 8) | base_tag;
+                        let key = expansion::price_key(serial, vertex, base_tag);
                         memo.price(key, base_total)
                     } else {
                         base_total()
@@ -1103,7 +1102,7 @@ mod tests {
             assert_eq!(
                 walk_calls() - before,
                 legal.len(),
-                "one walk per legal vertex, vacated {vacated:?}"
+                "one expansion valuation per legal vertex, vacated {vacated:?}"
             );
             assert_eq!(row.len(), topology.vertex_count());
             for vertex in &legal {
@@ -1139,7 +1138,7 @@ mod tests {
 
     /// The uncached row against a direct score on boards a draft can and cannot reach: several
     /// settlements per seat, road chains of the scoring seat's own, rival roads across the walk,
-    /// and a vacated vertex. One `ScoreRows` serves every state and both formulas, so anything it
+    /// and a vacated vertex. One `ScoreRows` serves every state and all formulas, so anything it
     /// remembers between calls has to be keyed by all of what it was computed from.
     #[test]
     fn an_uncached_row_matches_direct_scores_on_scrambled_boards() {
@@ -1147,10 +1146,22 @@ mod tests {
         let mut far = default_weights();
         far.expansion_decay = 0.35;
         far.expansion_weight = 0.4;
+        let mut scaled = default_weights();
+        scaled.expansion_decay = 0.3;
+        for row in scaled.slot_scales.values_mut() {
+            for (seat, scale) in row {
+                let seat = seat.parse::<f64>().unwrap();
+                scale.diversity = 0.5 + seat * 0.15;
+                scale.expansion = 0.2 + seat * 0.25;
+            }
+        }
         let scorers = [
             AppFormulaScorer::new(&board, &topology, default_weights()),
             AppFormulaScorer::new(&board, &topology, far),
+            AppFormulaScorer::new(&board, &topology, scaled),
         ];
+        assert_eq!(scorers[2].slot_scale(0).diversity, 0.5);
+        assert_ne!(scorers[2].slot_scale(0), scorers[2].slot_scale(1));
         let mut state = 0x9e37_79b9_7f4a_7c15_u64;
         let mut draw = |bound: usize| {
             state = state
@@ -1199,8 +1210,8 @@ mod tests {
                 (!occupied.is_empty()).then(|| occupied[draw(occupied.len())]),
             ];
             for seat in 0..6_u8 {
-                let scorer = &scorers[(board_index + usize::from(seat)) % 2];
-                let grant = (board_index + usize::from(seat)) % 3 == 0;
+                let scorer = &scorers[(board_index + usize::from(seat)) % scorers.len()];
+                let grant = (board_index + usize::from(seat)) % 2 == 0;
                 for vacated in vacancies {
                     let row = rows
                         .legal_row(

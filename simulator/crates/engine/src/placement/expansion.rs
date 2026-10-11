@@ -15,6 +15,9 @@ use crate::topology::{Edge, Vertex};
 /// Paid road-builds a site may cost before it is out of reach. The free setup road is not one.
 const MAX_PAID_BUILDS: usize = 2;
 const SITES_MEMO_LEN: usize = 4_096;
+const CONTEXT_MEMO_LEN: usize = 256;
+const PRICE_MEMO_LEN: usize = 16_384;
+const VALUE_MEMO_LEN: usize = 8_192;
 const WALK_MEMO_WAYS: usize = 2;
 static NEXT_REACH_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -54,7 +57,7 @@ struct OpenReach {
     masks: [u128; 3],
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub(super) struct ReachTable {
     pub(super) id: u64,
     entries: Vec<ReachEntry>,
@@ -474,7 +477,7 @@ impl ValueEntry {
         for (i, mask) in self.sites.iter().enumerate() {
             hash ^= mask.rotate_left((i * 11) as u32);
         }
-        mix64(hash) as usize & (8_192 - 1)
+        mix64(hash) as usize & (VALUE_MEMO_LEN - 1)
     }
 
     fn same_key(&self, other: &Self) -> bool {
@@ -483,7 +486,7 @@ impl ValueEntry {
 }
 
 pub(super) struct PriceMemo {
-    contexts: [(u64, u128, u32); 256],
+    contexts: [(u64, u128, u32); CONTEXT_MEMO_LEN],
     prices: Vec<(u64, f64)>,
     values: Vec<ValueEntry>,
     next_serial: u32,
@@ -492,9 +495,9 @@ pub(super) struct PriceMemo {
 impl Default for PriceMemo {
     fn default() -> Self {
         Self {
-            contexts: [(0, 0, 0); 256],
-            prices: vec![(0, 0.0); 16_384],
-            values: vec![ValueEntry::default(); 8_192],
+            contexts: [(0, 0, 0); CONTEXT_MEMO_LEN],
+            prices: vec![(0, 0.0); PRICE_MEMO_LEN],
+            values: vec![ValueEntry::default(); VALUE_MEMO_LEN],
             next_serial: 1,
         }
     }
@@ -502,8 +505,7 @@ impl Default for PriceMemo {
 
 impl PriceMemo {
     pub(super) fn serial(&mut self, scorer: u64, own: u128) -> u32 {
-        let hash = mix64(scorer ^ mix64(own as u64) ^ mix64((own >> 64) as u64).rotate_left(32));
-        let index = hash as usize & (self.contexts.len() - 1);
+        let index = Self::context_index(scorer, own);
         let (held_scorer, held_own, serial) = self.contexts[index];
         if held_scorer == scorer && held_own == own {
             return serial;
@@ -521,13 +523,28 @@ impl PriceMemo {
     }
 
     pub(super) fn price(&mut self, key: u64, compute: impl FnOnce() -> f64) -> f64 {
-        let index = (key.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 50) as usize;
+        let index = (key.wrapping_mul(0x9e37_79b9_7f4a_7c15)
+            >> (u64::BITS - PRICE_MEMO_LEN.ilog2())) as usize;
         let entry = &mut self.prices[index];
         if entry.0 != key {
             *entry = (key, compute());
         }
         entry.1
     }
+
+    fn context_index(scorer: u64, own: u128) -> usize {
+        let hash = mix64(scorer ^ mix64(own as u64) ^ mix64((own >> 64) as u64).rotate_left(32));
+        hash as usize & (CONTEXT_MEMO_LEN - 1)
+    }
+}
+
+pub(super) fn base_tag(seat: u8, grant: bool) -> u8 {
+    debug_assert!(seat < 64, "base keys reserve six bits for the seat");
+    0x80 | (seat << 1) | u8::from(grant)
+}
+
+pub(super) fn price_key(serial: u32, candidate: Vertex, tag: u8) -> u64 {
+    (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(tag)
 }
 
 thread_local! {
@@ -600,7 +617,7 @@ pub(super) fn row_value(
             }).price(site)
         };
         let price = if use_value_memo {
-            let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
+            let key = price_key(serial, candidate, site);
             memo.price(key, price_site)
         } else {
             price_site()
@@ -636,9 +653,6 @@ pub(super) fn row_road(
     seat: u8,
     candidate: Vertex,
 ) -> Option<Edge> {
-    if scorer.weights().expansion_weight == 0.0 {
-        return None;
-    }
     let occupancy = Occupancy::new(scorer, vertex_owner, edge_owner, seat);
     row_road_with_occupancy(scorer, vertex_owner, seat, candidate, &occupancy)
 }
@@ -693,7 +707,7 @@ pub(super) fn row_road_with_occupancy(
                 } else {
                     2
                 };
-                let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
+                let key = price_key(serial, candidate, site);
                 let price = memo.price(key, || {
                     pricer.get_or_insert_with(|| {
                         let mut holdings = scorer.holdings_for_owner(vertex_owner, seat);
@@ -1194,13 +1208,17 @@ mod tests {
     #[test]
     fn base_totals_and_site_prices_have_disjoint_keys() {
         let mut memo = PriceMemo::default();
-        let prefix = (u64::from(memo.serial(1, 0)) << 16) | (3 << 8);
+        let serial = memo.serial(1, 0);
+        let mut keys = Vec::new();
         for seat in 0_u8..64 {
             for grant in [false, true] {
-                let key = prefix | u64::from(0x80 | (seat << 1) | u8::from(grant));
-                for site in 0_u64..128 {
-                    assert_ne!(key, prefix | site);
-                    memo.price(prefix | site, || -1.0);
+                let key = price_key(serial, 3, base_tag(seat, grant));
+                assert!(!keys.contains(&key));
+                keys.push(key);
+                for site in 0..128 {
+                    let site_key = price_key(serial, 3, site);
+                    assert_ne!(key, site_key);
+                    memo.price(site_key, || -1.0);
                 }
                 let expected = f64::from(seat) + f64::from(grant);
                 assert_eq!(memo.price(key, || expected).to_bits(), expected.to_bits());
@@ -1219,11 +1237,12 @@ mod tests {
         deficit.port_coverage_deficit_weight = 0.7;
         let mut concentration = default_weights();
         concentration.robber_concentration_weight = 0.8;
-        let mut degenerate = default_weights();
-        degenerate.resource_value.wood = -1.0;
-        degenerate.resource_value.wheat = f64::NAN;
-        degenerate.diversity_weight = -0.5;
-        for (vector, weights) in [default_weights(), recipe, deficit, concentration, degenerate]
+        let mut negative = default_weights();
+        negative.resource_value.wood = -1.0;
+        negative.diversity_weight = -0.5;
+        let mut nan = negative.clone();
+        nan.resource_value.wheat = f64::NAN;
+        for (vector, weights) in [default_weights(), recipe, deficit, concentration, negative, nan]
             .into_iter()
             .enumerate()
         {
@@ -1542,10 +1561,13 @@ mod tests {
                 ore: -3.0,
             };
             degenerate.expansion_decay = f64::NAN;
+            let mut negative = degenerate.clone();
+            negative.expansion_decay = 0.3;
             let scorers = [
                 AppFormulaScorer::new(&board, &topology, default_weights()),
                 AppFormulaScorer::new(&board, &topology, far),
                 AppFormulaScorer::new(&board, &topology, degenerate),
+                AppFormulaScorer::new(&board, &topology, negative),
             ];
             for (board_index, (vertices, edges)) in scrambled_owners(&topology).iter().enumerate() {
                 for (scorer_index, scorer) in scorers.iter().enumerate() {
@@ -1608,7 +1630,7 @@ mod tests {
         }
     }
 
-    /// An own road in reach selects the original walk, including free travel over long chains.
+    /// An own road in reach selects general reach, including free travel over long chains.
     #[test]
     fn row_expansion_uses_walk_for_nearby_own_roads() {
         let (topology, board) = fixture();
@@ -1686,15 +1708,69 @@ mod tests {
     fn price_memo_clears_on_serial_rollover() {
         let mut memo = PriceMemo::default();
         assert_eq!(memo.serial(1, 0), 1);
-        let key = (1_u64 << 16) | (3 << 8) | 4;
+        let key = price_key(1, 3, 4);
         assert_eq!(memo.price(key, || 17.0), 17.0);
-        for id in 2..=258 {
-            assert_eq!(memo.serial(id, 0), id as u32);
-        }
-        assert!(memo.serial(1, 0) > 1);
+        let collision = (2..).find(|id| {
+            PriceMemo::context_index(*id, 0) == PriceMemo::context_index(1, 0)
+        }).unwrap();
+        assert_eq!(memo.serial(collision, 0), 2);
+        assert_eq!(memo.serial(1, 0), 3);
         memo.next_serial = u32::MAX;
-        assert_eq!(memo.serial(999, 0), 1);
+        assert_eq!(memo.serial(collision + 1, 0), 1);
         assert_eq!(memo.price(key, || -23.0), -23.0);
+    }
+
+    /// Rollover invalidates contexts too, so an old identity cannot reclaim a reissued serial.
+    #[test]
+    fn serial_rollover_invalidates_contexts_before_reissuing_serials() {
+        let slot = PriceMemo::context_index;
+        let old = 1;
+        let near_wrap = (2..).find(|id| slot(*id, 0) != slot(old, 0)).unwrap();
+        let new = (near_wrap + 1..).find(|id| {
+            slot(*id, 0) != slot(old, 0) && slot(*id, 0) != slot(near_wrap, 0)
+        }).unwrap();
+        let mut memo = PriceMemo::default();
+        let serial = memo.serial(old, 0);
+        let key = price_key(serial, 7, 9);
+        assert_eq!(memo.price(key, || 17.0), 17.0);
+        let mut value = ValueEntry::new(serial, 7, [0, 1 << 9, 0]);
+        value.value = 19.0;
+        memo.values[value.index()] = value;
+
+        memo.next_serial = u32::MAX - 1;
+        assert_eq!(memo.serial(near_wrap, 0), u32::MAX - 1);
+        assert_eq!(memo.serial(new, 0), serial);
+        assert_eq!(memo.price(key, || -23.0), -23.0);
+        assert!(!memo.values[value.index()].same_key(&value));
+
+        let renewed = memo.serial(old, 0);
+        assert_ne!(renewed, serial);
+        memo.price(price_key(renewed, 7, 9), || 17.0);
+        let mut renewed_value = ValueEntry::new(renewed, 7, [0, 1 << 9, 0]);
+        renewed_value.value = 19.0;
+        memo.values[renewed_value.index()] = renewed_value;
+        assert_eq!(memo.serial(new, 0), serial);
+        assert_eq!(memo.price(key, || -23.0), -23.0);
+        assert!(!memo.values[value.index()].same_key(&value));
+    }
+
+    /// Cached decays keep runtime powf's bits even when release optimizes integer exponents.
+    #[test]
+    fn cached_decays_match_runtime_powers() {
+        let (topology, board) = fixture();
+        let decays = (0..=4093).map(|i| 0.125 + 0.875 * (f64::from(i) / 4093.0));
+        for decay in decays.chain([
+            -1.0, -0.7, -0.3, -0.125, -0.0, 0.0, f64::NEG_INFINITY,
+            f64::INFINITY, f64::NAN,
+        ]) {
+            let mut weights = default_weights();
+            weights.expansion_decay = decay;
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            for (k, cached) in scorer.decay_pow.iter().enumerate() {
+                let direct = std::hint::black_box(decay).powf(std::hint::black_box(k as f64));
+                assert_eq!(cached.to_bits(), direct.to_bits(), "decay {decay:?} exponent {k}");
+            }
+        }
     }
 
     fn default_weights() -> EngineWeights {

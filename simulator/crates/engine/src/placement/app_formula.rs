@@ -14,6 +14,12 @@ use crate::view::pips;
 const COVERAGE_MEMO_BITS: u32 = 6;
 static NEXT_SCORER_ID: AtomicU64 = AtomicU64::new(1);
 
+// An opaque exponent preserves the reference's libm rounding under release optimization.
+#[inline(never)]
+fn decay_power(decay: f64, paid_builds: usize) -> f64 {
+    decay.powf(std::hint::black_box(paid_builds as f64))
+}
+
 thread_local! {
     /// Per-thread direct-mapped memo for coverage powers. Both operand bit patterns key the
     /// stored `powf` result, so hits are exact and entries need no invalidation. Every slot
@@ -469,7 +475,7 @@ impl<'a> SitePricer<'a> {
         });
         let diversity = scorer.diversity_combine(covers, covers)
             - self.total
-            - scorer.duplicate_number_penalty(&self.holdings, stats);
+            - scorer.sparse_duplicate_number_penalty(&self.holdings, stats);
         let port = if !self.holdings.has_ports && !stats.has_ports {
             0.0
         } else {
@@ -633,7 +639,7 @@ impl AppFormulaScorer {
         Self {
             id: NEXT_SCORER_ID.fetch_add(1, Ordering::Relaxed),
             reach: expansion::ReachTable::shared(&links),
-            decay_pow: std::array::from_fn(|k| weights.expansion_decay.powf(k as f64)),
+            decay_pow: std::array::from_fn(|k| decay_power(weights.expansion_decay, k)),
             weights,
             scarcity,
             coverage_value,
@@ -968,6 +974,16 @@ impl AppFormulaScorer {
     }
 
     fn duplicate_number_penalty(&self, holdings: &Holdings, candidate: &VertexStats) -> f64 {
+        let mut overlap = 0.0;
+        for number in 0..candidate.token_pips.len() {
+            if candidate.token_pips[number] != 0.0 {
+                overlap += js_min(holdings.token_pips[number], candidate.token_pips[number]);
+            }
+        }
+        overlap * self.weights.duplicate_number_penalty
+    }
+
+    fn sparse_duplicate_number_penalty(&self, holdings: &Holdings, candidate: &VertexStats) -> f64 {
         let mut overlap = 0.0;
         for number in &candidate.token_numbers[..usize::from(candidate.token_numbers_len)] {
             let number = usize::from(*number);
@@ -1335,6 +1351,7 @@ mod tests {
                 }
                 expected *= scorer.weights.duplicate_number_penalty;
                 assert_eq!(scorer.duplicate_number_penalty(&holdings, stats).to_bits(), expected.to_bits());
+                assert_eq!(scorer.sparse_duplicate_number_penalty(&holdings, stats).to_bits(), expected.to_bits());
             }
         }
     }
