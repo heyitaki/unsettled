@@ -13,7 +13,8 @@
 //! Deterministic by construction, so it never draws on the policy RNG stream: settlement ties go
 //! to the lowest vertex index and road ties to the lowest edge id, where the field draws at
 //! random. Exactness against the field is the model's point, so the lookahead scores every legal
-//! candidate and every intervening pick; the speed comes from `ScoreRows`, never from pruning.
+//! candidate and every intervening pick. `ScoreRows` reuses whole rows when possible and otherwise
+//! scores only vertices a pick can take.
 
 use std::ops::Range;
 
@@ -30,13 +31,14 @@ pub(crate) struct DraftScorers {
     pub opponent: AppFormulaScorer,
 }
 
-/// One seat's score for every vertex, at one holdings set and one setup grant.
+/// One seat's vertex scores, at one holdings set and one setup grant.
 ///
 /// Every component of the formula but `expansion` is a function of the seat, its own holdings and
 /// the candidate alone, so a row computed while weighing one hero candidate is exactly the row
 /// wanted for the next. `expansion` is the exception: it walks the occupancy around the
 /// candidate, which the lookahead moves as it replays. Rows are therefore kept only while both
-/// formulas carry `expansionWeight` 0, and recomputed into `scratch` when either does not.
+/// formulas carry `expansionWeight` 0. Otherwise the lookahead scores only legal vertices into
+/// `scratch`, including those reopened for denial.
 struct ScoreRows {
     /// Row length: the board's vertices, which is what `best_legal` scans.
     vertices: usize,
@@ -62,6 +64,35 @@ impl ScoreRows {
             rows: vec![None; slots],
             scratch: Vec::new(),
         }
+    }
+
+    /// The seat's row as `best_legal` reads it under `vacated`: the cached row while rows are
+    /// reusable, otherwise scores for the legal vertices alone and `NEG_INFINITY` for the rest,
+    /// which no scan reads.
+    #[allow(clippy::too_many_arguments)]
+    fn legal_row(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        topology: &Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        grant: bool,
+        vacated: Option<Vertex>,
+    ) -> &[f64] {
+        if self.reusable {
+            return self.row(scorer, vertex_owner, edge_owner, seat, grant);
+        }
+        self.scratch.clear();
+        self.scratch.extend((0..self.vertices).map(|index| {
+            let vertex = index as Vertex;
+            if legal_with_vacancy(topology, vertex_owner, vacated, vertex) {
+                scorer.score_for_owner(vertex_owner, edge_owner, seat, vertex, grant)
+            } else {
+                f64::NEG_INFINITY
+            }
+        }));
+        &self.scratch
     }
 
     /// The seat's score for every vertex on this state, computed once per distinct
@@ -155,10 +186,10 @@ fn slot_index(owner_slots: usize, seat: u8, held: Option<Vertex>, grant: bool) -
 /// credit's preregistered counterfactual: the same row answers what a seat could have taken had
 /// another seat not taken that vertex, by reopening the vertex and everything its distance ring
 /// barred. Only reachability moves, never a score. That is exact while `expansionWeight` is 0,
-/// where no component reads the board beyond the scoring seat's own holdings. Above 0 the row
-/// still prices every vertex with the candidate standing, because a settlement is a dead end for
-/// the expansion walk, so the counterfactual stays a legality one by definition rather than
-/// becoming a full re-score.
+/// where no component reads the board beyond the scoring seat's own holdings. Above 0 every
+/// vertex the vacancy reopens is still priced with the candidate standing, because a settlement
+/// is a dead end for the expansion walk, so the counterfactual stays a legality one by definition
+/// rather than becoming a full re-score.
 fn best_legal(
     topology: &Topology,
     vertex_owner: &[u8],
@@ -358,9 +389,15 @@ impl<'a> Lookahead<'a> {
     /// The best second settlement still legal on the board `replay` left, at the hero's own
     /// formula and with the setup grant only the second round pays.
     fn planned_second(&mut self) -> Option<(Vertex, f64)> {
-        let row = self
-            .rows
-            .row(self.hero_scorer, &self.owners, &self.edges, self.hero, true);
+        let row = self.rows.legal_row(
+            self.hero_scorer,
+            self.topology,
+            &self.owners,
+            &self.edges,
+            self.hero,
+            true,
+            None,
+        );
         best_legal(self.topology, &self.owners, None, row)
     }
 
@@ -399,16 +436,20 @@ impl<'a> Lookahead<'a> {
             // past the seat count is a second-round pick, which is the round that pays the grant.
             let grant = position >= self.seats;
             let pick = {
-                let row = self.rows.row(
+                // The row must cover every vertex either scan below can read.
+                let vacated = (self.denial_weight != 0.0).then_some(candidate);
+                let row = self.rows.legal_row(
                     self.opponent_scorer,
+                    self.topology,
                     &self.owners,
                     &self.edges,
                     seat,
                     grant,
+                    vacated,
                 );
                 let taken = best_legal(self.topology, &self.owners, None, row);
-                if self.denial_weight != 0.0 {
-                    let free = best_legal(self.topology, &self.owners, Some(candidate), row);
+                if vacated.is_some() {
+                    let free = best_legal(self.topology, &self.owners, vacated, row);
                     self.denial += denial_gain(free, taken);
                 }
                 taken
@@ -797,6 +838,79 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The uncached path scores only what a scan can read: the legal vertices, plus the ones the
+    /// denial scan's vacated vertex reopens. A cached row is shared by states with different
+    /// legality and stays whole.
+    #[test]
+    fn an_uncached_row_scores_only_the_vertices_a_pick_can_take() {
+        use crate::placement::expansion::walk_calls;
+
+        let (topology, board) = fixture();
+        let scorers = scorers(&topology, &board);
+        let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
+        vertex_owner[7] = 1;
+        let other = (20..topology.vertex_count() as Vertex)
+            .find(|vertex| can_place_settlement(&topology, &vertex_owner, *vertex))
+            .expect("one settlement leaves most of the board legal");
+        vertex_owner[usize::from(other)] = 3;
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), vertex_owner.len(), false);
+        for vacated in [None, Some(7)] {
+            let legal: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
+                .filter(|vertex| legal_with_vacancy(&topology, &vertex_owner, vacated, *vertex))
+                .collect();
+            assert!(legal.len() < topology.vertex_count());
+
+            let before = walk_calls();
+            let row = rows
+                .legal_row(
+                    &scorers.opponent,
+                    &topology,
+                    &vertex_owner,
+                    &edge_owner,
+                    2,
+                    true,
+                    vacated,
+                )
+                .to_vec();
+            assert_eq!(
+                walk_calls() - before,
+                legal.len(),
+                "one walk per legal vertex, vacated {vacated:?}"
+            );
+            assert_eq!(row.len(), topology.vertex_count());
+            for vertex in &legal {
+                let direct = scorers.opponent.score_for_owner(
+                    &vertex_owner,
+                    &edge_owner,
+                    2,
+                    *vertex,
+                    true,
+                );
+                assert_eq!(row[usize::from(*vertex)], direct, "vertex {vertex} vacated {vacated:?}");
+            }
+        }
+
+        let cached = scorers_without_expansion(&topology, &board, 0.0);
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), vertex_owner.len(), true);
+        let whole = rows
+            .row(&cached.opponent, &vertex_owner, &edge_owner, 2, true)
+            .to_vec();
+        let legal_only = rows
+            .legal_row(
+                &cached.opponent,
+                &topology,
+                &vertex_owner,
+                &edge_owner,
+                2,
+                true,
+                None,
+            )
+            .to_vec();
+        assert_eq!(legal_only, whole);
     }
 
     /// The lookahead with SP3's expansion term switched on, which is the combination no committed

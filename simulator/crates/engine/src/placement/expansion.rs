@@ -40,7 +40,7 @@ thread_local! {
 }
 
 #[cfg(test)]
-fn walk_calls() -> usize {
+pub(super) fn walk_calls() -> usize {
     WALK_CALLS.with(std::cell::Cell::get)
 }
 
@@ -277,6 +277,7 @@ pub(super) fn term(
         let mut road: Option<Edge> = None;
         let mut best_site = f64::NEG_INFINITY;
         let mut best_pair = f64::NEG_INFINITY;
+        let holdings_total = scorer.holdings_diversity_total(&with_candidate);
         for (first_edge, start, end) in edges.iter() {
             let span = &sites[*start..*end];
             values.clear();
@@ -289,7 +290,11 @@ pub(super) fn term(
                         // so what the pair's *current* pick position leans on says nothing about
                         // it. SP4's scales price this whole term instead, through the `expansion`
                         // scale its caller applies. `expansion.ts::expansionTerm` matches.
-                        let score = scorer.total_with_holdings(with_candidate, site.vertex, false);
+                        let score = scorer.site_total_with_holdings(
+                            with_candidate,
+                            site.vertex,
+                            holdings_total,
+                        );
                         scores[index] = Some(score);
                         score
                     }
@@ -535,6 +540,41 @@ mod tests {
             roads += 1;
         }
         assert!(roads > 0, "no candidate on the fixture board opens a site");
+    }
+
+    /// Every site of one call is priced against the same holdings, so the holdings' own diversity
+    /// total is scored once per call and each site adds only its own.
+    #[test]
+    fn a_term_scores_the_holdings_diversity_once() {
+        use crate::placement::app_formula::diversity_score_calls;
+
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let vertex_owner = vec![EMPTY; topology.vertex_count()];
+        let edge_owner = vec![EMPTY; topology.edge_count()];
+        let distinct_sites = |candidate: Vertex| {
+            let mut sites: Vec<Vertex> =
+                sites_by_edge(&scorer, &vertex_owner, &edge_owner, 0, candidate)
+                    .into_iter()
+                    .flat_map(|(_, sites)| sites.into_iter().map(|site| site.vertex))
+                    .collect();
+            sites.sort_unstable();
+            sites.dedup();
+            sites.len()
+        };
+        let candidate = (0..topology.vertex_count() as Vertex)
+            .find(|candidate| distinct_sites(*candidate) >= 3)
+            .expect("an empty board opens at least three sites from some vertex");
+        let sites = distinct_sites(candidate);
+
+        let before = diversity_score_calls();
+        let value = term(&scorer, &Holdings::empty(), &vertex_owner, &edge_owner, 0, candidate);
+        assert!(value.road.is_some());
+        assert_eq!(
+            diversity_score_calls() - before,
+            sites + 1,
+            "one total per site plus one for the holdings"
+        );
     }
 
     /// A site is listed once per first edge, at the cheapest cost the walk reaches it for.

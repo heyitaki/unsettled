@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
@@ -7,6 +8,35 @@ use crate::board::SimBoard;
 use crate::rules::{RESOURCE_COUNT, Resource};
 use crate::topology::{Edge, Topology, Vertex};
 use crate::view::pips;
+
+const COVERAGE_MEMO_BITS: u32 = 6;
+
+thread_local! {
+    /// Per-thread direct-mapped memo for coverage powers. Both operand bit patterns key the
+    /// stored `powf` result, so hits are exact and entries need no invalidation. Every slot
+    /// starts as the true entry for `powf(+0.0, +0.0)`.
+    static COVERAGE_POWF_MEMO: [Cell<((u64, u64), f64)>; 1 << COVERAGE_MEMO_BITS] = const {
+        [const { Cell::new(((0, 0), 1.0)) }; 1 << COVERAGE_MEMO_BITS]
+    };
+}
+
+// Times this thread scored a diversity total and ran `coverage`'s `powf`, so tests can pin how
+// often each happens. Thread-local for the reason `expansion.rs`'s walk counter is.
+#[cfg(test)]
+thread_local! {
+    static DIVERSITY_SCORE_CALLS: Cell<usize> = const { Cell::new(0) };
+    static COVERAGE_POWF_CALLS: Cell<usize> = const { Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn diversity_score_calls() -> usize {
+    DIVERSITY_SCORE_CALLS.with(Cell::get)
+}
+
+#[cfg(test)]
+fn coverage_powf_calls() -> usize {
+    COVERAGE_POWF_CALLS.with(Cell::get)
+}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -666,6 +696,27 @@ impl AppFormulaScorer {
         }
     }
 
+    pub(super) fn holdings_diversity_total(&self, holdings: &Holdings) -> f64 {
+        self.diversity_score(
+            holdings.pips[Resource::Wood.index()],
+            holdings.pips[Resource::Sheep.index()],
+            holdings.pips[Resource::Wheat.index()],
+            holdings.pips[Resource::Brick.index()],
+            holdings.pips[Resource::Ore.index()],
+        )
+    }
+
+    /// What SP3's walk prices a site by: `total_with_holdings` with no setup grant, handed the
+    /// holdings' own diversity total so one call pricing many sites scores that total once.
+    pub(super) fn site_total_with_holdings(
+        &self,
+        holdings: Holdings,
+        candidate: Vertex,
+        holdings_total: f64,
+    ) -> f64 {
+        self.scaled_total_with_diversity(holdings, candidate, false, 1.0, holdings_total)
+    }
+
     /// The largest single hex's share of all the pips these hexes produce, which is the quantity
     /// M-56 measured as `blockability`: 1 when every pip comes off one hex, and as low as
     /// `1 / hexes` when they are spread evenly. 0 for an empty mask, so a pair touching nothing
@@ -725,11 +776,12 @@ impl AppFormulaScorer {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
         let (production, scarcity, robber) = self.base_breakdown(stats);
+        let holdings_total = self.holdings_diversity_total(&holdings);
         ScoreBreakdown {
             production,
             scarcity,
             robber: robber + self.concentration_delta(&holdings, stats),
-            diversity: self.diversity_delta(&holdings, stats, precompute),
+            diversity: self.diversity_delta(&holdings, stats, precompute, holdings_total),
             port: self.port_delta(&holdings, stats, precompute),
             hand_value: if receives_grant {
                 hand_value(&self.weights, &stats.setup_grant)
@@ -753,6 +805,7 @@ impl AppFormulaScorer {
         holdings: &Holdings,
         stats: &VertexStats,
         precompute: VertexPrecompute,
+        holdings_total: f64,
     ) -> f64 {
         let wood = holdings.pips[Resource::Wood.index()];
         let sheep = holdings.pips[Resource::Sheep.index()];
@@ -765,11 +818,13 @@ impl AppFormulaScorer {
             wheat + precompute.adjusted[Resource::Wheat.index()],
             brick + precompute.adjusted[Resource::Brick.index()],
             ore + precompute.adjusted[Resource::Ore.index()],
-        ) - self.diversity_score(wood, sheep, wheat, brick, ore)
+        ) - holdings_total
             - self.duplicate_number_penalty(holdings, stats)
     }
 
     fn diversity_score(&self, wood: f64, sheep: f64, wheat: f64, brick: f64, ore: f64) -> f64 {
+        #[cfg(test)]
+        DIVERSITY_SCORE_CALLS.with(|calls| calls.set(calls.get() + 1));
         let weights = &self.weights;
         let cap = weights.diversity_cap;
         let wood_cover = coverage(weights, wood, cap);
@@ -943,9 +998,8 @@ impl AppFormulaScorer {
                 - port_surplus(weights, ore) * held[Resource::Ore.index()] * ore_pre)
     }
 
-    /// The formula without its expansion component, which is what SP3's walk prices a site by: a
-    /// site is worth what the rest of the formula says it is worth, and the term can never recurse
-    /// into itself. Mirrors `valuation.ts::marginalWithoutExpansion`.
+    /// The formula without its expansion component. Mirrors
+    /// `valuation.ts::marginalWithoutExpansion`.
     pub(super) fn total_with_holdings(
         &self,
         holdings: Holdings,
@@ -967,11 +1021,29 @@ impl AppFormulaScorer {
         receives_grant: bool,
         diversity_scale: f64,
     ) -> f64 {
+        let holdings_total = self.holdings_diversity_total(&holdings);
+        self.scaled_total_with_diversity(
+            holdings,
+            candidate,
+            receives_grant,
+            diversity_scale,
+            holdings_total,
+        )
+    }
+
+    fn scaled_total_with_diversity(
+        &self,
+        holdings: Holdings,
+        candidate: Vertex,
+        receives_grant: bool,
+        diversity_scale: f64,
+        holdings_total: f64,
+    ) -> f64 {
         let stats = &self.vertices[usize::from(candidate)];
         let precompute = stats.precompute;
         precompute.base
             + self.concentration_delta(&holdings, stats)
-            + diversity_scale * self.diversity_delta(&holdings, stats, precompute)
+            + diversity_scale * self.diversity_delta(&holdings, stats, precompute, holdings_total)
             + self.port_delta(&holdings, stats, precompute)
             + if receives_grant {
                 precompute.setup_grant_value
@@ -1003,7 +1075,23 @@ fn base_parts(
 }
 
 fn coverage(weights: &EngineWeights, pips: f64, cap: f64) -> f64 {
-    js_max(0.0, js_min(pips, cap) / cap).powf(weights.coverage_exponent)
+    let base = js_max(0.0, js_min(pips, cap) / cap);
+    let exponent = weights.coverage_exponent;
+    let key = (base.to_bits(), exponent.to_bits());
+    let mixed = (key.0 ^ key.1.rotate_left(32)).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    let index = (mixed >> (u64::BITS - COVERAGE_MEMO_BITS)) as usize;
+    COVERAGE_POWF_MEMO.with(|memo| {
+        let slot = &memo[index];
+        let (stored, result) = slot.get();
+        if stored == key {
+            return result;
+        }
+        #[cfg(test)]
+        COVERAGE_POWF_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let result = base.powf(exponent);
+        slot.set((key, result));
+        result
+    })
 }
 
 fn js_clamp(value: f64, min: f64, max: f64) -> f64 {
@@ -1114,4 +1202,89 @@ fn port_deficit_factor(weights: &EngineWeights, total: f64, own: f64) -> f64 {
 
 fn port_surplus(weights: &EngineWeights, pips: f64) -> f64 {
     js_max(0.0, pips - weights.port_surplus_threshold)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_weights() -> EngineWeights {
+        serde_json::from_str(include_str!("../../../../placement/default-weights.json")).unwrap()
+    }
+
+    /// The base of `coverage`'s power is a ratio of small pip sums to a cap, so a handful of values
+    /// account for nearly every call the setup lookahead makes. A repeated input must not pay for
+    /// `powf` again.
+    #[test]
+    fn a_repeated_coverage_runs_powf_once() {
+        let weights = default_weights();
+        let first = coverage(&weights, 3.0, 4.0);
+        let after_first = coverage_powf_calls();
+        for _ in 0..3 {
+            assert_eq!(coverage(&weights, 3.0, 4.0).to_bits(), first.to_bits());
+        }
+        assert_eq!(coverage_powf_calls(), after_first, "a repeat must be remembered");
+
+        // The cap divides out before the power, so an equal ratio is the same input.
+        assert_eq!(coverage(&weights, 1.5, 2.0).to_bits(), first.to_bits());
+        assert_eq!(coverage_powf_calls(), after_first);
+    }
+
+    /// Every slot starts as the entry for `powf(+0.0, +0.0)`, so a fresh thread can be answered
+    /// from a slot nothing has written. That answer has to be the real power.
+    #[test]
+    fn an_untouched_slot_already_holds_a_true_power() {
+        std::thread::spawn(|| {
+            let mut weights = default_weights();
+            weights.coverage_exponent = 0.0;
+            let before = coverage_powf_calls();
+            assert_eq!(coverage(&weights, 0.0, 4.0).to_bits(), 0.0_f64.powf(0.0).to_bits());
+            assert_eq!(coverage_powf_calls(), before, "the seeded entry answers without `powf`");
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// Whatever is remembered is the `powf` it stands for, bit for bit, across far more distinct
+    /// inputs than any table holds, at the edges of the domain, and at exponents other than the
+    /// shipped one. Each input is asked twice in a row and again on a second sweep, so a fresh
+    /// answer, an immediate repeat and an entry that was since displaced are all compared.
+    #[test]
+    fn a_remembered_coverage_is_the_powf_it_stands_for() {
+        let edges = [
+            0.0,
+            -0.0,
+            -1.0,
+            f64::MIN_POSITIVE,
+            1e-300,
+            4.0,
+            5.0,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NAN,
+        ];
+        let pips: Vec<f64> = edges
+            .into_iter()
+            .chain((0..2_000).map(|step| f64::from(step) * 0.003))
+            .collect();
+        for exponent in [1.5, 1.0, 0.0, 3.0, 0.5, -1.0, f64::NAN] {
+            let mut weights = default_weights();
+            weights.coverage_exponent = exponent;
+            for _sweep in 0..2 {
+                for cap in [4.0, 3.0] {
+                    for value in &pips {
+                        let direct = js_max(0.0, js_min(*value, cap) / cap).powf(exponent);
+                        for _ in 0..2 {
+                            let remembered = coverage(&weights, *value, cap);
+                            assert!(
+                                remembered.to_bits() == direct.to_bits()
+                                    || (remembered.is_nan() && direct.is_nan()),
+                                "pips {value} cap {cap} exponent {exponent}: {remembered} against {direct}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
