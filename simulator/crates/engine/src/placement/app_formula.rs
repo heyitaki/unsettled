@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use serde::Deserialize;
 
@@ -335,6 +335,8 @@ pub struct AppFormulaScorer {
     pub(super) reach: Arc<expansion::ReachTable>,
     /// Runtime libm powers indexed by paid builds, preserving the reference's bits.
     pub(super) decay_pow: [f64; expansion::MAX_PAID_BUILDS + 1],
+    /// Indirection preserves immutable scorer reads while clones share the lazy bound data.
+    expansion_bounds: Arc<OnceLock<Option<ExpansionBounds>>>,
     weights: EngineWeights,
     scarcity: [f64; RESOURCE_COUNT],
     coverage_value: [f64; RESOURCE_COUNT],
@@ -505,6 +507,103 @@ impl<'a> SitePricer<'a> {
     }
 }
 
+#[derive(Debug)]
+struct BoundSites {
+    bases: [[f64; 2]; 2],
+    adjusted: [f64; RESOURCE_COUNT],
+    port_factors: [f64; RESOURCE_COUNT],
+    decay: [f64; 2],
+}
+
+impl BoundSites {
+    fn new(scorer: &AppFormulaScorer, masks: [u128; 2], decay: [f64; 2]) -> Self {
+        let mut result = Self {
+            bases: [[f64::NEG_INFINITY; 2]; 2],
+            adjusted: [f64::NEG_INFINITY; RESOURCE_COUNT],
+            port_factors: [0.0; RESOURCE_COUNT],
+            decay,
+        };
+        for (class, mut mask) in masks.into_iter().enumerate() {
+            while mask != 0 {
+                let vertex = mask.trailing_zeros() as usize;
+                mask &= mask - 1;
+                let stats = scorer.vertices[vertex].precompute;
+                let best = &mut result.bases[class];
+                if stats.base > best[0] {
+                    best[1] = best[0];
+                    best[0] = stats.base;
+                } else if stats.base > best[1] {
+                    best[1] = stats.base;
+                }
+                for i in 0..RESOURCE_COUNT {
+                    result.adjusted[i] = js_max(result.adjusted[i], stats.adjusted[i]);
+                    result.port_factors[i] = js_max(result.port_factors[i], stats.port_factors[i]);
+                }
+            }
+        }
+        result
+    }
+}
+
+/// Upper operands keep the operation order of site pricing and the expansion fold.
+#[derive(Debug)]
+pub(super) struct ExpansionBounds {
+    table: Vec<BoundSites>,
+    general: BoundSites,
+    diversity: f64,
+}
+
+impl ExpansionBounds {
+    pub(super) fn value(
+        &self,
+        scorer: &AppFormulaScorer,
+        holdings: &Holdings,
+        candidate: Vertex,
+        table_path: bool,
+    ) -> f64 {
+        let mut with_candidate = *holdings;
+        scorer.add_to_holdings(&mut with_candidate, candidate);
+        let pricer = SitePricer::new(scorer, with_candidate);
+        self.with_pricer(&pricer, candidate, table_path)
+    }
+
+    fn with_pricer(&self, pricer: &SitePricer<'_>, candidate: Vertex, table_path: bool) -> f64 {
+        let sites = if table_path { &self.table[usize::from(candidate)] } else { &self.general };
+        let weights = &pricer.scorer.weights;
+        let diversity = self.diversity - pricer.total;
+        let concentration = weights.robber_concentration_weight.abs();
+        let q = |i: usize| {
+            js_max(0.0, pricer.holdings.pips[i] + sites.adjusted[i] - weights.port_surplus_threshold)
+                * js_max(pricer.holdings.port_factors[i], sites.port_factors[i])
+                * 1.0
+        };
+        let pp = pricer.port_products;
+        let port = weights.port_weight
+            * (q(0) - pp[0] + q(1) - pp[1] + q(2) - pp[2]
+                + q(3) - pp[3] + q(4) - pp[4]);
+        let mut first = 0.0;
+        let mut second = 0.0;
+        for (bases, decay) in sites.bases.iter().zip(sites.decay) {
+            for base in bases {
+                if *base == f64::NEG_INFINITY {
+                    continue;
+                }
+                let upper = js_max(0.0, *base + concentration + 1.0 * diversity + port + 0.0) * decay;
+                if upper.is_nan() {
+                    return upper;
+                }
+                if upper > first {
+                    second = first;
+                    first = upper;
+                } else if upper > second {
+                    second = upper;
+                }
+            }
+        }
+        weights.expansion_weight * (first + second)
+    }
+}
+
 impl AppFormulaScorer {
     pub fn new(board: &SimBoard, topology: &Topology, weights: EngineWeights) -> Self {
         debug_assert!(topology.vertex_count() <= 128, "vertex masks are 128 bits wide");
@@ -646,6 +745,7 @@ impl AppFormulaScorer {
             id: NEXT_SCORER_ID.fetch_add(1, Ordering::Relaxed),
             reach: expansion::ReachTable::shared(&links),
             decay_pow: std::array::from_fn(|k| decay_power(weights.expansion_decay, k)),
+            expansion_bounds: Arc::new(OnceLock::new()),
             weights,
             scarcity,
             coverage_value,
@@ -654,6 +754,53 @@ impl AppFormulaScorer {
             hex_pips,
             slot_scales,
         }
+    }
+
+    pub(super) fn expansion_bounds(&self, scale: f64) -> Option<&ExpansionBounds> {
+        if !scale.is_finite() || scale < 0.0 {
+            return None;
+        }
+        self.expansion_bounds.get_or_init(|| self.build_expansion_bounds()).as_ref()
+    }
+
+    fn build_expansion_bounds(&self) -> Option<ExpansionBounds> {
+        let weights = &self.weights;
+        let nonnegative = |value: f64| value.is_finite() && value >= 0.0;
+        if weights.recipe_cap != weights.diversity_cap
+            || weights.port_coverage_deficit_weight != 0.0
+            || !weights.diversity_cap.is_finite() || weights.diversity_cap <= 0.0
+            || !weights.port_surplus_threshold.is_finite()
+            || !weights.robber_concentration_weight.is_finite()
+            || ![
+                weights.expansion_weight, weights.diversity_weight,
+                weights.recipe_road_bonus, weights.recipe_city_bonus,
+                weights.recipe_settlement_bonus, weights.recipe_dev_card_bonus,
+                weights.duplicate_number_penalty, weights.coverage_exponent, weights.port_weight,
+            ].into_iter().all(nonnegative)
+            || !self.decay_pow.into_iter().all(nonnegative)
+            || !self.coverage_value.into_iter().all(nonnegative)
+            || !self.vertices.iter().all(|stats| {
+                stats.precompute.base.is_finite()
+                    && stats.precompute.adjusted.into_iter().all(f64::is_finite)
+                    && stats.precompute.port_factors.into_iter().all(nonnegative)
+                    && stats.token_pips.into_iter().all(|value| value >= 0.0)
+            })
+            || !self.hex_pips.iter().all(|value| *value >= 0.0)
+        {
+            return None;
+        }
+        let decay = [js_max(self.decay_pow[1], self.decay_pow[2]), self.decay_pow[2]];
+        let table = (0..self.vertices.len()).map(|vertex| {
+            let masks = self.reach.open_masks(vertex as Vertex);
+            BoundSites::new(self, [masks[1], masks[2]], decay)
+        }).collect();
+        let general_decay = js_max(self.decay_pow[0], decay[0]);
+        let general = BoundSites::new(self,
+            [u128::MAX >> (128 - self.vertices.len()), 0], [general_decay; 2]);
+
+        // Coverage is at most 1 for pow with under one ULP of error on [0, 1], exponent >= 0.
+        let diversity = self.diversity_combine([1.0; RESOURCE_COUNT], [1.0; RESOURCE_COUNT]);
+        Some(ExpansionBounds { table, general, diversity })
     }
 
     /// The scales this board's `slotScales` row gives a seat, or 1 everywhere for a seat count the
@@ -1322,6 +1469,22 @@ mod tests {
 
     fn default_weights() -> EngineWeights {
         serde_json::from_str(include_str!("../../../../placement/default-weights.json")).unwrap()
+    }
+
+    /// Coverage stays below the bound's unit operands, including exponent zero and clamping.
+    #[test]
+    fn coverage_is_at_most_one_across_pips_and_exponents() {
+        let mut weights = default_weights();
+        for exponent in 0..=128 {
+            weights.coverage_exponent = f64::from(exponent) / 32.0;
+            for index in 0..=4096 {
+                let pips = (f64::from(index) - 512.0) / 256.0;
+                for cap in [0.3, 4.0, 7.25] {
+                    let value = coverage(&weights, pips, cap);
+                    assert!(value <= 1.0, "pips={pips} cap={cap} exponent={exponent}");
+                }
+            }
+        }
     }
 
     /// Sparse token visits keep the dense loop's order and bits for every fixture vertex.

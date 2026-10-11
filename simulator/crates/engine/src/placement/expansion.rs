@@ -73,6 +73,14 @@ pub(super) struct ReachTable {
 }
 
 impl ReachTable {
+    pub(super) fn table_path(&self, candidate: Vertex, occupancy: &Occupancy) -> bool {
+        occupancy.own_edges & self.near_edges[usize::from(candidate)] == 0
+    }
+
+    pub(super) fn open_masks(&self, candidate: Vertex) -> SiteMasks {
+        self.open[usize::from(candidate)].masks
+    }
+
     pub(super) fn shared(links: &[VertexLinks]) -> Arc<Self> {
         LAST_REACH.with_borrow_mut(|last| {
             if let Some((held, table)) = last {
@@ -556,6 +564,11 @@ impl PriceMemo {
     }
 }
 
+/// Bit 48 is above every price key's u32 serial, vertex and base/site tag.
+pub(super) fn bound_key(serial: u32, candidate: Vertex, table_path: bool) -> u64 {
+    price_key(serial, candidate, u8::from(table_path)) | (1 << 48)
+}
+
 pub(super) fn base_tag(seat: u8, grant: bool) -> u8 {
     debug_assert!(seat < 64, "base keys reserve six bits for the seat");
     0x80 | (seat << 1) | u8::from(grant)
@@ -587,7 +600,7 @@ pub(super) fn row_value(
     #[cfg(test)]
     ROW_VALUE_CALLS.with(|calls| calls.set(calls.get() + 1));
 
-    let sites = if occupancy.own_edges & scorer.reach.near_edges[usize::from(candidate)] == 0 {
+    let sites = if scorer.reach.table_path(candidate, occupancy) {
         #[cfg(test)]
         FAST_PATH_CALLS.with(|calls| calls.set(calls.get() + 1));
 
@@ -1086,7 +1099,7 @@ fn top_two(values: &[f64]) -> f64 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::fs;
     use std::path::PathBuf;
 
@@ -1114,6 +1127,23 @@ mod tests {
         )
         .unwrap();
         (topology, board)
+    }
+
+    /// Bound keys distinguish both reach paths and never overlap any base or site price.
+    #[test]
+    fn bound_keys_are_disjoint_from_price_keys() {
+        for serial in [1, u32::MAX] {
+            for candidate in 0..128 {
+                let fast = bound_key(serial, candidate, true);
+                let general = bound_key(serial, candidate, false);
+                assert_ne!(fast, general);
+                for tag in 0..=u8::MAX {
+                    let price = price_key(serial, candidate, tag);
+                    assert_ne!(fast, price);
+                    assert_ne!(general, price);
+                }
+            }
+        }
     }
 
     /// Value entries retain every mask bit and cannot survive reuse of a context serial.
@@ -1438,7 +1468,7 @@ mod tests {
         }
     }
 
-    fn walk_fixtures() -> [(Topology, SimBoard); 2] {
+    pub(in crate::placement) fn walk_fixtures() -> [(Topology, SimBoard); 2] {
         let cases: serde_json::Value =
             serde_json::from_str(include_str!("../../../../fixtures/advice-parity.json")).unwrap();
         let wire =
@@ -1454,7 +1484,7 @@ mod tests {
         [(topology, board), fixture()]
     }
 
-    fn scrambled_owners(topology: &Topology) -> Vec<(Vec<u8>, Vec<u8>)> {
+    pub(in crate::placement) fn scrambled_owners(topology: &Topology) -> Vec<(Vec<u8>, Vec<u8>)> {
         let mut state = 0x9e37_79b9_7f4a_7c15_u64;
         let mut draw = |bound: usize| {
             state = state

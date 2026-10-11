@@ -14,7 +14,7 @@
 //! to the lowest vertex index and road ties to the lowest edge id, where the field draws at
 //! random. Exactness against the field is the model's point, so the lookahead scores every legal
 //! candidate and every intervening pick. `ScoreRows` reuses whole rows when possible and otherwise
-//! scores only vertices a pick can take.
+//! bounds argmax candidates before evaluating those that can still win.
 
 use std::ops::Range;
 
@@ -30,6 +30,22 @@ use crate::topology::{Edge, Topology, Vertex};
 pub(crate) struct DraftScorers {
     pub hero: AppFormulaScorer,
     pub opponent: AppFormulaScorer,
+}
+
+#[derive(Clone, Copy)]
+struct RowArgmax {
+    taken: Option<(Vertex, f64)>,
+    free: Option<(Vertex, f64)>,
+    occupancy: Option<expansion::Occupancy>,
+}
+
+#[cfg(test)]
+use std::cell::Cell;
+
+#[cfg(test)]
+thread_local! {
+    // Per row kind: legal candidates and exact evaluations, excluding the reference check.
+    static ARGMAX_COUNTS: Cell<[[usize; 2]; 2]> = const { Cell::new([[0; 2]; 2]) };
 }
 
 /// One seat's vertex scores, at one holdings set and one setup grant.
@@ -141,6 +157,187 @@ impl ScoreRows {
         (&self.scratch, Some(occupancy))
     }
 
+    /// Strict bound skips preserve both nested argmaxes; unsupported arithmetic uses the full row.
+    #[allow(clippy::too_many_arguments)]
+    fn argmax_row(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        topology: &Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        grant: bool,
+        vacated: Option<Vertex>,
+        memoize: bool,
+    ) -> RowArgmax {
+        if !self.reusable {
+            if let Some(result) = self.pruned_argmax(
+                scorer, topology, vertex_owner, edge_owner, seat, grant, vacated, memoize,
+            ) {
+                #[cfg(debug_assertions)]
+                {
+                    let reference = self.full_argmax(
+                        scorer, topology, vertex_owner, edge_owner, seat, grant, vacated, memoize,
+                    );
+                    let bits = |answer: Option<(Vertex, f64)>| {
+                        answer.map(|(vertex, score)| (vertex, score.to_bits()))
+                    };
+                    assert_eq!(bits(result.taken), bits(reference.taken));
+                    assert_eq!(bits(result.free), bits(reference.free));
+                }
+                return result;
+            }
+        }
+        self.full_argmax(scorer, topology, vertex_owner, edge_owner, seat, grant, vacated, memoize)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn full_argmax(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        topology: &Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        grant: bool,
+        vacated: Option<Vertex>,
+        memoize: bool,
+    ) -> RowArgmax {
+        let (row, occupancy) = self.legal_row_with_memo(
+            scorer, topology, vertex_owner, edge_owner, seat, grant, vacated, memoize,
+        );
+        let taken = if let Some(occupancy) = occupancy {
+            best_legal_mask(row, !occupancy.blocked)
+        } else {
+            best_legal(topology, vertex_owner, None, row)
+        };
+        let free = if vacated.is_some() {
+            best_legal(topology, vertex_owner, vacated, row)
+        } else {
+            taken
+        };
+        RowArgmax { taken, free, occupancy }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn pruned_argmax(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        topology: &Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        grant: bool,
+        vacated: Option<Vertex>,
+        memoize: bool,
+    ) -> Option<RowArgmax> {
+        let scale = scorer.slot_scale(seat);
+        let bounds = scorer.expansion_bounds(scale.expansion)?;
+        let occupancy = expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
+        let taken = !occupancy.blocked & (u128::MAX >> (128 - self.vertices));
+        let free = if vacated.is_some() {
+            (0..self.vertices as Vertex)
+                .filter(|vertex| legal_with_vacancy(topology, vertex_owner, vacated, *vertex))
+                .fold(0, |mask, vertex| mask | (1 << vertex))
+        } else {
+            taken
+        };
+        let holdings = scorer.holdings_for_owner(vertex_owner, seat);
+        let mut holdings_total = None;
+        let mut upper = [0.0; 128];
+        self.scratch.resize(self.vertices, f64::NEG_INFINITY);
+        expansion::PRICE_MEMO.with_borrow_mut(|memo| {
+            let serial = memoize.then(|| memo.serial(scorer.id, occupancy.own_vertices));
+            let base_tag = expansion::base_tag(seat, grant);
+            let mut seeds = [None; 2];
+            let mut rest = free;
+            while rest != 0 {
+                let vertex = rest.trailing_zeros() as Vertex;
+                rest &= rest - 1;
+                let mut base_total = || {
+                    let total = *holdings_total
+                        .get_or_insert_with(|| scorer.holdings_diversity_total(&holdings));
+                    scorer.scaled_total_with_diversity(holdings, vertex, grant, scale.diversity, total)
+                };
+                let base = if let Some(serial) = serial {
+                    memo.price(expansion::price_key(serial, vertex, base_tag), base_total)
+                } else {
+                    base_total()
+                };
+                let table_path = scorer.reach.table_path(vertex, &occupancy);
+                let expansion = if let Some(serial) = serial {
+                    memo.price(expansion::bound_key(serial, vertex, table_path), || {
+                        bounds.value(scorer, &holdings, vertex, table_path)
+                    })
+                } else {
+                    bounds.value(scorer, &holdings, vertex, table_path)
+                };
+                let bound = base + scale.expansion * expansion;
+                if !base.is_finite() || !bound.is_finite() {
+                    return None;
+                }
+                self.scratch[usize::from(vertex)] = base;
+                upper[usize::from(vertex)] = bound;
+                if taken & (1 << vertex) != 0 {
+                    keep_best(&mut seeds[0], vertex, base);
+                }
+                keep_best(&mut seeds[1], vertex, base);
+            }
+            let mut initial = 0_u128;
+            for (legal, seed) in [taken, free].into_iter().zip(seeds) {
+                if legal != 0 {
+                    initial |= 1 << legal.trailing_zeros();
+                    initial |= 1 << seed.unwrap().0;
+                }
+            }
+            let mut best = [None; 2];
+            #[cfg(test)]
+            let mut evaluated = 0_u128;
+            let mut evaluate = |vertex: Vertex, best: &mut [Option<(Vertex, f64)>; 2]| {
+                let score = self.scratch[usize::from(vertex)] + scale.expansion
+                    * expansion::row_value(scorer, &holdings, vertex, &occupancy, memo, serial);
+                if score.is_nan() {
+                    return false;
+                }
+                #[cfg(test)]
+                { evaluated |= 1 << vertex; }
+                if taken & (1 << vertex) != 0 {
+                    keep_best(&mut best[0], vertex, score);
+                }
+                keep_best(&mut best[1], vertex, score);
+                true
+            };
+            rest = initial;
+            while rest != 0 {
+                let vertex = rest.trailing_zeros() as Vertex;
+                rest &= rest - 1;
+                if !evaluate(vertex, &mut best) {
+                    return None;
+                }
+            }
+            rest = free & !initial;
+            while rest != 0 {
+                let vertex = rest.trailing_zeros() as Vertex;
+                rest &= rest - 1;
+                let held = best[usize::from(taken & (1 << vertex) == 0)].unwrap().1;
+                if upper[usize::from(vertex)] < held {
+                    continue;
+                }
+                if !evaluate(vertex, &mut best) {
+                    return None;
+                }
+            }
+            #[cfg(test)]
+            ARGMAX_COUNTS.with(|counts| {
+                let mut next = counts.get();
+                next[usize::from(memoize)][0] += free.count_ones() as usize;
+                next[usize::from(memoize)][1] += evaluated.count_ones() as usize;
+                counts.set(next);
+            });
+            Some(RowArgmax { taken: best[0], free: best[1], occupancy: Some(occupancy) })
+        })
+    }
+
     /// The seat's score for every vertex on this state, computed once per distinct
     /// (seat, holdings, grant) triple while rows are reusable.
     ///
@@ -188,6 +385,13 @@ impl ScoreRows {
             self.rows[slot] = Some(row);
         }
         self.rows[slot].as_deref().expect("the row was just filled")
+    }
+}
+
+/// Seeds arrive out of order, so equal scores retain the lowest vertex's bits.
+fn keep_best(best: &mut Option<(Vertex, f64)>, vertex: Vertex, score: f64) {
+    if best.is_none_or(|(held_vertex, held)| score > held || (score == held && vertex < held_vertex)) {
+        *best = Some((vertex, score));
     }
 }
 
@@ -453,7 +657,7 @@ impl<'a> Lookahead<'a> {
     /// formula and with the setup grant only the second round pays.
     fn planned_second(&mut self) -> Option<(Vertex, f64)> {
         // Each hero key is seen once per lookahead and would only evict the rivals' entries.
-        let (row, occupancy) = self.rows.legal_row_with_memo(
+        self.rows.argmax_row(
             self.hero_scorer,
             self.topology,
             &self.owners,
@@ -462,12 +666,7 @@ impl<'a> Lookahead<'a> {
             true,
             None,
             false,
-        );
-        if let Some(occupancy) = occupancy {
-            best_legal_mask(row, !occupancy.blocked)
-        } else {
-            best_legal(self.topology, &self.owners, None, row)
-        }
+        ).taken
     }
 
     /// Places the candidate for the hero and lets every intervening seat take its argmax, in
@@ -511,30 +710,21 @@ impl<'a> Lookahead<'a> {
             // `setup_order` runs the first round forward and the second reversed, so a position
             // past the seat count is a second-round pick, which is the round that pays the grant.
             let grant = position >= self.seats;
-            let (pick, occupancy) = {
-                // The row must cover every vertex either scan below can read.
-                let vacated = (self.denial_weight != 0.0).then_some(candidate);
-                let (row, occupancy) = self.rows.legal_row_with_memo(
-                    self.opponent_scorer,
-                    self.topology,
-                    &self.owners,
-                    &self.edges,
-                    seat,
-                    grant,
-                    vacated,
-                    true,
-                );
-                let taken = if let Some(occupancy) = occupancy {
-                    best_legal_mask(row, !occupancy.blocked)
-                } else {
-                    best_legal(self.topology, &self.owners, None, row)
-                };
-                if vacated.is_some() {
-                    let free = best_legal(self.topology, &self.owners, vacated, row);
-                    self.denial += denial_gain(free, taken);
-                }
-                (taken, occupancy)
-            };
+            let vacated = (self.denial_weight != 0.0).then_some(candidate);
+            let result = self.rows.argmax_row(
+                self.opponent_scorer,
+                self.topology,
+                &self.owners,
+                &self.edges,
+                seat,
+                grant,
+                vacated,
+                true,
+            );
+            if vacated.is_some() {
+                self.denial += denial_gain(result.free, result.taken);
+            }
+            let pick = result.taken;
             let Some((pick, _)) = pick else {
                 continue;
             };
@@ -545,7 +735,7 @@ impl<'a> Lookahead<'a> {
                 &self.edges,
                 seat,
                 pick,
-                occupancy.as_ref(),
+                result.occupancy.as_ref(),
             );
             self.owners[usize::from(pick)] = seat;
             self.edges[usize::from(road)] = seat;
@@ -733,6 +923,225 @@ mod tests {
         )
         .unwrap();
         (topology, board)
+    }
+
+    fn bound_weights() -> Vec<EngineWeights> {
+        let mut scaled = default_weights();
+        scaled.expansion_decay = 0.3;
+        for row in scaled.slot_scales.values_mut() {
+            for (seat, scale) in row {
+                let seat = seat.parse::<f64>().unwrap();
+                scale.diversity = 0.5 + seat * 0.15;
+                scale.expansion = 0.2 + seat * 0.25;
+            }
+        }
+        let mut concentration = default_weights();
+        concentration.robber_concentration_weight = -3.0;
+        let mut ports = default_weights();
+        ports.port_weight = 12.0;
+        ports.near_port_radius = 3.0;
+        let mut weights = vec![default_weights(), scaled, concentration, ports];
+        let mut random = 0x4250_554e_4445_4421_u64;
+        let mut draw = || {
+            random = random.wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (random >> 33) as f64 / (1_u64 << 31) as f64
+        };
+        for _ in 0..20 {
+            let mut vector = default_weights();
+            vector.expansion_weight = 1.2 * draw();
+            vector.expansion_decay = 0.125 + 0.875 * draw();
+            vector.diversity_weight = 3.0 * draw();
+            vector.diversity_cap = 0.5 + 7.5 * draw();
+            vector.recipe_cap = vector.diversity_cap;
+            vector.coverage_exponent = 4.0 * draw();
+            vector.coverage_scarcity_weight = draw();
+            vector.resource_value = super::super::app_formula::ResourceValues {
+                wood: 0.1 + 3.0 * draw(), sheep: 0.1 + 3.0 * draw(),
+                wheat: 0.1 + 3.0 * draw(), brick: 0.1 + 3.0 * draw(),
+                ore: 0.1 + 3.0 * draw(),
+            };
+            vector.recipe_road_bonus = 3.0 * draw();
+            vector.recipe_city_bonus = 3.0 * draw();
+            vector.recipe_settlement_bonus = 3.0 * draw();
+            vector.recipe_dev_card_bonus = 3.0 * draw();
+            vector.duplicate_number_penalty = 2.0 * draw();
+            vector.port_weight = 10.0 * draw();
+            vector.port_surplus_threshold = 6.0 * draw() - 2.0;
+            vector.robber_concentration_weight = 6.0 * draw() - 3.0;
+            vector.near_port_radius = (3.0 * draw()).floor();
+            vector.near_port_decay = draw();
+            weights.push(vector);
+        }
+        weights
+    }
+
+    fn answer_bits(answer: Option<(Vertex, f64)>) -> Option<(Vertex, u64)> {
+        answer.map(|(vertex, score)| (vertex, score.to_bits()))
+    }
+
+    /// The bound dominates exact expansion and both nested argmaxes retain their score bits.
+    #[test]
+    fn bounded_rows_match_full_rows_on_scrambled_boards() {
+        for (topology, board) in expansion::tests::walk_fixtures() {
+            let boards = expansion::tests::scrambled_owners(&topology);
+            let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+            for (weight_index, weights) in bound_weights().into_iter().enumerate() {
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                for (board_index, (vertices, edges)) in boards.iter().enumerate() {
+                    let vacancy = vertices.iter().position(|owner| *owner != EMPTY)
+                        .map(|vertex| vertex as Vertex).or(Some(0));
+                    for seat in 0..6 {
+                        let holdings = scorer.holdings_for_owner(vertices, seat);
+                        let occupancy = expansion::Occupancy::new(&scorer, vertices, edges, seat);
+                        let scale = scorer.slot_scale(seat).expansion;
+                        let bounds = scorer.expansion_bounds(scale).unwrap();
+                        for grant in [false, true] {
+                            expansion::PRICE_MEMO.with_borrow_mut(|memo| {
+                                let serial = memo.serial(scorer.id, occupancy.own_vertices);
+                                for vertex in 0..topology.vertex_count() as Vertex {
+                                    if !legal_with_vacancy(&topology, vertices, vacancy, vertex) {
+                                        continue;
+                                    }
+                                    let upper = bounds.value(&scorer, &holdings, vertex,
+                                        scorer.reach.table_path(vertex, &occupancy));
+                                    let exact = expansion::row_value(
+                                        &scorer, &holdings, vertex, &occupancy, memo, Some(serial),
+                                    );
+                                    assert!(scale * exact <= scale * upper,
+                                        "weight={weight_index} board={board_index} seat={seat} grant={grant} vertex={vertex} exact={exact:?} upper={upper:?}");
+                                }
+                            });
+                            for vacated in [None, vacancy] {
+                                let memoize = (board_index + usize::from(grant)) % 2 == 0;
+                                let actual = rows.pruned_argmax(&scorer, &topology, vertices, edges,
+                                    seat, grant, vacated, memoize).expect("the finite bound must be used");
+                                let expected = rows.full_argmax(&scorer, &topology, vertices, edges,
+                                    seat, grant, vacated, memoize);
+                                assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken),
+                                    "weight={weight_index} board={board_index} seat={seat} grant={grant} vacancy={vacated:?}");
+                                assert_eq!(answer_bits(actual.free), answer_bits(expected.free));
+                                assert_eq!(actual.occupancy, expected.occupancy);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Invalid proof signs take the full path, while exact ties keep the lowest legal index.
+    #[test]
+    fn bounded_rows_fall_back_for_unsupported_weights_and_preserve_ties() {
+        for (topology, board) in expansion::tests::walk_fixtures() {
+            let mut negative_expansion = default_weights();
+            negative_expansion.expansion_weight = -0.3;
+            let mut negative_port = default_weights();
+            negative_port.port_weight = -1.0;
+            let mut nan = default_weights();
+            nan.resource_value.wheat = f64::NAN;
+            let mut recipe = default_weights();
+            recipe.recipe_cap += 1.0;
+            let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+            for weights in [negative_expansion, negative_port, nan, recipe] {
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                assert!(scorer.expansion_bounds(1.0).is_none());
+                let before = ARGMAX_COUNTS.with(Cell::get);
+                for (vertices, edges) in expansion::tests::scrambled_owners(&topology) {
+                    for seat in 0..6 {
+                        for grant in [false, true] {
+                            for vacated in [None, Some(0)] {
+                                let actual = rows.argmax_row(&scorer, &topology, &vertices, &edges,
+                                    seat, grant, vacated, true);
+                                let expected = rows.full_argmax(&scorer, &topology, &vertices, &edges,
+                                    seat, grant, vacated, true);
+                                assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken));
+                                assert_eq!(answer_bits(actual.free), answer_bits(expected.free));
+                            }
+                        }
+                    }
+                }
+                assert_eq!(ARGMAX_COUNTS.with(Cell::get), before);
+            }
+            let mut tie = default_weights();
+            tie.resource_value = super::super::app_formula::ResourceValues {
+                wood: 0.0, sheep: 0.0, wheat: 0.0, brick: 0.0, ore: 0.0,
+            };
+            tie.scarcity_weight = 0.0;
+            tie.robber_discount = 0.0;
+            tie.diversity_weight = 0.0;
+            tie.recipe_road_bonus = 0.0;
+            tie.recipe_city_bonus = 0.0;
+            tie.recipe_settlement_bonus = 0.0;
+            tie.recipe_dev_card_bonus = 0.0;
+            tie.port_weight = 0.0;
+            tie.duplicate_number_penalty = 0.0;
+            let scorer = AppFormulaScorer::new(&board, &topology, tie);
+            assert!(scorer.expansion_bounds(1.0).is_some());
+            let vertices = vec![EMPTY; topology.vertex_count()];
+            let edges = vec![EMPTY; topology.edge_count()];
+            let actual = rows.argmax_row(&scorer, &topology, &vertices, &edges, 0, true, None, false);
+            let row = rows.legal_row(&scorer, &topology, &vertices, &edges, 0, true, None);
+            assert!(row.iter().all(|score| score.to_bits() == row[0].to_bits()));
+            assert_eq!(answer_bits(actual.taken), Some((0, row[0].to_bits())));
+        }
+    }
+
+    /// A finite proof gate still falls back if a row's arithmetic overflows or its base is NaN.
+    #[test]
+    fn nonfinite_bounds_and_bases_use_the_full_row() {
+        let (topology, board) = fixture();
+        let mut overflow = default_weights();
+        overflow.port_weight = f64::MAX;
+        let mut nan = default_weights();
+        for row in nan.slot_scales.values_mut() {
+            for scale in row.values_mut() {
+                scale.diversity = f64::NAN;
+            }
+        }
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+        for weights in [overflow, nan] {
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            assert!(scorer.expansion_bounds(-1.0).is_none());
+            assert!(scorer.expansion_bounds(f64::NAN).is_none());
+            assert!(scorer.expansion_bounds(1.0).is_some());
+            for memoize in [false, true] {
+                assert!(rows.pruned_argmax(&scorer, &topology, &vertices, &edges,
+                    0, true, None, memoize).is_none());
+                let actual = rows.argmax_row(&scorer, &topology, &vertices, &edges,
+                    0, true, None, memoize);
+                let expected = rows.full_argmax(&scorer, &topology, &vertices, &edges,
+                    0, true, None, memoize);
+                assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken));
+            }
+        }
+    }
+
+    /// Both row kinds prune real candidates; full-row verification is excluded from the counter.
+    #[test]
+    fn bounded_rows_skip_most_fixture_candidates() {
+        for (topology, board) in expansion::tests::walk_fixtures() {
+            let scorers = DraftScorers {
+                hero: AppFormulaScorer::new(&board, &topology, default_weights()),
+                opponent: AppFormulaScorer::new(&board, &topology, default_weights()),
+            };
+            let vertices = vec![EMPTY; topology.vertex_count()];
+            let edges = vec![EMPTY; topology.edge_count()];
+            let before = ARGMAX_COUNTS.with(Cell::get);
+            assert!(first_pick(&scorers, &topology, board.seats() as usize, &vertices, &edges, 0).is_some());
+            let after = ARGMAX_COUNTS.with(Cell::get);
+            for kind in 0..2 {
+                let legal = after[kind][0] - before[kind][0];
+                let evaluated = after[kind][1] - before[kind][1];
+                assert!(legal > 0);
+                assert!(evaluated * 2 < legal, "kind={kind} evaluated={evaluated} legal={legal}");
+                println!("vertices={} memoize={} evaluated={} legal={} skipped={:.2}%",
+                    topology.vertex_count(), kind == 1, evaluated, legal,
+                    100.0 * (legal - evaluated) as f64 / legal as f64);
+            }
+        }
     }
 
     /// Mask scans keep the byte scan's first legal NaN and lowest-index finite ties.
