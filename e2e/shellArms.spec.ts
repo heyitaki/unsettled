@@ -44,8 +44,9 @@ test.describe('desktop', () => {
     const maps = page.locator('.maps-panel')
     const rows = maps.locator('.board-list .list-row')
     await expect(maps).toBeVisible()
-    // Import is the panel's first action, ahead of the one list (spec D1).
-    await expect(maps.locator('.panel-heading + .hero-import')).toHaveText('Import screenshot')
+    // Import is the first action in Board tools, the panel above (spec D3).
+    await expect(page.locator('.tools-panel .panel-heading + .hero-import')).toHaveText('Import screenshot')
+    await expect(maps.locator('.hero-import')).toHaveCount(0)
     await expect(maps.locator('.group-label')).toContainText('Boards (1)')
     await expect(rows).toHaveCount(1)
     await expect(rows.first()).toHaveClass(/\bcurrent\b/)
@@ -272,6 +273,31 @@ test.describe('desktop', () => {
   test('an empty board says so and offers nothing: the import and the tools are already in the left rail', async ({ page }) => {
     await page.goto('')
     const panel = page.locator('.analysis-panel')
+  test('the tool rows fold behind Edit manually, and a folded tool never paints', async ({ page }) => {
+    await page.goto('')
+    const tools = page.locator('.tools-panel')
+    const terrain = tools.locator('.tool-label').filter({ hasText: 'Terrain' }).locator('.tool-count')
+    const toggle = tools.getByText('Edit manually')
+    const box = (await page.locator('.board-canvas').boundingBox())!
+    const clickBoard = () => page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await expect(tools.locator('.terrain-grid')).toBeHidden()
+    // The store boots with a tile tool; folded away, it must not paint (spec D3).
+    await clickBoard()
+    await expect(terrain).toHaveText('0/19')
+
+    await toggle.click()
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await tools.getByRole('button', { name: 'wood' }).click()
+    await clickBoard()
+    await expect(terrain).toHaveText('1/19')
+
+    // Folding drops the tool, so opening again starts with none picked.
+    await toggle.click()
+    await toggle.click()
+    await expect(tools.locator('.terrain-grid')).toBeVisible()
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+  })
+
     await expect(panel.locator('h2')).toHaveText('This board is empty')
     await expect(panel.locator('.hint')).toBeVisible()
     // Both ways in are on screen already, so the phone's two buttons stay on the phone (spec D4).
@@ -561,7 +587,7 @@ test.describe('desktop', () => {
     expect(list.scroll).toBeGreaterThan(list.client)
     await expect(saved).toHaveClass(/fade-bottom/)
 
-    // So the tools below it stay on screen however long the library grows.
+    // So the rail's panels stay on screen however long the library grows.
     const viewport = page.viewportSize()!
     const toolsTop = await page.locator('.tools-panel')
       .evaluate((el) => el.getBoundingClientRect().top)

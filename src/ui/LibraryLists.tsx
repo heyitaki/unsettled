@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { boardColor } from './boardColor'
-import { PhotoGlyph, PlusGlyph, SortGlyph, TrashGlyph } from './glyphs'
-import { ImportDialog } from './ImportDialog'
+import { PlusGlyph, SortGlyph, TrashGlyph } from './glyphs'
 import { ListRow } from './ListRow'
 import { SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, sortMaps, stampFor } from './library'
 import { MenuSelect } from './MenuSelect'
@@ -13,7 +12,7 @@ import { useRenameTab } from './useRenameTab'
 type Editing = { key: string; draft: string }
 
 /**
- * The library's body (spec D1, S7): import first, then the one list of boards.
+ * The library's body (spec D1, S7): the one list of boards.
  * Every edited board saves itself into a map, so the list is the saved maps in
  * sort order, with the boards that have no row among them ahead: never saved,
  * or linked to a map the listing cannot show (deleted in another window before
@@ -30,10 +29,6 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
   const { listed, openMap, deleteSavedMap, renameSavedMap } = useLibrary()
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
   const [editing, setEditing] = useState<Editing | null>(null)
-  // The screenshot dialog closes itself once a parse has landed and also when
-  // it is dismissed; only the first should navigate away.
-  const [importOpen, setImportOpen] = useState(false)
-  const imported = useRef(false)
   // The in-place rename of one row, keyed so only that row's field is open.
   // The field is closed before the commit lands, so a refused rename cannot
   // leave it up over the old name.
@@ -79,115 +74,93 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
     return () => observer.disconnect()
   }, [syncFades, rowCount])
   return (
-    <>
+    <div className="library-boards">
+      <div className="group-label">
+        <span>Boards <span className="count">({rowCount})</span></span>
+        <MenuSelect
+          ariaLabel="Sort boards"
+          value={sortKey}
+          options={SORT_OPTIONS}
+          onSelect={setSortKey}
+          caret={<SortGlyph className="menu-sort-glyph" />}
+        >
+          {SORT_MENU_LABEL[sortKey]}
+        </MenuSelect>
+      </div>
+      {listed.warning && <p className="hint">{listed.warning}</p>}
+      <div
+        ref={scrollerRef}
+        className={`list board-list ${fades.top ? 'fade-top' : ''} ${fades.bottom ? 'fade-bottom' : ''}`}
+        onScroll={syncFades}
+      >
+        {unlisted.map((tab) => {
+          const key = `tab:${tab.id}`
+          return (
+            <ListRow
+              key={key}
+              current={tab.id === current.id}
+              color={boardColor(tab.title)}
+              name={tab.title}
+              selectLabel={`Switch to ${tab.title}`}
+              onSelect={() => {
+                dispatch({ type: 'tab-select', id: tab.id })
+                onNavigate?.()
+              }}
+              {...rename(key, tab.title, (draft) => renameTab(tab, draft))}
+              action={{
+                label: `Delete ${tab.title}`,
+                icon: <TrashGlyph />,
+                // Discarded, not closed: an edit still inside the debounce
+                // would otherwise be rescued into a new map, and the row the
+                // user just deleted would come straight back as a saved one.
+                onClick: () => dispatch({ type: 'tab-close', id: tab.id, discard: true }),
+              }}
+            />
+          )
+        })}
+        {maps.map((map) => {
+          // Legacy data can hold duplicate names, so an entry with no id keys
+          // off its stored position rather than a name that may collide.
+          const key = `map:${map.id ?? `unaddressable:${map.index}`}`
+          const stamp = stampFor(map, sortKey)
+          return (
+            <ListRow
+              key={key}
+              current={map === currentMap}
+              color={boardColor(map.name)}
+              name={map.name || 'empty name'}
+              meta={!map.valid ? 'corrupt' : stamp === undefined ? '' : relativeTime(stamp)}
+              selectLabel={`Switch to ${map.name}`}
+              selectDisabled={!map.valid}
+              // A refused open has toasted why; the list stays for a retry.
+              onSelect={() => {
+                if (openMap(map)) onNavigate?.()
+              }}
+              {...rename(key, map.name, (draft) => renameSavedMap(map, draft))}
+              // Only an entry with no name at all is beyond addressing; one
+              // that merely lacks an id gets stamped on demand.
+              onStartRename={map.synthetic === true ? undefined : () => setEditing({ key, draft: map.name })}
+              action={{
+                label: `Delete ${map.name}`,
+                icon: <TrashGlyph />,
+                disabled: map.synthetic === true,
+                onClick: () => deleteSavedMap(map),
+              }}
+            />
+          )
+        })}
+      </div>
       <button
         type="button"
-        className="hero-import"
+        className="list-add"
         onClick={() => {
-          imported.current = false
-          setImportOpen(true)
+          dispatch({ type: 'tab-add' })
+          onNavigate?.()
         }}
       >
-        <PhotoGlyph />
-        Import screenshot
+        <PlusGlyph />
+        New board
       </button>
-      <div className="library-boards">
-        <div className="group-label">
-          <span>Boards <span className="count">({rowCount})</span></span>
-          <MenuSelect
-            ariaLabel="Sort boards"
-            value={sortKey}
-            options={SORT_OPTIONS}
-            onSelect={setSortKey}
-            caret={<SortGlyph className="menu-sort-glyph" />}
-          >
-            {SORT_MENU_LABEL[sortKey]}
-          </MenuSelect>
-        </div>
-        {listed.warning && <p className="hint">{listed.warning}</p>}
-        <div
-          ref={scrollerRef}
-          className={`list board-list ${fades.top ? 'fade-top' : ''} ${fades.bottom ? 'fade-bottom' : ''}`}
-          onScroll={syncFades}
-        >
-          {unlisted.map((tab) => {
-            const key = `tab:${tab.id}`
-            return (
-              <ListRow
-                key={key}
-                current={tab.id === current.id}
-                color={boardColor(tab.title)}
-                name={tab.title}
-                selectLabel={`Switch to ${tab.title}`}
-                onSelect={() => {
-                  dispatch({ type: 'tab-select', id: tab.id })
-                  onNavigate?.()
-                }}
-                {...rename(key, tab.title, (draft) => renameTab(tab, draft))}
-                action={{
-                  label: `Delete ${tab.title}`,
-                  icon: <TrashGlyph />,
-                  // Discarded, not closed: an edit still inside the debounce
-                  // would otherwise be rescued into a new map, and the row the
-                  // user just deleted would come straight back as a saved one.
-                  onClick: () => dispatch({ type: 'tab-close', id: tab.id, discard: true }),
-                }}
-              />
-            )
-          })}
-          {maps.map((map) => {
-            // Legacy data can hold duplicate names, so an entry with no id keys
-            // off its stored position rather than a name that may collide.
-            const key = `map:${map.id ?? `unaddressable:${map.index}`}`
-            const stamp = stampFor(map, sortKey)
-            return (
-              <ListRow
-                key={key}
-                current={map === currentMap}
-                color={boardColor(map.name)}
-                name={map.name || 'empty name'}
-                meta={!map.valid ? 'corrupt' : stamp === undefined ? '' : relativeTime(stamp)}
-                selectLabel={`Switch to ${map.name}`}
-                selectDisabled={!map.valid}
-                // A refused open has toasted why; the list stays for a retry.
-                onSelect={() => {
-                  if (openMap(map)) onNavigate?.()
-                }}
-                {...rename(key, map.name, (draft) => renameSavedMap(map, draft))}
-                // Only an entry with no name at all is beyond addressing; one
-                // that merely lacks an id gets stamped on demand.
-                onStartRename={map.synthetic === true ? undefined : () => setEditing({ key, draft: map.name })}
-                action={{
-                  label: `Delete ${map.name}`,
-                  icon: <TrashGlyph />,
-                  disabled: map.synthetic === true,
-                  onClick: () => deleteSavedMap(map),
-                }}
-              />
-            )
-          })}
-        </div>
-        <button
-          type="button"
-          className="list-add"
-          onClick={() => {
-            dispatch({ type: 'tab-add' })
-            onNavigate?.()
-          }}
-        >
-          <PlusGlyph />
-          New board
-        </button>
-      </div>
-      {importOpen && (
-        <ImportDialog
-          onImported={() => { imported.current = true }}
-          onClose={() => {
-            setImportOpen(false)
-            if (imported.current) onNavigate?.()
-          }}
-        />
-      )}
-    </>
+    </div>
   )
 }

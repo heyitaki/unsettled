@@ -107,7 +107,7 @@ button.danger { color: var(--danger); }
 .menu-popup:not(:focus-visible) button.keyboard-active { outline: 0; }
 
 /* S1/S7/D1: dots menus hang below their trigger, with the board's undo/redo pair above the list. */
-.sheet-menu { position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + var(--menu-gap, 4px)); right: max(4px, calc(anchor(right) - var(--menu-nudge, 0px))); margin: 0; color: var(--ink); width: 216px; min-width: 0; overflow: visible; display: flex; flex-direction: column; gap: 0; padding: 6px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); box-shadow: var(--shadow-float); }
+.sheet-menu { position: fixed; position-anchor: auto; position-try-fallbacks: flip-block; inset: auto; top: calc(anchor(bottom) + var(--menu-gap, 4px)); right: max(4px, calc(anchor(right) - var(--menu-nudge, 0px))); margin: 0; color: var(--ink); width: 216px; min-width: 0; overflow: visible; display: flex; flex-direction: column; gap: 0; padding: 6px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); box-shadow: var(--shadow-float); }
 
 /* The author display:flex overrides the UA rule that hides closed popovers. */
 .sheet-menu:not(:popover-open) { display: none; }
@@ -215,6 +215,12 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .group-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 7px; color: var(--muted); font-size: 12px; font-weight: 600; }
 .group-label .count { font-weight: 600; opacity: .72; }
 .group-label .menu-trigger { display: inline-flex; align-items: center; gap: 5px; margin-right: -6px; padding: 3px 6px 3px 8px; border-radius: var(--r-control); }
+.tools-manual { margin-top: 12px; }
+.tools-manual > summary { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.tools-manual > summary::-webkit-details-marker { display: none; }
+.tools-manual > summary .menu-chevron { width: 10px; height: 7px; color: inherit; }
+.tools-manual[open] > summary { margin-bottom: 14px; }
+.tools-manual[open] > summary .menu-chevron { transform: rotate(180deg); }
 .group-label .menu-sort-glyph { flex: none; margin-left: -1px; }
 .hero-import { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border: 0; border-radius: var(--r-row); background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 700; }
 .list { display: flex; flex-direction: column; gap: 2px; }
@@ -404,6 +410,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .list-row-x:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
   .token-tools button:hover:not(:disabled), .token-tools button.selected:hover:not(:disabled) { background: none; }
   .token-tools button:hover:not(.selected, :where(.phone-shell *)) .token-disc { fill: var(--tint); }
+  .tools-manual > summary:hover { color: var(--ink); }
   .list-add:hover:not(:disabled) { color: var(--ink); background: transparent; }
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }

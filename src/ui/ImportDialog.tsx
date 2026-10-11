@@ -7,6 +7,7 @@ import {
 import { listMaps } from '../persistence/localStorage'
 import { firstFreeName } from '../model/names'
 import { fileTitle } from './boardFiles'
+import { PhotoGlyph } from './glyphs'
 import { useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 import { ModalDialog } from './ModalDialog'
@@ -29,7 +30,7 @@ async function decodeImage(file: File): Promise<RgbaImage> {
   return { width: canvas.width, height: canvas.height, data: data.data }
 }
 
-// Screenshot import lives in a modal launched from the Library. On a clean
+// Screenshot import lives in a modal launched from `ImportButton`. On a clean
 // parse it closes itself; when the parse raises issues it stays open so they
 // can be reviewed and clicked to highlight the offending element on the board.
 // `onImported` runs once a parse has become a tab, before either close.
@@ -110,5 +111,39 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
         <button type="button" onClick={onClose}>Done</button>
       </div>
     </ModalDialog>
+  )
+}
+
+/**
+ * The hero button that opens the dialog: first in the desktop's Board tools and
+ * on the phone's Maps screen. The dialog closes itself once a parse has landed
+ * and also when it is dismissed; `onNavigate` runs only after the first.
+ */
+export function ImportButton({ onNavigate }: { onNavigate?: () => void }) {
+  const [open, setOpen] = useState(false)
+  const imported = useRef(false)
+  return (
+    <>
+      <button
+        type="button"
+        className="hero-import"
+        onClick={() => {
+          imported.current = false
+          setOpen(true)
+        }}
+      >
+        <PhotoGlyph />
+        Import screenshot
+      </button>
+      {open && (
+        <ImportDialog
+          onImported={() => { imported.current = true }}
+          onClose={() => {
+            setOpen(false)
+            if (imported.current) onNavigate?.()
+          }}
+        />
+      )}
+    </>
   )
 }

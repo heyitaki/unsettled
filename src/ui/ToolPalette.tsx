@@ -1,23 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { boardMenu } from './boardMenu'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
 import { ContextMenu } from './ContextMenu'
 import {
+  ChevronGlyph,
   DotsGlyph,
   GLYPH_MUTED,
-  StructureGlyph,
   NUMBER_TOKEN_EXTENT,
   NumberTokenFace,
+  StructureGlyph,
   type StructureShape,
 } from './glyphs'
+import { ImportButton } from './ImportDialog'
 import { activeTab, useStore, type Tool } from './store'
 
 const TILES: TileKind[] = [...RESOURCES, 'desert']
 const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
+const TOKEN_VIEW_BOX = `${-NUMBER_TOKEN_EXTENT} ${-NUMBER_TOKEN_EXTENT} ${NUMBER_TOKEN_EXTENT * 2} ${NUMBER_TOKEN_EXTENT * 2}`
 
 const STRUCTURES: { key: StructureShape; label: string; tool: Tool; danger?: boolean }[] = [
-const TOKEN_VIEW_BOX = `${-NUMBER_TOKEN_EXTENT} ${-NUMBER_TOKEN_EXTENT} ${NUMBER_TOKEN_EXTENT * 2} ${NUMBER_TOKEN_EXTENT * 2}`
   { key: 'road', label: 'road', tool: { kind: 'piece', tier: 'road' } },
   { key: 'settlement', label: 'settlement', tool: { kind: 'piece', tier: 'settlement' } },
   { key: 'city', label: 'city', tool: { kind: 'piece', tier: 'city' } },
@@ -80,9 +82,9 @@ export function ToolGroups() {
               type="button"
               className={selected === `token:${number}` ? 'selected' : ''}
               key={number}
+              aria-label={String(number)}
               onClick={() => selectTool({ kind: 'token', number })}
             >
-              aria-label={String(number)}
               <svg viewBox={TOKEN_VIEW_BOX} aria-hidden="true">
                 <NumberTokenFace number={number} />
               </svg>
@@ -113,12 +115,21 @@ export function ToolGroups() {
   )
 }
 
-/** The desktop tools panel: the phone header's dots menu over the shared tool rows. */
+/**
+ * The desktop tools panel: the phone header's dots menu, the import entry, then
+ * the shared tool rows folded behind `Edit manually`.
+ */
 export function ToolPalette() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   const { history, items } = boardMenu(tab, dispatch)
+  // A tool nobody can see must not paint. The store boots with a tile tool and
+  // a rotated phone can hand over a live one, so the tool is dropped on mount
+  // and again whenever the rows fold away.
+  useEffect(() => {
+    dispatch({ type: 'tool', tool: { kind: 'none' } })
+  }, [dispatch])
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -134,7 +145,16 @@ export function ToolPalette() {
           <DotsGlyph />
         </button>
       </div>
-      <ToolGroups />
+      <ImportButton />
+      <details
+        className="tools-manual"
+        onToggle={(event) => {
+          if (!event.currentTarget.open) dispatch({ type: 'tool', tool: { kind: 'none' } })
+        }}
+      >
+        <summary>Edit manually<ChevronGlyph className="menu-chevron" /></summary>
+        <ToolGroups />
+      </details>
       {menuTrigger && (
         <ContextMenu
           ariaLabel="Board options"

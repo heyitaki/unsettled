@@ -30,8 +30,8 @@ function Workspace() {
       <GlobalNotice />
       <main className="workspace">
         <aside className="left-rail">
-          <MapsPanel />
           <ToolPalette />
+          <MapsPanel />
         </aside>
         <div className="center-column">
           <BoardCanvas restMarks={restMarks} />

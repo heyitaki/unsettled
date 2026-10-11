@@ -5,9 +5,9 @@ import { LibraryLists } from './LibraryLists'
 import { useJsonFiles } from './useJsonFiles'
 
 /**
- * The desktop's Library panel (spec D1): the document switcher, the rename
- * surface and the import entry, at the top of the left rail. It is the phone's
- * Maps screen in a panel, so everything below the heading is `LibraryLists`.
+ * The desktop's Library panel (spec D1): the document switcher and the rename
+ * surface, under Board tools in the left rail. Everything below the heading is
+ * `LibraryLists`, the list the phone's Maps screen shows under its import button.
  */
 export function MapsPanel() {
   const { items, fileInput } = useJsonFiles()
