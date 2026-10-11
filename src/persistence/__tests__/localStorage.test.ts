@@ -8,6 +8,7 @@ import {
   MAPS_KEY,
   MAX_MAPS,
   deleteMap,
+  deleteMapAt,
   listMaps,
   loadMap,
   loadMaps,
@@ -316,6 +317,43 @@ describe('map identity', () => {
     // Filtering by id would have taken both: deleting one map must never
     // silently delete another.
     expect(listMaps().maps.map((map) => map.name)).toEqual(['second'])
+  })
+
+  it('deletes a row with no id or no name by its listed position', () => {
+    const kept = savedId('kept')
+    const stored = JSON.parse(localStorage.getItem(MAPS_KEY) ?? '[]') as unknown[]
+    // The pre-Game shape: a bare board and no id, so no id can address it.
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'old', board: game().board }, 42, ...stored]))
+    const [old, junk] = listMaps().maps
+    expect(old).toMatchObject({ id: null, name: 'old', valid: false })
+    expect(deleteMapAt(junk).ok).toBe(true)
+    expect(deleteMapAt(old).ok).toBe(true)
+    expect(listMaps().maps.map((map) => map.id)).toEqual([kept])
+  })
+
+  it('deletes the nameless row itself when it repeats a real map\'s id', () => {
+    localStorage.setItem(MAPS_KEY, JSON.stringify([
+      { id: 'shared', name: 'real', game: game() },
+      { id: 'shared', game: 'junk' },
+    ]))
+    const junk = listMaps().maps[1]
+    expect(junk).toMatchObject({ id: 'shared', synthetic: true })
+    expect(deleteMapAt(junk).ok).toBe(true)
+    // By id this would have taken the first row answering to it: the real map.
+    expect(listMaps().maps.map((map) => map.name)).toEqual(['real'])
+  })
+
+  it('refuses a positional delete when the row there is no longer the one listed', () => {
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'gone' }, { name: 'old' }, 42]))
+    const [, old, junk] = listMaps().maps
+    // Another document rewrote the library since the listing was taken.
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'old' }, { name: 'other' }]))
+    expect(deleteMapAt(old).ok).toBe(false)
+    // Past the end there is no name either, which must not read as a match.
+    expect(deleteMapAt(junk).ok).toBe(false)
+    localStorage.setItem(MAPS_KEY, JSON.stringify([{ name: 'gone' }, { id: 'new', name: 'old' }]))
+    expect(deleteMapAt(old).ok).toBe(false)
+    expect(listMaps().maps).toHaveLength(2)
   })
 })
 

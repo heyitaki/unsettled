@@ -137,13 +137,11 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
                 if (openMap(map)) onNavigate?.()
               }}
               {...rename(key, map.name, (draft) => renameSavedMap(map, draft))}
-              // Only an entry with no name at all is beyond addressing; one
-              // that merely lacks an id gets stamped on demand.
+              // An entry with no name has none to edit.
               onStartRename={map.synthetic === true ? undefined : () => setEditing({ key, draft: map.name })}
               action={{
                 label: `Delete ${map.name}`,
                 icon: <TrashGlyph />,
-                disabled: map.synthetic === true,
                 onClick: () => deleteSavedMap(map),
               }}
             />

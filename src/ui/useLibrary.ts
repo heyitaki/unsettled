@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   deleteMap,
+  deleteMapAt,
   type ListedMap,
   listMaps,
   loadMap,
@@ -13,10 +14,11 @@ import { useStore } from './store'
 
 /**
  * The saved-map library as both trees see it: the listing, cached on the
- * store's revision counter, and the open, delete and rename paths that address
- * an entry by id. Read by LibraryLists, which MapsPanel and the phone's Maps
- * screen both render, so there is one open path and one delete path. Sorting is the caller's: `sortMaps` in
- * library.ts over `listed.maps`.
+ * store's revision counter, and the open, delete and rename paths. They address
+ * an entry by id; delete falls back to its position when it has none. Read by
+ * LibraryLists, which MapsPanel and the phone's Maps screen both render, so
+ * there is one open path and one delete path. Sorting is the caller's:
+ * `sortMaps` in library.ts over `listed.maps`.
  *
  * The one list in the Library shows every map beside the boards not yet saved,
  * so a tap on a map is a plain switch when its board is already loaded and a
@@ -34,7 +36,7 @@ export function useLibrary() {
   const notice = (message: string) => dispatch({ type: 'notice', message })
   const refresh = () => dispatch({ type: 'maps-changed', library: readLibrary() })
   const addressable = (map: ListedMap): string | null => {
-    if (map.id === null) notice('This map entry is malformed and cannot be opened or deleted')
+    if (map.id === null) notice('This map entry is malformed and cannot be opened or renamed')
     return map.id
   }
   // The map's tab is the one linked to its id. A tab that merely shares the
@@ -75,10 +77,18 @@ export function useLibrary() {
    * map, and must leave the board and its pending edit with it.
    */
   const deleteSavedMap = (map: ListedMap) => {
-    const mapKey = addressable(map)
-    if (mapKey === null) return
-    const result = deleteMap(mapKey)
-    if (result.ok) {
+    // A row with no id (an old storage shape, or junk) or no name is addressed
+    // by its position in the store, and no tab can be linked to it.
+    const mapKey = map.synthetic === true ? null : map.id
+    // The position is only good while storage still holds the blob this
+    // listing was built from, which listMaps answers by identity.
+    if (mapKey === null && listMaps() !== listed) {
+      notice('The library changed, try again')
+      refresh()
+      return
+    }
+    const result = mapKey === null ? deleteMapAt(map) : deleteMap(mapKey)
+    if (result.ok && mapKey !== null) {
       const existing = tabOf(mapKey)
       if (existing) dispatch({ type: 'tab-close', id: existing.id, discard: true })
     }

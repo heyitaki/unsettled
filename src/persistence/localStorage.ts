@@ -320,6 +320,23 @@ export function deleteMap(id: string): WriteResult {
   return writeMaps(entries.filter((_, at) => at !== index))
 }
 
+/**
+ * Deletes the row at a listed position: the one way to address an entry with
+ * no usable id, or one with no name, whose id may repeat a real map's. Refused
+ * unless the row there still carries the id and stored name the listing saw,
+ * since the library may have been rewritten after the listing was taken.
+ */
+export function deleteMapAt(listed: ListedMap): WriteResult {
+  const entries = readRawMaps().entries
+  const entry = entries[listed.index]
+  const stored = isNamedMapEntry(entry) ? entry.name : undefined
+  const name = listed.synthetic === true ? undefined : listed.name
+  if (listed.index >= entries.length || mapEntryId(entry) !== listed.id || stored !== name) {
+    return { ok: false, error: MISSING_MAP }
+  }
+  return writeMaps(entries.filter((_, at) => at !== listed.index))
+}
+
 /** The stored workspace, unparsed: the blob to compare a write against. */
 export function readWorkspaceBlob(): string | null {
   return localStorage.getItem(WORKSPACE_KEY)

@@ -22,7 +22,7 @@ export function ListRow({ current, color, name, meta, selectLabel, selectDisable
   onStartRename?: () => void
   onCommit: () => void
   onCancel: () => void
-  action: { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean }
+  action: { label: string; icon: ReactNode; onClick: () => void }
 }) {
   return (
     <div className={current ? 'list-row current' : 'list-row'}>
@@ -32,7 +32,7 @@ export function ListRow({ current, color, name, meta, selectLabel, selectDisable
         <InlineRename name={name} draft={draft} onDraft={onDraft} onStart={onStartRename} onCommit={onCommit} onCancel={onCancel} />
       </span>
       {meta !== undefined && <span className="list-row-meta">{meta}</span>}
-      <button type="button" className="list-row-x" aria-label={action.label} disabled={action.disabled} onClick={action.onClick}>
+      <button type="button" className="list-row-x" aria-label={action.label} onClick={action.onClick}>
         {action.icon}
       </button>
     </div>
