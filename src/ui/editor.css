@@ -48,7 +48,7 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .maps-panel > :not(.library-boards) { flex: none; }
 .maps-panel .panel-heading { margin-bottom: 0; }
 .panel-actions { display: flex; gap: 2px; }
-.panel-dots { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-control); background: transparent; color: var(--muted); }
+.panel-dots { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-control); background: transparent; color: var(--muted); }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel { padding: 17px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 11px; }
@@ -153,8 +153,8 @@ button.danger { color: var(--danger); }
 /* Row metrics live here so the tally header, which sits outside the rows,
    aligns to the same values the rows use. Only the name flexes, so the tally
    keeps a fixed offset from the row's right edge for the header to meet. */
-.player-list { display: grid; gap: 3px; --tally-col: 21px; --row-gap: 10px; --card-pad: 6px; }
-.player-list .roster-row { gap: var(--row-gap); padding: 0 var(--card-pad) 0 7px; cursor: pointer; }
+.player-list { display: grid; --tally-col: 21px; --row-gap: 10px; --card-pad: 6px; }
+.player-list .roster-row { gap: var(--row-gap); height: 34px; padding: 0 var(--card-pad) 0 7px; cursor: pointer; }
 /* The phone's 30px floor keeps a name tappable in a cell that is never tight.
    Here the fixed columns can starve the name cell outright, and the floor would
    make the name overflow it and paint over the YOU chip instead of clipping. */
@@ -164,7 +164,7 @@ button.danger { color: var(--danger); }
 /* The VP pulls back over the row's gap, so the tally and the VP read as one
    unbroken run of columns: which is exactly what the header strip is. On a
    coarse pointer it is a button, so it also sheds the button chrome. */
-.player-list .roster-vp { width: var(--tally-col); margin-left: calc(-1 * var(--row-gap)); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.player-list .roster-vp { width: var(--tally-col); margin-left: calc(-1 * var(--row-gap)); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: 12px; font-weight: 400; }
 /* The header strip and every player's row share this definition and put one
    cell in each column, so grid-auto-columns keeps them aligned without either
    side knowing the column count. */
@@ -172,9 +172,12 @@ button.danger { color: var(--danger); }
 .tally-header { align-items: end; }
 .tally-header > span { position: relative; }
 .vp-head { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
-.tally-header > span::after { content: attr(data-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: var(--r-control); background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: var(--shadow-float); opacity: 0; pointer-events: none; z-index: 6; }
+.tally-header > span::after, .panel-dots::after { content: attr(data-label); position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 2px 6px; border-radius: var(--r-control); background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: var(--shadow-float); opacity: 0; pointer-events: none; z-index: 6; }
+.panel-dots::after { top: calc(100% - 5px); padding: 0; background: none; box-shadow: none; font-size: 10px; font-weight: 400; line-height: 1; }
+.panel-dots:disabled { opacity: 1; }
+.panel-dots:disabled svg { opacity: .42; }
 .tally-header > span, .player-tally > span { display: inline-flex; justify-content: center; }
-.tally-bar { display: flex; align-items: end; justify-content: end; gap: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+.tally-bar { display: flex; align-items: end; justify-content: end; gap: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); margin-bottom: 5px; }
 .tally-bar .menu-trigger { color: var(--muted); font-size: 11px; }
 /* The row's 1px border insets its cells by one more pixel than the header,
    which has none, so the header gives that pixel back. */
@@ -232,7 +235,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .list-row-name { position: relative; min-width: 30px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 600; line-height: 1.5; text-decoration: underline dotted var(--muted); text-decoration-thickness: 1.4px; text-underline-offset: 2.5px; pointer-events: auto; }
 .list-row-name.plain { color: var(--muted); text-decoration: none; }
 /* Stays 16px (the coarse-pointer input rule) rather than the mock's 14px: any smaller and iOS zooms the page on focus. */
-.list-row-rename { position: relative; width: auto; min-width: 30px; max-width: 100%; height: 30px; padding: 0 7px; border: 1px solid var(--accent-dark); border-radius: var(--r-control); background: var(--surface); color: var(--ink); font-weight: 600; pointer-events: auto; }
+.list-row-rename { position: relative; width: auto; min-width: 30px; max-width: 100%; height: 30px; padding: 0 7px; border: 1px solid var(--accent-dark); border-radius: var(--r-control); background: var(--surface); color: var(--ink); font-size: 13.5px; font-weight: 600; pointer-events: auto; }
 .list-row-rename:focus { outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 0; }
 .list-row-meta { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .list-row-x { position: relative; flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--r-control); background: transparent; color: var(--muted); }
@@ -250,12 +253,13 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .roster-row.dragging .roster-grip { cursor: grabbing; }
 .roster-grip { position: relative; display: grid; place-items: center; height: 100%; color: var(--muted); cursor: grab; touch-action: none; }
 .roster-row .swatch { width: 24px; height: 24px; padding: 0; }
-.roster-row .list-row-name { font-size: 14px; }
+.roster-row .list-row-name, .roster-row .list-row-rename { font-size: 14px; }
 .roster-row .list-row-rename { user-select: text; -webkit-user-select: text; }
 /* The claim button covers the whole row, so the controls and tooltips that sit
    over it have to be positioned to paint above it, the way the name already is. */
 .roster-row .swatch, .roster-row .player-tally, .roster-row .roster-vp, .roster-row .player-awards { position: relative; }
 .roster-vp { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.player-list .roster-trash { margin-top: 3px; }
 .roster-trash { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border: 1px dashed var(--danger); border-radius: var(--r-row); color: var(--danger); font-size: 11px; font-weight: 700; }
 .roster-trash.over { border-style: solid; background: color-mix(in srgb, var(--danger) 12%, transparent); }
 /* Children would otherwise swallow the dragleave/drop events as the pointer
@@ -263,8 +267,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .roster-trash > * { pointer-events: none; }
 
 /* Analysis */
-.draft-steps { display: flex; flex: none; gap: 4px; }
-.draft-step { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border-radius: 50%; color: var(--ink); }
 .analysis-context { margin: 10px 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; text-align: center; }
 .analysis-context .menu-trigger { display: inline-flex; align-items: center; gap: 4px; vertical-align: -2px; color: var(--ink); }
 .analysis-context .menu-trigger strong { border-bottom: 1.5px dotted var(--accent-dark); }
@@ -343,7 +345,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .tally-header button { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--muted); }
 .tally-header button.active { color: var(--accent); }
 
-.move-turn { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
 .best-moves-panel .move-order { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; }
 .best-moves-panel .move-seat { flex: none; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--ink); font: 800 13px Inter, sans-serif; }
 .best-moves-panel .move-seat[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--ink); }
@@ -410,10 +411,10 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }
   .placement-slot:hover { fill: #fffdf7; }
-  .tally-header > span:hover::after { opacity: 1; }
+  .tally-header > span:hover::after, .panel-dots:hover::after { opacity: 1; }
   .analysis-row:hover:not(.current) { border-color: var(--muted); }
   .board-status .menu-trigger:hover:not(:disabled, :where(.phone-shell *)) { color: #fff; background: rgba(255, 255, 255, .16); }
-  .menu-trigger:hover:not(:disabled), .move-table .move-who:hover:not(:disabled), .list-row-name:hover:not(:disabled), .tally-header button:hover:not(:disabled), .player-list .roster-vp:hover:not(:disabled), .list-row-select:hover:not(:disabled), .menu-backdrop:hover:not(:disabled), .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled) { background: transparent; }
+  .menu-trigger:hover:not(:disabled), .move-table .move-who:hover:not(:disabled), .list-row-name:hover:not(:disabled), .tally-header button:hover:not(:disabled), .player-list .roster-vp:hover:not(:disabled), .list-row-select:hover:not(:disabled), .menu-backdrop:hover:not(:disabled), .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled), .panel-dots:hover:not(:disabled) { background: transparent; }
   .global-notice-close:hover:not(:disabled) { background: color-mix(in srgb, var(--surface) 12%, transparent); }
   @media (pointer: fine) {
     .list-row:not(:where(.phone-shell *)) { height: 34px; padding-right: 3px; }
@@ -437,7 +438,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .structure-grid button { grid-template-rows: 28px auto; font-size: 12px; }
   .token-tools button { min-height: 48px; }
   .global-notice-close { min-width: 34px; min-height: 34px; }
-  input, select { font-size: 16px; }
+  input, select, .list-row-rename, .roster-row .list-row-rename { font-size: 16px; }
   .tally-header button { align-items: flex-end; }
   .menu-trigger { position: relative; }
   .menu-trigger::before { content: ''; position: absolute; inset: -15px -10px; }
@@ -447,6 +448,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   /* Hit area only, so the chip stays inside the status row's reserved height. */
   .board-zoom button::before { content: ''; position: absolute; inset: -11px -9px; }
   .tally-header button, .player-list .roster-vp { min-height: 44px; }
+  .player-list .roster-row { height: 44px; }
 }
 
 .board-list, .issue-list { overscroll-behavior: contain; }
@@ -493,7 +495,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 @media (max-width: 760px) {
   .phone-block.phone-analysis { margin: 0; padding: 14px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .phone-block.phone-analysis .panel-heading h2 { font-size: 21px; }
-  .best-moves-panel .draft-step { width: 44px; height: 44px; }
   .best-moves-panel .move-seat { position: relative; }
   .best-moves-panel .move-seat::before { content: ''; position: absolute; width: 44px; height: 44px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
   .best-moves-panel .move-order { gap: 14px; padding: 7px; }
@@ -551,7 +552,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .phone-page { padding: 10px 0 22px; }
   .phone-shell .board-stage { padding: 4px var(--gutter) 0; }
   .phone-shell .board-canvas { aspect-ratio: min(1, var(--board-aspect)); width: 100%; height: auto; max-height: none; padding: 5px; }
-  .phone-analysis .draft-step { width: 44px; height: 44px; }
+  .phone-analysis .panel-dots { width: 44px; height: 44px; }
   .phone-analysis .draft-ribbon { margin: 17px 0; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); }
   .phone-block-head, .phone-block .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }

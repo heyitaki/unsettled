@@ -388,11 +388,11 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
       <div className="panel-heading">
         <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
         {!empty && (
-          <div className="draft-steps">
-            <button type="button" className="draft-step" aria-label="Step back one pick" title="Step back one pick" disabled={!canStepBack} onClick={stepBack}>
+          <div className="panel-actions">
+            <button type="button" className="panel-dots" aria-label="Step back one pick" data-label="Back" disabled={!canStepBack} onClick={stepBack}>
               <ArrowLeftGlyph />
             </button>
-            <button type="button" className="draft-step" aria-label="Step forward one pick" title="Step forward one pick" disabled={!canStepForward} onClick={stepForward}>
+            <button type="button" className="panel-dots" aria-label="Step forward one pick" data-label="Forward" disabled={!canStepForward} onClick={stepForward}>
               <ArrowRightGlyph />
             </button>
           </div>

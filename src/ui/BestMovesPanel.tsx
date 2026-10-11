@@ -201,16 +201,13 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   return (
     <section className={`${className} best-moves-panel`}>
       <div className="panel-heading">
-        <div>
-          <span className="move-turn">{mine ? 'Your turn' : `${active.name}'s turn`}</span>
-          <h2>Best moves</h2>
-        </div>
-        <div className="draft-steps">
+        <h2>Best moves</h2>
+        <div className="panel-actions">
           <button
             type="button"
-            className="draft-step"
+            className="panel-dots"
             aria-label="Undo"
-            title="Undo"
+            data-label="Undo"
             disabled={tab.past.length === 0}
             onClick={() => dispatch({ type: 'undo' })}
           >
@@ -218,9 +215,9 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
           </button>
           <button
             type="button"
-            className="draft-step"
+            className="panel-dots"
             aria-label="Redo"
-            title="Redo"
+            data-label="Redo"
             disabled={tab.future.length === 0}
             onClick={() => dispatch({ type: 'redo' })}
           >

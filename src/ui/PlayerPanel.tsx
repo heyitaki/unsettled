@@ -149,6 +149,7 @@ export function PlayerPanel() {
           type="button"
           className="panel-dots"
           aria-label="Add player"
+          data-label="Add"
           disabled={board.players.length >= 6}
           onClick={addSeat}
         >

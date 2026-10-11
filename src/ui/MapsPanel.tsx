@@ -23,6 +23,7 @@ export function MapsPanel() {
             type="button"
             className="panel-dots"
             aria-label="New board"
+            data-label="New"
             onClick={() => dispatch({ type: 'tab-add' })}
           >
             <PlusGlyph />
