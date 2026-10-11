@@ -5,7 +5,6 @@ import type { PlayerStats } from '../model/game'
 import { PLAYER_PALETTE, RESOURCES, type Board, type Resource } from '../model/types'
 import { CounterGlyph, GLYPH_MUTED, PlusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { RosterRow, RosterTrash } from './RosterRow'
-import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 import { useCoarsePointer } from './useMediaQuery'
 import { useRoster } from './useRoster'
@@ -19,7 +18,7 @@ const RESOURCE_LABELS: Record<Resource, string> = {
   ore: 'Ore',
 }
 
-const TALLY_PX = 13
+const TALLY_PX = 14
 
 interface TallyColumn {
   key: string
@@ -27,7 +26,7 @@ interface TallyColumn {
   icon: ReactNode
   value: (standing: PlayerStanding, stats: PlayerStats) => number
   /** Longer per-row tooltip where the bare count leaves something out. */
-  detail?: (standing: PlayerStanding) => string
+  detail?: (standing: PlayerStanding) => string | undefined
   /** Marks the count that won a card, the award holder's roads/knights. */
   emphasize?: (standing: PlayerStanding) => boolean
 }
@@ -84,6 +83,7 @@ const TALLY_COLUMNS: TallyColumn[] = [
     label: 'Knights played',
     icon: <CounterGlyph shape="knight" />,
     value: (_standing, stats) => stats.knights,
+    detail: (standing) => standing.hasLargestArmy ? 'holds the card, +2 VP' : undefined,
     emphasize: (standing) => standing.hasLargestArmy,
   },
 ]
@@ -166,14 +166,18 @@ export function PlayerPanel() {
             for assistive tech. The label rides in data-label: a CSS tooltip
             beats the native one's delay, and it matches the history buttons. */}
         <div className="tally-bar">
-          <MenuSelect
-            ariaLabel="Player table view"
-            value={view}
-            options={VIEW_OPTIONS}
-            onSelect={setView}
-          >
-            <strong>{VIEW_OPTIONS.find((option) => option.value === view)?.label}</strong>
-          </MenuSelect>
+          <div className="tally-tabs" role="group" aria-label="Player table view">
+            {VIEW_OPTIONS.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                aria-pressed={view === option.value}
+                onClick={() => setView(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <div className="tally-header" aria-hidden={coarse ? undefined : true}>
             {columns.map((column) => (
               coarse ? (
@@ -228,24 +232,12 @@ export function PlayerPanel() {
                   }}
                 />
               }
-              awards={
-                <span className="player-awards">
-                  {standing.hasLargestArmy && (
-                    <span
-                      className="award"
-                      title={`Largest army (${stats.knights}) · +2 VP`}
-                      aria-label={`Largest army: ${stats.knights} knights, +2 victory points`}
-                    >
-                      <CounterGlyph shape="knight" color="#fff" />
-                    </span>
-                  )}
-                </span>
-              }
             >
               <div className="player-tally">
                 {columns.map((column) => {
                   const count = column.value(standing, stats)
                   const detail = column.detail?.(standing)
+                  const label = detail ? `${column.label}: ${count} (${detail})` : `${column.label}: ${count}`
                   return (
                     <span
                       key={column.key}
@@ -253,8 +245,8 @@ export function PlayerPanel() {
                         count === 0 ? 'zero' : '',
                         column.emphasize?.(standing) ? 'strong' : '',
                       ].join(' ').trim()}
-                      title={detail ? `${column.label}: ${count} (${detail})` : `${column.label}: ${count}`}
-                      aria-label={`${column.label}: ${count}`}
+                      title={label}
+                      aria-label={label}
                     >
                       {count}
                     </span>

@@ -716,8 +716,7 @@ test.describe('desktop', () => {
 
       // Both views, since the resources view carries a sixth tally column.
       for (const view of ['Pieces', 'Resources']) {
-        await page.locator('.tally-bar .menu-trigger').click()
-        await page.getByRole('option', { name: view }).click()
+        await page.locator('.tally-tabs').getByRole('button', { name: view }).click()
         const boxes = await rows.evaluateAll((elements) => elements.map((row) => ({
           cell: row.querySelector('.list-row-main')!.getBoundingClientRect().width,
           nameRight: row.querySelector('.list-row-name')!.getBoundingClientRect().right,

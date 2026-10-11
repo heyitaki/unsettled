@@ -218,11 +218,11 @@ export function NumberTokenFace({ number, x = 0, y = 0, discOnly = false }: {
 export type CounterShape = 'unknownCard' | 'devCard' | 'knight' | 'vpCard'
 
 /** A tracked stat with no piece of its own, filled flat like the pieces. */
-export function CounterGlyph({ shape, color = GLYPH_MUTED }: { shape: CounterShape; color?: string }) {
+export function CounterGlyph({ shape }: { shape: CounterShape }) {
   const shell = {
     className: 'stat-icon',
     viewBox: GRID,
-    fill: color,
+    fill: GLYPH_MUTED,
     'aria-hidden': true,
   }
   switch (shape) {
@@ -247,7 +247,7 @@ export function CounterGlyph({ shape, color = GLYPH_MUTED }: { shape: CounterSha
           <rect x="4.4" y="5.4" width="7.8" height="11.4" rx=".5" transform="rotate(-8 8.3 11.1)" stroke={PAPER} strokeWidth="1.1" />
         </svg>
       )
-    case 'knight': // shield — also the largest-army badge
+    case 'knight': // shield
       return (
         <svg {...shell}>
           <path d="M10 2.5 16.3 4.8v4.9c0 3.7-2.7 6.3-6.3 7.8-3.6-1.5-6.3-4.1-6.3-7.8V4.8Z" />

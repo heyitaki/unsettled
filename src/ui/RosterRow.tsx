@@ -6,12 +6,11 @@ import type { useRoster } from './useRoster'
 
 type Roster = ReturnType<typeof useRoster>
 
-export function RosterRow({ player, index, roster, swatch, awards, children }: {
+export function RosterRow({ player, index, roster, swatch, children }: {
   player: Player
   index: number
   roster: Roster
   swatch?: ReactNode
-  awards?: ReactNode
   children: ReactNode
 }) {
   const { reorder } = roster
@@ -55,7 +54,6 @@ export function RosterRow({ player, index, roster, swatch, awards, children }: {
       <span className="list-row-main">
         <InlineRename {...roster.renameProps(player)} />
         {me && <span className="you-chip">You</span>}
-        {awards}
       </span>
       {children}
     </div>
