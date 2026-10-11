@@ -20,6 +20,7 @@ import {
   setMe,
   setNumberToken,
   setRobber,
+  terrainKey,
   upsertPort,
   validateBoard,
   vertexProduction,
@@ -287,5 +288,43 @@ describe('randomizeBoard', () => {
       draws.add(randomizeBoard(createBoard('standard4')).ports.map((port) => port.resource ?? '-').join(','))
     }
     expect(draws.size).toBeGreaterThan(1)
+  })
+})
+
+describe('terrainKey', () => {
+  const dealt = () => randomizeBoard(createBoard('standard4'))
+
+  it('ignores pieces, the robber, players and storage order', () => {
+    const board = dealt()
+    let played = addPlayer(board, { id: 'b', name: 'Bee', color: '#3063ba' })
+    played = setRobber(played, played.hexes[3].coord)
+    played = placeRoad(played, defaultPortEdges('standard4')[0], 'b')
+    played = { ...played, hexes: [...played.hexes].reverse(), ports: [...played.ports].reverse() }
+    expect(terrainKey(played)).toBe(terrainKey(board))
+  })
+
+  it('changes with one tile, one number token or one port', () => {
+    const board = dealt()
+    const key = terrainKey(board)
+    const hex = board.hexes.find((candidate) => candidate.tile !== 'desert')!
+    expect(terrainKey(setHexTile(board, hex.coord, hex.tile === 'ore' ? 'wood' : 'ore'))).not.toBe(key)
+    expect(terrainKey(setNumberToken(board, hex.coord, hex.numberToken === 5 ? 9 : 5))).not.toBe(key)
+    const port = board.ports[0]
+    expect(terrainKey(upsertPort(board, port.edgeId, port.resource === 'ore' ? 'wood' : 'ore', 2))).not.toBe(key)
+    expect(terrainKey({ ...board, layout: 'extension6' })).not.toBe(key)
+  })
+
+  it('changes when the same tiles, tokens or ports sit somewhere else', () => {
+    const board = dealt()
+    const key = terrainKey(board)
+    const [first, second] = [board.hexes[0], board.hexes.find((hex) => hex.tile !== board.hexes[0].tile)!]
+    const swapped = board.hexes.map((hex) =>
+      hex === first ? { ...second, coord: first.coord } : hex === second ? { ...first, coord: second.coord } : hex)
+    expect(terrainKey({ ...board, hexes: swapped })).not.toBe(key)
+    const [port, other] = [board.ports[0], board.ports.find((candidate) => candidate.resource !== board.ports[0].resource)!]
+    const moved = board.ports.map((candidate) =>
+      candidate === port ? { ...other, edgeId: port.edgeId } : candidate === other ? { ...port, edgeId: other.edgeId } : candidate)
+    expect(terrainKey({ ...board, ports: moved })).not.toBe(key)
+    expect(terrainKey({ ...board, ports: board.ports.slice(1) })).not.toBe(key)
   })
 })

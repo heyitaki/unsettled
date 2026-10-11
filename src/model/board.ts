@@ -335,6 +335,17 @@ export const isBlank = (board: Board): boolean => {
       candidate.edgeId === port.edgeId && candidate.resource === port.resource && candidate.rate === port.rate))
 }
 
+/**
+ * What makes two boards the same map: the layout and every tile, number token
+ * and port. Pieces, the robber and the players are left out, so a later
+ * screenshot of a game still matches the map it was saved as.
+ */
+export function terrainKey(board: Board): string {
+  const hexes = board.hexes.map((hex) => `${axialKey(hex.coord)}:${hex.tile}:${hex.numberToken}`).sort()
+  const ports = board.ports.map((port) => `${port.edgeId}:${port.resource}:${port.rate}`).sort()
+  return [board.layout, ...hexes, ...ports].join('|')
+}
+
 // Wipe tiles, tokens, pieces, and the robber back to a fresh board, keeping the
 // current layout and roster. Clearing an already-blank board is a no-op, and
 // has to be caught here: setLayout cannot short-circuit on a matching layout,

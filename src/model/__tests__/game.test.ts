@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, removePlayer } from '../board'
+import { addPlayer, createBoard, placeBuilding, placeRoad, removePlayer, setMe, setRobber } from '../board'
+import { parseGame, serializeGame } from '../serialization'
+import { boardGrid } from '../layouts'
+import { PLAYER_PALETTE, type Board } from '../types'
 import {
   adjustCounter,
   adjustHand,
   emptyStats,
+  type Game,
+  mergeScreenshot,
   newGame,
   reconcileStats,
   validateGameStats,
@@ -133,4 +138,144 @@ it('withBoard drops turn and devHand when their player leaves', () => {
   expect(Object.hasOwn(myHand, 'turn')).toBe(false)
   expect(withBoard(game, { ...game.board }).turn).toBe(game.turn)
   expect(withBoard(game, { ...game.board }).devHand).toBe(game.devHand)
+})
+
+describe('mergeScreenshot', () => {
+  const [vertexA, vertexB] = [boardGrid('standard4').vertexIds[0], boardGrid('standard4').vertexIds.at(-1)!]
+  const [edgeA] = boardGrid('standard4').edgeIds
+  const blue = { name: 'Blue', color: PLAYER_PALETTE.blue }
+  const white = { name: 'White', color: PLAYER_PALETTE.white }
+  // Pills for everyone, every hand size read.
+  const pills = (hands = ['p1', 'p2', 'p3']) => ({ roster: true, hands })
+  const empty = (): Board => ({ ...createBoard('standard4'), players: [], mePlayerId: null })
+
+  // Saved: aki (red, claimed) and a renamed blue player, with hand-entered stats.
+  const saved = (): Game => {
+    const board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: PLAYER_PALETTE.blue })
+    const game = newGame(setRobber(board, board.hexes[3].coord))
+    return {
+      ...game,
+      stats: {
+        aki: { ...emptyStats(), hand: { ...emptyStats().hand, ore: 2 }, devCards: 1, knights: 1 },
+        b: { ...emptyStats(), handUnknown: 3, knights: 2, vpCards: 1 },
+      },
+      awards: { longestRoad: null, largestArmy: null },
+      turn: { playerId: 'b', rolled: 8, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } },
+    }
+  }
+
+  // Parsed: ids follow pill order, names are colour names, and a third player joined.
+  const shot = (hands: [number, number, number] = [5, 4, 1]): Game => {
+    let board = addPlayer(empty(), { id: 'p1', ...blue })
+    board = addPlayer(board, { id: 'p2', name: 'Red', color: PLAYER_PALETTE.red })
+    board = addPlayer(board, { id: 'p3', ...white })
+    board = placeBuilding(board, vertexA, 'p2', 'settlement')
+    board = placeBuilding(board, vertexB, 'p3', 'city')
+    board = placeRoad(board, edgeA, 'p2')
+    const game = newGame(setRobber(setMe(board, 'p1'), board.hexes[5].coord))
+    hands.forEach((count, index) => { game.stats[`p${index + 1}`].handUnknown = count })
+    return game
+  }
+
+  it('keeps saved ids, names and the claim, and takes the roster order and pieces from the screenshot', () => {
+    const merged = mergeScreenshot(saved(), shot(), pills())
+    expect(merged.board.players).toEqual([
+      { id: 'b', name: 'Bee', color: PLAYER_PALETTE.blue },
+      { id: 'aki', name: 'aki', color: PLAYER_PALETTE.red },
+      { id: 'p3', ...white },
+    ])
+    expect(merged.board.buildings).toEqual([
+      { vertexId: vertexA, playerId: 'aki', tier: 'settlement' },
+      { vertexId: vertexB, playerId: 'p3', tier: 'city' },
+    ])
+    expect(merged.board.roads).toEqual([{ edgeId: edgeA, playerId: 'aki' }])
+    expect(merged.board.robber).toEqual(shot().board.robber)
+    expect(merged.board.mePlayerId).toBe('aki')
+    // What the autosave writes must be what the library can read back.
+    expect(parseGame(JSON.parse(serializeGame(merged)))).toEqual({ ok: true, game: merged })
+  })
+
+  it('keeps hand-entered counters, the turn and the awards', () => {
+    const before = saved()
+    const merged = mergeScreenshot(before, shot(), pills())
+    expect(merged.stats.b).toEqual({ ...emptyStats(), handUnknown: 5, knights: 2, vpCards: 1 })
+    expect(merged.stats.p3).toEqual({ ...emptyStats(), handUnknown: 1 })
+    expect(merged.turn).toBe(before.turn)
+    expect(merged.awards).toBe(before.awards)
+  })
+
+  it('keeps known cards while the screenshot count has room for them', () => {
+    const known = { ...emptyStats(), hand: { ...emptyStats().hand, ore: 2 }, devCards: 1, knights: 1 }
+    expect(mergeScreenshot(saved(), shot([5, 4, 1]), pills()).stats.aki).toEqual({ ...known, handUnknown: 2 })
+    expect(mergeScreenshot(saved(), shot([5, 2, 1]), pills()).stats.aki).toEqual(known)
+    expect(mergeScreenshot(saved(), shot([5, 1, 1]), pills()).stats.aki)
+      .toEqual({ ...emptyStats(), handUnknown: 1, devCards: 1, knights: 1 })
+  })
+
+  it('keeps the saved hand of a player whose hand size was not read', () => {
+    const before = saved()
+    // Red's pill was unreadable, so its parsed zero says nothing.
+    const merged = mergeScreenshot(before, shot([5, 0, 1]), pills(['p1', 'p3']))
+    expect(merged.stats.aki).toEqual(before.stats.aki)
+    expect(merged.stats.b.handUnknown).toBe(5)
+    // The same zero, read: the hand really is empty.
+    expect(mergeScreenshot(before, shot([5, 0, 1]), pills()).stats.aki)
+      .toEqual({ ...emptyStats(), devCards: 1, knights: 1 })
+  })
+
+  it('keeps the saved robber when the screenshot found none', () => {
+    const before = saved()
+    const parsed = shot()
+    const merged = mergeScreenshot(before, { ...parsed, board: { ...parsed.board, robber: null } }, pills())
+    expect(merged.board.robber).toEqual(before.board.robber)
+  })
+
+  it('never hands a newcomer a saved id, matched or departed', () => {
+    // Saved green is `p2`, on turn and holding typed dev cards; the screenshot
+    // has no green, and calls its new blue player `p2`.
+    let before = newGame(addPlayer(createBoard('standard4'), { id: 'p2', name: 'Gina', color: PLAYER_PALETTE.green }))
+    before = {
+      ...before,
+      stats: { ...before.stats, p2: { ...emptyStats(), devCards: 1 } },
+      turn: { playerId: 'p2', rolled: null, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } },
+      devHand: {
+        playerId: 'p2',
+        playable: { knight: 1, roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 },
+        bought: { knight: 0, roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 },
+      },
+    }
+    let board = addPlayer(empty(), { id: 'p1', name: 'Red', color: PLAYER_PALETTE.red })
+    board = placeBuilding(addPlayer(board, { id: 'p2', ...blue }), vertexA, 'p2', 'settlement')
+    const merged = mergeScreenshot(before, newGame(board), pills())
+    const [red, newcomer] = merged.board.players
+    expect(red.id).toBe('aki')
+    expect(newcomer).toEqual({ id: 'p2-2', ...blue })
+    expect(merged.board.buildings[0].playerId).toBe('p2-2')
+    expect(Object.keys(merged.stats)).toEqual(['aki', 'p2-2'])
+    expect(merged.stats['p2-2']).toEqual(emptyStats())
+    expect(Object.hasOwn(merged, 'turn')).toBe(false)
+    expect(Object.hasOwn(merged, 'devHand')).toBe(false)
+  })
+
+  it('falls back to the screenshot claim when the claimed player is gone', () => {
+    // Saved red is claimed; the screenshot has no red player.
+    const merged = mergeScreenshot(saved(), newGame(setMe(addPlayer(empty(), { id: 'p1', ...blue }), 'p1')), pills())
+    expect(merged.board.players.map((player) => player.id)).toEqual(['b'])
+    expect(merged.board.mePlayerId).toBe('b')
+  })
+
+  it('drops nobody when the screenshot had no pills, only pieces', () => {
+    const before = saved()
+    // Colours with pieces are all such a screenshot knows: blue, and a white newcomer.
+    let board = addPlayer(empty(), { id: 's-white', ...white })
+    board = addPlayer(board, { id: 's-blue', ...blue })
+    board = placeBuilding(board, vertexA, 's-blue', 'settlement')
+    board = placeBuilding(board, vertexB, 's-white', 'settlement')
+    const merged = mergeScreenshot(before, newGame(board), { roster: false, hands: [] })
+    expect(merged.board.players).toEqual([...before.board.players, { id: 's-white', ...white }])
+    expect(merged.board.buildings.map((building) => building.playerId)).toEqual(['b', 's-white'])
+    expect(merged.board.mePlayerId).toBe('aki')
+    expect(merged.stats).toEqual({ ...before.stats, 's-white': emptyStats() })
+    expect(merged.turn).toBe(before.turn)
+  })
 })

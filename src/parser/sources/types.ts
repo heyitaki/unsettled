@@ -1,4 +1,4 @@
-import type { Game } from '../../model/game'
+import type { Game, ScreenshotRead } from '../../model/game'
 
 export interface ParseIssue {
   stage: 'registration' | 'sharpness' | 'tokens' | 'ports' | 'roster' | 'pieces' | 'stats'
@@ -8,5 +8,5 @@ export interface ParseIssue {
 }
 
 export type SourceParse =
-  | { ok: true; game: Game; issues: ParseIssue[] }
+  | { ok: true; game: Game; issues: ParseIssue[]; read: ScreenshotRead }
   | { ok: false; error: string }

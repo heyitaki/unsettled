@@ -109,6 +109,79 @@ export function withBoard(game: Game, board: Board): Game {
   return next
 }
 
+/** What a screenshot's player pills supplied, which the parsed Game cannot say for itself. */
+export interface ScreenshotRead {
+  /** False when there were no pills: the players are then only the colours with pieces on the board. */
+  roster: boolean
+  /** Parsed ids of the players whose hand size was read. A zero hand is otherwise the same as an unread one. */
+  hands: readonly string[]
+}
+
+/**
+ * Fold a later screenshot of a saved game into it. The screenshot wins on what
+ * it shows: the roster and its order, the pieces, the robber and each hand's
+ * size. The saved game keeps what a screenshot cannot show: names, the claim,
+ * dev cards, knights, VP cards, awards and the recorded turn. It also keeps
+ * what this screenshot failed to read: a hand missing from `read.hands`, and a
+ * robber nobody found.
+ *
+ * Parsed ids follow pill order and parsed names are colour names, so players
+ * are matched by colour and a match keeps its saved id and name.
+ */
+export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): Game {
+  const byColor = new Map<string, Player>()
+  for (const player of saved.board.players) if (!byColor.has(player.color)) byColor.set(player.color, player)
+  // Every saved id is reserved, matched or not: a newcomer handed a departed
+  // player's id would inherit that player's turn and dev hand.
+  const taken = new Set(saved.board.players.map((player) => player.id))
+  const handRead = new Set(read.hands)
+  // Screenshot id to merged id, for the pieces and the claim.
+  const ids = new Map<string, string>()
+  const stats = new Map<string, PlayerStats>()
+  const newcomers: Player[] = []
+  const shotPlayers = shot.board.players.map((player) => {
+    const match = byColor.get(player.color)
+    let id = match?.id ?? player.id
+    if (match === undefined) for (let n = 2; taken.has(id); n += 1) id = `${player.id}-${n}`
+    taken.add(id)
+    ids.set(player.id, id)
+    const merged = { ...player, id, name: match?.name ?? player.name }
+    const shotStats = shot.stats[player.id]
+    if (match === undefined) {
+      newcomers.push(merged)
+      stats.set(id, shotStats)
+    } else if (handRead.has(player.id)) {
+      // Known cards stay known while the new hand size has room for them.
+      const savedStats = saved.stats[id]
+      const known = Object.values(savedStats.hand).reduce((sum, cards) => sum + cards, 0)
+      stats.set(id, shotStats.handUnknown >= known
+        ? { ...savedStats, handUnknown: shotStats.handUnknown - known }
+        : { ...savedStats, hand: shotStats.hand, handUnknown: shotStats.handUnknown })
+    }
+    return merged
+  })
+  // With no roster read, a saved player missing from the screenshot only has
+  // no piece on the board yet, so nobody is dropped and the saved order stands.
+  const players = read.roster ? shotPlayers : [...saved.board.players, ...newcomers]
+  const remapOwner = <T extends { playerId: string }>(piece: T): T =>
+    ({ ...piece, playerId: ids.get(piece.playerId) ?? piece.playerId })
+  const savedClaim = saved.board.mePlayerId
+  const claim = savedClaim !== null && players.some((player) => player.id === savedClaim)
+    ? savedClaim
+    : ids.get(shot.board.mePlayerId ?? '') ?? null
+  return withBoard({
+    ...saved,
+    stats: Object.fromEntries(players.map((player) => [player.id, stats.get(player.id) ?? saved.stats[player.id]])),
+  }, {
+    ...shot.board,
+    robber: shot.board.robber ?? saved.board.robber,
+    players,
+    roads: shot.board.roads.map(remapOwner),
+    buildings: shot.board.buildings.map(remapOwner),
+    mePlayerId: claim,
+  })
+}
+
 export function ensureStats(game: Game, playerId: string): PlayerStats {
   if (!Object.hasOwn(game.stats, playerId)) throw new RangeError(`Unknown player ${playerId}`)
   return game.stats[playerId]

@@ -1,12 +1,17 @@
 // Shared board-file helpers: title derivation for JSON import and export and
 // the map library, the comparison behind "this tab holds work the library does
-// not", and the no-prompt save behind the autosave.
+// not", the no-prompt save behind the autosave, and the terrain match behind
+// "this screenshot is a board the app already holds".
 
-import { validateBoard } from '../model/board'
+import { terrainKey, validateBoard } from '../model/board'
 import type { Game } from '../model/game'
 import { firstFreeName } from '../model/names'
 import { gameSignature, isFreshGame, type ParseGameResult } from '../model/serialization'
-import { readLibrary, saveMap, takenMapNames, updateMap } from '../persistence/localStorage'
+import type { Board } from '../model/types'
+import {
+  type ListedMap, listMaps, loadMap, loadMaps, readLibrary, saveMap, takenMapNames, updateMap,
+} from '../persistence/localStorage'
+import { sortMaps } from './library'
 
 export function fileTitle(name: string): string {
   return name.replace(/\.[^/.]+$/, '') || name
@@ -91,6 +96,47 @@ export function saveTab(
   const result = saveMap(name, tab.game, keep)
   if (!result.ok) return result
   return { ok: true, id: result.id, name, ...(result.evicted === undefined ? {} : { evicted: result.evicted }) }
+}
+
+type LinkedTab = { mapId: string | null; game: Game }
+
+/**
+ * The game a library map holds now: its open tab's, which can be ahead of the
+ * autosave, else the stored one. Null when there is neither.
+ */
+export function mapGame(mapId: string | null, tabs: readonly LinkedTab[]): Game | null {
+  if (mapId === null) return null
+  const open = tabs.find((tab) => tab.mapId === mapId)
+  if (open !== undefined) return open.game
+  const stored = loadMap(mapId)
+  return stored.ok ? stored.game : null
+}
+
+/** A board the app already holds: a library map, or an open board in no map yet. */
+export type HeldBoard = { map: ListedMap } | { tab: { id: string; title: string } }
+
+/**
+ * The board the app already holds with this terrain, or null. Library maps come
+ * first, the most recently modified when several share the terrain. Then the
+ * open boards in no map, newest first: an import is not written to the library
+ * until its first edit, so a second screenshot of that game finds it only here.
+ */
+export function matchingBoard(
+  board: Board,
+  tabs: readonly (LinkedTab & { id: string; title: string })[],
+): HeldBoard | null {
+  const key = terrainKey(board)
+  // A row with a made-up name cannot be linked to a tab, so it cannot be updated.
+  const maps = sortMaps(listMaps().maps, 'modifiedAt').filter((map) => map.synthetic !== true)
+  // One pass over the store, so the lookups below are all cache hits.
+  loadMaps(maps.flatMap((map) => map.id ?? []))
+  const map = maps.find((candidate) => {
+    const game = mapGame(candidate.id, tabs)
+    return game !== null && terrainKey(game.board) === key
+  })
+  if (map !== undefined) return { map }
+  const tab = tabs.findLast((candidate) => candidate.mapId === null && terrainKey(candidate.game.board) === key)
+  return tab === undefined ? null : { tab: { id: tab.id, title: tab.title } }
 }
 
 // The board's non-blocking warnings as a clause, or null when it has none.

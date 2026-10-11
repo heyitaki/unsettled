@@ -257,7 +257,11 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
         message: `Could not determine settlement order for ${player.name}`,
       })
     }
-    return { ok: true, game, issues }
+    const read = {
+      roster: roster.players.length > 0,
+      hands: roster.players.filter((entry) => entry.hand !== null).map((entry) => entry.player.id),
+    }
+    return { ok: true, game, issues, read }
   } catch {
     return failure('could not parse this image')
   }
