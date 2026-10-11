@@ -372,6 +372,8 @@ struct VertexStats {
     pips: [f64; RESOURCE_COUNT],
     robbed_pips: [f64; RESOURCE_COUNT],
     token_pips: [f64; 13],
+    token_numbers: [u8; 3],
+    token_numbers_len: u8,
     has_ports: bool,
     setup_grant: [f64; RESOURCE_COUNT],
     /// The producing hexes this vertex touches, one bit per hex index. Mirrors
@@ -570,10 +572,20 @@ impl AppFormulaScorer {
             }
             let (production, scarcity_value, robber) =
                 base_parts(&weights, &scarcity, &raw_pips, &robbed_pips);
+            let mut token_numbers = [0; 3];
+            let mut token_numbers_len = 0;
+            for (number, pips) in token_pips.iter().enumerate() {
+                if *pips != 0.0 {
+                    token_numbers[usize::from(token_numbers_len)] = number as u8;
+                    token_numbers_len += 1;
+                }
+            }
             vertices.push(VertexStats {
                 pips: raw_pips,
                 robbed_pips,
                 token_pips,
+                token_numbers,
+                token_numbers_len,
                 has_ports: has_ports[vertex_index],
                 setup_grant,
                 hex_mask,
@@ -957,10 +969,9 @@ impl AppFormulaScorer {
 
     fn duplicate_number_penalty(&self, holdings: &Holdings, candidate: &VertexStats) -> f64 {
         let mut overlap = 0.0;
-        for number in 0..candidate.token_pips.len() {
-            if candidate.token_pips[number] != 0.0 {
-                overlap += js_min(holdings.token_pips[number], candidate.token_pips[number]);
-            }
+        for number in &candidate.token_numbers[..usize::from(candidate.token_numbers_len)] {
+            let number = usize::from(*number);
+            overlap += js_min(holdings.token_pips[number], candidate.token_pips[number]);
         }
         overlap * self.weights.duplicate_number_penalty
     }
@@ -1288,6 +1299,44 @@ mod tests {
 
     fn default_weights() -> EngineWeights {
         serde_json::from_str(include_str!("../../../../placement/default-weights.json")).unwrap()
+    }
+
+    /// Sparse token visits keep the dense loop's order and bits for every fixture vertex.
+    #[test]
+    fn sparse_duplicate_numbers_match_the_dense_sum() {
+        use crate::board::ConversionOptions;
+        use crate::rules::RuleConfig;
+        use crate::topology::Layout;
+        use crate::wire::WireBoard;
+
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../fixtures/advice-parity.json")).unwrap();
+        let wire = WireBoard::parse_value(cases["cases"][0]["request"]["game"]["board"].clone()).unwrap();
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let board = SimBoard::try_from_wire(
+            wire, &topology, &RuleConfig::base(Layout::Standard4), ConversionOptions::default(),
+        ).unwrap();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        for stats in &scorer.vertices {
+            let numbers: Vec<u8> = stats.token_pips.iter().enumerate()
+                .filter_map(|(number, pips)| (*pips != 0.0).then_some(number as u8))
+                .collect();
+            assert_eq!(&stats.token_numbers[..usize::from(stats.token_numbers_len)], numbers);
+            for value in [0.0, -0.0, -1.5, 1e-12, 1e20, f64::NAN] {
+                let mut holdings = Holdings::empty();
+                for (number, held) in holdings.token_pips.iter_mut().enumerate() {
+                    *held = if number % 2 == 0 { value } else { number as f64 };
+                }
+                let mut expected = 0.0;
+                for number in 0..stats.token_pips.len() {
+                    if stats.token_pips[number] != 0.0 {
+                        expected += js_min(holdings.token_pips[number], stats.token_pips[number]);
+                    }
+                }
+                expected *= scorer.weights.duplicate_number_penalty;
+                assert_eq!(scorer.duplicate_number_penalty(&holdings, stats).to_bits(), expected.to_bits());
+            }
+        }
     }
 
     /// The base of `coverage`'s power is a ratio of small pip sums to a cap, so a handful of values

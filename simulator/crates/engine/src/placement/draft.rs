@@ -49,6 +49,18 @@ struct ScoreRows {
     reusable: bool,
     rows: Vec<Option<Vec<f64>>>,
     scratch: Vec<f64>,
+    last_occupancy: Option<RowOccupancy>,
+}
+
+struct RowOccupancy {
+    vertex_owner: [u8; 128],
+    edge_owner: [u8; 128],
+    vertices: usize,
+    edges: usize,
+    seat: u8,
+    /// The masks also depend on the adjacency they were read over, which the reach table names.
+    reach: u64,
+    masks: expansion::Occupancy,
 }
 
 impl ScoreRows {
@@ -64,6 +76,7 @@ impl ScoreRows {
             reusable,
             rows: vec![None; slots],
             scratch: Vec::new(),
+            last_occupancy: None,
         }
     }
 
@@ -105,22 +118,47 @@ impl ScoreRows {
         let mut holdings_total = None;
         let scale = scorer.slot_scale(seat);
         let occupancy = expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
+        let last = self.last_occupancy.get_or_insert_with(|| RowOccupancy {
+            vertex_owner: [EMPTY; 128],
+            edge_owner: [EMPTY; 128],
+            vertices: 0,
+            edges: 0,
+            seat,
+            reach: scorer.reach.id,
+            masks: occupancy,
+        });
+        last.vertices = vertex_owner.len();
+        last.edges = edge_owner.len();
+        last.vertex_owner[..last.vertices].copy_from_slice(vertex_owner);
+        last.edge_owner[..last.edges].copy_from_slice(edge_owner);
+        last.seat = seat;
+        last.reach = scorer.reach.id;
+        last.masks = occupancy;
         self.scratch.clear();
         expansion::PRICE_MEMO.with_borrow_mut(|memo| {
-            let serial = memo.serial(scorer.id, occupancy.own_vertices);
+            let serial = if use_value_memo {
+                memo.serial(scorer.id, occupancy.own_vertices)
+            } else {
+                0
+            };
             debug_assert!(seat < 64, "base keys reserve six bits for the seat");
             let base_tag = u64::from(0x80 | (seat << 1) | u8::from(grant));
             self.scratch.extend((0..self.vertices).map(|index| {
                 let vertex = index as Vertex;
                 if legal_with_vacancy(topology, vertex_owner, vacated, vertex) {
-                    let key = (u64::from(serial) << 16) | (u64::from(vertex) << 8) | base_tag;
-                    let base = memo.price(key, || {
+                    let mut base_total = || {
                         let total = *holdings_total
                             .get_or_insert_with(|| scorer.holdings_diversity_total(&holdings));
                         scorer.scaled_total_with_diversity(
                             holdings, vertex, grant, scale.diversity, total,
                         )
-                    });
+                    };
+                    let base = if use_value_memo {
+                        let key = (u64::from(serial) << 16) | (u64::from(vertex) << 8) | base_tag;
+                        memo.price(key, base_total)
+                    } else {
+                        base_total()
+                    };
                     base + scale.expansion * expansion::row_value(
                         scorer, &holdings, vertex, &occupancy, memo, serial, use_value_memo,
                     )
@@ -130,6 +168,24 @@ impl ScoreRows {
             }));
         });
         &self.scratch
+    }
+
+    fn cached_occupancy(
+        &self,
+        scorer: &AppFormulaScorer,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+    ) -> Option<&expansion::Occupancy> {
+        self.last_occupancy
+            .as_ref()
+            .filter(|last| {
+                last.seat == seat
+                    && last.reach == scorer.reach.id
+                    && last.vertex_owner[..last.vertices] == *vertex_owner
+                    && last.edge_owner[..last.edges] == *edge_owner
+            })
+            .map(|last| &last.masks)
     }
 
     /// The seat's score for every vertex on this state, computed once per distinct
@@ -278,8 +334,14 @@ fn setup_road(
     edge_owner: &[u8],
     seat: u8,
     vertex: Vertex,
+    occupancy: Option<&expansion::Occupancy>,
 ) -> Edge {
-    if let Some(edge) = expansion::row_road(scorer, vertex_owner, edge_owner, seat, vertex) {
+    let road = if let Some(occupancy) = occupancy {
+        expansion::row_road_with_occupancy(scorer, vertex_owner, seat, vertex, occupancy)
+    } else {
+        expansion::row_road(scorer, vertex_owner, edge_owner, seat, vertex)
+    };
+    if let Some(edge) = road {
         return edge;
     }
     let mut selected = topology.vertex_edges(vertex)[0];
@@ -329,18 +391,11 @@ fn best_direct(
     seat: u8,
     grant: bool,
 ) -> Option<Vertex> {
-    let mut best: Option<(Vertex, f64)> = None;
-    for vertex_index in 0..topology.vertex_count() {
-        let vertex = vertex_index as Vertex;
-        if !can_place_settlement(topology, vertex_owner, vertex) {
-            continue;
-        }
-        let score = scorer.score_for_owner(vertex_owner, edge_owner, seat, vertex, grant);
-        if best.is_none_or(|(_, held)| score > held) {
-            best = Some((vertex, score));
-        }
-    }
-    best.map(|(vertex, _)| vertex)
+    let mut rows = ScoreRows::new(
+        usize::from(seat) + 1, topology.vertex_count(), vertex_owner.len(), false,
+    );
+    let row = rows.legal_row(scorer, topology, vertex_owner, edge_owner, seat, grant, None);
+    best_legal(topology, vertex_owner, None, row).map(|(vertex, _)| vertex)
 }
 
 /// One hero's first-pick lookahead over one board state, carrying the scratch every candidate
@@ -475,6 +530,7 @@ impl<'a> Lookahead<'a> {
             edge_owner,
             self.hero,
             candidate,
+            self.rows.cached_occupancy(self.hero_scorer, vertex_owner, edge_owner, self.hero),
         );
         self.owners[usize::from(candidate)] = self.hero;
         self.edges[usize::from(road)] = self.hero;
@@ -512,6 +568,7 @@ impl<'a> Lookahead<'a> {
                 &self.edges,
                 seat,
                 pick,
+                self.rows.cached_occupancy(self.opponent_scorer, &self.owners, &self.edges, seat),
             );
             self.owners[usize::from(pick)] = seat;
             self.edges[usize::from(road)] = seat;
@@ -556,6 +613,7 @@ pub(super) fn choose(
         edge_owner,
         seat,
         vertex,
+        None,
     );
     Some((vertex, road))
 }
@@ -734,6 +792,82 @@ mod tests {
                 first_pick(&scorers, &topology, 6, &vertices, &edges, hero),
                 best.map(|(vertex, _)| vertex)
             );
+        }
+    }
+
+    /// A road may reuse occupancy only while both copied owner arrays and the seat still match.
+    #[test]
+    fn row_occupancy_reuse_checks_array_contents_and_seat() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let mut vertices = vec![EMPTY; topology.vertex_count()];
+        let mut edges = vec![EMPTY; topology.edge_count()];
+        let mut rows = ScoreRows::new(6, topology.vertex_count(), vertices.len(), false);
+        rows.legal_row(&scorer, &topology, &vertices, &edges, 0, false, None);
+        let direct = expansion::Occupancy::new(&scorer, &vertices, &edges, 0);
+        assert_eq!(rows.cached_occupancy(&scorer, &vertices.clone(), &edges.clone(), 0), Some(&direct));
+        assert!(rows.cached_occupancy(&scorer, &vertices, &edges, 1).is_none());
+        vertices[0] = 0;
+        assert!(rows.cached_occupancy(&scorer, &vertices, &edges, 0).is_none());
+        vertices[0] = EMPTY;
+        edges[0] = 0;
+        assert!(rows.cached_occupancy(&scorer, &vertices, &edges, 0).is_none());
+        edges[0] = EMPTY;
+        vertices.push(EMPTY);
+        assert!(rows.cached_occupancy(&scorer, &vertices, &edges, 0).is_none());
+        vertices.pop();
+        edges.push(EMPTY);
+        assert!(rows.cached_occupancy(&scorer, &vertices, &edges, 0).is_none());
+        edges.pop();
+        vertices[0] = 0;
+        edges[0] = 0;
+        rows.legal_row(&scorer, &topology, &vertices, &edges, 0, true, None);
+        let occupancy = rows.cached_occupancy(&scorer, &vertices, &edges, 0).unwrap();
+        assert_eq!(occupancy, &expansion::Occupancy::new(&scorer, &vertices, &edges, 0));
+        for candidate in 0..topology.vertex_count() as Vertex {
+            assert_eq!(
+                expansion::row_road_with_occupancy(&scorer, &vertices, 0, candidate, occupancy),
+                scorer.expansion_road(&vertices, &edges, 0, candidate)
+            );
+        }
+    }
+
+    /// A second-pick row keeps the direct scan's winner, including NaN comparisons and ties.
+    #[test]
+    fn direct_pick_rows_match_reference_argmax() {
+        let (topology, board) = fixture();
+        let mut no_expansion = default_weights();
+        no_expansion.expansion_weight = 0.0;
+        let mut degenerate = default_weights();
+        degenerate.diversity_weight = f64::NAN;
+        for weights in [default_weights(), no_expansion, degenerate] {
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            for seat in 0..6 {
+                let mut vertices = vec![EMPTY; topology.vertex_count()];
+                let mut edges = vec![EMPTY; topology.edge_count()];
+                for shifted in 0..8 {
+                    vertices.fill(EMPTY);
+                    edges.fill(EMPTY);
+                    let held = (shifted * 7) as Vertex;
+                    vertices[usize::from(held)] = seat;
+                    for edge in topology.vertex_edges(held) {
+                        edges[usize::from(*edge)] = seat;
+                    }
+                    let mut expected: Option<(Vertex, f64)> = None;
+                    for vertex in 0..topology.vertex_count() as Vertex {
+                        if can_place_settlement(&topology, &vertices, vertex) {
+                            let score = scorer.score_for_owner(&vertices, &edges, seat, vertex, true);
+                            if expected.is_none_or(|(_, best)| score > best) {
+                                expected = Some((vertex, score));
+                            }
+                        }
+                    }
+                    assert_eq!(
+                        best_direct(&scorer, &topology, &vertices, &edges, seat, true),
+                        expected.map(|(vertex, _)| vertex)
+                    );
+                }
+            }
         }
     }
 

@@ -5,6 +5,7 @@
 //! is the one component that depends on where everybody else's pieces stand.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::app_formula::{AppFormulaScorer, Holdings, SitePricer, VERTEX_FANOUT, VertexLinks, js_max};
 use crate::rng::mix64;
@@ -13,6 +14,9 @@ use crate::topology::{Edge, Vertex};
 
 /// Paid road-builds a site may cost before it is out of reach. The free setup road is not one.
 const MAX_PAID_BUILDS: usize = 2;
+const SITES_MEMO_LEN: usize = 4_096;
+const WALK_MEMO_WAYS: usize = 2;
+static NEXT_REACH_ID: AtomicU64 = AtomicU64::new(1);
 
 /// A site the candidate opens, at the cost the walk settled it for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +56,7 @@ struct OpenReach {
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct ReachTable {
+    pub(super) id: u64,
     entries: Vec<ReachEntry>,
     spans: Vec<std::ops::Range<usize>>,
     near_edges: Vec<u128>,
@@ -73,7 +78,10 @@ impl ReachTable {
     }
 
     fn new(links: &[VertexLinks]) -> Self {
-        let mut table = Self::default();
+        let mut table = Self {
+            id: NEXT_REACH_ID.fetch_add(1, Ordering::Relaxed),
+            ..Self::default()
+        };
         for index in 0..links.len() {
             let vertex = index as Vertex;
             let start = table.entries.len();
@@ -125,12 +133,36 @@ impl ReachTable {
 
     fn sites(&self, candidate: Vertex, occupancy: &Occupancy) -> [u128; 3] {
         let open = &self.open[usize::from(candidate)];
-        if occupancy.blocked & open.sites == 0
-            && occupancy.rival_edges & open.edges == 0
-            && occupancy.rival_vertices & open.through == 0
-        {
+        let masked = [
+            occupancy.blocked & open.sites,
+            occupancy.rival_edges & open.edges,
+            occupancy.rival_vertices & open.through,
+        ];
+        if masked == [0; 3] {
             return open.masks;
         }
+        let mut hash = self.id ^ u64::from(candidate).rotate_left(32);
+        for (i, mask) in masked.iter().enumerate() {
+            hash ^= (*mask as u64).rotate_left((i * 11) as u32)
+                ^ ((*mask >> 64) as u64).rotate_left((i * 11 + 7) as u32);
+        }
+        SITES_MEMO.with_borrow_mut(|memo| {
+            let entry = &mut memo[mix64(hash) as usize & (SITES_MEMO_LEN - 1)];
+            if entry.table == self.id && entry.candidate == candidate && entry.masked == masked {
+                return entry.sites;
+            }
+            let sites = self.scan_sites(candidate, occupancy);
+            *entry = SitesEntry {
+                table: self.id,
+                candidate,
+                masked,
+                sites,
+            };
+            sites
+        })
+    }
+
+    fn scan_sites(&self, candidate: Vertex, occupancy: &Occupancy) -> [u128; 3] {
         let mut sites = [0; 3];
         for entry in &self.entries[self.spans[usize::from(candidate)].clone()] {
             let bit = 1 << entry.site;
@@ -146,7 +178,15 @@ impl ReachTable {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
+struct SitesEntry {
+    table: u64,
+    candidate: Vertex,
+    masked: [u128; 3],
+    sites: [u128; 3],
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(super) struct Occupancy {
     rival_vertices: u128,
     blocked: u128,
@@ -165,16 +205,10 @@ impl Occupancy {
         debug_assert!(vertex_owner.len() <= 128, "vertex masks are 128 bits wide");
         debug_assert!(edge_owner.len() <= 128, "edge masks are 128 bits wide");
         let mut masks = Self::default();
-        for (vertex, owner) in vertex_owner
-            .iter()
-            .take(scorer.reach.spans.len())
-            .enumerate()
-        {
-            if *owner == EMPTY {
-                continue;
-            }
+        let vertices = vertex_owner.len().min(scorer.reach.spans.len());
+        for (vertex, owner) in occupied(&vertex_owner[..vertices]) {
             let bit = 1 << vertex;
-            if *owner == seat {
+            if owner == seat {
                 masks.own_vertices |= bit;
             } else {
                 masks.rival_vertices |= bit;
@@ -184,15 +218,39 @@ impl Occupancy {
                 masks.blocked |= 1 << adjacent;
             }
         }
-        for (edge, owner) in edge_owner.iter().enumerate() {
-            if *owner == seat {
+        for (edge, owner) in occupied(edge_owner) {
+            if owner == seat {
                 masks.own_edges |= 1 << edge;
-            } else if *owner != EMPTY {
+            } else {
                 masks.rival_edges |= 1 << edge;
             }
         }
         masks
     }
+
+    fn restricted(&self, vertices: u128, edges: u128) -> [u128; 4] {
+        [
+            self.blocked & vertices,
+            self.rival_vertices & vertices,
+            self.own_edges & edges,
+            self.rival_edges & edges,
+        ]
+    }
+}
+
+fn occupied(owners: &[u8]) -> impl Iterator<Item = (usize, u8)> + '_ {
+    owners
+        .chunks(8)
+        .enumerate()
+        .filter(|(_, bytes)| {
+            bytes.len() < 8
+                || u64::from_ne_bytes((*bytes).try_into().unwrap()) != u64::from_ne_bytes([EMPTY; 8])
+        })
+        .flat_map(|(word, bytes)| {
+            bytes.iter().enumerate().filter_map(move |(offset, owner)| {
+                (*owner != EMPTY).then_some((word * 8 + offset, *owner))
+            })
+        })
 }
 
 /// A site's cheapest reach from any source is the minimum of the individual walks.
@@ -202,23 +260,39 @@ fn mask_walk(
     candidate: Vertex,
     sources: [u128; 2],
 ) -> [u128; MAX_PAID_BUILDS + 1] {
+    mask_walk_recorded::<false>(scorer, occupancy, candidate, sources).sites
+}
+
+#[derive(Clone, Copy, Default)]
+struct WalkRead {
+    sites: [u128; MAX_PAID_BUILDS + 1],
+    vertices: u128,
+    edges: u128,
+}
+
+fn mask_walk_recorded<const RECORD: bool>(
+    scorer: &AppFormulaScorer,
+    occupancy: &Occupancy,
+    candidate: Vertex,
+    sources: [u128; 2],
+) -> WalkRead {
     debug_assert!(
         scorer.reach.spans.len() <= 128,
         "vertex masks are 128 bits wide"
     );
     if scorer.reach.spans.len() <= 64 {
-        mask_walk_words::<1>(scorer, occupancy, candidate, sources)
+        mask_walk_words::<1, RECORD>(scorer, occupancy, candidate, sources)
     } else {
-        mask_walk_words::<2>(scorer, occupancy, candidate, sources)
+        mask_walk_words::<2, RECORD>(scorer, occupancy, candidate, sources)
     }
 }
 
-fn mask_walk_words<const WORDS: usize>(
+fn mask_walk_words<const WORDS: usize, const RECORD: bool>(
     scorer: &AppFormulaScorer,
     occupancy: &Occupancy,
     candidate: Vertex,
     sources: [u128; 2],
-) -> [u128; MAX_PAID_BUILDS + 1] {
+) -> WalkRead {
     let split =
         |bits: u128| -> [u64; WORDS] { std::array::from_fn(|word| (bits >> (word * 64)) as u64) };
     let mut excluded = occupancy.blocked | (1 << candidate);
@@ -241,6 +315,7 @@ fn mask_walk_words<const WORDS: usize>(
     let mut settled = [[0_u64; WORDS]; 2];
     let mut recorded = [0; WORDS];
     let mut sites = [[0; WORDS]; MAX_PAID_BUILDS + 1];
+    let mut read_edges = [0_u64; 2];
 
     // The unused-road lane only occurs at cost 0; each unowned edge advances one band.
     for band in 0..MAX_PAID_BUILDS + 2 {
@@ -265,7 +340,12 @@ fn mask_walk_words<const WORDS: usize>(
             }
             if band == MAX_PAID_BUILDS + 1 {
                 for (edge, to) in scorer.steps(vertex) {
-                    if own_edges[usize::from(edge >= 64)] & (1 << (edge & 63)) != 0 {
+                    let edge_word = usize::from(edge >= 64);
+                    let edge_bit = 1 << (edge & 63);
+                    if RECORD {
+                        read_edges[edge_word] |= edge_bit;
+                    }
+                    if own_edges[edge_word] & edge_bit != 0 {
                         let to_word = usize::from(WORDS == 2 && to >= 64);
                         frontier[band][to_word] |= (1 << (to & 63)) & !settled[lane][to_word];
                     }
@@ -275,6 +355,9 @@ fn mask_walk_words<const WORDS: usize>(
             for (edge, to) in scorer.steps(vertex) {
                 let edge_word = usize::from(edge >= 64);
                 let edge_bit = 1 << (edge & 63);
+                if RECORD {
+                    read_edges[edge_word] |= edge_bit;
+                }
                 if rival_edges[edge_word] & edge_bit != 0 {
                     continue;
                 }
@@ -288,14 +371,85 @@ fn mask_walk_words<const WORDS: usize>(
             }
         }
     }
-    sites.map(|bits| {
+    let join = |bits: [u64; WORDS]| {
         let low = u128::from(bits[0]);
         if WORDS == 1 {
             low
         } else {
             low | (u128::from(bits[1]) << 64)
         }
-    })
+    };
+    WalkRead {
+        sites: sites.map(join),
+        vertices: if RECORD {
+            join(std::array::from_fn(|i| settled[0][i] | settled[1][i]))
+        } else {
+            0
+        },
+        edges: u128::from(read_edges[0]) | (u128::from(read_edges[1]) << 64),
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct WalkEntry {
+    table: u64,
+    walk: WalkRead,
+    occupancy: [u128; 4],
+}
+
+impl WalkEntry {
+    fn matches(&self, table: u64, occupancy: &Occupancy) -> bool {
+        self.table == table
+            && self.occupancy == occupancy.restricted(self.walk.vertices, self.walk.edges)
+    }
+}
+
+struct WalkMemo {
+    entries: Vec<[WalkEntry; WALK_MEMO_WAYS]>,
+    next: [usize; 128],
+}
+
+impl Default for WalkMemo {
+    fn default() -> Self {
+        Self {
+            entries: vec![[WalkEntry::default(); WALK_MEMO_WAYS]; 128],
+            next: [0; 128],
+        }
+    }
+}
+
+impl WalkMemo {
+    fn sites(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        occupancy: &Occupancy,
+        candidate: Vertex,
+    ) -> [u128; 3] {
+        let index = usize::from(candidate);
+        for entry in &self.entries[index] {
+            if entry.matches(scorer.reach.id, occupancy) {
+                return entry.walk.sites;
+            }
+        }
+        let mut sources = [0; 2];
+        let mut edges = 0;
+        for (edge, to) in scorer.steps(candidate) {
+            let bit = 1 << edge;
+            edges |= bit;
+            if occupancy.rival_edges & bit == 0 {
+                sources[usize::from(occupancy.own_edges & bit == 0)] |= 1 << to;
+            }
+        }
+        let mut walk = mask_walk_recorded::<true>(scorer, occupancy, candidate, sources);
+        walk.edges |= edges;
+        self.entries[index][self.next[index]] = WalkEntry {
+            table: scorer.reach.id,
+            occupancy: occupancy.restricted(walk.vertices, walk.edges),
+            walk,
+        };
+        self.next[index] = (self.next[index] + 1) % WALK_MEMO_WAYS;
+        walk.sites
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -377,6 +531,10 @@ impl PriceMemo {
 }
 
 thread_local! {
+    static WALK_MEMO: std::cell::RefCell<WalkMemo> =
+        std::cell::RefCell::new(WalkMemo::default());
+    static SITES_MEMO: std::cell::RefCell<Vec<SitesEntry>> =
+        std::cell::RefCell::new(vec![SitesEntry::default(); SITES_MEMO_LEN]);
     static LAST_REACH: std::cell::RefCell<Option<(Vec<VertexLinks>, Arc<ReachTable>)>> =
         const { std::cell::RefCell::new(None) };
     pub(super) static PRICE_MEMO: std::cell::RefCell<PriceMemo> =
@@ -405,14 +563,7 @@ pub(super) fn row_value(
 
         scorer.reach.sites(candidate, occupancy)
     } else {
-        let mut sources = [0; 2];
-        for (edge, to) in scorer.steps(candidate) {
-            let bit = 1 << edge;
-            if occupancy.rival_edges & bit == 0 {
-                sources[usize::from(occupancy.own_edges & bit == 0)] |= 1 << to;
-            }
-        }
-        mask_walk(scorer, occupancy, candidate, sources)
+        WALK_MEMO.with_borrow_mut(|memo| memo.sites(scorer, occupancy, candidate))
     };
     let mut rest = sites[0] | sites[1] | sites[2];
     if rest == 0 {
@@ -441,14 +592,19 @@ pub(super) fn row_value(
         } else {
             2
         };
-        let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
-        let price = memo.price(key, || {
+        let mut price_site = || {
             pricer.get_or_insert_with(|| {
                 let mut with_candidate = *holdings;
                 scorer.add_to_holdings(&mut with_candidate, candidate);
                 SitePricer::new(scorer, with_candidate)
             }).price(site)
-        });
+        };
+        let price = if use_value_memo {
+            let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
+            memo.price(key, price_site)
+        } else {
+            price_site()
+        };
         let value = price * scorer.decay_pow[cost];
         if value > first {
             second = first;
@@ -483,10 +639,23 @@ pub(super) fn row_road(
     if scorer.weights().expansion_weight == 0.0 {
         return None;
     }
+    let occupancy = Occupancy::new(scorer, vertex_owner, edge_owner, seat);
+    row_road_with_occupancy(scorer, vertex_owner, seat, candidate, &occupancy)
+}
+
+pub(super) fn row_road_with_occupancy(
+    scorer: &AppFormulaScorer,
+    vertex_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+    occupancy: &Occupancy,
+) -> Option<Edge> {
+    if scorer.weights().expansion_weight == 0.0 {
+        return None;
+    }
     #[cfg(test)]
     WALK_CALLS.with(|calls| calls.set(calls.get() + 1));
 
-    let occupancy = Occupancy::new(scorer, vertex_owner, edge_owner, seat);
     let mut firsts = [(0, 0); VERTEX_FANOUT];
     let mut len = 0;
     for (edge, to) in scorer.steps(candidate) {
@@ -505,7 +674,7 @@ pub(super) fn row_road(
         for (first_edge, to) in &firsts[..len] {
             let mut sources = [0; 2];
             sources[usize::from(occupancy.own_edges & (1 << first_edge) == 0)] = 1 << to;
-            let sites = mask_walk(scorer, &occupancy, candidate, sources);
+            let sites = mask_walk(scorer, occupancy, candidate, sources);
             let mut rest = sites[0] | sites[1] | sites[2];
             if rest == 0 {
                 continue;
@@ -971,6 +1140,26 @@ mod tests {
         assert_eq!(memo.values[index].value, -9999.0);
     }
 
+    /// A one-use hero row neither reads nor evicts prices cached for the rivals.
+    #[test]
+    fn bypassed_rows_leave_site_prices_untouched() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+        let holdings = Holdings::empty();
+        let mut memo = PriceMemo::default();
+        let serial = memo.serial(scorer.id, 0);
+        for site in 0..topology.vertex_count() as Vertex {
+            memo.price((u64::from(serial) << 16) | u64::from(site), || -9999.0);
+        }
+        let before = memo.prices.clone();
+        let value = row_value(&scorer, &holdings, 0, &occupancy, &mut memo, serial, false);
+        assert_eq!(value.to_bits(), term(&scorer, &holdings, &vertices, &edges, 0, 0).value.to_bits());
+        assert_eq!(memo.prices, before);
+    }
+
     /// The open-board shortcut observes every site, intermediate vertex and edge obstruction.
     #[test]
     fn open_reach_matches_entries_with_each_obstruction() {
@@ -1090,6 +1279,146 @@ mod tests {
                 first.reach.sites(vertex, &Occupancy::default()),
                 rebuilt.reach.sites(vertex, &Occupancy::default())
             );
+        }
+    }
+
+    /// Projected occupancy keys remain exact when one thread alternates between adjacencies.
+    #[test]
+    fn fast_sites_memo_matches_entries_across_boards_and_layouts() {
+        let cases: Vec<_> = walk_fixtures().into_iter().map(|(topology, board)| {
+            let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+            (scorer, scrambled_owners(&topology))
+        }).collect();
+        assert_ne!(cases[0].0.reach.id, cases[1].0.reach.id);
+        for board in 0..20 {
+            for (scorer, boards) in &cases {
+                let (vertices, edges) = &boards[board];
+                for seat in 0..6 {
+                    let occupancy = Occupancy::new(scorer, vertices, edges, seat);
+                    for candidate in 0..scorer.reach.spans.len() as Vertex {
+                        let mut expected = [0; 3];
+                        let span = scorer.reach.spans[usize::from(candidate)].clone();
+                        for entry in &scorer.reach.entries[span] {
+                            if occupancy.blocked & (1 << entry.site) == 0
+                                && occupancy.rival_edges & entry.edges == 0
+                                && occupancy.rival_vertices & entry.through == 0
+                            {
+                                expected[entry.paid_builds] |= 1 << entry.site;
+                            }
+                        }
+                        expected[2] &= !expected[1];
+                        for _ in 0..2 {
+                            assert_eq!(scorer.reach.sites(candidate, &occupancy), expected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One memo remains exact across changed boards, own-road chains and both adjacencies.
+    #[test]
+    fn general_sites_memo_matches_fresh_walks_on_scrambled_boards() {
+        let mut memo = WalkMemo::default();
+        for (topology, board) in walk_fixtures() {
+            let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+            for (vertices, edges) in scrambled_owners(&topology) {
+                for seat in 0..6 {
+                    let occupancy = Occupancy::new(&scorer, &vertices, &edges, seat);
+                    for candidate in 0..topology.vertex_count() as Vertex {
+                        let mut sources = [0; 2];
+                        for (edge, to) in scorer.steps(candidate) {
+                            if occupancy.rival_edges & (1 << edge) == 0 {
+                                sources[usize::from(occupancy.own_edges & (1 << edge) == 0)] |= 1 << to;
+                            }
+                        }
+                        let expected = mask_walk(&scorer, &occupancy, candidate, sources);
+                        assert_eq!(memo.sites(&scorer, &occupancy, candidate), expected);
+                        let next = memo.next[usize::from(candidate)];
+                        assert_eq!(memo.sites(&scorer, &occupancy, candidate), expected);
+                        assert_eq!(memo.next[usize::from(candidate)], next);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every occupancy bit the walk read participates in validation, even on rejected edges.
+    #[test]
+    fn general_sites_memo_rejects_each_changed_read_bit() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let mut edges = vec![EMPTY; topology.edge_count()];
+        for (edge, to) in scorer.steps(0) {
+            edges[usize::from(edge)] = 0;
+            for (edge, _) in scorer.steps(to) {
+                edges[usize::from(edge)] = 0;
+            }
+        }
+        let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+        let mut memo = WalkMemo::default();
+        memo.sites(&scorer, &occupancy, 0);
+        let entry = memo.entries[0][0];
+        assert_ne!(entry.walk.vertices, 0);
+        assert_ne!(entry.walk.edges, 0);
+        assert!(entry.matches(scorer.reach.id, &occupancy));
+        assert!(!entry.matches(scorer.reach.id + 1, &occupancy));
+        for field in 0..4 {
+            let mask = if field < 2 { entry.walk.vertices } else { entry.walk.edges };
+            for bit in 0..128 {
+                let mut changed = occupancy;
+                let target = match field {
+                    0 => &mut changed.blocked,
+                    1 => &mut changed.rival_vertices,
+                    2 => &mut changed.own_edges,
+                    _ => &mut changed.rival_edges,
+                };
+                *target ^= 1 << bit;
+                assert_eq!(entry.matches(scorer.reach.id, &changed), mask & (1 << bit) == 0);
+            }
+        }
+    }
+
+    /// Word skips and partial words preserve the bytewise masks, including padded owner arrays.
+    #[test]
+    fn occupancy_word_scan_matches_each_owner_byte() {
+        for (topology, board) in walk_fixtures() {
+            let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+            for (vertices, edges) in scrambled_owners(&topology).into_iter().take(20) {
+                for padding in 0..8 {
+                    let mut vertices = vertices.clone();
+                    let mut edges = edges.clone();
+                    vertices.extend(std::iter::repeat_n(0, padding));
+                    edges.extend(std::iter::repeat_n(0, padding));
+                    for seat in 0..6 {
+                        let mut expected = Occupancy::default();
+                        for (vertex, owner) in vertices.iter().take(topology.vertex_count()).enumerate() {
+                            if *owner == EMPTY {
+                                continue;
+                            }
+                            let bit = 1 << vertex;
+                            if *owner == seat {
+                                expected.own_vertices |= bit;
+                            } else {
+                                expected.rival_vertices |= bit;
+                            }
+                            expected.blocked |= bit;
+                            for adjacent in scorer.vertex_adjacent(vertex as Vertex) {
+                                expected.blocked |= 1 << adjacent;
+                            }
+                        }
+                        for (edge, owner) in edges.iter().enumerate() {
+                            if *owner == seat {
+                                expected.own_edges |= 1 << edge;
+                            } else if *owner != EMPTY {
+                                expected.rival_edges |= 1 << edge;
+                            }
+                        }
+                        assert_eq!(Occupancy::new(&scorer, &vertices, &edges, seat), expected);
+                    }
+                }
+            }
         }
     }
 
