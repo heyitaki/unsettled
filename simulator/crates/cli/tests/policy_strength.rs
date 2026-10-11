@@ -6,7 +6,7 @@ use unsettled_engine::rules::{Resource, RuleConfig};
 use unsettled_engine::topology::{Layout, Topology};
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
-    EVAL2_SEED, EVAL3_SEED, EVAL_SEED, GATE2_SEED, GATE3_SEED, GATE_SEED,
+    EVAL2_SEED, EVAL3_SEED, EVAL_SEED, EvaluationDomain, GATE2_SEED, GATE3_SEED, GATE_SEED,
     TUNING2_SEED, TUNING3_SEED, TUNING_SEED,
 };
 use unsettled_sim::stats::wilson95;
@@ -61,12 +61,9 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
             .collect::<Vec<(Vec<Option<Resource>>, Vec<Option<u8>>, u8)>>()
     };
 
-    // Pairwise across all nine domains, not just tuning/eval: a held-out domain only holds
-    // its value as an unspent gate if it shares neither seed streams nor generated boards
-    // with the domains tuning work is free to burn. Boards are compared on both layouts
-    // because a domain that collided on only one of them would still leak through a run
-    // there, and every domain is runnable on either.
-    let domains = [
+    // Compare the nine old domains and all fifteen fourth-generation seat seeds on both
+    // layouts, including boards at different indices that a bare seat xor would overlap.
+    let mut domains = [
         ("tuning", TUNING_SEED),
         ("eval", EVAL_SEED),
         ("gate", GATE_SEED),
@@ -76,7 +73,15 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
         ("tuning3", TUNING3_SEED),
         ("eval3", EVAL3_SEED),
         ("gate3", GATE3_SEED),
-    ];
+    ]
+    .into_iter()
+    .map(|(name, seed)| (name.to_string(), seed))
+    .collect::<Vec<_>>();
+    for domain in [EvaluationDomain::Tuning4, EvaluationDomain::Eval4, EvaluationDomain::Gate4] {
+        for seats in 2..=6 {
+            domains.push((format!("{}-{seats}", domain.name()), domain.seed(seats)));
+        }
+    }
     let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {
         for (right_name, right) in &domains[index + 1..] {
@@ -86,10 +91,11 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
                 "{left_name} and {right_name} share evaluation seeds"
             );
             for (layout, seats) in layouts {
-                assert_ne!(
-                    boards(*left, layout, seats),
-                    boards(*right, layout, seats),
-                    "{left_name} and {right_name} generate the same {layout:?} boards"
+                let left_boards = boards(*left, layout, seats);
+                let right_boards = boards(*right, layout, seats);
+                assert!(
+                    left_boards.iter().all(|board| !right_boards.contains(board)),
+                    "{left_name} and {right_name} share {layout:?} boards"
                 );
             }
         }

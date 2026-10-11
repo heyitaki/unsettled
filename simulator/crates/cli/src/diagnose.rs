@@ -125,7 +125,7 @@ pub fn diagnose(request: DiagnoseRequest<'_>) -> Result<Diagnostics, String> {
         .boards
         .checked_mul(request.reps)
         .ok_or_else(|| "diagnostic game count overflow".to_string())?;
-    let domain_seed = request.domain.seed();
+    let domain_seed = request.domain.seed(request.seats);
     let mut boards = (0..request.boards)
         .map(|board_index| {
             generate_board(

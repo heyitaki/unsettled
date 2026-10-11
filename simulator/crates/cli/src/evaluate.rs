@@ -41,6 +41,12 @@ pub const TUNING3_SEED: u64 = 0x7a13_5eed_2026_1010;
 pub const EVAL3_SEED: u64 = 0xe7a3_5eed_2026_1010;
 pub const GATE3_SEED: u64 = 0x6a73_5eed_2026_1010;
 
+/// Fourth-generation domains, minted because seat counts on one layout share boards in
+/// the first three generations. These fold the seat count into the seed.
+pub const TUNING4_SEED: u64 = 0x7a14_5eed_2026_1010;
+pub const EVAL4_SEED: u64 = 0xe7a4_5eed_2026_1010;
+pub const GATE4_SEED: u64 = 0x6a74_5eed_2026_1010;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EvaluationDomain {
     Tuning,
@@ -52,6 +58,9 @@ pub enum EvaluationDomain {
     Tuning3,
     Eval3,
     Gate3,
+    Tuning4,
+    Eval4,
+    Gate4,
 }
 
 impl EvaluationDomain {
@@ -66,6 +75,9 @@ impl EvaluationDomain {
             "tuning3" => Ok(Self::Tuning3),
             "eval3" => Ok(Self::Eval3),
             "gate3" => Ok(Self::Gate3),
+            "tuning4" => Ok(Self::Tuning4),
+            "eval4" => Ok(Self::Eval4),
+            "gate4" => Ok(Self::Gate4),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
     }
@@ -81,10 +93,13 @@ impl EvaluationDomain {
             Self::Tuning3 => "tuning3",
             Self::Eval3 => "eval3",
             Self::Gate3 => "gate3",
+            Self::Tuning4 => "tuning4",
+            Self::Eval4 => "eval4",
+            Self::Gate4 => "gate4",
         }
     }
 
-    pub const fn seed(self) -> u64 {
+    pub fn seed(self, seats: usize) -> u64 {
         match self {
             Self::Tuning => TUNING_SEED,
             Self::Eval => EVAL_SEED,
@@ -95,6 +110,9 @@ impl EvaluationDomain {
             Self::Tuning3 => TUNING3_SEED,
             Self::Eval3 => EVAL3_SEED,
             Self::Gate3 => GATE3_SEED,
+            Self::Tuning4 => mix64(TUNING4_SEED ^ seats as u64),
+            Self::Eval4 => mix64(EVAL4_SEED ^ seats as u64),
+            Self::Gate4 => mix64(GATE4_SEED ^ seats as u64),
         }
     }
 }
@@ -270,7 +288,7 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
         .len()
         .checked_mul(units)
         .ok_or_else(|| "evaluation game count overflow".to_string())?;
-    let domain_seed = request.domain.seed();
+    let domain_seed = request.domain.seed(request.seats);
     let mut boards = (0..request.boards)
         .map(|board_index| {
             generate_board(

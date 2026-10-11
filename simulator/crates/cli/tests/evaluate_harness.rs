@@ -7,8 +7,9 @@ use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::topology::Layout;
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
-    EVAL2_SEED, EVAL3_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain, GATE2_SEED, GATE3_SEED, GATE_SEED,
-    TUNING2_SEED, TUNING3_SEED, TUNING_SEED, evaluate, evaluation_schedule,
+    EVAL2_SEED, EVAL3_SEED, EVAL4_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain,
+    GATE2_SEED, GATE3_SEED, GATE4_SEED, GATE_SEED, TUNING2_SEED, TUNING3_SEED, TUNING4_SEED,
+    TUNING_SEED, evaluate, evaluation_schedule,
     summarize_arm,
 };
 
@@ -500,9 +501,9 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
             .collect::<Vec<_>>()
     };
 
-    // Every domain the CLI accepts, pairwise, on both layouts: the seed stream a run
-    // consumes and the board set it generates must both be new to a held-out domain.
-    let domains = [
+    // Compare the nine old domains and all fifteen fourth-generation seat seeds on both
+    // layouts, including boards at different indices that a bare seat xor would overlap.
+    let mut domains = [
         ("tuning", TUNING_SEED),
         ("eval", EVAL_SEED),
         ("gate", GATE_SEED),
@@ -512,7 +513,15 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
         ("tuning3", TUNING3_SEED),
         ("eval3", EVAL3_SEED),
         ("gate3", GATE3_SEED),
-    ];
+    ]
+    .into_iter()
+    .map(|(name, seed)| (name.to_string(), seed))
+    .collect::<Vec<_>>();
+    for domain in [EvaluationDomain::Tuning4, EvaluationDomain::Eval4, EvaluationDomain::Gate4] {
+        for seats in 2..=6 {
+            domains.push((format!("{}-{seats}", domain.name()), domain.seed(seats)));
+        }
+    }
     let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {
         for (right_name, right) in &domains[index + 1..] {
@@ -521,17 +530,18 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
                 "{left_name} and {right_name} share evaluation seeds"
             );
             for (layout, seats) in layouts {
-                assert_ne!(
-                    boards(*left, layout, seats),
-                    boards(*right, layout, seats),
-                    "{left_name} and {right_name} generate the same {layout:?} boards"
+                let left_boards = boards(*left, layout, seats);
+                let right_boards = boards(*right, layout, seats);
+                assert!(
+                    left_boards.iter().all(|board| !right_boards.contains(board)),
+                    "{left_name} and {right_name} share {layout:?} boards"
                 );
             }
         }
     }
 }
 
-/// A domain is held out per layout, not per seat count: the seat count only sets the player
+/// An old domain is held out per layout, not per seat count: seats only set the player
 /// list, so board `i` has the same tiles and tokens at every seat count on one layout.
 #[test]
 fn seat_count_does_not_change_a_domains_boards() {
@@ -548,11 +558,29 @@ fn seat_count_does_not_change_a_domains_boards() {
     }
 }
 
-/// The nine spellings the CLI parses, and the one it must not.
+#[test]
+fn seat_count_changes_a_fourth_generation_domains_boards() {
+    let layouts: [(Layout, &[usize]); 2] =
+        [(Layout::Standard4, &[2, 3, 4]), (Layout::Extension6, &[5, 6])];
+    for (layout, seat_counts) in layouts {
+        let board = |seats| {
+            let seed = EvaluationDomain::Gate4.seed(seats);
+            let board = generate_board(layout, seats, mix64(seed ^ 3)).unwrap();
+            (board.tiles().to_vec(), board.tokens().to_vec())
+        };
+        for (index, &left) in seat_counts.iter().enumerate() {
+            for &right in &seat_counts[index + 1..] {
+                assert_ne!(board(left), board(right), "{layout:?} at {left} and {right} seats");
+            }
+        }
+    }
+}
+
+/// The twelve spellings the CLI parses, and the one it must not.
 ///
 /// `EvaluationDomain::seed` is the only place a run's whole seed stream is chosen, so a
 /// domain that parses to the wrong constant would silently spend a held-out set. The
-/// unknown case is pinned too: a typo like `tuning4` has to fail rather than fall back.
+/// unknown case is pinned too: a typo like `tuning5` has to fail rather than fall back.
 #[test]
 fn every_evaluation_domain_parses_to_its_own_named_seed() {
     let expected = [
@@ -569,12 +597,41 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
     for (spelling, domain, seed) in expected {
         assert_eq!(EvaluationDomain::parse(spelling), Ok(domain));
         assert_eq!(domain.name(), spelling);
-        assert_eq!(domain.seed(), seed);
+        for seats in 2..=6 {
+            assert_eq!(domain.seed(seats), seed);
+        }
+    }
+
+    for (spelling, domain, seed) in [
+        ("tuning4", EvaluationDomain::Tuning4, TUNING4_SEED),
+        ("eval4", EvaluationDomain::Eval4, EVAL4_SEED),
+        ("gate4", EvaluationDomain::Gate4, GATE4_SEED),
+    ] {
+        assert_eq!(EvaluationDomain::parse(spelling), Ok(domain));
+        assert_eq!(domain.name(), spelling);
+        let mut seeds = BTreeSet::new();
+        for seats in 2..=6 {
+            assert_eq!(domain.seed(seats), mix64(seed ^ seats as u64));
+            seeds.insert(domain.seed(seats));
+        }
+        assert_eq!(seeds.len(), 5, "{spelling} must have a distinct seed per seat count");
+    }
+
+    // The gate seeds the M-82 to M-86 preregistrations name, in decimal as a run reports them.
+    let gate4 = [
+        16890014424357517501,
+        9339080276862700003,
+        16013495161676280900,
+        15970491955241482323,
+        4584976607990361878_u64,
+    ];
+    for (seats, seed) in (2..=6).zip(gate4) {
+        assert_eq!(EvaluationDomain::Gate4.seed(seats), seed);
     }
 
     assert_eq!(
-        EvaluationDomain::parse("tuning4"),
-        Err("unknown evaluation domain tuning4".to_string())
+        EvaluationDomain::parse("tuning5"),
+        Err("unknown evaluation domain tuning5".to_string())
     );
 }
 
