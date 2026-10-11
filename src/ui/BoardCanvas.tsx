@@ -809,7 +809,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       // silhouette is widest; on a bare circle it stays centred.
       const labelY = marked
         ? point.y + TIER_BASE_Y[marked.tier] * TIER_SCALE[marked.tier] - 4.2
-        : point.y + 3.6
+        : point.y + 4.73
       const fill = mark.color
       const ink = mark.color ? readableInk(mark.color) : undefined
       const faded = mark.faded ? ' faded' : ''
