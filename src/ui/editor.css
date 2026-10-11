@@ -71,11 +71,9 @@ button.danger { color: var(--danger); }
 .hex-swatch { width: 20px; height: 22px; }
 .hex-swatch polygon { stroke: rgba(0,0,0,.18); stroke-width: 1; }
 .token-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-/* Match the board's number-token face (see .token-text). */
-.token-tools button { display: grid; place-items: center; align-content: center; gap: 2px; width: 100%; max-width: 54px; margin-inline: auto; aspect-ratio: 1; padding: 0; border-radius: 50%; font-family: Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; font-size: 21px; font-weight: 700; line-height: 1; border: 2.5px solid var(--ink); background: var(--page); }
-.token-tools button.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--page)); }
-.token-tools .hot { color: var(--danger); }
-.token-pips { height: 3px; background: radial-gradient(circle, currentColor 1.5px, transparent 1.9px) 0 0 / 4.5px 3px; }
+.token-tools button { display: grid; place-items: center; width: 100%; max-width: 54px; margin-inline: auto; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; }
+.token-tools svg { display: block; width: 100%; height: auto; }
+.token-tools .selected .token-disc { stroke: var(--accent); fill: color-mix(in srgb, var(--accent) 14%, var(--page)); }
 
 .draft-ribbon { display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 0 9px; margin-bottom: 12px; }
 .draft-ribbon-slot { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -404,6 +402,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .menu-trigger:hover:not(:disabled), .panel-dots:hover:not(:disabled) { color: var(--accent-dark); }
   .group-label .menu-trigger:hover:not(:disabled) { color: var(--ink); background: var(--tint); }
   .list-row-x:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .token-tools button:hover:not(:disabled), .token-tools button.selected:hover:not(:disabled) { background: none; }
+  .token-tools button:hover:not(.selected, :where(.phone-shell *)) .token-disc { fill: var(--tint); }
   .list-add:hover:not(:disabled) { color: var(--ink); background: transparent; }
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }
@@ -560,8 +560,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .phone-shell .tool-group + .tool-group { margin-top: 10px; padding-top: 10px; }
   .phone-shell .tool-grid, .phone-shell .token-tools { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
   .phone-shell .tool-grid::-webkit-scrollbar, .phone-shell .token-tools::-webkit-scrollbar { height: 0; }
-  .phone-shell .tool-grid button, .phone-shell .token-tools button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; min-height: 0; padding: 7px 6px; border-radius: var(--r-control); font-size: 11px; font-weight: 600; line-height: normal; overflow: visible; }
-  .phone-shell .token-tools button { width: 42px; min-width: 42px; margin: 0; justify-content: center; border-radius: 50%; padding: 0; gap: 2px; font-size: 15px; font-weight: 700; line-height: 1; }
+  .phone-shell .tool-grid button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; min-height: 0; padding: 7px 6px; border-radius: var(--r-control); font-size: 11px; font-weight: 600; line-height: normal; overflow: visible; }
+  .phone-shell .token-tools button { flex: none; width: 42px; min-width: 42px; min-height: 0; margin: 0; }
   .phone-shell .hex-swatch { width: 21px; height: 23px; }
   .phone-shell .player-grid button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; padding: 11px 13px; border: 0; border-radius: var(--r-row); background: var(--ink); color: var(--surface); }

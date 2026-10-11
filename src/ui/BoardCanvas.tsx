@@ -35,7 +35,7 @@ import {
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
 import { INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
-import { ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R } from './glyphs'
+import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
@@ -117,22 +117,6 @@ function hexPoints(coord: AxialCoord, radius = SIZE): string {
     const angle = (-90 + index * 60) * Math.PI / 180
     return `${point.x + radius * Math.cos(angle)},${point.y + radius * Math.sin(angle)}`
   }).join(' ')
-}
-
-function pipDots(number: number, x: number, y: number, override?: { fill: string; stroke: string }) {
-  const count = 6 - Math.abs(7 - number)
-  const fill = override?.fill ?? (number === 6 || number === 8 ? '#af2020' : INK_COLOR)
-  return Array.from({ length: count }, (_, index) => (
-    <circle
-      key={index}
-      cx={x + (index - (count - 1) / 2) * 4.2}
-      cy={y + 12}
-      r="1.6"
-      fill={fill}
-      stroke={override?.stroke}
-      strokeWidth={override ? 0.8 : undefined}
-    />
-  ))
 }
 
 interface PortLayout {
@@ -542,19 +526,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const tokenLayer = useMemo(() => board.hexes.map((hex) => {
     if (hex.numberToken === null) return null
     const point = center(hex.coord)
-    const hot = hex.numberToken === 6 || hex.numberToken === 8
     // On the robber's hex, draw only the disc here; its number + pips are
     // re-drawn in white above the robber below so they stay readable.
     const underRobber = board.robber !== null && axialKey(hex.coord) === axialKey(board.robber)
     return (
       <g key={`token:${axialKey(hex.coord)}`}>
-        <circle cx={point.x} cy={point.y} r="23" fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth="2.5" />
-        {!underRobber && (
-          <>
-            <text x={point.x} y={point.y + 6} textAnchor="middle" className={hot ? 'token-text hot' : 'token-text'}>{hex.numberToken}</text>
-            {pipDots(hex.numberToken, point.x, point.y)}
-          </>
-        )}
+        <NumberTokenFace number={hex.numberToken} x={point.x} y={point.y} discOnly={underRobber} />
       </g>
     )
   }), [board.hexes, board.robber])
@@ -592,7 +569,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         >
           {robberHex.numberToken}
         </text>
-        {pipDots(robberHex.numberToken, point.x, point.y, { fill: '#fff', stroke: '#1c1c1c' })}
+        <TokenPips number={robberHex.numberToken} x={point.x} y={point.y} override={{ fill: '#fff', stroke: '#1c1c1c' }} />
       </g>
     )
   }, [board.robber, board.hexes])

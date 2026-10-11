@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { boardMenu } from './boardMenu'
-import { pips } from '../model/board'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
 import { ContextMenu } from './ContextMenu'
@@ -8,6 +7,8 @@ import {
   DotsGlyph,
   GLYPH_MUTED,
   StructureGlyph,
+  NUMBER_TOKEN_EXTENT,
+  NumberTokenFace,
   type StructureShape,
 } from './glyphs'
 import { activeTab, useStore, type Tool } from './store'
@@ -16,6 +17,7 @@ const TILES: TileKind[] = [...RESOURCES, 'desert']
 const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
 
 const STRUCTURES: { key: StructureShape; label: string; tool: Tool; danger?: boolean }[] = [
+const TOKEN_VIEW_BOX = `${-NUMBER_TOKEN_EXTENT} ${-NUMBER_TOKEN_EXTENT} ${NUMBER_TOKEN_EXTENT * 2} ${NUMBER_TOKEN_EXTENT * 2}`
   { key: 'road', label: 'road', tool: { kind: 'piece', tier: 'road' } },
   { key: 'settlement', label: 'settlement', tool: { kind: 'piece', tier: 'settlement' } },
   { key: 'city', label: 'city', tool: { kind: 'piece', tier: 'city' } },
@@ -76,12 +78,14 @@ export function ToolGroups() {
           {TOKENS.map((number) => (
             <button
               type="button"
-              className={`${selected === `token:${number}` ? 'selected ' : ''}${number === 6 || number === 8 ? 'hot' : ''}`}
+              className={selected === `token:${number}` ? 'selected' : ''}
               key={number}
               onClick={() => selectTool({ kind: 'token', number })}
             >
-              {number}
-              <span className="token-pips" style={{ width: pips(number) * 4.5 }} />
+              aria-label={String(number)}
+              <svg viewBox={TOKEN_VIEW_BOX} aria-hidden="true">
+                <NumberTokenFace number={number} />
+              </svg>
             </button>
           ))}
         </div>

@@ -87,7 +87,7 @@ const PORT_POOLS: Record<LayoutId, readonly (Resource | null)[]> = {
   extension6: ['wood', 'sheep', 'sheep', 'wheat', 'brick', 'ore', null, null, null, null, null],
 }
 
-const isRedToken = (token: number): boolean => token === 6 || token === 8
+export const isRedToken = (token: number): boolean => token === 6 || token === 8
 
 function shuffle<T>(items: readonly T[]): T[] {
   const array = [...items]

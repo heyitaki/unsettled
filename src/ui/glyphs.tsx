@@ -1,11 +1,13 @@
+import { isRedToken, pips } from '../model/board'
 import type { Resource } from '../model/types'
-import { TILE_COLORS } from './colors'
+import { INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 
 // Shared inline icons, one flat family on a 20-unit grid (desktop spec D3,
 // option C): pieces are filled blocks of a player or tool colour with no
 // casing, counters and resources are filled silhouettes at the same weight, and
 // the line-art marks (anchor, trash) are drawn thick enough to sit beside them.
-// The board keeps its own piece shapes; only the robber's outline is shared.
+// The board keeps its own piece shapes; only the robber's outline and the
+// number token's face are shared.
 
 const PIECE_INK = '#30271f'
 /** The paper the cut-out detail of a flat glyph shows through. */
@@ -164,6 +166,53 @@ export function ResourceGlyph({ resource }: { resource: Resource }) {
         </svg>
       )
   }
+}
+
+/** A token's probability pips, centred under (x, y) in board units. */
+export function TokenPips({ number, x, y, override }: { number: number; x: number; y: number; override?: { fill: string; stroke: string } }) {
+  const count = pips(number)
+  const fill = override?.fill ?? (isRedToken(number) ? '#af2020' : INK_COLOR)
+  return Array.from({ length: count }, (_, index) => (
+    <circle
+      key={index}
+      cx={x + (index - (count - 1) / 2) * 4.2}
+      cy={y + 12}
+      r="1.6"
+      fill={fill}
+      stroke={override?.stroke}
+      strokeWidth={override ? 0.8 : undefined}
+    />
+  ))
+}
+
+const TOKEN_RADIUS = 23
+const TOKEN_STROKE = 2.5
+/** The token's outer radius in board units, stroke included: half the box a lone token needs. */
+export const NUMBER_TOKEN_EXTENT = TOKEN_RADIUS + TOKEN_STROKE / 2
+
+/**
+ * A number token in board units, centred on (x, y). The board and the tools
+ * palette both draw this one face, so the palette's tokens keep the board's
+ * proportions at any size.
+ */
+export function NumberTokenFace({ number, x = 0, y = 0, discOnly = false }: {
+  number: number
+  x?: number
+  y?: number
+  /** The disc without its number and pips. */
+  discOnly?: boolean
+}) {
+  return (
+    <>
+      <circle className="token-disc" cx={x} cy={y} r={TOKEN_RADIUS} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth={TOKEN_STROKE} />
+      {!discOnly && (
+        <>
+          <text x={x} y={y + 6} textAnchor="middle" className={isRedToken(number) ? 'token-text hot' : 'token-text'}>{number}</text>
+          <TokenPips number={number} x={x} y={y} />
+        </>
+      )}
+    </>
+  )
 }
 
 export type CounterShape = 'unknownCard' | 'devCard' | 'knight' | 'vpCard'
