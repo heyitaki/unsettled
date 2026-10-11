@@ -146,46 +146,47 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(2)
   })
 
-  test('steps back and forward through a completed draft without a claimed player', async ({ page }) => {
+  test('steps back and forward through a draft without a claimed player', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('.workspace')).toBeVisible()
     let board = setHexTile({ ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: null }, { q: 0, r: 0 }, 'ore')
     const grid = boardGrid(board.layout)
     const vertices = grid.vertexIds.filter((_, index) => index % 6 === 0).slice(0, 8)
-    draftOrder(board).forEach((playerId, index) => {
+    // One pick short of done: a finished draft shows Best moves, which has no step buttons.
+    draftOrder(board).slice(0, 7).forEach((playerId, index) => {
       board = placeBuilding(board, vertices[index], playerId, 'settlement')
     })
-    const edge = grid.edgeIds.find((edgeId) => edgeEndpointVertexIds(edgeId).includes(vertices[7]))!
-    board = placeRoad(board, edge, 'p1')
+    const edge = grid.edgeIds.find((edgeId) => edgeEndpointVertexIds(edgeId).includes(vertices[6]))!
+    board = placeRoad(board, edge, 'p2')
     await seedBoard(page, board)
 
     const panel = page.locator('.analysis-panel')
     const back = panel.getByRole('button', { name: 'Step back one pick' })
     const forward = panel.getByRole('button', { name: 'Step forward one pick' })
-    const red = page.locator('.board-canvas g[fill="#c23f38"]')
     const blue = page.locator('.board-canvas g[fill="#3063ba"]')
-    const road = page.locator('.board-canvas rect[fill="#c23f38"]')
+    const orange = page.locator('.board-canvas g[fill="#e58331"]')
+    const road = page.locator('.board-canvas rect[fill="#3063ba"]')
     await expect(panel.locator('.analysis-context')).toHaveCount(0)
     await expect(back).toBeEnabled()
     await expect(forward).toBeDisabled()
-    await expect(red).toHaveCount(2)
+    await expect(blue).toHaveCount(2)
     await expect(road).toHaveCount(1)
-    const placements = await red.evaluateAll((pieces) => pieces.map((piece) => piece.getAttribute('transform')))
-    await back.click()
-    await expect(red).toHaveCount(1)
-    await expect(road).toHaveCount(0)
+    const placements = await blue.evaluateAll((pieces) => pieces.map((piece) => piece.getAttribute('transform')))
     await back.click()
     await expect(blue).toHaveCount(1)
+    await expect(road).toHaveCount(0)
+    await back.click()
+    await expect(orange).toHaveCount(1)
     await forward.click()
-    await expect(blue).toHaveCount(2)
+    await expect(orange).toHaveCount(2)
 
     await panel.getByRole('button', { name: 'Pick 2: Blue', exact: true }).click()
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
     await expect(forward).toBeEnabled()
     await forward.click()
-    await expect(red).toHaveCount(2)
+    await expect(blue).toHaveCount(2)
     await expect(road).toHaveCount(1)
-    expect(await red.evaluateAll((pieces) => pieces.map((piece) => piece.getAttribute('transform')))).toEqual(placements)
+    expect(await blue.evaluateAll((pieces) => pieces.map((piece) => piece.getAttribute('transform')))).toEqual(placements)
     await expect(forward).toBeDisabled()
 
     await back.click()

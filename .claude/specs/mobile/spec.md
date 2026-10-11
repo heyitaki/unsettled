@@ -40,7 +40,7 @@ Undo prints as `Undo`, with no stack-depth count. The count is a quantity the us
 
 ### S2 · Draft ribbon
 
-Whenever the board has tiles, a row of numbered circles opens the analysis block (S5) under its heading and above the context line. Each circle is one pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, the current pick is ringed, and each of your own picks carries a dot beneath it, clear of the current-pick ring. Centred in the block. Each circle is a button named `Pick 3: Red` that claims its player, with `aria-pressed` reflecting the claim. Tapping the already claimed player does nothing. The slots come from draft inference without analysis predictions.
+Whenever the board has tiles, a row of numbered circles opens the analysis block (S5) under its heading and above the context line. Each circle is one pick in the snake, tinted to the player who takes it. Picks already taken are solid, later picks are faded, and the current pick is ringed; nothing marks your own picks, since the cards below are already yours. Centred in the block. Each circle is a button named `Pick 3: Red` that claims its player, with `aria-pressed` reflecting the claim. Tapping the already claimed player does nothing. The slots come from draft inference without analysis predictions.
 
 It leaves with the analysis block in build mode; nothing sits between the header and the board, so entering build mode does not shift the board.
 
@@ -64,7 +64,7 @@ The `19/19 terrain` and `4 pieces` counts are removed from this line on phones. 
 
 The block below the caption, and the reason the page exists.
 
-- Heading `Draft analysis` / `Best picks`, with round `Step back one pick` and `Step forward one pick` icon buttons on the right whenever the board has tiles, including an unclaimed or finished draft. Each button has a 44px touch target. Back removes the last snake picker's last settlement and its touching roads owned by that player, falling back to the last settlement in board order when that picker has none. It is disabled with no settlements, any upgraded building, or more settlements than draft picks. Forward restores the removed pick and roads. Each step is an ordinary board edit; the local forward list survives player claims while the building and road arrays stay identical, and is discarded by a piece edit, a tab switch, or store undo/redo. Forward is disabled when that list is empty or invalid.
+- Heading `Draft analysis` / `Best picks`, with round `Step back one pick` and `Step forward one pick` icon buttons on the right whenever the board has tiles, including an unclaimed draft. A finished draft shows Best moves (S10) instead, whose heading holds `Undo` and `Redo`. Each button has a 44px touch target. Back removes the last snake picker's last settlement and its touching roads owned by that player, falling back to the last settlement in board order when that picker has none. It is disabled with no settlements, any upgraded building, or more settlements than draft picks. Forward restores the removed pick and roads. Each step is an ordinary board edit; the local forward list survives player claims while the building and road arrays stay identical, and is discarded by a piece edit, a tab switch, or store undo/redo. Forward is disabled when that list is empty or invalid.
 - Context line: `<name> · Picking 3rd and 6th`. `<name>` is a picker, so claiming yourself is reachable here as well as from the roster.
 - Ranked recommendation cards. Each card shows the triple, the score, the survival line, the planned follow-up, and the factor pills.
 - Tapping a card draws its marks on the board **in the claimed player's colour**, with the planned second pick faded behind the first. A card may also carry a third mark, a stub of road along the edge its first pick opens; it is absent only when the pick opens nothing, or when `expansionWeight` is 0, which it has not been since the SP6 adoption put it at 0.1. If the board has been scrolled past, tapping a card scrolls the page back to it (B2).
@@ -120,6 +120,18 @@ The points ledger stays on desktop (O1). Below the snake draft, `Award holders` 
 Bottom of the screen, above the safe area. With the nav bar gone it no longer has to clear it.
 
 Save failures stay visible until resolved, with `Retry saving` and `Export backup` actions. A board saved again after it closed says so, and its rescued edits land as a separate board rather than over the newer save. Ordinary notices still dismiss automatically.
+
+### S10 · Best moves
+
+Once every starting settlement is placed the analysis block becomes Best moves: the same component and the same order as desktop D8 (heading, turn order, context line, table, action bar, recommendations, notes), on the main page so the table is in view while choosing a move. The Players screen stays for the roster.
+
+What differs on the phone:
+
+- `Undo` and `Redo` in the heading and every turn-order circle have a 44px touch target.
+- The dice are two rows of six rather than one row of eleven, each 44px tall, and the action bar buttons are 44px tall.
+- A card's cost chips show without selecting it, since there is no hover.
+- The table's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
+- A build or a robber move that needs a spot scrolls the board into view, as selecting a card does (S5).
 
 ## Behaviours that are not CSS
 

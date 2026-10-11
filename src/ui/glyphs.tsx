@@ -356,6 +356,24 @@ export function RedoGlyph() {
   )
 }
 
+export function ArrowLeftGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M16 10H4" />
+      <path d="M9 5 4 10l5 5" />
+    </svg>
+  )
+}
+
+export function ArrowRightGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M4 10h12" />
+      <path d="M11 5l5 5-5 5" />
+    </svg>
+  )
+}
+
 /** A die face, for the randomize action. */
 export function DiceGlyph() {
   return (

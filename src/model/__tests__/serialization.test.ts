@@ -101,3 +101,117 @@ describe('game serialization', () => {
     expect(parseGame({ ...game, board: { ...game.board, schemaVersion: 2 } })).toMatchObject({ ok: false })
   })
 })
+
+it('a game saved before turn tracking still loads', () => {
+  const board = createBoard('standard4')
+  const old = `{"schemaVersion":1,"board":${JSON.stringify(board)},"stats":{}}`
+  const awards = `{"schemaVersion":1,"board":${JSON.stringify(board)},"stats":{},"awards":{"longestRoad":null,"largestArmy":"aki"}}`
+  expect(parseGame(old)).toEqual({ ok: true, game: newGame(board) })
+  expect(parseGame(awards)).toEqual({ ok: true, game: { ...newGame(board), awards: { longestRoad: null, largestArmy: 'aki' } } })
+})
+
+it('turn and devHand round-trip through serializeGame and parseGame', () => {
+  const game = newGame(createBoard('standard4'))
+  const turn = { playerId: 'aki', rolled: 8, devPlayed: true, progressPlayed: { roadBuilding: 1, yearOfPlenty: 1, monopoly: 1 } }
+  const devHand = {
+    playerId: 'aki',
+    playable: { knight: 2, roadBuilding: 1, yearOfPlenty: 0, monopoly: 0 },
+    bought: { knight: 1, roadBuilding: 0, yearOfPlenty: 1, monopoly: 0 },
+  }
+  const awards = { longestRoad: null, largestArmy: 'aki' }
+  for (const withTurn of [false, true]) {
+    for (const withHand of [false, true]) {
+      for (const withAwards of [false, true]) {
+        const input = { ...game, ...(withTurn ? { turn } : {}), ...(withHand ? { devHand } : {}), ...(withAwards ? { awards } : {}) }
+        expect(parseGame(serializeGame(input))).toEqual({ ok: true, game: input })
+        expect(parseGame(input)).toEqual({ ok: true, game: input })
+      }
+    }
+  }
+  for (const rolled of [null, 2, 12]) {
+    const input = { ...game, turn: { ...turn, rolled } }
+    expect(parseGame(input)).toEqual({ ok: true, game: input })
+  }
+  const input = { ...game, turn, devHand, awards }
+  const result = parseGame(input)
+  expect(result.ok).toBe(true)
+  if (!result.ok) throw new Error(result.errors.join(', '))
+  const before = structuredClone(input)
+  expect(result.game.turn).not.toBe(turn)
+  expect(result.game.turn?.progressPlayed).not.toBe(turn.progressPlayed)
+  expect(result.game.devHand).not.toBe(devHand)
+  expect(result.game.devHand?.playable).not.toBe(devHand.playable)
+  expect(result.game.devHand?.bought).not.toBe(devHand.bought)
+  turn.progressPlayed.monopoly = 10
+  devHand.playable.knight = 10
+  devHand.bought.monopoly = 10
+  expect(result.game).toEqual(before)
+})
+
+it('rejects a turn or devHand that names a player outside the roster', () => {
+  const game = newGame(createBoard('standard4'))
+  const counts = { knight: 0, roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 }
+  for (const playerId of ['ghost', 'toString', '__proto__']) {
+    for (const field of [
+      { turn: { playerId, rolled: null, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } } },
+      { devHand: { playerId, playable: counts, bought: counts } },
+    ]) {
+      const result = parseGame({ ...game, ...field })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.errors).toHaveLength(1)
+    }
+  }
+})
+
+it('rejects malformed turn and devHand fields', () => {
+  const game = newGame(createBoard('standard4'))
+  const turn = { playerId: 'aki', rolled: null, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } }
+  const counts = { knight: 0, roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 }
+  const devHand = { playerId: 'aki', playable: counts, bought: counts }
+  const fields: unknown[] = [
+    ...[undefined, null, [], {}, { ...turn, rolled: 13 }, { ...turn, rolled: 1 }, { ...turn, rolled: 6.5 },
+      { ...turn, rolled: '6' }, { ...turn, devPlayed: 1 }, { ...turn, progressPlayed: -1 },
+      { ...turn, progressPlayed: 0.5 }, { ...turn, playerId: null }, { ...turn, extra: 1 },
+      { playerId: 'aki', rolled: null, devPlayed: false },
+    ].map((value) => ({ turn: value })),
+    ...[undefined, null, [], {}, { ...devHand, extra: 1 }, { playerId: 'aki', playable: counts },
+      { ...devHand, playable: { ...counts, knight: -1 } }, { ...devHand, bought: { ...counts, monopoly: -1 } },
+      { ...devHand, playable: { knight: 0, roadBuilding: 0, yearOfPlenty: 0 } },
+      { ...devHand, bought: { knight: 0, roadBuilding: 0, yearOfPlenty: 0 } },
+      { ...devHand, playable: { ...counts, extra: 0 } }, { ...devHand, bought: { ...counts, extra: 0 } },
+      { ...devHand, playable: null }, { ...devHand, bought: [] },
+      { ...devHand, playable: { ...counts, knight: 0.5 } }, { ...devHand, bought: { ...counts, knight: '1' } },
+    ].map((value) => ({ devHand: value })),
+  ]
+  for (const field of fields) {
+    const result = parseGame(Object.assign({}, game, field))
+    expect(result.ok, JSON.stringify(field)).toBe(false)
+    if (!result.ok) expect(result.errors).toHaveLength(1)
+  }
+})
+
+it('rejects an unknown top-level field', () => {
+  const game = newGame(createBoard('standard4'))
+  const result = parseGame({ ...game, turn: { playerId: 'aki', rolled: null, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } }, extra: true })
+  expect(result).toEqual({ ok: false, errors: ['Game contains missing or unknown top-level fields'] })
+  for (const missing of ['schemaVersion', 'board', 'stats'] as const) {
+    const input: Record<string, unknown> = { ...game }
+    delete input[missing]
+    expect(parseGame(input).ok).toBe(false)
+  }
+})
+
+it('progressPlayed requires exactly the three non-negative integer counts', () => {
+  const game = newGame(createBoard('standard4'))
+  const counts = { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 }
+  const invalid: unknown[] = [0, 2, null, [], { ...counts, knight: 0 }]
+  for (const kind of ['roadBuilding', 'yearOfPlenty', 'monopoly'] as const) {
+    const missing: Partial<typeof counts> = { ...counts }
+    delete missing[kind]
+    invalid.push(missing)
+    for (const value of [-1, 0.5, '1', null]) invalid.push({ ...counts, [kind]: value })
+  }
+  for (const progressPlayed of invalid) {
+    expect(parseGame({ ...game, turn: { playerId: 'aki', rolled: null, devPlayed: false, progressPlayed } }).ok, JSON.stringify(progressPlayed)).toBe(false)
+  }
+})

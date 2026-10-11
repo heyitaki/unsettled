@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Recommendation } from '../engine/analyze'
+import { draftIsComplete } from '../engine/draft'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'
 import type { Board, Resource, VertexId } from '../model/types'
@@ -8,6 +9,7 @@ import { useAnalysis } from './useAnalysis'
 import { useDraftSteps } from './useDraftSteps'
 import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
+import { BestMovesPanel } from './BestMovesPanel'
 import { PencilGlyph, PhotoGlyph, RedoGlyph, ResourceGlyph, StructureGlyph, UndoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
@@ -237,7 +239,6 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const emptyMessage: Partial<Record<typeof analysis.status, string>> = {
     'no-availability': 'No spot is likely to survive until your pick.',
     'no-production': 'Add number tokens to the board to analyze placements.',
-    complete: 'The draft is finished. Every starting settlement is placed.',
     'me-done': 'Your starting settlements are placed. Waiting on the rest of the draft.',
   }
 
@@ -382,7 +383,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   )
 
   const empty = boardIsEmpty(board)
-  return (
+  const panel = (
     <section className={className}>
       <div className="panel-heading">
         <div>
@@ -456,10 +457,15 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
           ) : body}
         </>
       )}
-      {/* Outside the empty branch: a successful import replaces the board
-          and drops that branch, and the dialog must outlive it to show any
-          parse issues. */}
-      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </section>
+  )
+  // The dialog is the panel's sibling at a fixed position: a successful import replaces the
+  // board, which drops the empty branch or swaps the whole panel for Best moves, and the
+  // dialog must outlive both to show any parse issues.
+  return (
+    <>
+      {!empty && draftIsComplete(board, analysis.draft) ? <BestMovesPanel className={className} /> : panel}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
+    </>
   )
 }

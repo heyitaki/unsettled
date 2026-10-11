@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run --exclude src/engine/__tests__/perf.test.ts && vitest run src/engine/__tests__/perf.test.ts",
+    "test": "vitest run --exclude src/engine/__tests__/perf.test.ts --exclude src/engine/advice/__tests__/advicePerf.test.ts && vitest run src/engine/__tests__/perf.test.ts && vitest run src/engine/advice/__tests__/advicePerf.test.ts",
     "test:e2e": "playwright test",
     "test:pwa": "playwright test --config playwright.production.config.ts",
     "typecheck": "tsc -b"

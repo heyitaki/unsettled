@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { AnalysisProvider } from './AnalysisProvider'
+import { AdviceProvider } from './AdviceProvider'
 import { useAnalysis } from './useAnalysis'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
@@ -51,5 +52,5 @@ function Shell() {
 }
 
 export function App() {
-  return <StoreProvider><AnalysisProvider><Shell /></AnalysisProvider></StoreProvider>
+  return <StoreProvider><AnalysisProvider><AdviceProvider><Shell /></AdviceProvider></AnalysisProvider></StoreProvider>
 }

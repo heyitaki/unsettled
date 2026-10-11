@@ -15,7 +15,13 @@ test('reloads offline and imports a board', async ({ page, context }) => {
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   await dialog.locator('input[type=file]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
   await expect(page.getByRole('button', { name: 'Rename board-endgame-pieces', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Best picks' })).toBeVisible()
+  // The fixture is a finished draft: the move adviser's wasm engine must answer from the precache.
+  await expect(page.getByRole('heading', { name: 'Best moves' })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Done' }).click()
+  await page.getByRole('button', { name: /^Turn 1: / }).click()
+  await page.getByRole('button', { name: 'Roll', exact: true }).click()
+  await page.getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
+  await expect(page.locator('.best-moves-panel .analysis-rank').first()).toBeVisible()
 })
 
 test('keeps import warnings open until Done and allows editing afterwards', async ({ page }) => {

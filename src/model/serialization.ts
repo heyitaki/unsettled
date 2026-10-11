@@ -1,6 +1,6 @@
 import { createBoard, validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
-import { newGame, reconcileStats, validateGameStats, type AwardHolders, type Game, type PlayerStats } from './game'
+import { DEV_KINDS, newGame, reconcileStats, validateGameStats, type AwardHolders, type DevHand, type DevKind, type Game, type PlayerStats, type TurnState } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
 type ParseBoardResult =
@@ -103,6 +103,13 @@ export function parseBoard(data: unknown): ParseBoardResult {
 
 const isCount = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0
 
+function normalizeDevCounts(value: unknown): Record<DevKind, number> | null {
+  if (!isRecord(value) || !exactKeys(value, DEV_KINDS) ||
+    !isCount(value.knight) || !isCount(value.roadBuilding) ||
+    !isCount(value.yearOfPlenty) || !isCount(value.monopoly)) return null
+  return { knight: value.knight, roadBuilding: value.roadBuilding, yearOfPlenty: value.yearOfPlenty, monopoly: value.monopoly }
+}
+
 function normalizePlayerStats(value: unknown): PlayerStats | null {
   if (!isRecord(value)) return null
   if (!exactKeys(value, ['hand', 'devCards', 'knights', 'vpCards', 'handUnknown'])) return null
@@ -135,21 +142,51 @@ export function parseGame(data: unknown): ParseGameResult {
   }
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
-  if (!exactKeys(value, ['schemaVersion', 'board', 'stats']) && !exactKeys(value, ['schemaVersion', 'board', 'stats', 'awards'])) {
+  if (!['schemaVersion', 'board', 'stats'].every((key) => Object.hasOwn(value, key)) ||
+    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand'].includes(key))) {
     return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
   }
   const parsedBoard = parseBoard(value.board)
   if (!parsedBoard.ok) return parsedBoard
+  const inRoster = (id: unknown): id is string =>
+    typeof id === 'string' && parsedBoard.board.players.some((player) => player.id === id)
   let awards: AwardHolders | undefined
-  if ('awards' in value) {
+  if (Object.hasOwn(value, 'awards')) {
     if (!isRecord(value.awards) || !exactKeys(value.awards, ['longestRoad', 'largestArmy'])) {
       return { ok: false, errors: ['Invalid award holders'] }
     }
     const { longestRoad, largestArmy } = value.awards
-    const validHolder = (id: unknown): id is string | null => id === null ||
-      typeof id === 'string' && parsedBoard.board.players.some((player) => player.id === id)
+    const validHolder = (id: unknown): id is string | null => id === null || inRoster(id)
     if (!validHolder(longestRoad) || !validHolder(largestArmy)) return { ok: false, errors: ['Award holder is not in the roster'] }
     awards = { longestRoad, largestArmy }
+  }
+  let turn: TurnState | undefined
+  if (Object.hasOwn(value, 'turn')) {
+    if (!isRecord(value.turn) || !exactKeys(value.turn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed'])) {
+      return { ok: false, errors: ['Invalid turn state'] }
+    }
+    const { playerId, rolled, devPlayed, progressPlayed } = value.turn
+    if (!inRoster(playerId) ||
+      !(rolled === null || isCount(rolled) && rolled >= 2 && rolled <= 12) ||
+      typeof devPlayed !== 'boolean' || !isRecord(progressPlayed) ||
+      !exactKeys(progressPlayed, ['roadBuilding', 'yearOfPlenty', 'monopoly']) ||
+      !isCount(progressPlayed.roadBuilding) || !isCount(progressPlayed.yearOfPlenty) || !isCount(progressPlayed.monopoly)) {
+      return { ok: false, errors: ['Invalid turn state'] }
+    }
+    turn = { playerId, rolled, devPlayed, progressPlayed: {
+      roadBuilding: progressPlayed.roadBuilding, yearOfPlenty: progressPlayed.yearOfPlenty, monopoly: progressPlayed.monopoly,
+    } }
+  }
+  let devHand: DevHand | undefined
+  if (Object.hasOwn(value, 'devHand')) {
+    if (!isRecord(value.devHand) || !exactKeys(value.devHand, ['playerId', 'playable', 'bought']) ||
+      !inRoster(value.devHand.playerId)) {
+      return { ok: false, errors: ['Invalid dev hand'] }
+    }
+    const playable = normalizeDevCounts(value.devHand.playable)
+    const bought = normalizeDevCounts(value.devHand.bought)
+    if (!playable || !bought) return { ok: false, errors: ['Invalid dev hand'] }
+    devHand = { playerId: value.devHand.playerId, playable, bought }
   }
   if (!isRecord(value.stats)) {
     return { ok: false, errors: ['Invalid player stats'] }
@@ -169,6 +206,8 @@ export function parseGame(data: unknown): ParseGameResult {
     board: parsedBoard.board,
     stats: reconcileStats(stats, parsedBoard.board.players),
     ...(awards === undefined ? {} : { awards }),
+    ...(turn === undefined ? {} : { turn }),
+    ...(devHand === undefined ? {} : { devHand }),
   }
   // reconcileStats zero-fills missing entries, so any surviving issue is a
   // stats key pointing at a player outside the roster.

@@ -79,7 +79,6 @@ button.selected.danger { color: #fff; }
 .draft-ribbon-slot { position: relative; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .draft-ribbon-slot.pending { opacity: .34; }
 .draft-ribbon-slot.now { box-shadow: 0 0 0 2px var(--paper-board), 0 0 0 3.5px var(--ink); }
-.draft-ribbon-slot.mine::after { content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
 
 .board-stage { position: static; padding: 12px; background: var(--paper-board); }
 /* min-height reserves the zoom chip's row: it only exists above 1x, and above
@@ -346,6 +345,60 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 .tally-header button { display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--muted); }
 .tally-header button.active { color: var(--accent); }
 
+.best-moves-panel .move-order { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; }
+.best-moves-panel .move-seat { flex: none; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--ink); font: 800 13px Inter, sans-serif; }
+.best-moves-panel .move-seat[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--paper-light), 0 0 0 5px var(--ink); }
+.best-moves-panel .move-context { margin: 10px 0 8px; text-align: center; }
+.move-context strong { color: var(--ink); }
+.move-label { margin: 12px 0 5px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.move-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.move-seg button { min-height: 0; border: 0; border-radius: 0; padding: 3px 9px; font-size: 10px; font-weight: 700; letter-spacing: .04em; transition: none; }
+.best-moves-panel button[aria-pressed="true"]:not(.move-seat):not(.analysis-row-select), .move-tray .primary { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+.best-moves-panel button[aria-pressed="true"]:not(.analysis-row-select) .stat-icon { filter: brightness(0) invert(1); }
+.move-table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.move-table th, .move-table td { padding: 5px 2px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.move-table thead th { color: var(--muted); font-size: 10px; font-weight: 700; }
+.move-table th:first-child { text-align: left; }
+.move-table tr.active > * { background: rgba(228,216,191,.6); font-weight: 700; }
+.move-table tbody tr { cursor: pointer; }
+.move-table .move-who { display: flex; align-items: center; gap: 5px; max-width: 76px; overflow: hidden; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: inherit; font-weight: inherit; text-align: left; }
+.move-who .swatch { flex: none; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--ink); }
+.move-range { color: var(--muted); font-weight: 400; }
+.move-mine { margin: 7px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; font-size: 11px; color: var(--muted); }
+.move-mine b { color: var(--ink); font-weight: 700; margin-right: 2px; }
+.move-mine > span { padding: 2px 7px; border-radius: 5px; background: var(--paper-deep); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.move-mine > span.has { color: var(--ink); background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 800; }
+.move-mine > span.new { color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px var(--muted); opacity: .6; }
+.move-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.move-chip { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 7px; background: #f9f5ea; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.move-chip button { width: 22px; min-height: 0; padding: 4px 0; border: 0; background: transparent; font-size: 12px; }
+.move-edit { margin-top: 6px; padding: 8px; border-radius: 9px; background: var(--paper-deep); display: grid; gap: 6px; font-size: 11px; color: var(--muted); }
+.move-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.move-bar button { padding: 9px 4px; font-size: 12px; font-weight: 700; }
+.move-tray { margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; background: #f9f5ea; display: grid; gap: 8px; font-size: 12px; }
+.move-tray p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.move-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.move-pick > span { flex: none; color: var(--muted); font-size: 11px; }
+.move-pick > span:first-child { min-width: 62px; }
+.move-pick b { color: var(--ink); }
+.move-pick button { padding: 5px 8px; font-size: 11.5px; }
+.move-tray select { font: inherit; padding: 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper-light); color: var(--ink); }
+.move-discard { display: grid; gap: 6px; }
+.move-dice { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; }
+.move-dice button { padding: 7px 0; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.move-dice .seven { border-color: var(--accent-dark); color: var(--accent-dark); }
+.move-verdict { padding: 7px 9px; border-radius: 8px; background: var(--paper-deep); font-size: 12px; line-height: 1.45; }
+.best-moves-panel .analysis-row.current { border-color: var(--ink); background: #f9f5ea; box-shadow: none; }
+.best-moves-panel .move-dashed { border-style: dashed; background: rgba(187,76,50,.04); }
+.move-dashed .analysis-row-select { grid-template-columns: minmax(0, 1fr); }
+.best-moves-panel .analysis-row-body { gap: 2px; }
+.move-reason { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.move-costs { display: none; margin-top: 4px; }
+.move-costs.expanded { display: flex; }
+.move-notes { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+.move-advice-error { font-size: 12px; }
+.best-moves-panel .stat-icon { width: 13px; height: 13px; vertical-align: -2px; }
+
 @media (hover: hover) {
   button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(55,45,32,.35); box-shadow: 0 4px 10px rgba(55,45,32,.08); }
   .menu-trigger:hover:not(:disabled), .panel-dots:hover:not(:disabled) { transform: none; border-color: transparent; box-shadow: none; color: var(--accent-dark); }
@@ -436,6 +489,18 @@ input, select { border: 1px solid var(--line); border-radius: 7px; padding: 8px;
 
 /* The phone arm: App mounts PhoneShell here, so nothing of the Workspace tree is styled. */
 @media (max-width: 760px) {
+  .phone-block.best-moves-panel { margin: 0; padding: 14px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .phone-block.best-moves-panel .panel-heading h2 { font-size: 21px; }
+  .best-moves-panel .draft-step { width: 44px; height: 44px; }
+  .best-moves-panel .move-seat { position: relative; }
+  .best-moves-panel .move-seat::before { content: ''; position: absolute; width: 44px; height: 44px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  .best-moves-panel .move-order { gap: 14px; padding: 7px; }
+  .best-moves-panel .move-bar button { min-height: 44px; padding: 12px 4px; }
+  .best-moves-panel .move-dice { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .best-moves-panel .move-dice button { min-height: 44px; padding: 11px 0; }
+  .best-moves-panel .move-costs { display: flex; }
+  .best-moves-panel .move-chip button { width: 30px; min-height: 44px; padding: 9px 0; }
+
   /* On the root, not body: the overscroll canvas only takes body's background if the root's is transparent. */
   :root { background: var(--paper-board); }
   /* The page is the one scroller and a thumb needs no scrollbar for it. */

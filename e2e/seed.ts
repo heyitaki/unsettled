@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import type { Game } from '../src/model/game'
 import type { Board } from '../src/model/types'
 
 /** The roster `seedUnclaimedRoster` writes, in the order the claim row renders it. */
@@ -21,20 +22,21 @@ export async function seedUnclaimedRoster(page: Page) {
 }
 
 /**
- * Writes `fields` over the stored board, a whole `Board` replacing it. The tab's active player
- * goes with them, since the seeded roster need not hold that id.
+ * Writes `fields` over the stored board, a whole `Board` replacing it, and `stats` over the
+ * game's per-player stats. The tab's active player goes with them, since the seeded roster need
+ * not hold that id.
  */
-export async function seedBoard(page: Page, fields: Partial<Board>) {
-  await page.addInitScript((seed) => {
+export async function seedBoard(page: Page, fields: Partial<Board>, stats: Game['stats'] = {}) {
+  await page.addInitScript(({ seed, stats }) => {
     const key = 'unsettled.workspace.v1'
     const raw = localStorage.getItem(key)
     if (raw === null) return
     const workspace = JSON.parse(raw)
     Object.assign(workspace.tabs[0].game.board, seed)
-    workspace.tabs[0].game.stats = {}
+    workspace.tabs[0].game.stats = stats
     delete workspace.tabs[0].activePlayerId
     localStorage.setItem(key, JSON.stringify(workspace))
-  }, fields)
+  }, { seed: fields, stats })
   await page.reload()
 }
 

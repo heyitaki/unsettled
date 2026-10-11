@@ -1,0 +1,333 @@
+<title>Best moves mock-up</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: the app's own paper palette and type. A working prototype of one panel, shown in a phone frame and as the desktop right-rail panel; glyph options and open rulings sit below. Single theme on purpose: it mocks the app, which has one. */
+:root {
+  --paper: #f1ead9; --paper-deep: #e4d8bf; --paper-light: #f8f3e8; --card: #f9f5ea;
+  --ink: #2d2924; --muted: #776f64; --line: rgba(55,45,32,.16);
+  --accent: #bb4c32; --accent-dark: #8f3425; --page: #cfc3a9;
+  --wood: #3f7d4a; --sheep: #9bc45a; --wheat: #e0b23c; --brick: #b9553a; --ore: #7d8794;
+  --display: Georgia, "Times New Roman", serif;
+  --body: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font-family: var(--body); padding-block: 22px 40px; padding-inline: 16px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { margin: 0; font: 800 28px/1.1 var(--display); letter-spacing: -.02em; text-wrap: balance; }
+.lede { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; max-width: 65ch; }
+.eyebrow { display: block; color: var(--accent-dark); font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+button { font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 7px 10px; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+button:disabled { opacity: .42; cursor: default; }
+button.primary, button[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent-dark); }
+.jumps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.jumps button { font-size: 12px; font-weight: 700; }
+.jumps span { color: var(--muted); font-size: 12px; }
+.frames { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+.frame { min-width: 0; display: grid; gap: 6px; }
+.frame-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.phone { width: min(390px, 100%); border-radius: 26px; border: 1px solid var(--line); background: var(--paper); overflow: hidden; }
+.phone-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; font: 800 18px var(--display); }
+.phone-bar span { color: var(--muted); font: 600 11px var(--body); }
+.board { background: var(--paper-deep); padding: 6px; }
+.board svg { display: block; width: 100%; height: auto; }
+.desk { width: min(372px, 100%); }
+.panel { background: var(--paper-light); border: 1px solid rgba(255,255,255,.65); border-radius: 18px; box-shadow: inset 0 0 0 1px var(--line); padding: 17px; }
+.phone .panel { border: 0; border-radius: 0; box-shadow: none; background: transparent; padding: 14px; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.heading h2 { margin: 2px 0 0; font: 700 21px/1.1 var(--display); }
+.round { width: 32px; height: 32px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; }
+.phone .round { width: 44px; height: 44px; }
+.order { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; }
+.seat { position: relative; width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 1.5px solid var(--ink); color: #fff; font: 800 13px var(--body); }
+.seat[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--paper-light), 0 0 0 5px var(--ink); }
+.context { margin: 10px 0 8px; color: var(--muted); font-size: 12px; text-align: center; }
+.context strong { color: var(--ink); }
+.label { margin: 12px 0 5px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 3px 9px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 2px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-size: 10px; font-weight: 700; }
+td:first-child, th:first-child { text-align: left; }
+tr.active td { background: rgba(228,216,191,.6); font-weight: 700; }
+tbody tr { cursor: pointer; }
+.who { display: inline-flex; align-items: center; gap: 5px; max-width: 76px; overflow: hidden; text-overflow: ellipsis; }
+.swatch { flex: none; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--ink); }
+.range { color: var(--muted); font-weight: 400; }
+.mine { margin: 7px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 5px; font-size: 11px; color: var(--muted); }
+.mine b { color: var(--ink); font-weight: 700; margin-right: 2px; }
+.mine span { padding: 2px 7px; border-radius: 5px; background: var(--paper-deep); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mine span.has { color: var(--ink); background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 800; }
+.mine span.new { color: var(--muted); background: transparent; box-shadow: inset 0 0 0 1px var(--muted); font-weight: 600; opacity: .6; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip button { width: 22px; padding: 4px 0; border: 0; background: transparent; font-size: 12px; }
+.phone .chip button { width: 30px; padding: 9px 0; }
+.edit { margin-top: 6px; padding: 8px; border-radius: 9px; background: var(--paper-deep); display: grid; gap: 6px; font-size: 11px; color: var(--muted); }
+.res { display: inline-block; width: 10px; height: 13px; border-radius: 2.5px; vertical-align: -2px; }
+.res.wood { background: var(--wood); } .res.sheep { background: var(--sheep); } .res.wheat { background: var(--wheat); } .res.brick { background: var(--brick); } .res.ore { background: var(--ore); }
+.bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.bar button { padding: 9px 4px; font-size: 12px; font-weight: 700; }
+.phone .bar button { padding: 12px 4px; }
+.tray { margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--card); display: grid; gap: 8px; font-size: 12px; }
+.tray p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.tray .pick { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.tray .pick > span { flex: none; min-width: 62px; color: var(--muted); font-size: 11px; }
+.tray .pick button { padding: 5px 8px; font-size: 11.5px; }
+.tray select { font: inherit; padding: 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper-light); color: var(--ink); }
+.dice { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 3px; }
+.dice button { padding: 7px 0; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.phone .dice { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.phone .dice button { padding: 11px 0; }
+.dice .seven { border-color: var(--accent-dark); color: var(--accent-dark); }
+.verdict { padding: 7px 9px; border-radius: 8px; background: var(--paper-deep); font-size: 12px; line-height: 1.45; }
+.verdict b { font-weight: 800; }
+.list { display: grid; gap: 6px; }
+.row { border: 1px solid var(--line); border-radius: 13px; background: var(--card); overflow: hidden; }
+.row.current { border-color: var(--ink); }
+.row.dashed { border-style: dashed; background: rgba(187,76,50,.04); }
+.select { width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 9px 10px; border: 0; border-radius: 0; background: transparent; text-align: left; }
+.dashed .select { grid-template-columns: minmax(0, 1fr); }
+.rank { display: grid; place-items: center; width: 26px; height: 26px; border: 1.5px solid var(--ink); border-radius: 50%; color: #fff; font: 800 13px var(--body); }
+.body { min-width: 0; display: grid; gap: 2px; }
+.line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.line strong { min-width: 0; font: 700 13px/1.3 var(--body); }
+.score { flex: none; font: 800 15px/1 var(--body); font-variant-numeric: tabular-nums; }
+.title { display: block; color: var(--accent-dark); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.reason { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.costs { display: flex; flex-wrap: wrap; gap: 3px 6px; margin-top: 4px; }
+.costs span { padding: 2px 6px; border-radius: 5px; background: var(--paper-deep); color: var(--muted); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 9px 10px; border-top: 1px solid var(--line); background: rgba(228,216,191,.34); }
+.actions button { padding: 9px; border-radius: 9px; font-size: 12px; font-weight: 700; }
+.actions .pick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.actions .pick button { padding: 5px 8px; font-size: 11px; }
+.notes { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+.card { background: var(--paper-light); border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px; }
+.card h2 { margin: 0; font: 700 17px var(--display); }
+.card ol { margin: 0; padding-left: 20px; display: grid; gap: 7px; font-size: 13px; line-height: 1.5; max-width: 70ch; }
+.card p { margin: 0; font-size: 13px; color: var(--muted); max-width: 70ch; line-height: 1.5; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Unsettled · mock-up · version 5</span>
+    <h1>Best moves</h1>
+    <p class="lede">A working sketch: the turn-order circles, the table, the six actions and the dice all respond. Both frames show the same component and share one state.</p>
+  </header>
+  <div class="jumps"><span>Jump to</span>
+    <button id="jump-before" data-jump="before">Before the roll</button>
+    <button id="jump-eight" data-jump="eight">Rolled 8</button>
+    <button id="jump-seven" data-jump="seven">A seven</button>
+    <button id="jump-trade" data-jump="trade">A trade</button>
+    <button id="jump-red" data-jump="red">Red's turn</button>
+  </div>
+  <div class="frames">
+    <div class="frame">
+      <span class="frame-label">Phone, one scrolling page</span>
+      <div class="phone">
+        <div class="phone-bar">Unsettled <span>Friday game</span></div>
+        <div class="board"><svg id="board" viewBox="0 0 300 190" role="img" aria-label="Part of the board with the selected move marked"></svg></div>
+        <div id="phone-panel"></div>
+      </div>
+    </div>
+    <div class="frame desk">
+      <span class="frame-label">Desktop, right rail</span>
+      <div id="desk-panel"></div>
+    </div>
+  </div>
+  <section class="card">
+    <h2>Settled</h2>
+    <ol>
+      <li><b>One active player.</b> Tapping a circle makes it that player's turn: the advice is theirs and the six actions record for them. End turn moves the ring to the next seat.</li>
+      <li><b>No dot under a circle,</b> here or in the draft ribbon. The ring is the only mark; who you are shows in the table and the roster.</li>
+      <li><b>Straight arrows</b> for undo and redo.</li>
+      <li><b>The table</b> sits under the turn order in both trees, with your own dev cards broken out by type beneath it; a card bought this turn is greyed until it can be played.</li>
+      <li><b>Apply is on every recommendation.</b> It commits when the advice is the whole fact, and otherwise opens the matching action filled in.</li>
+      <li><b>Trade advice covers one shape,</b> one or two cards of one resource for one card of another. Other trades can be recorded but get no verdict.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const RES = ['wood', 'sheep', 'wheat', 'brick', 'ore'];
+const P = [{ id: 'aki', name: 'aki', color: '#3063ba', me: true }, { id: 'red', name: 'Red', color: '#c23f38' }, { id: 'orange', name: 'Orange', color: '#e58331' }, { id: 'green', name: 'Green', color: '#5d9e52' }];
+const POINTS = { aki: [2, 2, '4', '2', '1', 7], red: [2, 2, '6 ★', '1', '?', 8], orange: [3, 1, '3', '0', '?', 5], green: [2, 1, '2', '3 ★', '?', 6] };
+const PROD = { 8: { aki: [0, 0, 2, 0, 1], red: [0, 0, 1, 0, 0] }, 5: { orange: [0, 0, 0, 1, 0], green: [0, 1, 0, 0, 0] }, 6: { aki: [0, 0, 1, 0, 0] }, 9: { red: [1, 0, 0, 0, 0] } };
+const GLYPHS = {
+  hook: ['Hooked', '<path d="M4 8h8a4 4 0 0 1 0 8H8"/><path d="M7 5 4 8l3 3"/>', '<path d="M16 8H8a4 4 0 0 0 0 8h4"/><path d="M13 5l3 3-3 3"/>'],
+  chevron: ['Chevrons', '<path d="M12 4 6 10l6 6"/>', '<path d="M8 4l6 6-6 6"/>'],
+  arrow: ['Straight', '<path d="M16 10H4"/><path d="M9 5 4 10l5 5"/>', '<path d="M4 10h12"/><path d="M11 5l5 5-5 5"/>'],
+  skip: ['Skip', '<path d="M5 4v12"/><path d="M15 4 8 10l7 6z" fill="currentColor"/>', '<path d="M15 4v12"/><path d="M5 4l7 6-7 6z" fill="currentColor"/>'],
+};
+const svg = (inner) => `<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+const R = (name, text) => `<span class="res ${name}"></span>${text ?? ''}`;
+const hex = (name, n) => `<span style="white-space:nowrap">${R(name)} ${n}</span>`;
+const hands = () => ({ aki: { lo: [1, 1, 2, 0, 2], unk: 0, dev: 2 }, red: { lo: [1, 0, 2, 0, 0], unk: 2, dev: 2 }, orange: { lo: [0, 2, 0, 1, 0], unk: 0, dev: 0 }, green: { lo: [0, 0, 0, 0, 0], unk: 4, dev: 1 } });
+let glyph = 'arrow';
+let st;
+const reset = (over = {}) => { st = { active: 0, rolled: null, open: 'roll', selected: null, table: 'cards', editing: null, picks: {}, hands: hands(), log: '', ...over }; };
+const total = (h) => h.lo.reduce((a, b) => a + b, 0) + h.unk;
+const active = () => P[st.active];
+const whose = () => active().me ? 'Your' : `${active().name}'s`;
+const JUMPS = {
+  before: () => reset(),
+  eight: () => { reset(); roll(8); },
+  seven: () => { reset({ hands: { ...hands(), aki: { lo: [1, 1, 4, 0, 3], unk: 0, dev: 1 }, red: { lo: [1, 0, 3, 0, 0], unk: 4, dev: 2 } } }); roll(7); },
+  trade: () => { reset({ active: 1, rolled: 9, open: 'trade', log: `Rolled 9 · Red ${R('wood', '+1')}`, picks: { with: 'aki', give: 'brick', get: 'wheat' } }); },
+  red: () => reset({ active: 1 }),
+};
+function roll(n) {
+  st.rolled = n; st.selected = null;
+  if (n === 7) { st.open = 'roll'; st.log = 'Rolled 7 · nobody produces'; return; }
+  const gains = PROD[n] ?? {};
+  const parts = Object.entries(gains).map(([id, g]) => { g.forEach((v, i) => { st.hands[id].lo[i] += v; }); return `${P.find((p) => p.id === id).name} ${g.map((v, i) => v ? R(RES[i], `+${v}`) : '').join(' ')}`; });
+  st.open = null; st.log = `Rolled ${n} · ${parts.length ? parts.join(' · ') : 'nobody produces in this sample'}`;
+}
+
+function recs() {
+  const me = active().me;
+  if (st.rolled === 7) return { hint: 'Record the discards and the robber above. The ranked moves follow.' };
+  if (st.rolled === null) return me
+    ? { block: { id: 'knight', mark: 'hex', title: 'Before you roll', text: `Play Knight: robber to ${hex('ore', 8)}, steal from Red`, reason: `Frees your ${hex('wheat', 6)} (5 pips blocked) and Red leads on 8 VP`, apply: 'Apply', pick: ['Stole', RES] } }
+    : { block: { id: 'hold', title: `Before ${active().name} rolls`, text: 'Hold: no dev card is worth playing yet', reason: 'Nothing playable is known', apply: null } };
+  if (!me) return { rows: [
+    { id: 'road', mark: 'road', text: `Build road toward ${hex('wheat', 9)} · ${hex('brick', 5)}`, score: '62.4', reason: 'Opens a settlement spot worth 9.2', costs: ['−1 wood', '−1 brick'], apply: 'Apply' },
+    { id: 'pass', text: 'Pass', score: '0.0', reason: 'End the turn here', costs: [], apply: 'End turn' }] };
+  return { rows: [
+    { id: 'city', mark: 'vertex', text: `Upgrade to city · ${hex('wheat', 8)} · ${hex('ore', 5)} · ${hex('sheep', 10)}`, score: '10,013.4', reason: 'Production +13.0, scarcity +0.4', costs: ['−2 wheat', '−3 ore'], apply: 'Apply' },
+    { id: 'offer', text: `Offer 1 ${R('wheat')} for 1 ${R('brick')}`, score: '55.1', reason: 'Gets you to a road; Orange gains least from it', costs: [], apply: 'Apply: who accepted?' },
+    { id: 'dev', text: 'Buy a development card', score: '41.2', reason: 'Largest Army is one knight away', costs: ['−1 sheep', '−1 wheat', '−1 ore'], apply: 'Apply', pick: ['Drew', ['Knight', 'Road building', 'Year of plenty', 'Monopoly', 'VP']] },
+    { id: 'pass', text: 'Pass', score: '0.0', reason: 'End the turn here', costs: [], apply: 'End turn' }] };
+}
+
+function pickRow(label, group, options) {
+  return `<div class="pick"><span>${label}</span>${options.map(([value, text]) => `<button type="button" data-pick="${group}:${value}" aria-pressed="${st.picks[group] === value}">${text}</button>`).join('')}</div>`;
+}
+const resOptions = RES.map((r) => [r, R(r)]);
+const count = (id, n) => `<select id="${id}" aria-label="How many">${[1, 2, 3, 4].map((v) => `<option${v === n ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+
+function tray(prefix) {
+  const a = active();
+  const others = P.filter((p) => p !== a).map((p) => [p.id, p.name]);
+  if (st.open === 'roll') {
+    const dice = `<div class="dice">${[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `<button type="button" data-roll="${n}" class="${n === 7 ? 'seven' : ''}">${n}</button>`).join('')}</div>`;
+    if (st.rolled !== 7) return `<div class="tray">${dice}</div>`;
+    const over = P.filter((p) => total(st.hands[p.id]) > 7);
+    const discards = over.map((p) => `<div class="pick"><span><b style="color:var(--ink)">${p.name}</b> · ${total(st.hands[p.id])} cards</span>${p.me ? `discard 4: ${R('wheat', '×2')} ${R('wood', '×1')} ${R('sheep', '×1')}` : 'discards 4, types not seen'} <button type="button" class="primary">Record</button>${p.me ? '' : '<button type="button">Enter types</button>'}</div>`).join('');
+    const robber = a.me
+      ? `<div class="pick"><span><b style="color:var(--ink)">Robber</b></span>to ${hex('ore', 8)}, steal from Red <button type="button" data-select="robber" aria-pressed="${st.selected === 'robber'}">Show</button></div>${pickRow('Stole', 'stole', resOptions)}<button type="button" class="primary">Record robber</button>`
+      : `<p>Tap the hex ${a.name} moved the robber to, then who was robbed.</p>${pickRow('Robbed', 'victim', others)}`;
+    return `<div class="tray"><p>A seven. Everyone holding more than 7 cards discards half.</p>${discards || '<p>Nobody is over 7 cards.</p>'}${robber}</div>`;
+  }
+  if (st.open === 'trade') {
+    const withOptions = [['bank', 'Bank 4:1'], ['port', `${R('wheat')} port 2:1`], ...others];
+    const answering = st.picks.with === 'aki';
+    return `<div class="tray">${pickRow('With', 'with', withOptions)}
+      <div class="pick"><span>${a.name} gives</span>${count(`${prefix}-give-n`, 2)}${RES.map((r) => `<button type="button" data-pick="give:${r}" aria-pressed="${st.picks.give === r}">${R(r)}</button>`).join('')}</div>
+      <div class="pick"><span>and gets</span>${count(`${prefix}-get-n`, 1)}${RES.map((r) => `<button type="button" data-pick="get:${r}" aria-pressed="${st.picks.get === r}">${R(r)}</button>`).join('')}</div>
+      ${answering ? `<div class="verdict">Advice for you: <b>Decline</b> (−0.42). Two brick helps you less than the wheat helps Red, who is one build from winning.</div>` : ''}
+      <button type="button" class="primary">Record trade</button></div>`;
+  }
+  if (st.open === 'build') return `<div class="tray">${pickRow('Piece', 'piece', [['road', `Road ${R('wood')}${R('brick')}`], ['settlement', `Settlement ${R('wood')}${R('brick')}${R('sheep')}${R('wheat')}`], ['city', `City ${R('wheat', '×2')} ${R('ore', '×3')}`]])}<p>Then tap the spot on the board. The cost comes off ${a.me ? 'your' : `${a.name}'s`} hand, known cards first.</p></div>`;
+  if (st.open === 'buy') return `<div class="tray"><p>${a.name} pays ${R('sheep')} ${R('wheat')} ${R('ore')}.</p>${a.me ? pickRow('Drew', 'drew', [['knight', 'Knight'], ['road', 'Road building'], ['plenty', 'Year of plenty'], ['mono', 'Monopoly'], ['vp', 'VP']]) : ''}<button type="button" class="primary">Record</button></div>`;
+  if (st.open === 'play') {
+    const kind = st.picks.card;
+    const more = kind === 'plenty' ? pickRow('Takes', 'plenty1', resOptions) + pickRow('and', 'plenty2', resOptions)
+      : kind === 'mono' ? pickRow('Names', 'mono', resOptions) + `<div class="pick"><span>Took</span>${others.map(([id, name]) => `${name} ${count(`${prefix}-mono-${id}`, 1)}`).join(' ')}</div>`
+      : kind === 'road' ? '<p>Tap the two road spots on the board.</p>'
+      : kind === 'knight' ? '<p>Then the robber move, as on a seven. Knights played goes up by one.</p>' : '';
+    return `<div class="tray">${pickRow('Card', 'card', [['knight', 'Knight'], ['road', 'Road building'], ['plenty', 'Year of plenty'], ['mono', 'Monopoly']])}${more}${kind ? '<button type="button" class="primary">Record</button>' : ''}</div>`;
+  }
+  return '';
+}
+
+function table() {
+  const head = st.table === 'cards' ? [...RES.map((r) => R(r)), 'Σ', 'Dev'] : ['Sett', 'City', 'Road', 'Kn', 'VPc', 'VP'];
+  const rows = P.map((p, i) => {
+    const h = st.hands[p.id];
+    const cells = st.table === 'cards'
+      ? [...h.lo.map((v) => h.unk ? `<span class="range">${v}–${v + h.unk}</span>` : v), total(h), h.dev]
+      : POINTS[p.id];
+    return `<tr class="${i === st.active ? 'active' : ''}" data-edit="${p.id}"><td><span class="who"><span class="swatch" style="background:${p.color}"></span>${p.name}</span></td>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+  }).join('');
+  const e = st.editing && P.find((p) => p.id === st.editing);
+  const chip = (label, n, key) => `<span class="chip"><button type="button" data-adj="${key}:-1" aria-label="Fewer">−</button>${label} ${n}<button type="button" data-adj="${key}:1" aria-label="More">+</button></span>`;
+  const DEV = [['Knight', 1], ['Road building', 0], ['Year of plenty', 0], ['Monopoly', 1, true], ['VP', 1]];
+  const mine = `<p class="mine"><b>Your dev cards</b>${DEV.map(([name, n, bought]) => `<span class="${n ? 'has' : ''} ${bought ? 'new' : ''}" ${bought ? 'title="Bought this turn, playable next turn"' : ''}>${name} ${n}</span>`).join('')}</p>`;
+  const edit = !e ? '' : `<div class="edit">Correct ${e.name} by hand<div class="chips">${RES.map((r, i) => chip(R(r), st.hands[e.id].lo[i], i)).join('')}${chip('Unseen', st.hands[e.id].unk, 'unk')}${e.me ? DEV.map(([name, n]) => `<span class="chip"><button type="button" aria-label="Fewer">−</button>${name} ${n}<button type="button" aria-label="More">+</button></span>`).join('') : chip('Dev', st.hands[e.id].dev, 'dev')}</div></div>`;
+  return `<div class="label"><span>Table</span><span class="seg"><button type="button" data-table="cards" aria-pressed="${st.table === 'cards'}">Cards</button><button type="button" data-table="points" aria-pressed="${st.table === 'points'}">Points</button></span></div>
+    <table><thead><tr><th></th>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>${mine}${edit}`;
+}
+
+function card(row, index, phone) {
+  const current = st.selected === row.id;
+  const pick = row.pick ? `<div class="pick">${row.pick[0]}: ${row.pick[1].map((p) => `<button type="button">${RES.includes(p) ? R(p) : p}</button>`).join('')}</div>` : '';
+  const actions = current && row.apply ? `<div class="actions">${pick}<button type="button" class="primary">${row.apply}</button><button type="button" data-clear>Clear</button></div>` : '';
+  const costs = (phone || current) && row.costs?.length ? `<span class="costs">${row.costs.map((c) => `<span>${c}</span>`).join('')}</span>` : '';
+  const lead = row.title ? '' : `<span class="rank" style="background:${active().color}">${index + 1}</span>`;
+  return `<div class="row ${row.title ? 'dashed' : ''} ${current ? 'current' : ''}"><button type="button" class="select" data-select="${row.id}">${lead}<span class="body">${row.title ? `<span class="title">${row.title}</span>` : ''}<span class="line"><strong>${row.text}</strong>${row.score ? `<span class="score">${row.score}</span>` : ''}</span><span class="reason">${row.reason}</span>${costs}</span></button>${actions}</div>`;
+}
+
+function panel(phone) {
+  const a = active();
+  const r = recs();
+  const bar = [['roll', st.rolled === null ? 'Roll' : `Rolled ${st.rolled}`], ['trade', 'Trade'], ['build', 'Build'], ['buy', 'Buy dev card'], ['play', 'Play dev card'], ['end', 'End turn']];
+  const notes = ['Dev deck: 14 left', 'Bank estimated: 6 cards of unknown type', ...(a.me || !st.hands[a.id].unk ? [] : [`${st.hands[a.id].unk} of ${a.name}'s cards are of unknown type and ignored`]), 'Super cities count for production and points but are never suggested'];
+  return `<section class="panel">
+    <div class="heading"><div><span class="eyebrow">${whose()} turn</span><h2>Best moves</h2></div>
+      <div style="display:flex;gap:4px"><button type="button" class="round" aria-label="Undo">${svg(GLYPHS[glyph][1])}</button><button type="button" class="round" aria-label="Redo" disabled>${svg(GLYPHS[glyph][2])}</button></div></div>
+    <div class="order" role="group" aria-label="Turn order">${P.map((p, i) => `<button type="button" class="seat" style="background:${p.color}" data-active="${i}" aria-pressed="${i === st.active}" aria-label="Turn ${i + 1}: ${p.name}" title="Turn ${i + 1}: ${p.name}">${i + 1}</button>`).join('')}</div>
+    <p class="context"><strong>${a.name}</strong> · ${st.log || 'not rolled yet'}</p>
+    ${table()}
+    <div class="label"><span>${a.me ? 'Record your turn' : `Record ${a.name}'s turn`}</span></div>
+    <div class="bar">${bar.map(([id, text]) => `<button type="button" data-open="${id}" aria-pressed="${st.open === id}">${text}</button>`).join('')}</div>
+    ${tray(phone ? 'p' : 'd')}
+    <div class="label"><span>${a.me ? 'Your best moves' : `Best moves for ${a.name}`}</span></div>
+    ${r.hint ? `<p class="reason">${r.hint}</p>` : `<div class="list">${[...(r.block ? [r.block] : []), ...(r.rows ?? [])].map((row, i) => card(row, r.block ? i - 1 : i, phone)).join('')}</div>`}
+    <ul class="notes">${notes.map((n) => `<li>${n}</li>`).join('')}</ul>
+  </section>`;
+}
+
+function board() {
+  const pts = (cx, cy, r = 34) => [0, 1, 2, 3, 4, 5].map((i) => { const a = Math.PI / 180 * (60 * i - 30); return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+  const tiles = [[62, 60, 'wheat', 6], [121, 60, 'ore', 8], [180, 60, 'sheep', 10], [239, 60, 'wood', 4], [91.5, 111, 'wheat', 8], [150.5, 111, 'ore', 5], [209.5, 111, 'brick', 5], [121, 162, 'sheep', 3], [180, 162, 'wheat', 9]];
+  const r = recs();
+  const mark = st.selected === 'robber' ? 'hex' : [...(r.rows ?? []), r.block].filter(Boolean).find((row) => row.id === st.selected)?.mark;
+  const color = active().color;
+  let out = tiles.map(([x, y, res, n]) => `<polygon points="${pts(x, y).map((p) => p.join(',')).join(' ')}" fill="var(--${res})" fill-opacity=".55" stroke="var(--paper)" stroke-width="2"/><circle cx="${x}" cy="${y}" r="10" fill="var(--paper-light)"/><text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)" font-family="Inter, sans-serif">${n}</text>`).join('');
+  const v = pts(150.5, 111)[5];
+  const w = pts(209.5, 111);
+  out += `<rect x="${v[0] - 6}" y="${v[1] - 6}" width="12" height="12" rx="2" fill="${P[0].color}" stroke="var(--ink)"/><rect x="${w[5][0] - 6}" y="${w[5][1] - 6}" width="12" height="12" rx="2" fill="${P[1].color}" stroke="var(--ink)"/><circle cx="62" cy="60" r="7" fill="var(--ink)"/>`;
+  if (mark === 'vertex') out += `<circle cx="${v[0]}" cy="${v[1]}" r="13" fill="none" stroke="${color}" stroke-width="3"/>`;
+  if (mark === 'hex') out += `<polygon points="${pts(121, 60, 30).map((p) => p.join(',')).join(' ')}" fill="none" stroke="${color}" stroke-width="3.5" stroke-dasharray="7 4"/>`;
+  if (mark === 'road') out += `<line x1="${w[5][0]}" y1="${w[5][1]}" x2="${w[0][0]}" y2="${w[0][1]}" stroke="${color}" stroke-width="6" stroke-linecap="round"/>`;
+  document.getElementById('board').innerHTML = out;
+}
+
+function render() {
+  document.getElementById('phone-panel').innerHTML = panel(true);
+  document.getElementById('desk-panel').innerHTML = panel(false);
+  board();
+}
+document.addEventListener('click', (event) => {
+  const el = event.target.closest('[data-jump],[data-active],[data-open],[data-roll],[data-select],[data-clear],[data-table],[data-pick],[data-adj],[data-glyph],[data-edit]');
+  if (!el) return;
+  const d = el.dataset;
+  if (d.jump) JUMPS[d.jump]();
+  else if (d.glyph) glyph = d.glyph;
+  else if (d.active) reset({ active: Number(d.active), hands: st.hands, table: st.table });
+  else if (d.open === 'end') reset({ active: (st.active + 1) % P.length, hands: st.hands, table: st.table });
+  else if (d.open) { st.open = st.open === d.open ? null : d.open; }
+  else if (d.roll) roll(Number(d.roll));
+  else if (d.select) st.selected = st.selected === d.select ? null : d.select;
+  else if ('clear' in d) st.selected = null;
+  else if (d.table) st.table = d.table;
+  else if (d.pick) { const [group, value] = d.pick.split(':'); st.picks[group] = value; }
+  else if (d.adj) { const [key, delta] = d.adj.split(':'); const h = st.hands[st.editing]; if (key === 'unk' || key === 'dev') h[key] = Math.max(0, h[key] + Number(delta)); else h.lo[key] = Math.max(0, h.lo[key] + Number(delta)); }
+  else if (d.edit) st.editing = st.editing === d.edit ? null : d.edit;
+  render();
+});
+reset();
+render();
+</script>

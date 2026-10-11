@@ -6,9 +6,8 @@ import { activeTab, useStore } from './store'
 
 /**
  * The snake draft as a row (spec S2, D4): one circle per pick, tinted to the
- * player who takes it. Taken picks are solid, later ones faded, the current
- * one ringed, and each of the claimed player's own picks carries a dot beneath
- * it. Clicking a circle claims its player.
+ * player who takes it. Taken picks are solid, later ones faded and the current
+ * one ringed. Clicking a circle claims its player.
  */
 export function DraftRibbon() {
   const { state, dispatch } = useStore()
@@ -23,7 +22,6 @@ export function DraftRibbon() {
         const classes = ['draft-ribbon-slot']
         if (!slot.placed && !slot.current) classes.push('pending')
         if (slot.current) classes.push('now')
-        if (slot.mine) classes.push('mine')
         return (
           <button
             type="button"
