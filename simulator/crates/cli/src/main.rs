@@ -309,7 +309,8 @@ fn tournament(args: TournamentArgs) -> Result<(), String> {
     {
         return Err("tournament boards must be draft-empty".into());
     }
-    let heuristics = parse_heuristics(&heuristic_names, seats)?;
+    // The games take their seat count from the boards, which a --board file can set.
+    let heuristics = parse_heuristics(&heuristic_names, boards[0].seats())?;
     prepare_app_formula_boards(&mut boards, &topology, &heuristics);
     let policy = parse_policy(&policy_name)?;
     let schedule = tournament_schedule(boards.len(), reps, heuristics.len());

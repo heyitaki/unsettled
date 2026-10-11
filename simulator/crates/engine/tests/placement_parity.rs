@@ -13,8 +13,9 @@ use unsettled_engine::topology::{Topology, Vertex};
 use unsettled_engine::wire::WireBoard;
 
 const TOLERANCE: f64 = 1e-9;
-const REQUIRED_CLASSES: [&str; 43] = [
+const REQUIRED_CLASSES: [&str; 44] = [
     "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12", "W13", "W14", "W15",
+    "W16",
     "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "P1", "P2", "P3", "P4",
     "P5", "H1", "H2", "H3", "H4", "F1", "F2", "G1", "G2", "G3", "G4", "G5", "G6",
 ];

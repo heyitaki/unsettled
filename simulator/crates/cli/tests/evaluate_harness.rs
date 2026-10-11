@@ -531,6 +531,23 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
     }
 }
 
+/// A domain is held out per layout, not per seat count: the seat count only sets the player
+/// list, so board `i` has the same tiles and tokens at every seat count on one layout.
+#[test]
+fn seat_count_does_not_change_a_domains_boards() {
+    let layouts: [(Layout, &[usize]); 2] =
+        [(Layout::Standard4, &[2, 3, 4]), (Layout::Extension6, &[5, 6])];
+    for (layout, seat_counts) in layouts {
+        let board = |seats| {
+            let board = generate_board(layout, seats, mix64(TUNING_SEED ^ 3)).unwrap();
+            (board.tiles().to_vec(), board.tokens().to_vec())
+        };
+        for &seats in seat_counts {
+            assert_eq!(board(seats), board(seat_counts[0]), "{layout:?} at {seats} seats");
+        }
+    }
+}
+
 /// The nine spellings the CLI parses, and the one it must not.
 ///
 /// `EvaluationDomain::seed` is the only place a run's whole seed stream is chosen, so a

@@ -667,6 +667,23 @@ const cases: CaseInput[] = [
     slot: { seats: 4, slot: 0 },
   },
   {
+    // The vector two, three and five seats ship: both leaves a seat count has adopted.
+    id: 'seat-vector-first-pick',
+    covers: ['W16'],
+    board: standard,
+    weights: weightsForSeats(2),
+    candidate: threeHex,
+    receivesGrant: true,
+  },
+  {
+    id: 'seat-vector-with-holding',
+    covers: ['W16'],
+    board: expansionBoard,
+    weights: weightsForSeats(2),
+    holdings: [expansionHolding],
+    candidate: expansionCandidate,
+  },
+  {
     id: 'real-endgame-pieces',
     covers: ['F2'],
     board: endgame,

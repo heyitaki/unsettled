@@ -18,9 +18,9 @@ Run helper (not committed): `sc.py` in the session scratchpad (the session resta
 | 8 | 5 seats: same | done |
 | 9 | 6 seats: same | done |
 | 10 | Spend ledger in `programme.md`, outcome table in the programme file, `CLAUDE.md`, `simulator/README.md`, memory | done |
-| 11 | Three passes checking every quoted number against its run output | not started |
-| 12 | Final gates: `npm test`, `npm run typecheck`, `npm run lint`, `cargo test` in both profiles; `/selfreview`; final commit | not started |
-| 13 | Move this file to `docs/plans/completed/` | not started |
+| 11 | Three passes checking every quoted number against its run output | done |
+| 12 | Final gates: `npm test`, `npm run typecheck`, `npm run lint`, `cargo test` in both profiles; `/selfreview`; final commit | done |
+| 13 | Move this file to `docs/plans/completed/` | done |
 
 ## Per-seat state
 
@@ -32,3 +32,4 @@ Filled as runs complete: sized `B`, survivors, verdicts, M numbers. Run logs and
 - **5 seats, M-76.** Pilot (100 boards) 158.301s (82.1 games/s), widest half-width 2.5981pp (`port_hi`), cap (120 min) binds, `B` = 4500. Screen: 7009.206s, zero illegal actions, `base` 8991 of 45000 (pass). `diversity_hi` `better` (+0.838pp). `coverage_lo` `inconclusive` at +0.709pp, retry at 18000 boards writes `runs/m76-seats5-retry`. Retry: `better` (+0.754pp). Combine pass against `sc_s2_combined.json`: neither removal `better`, `base` `worse` at -1.509pp. Candidate: the combined vector. M-77 `eval3` at 18000 boards: `better`, +1.738pp. M-78 `gate3`: `better`, +1.524pp. **Adopted**: `SEAT_WEIGHT_OVERRIDES[5] = { coverageExponent: 1.0, diversityWeight: 3.2 }`. `eval3` and `gate3` are spent at five seats.
 - **6 seats, M-79 to M-81.** Pilot 100 boards, 253.610s; `B` = 2500 (cap binds). Screen: no `better`; `coverage_lo` +0.577pp and `diversity_hi` +0.330pp earned the retry. Retry at 10000 boards: `coverage_lo` `better` +0.853pp, `diversity_hi` `inconclusive` +0.570pp, dropped unresolved. One survivor, no combine pass; candidate is `sc_coverage_lo.json`. M-79 written. M-80 `eval3` at 10000 boards: `better`, +0.782pp. M-81 `gate3`: `better`, +0.689pp on `[+0.532pp, +0.847pp]`. **Adopted**: `SEAT_WEIGHT_OVERRIDES[6] = { coverageExponent: 1.0 }`. `eval3` and `gate3` are now spent at all five seat counts.
 - **Number checks.** Three passes are done for M-67 to M-78 with the scratchpad scripts: `check_numbers.py` (every prose number traced to a run output), `pass2.py` (every pp figure paired with the arm named beside it and every pooled row checked against the raw `evaluation.json`), `pass3.py` (provenance figures, win counts and per-seat rows against the raw artifacts). Repeat all three for the six-seat entries.
+- **Review, 2026-10-10.** `/selfreview` found that seat count does not change generated boards, so seat counts on one layout share boards in every domain. Corrected in the programme file, the ledger, `contracts.md`, the `evaluate.rs` comment and a note after M-81; pinned by `seat_count_does_not_change_a_domains_boards`. Also fixed: `tournament` resolved `{seats}` from `--seats` instead of the boards' seat count; added two parity cases (`W16`) on the shipped seat vector.

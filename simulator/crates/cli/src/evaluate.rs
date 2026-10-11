@@ -35,8 +35,8 @@ pub const EVAL2_SEED: u64 = 0xe7a2_5eed_2026_0902;
 pub const GATE2_SEED: u64 = 0x6a72_5eed_2026_0902;
 
 /// Third-generation domains, minted for the seat-count weights programme because all six
-/// earlier domains are spent. One generation serves all five seat counts: board generation
-/// consumes layout and seat count, so each seat count draws its own boards.
+/// earlier domains are spent. One generation served all five seat counts, and seat counts on
+/// one layout share its boards: the seat count only sets a generated board's player list.
 pub const TUNING3_SEED: u64 = 0x7a13_5eed_2026_1010;
 pub const EVAL3_SEED: u64 = 0xe7a3_5eed_2026_1010;
 pub const GATE3_SEED: u64 = 0x6a73_5eed_2026_1010;
