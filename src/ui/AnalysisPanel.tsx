@@ -433,7 +433,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         </div>
       ) : (
         <>
-          <p className="analysis-context">
+          <div className="analysis-context">
             <MenuSelect
               ariaLabel="Which player is you"
               value={board.mePlayerId}
@@ -443,7 +443,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
               <strong>{me.name}</strong>
             </MenuSelect>
             {` · Picking ${pickText}`}
-          </p>
+          </div>
           {warnings}
           {pending ? <p role="status">Analyzing placements…</p> : error ? (
             <div role="alert">
