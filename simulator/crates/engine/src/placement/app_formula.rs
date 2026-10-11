@@ -318,7 +318,7 @@ pub fn hand_value(weights: &EngineWeights, counts: &[f64; RESOURCE_COUNT]) -> f6
 }
 
 /// A vertex sits on at most three edges and three neighbouring vertices, in every layout.
-const VERTEX_FANOUT: usize = 3;
+pub(super) const VERTEX_FANOUT: usize = 3;
 
 #[derive(Clone, Debug)]
 pub struct AppFormulaScorer {
@@ -567,10 +567,10 @@ impl AppFormulaScorer {
     pub fn steps(&self, vertex: Vertex) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
         let links = &self.links[usize::from(vertex)];
         links
-            .adjacent()
+            .edge_to
             .iter()
-            .enumerate()
-            .map(move |(slot, neighbor)| (links.edge_to[slot], *neighbor))
+            .copied()
+            .zip(links.adjacent().iter().copied())
     }
 
     pub(super) fn weights(&self) -> &EngineWeights {

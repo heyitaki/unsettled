@@ -255,7 +255,7 @@ fn setup_road(
     seat: u8,
     vertex: Vertex,
 ) -> Edge {
-    if let Some(edge) = scorer.expansion_road(vertex_owner, edge_owner, seat, vertex) {
+    if let Some(edge) = expansion::row_road(scorer, vertex_owner, edge_owner, seat, vertex) {
         return edge;
     }
     let mut selected = topology.vertex_edges(vertex)[0];
