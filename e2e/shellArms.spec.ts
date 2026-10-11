@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { createBoard, draftOrder, placeBuilding, placeRoad, setHexTile } from '../src/model/board'
 import { edgeEndpointVertexIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
+import type { Board } from '../src/model/types'
 import { LISTED_PICKS } from '../src/ui/restMarks'
 import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 
@@ -602,6 +604,26 @@ test.describe('desktop', () => {
      only cell that flexes, so this is where it gets squeezed out. */
   test.describe('at the narrowest three-column width', () => {
     test.use({ viewport: { width: 1121, height: 900 } })
+
+    test('a six-player draft ribbon shrinks its circles to fit the rail', async ({ page }) => {
+      const board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
+      await page.goto('')
+      await seedBoard(page, { ...board, players: [...board.players, { id: 'p6', name: 'Violet', color: '#7a4fa3' }], mePlayerId: 'p1' })
+      const panel = page.locator('.analysis-panel')
+      const slots = panel.locator('.draft-ribbon-slot')
+      await expect(slots).toHaveCount(12)
+      const ribbon = (await panel.locator('.draft-ribbon').boundingBox())!
+      const boxes = await slots.evaluateAll((elements) => elements.map((element) => {
+        const { left, right, width, height } = element.getBoundingClientRect()
+        return { left, right, width, height }
+      }))
+      expect(boxes[0].left).toBeGreaterThanOrEqual(ribbon.x - 0.5)
+      expect(boxes[11].right).toBeLessThanOrEqual(ribbon.x + ribbon.width + 0.5)
+      // Still circles, only smaller than the 30px they are when the row fits.
+      for (const box of boxes) expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(0.5)
+      expect(boxes[0].width).toBeLessThan(30)
+      await snap(page, 'desktop-draft-ribbon-six', false)
+    })
 
     test('leaves the roster name a cell of its own instead of running it under the YOU chip', async ({ page }) => {
       await page.goto('')

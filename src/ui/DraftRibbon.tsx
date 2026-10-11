@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { inferDraftState } from '../engine/draft'
 import { setMe } from '../model/board'
 import { readableInk } from './colors'
@@ -14,7 +15,7 @@ export function DraftRibbon() {
   const { board } = activeTab(state).game
   const slots = draftSlots(board, inferDraftState(board))
   return (
-    <div className="draft-ribbon" aria-label="Snake draft order">
+    <div className="draft-ribbon" aria-label="Snake draft order" style={{ '--slots': slots.length } as CSSProperties}>
       {slots.map((slot, index) => {
         const player = board.players.find((candidate) => candidate.id === slot.playerId)
         if (!player) return null

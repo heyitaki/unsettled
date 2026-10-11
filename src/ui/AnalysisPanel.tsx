@@ -10,7 +10,7 @@ import { useDraftSteps } from './useDraftSteps'
 import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
 import { BestMovesPanel } from './BestMovesPanel'
-import { PencilGlyph, PhotoGlyph, RedoGlyph, ResourceGlyph, StructureGlyph, UndoGlyph } from './glyphs'
+import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
@@ -390,10 +390,10 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         {!empty && (
           <div className="draft-steps">
             <button type="button" className="draft-step" aria-label="Step back one pick" title="Step back one pick" disabled={!canStepBack} onClick={stepBack}>
-              <UndoGlyph />
+              <ArrowLeftGlyph />
             </button>
             <button type="button" className="draft-step" aria-label="Step forward one pick" title="Step forward one pick" disabled={!canStepForward} onClick={stepForward}>
-              <RedoGlyph />
+              <ArrowRightGlyph />
             </button>
           </div>
         )}
