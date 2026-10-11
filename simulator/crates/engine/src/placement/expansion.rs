@@ -4,7 +4,9 @@
 //! class pins the two against each other. The walk reads the occupancy the scorer is handed, so it
 //! is the one component that depends on where everybody else's pieces stand.
 
-use super::app_formula::{AppFormulaScorer, Holdings, VERTEX_FANOUT, js_max};
+use std::sync::Arc;
+
+use super::app_formula::{AppFormulaScorer, Holdings, SitePricer, VERTEX_FANOUT, VertexLinks, js_max};
 use crate::rng::mix64;
 use crate::state::EMPTY;
 use crate::topology::{Edge, Vertex};
@@ -41,23 +43,45 @@ struct ReachEntry {
 }
 
 #[derive(Clone, Debug, Default)]
+struct OpenReach {
+    edges: u128,
+    through: u128,
+    sites: u128,
+    masks: [u128; 3],
+}
+
+#[derive(Clone, Debug, Default)]
 pub(super) struct ReachTable {
     entries: Vec<ReachEntry>,
     spans: Vec<std::ops::Range<usize>>,
     near_edges: Vec<u128>,
+    open: Vec<OpenReach>,
 }
 
 impl ReachTable {
-    pub(super) fn new(scorer: &AppFormulaScorer, vertices: usize) -> Self {
+    pub(super) fn shared(links: &[VertexLinks]) -> Arc<Self> {
+        LAST_REACH.with_borrow_mut(|last| {
+            if let Some((held, table)) = last {
+                if held == links {
+                    return Arc::clone(table);
+                }
+            }
+            let table = Arc::new(Self::new(links));
+            *last = Some((links.to_vec(), Arc::clone(&table)));
+            table
+        })
+    }
+
+    fn new(links: &[VertexLinks]) -> Self {
         let mut table = Self::default();
-        for index in 0..vertices {
+        for index in 0..links.len() {
             let vertex = index as Vertex;
             let start = table.entries.len();
             let mut near_edges = 0;
-            let is_site = |site| site != vertex && !scorer.vertex_adjacent(vertex).contains(&site);
-            for (first, a) in scorer.steps(vertex) {
+            let is_site = |site| site != vertex && !links[index].adjacent().contains(&site);
+            for (first, a) in links[index].steps() {
                 near_edges |= 1 << first;
-                for (second, b) in scorer.steps(a) {
+                for (second, b) in links[usize::from(a)].steps() {
                     near_edges |= 1 << second;
                     let edges = (1 << first) | (1 << second);
                     if is_site(b) {
@@ -68,9 +92,9 @@ impl ReachTable {
                             through: 1 << a,
                         });
                     }
-                    for (third, c) in scorer.steps(b) {
+                    for (third, c) in links[usize::from(b)].steps() {
                         near_edges |= 1 << third;
-                        for (edge, _) in scorer.steps(c) {
+                        for (edge, _) in links[usize::from(c)].steps() {
                             near_edges |= 1 << edge;
                         }
                         if is_site(c) {
@@ -84,6 +108,15 @@ impl ReachTable {
                     }
                 }
             }
+            let mut open = OpenReach::default();
+            for entry in &table.entries[start..] {
+                open.edges |= entry.edges;
+                open.through |= entry.through;
+                open.sites |= 1 << entry.site;
+                open.masks[entry.paid_builds] |= 1 << entry.site;
+            }
+            open.masks[2] &= !open.masks[1];
+            table.open.push(open);
             table.spans.push(start..table.entries.len());
             table.near_edges.push(near_edges);
         }
@@ -91,6 +124,13 @@ impl ReachTable {
     }
 
     fn sites(&self, candidate: Vertex, occupancy: &Occupancy) -> [u128; 3] {
+        let open = &self.open[usize::from(candidate)];
+        if occupancy.blocked & open.sites == 0
+            && occupancy.rival_edges & open.edges == 0
+            && occupancy.rival_vertices & open.through == 0
+        {
+            return open.masks;
+        }
         let mut sites = [0; 3];
         for entry in &self.entries[self.spans[usize::from(candidate)].clone()] {
             let bit = 1 << entry.site;
@@ -258,9 +298,40 @@ fn mask_walk_words<const WORDS: usize>(
     })
 }
 
+#[derive(Clone, Copy, Default)]
+#[repr(C, align(64))]
+struct ValueEntry {
+    sites: [u64; 6],
+    key: u64,
+    value: f64,
+}
+
+impl ValueEntry {
+    fn new(serial: u32, candidate: Vertex, sites: [u128; 3]) -> Self {
+        Self {
+            sites: std::array::from_fn(|i| (sites[i / 2] >> (64 * (i % 2))) as u64),
+            key: (u64::from(serial) << 8) | u64::from(candidate),
+            value: 0.0,
+        }
+    }
+
+    fn index(&self) -> usize {
+        let mut hash = self.key;
+        for (i, mask) in self.sites.iter().enumerate() {
+            hash ^= mask.rotate_left((i * 11) as u32);
+        }
+        mix64(hash) as usize & (8_192 - 1)
+    }
+
+    fn same_key(&self, other: &Self) -> bool {
+        self.key == other.key && self.sites == other.sites
+    }
+}
+
 pub(super) struct PriceMemo {
     contexts: [(u64, u128, u32); 256],
     prices: Vec<(u64, f64)>,
+    values: Vec<ValueEntry>,
     next_serial: u32,
 }
 
@@ -269,6 +340,7 @@ impl Default for PriceMemo {
         Self {
             contexts: [(0, 0, 0); 256],
             prices: vec![(0, 0.0); 16_384],
+            values: vec![ValueEntry::default(); 8_192],
             next_serial: 1,
         }
     }
@@ -285,6 +357,7 @@ impl PriceMemo {
         if self.next_serial == u32::MAX {
             self.contexts.fill((0, 0, 0));
             self.prices.fill((0, 0.0));
+            self.values.fill(ValueEntry::default());
             self.next_serial = 1;
         }
         let serial = self.next_serial;
@@ -293,7 +366,7 @@ impl PriceMemo {
         serial
     }
 
-    fn price(&mut self, key: u64, compute: impl FnOnce() -> f64) -> f64 {
+    pub(super) fn price(&mut self, key: u64, compute: impl FnOnce() -> f64) -> f64 {
         let index = (key.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 50) as usize;
         let entry = &mut self.prices[index];
         if entry.0 != key {
@@ -304,22 +377,21 @@ impl PriceMemo {
 }
 
 thread_local! {
+    static LAST_REACH: std::cell::RefCell<Option<(Vec<VertexLinks>, Arc<ReachTable>)>> =
+        const { std::cell::RefCell::new(None) };
     pub(super) static PRICE_MEMO: std::cell::RefCell<PriceMemo> =
         std::cell::RefCell::new(PriceMemo::default());
 }
 
 /// Rows need the sites' value alone, so first-edge road comparisons can be omitted.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn row_value(
     scorer: &AppFormulaScorer,
     holdings: &Holdings,
-    _vertex_owner: &[u8],
-    _edge_owner: &[u8],
-    _seat: u8,
     candidate: Vertex,
     occupancy: &Occupancy,
     memo: &mut PriceMemo,
     serial: u32,
+    use_value_memo: bool,
 ) -> f64 {
     if scorer.weights().expansion_weight == 0.0 {
         return 0.0;
@@ -346,9 +418,16 @@ pub(super) fn row_value(
     if rest == 0 {
         return 0.0;
     }
-    let mut with_candidate = *holdings;
-    scorer.add_to_holdings(&mut with_candidate, candidate);
-    let mut holdings_total = None;
+    let remembered = use_value_memo.then(|| {
+        let entry = ValueEntry::new(serial, candidate, sites);
+        (entry.index(), entry)
+    });
+    if let Some((index, entry)) = &remembered {
+        if memo.values[*index].same_key(entry) {
+            return memo.values[*index].value;
+        }
+    }
+    let mut pricer = None;
     let mut first = f64::NEG_INFINITY;
     let mut second = f64::NEG_INFINITY;
     while rest != 0 {
@@ -364,9 +443,11 @@ pub(super) fn row_value(
         };
         let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
         let price = memo.price(key, || {
-            let total = *holdings_total
-                .get_or_insert_with(|| scorer.holdings_diversity_total(&with_candidate));
-            scorer.site_total_with_holdings(with_candidate, site, total)
+            pricer.get_or_insert_with(|| {
+                let mut with_candidate = *holdings;
+                scorer.add_to_holdings(&mut with_candidate, candidate);
+                SitePricer::new(scorer, with_candidate)
+            }).price(site)
         });
         let value = price * scorer.decay_pow[cost];
         if value > first {
@@ -383,7 +464,12 @@ pub(super) fn row_value(
     } else {
         first + second
     };
-    scorer.weights().expansion_weight * total
+    let value = scorer.weights().expansion_weight * total;
+    if let Some((index, mut entry)) = remembered {
+        entry.value = value;
+        memo.values[index] = entry;
+    }
+    value
 }
 
 /// Reuse the row's site prices while retaining each first edge's own cheapest reach.
@@ -412,7 +498,7 @@ pub(super) fn row_road(
     firsts[..len].sort_unstable();
     PRICE_MEMO.with_borrow_mut(|memo| {
         let serial = memo.serial(scorer.id, occupancy.own_vertices);
-        let mut price_inputs = None;
+        let mut pricer = None;
         let mut road = None;
         let mut best_site = f64::NEG_INFINITY;
         let mut best_pair = f64::NEG_INFINITY;
@@ -440,13 +526,11 @@ pub(super) fn row_road(
                 };
                 let key = (u64::from(serial) << 16) | (u64::from(candidate) << 8) | u64::from(site);
                 let price = memo.price(key, || {
-                    let (with_candidate, total) = *price_inputs.get_or_insert_with(|| {
+                    pricer.get_or_insert_with(|| {
                         let mut holdings = scorer.holdings_for_owner(vertex_owner, seat);
                         scorer.add_to_holdings(&mut holdings, candidate);
-                        let total = scorer.holdings_diversity_total(&holdings);
-                        (holdings, total)
-                    });
-                    scorer.site_total_with_holdings(with_candidate, site, total)
+                        SitePricer::new(scorer, holdings)
+                    }).price(site)
                 });
                 let value = price * scorer.decay_pow[cost];
                 best = js_max(best, value);
@@ -835,6 +919,180 @@ mod tests {
         (topology, board)
     }
 
+    /// Value entries retain every mask bit and cannot survive reuse of a context serial.
+    #[test]
+    fn value_memo_checks_full_keys_and_clears_on_wrap() {
+        assert_eq!(std::mem::size_of::<ValueEntry>(), 64);
+        assert_eq!(std::mem::align_of::<ValueEntry>(), 64);
+        let mut memo = PriceMemo::default();
+        let serial = memo.serial(1, 0);
+        let entry = ValueEntry::new(serial, 7, [1, 2, 3]);
+        assert!(!ValueEntry::default().same_key(&entry));
+        for mask in 0..3 {
+            for bit in 0..128 {
+                let mut sites = [1, 2, 3];
+                sites[mask] ^= 1 << bit;
+                assert!(!entry.same_key(&ValueEntry::new(serial, 7, sites)));
+            }
+        }
+        assert!(!entry.same_key(&ValueEntry::new(serial + 1, 7, [1, 2, 3])));
+        assert!(!entry.same_key(&ValueEntry::new(serial, 8, [1, 2, 3])));
+        memo.values[entry.index()] = entry;
+        memo.next_serial = u32::MAX;
+        memo.serial(2, 1);
+        assert!(memo.values.iter().all(|held| held.key == 0));
+    }
+
+    /// A hero's second row neither reads nor evicts the rivals' remembered values.
+    #[test]
+    fn value_memo_can_be_bypassed_without_reading_or_writing() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+        let holdings = Holdings::empty();
+        let mut memo = PriceMemo::default();
+        let serial = memo.serial(scorer.id, 0);
+        let direct = row_value(
+            &scorer, &holdings, 0, &occupancy, &mut memo, serial, false,
+        );
+        assert!(memo.values.iter().all(|entry| entry.key == 0));
+        let cached = row_value(
+            &scorer, &holdings, 0, &occupancy, &mut memo, serial, true,
+        );
+        assert_eq!(cached.to_bits(), direct.to_bits());
+        let index = memo.values.iter().position(|entry| entry.key != 0).unwrap();
+        memo.values[index].value = -9999.0;
+        let bypassed = row_value(
+            &scorer, &holdings, 0, &occupancy, &mut memo, serial, false,
+        );
+        assert_eq!(bypassed.to_bits(), direct.to_bits());
+        assert_eq!(memo.values[index].value, -9999.0);
+    }
+
+    /// The open-board shortcut observes every site, intermediate vertex and edge obstruction.
+    #[test]
+    fn open_reach_matches_entries_with_each_obstruction() {
+        let (topology, board) = fixture();
+        let scorer = AppFormulaScorer::new(&board, &topology, default_weights());
+        for candidate in 0..topology.vertex_count() as Vertex {
+            let entries = &scorer.reach.entries[scorer.reach.spans[usize::from(candidate)].clone()];
+            for bit in 0..128 {
+                for occupancy in [
+                    Occupancy::default(),
+                    Occupancy { blocked: 1 << bit, ..Occupancy::default() },
+                    Occupancy { rival_edges: 1 << bit, ..Occupancy::default() },
+                    Occupancy { rival_vertices: 1 << bit, ..Occupancy::default() },
+                ] {
+                    let mut expected = [0; 3];
+                    for entry in entries {
+                        if occupancy.blocked & (1 << entry.site) == 0
+                            && occupancy.rival_edges & entry.edges == 0
+                            && occupancy.rival_vertices & entry.through == 0
+                        {
+                            expected[entry.paid_builds] |= 1 << entry.site;
+                        }
+                    }
+                    expected[2] &= !expected[1];
+                    assert_eq!(scorer.reach.sites(candidate, &occupancy), expected);
+                }
+            }
+        }
+    }
+
+    /// Base keys preserve the seat and grant and cannot match any site's price key.
+    #[test]
+    fn base_totals_and_site_prices_have_disjoint_keys() {
+        let mut memo = PriceMemo::default();
+        let prefix = (u64::from(memo.serial(1, 0)) << 16) | (3 << 8);
+        for seat in 0_u8..64 {
+            for grant in [false, true] {
+                let key = prefix | u64::from(0x80 | (seat << 1) | u8::from(grant));
+                for site in 0_u64..128 {
+                    assert_ne!(key, prefix | site);
+                    memo.price(prefix | site, || -1.0);
+                }
+                let expected = f64::from(seat) + f64::from(grant);
+                assert_eq!(memo.price(key, || expected).to_bits(), expected.to_bits());
+                assert_eq!(memo.price(key, || panic!("base total missed")).to_bits(), expected.to_bits());
+            }
+        }
+    }
+
+    /// Hoisted coverage and port operands preserve every site's bits, including fallback weights.
+    #[test]
+    fn holdings_pricer_matches_site_totals_on_the_fixture() {
+        let (topology, board) = fixture();
+        let mut recipe = default_weights();
+        recipe.recipe_cap = recipe.diversity_cap + 1.0;
+        let mut deficit = default_weights();
+        deficit.port_coverage_deficit_weight = 0.7;
+        let mut concentration = default_weights();
+        concentration.robber_concentration_weight = 0.8;
+        let mut degenerate = default_weights();
+        degenerate.resource_value.wood = -1.0;
+        degenerate.resource_value.wheat = f64::NAN;
+        degenerate.diversity_weight = -0.5;
+        for (vector, weights) in [default_weights(), recipe, deficit, concentration, degenerate]
+            .into_iter()
+            .enumerate()
+        {
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            let mut holdings = vec![Holdings::empty()];
+            for first in 0..topology.vertex_count() as Vertex {
+                let mut single = Holdings::empty();
+                scorer.add_to_holdings(&mut single, first);
+                holdings.push(single);
+                // Every pair is 104 million comparisons; a stride keeps pairs near and far.
+                for second in (first + 1..topology.vertex_count() as Vertex).step_by(37) {
+                    let mut pair = single;
+                    scorer.add_to_holdings(&mut pair, second);
+                    holdings.push(pair);
+                }
+            }
+            for (held, holdings) in holdings.into_iter().enumerate() {
+                for candidate in 0..topology.vertex_count() as Vertex {
+                    let mut with_candidate = holdings;
+                    scorer.add_to_holdings(&mut with_candidate, candidate);
+                    let total = scorer.holdings_diversity_total(&with_candidate);
+                    let pricer = super::super::app_formula::SitePricer::new(&scorer, with_candidate);
+                    for site in 0..topology.vertex_count() as Vertex {
+                        assert_eq!(
+                            pricer.price(site).to_bits(),
+                            scorer.site_total_with_holdings(with_candidate, site, total).to_bits(),
+                            "vector {vector} holding {held} candidate {candidate} site {site}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Scorers share immutable reach only while the thread's last adjacency still matches.
+    #[test]
+    fn reach_tables_share_adjacency_across_weights_and_clones() {
+        fn send_and_sync<T: Send + Sync>() {}
+        send_and_sync::<AppFormulaScorer>();
+        let [(small_topology, small_board), (large_topology, large_board)] = walk_fixtures();
+        let first = AppFormulaScorer::new(&small_board, &small_topology, default_weights());
+        let mut weights = default_weights();
+        weights.expansion_decay = 0.2;
+        let second = AppFormulaScorer::new(&small_board, &small_topology, weights);
+        assert!(Arc::ptr_eq(&first.reach, &second.reach));
+        assert!(Arc::ptr_eq(&first.reach, &first.clone().reach));
+        let large = AppFormulaScorer::new(&large_board, &large_topology, default_weights());
+        assert!(!Arc::ptr_eq(&first.reach, &large.reach));
+        let rebuilt = AppFormulaScorer::new(&small_board, &small_topology, default_weights());
+        assert!(!Arc::ptr_eq(&first.reach, &rebuilt.reach));
+        for vertex in 0..small_topology.vertex_count() as Vertex {
+            assert_eq!(
+                first.reach.sites(vertex, &Occupancy::default()),
+                rebuilt.reach.sites(vertex, &Occupancy::default())
+            );
+        }
+    }
+
     fn walk_fixtures() -> [(Topology, SimBoard); 2] {
         let cases: serde_json::Value =
             serde_json::from_str(include_str!("../../../../fixtures/advice-parity.json")).unwrap();
@@ -1047,7 +1305,7 @@ mod tests {
             let before = walk_calls();
             let fast_before = FAST_PATH_CALLS.with(std::cell::Cell::get);
             let value = row_value(
-                &scorer, &holdings, &vertices, &edges, 0, candidate, &occupancy, &mut memo, serial,
+                &scorer, &holdings, candidate, &occupancy, &mut memo, serial, true,
             );
             assert_eq!(walk_calls(), before + 1);
             assert_eq!(FAST_PATH_CALLS.with(std::cell::Cell::get), fast_before);

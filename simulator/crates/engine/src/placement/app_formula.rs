@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use serde::Deserialize;
 
@@ -323,7 +324,7 @@ pub(super) const VERTEX_FANOUT: usize = 3;
 #[derive(Clone, Debug)]
 pub struct AppFormulaScorer {
     pub(super) id: u64,
-    pub(super) reach: expansion::ReachTable,
+    pub(super) reach: Arc<expansion::ReachTable>,
     pub(super) decay_pow: [f64; 3],
     weights: EngineWeights,
     scarcity: [f64; RESOURCE_COUNT],
@@ -345,8 +346,8 @@ pub struct AppFormulaScorer {
 /// outward from a candidate at score time, so the walk's adjacency is copied once here rather
 /// than threaded through every scoring call. The orders match `Topology`'s, so a walk over this
 /// copy visits vertices and edges in exactly the order a walk over the topology would.
-#[derive(Clone, Copy, Debug)]
-struct VertexLinks {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct VertexLinks {
     adjacent: [Vertex; VERTEX_FANOUT],
     adjacent_len: u8,
     /// `edge_to[slot]` joins the vertex to `adjacent[slot]`, which is `Topology::edge_between`.
@@ -354,8 +355,15 @@ struct VertexLinks {
 }
 
 impl VertexLinks {
-    fn adjacent(&self) -> &[Vertex] {
+    pub(super) fn adjacent(&self) -> &[Vertex] {
         &self.adjacent[..usize::from(self.adjacent_len)]
+    }
+
+    pub(super) fn steps(&self) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
+        self.edge_to
+            .iter()
+            .copied()
+            .zip(self.adjacent().iter().copied())
     }
 }
 
@@ -401,6 +409,85 @@ impl Holdings {
             port_factors: [0.0; RESOURCE_COUNT],
             hexes: 0,
         }
+    }
+}
+
+pub(super) struct SitePricer<'a> {
+    scorer: &'a AppFormulaScorer,
+    holdings: Holdings,
+    covers: [f64; RESOURCE_COUNT],
+    total: f64,
+    port_products: [f64; RESOURCE_COUNT],
+    fallback: bool,
+}
+
+impl<'a> SitePricer<'a> {
+    pub(super) fn new(scorer: &'a AppFormulaScorer, holdings: Holdings) -> Self {
+        let weights = &scorer.weights;
+        let fallback = weights.recipe_cap != weights.diversity_cap
+            || weights.port_coverage_deficit_weight != 0.0;
+        let covers = if fallback {
+            [0.0; RESOURCE_COUNT]
+        } else {
+            scorer.diversity_coverage(holdings.pips, weights.diversity_cap)
+        };
+        let total = if fallback {
+            scorer.holdings_diversity_total(&holdings)
+        } else {
+            scorer.diversity_combine(covers, covers)
+        };
+        Self {
+            scorer,
+            holdings,
+            covers,
+            total,
+            port_products: std::array::from_fn(|i| {
+                port_surplus(weights, holdings.pips[i]) * holdings.port_factors[i] * 1.0
+            }),
+            fallback,
+        }
+    }
+
+    pub(super) fn price(&self, site: Vertex) -> f64 {
+        if self.fallback {
+            return self.scorer.site_total_with_holdings(self.holdings, site, self.total);
+        }
+        let scorer = self.scorer;
+        let stats = &scorer.vertices[usize::from(site)];
+        let precompute = stats.precompute;
+        let next: [f64; RESOURCE_COUNT] = std::array::from_fn(|i| {
+            self.holdings.pips[i] + precompute.adjusted[i]
+        });
+        let covers = std::array::from_fn(|i| {
+            if next[i].to_bits() == self.holdings.pips[i].to_bits() {
+                self.covers[i]
+            } else {
+                coverage(&scorer.weights, next[i], scorer.weights.diversity_cap)
+            }
+        });
+        let diversity = scorer.diversity_combine(covers, covers)
+            - self.total
+            - scorer.duplicate_number_penalty(&self.holdings, stats);
+        let port = if !self.holdings.has_ports && !stats.has_ports {
+            0.0
+        } else {
+            let post = |i: usize| {
+                port_surplus(&scorer.weights, next[i])
+                    * js_max(self.holdings.port_factors[i], precompute.port_factors[i])
+                    * 1.0
+            };
+            scorer.weights.port_weight
+                * (post(0) - self.port_products[0]
+                    + post(1) - self.port_products[1]
+                    + post(2) - self.port_products[2]
+                    + post(3) - self.port_products[3]
+                    + post(4) - self.port_products[4])
+        };
+        precompute.base
+            + scorer.concentration_delta(&self.holdings, stats)
+            + 1.0 * diversity
+            + port
+            + 0.0
     }
 }
 
@@ -531,9 +618,9 @@ impl AppFormulaScorer {
                     .collect()
             })
             .unwrap_or_default();
-        let mut scorer = Self {
+        Self {
             id: NEXT_SCORER_ID.fetch_add(1, Ordering::Relaxed),
-            reach: expansion::ReachTable::default(),
+            reach: expansion::ReachTable::shared(&links),
             decay_pow: std::array::from_fn(|k| weights.expansion_decay.powf(k as f64)),
             weights,
             scarcity,
@@ -542,9 +629,7 @@ impl AppFormulaScorer {
             links,
             hex_pips,
             slot_scales,
-        };
-        scorer.reach = expansion::ReachTable::new(&scorer, topology.vertex_count());
-        scorer
+        }
     }
 
     /// The scales this board's `slotScales` row gives a seat, or 1 everywhere for a seat count the
@@ -565,12 +650,7 @@ impl AppFormulaScorer {
     /// This and `vertex_adjacent` are the whole of the graph the expansion walk reads, so the
     /// parity test pins both against the topology the scorer was built from.
     pub fn steps(&self, vertex: Vertex) -> impl Iterator<Item = (Edge, Vertex)> + '_ {
-        let links = &self.links[usize::from(vertex)];
-        links
-            .edge_to
-            .iter()
-            .copied()
-            .zip(links.adjacent().iter().copied())
+        self.links[usize::from(vertex)].steps()
     }
 
     pub(super) fn weights(&self) -> &EngineWeights {
@@ -837,46 +917,32 @@ impl AppFormulaScorer {
     fn diversity_score(&self, wood: f64, sheep: f64, wheat: f64, brick: f64, ore: f64) -> f64 {
         #[cfg(test)]
         DIVERSITY_SCORE_CALLS.with(|calls| calls.set(calls.get() + 1));
+        let pips = [wood, sheep, wheat, brick, ore];
+        let covers = self.diversity_coverage(pips, self.weights.diversity_cap);
+        let recipes = if self.weights.recipe_cap == self.weights.diversity_cap {
+            covers
+        } else {
+            self.diversity_coverage(pips, self.weights.recipe_cap)
+        };
+        self.diversity_combine(covers, recipes)
+    }
+
+    fn diversity_coverage(&self, pips: [f64; RESOURCE_COUNT], cap: f64) -> [f64; RESOURCE_COUNT] {
+        pips.map(|pips| coverage(&self.weights, pips, cap))
+    }
+
+    fn diversity_combine(
+        &self,
+        [wood_cover, sheep_cover, wheat_cover, brick_cover, ore_cover]: [f64; RESOURCE_COUNT],
+        [wood_recipe, sheep_recipe, wheat_recipe, brick_recipe, ore_recipe]: [f64; RESOURCE_COUNT],
+    ) -> f64 {
         let weights = &self.weights;
-        let cap = weights.diversity_cap;
-        let wood_cover = coverage(weights, wood, cap);
-        let sheep_cover = coverage(weights, sheep, cap);
-        let wheat_cover = coverage(weights, wheat, cap);
-        let brick_cover = coverage(weights, brick, cap);
-        let ore_cover = coverage(weights, ore, cap);
         let spread = weights.diversity_weight
             * (self.coverage_value[Resource::Wood.index()] * wood_cover
                 + self.coverage_value[Resource::Sheep.index()] * sheep_cover
                 + self.coverage_value[Resource::Wheat.index()] * wheat_cover
                 + self.coverage_value[Resource::Brick.index()] * brick_cover
                 + self.coverage_value[Resource::Ore.index()] * ore_cover);
-        let recipe_cap = weights.recipe_cap;
-        let same_cap = recipe_cap == cap;
-        let wood_recipe = if same_cap {
-            wood_cover
-        } else {
-            coverage(weights, wood, recipe_cap)
-        };
-        let sheep_recipe = if same_cap {
-            sheep_cover
-        } else {
-            coverage(weights, sheep, recipe_cap)
-        };
-        let wheat_recipe = if same_cap {
-            wheat_cover
-        } else {
-            coverage(weights, wheat, recipe_cap)
-        };
-        let brick_recipe = if same_cap {
-            brick_cover
-        } else {
-            coverage(weights, brick, recipe_cap)
-        };
-        let ore_recipe = if same_cap {
-            ore_cover
-        } else {
-            coverage(weights, ore, recipe_cap)
-        };
         let road = weights.recipe_road_bonus * js_min(wood_recipe, brick_recipe);
         let city = weights.recipe_city_bonus * js_min(ore_recipe, wheat_recipe);
         let settlement = weights.recipe_settlement_bonus

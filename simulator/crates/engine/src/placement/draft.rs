@@ -81,24 +81,48 @@ impl ScoreRows {
         grant: bool,
         vacated: Option<Vertex>,
     ) -> &[f64] {
+        self.legal_row_with_memo(
+            scorer, topology, vertex_owner, edge_owner, seat, grant, vacated, true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn legal_row_with_memo(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        topology: &Topology,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        grant: bool,
+        vacated: Option<Vertex>,
+        use_value_memo: bool,
+    ) -> &[f64] {
         if self.reusable {
             return self.row(scorer, vertex_owner, edge_owner, seat, grant);
         }
         let holdings = scorer.holdings_for_owner(vertex_owner, seat);
-        let holdings_total = scorer.holdings_diversity_total(&holdings);
+        let mut holdings_total = None;
         let scale = scorer.slot_scale(seat);
         let occupancy = expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
         self.scratch.clear();
         expansion::PRICE_MEMO.with_borrow_mut(|memo| {
             let serial = memo.serial(scorer.id, occupancy.own_vertices);
+            debug_assert!(seat < 64, "base keys reserve six bits for the seat");
+            let base_tag = u64::from(0x80 | (seat << 1) | u8::from(grant));
             self.scratch.extend((0..self.vertices).map(|index| {
                 let vertex = index as Vertex;
                 if legal_with_vacancy(topology, vertex_owner, vacated, vertex) {
-                    scorer.scaled_total_with_diversity(
-                        holdings, vertex, grant, scale.diversity, holdings_total,
-                    ) + scale.expansion * expansion::row_value(
-                        scorer, &holdings, vertex_owner, edge_owner, seat, vertex,
-                        &occupancy, memo, serial,
+                    let key = (u64::from(serial) << 16) | (u64::from(vertex) << 8) | base_tag;
+                    let base = memo.price(key, || {
+                        let total = *holdings_total
+                            .get_or_insert_with(|| scorer.holdings_diversity_total(&holdings));
+                        scorer.scaled_total_with_diversity(
+                            holdings, vertex, grant, scale.diversity, total,
+                        )
+                    });
+                    base + scale.expansion * expansion::row_value(
+                        scorer, &holdings, vertex, &occupancy, memo, serial, use_value_memo,
                     )
                 } else {
                     f64::NEG_INFINITY
@@ -388,6 +412,16 @@ impl<'a> Lookahead<'a> {
             candidate,
             false,
         );
+        self.value_with_marginal(vertex_owner, edge_owner, candidate, marginal)
+    }
+
+    fn value_with_marginal(
+        &mut self,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        candidate: Vertex,
+        marginal: f64,
+    ) -> f64 {
         self.replay(vertex_owner, edge_owner, candidate, None);
         let second = self.planned_second().map_or(0.0, |(_, score)| score);
         // At the shipped weight the credit is not merely zero but never formed: `replay` skips
@@ -402,7 +436,7 @@ impl<'a> Lookahead<'a> {
     /// The best second settlement still legal on the board `replay` left, at the hero's own
     /// formula and with the setup grant only the second round pays.
     fn planned_second(&mut self) -> Option<(Vertex, f64)> {
-        let row = self.rows.legal_row(
+        let row = self.rows.legal_row_with_memo(
             self.hero_scorer,
             self.topology,
             &self.owners,
@@ -410,6 +444,7 @@ impl<'a> Lookahead<'a> {
             self.hero,
             true,
             None,
+            false,
         );
         best_legal(self.topology, &self.owners, None, row)
     }
@@ -543,13 +578,18 @@ fn first_pick(
         vertex_owner,
         edge_owner,
     )?;
+    let marginals = lookahead.rows
+        .legal_row(&scorers.hero, topology, vertex_owner, edge_owner, hero, false, None)
+        .to_vec();
     let mut best: Option<(Vertex, f64)> = None;
     for vertex_index in 0..topology.vertex_count() {
         let candidate = vertex_index as Vertex;
         if !can_place_settlement(topology, vertex_owner, candidate) {
             continue;
         }
-        let value = lookahead.value(vertex_owner, edge_owner, candidate);
+        let value = lookahead.value_with_marginal(
+            vertex_owner, edge_owner, candidate, marginals[vertex_index],
+        );
         if best.is_none_or(|(_, held)| value > held) {
             best = Some((candidate, value));
         }
@@ -658,6 +698,43 @@ mod tests {
         )
         .unwrap();
         (topology, board)
+    }
+
+    /// A precomputed marginal row preserves the replay value and the first pick's argmax.
+    #[test]
+    fn hero_marginal_rows_match_direct_lookahead_values() {
+        let (topology, board) = fixture();
+        let scorers = scorers(&topology, &board);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        for hero in [0, 5] {
+            let mut direct = Lookahead::new(
+                &scorers.hero, &scorers.opponent, &topology, 6, hero, &vertices, &edges,
+            ).unwrap();
+            let mut rows = Lookahead::new(
+                &scorers.hero, &scorers.opponent, &topology, 6, hero, &vertices, &edges,
+            ).unwrap();
+            let marginals = rows.rows.legal_row(
+                &scorers.hero, &topology, &vertices, &edges, hero, false, None,
+            ).to_vec();
+            let mut best: Option<(Vertex, f64)> = None;
+            for candidate in 0..topology.vertex_count() as Vertex {
+                let expected = direct.value(&vertices, &edges, candidate);
+                assert_eq!(
+                    rows.value_with_marginal(
+                        &vertices, &edges, candidate, marginals[usize::from(candidate)],
+                    ).to_bits(),
+                    expected.to_bits()
+                );
+                if best.is_none_or(|(_, held)| expected > held) {
+                    best = Some((candidate, expected));
+                }
+            }
+            assert_eq!(
+                first_pick(&scorers, &topology, 6, &vertices, &edges, hero),
+                best.map(|(vertex, _)| vertex)
+            );
+        }
     }
 
     fn default_weights() -> EngineWeights {
