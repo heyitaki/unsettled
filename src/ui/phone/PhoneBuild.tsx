@@ -17,10 +17,7 @@ export function PhoneBuild({ onDone, onCancel }: { onDone: () => void; onCancel:
     <section className="phone-block phone-block-flush phone-build">
       <div className="phone-block-inner">
         <div className="phone-block-head">
-          <div>
-            <span className="eyebrow">Build mode</span>
-            <h2>Board tools</h2>
-          </div>
+          <h2>Board tools</h2>
         </div>
         <ToolGroups />
         <div className="tool-group">

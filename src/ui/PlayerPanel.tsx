@@ -164,10 +164,7 @@ export function PlayerPanel() {
   return (
     <section className="panel player-panel">
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Points ledger</span>
-          <h2>Players</h2>
-        </div>
+        <h2>Players</h2>
       </div>
       <div
         className={dragId !== null ? 'player-list roster reordering' : 'player-list roster'}

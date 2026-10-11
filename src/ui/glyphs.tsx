@@ -9,7 +9,7 @@ import { TILE_COLORS } from './colors'
 
 const PIECE_INK = '#30271f'
 /** The paper the cut-out detail of a flat glyph shows through. */
-const PAPER = '#f8f3e8'
+const PAPER = '#fbf8f1'
 /**
  * Default body colour for glyphs with no player/tool colour of their own: the
  * page's muted ink, so a flat shape still reads on the parchment.

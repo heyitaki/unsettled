@@ -19,8 +19,8 @@ export default defineConfig({
         scope: '/unsettled/',
         display: 'standalone',
         orientation: 'any',
-        background_color: '#e6dcc4',
-        theme_color: '#f6efdf',
+        background_color: '#efe8d9',
+        theme_color: '#efe8d9',
         icons: [
           { src: '/unsettled/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/unsettled/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

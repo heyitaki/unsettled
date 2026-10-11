@@ -116,10 +116,7 @@ export function ToolPalette() {
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Build mode</span>
-          <h2>Board tools</h2>
-        </div>
+        <h2>Board tools</h2>
         <button
           type="button"
           className="panel-dots"

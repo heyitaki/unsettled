@@ -181,10 +181,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   if (!active || activeId === null) return (
     <section className={`${className} best-moves-panel`}>
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">Draft complete</span>
-          <h2>Best moves</h2>
-        </div>
+        <h2>Best moves</h2>
       </div>
       {order}
       <p className="hint">Tap a player to start tracking turns</p>
@@ -205,7 +202,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     <section className={`${className} best-moves-panel`}>
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">{mine ? 'Your turn' : `${active.name}'s turn`}</span>
+          <span className="move-turn">{mine ? 'Your turn' : `${active.name}'s turn`}</span>
           <h2>Best moves</h2>
         </div>
         <div className="draft-steps">

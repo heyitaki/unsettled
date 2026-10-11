@@ -261,11 +261,10 @@ test.describe('desktop', () => {
     await expect(others).toBeHidden()
     await page.keyboard.press('Escape')
 
-    // The dots menu is the phone's sheet, tail and all (spec D6 menus).
+    // The dots menu is the phone's sheet (spec D6 menus).
     await page.getByRole('button', { name: 'Import and export files' }).click()
     const sheet = page.getByRole('menu', { name: 'Import and export files' })
     await expect(sheet).toHaveClass(/\bsheet-menu\b/)
-    await expect(sheet.locator('.menu-tail')).toBeVisible()
     await expect(sheet.getByRole('menuitem').first().locator('.menu-icon')).toBeVisible()
     await snap(page, 'desktop-menus', false)
   })
@@ -273,7 +272,6 @@ test.describe('desktop', () => {
   test('an empty board says so and offers nothing: the import and the tools are already in the left rail', async ({ page }) => {
     await page.goto('')
     const panel = page.locator('.analysis-panel')
-    await expect(panel.locator('.eyebrow')).toHaveText('Nothing to rank yet')
     await expect(panel.locator('h2')).toHaveText('This board is empty')
     await expect(panel.locator('.hint')).toBeVisible()
     // Both ways in are on screen already, so the phone's two buttons stay on the phone (spec D4).
@@ -397,7 +395,7 @@ test.describe('desktop', () => {
     const rows = panel.locator('.roster-row')
     await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
     await expect(panel.locator('.roster-row.me')).toHaveCount(0)
-    // The heading's + moved to the dashed row under the roster (spec D5).
+    // The heading's + moved to the row under the roster (spec D5).
     await expect(panel.locator('.panel-heading button')).toHaveCount(0)
     await randomize(page)
 
@@ -436,7 +434,7 @@ test.describe('desktop', () => {
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
     await expect(page.locator('.draft-ribbon-slot').first()).toHaveAttribute('title', /Mara/)
 
-    // The dashed row is the only way to add, and it stops at six seats.
+    // The row under the roster is the only way to add, and it stops at six seats.
     const add = panel.getByRole('button', { name: 'Add player' })
     await add.click()
     await add.click()

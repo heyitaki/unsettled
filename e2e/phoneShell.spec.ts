@@ -149,7 +149,6 @@ async function seedUnclaimedRoster(page: Page) {
 test('an empty board offers the two ways to fill it', async ({ page }) => {
   await open(page)
   const block = page.locator('.phone-analysis')
-  await expect(block.locator('.eyebrow')).toHaveText('Nothing to rank yet')
   await expect(block.locator('h2')).toHaveText('This board is empty')
   await expect(block.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
   const build = block.getByRole('button', { name: 'Build it by hand' })

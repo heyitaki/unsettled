@@ -250,7 +250,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         </p>
       )}
       {analysis.warnings.includes('solo-roster') && (
-        <p className="analysis-warning">Only one player on the board.</p>
+        <p className="analysis-warning quiet">Only one player on the board.</p>
       )}
     </>
   )
@@ -386,10 +386,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const panel = (
     <section className={className}>
       <div className="panel-heading">
-        <div>
-          <span className="eyebrow">{empty ? 'Nothing to rank yet' : 'Draft analysis'}</span>
-          <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
-        </div>
+        <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
         {!empty && (
           <div className="draft-steps">
             <button type="button" className="draft-step" aria-label="Step back one pick" title="Step back one pick" disabled={!canStepBack} onClick={stepBack}>
@@ -405,8 +402,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
       {empty ? (
         <div className="claim">
           <p className="hint">
-            Nothing has been laid out yet. Import a screenshot and the parser reads the tiles,
-            numbers and players off it, or place them yourself.
+            Import a screenshot to read the tiles, numbers and players off it, or place them yourself.
           </p>
           {/* The desktop's import and tools are already on screen in the left
               rail, so only the phone needs the two ways in from here (spec D4). */}

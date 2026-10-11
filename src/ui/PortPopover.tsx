@@ -22,7 +22,6 @@ export function PortPopover({ edgeId, port, onCancel, onDelete, onSave }: Props)
         }}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <span className="eyebrow">Coastal trade</span>
         <h3>Edit port</h3>
         <code>{edgeId}</code>
         <label>
