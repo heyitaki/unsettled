@@ -407,7 +407,7 @@ pub fn select_counterparty(
 }
 
 /// Per-kind heuristic parameters. Non-heuristic kinds receive defaults with every gate disabled.
-fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
+pub(crate) fn heuristic_params(kind: PolicyKind) -> heuristic_v1::HeuristicParams {
     match kind {
         PolicyKind::Custom(index) => params_file::custom_params(index),
         PolicyKind::HeuristicV1Noports => heuristic_v1::HeuristicParams {
