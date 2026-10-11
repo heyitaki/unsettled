@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, OnceCell};
 
 use serde::Serialize;
 
@@ -154,6 +154,8 @@ struct OwnRoads {
 /// on every call.
 struct ViewCache {
     production: [Cell<Option<[u16; RESOURCE_COUNT]>>; MAX_SEATS],
+    etw_inputs: [OnceCell<crate::etw::EtwInputs>; MAX_SEATS],
+    etw: [Cell<Option<f64>>; MAX_SEATS],
     own_roads: Cell<Option<OwnRoads>>,
     /// Legal placements as vertex and edge bitsets. Several passes ask for these across the whole
     /// board within one decision, so they are derived as a set rather than tested one at a time.
@@ -166,6 +168,8 @@ impl ViewCache {
     const fn new() -> Self {
         Self {
             production: [const { Cell::new(None) }; MAX_SEATS],
+            etw_inputs: [const { OnceCell::new() }; MAX_SEATS],
+            etw: [const { Cell::new(None) }; MAX_SEATS],
             own_roads: Cell::new(None),
             settlements: Cell::new(None),
             roads: Cell::new(None),
@@ -896,6 +900,20 @@ impl<'a> DecisionView<'a> {
             .map(pips)
             .map(u16::from)
             .sum()
+    }
+
+    pub(crate) fn etw_inputs(&self, seat: usize) -> &crate::etw::EtwInputs {
+        self.cache.etw_inputs[seat]
+            .get_or_init(|| crate::etw::compute_inputs_for_seat(self, seat))
+    }
+
+    pub(crate) fn etw_for_seat(&self, seat: usize) -> f64 {
+        if let Some(value) = self.cache.etw[seat].get() {
+            return value;
+        }
+        let value = crate::etw::expected_turns_to_win(self.etw_inputs(seat));
+        self.cache.etw[seat].set(Some(value));
+        value
     }
 
     pub fn production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {

@@ -71,9 +71,9 @@ pub fn acceptance_margin(
 ) -> f32 {
     assert_params(params);
     let own = own_inputs(view);
-    let proposer = etw::inputs_for_seat(view, offer.proposer);
+    let proposer = view.etw_inputs(offer.proposer);
     let mine = trade_benefit(&own, params, &responder_delta(offer));
-    let theirs = counterparty_score(&proposer, params, &proposer_delta(offer));
+    let theirs = counterparty_score(proposer, params, &proposer_delta(offer));
     (params.margin_scale * (mine - f64::from(config.opponent_gain_weight) * theirs)) as f32
 }
 
@@ -130,7 +130,7 @@ pub fn select_counterparty(
         .expect("counterparty selection requires an acceptor");
     let mut best_score = f64::INFINITY;
     for seat in acceptors {
-        let score = counterparty_score(&etw::inputs_for_seat(view, *seat), params, delta);
+        let score = counterparty_score(view.etw_inputs(*seat), params, delta);
         if !score.is_finite() {
             continue;
         }
@@ -183,6 +183,71 @@ pub fn trade_benefit_with_base(
     };
 
     params.etw_weight * gain + params.tempo_weight * tempo
+}
+
+pub(crate) struct TradeValue<'a> {
+    inputs: &'a EtwInputs,
+    params: &'a TradeParams,
+    estimate: etw::EtwEstimate,
+    base: f64,
+    gain_denominator: f64,
+    standing_danger: f64,
+    tempo_numerator: [f64; RESOURCE_COUNT],
+    tempo_denominator: [f64; RESOURCE_COUNT],
+}
+
+impl<'a> TradeValue<'a> {
+    pub(crate) fn new(inputs: &'a EtwInputs, params: &'a TradeParams, base: f64) -> Self {
+        Self {
+            inputs,
+            params,
+            estimate: etw::EtwEstimate::new(inputs),
+            base,
+            gain_denominator: base + params.etw_floor,
+            standing_danger: params.danger_weight * threat::danger_from_etw(base, params.danger_floor),
+            tempo_numerator: threat::cheapest_route_shortfall(inputs).map(|need| 1.0 + need),
+            tempo_denominator: inputs.production_pips
+                .map(|pips| f64::from(pips) / 36.0 + params.scarcity_floor),
+        }
+    }
+
+    pub(crate) fn benefit(
+        &self,
+        delta: &[f64; RESOURCE_COUNT],
+    ) -> f64 {
+        let params = self.params;
+        assert_params(params);
+        let hand = std::array::from_fn(|resource| {
+            (self.inputs.belief_expected[resource] + delta[resource]).max(0.0)
+        });
+        let after = self.estimate.with_hand(&hand);
+        let raw = (self.base - after) / self.gain_denominator;
+        let gain = if raw.is_finite() {
+            raw.clamp(-params.gain_cap, params.gain_cap)
+        } else {
+            0.0
+        };
+        let mut useful = 0.0;
+        for resource in 0..RESOURCE_COUNT {
+            useful += delta[resource] * self.tempo_numerator[resource]
+                / self.tempo_denominator[resource];
+        }
+        let tempo = if useful.is_finite() {
+            useful / (useful.abs() + params.tempo_half)
+        } else {
+            0.0
+        };
+        params.etw_weight * gain + params.tempo_weight * tempo
+    }
+
+    pub(crate) fn counterparty_score(
+        &self,
+        delta: &[f64; RESOURCE_COUNT],
+    ) -> f64 {
+        let params = self.params;
+        assert_params(params);
+        self.standing_danger + params.benefit_weight * self.benefit(delta)
+    }
 }
 
 /// The `assert_params` domain, spelled as load-time errors (JSON field names) so the H0
@@ -408,5 +473,45 @@ mod tests {
             &[0.0; RESOURCE_COUNT],
         );
         assert_ne!(first, second);
+    }
+}
+
+#[cfg(test)]
+mod prepared_tests {
+    use super::*;
+
+    #[test]
+    fn prepared_trade_values_match_direct_bits_for_every_offer() {
+        let (topology, board, arena) = crate::etw::tests::fixture();
+        let view = arena.decision_view(&board, &topology, 0, crate::view::DecisionPhase::Action);
+        for seat in 0..view.seats() {
+            for held in [0.0, 0.5, 1.0, 3.5, 15.0] {
+                let mut inputs = etw::inputs_for_seat(&view, seat);
+                inputs.belief_expected = [held; RESOURCE_COUNT];
+                inputs.public_vp = 5;
+                let base = etw::expected_turns_to_win(&inputs);
+                for params in [TradeParams::default(), TradeParams {
+                    etw_floor: 2.0, scarcity_floor: 0.125, tempo_weight: 0.7,
+                    ..TradeParams::default()
+                }] {
+                    let prepared = TradeValue::new(&inputs, &params, base);
+                    for give in 0..RESOURCE_COUNT {
+                        for get in 0..RESOURCE_COUNT {
+                            for count in [-2.0, -1.0, 1.0, 2.0] {
+                                let mut delta = [0.0; RESOURCE_COUNT];
+                                delta[give] -= count;
+                                delta[get] += 1.0;
+                                let direct = trade_benefit_with_base(&inputs, &params, &delta, base);
+                                assert_eq!(prepared.benefit(&delta).to_bits(), direct.to_bits());
+                                assert_eq!(
+                                    prepared.counterparty_score(&delta).to_bits(),
+                                    counterparty_score_with_base(&inputs, &params, &delta, base).to_bits(),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

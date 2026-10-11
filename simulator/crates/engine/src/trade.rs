@@ -82,15 +82,12 @@ pub fn embargoed(view: &DecisionView<'_>, seat: usize) -> bool {
     debug_assert!(config.embargo_takeover_danger.is_finite());
     // A seat prices its own embargo from its real hand (the engine's per-seat eligibility
     // pass observes the seat itself); a rival's stands on the belief-derived expectation.
-    let inputs = if seat == view.observer() {
-        trading::own_inputs(view)
+    let estimate = if seat == view.observer() {
+        etw::expected_turns_to_win(&trading::own_inputs(view))
     } else {
-        etw::inputs_for_seat(view, seat)
+        etw::etw_for_seat(view, seat)
     };
-    let danger = threat::danger_from_etw(
-        etw::expected_turns_to_win(&inputs),
-        config.embargo_danger_floor,
-    );
+    let danger = threat::danger_from_etw(estimate, config.embargo_danger_floor);
     if danger >= config.embargo_danger {
         return true;
     }

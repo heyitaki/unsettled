@@ -36,6 +36,10 @@ pub struct EtwInputs {
 }
 
 pub fn inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
+    view.etw_inputs(seat).clone()
+}
+
+pub(crate) fn compute_inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
     let rules = view.rules_for(seat);
     let settlements_on_board = (0..view.topology().vertex_count())
         .filter(|vertex| {
@@ -65,6 +69,110 @@ pub fn inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
         trade_rates: Resource::ALL.map(|resource| view.trade_rate_for(seat, resource)),
         belief_expected: view.belief().expected(seat),
         hand_total: view.hand_total(seat),
+    }
+}
+
+/// Route costs and income stay fixed while an offer changes only the hand.
+pub(crate) struct EtwEstimate {
+    routes: [Option<EtwRoute>; 3],
+    income: f64,
+    trade_rates: [u32; RESOURCE_COUNT],
+    ceiling: f64,
+}
+
+struct EtwRoute {
+    cost: [f64; RESOURCE_COUNT],
+    cards_per_vp: f64,
+    required: f64,
+}
+
+impl EtwEstimate {
+    pub(crate) fn new(inputs: &EtwInputs) -> Self {
+        let mut estimate = Self {
+            routes: [None, None, None],
+            income: 0.0,
+            trade_rates: inputs.trade_rates,
+            ceiling: ETW_CAP,
+        };
+        let unseen_pool =
+            u32::from(inputs.dev_deck_remaining) + u32::from(inputs.all_seats_dev_count_sum);
+        let hidden_dev_vp = if unseen_pool == 0 {
+            0.0
+        } else {
+            f64::from(inputs.dev_count) * f64::from(inputs.dev_victory_points) / f64::from(unseen_pool)
+        };
+        let deficit = f64::from(inputs.win_vp) - f64::from(inputs.public_vp) - hidden_dev_vp;
+        if deficit <= 0.0 {
+            estimate.ceiling = 0.0;
+            return estimate;
+        }
+        estimate.income = inputs.production_pips.iter()
+            .map(|pips| f64::from(*pips)).sum::<f64>() / 36.0;
+        if estimate.income == 0.0 {
+            return estimate;
+        }
+        let route = |cost, cards_per_vp| Some(EtwRoute {
+            cost, cards_per_vp, required: deficit * cards_per_vp * MIX_PENALTY,
+        });
+        if inputs.pieces_city > 0
+            && inputs.settlements_on_board > 0
+            && inputs.city_vp > inputs.settlement_vp
+            && let Some(cost) = inputs.city_cost
+        {
+            let cost = cost.map(f64::from);
+            let cards_per_vp = sum_cost(&cost) / f64::from(inputs.city_vp - inputs.settlement_vp);
+            estimate.routes[0] = route(cost, cards_per_vp);
+        }
+        if inputs.pieces_settlement > 0
+            && inputs.settlement_vp > 0
+            && let (Some(settlement), Some(road)) = (inputs.settlement_cost, inputs.road_cost)
+        {
+            let cost = std::array::from_fn(|resource| {
+                f64::from(settlement[resource]) + ROAD_ALLOWANCE * f64::from(road[resource])
+            });
+            let cards_per_vp = sum_cost(&cost) / f64::from(inputs.settlement_vp);
+            estimate.routes[1] = route(cost, cards_per_vp);
+        }
+        if inputs.dev_deck_remaining > 0
+            && unseen_pool > 0
+            && inputs.dev_victory_points > 0
+            && let Some(cost) = inputs.dev_cost
+        {
+            let cost = cost.map(f64::from);
+            let expected_vp_per_draw = f64::from(inputs.dev_victory_points) / f64::from(unseen_pool);
+            let cards_per_vp = sum_cost(&cost) / expected_vp_per_draw;
+            estimate.routes[2] = route(cost, cards_per_vp);
+        }
+        estimate
+    }
+
+    pub(crate) fn with_hand(&self, hand: &[f64; RESOURCE_COUNT]) -> f64 {
+        if hand.iter().any(|expected| !expected.is_finite()) {
+            return ETW_CAP;
+        }
+        let mut best = self.ceiling;
+        for route in self.routes.iter().flatten() {
+            let mut direct = 0.0;
+            let mut surplus = 0.0;
+            for resource in 0..RESOURCE_COUNT {
+                direct += hand[resource].min(route.cost[resource]);
+                let surplus_amount = (hand[resource] - route.cost[resource]).max(0.0);
+                if surplus_amount == 0.0 {
+                    continue;
+                }
+
+                // Positive surplus at rate zero has unbounded trade credit.
+                if self.trade_rates[resource] == 0 {
+                    surplus = f64::INFINITY;
+                } else {
+                    surplus += surplus_amount / f64::from(self.trade_rates[resource]);
+                }
+            }
+            let credit = (direct + surplus).min(route.cards_per_vp);
+            let value = (route.required - credit).max(0.0) / self.income;
+            best = best.min(if value.is_finite() { value } else { ETW_CAP });
+        }
+        best
     }
 }
 
@@ -140,7 +248,7 @@ pub fn expected_turns_to_win(inputs: &EtwInputs) -> f64 {
 }
 
 pub fn etw_for_seat(view: &DecisionView<'_>, seat: usize) -> f64 {
-    expected_turns_to_win(&inputs_for_seat(view, seat))
+    view.etw_for_seat(seat)
 }
 
 fn minimum_cost(costs: &[[u8; RESOURCE_COUNT]]) -> Option<[u8; RESOURCE_COUNT]> {
@@ -180,4 +288,127 @@ fn route_etw(
 
 fn sum_cost(cost: &[f64; RESOURCE_COUNT]) -> f64 {
     cost.iter().sum()
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::board::{ConversionOptions, SimBoard};
+    use crate::game::{GameArena, GameConfig};
+    use crate::rules::{RuleConfig, TradeConfig};
+    use crate::topology::{Layout, Topology};
+    use crate::view::DecisionPhase;
+    use crate::wire::WireBoard;
+
+    pub(crate) fn fixture() -> (Topology, SimBoard, GameArena) {
+        let topology = Topology::load(Layout::Extension6).unwrap();
+        let mut rules = RuleConfig::base(Layout::Extension6);
+        rules.player_trading = Some(TradeConfig::default());
+        let wire = WireBoard::parse_str(include_str!(
+            "../../../../src/parser/__tests__/expected/board-draft-empty.json"
+        )).unwrap();
+        let board = SimBoard::try_from_wire(
+            wire, &topology, &rules, ConversionOptions::default(),
+        ).unwrap();
+        let mut arena = GameArena::default();
+        arena.play(&board, &topology, &rules, &GameConfig::default());
+        (topology, board, arena)
+    }
+
+    #[test]
+    fn prepared_hand_estimate_matches_direct_bits() {
+        let (topology, board, arena) = fixture();
+        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+        for seat in 0..view.seats() {
+            for variant in 0..32 {
+                let mut inputs = direct_inputs(&view, seat);
+                inputs.public_vp = variant % 12;
+                inputs.dev_count = variant % 5;
+                inputs.all_seats_dev_count_sum = u16::from(variant % 7);
+                inputs.dev_deck_remaining = variant % 4;
+                inputs.dev_victory_points = variant % 6;
+                inputs.pieces_city = variant % 3;
+                inputs.pieces_settlement = variant % 2;
+                inputs.settlements_on_board = variant % 4;
+                inputs.city_vp = variant % 4;
+                inputs.settlement_vp = variant % 3;
+                inputs.production_pips = [u16::from(variant); RESOURCE_COUNT];
+                inputs.trade_rates = std::array::from_fn(|r| (r as u32 + u32::from(variant)) % 5);
+                if variant % 5 == 0 { inputs.city_cost = None; }
+                if variant % 7 == 0 { inputs.road_cost = None; }
+                if variant % 11 == 0 { inputs.dev_cost = None; }
+                let estimate = EtwEstimate::new(&inputs);
+                for amount in [0.0, 0.25, 1.0, 2.5, 9.0, -1.0, f64::INFINITY, f64::NAN] {
+                    for resource in 0..RESOURCE_COUNT {
+                        inputs.belief_expected = [1.5; RESOURCE_COUNT];
+                        inputs.belief_expected[resource] = amount;
+                        let direct = expected_turns_to_win(&inputs).to_bits();
+                        assert_eq!(estimate.with_hand(&inputs.belief_expected).to_bits(), direct);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn seat_inputs_and_base_follow_each_view() {
+        let (topology, board, mut arena) = fixture();
+        for variant in 0..12 {
+            arena.state.players[0].resources = [variant; RESOURCE_COUNT];
+            arena.state.players[1].pieces[1] = variant as u8 % 5;
+            arena.state.players[1].pieces[2] = variant as u8 % 4;
+            arena.state.players[1].vp_public = variant as u8 % 9;
+            arena.state.players[1].playable_dev[0] = variant as u8 % 4;
+            arena.state.players[1].trade_rate = [variant as u32 % 5; RESOURCE_COUNT];
+            arena.set_dev_state(variant as usize, false);
+            arena.state.vertex_owner[0] = variant as u8 % board.seats() as u8;
+            arena.state.vertex_tier[0] = variant as u8 % 3;
+            arena.state.belief.gain(1, variant as usize % RESOURCE_COUNT, 1);
+            for observer in 0..board.seats() {
+                let view = arena.decision_view(&board, &topology, observer, DecisionPhase::Action);
+                for _ in 0..2 {
+                    for seat in 0..board.seats() {
+                        let direct = direct_inputs(&view, seat);
+                        assert_eq!(inputs_for_seat(&view, seat), direct);
+                        assert_eq!(etw_for_seat(&view, seat).to_bits(), expected_turns_to_win(&direct).to_bits());
+                    }
+                }
+            }
+        }
+    }
+
+    fn direct_inputs(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
+        let rules = view.rules_for(seat);
+        let settlements_on_board = (0..view.topology().vertex_count())
+            .filter(|vertex| {
+                view.vertex_owner(*vertex as u8) == Some(seat as u8)
+                    && view.vertex_tier(*vertex as u8) == 1
+            })
+            .count() as u8;
+        EtwInputs {
+            win_vp: rules.win_vp(),
+            public_vp: view.public_vp(seat),
+            dev_count: view.dev_count(seat),
+            all_seats_dev_count_sum: (0..view.seats())
+                .map(|other| u16::from(view.dev_count(other)))
+                .sum(),
+            dev_deck_remaining: view.dev_deck_remaining(),
+            dev_victory_points: rules.dev_victory_points(),
+            production_pips: view.production_pips(seat),
+            pieces_settlement: view.pieces(seat, Buildable::Settlement),
+            pieces_city: view.pieces(seat, Buildable::City),
+            settlements_on_board,
+            settlement_cost: minimum_cost(rules.costs(Buildable::Settlement)),
+            city_cost: minimum_cost(rules.costs(Buildable::City)),
+            road_cost: minimum_cost(rules.costs(Buildable::Road)),
+            dev_cost: Some(*rules.dev_cost()),
+            settlement_vp: rules.vp(Buildable::Settlement),
+            city_vp: rules.vp(Buildable::City),
+            trade_rates: Resource::ALL.map(|resource| view.trade_rate_for(seat, resource)),
+            belief_expected: view.belief().expected(seat),
+            hand_total: view.hand_total(seat),
+        }
+    }
+
+
 }

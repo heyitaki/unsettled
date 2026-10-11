@@ -91,16 +91,18 @@ fn score_offers_inner(
     trading_params: &trading::TradeParams,
     mut collect: impl FnMut(ScoredAction),
 ) {
-    let mut recipients: [Option<EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
+    let mut recipients: [Option<&EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
     let mut bases = [None; MAX_SEATS];
     for seat in 0..view.seats() {
         if seat == view.observer() || trade::embargoed(view, seat) {
             continue;
         }
-        recipients[seat] = Some(etw::inputs_for_seat(view, seat));
+        recipients[seat] = Some(view.etw_inputs(seat));
     }
     let own = trading::own_inputs(view);
     let own_base = etw::expected_turns_to_win(&own);
+    let own_value = trading::TradeValue::new(&own, trading_params, own_base);
+    let mut values: [Option<trading::TradeValue<'_>>; MAX_SEATS] = [const { None }; MAX_SEATS];
     for give in Resource::ALL {
         for get in Resource::ALL {
             for count in [1, 2] {
@@ -113,11 +115,8 @@ fn score_offers_inner(
                     get,
                     count,
                 };
-                let mine = trading::trade_benefit_with_base(
-                    &own,
-                    trading_params,
+                let mine = own_value.benefit(
                     &trading::proposer_delta(offer),
-                    own_base,
                 );
                 if mine <= 0.0 {
                     continue;
@@ -131,10 +130,9 @@ fn score_offers_inner(
                     if inputs.belief_expected[get.index()] < 1.0 {
                         continue;
                     }
-                    let base = *bases[seat].get_or_insert_with(|| etw::expected_turns_to_win(inputs));
-                    let score = trading::counterparty_score_with_base(
-                        inputs, trading_params, &responder, base,
-                    );
+                    let base = *bases[seat].get_or_insert_with(|| etw::etw_for_seat(view, seat));
+                    let value = values[seat].get_or_insert_with(|| trading::TradeValue::new(inputs, trading_params, base));
+                    let score = value.counterparty_score(&responder);
                     if !score.is_finite() {
                         continue;
                     }

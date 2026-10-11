@@ -1,5 +1,7 @@
-use crate::state::{EMPTY, MAX_EDGES, MAX_VERTICES};
-use crate::topology::{Edge, Topology, Vertex};
+use std::cell::RefCell;
+
+use crate::state::{EMPTY, MAX_EDGES, MAX_SEATS, MAX_VERTICES};
+use crate::topology::{Edge, Layout, Topology, Vertex};
 
 /// Prospective segments a caller may splice onto an owned network at once. Road building lays two.
 const PROBE_CAPACITY: usize = 2;
@@ -9,6 +11,35 @@ const _: () = assert!(MAX_TRAIL_EDGES <= u128::BITS as usize);
 const _: () = assert!(MAX_VERTICES <= u128::BITS as usize);
 /// Board geometry gives every vertex two or three incident edges.
 const MAX_VERTEX_DEGREE: usize = 3;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct RoadKey {
+    layout: Layout,
+    edges: u128,
+    blocked: u128,
+}
+
+#[derive(Clone, Copy)]
+struct RoadProbe {
+    segment: [Vertex; 2],
+    cap: u8,
+    length: u8,
+}
+
+struct RoadMemo {
+    key: RoadKey,
+    network: RoadNetwork,
+    vertex_owner: [u8; MAX_VERTICES],
+    edge_owner: [u8; MAX_EDGES],
+    probes: [Option<RoadProbe>; MAX_EDGES],
+    next: usize,
+}
+
+// Hands and dice change between decisions without changing the road graph.
+std::thread_local! {
+    static ROAD_MEMOS: [RefCell<Option<RoadMemo>>; MAX_SEATS] =
+        [const { RefCell::new(None) }; MAX_SEATS];
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct RoadCard {
@@ -31,6 +62,7 @@ pub struct RoadCard {
 ///
 /// A probed segment is assumed not to be owned already; laying a road the seat holds is not a
 /// legal action, and the graph would gain a parallel edge if it were.
+#[derive(Clone)]
 pub struct RoadNetwork {
     endpoints: [[Vertex; 2]; MAX_TRAIL_EDGES],
     /// Slot indices into `endpoints`, grouped by the vertex they touch.
@@ -44,6 +76,7 @@ pub struct RoadNetwork {
     /// Segments the seat owns, below any probe currently spliced on.
     owned: usize,
     base: u8,
+    memo: Option<(u8, RoadKey)>,
 }
 
 impl RoadNetwork {
@@ -54,17 +87,53 @@ impl RoadNetwork {
         edge_owner: &[u8],
         seat: u8,
     ) -> Self {
-        let mut network = Self::empty();
-        for vertex in 0..topology.vertex_count() {
-            let owner = vertex_owner[vertex];
-            network.blocked[vertex] = owner != EMPTY && owner != seat;
-        }
-        for edge in 0..topology.edge_count() {
-            if edge_owner[edge] == seat {
-                network.push(topology.edge_endpoints(edge as Edge));
+        ROAD_MEMOS.with(|memos| {
+            let mut memo = memos[usize::from(seat)].borrow_mut();
+            let vertices = &vertex_owner[..topology.vertex_count()];
+            let edges = &edge_owner[..topology.edge_count()];
+            if let Some(cached) = memo.as_ref()
+                && cached.key.layout == topology.layout()
+                && &cached.vertex_owner[..vertices.len()] == vertices
+                && &cached.edge_owner[..edges.len()] == edges
+            {
+                return cached.network.clone();
             }
-        }
-        network.sealed()
+            let mut key = RoadKey { layout: topology.layout(), edges: 0, blocked: 0 };
+            for (vertex, owner) in vertices.iter().copied().enumerate() {
+                if owner != EMPTY && owner != seat {
+                    key.blocked |= 1 << vertex;
+                }
+            }
+            for (edge, owner) in edges.iter().copied().enumerate() {
+                if owner == seat {
+                    key.edges |= 1 << edge;
+                }
+            }
+            if memo.as_ref().is_none_or(|cached| cached.key != key) {
+                let mut network = Self::empty();
+                for vertex in 0..topology.vertex_count() {
+                    network.blocked[vertex] = key.blocked & (1 << vertex) != 0;
+                }
+                let mut owned = key.edges;
+                while owned != 0 {
+                    let edge = owned.trailing_zeros() as Edge;
+                    owned &= owned - 1;
+                    network.push(topology.edge_endpoints(edge));
+                }
+                network.owned = network.len;
+                network.memo = Some((seat, key));
+                network.base = network.search(u128::MAX, network.len, 0);
+                *memo = Some(RoadMemo {
+                    key, network,
+                    vertex_owner: [EMPTY; MAX_VERTICES], edge_owner: [EMPTY; MAX_EDGES],
+                    probes: [None; MAX_EDGES], next: 0,
+                });
+            }
+            let memo = memo.as_mut().unwrap();
+            memo.vertex_owner[..vertices.len()].copy_from_slice(vertices);
+            memo.edge_owner[..edges.len()].copy_from_slice(edges);
+            memo.network.clone()
+        })
     }
 
     pub fn from_edges(edges: &[[Vertex; 2]], blocked_vertices: &[bool]) -> Self {
@@ -88,13 +157,24 @@ impl RoadNetwork {
     /// [`u8::MAX`] for the exact length. Capping is what keeps a long late-game network affordable,
     /// since the deepest branches are also the most expensive ones to walk.
     pub fn probe(&mut self, segments: &[[Vertex; 2]], cap: u8) -> u8 {
-        let probed = self.len;
-        for pair in segments {
-            self.push(*pair);
+        if let ([segment], Some((seat, key))) = (segments, self.memo) {
+            return ROAD_MEMOS.with(|memos| {
+                let mut memo = memos[usize::from(seat)].borrow_mut();
+                let Some(memo) = memo.as_mut().filter(|memo| memo.key == key) else {
+                    return self.probe_uncached(segments, cap);
+                };
+                for probe in memo.probes.iter().map_while(Option::as_ref) {
+                    if probe.segment == *segment && probe.cap == cap {
+                        return probe.length;
+                    }
+                }
+                let length = self.probe_uncached(segments, cap);
+                memo.probes[memo.next] = Some(RoadProbe { segment: *segment, cap, length });
+                memo.next = (memo.next + 1) % MAX_EDGES;
+                length
+            });
         }
-        let best = self.longest_trail_through(probed, cap);
-        self.rewind(probed);
-        best
+        self.probe_uncached(segments, cap)
     }
 
     fn empty() -> Self {
@@ -107,7 +187,18 @@ impl RoadNetwork {
             len: 0,
             owned: 0,
             base: 0,
+            memo: None,
         }
+    }
+
+    fn probe_uncached(&mut self, segments: &[[Vertex; 2]], cap: u8) -> u8 {
+        let probed = self.len;
+        for pair in segments {
+            self.push(*pair);
+        }
+        let best = self.longest_trail_through(probed, cap);
+        self.rewind(probed);
+        best
     }
 
     fn sealed(mut self) -> Self {
@@ -304,4 +395,50 @@ pub fn leading_holder(current: Option<usize>, values: &[u8], minimum: u8) -> Opt
 pub fn update_road_card(card: &mut RoadCard, lengths: &[u8], minimum: u8) {
     card.holder = leading_holder(card.holder, lengths, minimum);
     card.retired = card.holder.is_none();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::topology::Layout;
+
+    #[test]
+    fn remembered_roads_match_fresh_search_after_content_changes() {
+        for layout in [Layout::Standard4, Layout::Extension6] {
+            let topology = Topology::load(layout).unwrap();
+            let mut owners = [EMPTY; MAX_EDGES];
+            let mut vertices = [EMPTY; MAX_VERTICES];
+            let mut seed = 918273_u64;
+            for variant in 0..160 {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                let edge = seed as usize % topology.edge_count();
+                owners[edge] = if variant % 3 == 0 { EMPTY } else { (variant % 2) as u8 };
+                let vertex = (seed >> 32) as usize % topology.vertex_count();
+                vertices[vertex] = if variant % 5 == 0 { 1 } else { EMPTY };
+                for seat in 0..2 {
+                    let edges: Vec<_> = (0..topology.edge_count())
+                        .filter(|edge| owners[*edge] == seat)
+                        .map(|edge| topology.edge_endpoints(edge as Edge)).collect();
+                    let blocked = vertices.map(|owner| owner != EMPTY && owner != seat);
+                    for pass in 0..3 {
+                        let mut actual = RoadNetwork::for_seat(&topology, &vertices, &owners, seat);
+                        let mut direct = RoadNetwork::from_edges(&edges, &blocked);
+                        assert_eq!(actual.base_length(), direct.base_length());
+                        if pass == 1 {
+
+                            // Another view may replace the memo while this graph is still in use.
+                            RoadNetwork::for_seat(&topology, &vertices, &[EMPTY; MAX_EDGES], seat);
+                        }
+                        for edge in 0..topology.edge_count() {
+                            if owners[edge] == seat { continue; }
+                            let segments = [topology.edge_endpoints(edge as Edge)];
+                            for cap in [3, 5, 8, u8::MAX, 5] {
+                                assert_eq!(actual.probe(&segments, cap), direct.probe(&segments, cap));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
