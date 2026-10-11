@@ -86,10 +86,10 @@ The pencil replaces the analysis block with the board tools in the same slot. Ev
 
 ### S7 · Maps screen
 
-Full-screen overlay. Header: back chevron, `Maps` left-aligned, dots menu in the right corner holding `Import JSON`, `Export JSON`, `Back up library` and `Restore library backup`. Backup includes current unsaved games, leaving out an unlinked board still blank. Restore merges without overwriting, skips content already restored under its name or a `name (n)` copy, and refuses to evict boards at the cap. Body, in order:
+Full-screen overlay. Header: back chevron, `Maps` left-aligned, then in the right corner a plus button (`New board`, which adds a board and closes the screen) and the dots menu holding `Import JSON`, `Export JSON`, `Back up library` and `Restore library backup`. Backup includes current unsaved games, leaving out an unlinked board still blank. Restore merges without overwriting, skips content already restored under its name or a `name (n)` copy, and refuses to evict boards at the cap. Body, in order:
 
 1. **`Import screenshot`**: the filled accent button, first on the page. It is why the screen was opened.
-2. **`Boards (n)`** with a sort control on the right of the label: the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. Rows have transparent grounds and transparent 1px borders. The board on screen has the neutral tint. Below the rows, a plain, left-aligned, 36px **`New board`** text button.
+2. **`Boards (n)`** with a sort control on the right of the label: the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. Rows have transparent grounds and transparent 1px borders. The board on screen has the neutral tint.
 
 Every board autosaves into a map (O2), so an open board and its saved map are one thing and the list shows it once. Nothing marks a map as loaded: tapping one already loaded just switches to it. An unsaved board carries no timestamp, because it has nothing saved; the timestamp answers "can I delete this?". The trash deletes the map and drops the board loaded from it in one gesture (an unsaved board is simply dropped, pending edit included). The library keeps the 50 most recently touched boards; older ones leave the list on their own, board and map together (desktop D1). Desktop spec D1 holds the store actions each row reaches.
 
@@ -107,7 +107,7 @@ Full-screen overlay. Header: back chevron, `Players`, no dots menu (nothing to i
 - **Tap the name** to rename in place. The name button is only as wide as its own text plus a few pixels, with a floor around 30px, so the rest of the row stays a claim target; the field grows with what is typed rather than filling the column. Enter commits, Escape reverts. The name carries a faint dotted underline, matching the context-line player picker, because nothing else distinguishes it from the row it sits in.
 - **Press and hold, or drag the grip**, to move the row to another seat. The grip starts a drag immediately; anywhere else needs a hold, and movement past a slop threshold before the hold lands cancels it so a scroll still scrolls. The lifted row tracks the finger with no easing while the rows it passes ease out of the way.
 
-Below the rows, a plain, left-aligned, 36px **`Add player`** text button matching `New board` on the Maps screen.
+Below the rows, a plain, left-aligned, 36px **`Add player`** text button.
 
 **Snake draft.** Below the roster, the pick grid, derived from seat order.
 

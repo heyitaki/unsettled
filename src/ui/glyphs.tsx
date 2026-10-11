@@ -327,7 +327,7 @@ export function BackGlyph() {
 
 export function PlusGlyph() {
   return (
-    <svg {...LINE_ART} width="12" height="12" viewBox="0 0 12 12" strokeWidth="1.8">
+    <svg {...LINE_ART} width="12" height="12" viewBox="0 0 12 12" strokeWidth="1.2">
       <path d="M6 1.4V10.6M1.4 6H10.6" />
     </svg>
   )

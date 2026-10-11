@@ -8,10 +8,12 @@ import { isTextEntry, overlayOpen } from '../overlayPosition'
  * the page, sliding in from the right, closed by the back chevron or Escape.
  * The page under it is never scrolled or re-laid out, so it returns exactly as
  * it was. The dots button keeps its slot invisibly when a screen has no menu,
- * so the title sits at the same place on both screens.
+ * so the title sits at the same place on both screens. A screen's own
+ * `action` button sits before the dots.
  */
-export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
+export function PhoneOverlay({ title, action, menu, menuLabel, onClose, children }: {
   title: string
+  action?: ReactNode
   menu?: readonly ContextMenuItem[]
   menuLabel?: string
   onClose: () => void
@@ -41,6 +43,7 @@ export function PhoneOverlay({ title, menu, menuLabel, onClose, children }: {
           <BackGlyph />
         </button>
         <span className="phone-overlay-title">{title}</span>
+        {action}
         <button
           type="button"
           className={menu ? 'phone-ohead-btn' : 'phone-ohead-btn invisible'}

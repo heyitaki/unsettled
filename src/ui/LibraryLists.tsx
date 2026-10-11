@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { boardColor } from './boardColor'
-import { PlusGlyph, SortGlyph, TrashGlyph } from './glyphs'
+import { SortGlyph, TrashGlyph } from './glyphs'
 import { ListRow } from './ListRow'
 import { SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, sortMaps, stampFor } from './library'
 import { MenuSelect } from './MenuSelect'
@@ -21,7 +21,7 @@ type Editing = { key: string; draft: string }
  * loaded and unloaded maps: opening one that already is just switches.
  * The desktop's Library panel and the phone's Maps screen both render this
  * and differ only in the chrome around it, plus `onNavigate`: on the phone,
- * opening or adding a board takes the screen away with it.
+ * opening a board takes the screen away with it.
  */
 export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
   const { state, dispatch } = useStore()
@@ -150,17 +150,6 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
           )
         })}
       </div>
-      <button
-        type="button"
-        className="list-add"
-        onClick={() => {
-          dispatch({ type: 'tab-add' })
-          onNavigate?.()
-        }}
-      >
-        <PlusGlyph />
-        New board
-      </button>
     </div>
   )
 }
