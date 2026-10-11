@@ -13,9 +13,9 @@ Follow-on to [completed/seat-count-weights.md](completed/seat-count-weights.md).
 
 | # | Item | State |
 | ---: | --- | --- |
-| 1 | Mint `tuning4`/`eval4`/`gate4` with the seat count folded into the seed; pins for disjointness across domains and seat counts; docs | not started |
-| 2 | Programme-file revision and five preregistrations (M-82 to M-86), committed before any run | not started |
-| 3 | Run the five `gate4` gates one after another: 2, 3, 4, 5, 6 seats | not started |
+| 1 | Mint `tuning4`/`eval4`/`gate4` with the seat count folded into the seed; pins for disjointness across domains and seat counts; docs | done |
+| 2 | Programme-file revision and five preregistrations (M-82 to M-86), committed before any run | done |
+| 3 | Run the five `gate4` gates one after another: 2, 3, 4, 5, 6 seats | in progress: one background script, logs in the session scratchpad as `m8N.log`, artifacts in `simulator/runs/m8N-seatsN-gate4`; a seat count whose artifact directory exists is spent and must never be rerun |
 | 4 | Record M-82 to M-86; keep or revert each seat count; regenerate; update outcome table, ledger, `CLAUDE.md`, README | not started |
 | 5 | Three number-check passes; final gates (`npm test`, typecheck, lint, `cargo test` both profiles); `/selfreview`; commit | not started |
 | 6 | Move this file to `docs/plans/completed/` | not started |

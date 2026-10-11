@@ -90,6 +90,18 @@ Made after the four-seat pilot was read for its wall time and widths and before 
 
 **What this costs.** Where a cap binds, the screen's half-widths are wider than the 0.35pp target and more arms end `inconclusive`. An `inconclusive` reading is a statement about power and never a null, and an entry under a binding cap says so.
 
+## Revision 2, 2026-10-10: an independent gate on a fourth generation
+
+Made after the correction under "Seed domains and the authorization", and before any fourth-generation run. The closing report offered a fourth generation as the way to make the seat counts independent of each other, and the user answered: "great do it. in the future dont ask about creating new generations/seeds. its cheap so just do it".
+
+**The fourth generation folds the seat count into the seed.** `tuning4`, `eval4` and `gate4` derive a run's domain seed as `mix64(constant ^ seats)`, so every seat count draws its own boards and its own game seeds, pinned by `seat_count_changes_a_fourth_generation_domains_boards` and by the pairwise disjointness tests over all fifteen derived seeds. The nine earlier domains keep their seat-blind seeds, so every earlier entry stays reproducible.
+
+**One run per seat count, on `gate4` only.** Each seat count's vector was chosen without bias; what the shared boards cost was independence between seat counts. One gate per seat count, on boards no other seat count and no earlier run shares, gives five mutually independent readings of the five shipped vectors. There is no new screen and no `eval4` run, so `tuning4` and `eval4` stay unspent, and this revision does not ask whether a different arm would have been chosen on independent boards.
+
+**The user's rule decides, applied to the independent gate.** A seat count keeps its adopted vector only on `better` at `--threshold 0.005` on `gate4`. Any other verdict returns that seat count to today's vector, with the M entry saying why. This is stricter than the first procedure, which asked for one gate: a vector now has to have read `better` on `gate3` and again on `gate4`.
+
+**Sizes, fixed from third-generation readings before any `gate4` run.** The `gate3` board count, doubled where `gate3` cleared the bar by less than 0.25pp, so that a real effect of the size already read is unlikely to miss on power alone: 70000 boards at two seats, 42000 at three, 36000 at four (doubled), 18000 at five and 20000 at six (doubled). The five runs go one after another in seat order and take M-82 to M-86.
+
 ## Outcome
 
 Filled in as each seat count closes. One row per seat count: the vector it ships and the entry that says why.
