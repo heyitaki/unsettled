@@ -10,8 +10,13 @@ import { AnalysisContext, type AnalysisState } from './useAnalysis'
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const { state } = useStore()
   const board = activeTab(state).game.board
-  const [client] = useState(() => createAnalysisClient(() =>
-    new Worker(new URL('../engine/analysis.worker.ts', import.meta.url), { type: 'module' })))
+  const [client] = useState(() => createAnalysisClient(
+    () => new Worker(new URL('../engine/analysis.worker.ts', import.meta.url), { type: 'module' }),
+    // A production chunk's URL carries a content hash that moves with the
+    // engine, so it versions the saved results. A dev server keeps one URL
+    // while the engine changes under it, so there nothing is saved.
+    import.meta.env.PROD ? { storage: localStorage, version: import.meta.url } : undefined,
+  ))
   const [completed, setCompleted] = useState<{ board: Board; result: AnalysisResult } | null>(null)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {

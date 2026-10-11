@@ -8,6 +8,9 @@ export const WORKSPACE_KEY = 'unsettled.workspace.v1'
 // Session-scoped, so it is per browser tab and fires no cross-document events.
 export const ACTIVE_TAB_KEY = 'unsettled.activeTab.v1'
 export const WORKSPACE_CORRUPT_KEY = `${WORKSPACE_KEY}.corrupt`
+// Best picks results by board content. Derived data: never backed up, and
+// safe to delete.
+export const ANALYSIS_CACHE_KEY = 'unsettled.analysisCache.v1'
 
 export interface ListedMap {
   // Stable identity, minted on first write and preserved across renames and

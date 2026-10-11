@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createBoard } from '../../model/board'
 import type { DraftAnalysis } from '../../engine/analyze'
 import { inferDraftState } from '../../engine/draft'
-import { createAnalysisClient } from '../analysisClient'
+import { ANALYSIS_CACHE_KEY } from '../../persistence/localStorage'
+import { ANALYSIS_CACHE_SIZE, createAnalysisClient, type AnalysisCachePersistence } from '../analysisClient'
 
-function harness() {
+function harness(persist?: AnalysisCachePersistence) {
   const workers: {
     postMessage: ReturnType<typeof vi.fn>
     terminate: ReturnType<typeof vi.fn>
@@ -15,7 +16,7 @@ function harness() {
     const worker = { postMessage: vi.fn(), terminate: vi.fn(), onmessage: null, onerror: null }
     workers.push(worker)
     return worker as unknown as Worker
-  })
+  }, persist)
   const reply = (index: number, analysis: DraftAnalysis) => {
     const worker = workers[index]
     const request = worker.postMessage.mock.calls.at(-1)?.[0]
@@ -53,6 +54,85 @@ describe('analysis client', () => {
     client.run(board, report)
     expect(report).toHaveBeenCalledWith({ analysis })
     expect(workers[0].postMessage).toHaveBeenCalledOnce()
+    client.dispose()
+  })
+
+  it('reuses a result for a different board object with the same content', () => {
+    const { client, workers, reply } = harness()
+    client.run(board, vi.fn())
+    reply(0, analysis)
+    const report = vi.fn()
+    client.run(createBoard('standard4'), report)
+    expect(report).toHaveBeenCalledWith({ analysis })
+    expect(workers[0].postMessage).toHaveBeenCalledOnce()
+    client.dispose()
+  })
+
+  it('evicts the least recently used result once the cache is full', () => {
+    const { client, workers, reply } = harness()
+    const variant = (index: number) => ({ ...board, mePlayerId: `p${index}` })
+    const posts = () => workers[0].postMessage.mock.calls.length
+    const compute = (index: number) => {
+      client.run(variant(index), vi.fn())
+      reply(0, analysis)
+    }
+    for (let index = 0; index < ANALYSIS_CACHE_SIZE; index++) compute(index)
+    client.run(variant(0), vi.fn())
+    expect(posts()).toBe(ANALYSIS_CACHE_SIZE)
+    compute(ANALYSIS_CACHE_SIZE)
+    client.run(variant(0), vi.fn())
+    expect(posts()).toBe(ANALYSIS_CACHE_SIZE + 1)
+    client.run(variant(1), vi.fn())
+    expect(posts()).toBe(ANALYSIS_CACHE_SIZE + 2)
+    client.dispose()
+  })
+
+  it('restores results saved by an earlier client of the same version, and none from another', () => {
+    const stored = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+    }
+    const first = harness({ storage, version: 'a' })
+    first.client.run(board, vi.fn())
+    first.reply(0, analysis)
+    first.client.dispose()
+
+    const same = harness({ storage, version: 'a' })
+    const report = vi.fn()
+    same.client.run(createBoard('standard4'), report)
+    expect(report).toHaveBeenCalledWith({ analysis })
+    expect(same.workers).toHaveLength(0)
+
+    const other = harness({ storage, version: 'b' })
+    other.client.run(board, vi.fn())
+    expect(other.workers[0].postMessage).toHaveBeenCalledOnce()
+    other.client.dispose()
+  })
+
+  it.each(['{not json', '{"version":"a","entries":[null]}', '{"version":"a","entries":5}'])(
+    'starts empty from a stored value it cannot use: %s', (saved) => {
+      const { client, workers } = harness({
+        storage: { getItem: () => saved, setItem: () => {}, removeItem: () => {} },
+        version: 'a',
+      })
+      client.run(board, vi.fn())
+      expect(workers[0].postMessage).toHaveBeenCalledOnce()
+      client.dispose()
+    })
+
+  it('still reports when the store refuses the write, and frees its own entry', () => {
+    const removeItem = vi.fn(() => { throw new Error('SecurityError') })
+    const { client, reply } = harness({
+      storage: { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError') }, removeItem },
+      version: 'a',
+    })
+    const report = vi.fn()
+    client.run(board, report)
+    reply(0, analysis)
+    expect(report).toHaveBeenCalledWith({ analysis })
+    expect(removeItem).toHaveBeenCalledWith(ANALYSIS_CACHE_KEY)
     client.dispose()
   })
 
