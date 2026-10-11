@@ -68,6 +68,38 @@ describe('analysis client', () => {
     client.dispose()
   })
 
+  it('does not keep a result the engine never had to rank for', () => {
+    const { client, workers, reply } = harness()
+    for (const status of ['complete', 'no-me', 'me-done'] as const) {
+      const unranked = { ...board, mePlayerId: status }
+      client.run(unranked, vi.fn())
+      reply(0, { ...analysis, status })
+      const before = workers[0].postMessage.mock.calls.length
+      client.run(unranked, vi.fn())
+      expect(workers[0].postMessage.mock.calls.length).toBe(before + 1)
+      reply(0, { ...analysis, status })
+    }
+    client.dispose()
+  })
+
+  it('gives boards that differ anywhere their own result', () => {
+    const { client, workers, reply } = harness()
+    const variants = [
+      { ...board, robber: { q: 1, r: -1 } },
+      { ...board, robber: { q: -1, r: 1 } },
+      { ...board, mePlayerId: 'p1' },
+      { ...board, mePlayerId: 'p2' },
+      { ...board, hexes: board.hexes.toReversed() },
+      { ...board, players: board.players.toReversed() },
+    ]
+    for (const [index, variant] of variants.entries()) {
+      client.run(variant, vi.fn())
+      expect(workers[0].postMessage.mock.calls.length).toBe(index + 1)
+      reply(0, analysis)
+    }
+    client.dispose()
+  })
+
   it('evicts the least recently used result once the cache is full', () => {
     const { client, workers, reply } = harness()
     const variant = (index: number) => ({ ...board, mePlayerId: `p${index}` })
@@ -98,6 +130,7 @@ describe('analysis client', () => {
     first.client.run(board, vi.fn())
     first.reply(0, analysis)
     first.client.dispose()
+    expect(stored.get(ANALYSIS_CACHE_KEY)).not.toContain('hexes')
 
     const same = harness({ storage, version: 'a' })
     const report = vi.fn()

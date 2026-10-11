@@ -1,10 +1,30 @@
-import type { DraftAnalysis } from '../engine/analyze'
+import type { AnalysisStatus, DraftAnalysis } from '../engine/analyze'
 import type { AnalysisRequest, AnalysisResponse, AnalysisResult } from '../engine/analysisProtocol'
 import { isRecord } from '../model/serialization'
 import type { Board } from '../model/types'
 import { ANALYSIS_CACHE_KEY } from '../persistence/localStorage'
 
 export const ANALYSIS_CACHE_SIZE = 50
+
+// With these the engine returns before ranking anything, so the answer costs
+// nothing to ask for again and would only push a real ranking out.
+const UNRANKED: ReadonlySet<AnalysisStatus> = new Set(['complete', 'no-me', 'me-done'])
+
+// cyrb53. The cache holds this in place of the board's JSON, which was half of
+// what it stored. 53 bits: two boards sharing a key, and one showing the
+// other's picks, is about a 1 in 10^13 chance for a full cache.
+function hash(text: string): string {
+  let low = 0xdeadbeef
+  let high = 0x41c6ce57
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index)
+    low = Math.imul(low ^ code, 2654435761)
+    high = Math.imul(high ^ code, 1597334677)
+  }
+  low = Math.imul(low ^ (low >>> 16), 2246822507) ^ Math.imul(high ^ (high >>> 13), 3266489909)
+  high = Math.imul(high ^ (high >>> 16), 2246822507) ^ Math.imul(low ^ (low >>> 13), 3266489909)
+  return (4294967296 * (2097151 & high) + (low >>> 0)).toString(36)
+}
 
 // `version` must change whenever the analysis code does: entries saved under
 // another version are dropped unread, which is also the only shape check.
@@ -31,8 +51,8 @@ function save({ storage, version }: AnalysisCachePersistence, cache: Map<string,
 }
 
 export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCachePersistence) {
-  // Keyed by board content rather than identity, and kept across board changes,
-  // so stepping back to a position already analysed costs nothing. A Map
+  // Keyed by a hash of the board's content rather than its identity, and kept across
+  // board changes, so stepping back to a position already analysed costs nothing. A Map
   // iterates in insertion order, which makes it the recency list too.
   const cache = persist ? restore(persist) : new Map<string, DraftAnalysis>()
   let worker: Worker | null = null
@@ -46,7 +66,7 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
   return {
     run(board: Board, report: (result: AnalysisResult) => void): () => void {
       if (active) stop()
-      const key = JSON.stringify(board)
+      const key = hash(JSON.stringify(board))
       const cached = cache.get(key)
       if (cached) {
         cache.delete(key)
@@ -63,9 +83,11 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
           const pending = active
           active = null
           if ('analysis' in event.data) {
-            cache.set(pending.key, event.data.analysis)
-            if (cache.size > ANALYSIS_CACHE_SIZE) cache.delete(cache.keys().next().value!)
-            if (persist) save(persist, cache)
+            if (!UNRANKED.has(event.data.analysis.status)) {
+              cache.set(pending.key, event.data.analysis)
+              if (cache.size > ANALYSIS_CACHE_SIZE) cache.delete(cache.keys().next().value!)
+              if (persist) save(persist, cache)
+            }
             pending.report({ analysis: event.data.analysis })
           } else pending.report({ error: event.data.error })
         }
