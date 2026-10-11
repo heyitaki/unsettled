@@ -57,7 +57,7 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
   const cache = persist ? restore(persist) : new Map<string, DraftAnalysis>()
   let worker: Worker | null = null
   let sequence = 0
-  let active: { id: number; key: string; report: (result: AnalysisResult) => void } | null = null
+  let active: { id: number; key: string; report: (result: AnalysisResult) => void; progress?: (fraction: number) => void } | null = null
   const stop = () => {
     active = null
     worker?.terminate()
@@ -67,7 +67,12 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
   return {
     /** A result already held, read without a worker so a render can show it at once. */
     peek: (board: Board, targetPick: number | null = null): DraftAnalysis | undefined => cache.get(keyOf(board, targetPick)),
-    run(board: Board, report: (result: AnalysisResult) => void, targetPick: number | null = null): () => void {
+    run(
+      board: Board,
+      report: (result: AnalysisResult) => void,
+      targetPick: number | null = null,
+      progress?: (fraction: number) => void,
+    ): () => void {
       if (active) stop()
       const key = keyOf(board, targetPick)
       const cached = cache.get(key)
@@ -80,9 +85,10 @@ export function createAnalysisClient(factory: () => Worker, persist?: AnalysisCa
       const id = ++sequence
       try {
         worker ??= factory()
-        active = { id, key, report }
+        active = { id, key, report, progress }
         worker.onmessage = (event: MessageEvent<AnalysisResponse>) => {
           if (event.data.id !== active?.id) return
+          if ('progress' in event.data) return active.progress?.(event.data.progress)
           const pending = active
           active = null
           if ('analysis' in event.data) {

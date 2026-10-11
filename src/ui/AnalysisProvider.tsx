@@ -23,10 +23,20 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     import.meta.env.PROD ? { storage: localStorage, version: import.meta.url } : undefined,
   ))
   const [completed, setCompleted] = useState<{ board: Board; targetPick: number | null; result: AnalysisResult } | null>(null)
+  // Tagged like `completed`, so a new view reads as not started without a reset.
+  const [progressed, setProgressed] = useState<{ board: Board; targetPick: number | null; fraction: number } | null>(null)
   const [attempt, setAttempt] = useState(0)
+  // The last ranking stays in `completed` while the next is pending, so the
+  // panel can hold its shape. An error goes: its board can come back (undo, a
+  // retry), and must then read as pending rather than as failed again.
   useEffect(() => {
-    setCompleted(null)
-    return client.run(analysisBoard, (result) => setCompleted({ board: analysisBoard, targetPick, result }), targetPick)
+    setCompleted((last) => last && 'error' in last.result ? null : last)
+    return client.run(
+      analysisBoard,
+      (result) => setCompleted({ board: analysisBoard, targetPick, result }),
+      targetPick,
+      (fraction) => setProgressed({ board: analysisBoard, targetPick, fraction }),
+    )
   }, [client, analysisBoard, targetPick, attempt])
   useEffect(() => () => client.dispose(), [client])
   const placeholder = useMemo<DraftAnalysis>(() => {
@@ -41,6 +51,8 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const value: AnalysisState = {
     analysis: result && 'analysis' in result ? result.analysis : placeholder,
     pending: result === null,
+    settled: completed && 'analysis' in completed.result ? completed.result.analysis : undefined,
+    progress: progressed?.board === analysisBoard && progressed.targetPick === targetPick ? progressed.fraction : 0,
     error: result && 'error' in result ? result.error : null,
     retry: () => setAttempt((value) => value + 1),
   }

@@ -28,6 +28,29 @@ const scores = (analysis: DraftAnalysis) =>
     .sort(([a], [b]) => a.localeCompare(b))
 
 describe('analyzeBoard with a target pick', () => {
+  it.each([undefined, 6])('reports progress that only rises and ends at 1 (target %s)', (targetPick) => {
+    const board = setMe(filledBoard(), 'p2')
+    const seen: number[] = []
+    const analysis = analyzeBoard(board, { ...SAMPLED, targetPick, onProgress: (fraction) => seen.push(fraction) })
+    expect(analysis).toEqual(analyzeBoard(board, { ...SAMPLED, targetPick }))
+    expect(seen.length).toBeGreaterThan(5)
+    expect(seen.at(-1)).toBeCloseTo(1)
+    expect(seen.every((fraction, index) => fraction > 0 && fraction >= (seen[index - 1] ?? 0))).toBe(true)
+    // Six picks stand before p2's second, each a ranking of its own, so most of the bar is theirs.
+    if (targetPick !== undefined) expect(seen.filter((fraction) => fraction < 0.9).length).toBeGreaterThan(5)
+  })
+
+  it('leaves the whole bar to the work still to do when the nested rankings are already held', () => {
+    const board = setMe(filledBoard(), 'p2')
+    const modalCache = new Map<string, DraftAnalysis>()
+    analyzeBoard(board, { ...SAMPLED, targetPick: 6, modalCache })
+    const seen: number[] = []
+    analyzeBoard(board, { ...SAMPLED, targetPick: 6, modalCache, onProgress: (fraction) => seen.push(fraction) })
+    expect(seen[0]).toBeLessThan(0.1)
+    expect(seen.at(-1)).toBeCloseTo(1)
+    expect(seen.every((fraction, index) => fraction >= (seen[index - 1] ?? 0))).toBe(true)
+  })
+
   it('ranks my next pick exactly as before when the target names it', () => {
     const board = setMe(filledBoard(), 'p2')
     const base = analyzeBoard(board, SAMPLED)

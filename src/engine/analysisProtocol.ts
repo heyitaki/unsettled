@@ -8,4 +8,5 @@ export interface AnalysisRequest {
 }
 
 export type AnalysisResult = { analysis: DraftAnalysis } | { error: string }
-export type AnalysisResponse = AnalysisResult & { id: number }
+/** `progress` is the fraction of the job done so far; any number of them precede the one result. */
+export type AnalysisResponse = (AnalysisResult | { progress: number }) & { id: number }

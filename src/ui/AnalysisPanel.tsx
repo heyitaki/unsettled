@@ -138,9 +138,23 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
 } = {}) {
   const { state, dispatch } = useStore()
   const board = activeTab(state).game.board
-  const { analysis, pending, error, retry } = useAnalysis()
+  const { analysis, pending, settled, progress = 0, error, retry } = useAnalysis()
   const { canStepBack, canStepForward, stepBack, stepForward } = useDraftSteps()
-  const recommendations = analysis.recommendations.slice(0, LISTED_PICKS)
+  // While a ranking is pending the last one stays in place, inert and drawn as
+  // placeholders, so the panel keeps its height (spec D4). The draft facts
+  // still come from `analysis`, which is already the new board's. Only a body
+  // that was on screen has a shape to keep: the ref is set while it is mounted,
+  // which the empty board, the claim row and an error all leave it not.
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const stale = pending && settled && bodyRef.current ? settled : null
+  const shown = stale ?? analysis
+  // With no body to hold (first load, a fresh claim) generic rows stand in, but
+  // only where a ranking can follow: a board with no numbers or a player with
+  // no pick left answers at once with a message, and rows would only flash.
+  const ghosts = pending && !stale
+    && board.hexes.some((hex) => hex.numberToken !== null)
+    && analysis.draft.myRemainingPickIndices.length > 0
+  const recommendations = shown.recommendations.slice(0, LISTED_PICKS)
   const [selectedPick, setSelectedPick] = useState<VertexId | null>(null)
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -193,7 +207,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     : ordinal(state.viewedPick + 1)
   // The picks before the viewed pick, taken from the modal simulation, so
   // each spot is mutually legal and attributed to the player who takes it.
-  const likelyGone = analysis.takenBeforeFirstPick
+  const likelyGone = shown.takenBeforeFirstPick
   // Numbered in draft order and tinted to each picker so selecting shows who goes
   // where, and playing them out advances the draft to the viewed pick.
   const likelyGoneMarks: HighlightMark[] = likelyGone.map(({ vertexId, playerId }, index) => ({
@@ -263,10 +277,10 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     </>
   )
 
-  const body = analysis.status !== 'ready' ? (
+  const body = shown.status !== 'ready' ? (
     <div className="analysis-placeholder">
-      <p>{emptyMessage[analysis.status]}</p>
-      {analysis.status === 'no-availability' && likelyGone.length > 0 && (
+      <p>{emptyMessage[shown.status]}</p>
+      {shown.status === 'no-availability' && likelyGone.length > 0 && (
         <span>
           likely gone: {joined(likelyGone.map(({ vertexId }) =>
             <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ', ')}
@@ -456,12 +470,29 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             {` · Picking ${pickText}`}
           </div>
           {warnings}
-          {pending ? <p role="status">Analyzing placements…</p> : error ? (
-            <div role="alert">
-              <p>{error}</p>
-              <button type="button" onClick={retry}>Retry analysis</button>
-            </div>
-          ) : body}
+          <div className="analysis-body">
+            {pending && (
+              <div className="analysis-loading" role="status">
+                <span>Analyzing placements…</span>
+                {/* Never empty, so the bar reads as started before the first report. */}
+                <div style={{ width: `${Math.max(3, Math.round(progress * 100))}%` }} />
+              </div>
+            )}
+            {!pending && error ? (
+              <div role="alert">
+                <p>{error}</p>
+                <button type="button" onClick={retry}>Retry analysis</button>
+              </div>
+            ) : (!pending || stale) ? (
+              <div ref={bodyRef} className={pending ? 'analysis-stale' : undefined} inert={pending}>{body}</div>
+            ) : ghosts && (
+              <div className="analysis-ghosts" aria-hidden>
+                {Array.from({ length: LISTED_PICKS }, (_, index) => (
+                  <div key={index} className="analysis-ghost"><span /><span /><span /><span /></div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
     </section>

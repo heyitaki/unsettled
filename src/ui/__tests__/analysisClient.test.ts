@@ -31,6 +31,19 @@ const analysis: DraftAnalysis = {
 }
 
 describe('analysis client', () => {
+  it('forwards progress without finishing the job', () => {
+    const { client, workers, reply } = harness()
+    const report = vi.fn()
+    const progress = vi.fn()
+    client.run(board, report, null, progress)
+    const request = workers[0].postMessage.mock.calls.at(-1)?.[0]
+    workers[0].onmessage?.call(workers[0] as unknown as Worker, { data: { id: request.id, progress: 0.4 } } as MessageEvent)
+    expect(progress).toHaveBeenCalledWith(0.4)
+    expect(report).not.toHaveBeenCalled()
+    reply(0, analysis)
+    expect(report).toHaveBeenCalledWith({ analysis })
+  })
+
   it('cancels obsolete computation and ignores a late response for a different board', () => {
     const { client, workers, reply } = harness()
     const first = vi.fn()

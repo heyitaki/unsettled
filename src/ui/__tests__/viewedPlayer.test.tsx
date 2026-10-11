@@ -12,7 +12,7 @@ import { setTile } from '../../model/__tests__/helpers'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { AnalysisProvider } from '../AnalysisProvider'
 import { viewedPlayerId } from '../draftSlots'
-import { restingMarks } from '../restMarks'
+import { LISTED_PICKS, restingMarks } from '../restMarks'
 import { activeTab, StoreProvider, useStore } from '../store'
 import { useAnalysis, type AnalysisState } from '../useAnalysis'
 
@@ -37,7 +37,7 @@ describe('viewing another player in Best picks', () => {
   let root: Root
   let container: HTMLDivElement
   let seen: Seen
-  let jobs: { request: AnalysisRequest; reply(analysis: DraftAnalysis): void }[]
+  let jobs: { request: AnalysisRequest; reply(analysis: DraftAnalysis): void; progress(fraction: number): void }[]
   const board = () => activeTab(seen.state).game.board
   const click = async (element: Element | null) => {
     if (!element) throw new Error('Missing control')
@@ -62,7 +62,11 @@ describe('viewing another player in Best picks', () => {
     vi.stubGlobal('Worker', class {
       onmessage: ((event: MessageEvent) => void) | null = null
       postMessage(request: AnalysisRequest) {
-        jobs.push({ request, reply: (analysis) => this.onmessage?.({ data: { id: request.id, analysis } } as MessageEvent) })
+        jobs.push({
+          request,
+          reply: (analysis) => this.onmessage?.({ data: { id: request.id, analysis } } as MessageEvent),
+          progress: (fraction) => this.onmessage?.({ data: { id: request.id, progress: fraction } } as MessageEvent),
+        })
       }
       terminate() {}
     })
@@ -108,7 +112,7 @@ describe('viewing another player in Best picks', () => {
     expect(jobs.at(-1)!.request.board).toBe(analysed)
     expect(jobs.at(-1)!.request.targetPick).toBe(6)
     expect(seen.analysis.pending).toBe(true)
-    expect(container.querySelector('.analysis-row')).toBeNull()
+    expect(container.querySelector('.analysis-row')?.closest('[inert]')).toBeTruthy()
     expect(seen.state.highlight).toBeNull()
     await click(container.querySelector('.analysis-context .menu-trigger'))
     expect(container.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe('Whose picks to show')
@@ -136,6 +140,73 @@ describe('viewing another player in Best picks', () => {
     expect(jobs).toHaveLength(asked)
     expect(container.querySelector('.analysis-row')).not.toBeNull()
     expect(added.some((node) => node instanceof Element && node.matches('[role="status"]'))).toBe(false)
+  })
+
+  it('keeps the last ranking in place as inert placeholders while the next is pending', async () => {
+    await click(button('Pick 2: Blue'))
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('Analyzing placements')
+    expect(container.querySelector('.analysis-stale')).toBeNull()
+    expect(container.querySelectorAll('.analysis-ghost')).toHaveLength(LISTED_PICKS)
+    await reply()
+    expect(container.querySelector('[role="status"]')).toBeNull()
+    expect(container.querySelector('.analysis-ghost')).toBeNull()
+    const row = container.querySelector('.analysis-row')
+    expect(row?.closest('[inert]')).toBeNull()
+    await click(button('Pick 7: Blue'))
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('Analyzing placements')
+    expect(container.querySelector('.analysis-row')).toBe(row)
+    expect(row?.closest('[inert]')?.classList.contains('analysis-stale')).toBe(true)
+    expect(container.querySelector('.analysis-ghost')).toBeNull()
+    await reply()
+    expect(container.querySelector('.analysis-row')?.closest('[inert]')).toBeNull()
+  })
+
+  it('fills the loading bar with the work reported so far, and starts over for the next view', async () => {
+    const fill = () => container.querySelector<HTMLElement>('.analysis-loading div')?.style.width
+    await click(button('Pick 2: Blue'))
+    await act(async () => jobs.at(-1)!.progress(0.5))
+    expect(fill()).toBe('50%')
+    expect(container.querySelector('[role="status"]')).not.toBeNull()
+    await click(button('Pick 7: Blue'))
+    expect(fill()).toBe('3%')
+  })
+
+  it('keeps a message box in place while pending, and holds no shape the panel was not showing', async () => {
+    const unranked = async () => {
+      const job = jobs.at(-1)!
+      await act(async () => job.reply({
+        status: 'no-production', draft: inferDraftState(job.request.board), warnings: [], recommendations: [], takenBeforeFirstPick: [],
+      }))
+    }
+    await unranked()
+    const box = container.querySelector('.analysis-placeholder')
+    expect(box?.closest('[inert]')).toBeNull()
+    await act(async () => seen.dispatch({ type: 'commit', board: setTile(board(), { q: 1, r: 0 }, 'sheep', 8) }))
+    expect(container.querySelector('.analysis-placeholder')).toBe(box)
+    expect(box?.closest('.analysis-stale')).not.toBeNull()
+
+    // An empty board has a result too, but the panel shows its empty state, not that result.
+    await act(async () => seen.dispatch({ type: 'commit', board: createBoard('standard4') }))
+    await unranked()
+    expect(container.querySelector('h2')?.textContent).toBe('This board is empty')
+    // With nothing to hold, generic rows stand in, but only where a ranking can follow.
+    await act(async () => seen.dispatch({ type: 'commit', board: setTile(createBoard('standard4'), { q: 0, r: 0 }, 'wood') }))
+    expect(container.querySelector('[role="status"]')).not.toBeNull()
+    expect(container.querySelector('.analysis-ghost')).toBeNull()
+    await act(async () => seen.dispatch({ type: 'commit', board: setTile(opening(), { q: -1, r: 0 }, 'ore', 5) }))
+    expect(container.querySelector('.analysis-stale')).toBeNull()
+    expect(container.querySelectorAll('.analysis-ghost')).toHaveLength(LISTED_PICKS)
+  })
+
+  it('shows a returned-to view as pending, not as its old error, while it is analysed again', async () => {
+    vi.spyOn(Worker.prototype, 'postMessage').mockImplementationOnce(() => { throw new Error('boom') })
+    await click(button('Pick 2: Blue'))
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('boom')
+    await click(button('Pick 7: Blue'))
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    await click(button('Pick 2: Blue'))
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.querySelector('[role="status"]')).not.toBeNull()
   })
 
   it.each(['Play these out', 'Place settlement'])('keeps the claim when using %s on a rival view', async (action) => {

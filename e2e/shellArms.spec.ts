@@ -180,6 +180,8 @@ test.describe('desktop', () => {
     await expect(slots.nth(1)).toHaveAttribute('aria-pressed', 'true')
     await expect(slots.nth(0)).toHaveAttribute('aria-pressed', 'false')
     await expect(context).toHaveText('Blue · Picking 2nd and 7th', { useInnerText: true })
+    // The last view's cards stay in place while this one is ranked, so wait for the bar to go.
+    await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
     await expect(gone).toContainText('1. Red:', { timeout: 60_000 })
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
     await expect(rows.locator('.you-chip')).toHaveCount(1)
@@ -212,6 +214,7 @@ test.describe('desktop', () => {
     // Red is a rival now and still viewable; White's own circle returns to the default view.
     await slots.nth(0).click()
     await expect(context).toHaveText('Red · Picking 1st and 8th', { useInnerText: true })
+    await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
     await expect(gone).toHaveCount(0)
     await slots.nth(3).click()
     await expect(slots.nth(3)).toHaveClass(/\bviewing\b/)

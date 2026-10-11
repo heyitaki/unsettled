@@ -66,6 +66,8 @@ export interface AnalysisOptions {
   targetPick?: number
   /** Nested modal rankings, reusable only across calls sharing seed, rollouts and weights. */
   modalCache?: Map<string, DraftAnalysis>
+  /** Told the fraction of the ranking done so far, which only rises and ends at 1. */
+  onProgress?: (fraction: number) => void
 }
 
 export interface DraftAnalysis {
@@ -534,6 +536,7 @@ export function rankCandidates(
   preWindows: readonly PreWindowResult[],
   maxResults: number,
   targetPick?: number,
+  onProgress?: (fraction: number) => void,
 ): { recommendations: Recommendation[]; takenBeforeFirstPick: TakenVertex[] } {
   const grid = boardGrid(board.layout)
   const gridIndex = new Map(grid.vertexIds.map((vertexId, index) => [vertexId, index]))
@@ -657,6 +660,7 @@ export function rankCandidates(
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
     }
     aggregates.set(candidate, aggregate)
+    onProgress?.(aggregates.size / candidates.length)
   }
 
   const recommendations: Recommendation[] = []
@@ -809,6 +813,22 @@ function analyzeBoardInternal(
     const baseOccupied = boardSettlements(board)
     const preWindows: PreWindowResult[] = []
     const modalLists: (readonly Recommendation[] | undefined)[] = []
+    // Progress counts rankings: the nested one per pick ahead, then this one, each moved along by
+    // its candidate loop, which is nearly all of its cost. The costs are an estimate for pacing a
+    // bar, not a measurement: a ranking's work grows with the picks between its player's two
+    // settlements, and one with no second pick to plan is a fraction of the smallest of those.
+    const cost = (playerId: string, pickIndex: number) => {
+      const second = draft.remainingPickIndices.find((index) =>
+        index > pickIndex && draft.sequence[index] === playerId)
+      return second === undefined ? 0.3 : remainingTurns(draft, pickIndex + 1, second, playerId).length + 1
+    }
+    const nestedCosts = rankModalPicks ? preTurns.map(({ playerId, turnIndex }) => cost(playerId, turnIndex)) : []
+    const ownCost = cost(me, firstPickIndex)
+    let doneCost = 0
+    let totalCost = nestedCosts.reduce((sum, value) => sum + value, ownCost)
+    const share = (size: number) => (fraction: number) =>
+      options.onProgress?.(Math.min(1, (doneCost + fraction * size) / totalCost))
+    let nested = 0
     for (let rollout = 0; rollout < rollouts; rollout += 1) {
       const blocked = new Set(baseBlocked)
       let uniformIndex = 0
@@ -831,13 +851,19 @@ function analyzeBoardInternal(
               placeBuilding(next, vertexId, pickerIds[index], 'settlement'), board)
             const key = options.modalCache ? JSON.stringify({ ...scratch, mePlayerId: playerId }) : ''
             let analysis = options.modalCache?.get(key)
+            const size = nestedCosts[nested++]
             if (!analysis) {
               analysis = analyzeBoardInternal(setMe(scratch, playerId), {
                 ...options,
                 targetPick: undefined,
                 maxResults: Math.max(1, weights.opponentTopK),
+                onProgress: share(size),
               }, false)
               options.modalCache?.set(key, analysis)
+              doneCost += size
+            } else {
+              // A ranking already held costs nothing, so it leaves the bar to the rest.
+              totalCost -= size
             }
             if (analysis.status !== 'ready') return undefined
             modalLists[taken.length] = analysis.recommendations
@@ -864,7 +890,9 @@ function analyzeBoardInternal(
           : uniforms[rollout],
       })
     }
-    const ranked = rankCandidates(ctx, board, draft, preWindows, options.maxResults ?? weights.maxResults, targetPick)
+    const ranked = rankCandidates(
+      ctx, board, draft, preWindows, options.maxResults ?? weights.maxResults, targetPick, share(ownCost),
+    )
     recommendations = ranked.recommendations
     takenBeforeFirstPick = ranked.takenBeforeFirstPick
   }

@@ -4,6 +4,10 @@ import type { DraftAnalysis } from '../engine/analyze'
 export interface AnalysisState {
   analysis: DraftAnalysis
   pending: boolean
+  /** The last ranking to arrive, for any board: the pending state keeps its shape. */
+  settled?: DraftAnalysis
+  /** How much of the pending ranking is done, from 0 to 1. */
+  progress?: number
   error: string | null
   retry(): void
 }
