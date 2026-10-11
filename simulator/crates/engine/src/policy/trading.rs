@@ -84,6 +84,16 @@ pub fn counterparty_score(
 ) -> f64 {
     assert_params(params);
     let base = etw::expected_turns_to_win(inputs);
+    counterparty_score_with_base(inputs, params, delta, base)
+}
+
+pub(crate) fn counterparty_score_with_base(
+    inputs: &EtwInputs,
+    params: &TradeParams,
+    delta: &[f64; RESOURCE_COUNT],
+    base: f64,
+) -> f64 {
+    assert_params(params);
     params.danger_weight * threat::danger_from_etw(base, params.danger_floor)
         + params.benefit_weight * trade_benefit_with_base(inputs, params, delta, base)
 }
@@ -400,4 +410,33 @@ mod tests {
         );
         assert_ne!(first, second);
     }
+    #[test]
+    fn remembered_counterparty_base_matches_direct_bits() {
+        let params = TradeParams::default();
+        for case in 0..64 {
+            let mut inputs = inputs(std::array::from_fn(|resource| {
+                f64::from((case + resource as u8 * 3) % 13) / 2.0
+            }));
+            inputs.public_vp = case % 11;
+            inputs.production_pips = [u16::from(case % 9); RESOURCE_COUNT];
+            inputs.dev_deck_remaining = case % 26;
+            inputs.pieces_city = case % 3;
+            inputs.pieces_settlement = case % 5;
+            inputs.trade_rates = [u32::from(case % 5); RESOURCE_COUNT];
+            let base = etw::expected_turns_to_win(&inputs);
+            for give in 0..RESOURCE_COUNT {
+                for get in 0..RESOURCE_COUNT {
+                    for count in [1.0, 2.0] {
+                        let mut delta = [0.0; RESOURCE_COUNT];
+                        delta[give] += count;
+                        delta[get] -= 1.0;
+                        let direct = super::counterparty_score(&inputs, &params, &delta);
+                        let cached = super::counterparty_score_with_base(&inputs, &params, &delta, base);
+                        assert_eq!(cached.to_bits(), direct.to_bits());
+                    }
+                }
+            }
+        }
+    }
+
 }

@@ -843,6 +843,23 @@ pub(crate) fn best_goal(
     best_goal_with(view, params, best_road(view, params, gated))
 }
 
+pub(crate) fn has_goal(view: &DecisionView<'_>, params: &HeuristicParams) -> bool {
+    for kind in [BuildKind::City, BuildKind::Settlement] {
+        for vertex in 0..view.topology().vertex_count() as u8 {
+            let legal = match kind {
+                BuildKind::City => view.legal_city(vertex),
+                BuildKind::Settlement => view.legal_settlement(vertex),
+            };
+            if legal && vertex_score(view, vertex, params, kind).is_finite() {
+                return true;
+            }
+        }
+    }
+    let context = params.denial.as_ref()
+        .map(|denial_params| denial::context(view, denial_params));
+    best_road(view, params, context.as_ref().zip(params.denial.as_ref())).is_some()
+}
+
 /// `best_road` scans every legal edge and, when the Longest Road card is in reach, runs an
 /// exponential trail search per candidate. Callers that already have its result pass it in rather
 /// than paying for it again -- a decision used to repeat that search three times over.
@@ -926,6 +943,8 @@ fn best_road(
     gated: Gated<'_>,
 ) -> Option<RoadGoal> {
     let mut best = None;
+    let mut scores = [None; crate::state::MAX_VERTICES];
+
     // The trail search is the dominant cost of a decision, so the graph it walks is built once
     // here and probed per candidate -- and not at all when the card is out of reach.
     let mut network = longest_road_reachable(view, 1, gated).then(|| view.road_network());
@@ -935,7 +954,11 @@ fn best_road(
         if !view.legal_road(edge) {
             continue;
         }
-        let expansion_score = expansion_road_score(view, edge, params);
+        let expansion_score = expansion_road_score_with(view, edge, |vertex| {
+            *scores[usize::from(vertex)].get_or_insert_with(|| {
+                vertex_score(view, vertex, params, BuildKind::Settlement)
+            })
+        });
         let new_length = network
             .as_mut()
             .map_or(0, |network| view.road_length_on(network, edge, None, cap));
@@ -976,10 +999,20 @@ pub(crate) fn expansion_road_score(
     first: u8,
     params: &HeuristicParams,
 ) -> Option<f32> {
+    expansion_road_score_with(view, first, |vertex| {
+        vertex_score(view, vertex, params, BuildKind::Settlement)
+    })
+}
+
+fn expansion_road_score_with(
+    view: &DecisionView<'_>,
+    first: u8,
+    mut vertex_score: impl FnMut(u8) -> f32,
+) -> Option<f32> {
     let mut best_score = None;
     for target in view.topology().edge_endpoints(first) {
         if view.is_expansion_target(target) {
-            let score = vertex_score(view, target, params, BuildKind::Settlement) + 0.25;
+            let score = vertex_score(target) + 0.25;
             if best_score.is_none_or(|best| score > best) {
                 best_score = Some(score);
             }
@@ -992,7 +1025,7 @@ pub(crate) fn expansion_road_score(
         }
         for target in view.topology().edge_endpoints(second) {
             if view.is_expansion_target(target) {
-                let score = vertex_score(view, target, params, BuildKind::Settlement);
+                let score = vertex_score(target);
                 if best_score.is_none_or(|best| score > best) {
                     best_score = Some(score);
                 }
@@ -2181,4 +2214,122 @@ mod devcards_rate_tests {
     /// A seed whose game reaches the M-21 review state and flips there; re-found by scan
     /// (`M21_FLIP_SEED_SCAN`) whenever a behavior change moves the trajectories.
     const SEED: u64 = 667;
+
+    #[test]
+    fn goal_existence_matches_full_ranking_on_changed_states() {
+        use super::{HeuristicParams, best_goal, has_goal};
+        use crate::policy::{denial, heuristic_v1_trader, trading};
+        use crate::rules::Resource;
+        use crate::trade::TradeOffer;
+
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let mut rules = RuleConfig::base(Layout::Standard4);
+        rules.player_trading = Some(crate::rules::TradeConfig::default());
+        let board = standard_board(&topology, &rules);
+        let mut arena = GameArena::default();
+        let mut config = GameConfig::default();
+        let mut margins = [0; 2];
+        for seed in 0..24 {
+            config.seed = seed;
+            arena.play(&board, &topology, &rules, &config);
+            for change in 0..5 {
+                if change == 1 {
+                    for player in &mut arena.state.players {
+                        player.pieces[Buildable::City.index()] = 0;
+                    }
+                } else if change == 2 {
+                    arena.state.vertex_owner.fill(crate::state::EMPTY);
+                } else if change == 3 {
+                    arena.state.edge_owner.fill(crate::state::EMPTY);
+                } else if change == 4 {
+                    arena.prepare(&board, &topology, &rules, &config);
+                }
+                for seat in 0..board.seats() {
+                    let view = arena.decision_view(
+                        &board, &topology, seat, DecisionPhase::TradeResponse,
+                    );
+                    for denial in [None, Some(denial::DenialParams::default())] {
+                        let params = HeuristicParams {
+                            denial,
+                            trading: Some(trading::TradeParams::default()),
+                            ..HeuristicParams::default()
+                        };
+                        let context = denial.as_ref().map(|params| denial::context(&view, params));
+                        let direct = best_goal(&view, &params, context.as_ref().zip(denial.as_ref()));
+                        assert_eq!(
+                            has_goal(&view, &params), direct.is_some(),
+                            "seed={seed} change={change} seat={seat}",
+                        );
+                        for get in Resource::ALL {
+                            let offer = TradeOffer {
+                                proposer: (seat + 1) % board.seats(),
+                                give: Resource::ALL[(get.index() + 1) % 5],
+                                get,
+                                count: 1,
+                            };
+                            let expected = (direct.is_some() && view.own_hand()[get.index()] >= 1)
+                                .then(|| trading::acceptance_margin(
+                                    &view, params.trading.as_ref().unwrap(),
+                                    &view.trade_config().unwrap(), offer,
+                                ));
+                            let actual = heuristic_v1_trader::response_margin(
+                                &view, offer, &params,
+                            );
+                            margins[usize::from(expected.is_some())] += 1;
+                            assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(margins.into_iter().all(|count| count > 0));
+    }
+
+    #[test]
+    fn remembered_expansion_scores_match_direct_bits() {
+        use super::{
+            BuildKind, HeuristicParams, expansion_road_score, expansion_road_score_with, vertex_score,
+        };
+
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let rules = RuleConfig::base(Layout::Standard4);
+        let board = standard_board(&topology, &rules);
+        let mut arena = GameArena::default();
+        let mut config = GameConfig::default();
+        for seed in 0..24 {
+            config.seed = seed;
+            arena.play(&board, &topology, &rules, &config);
+            for change in 0..3 {
+                if change == 1 {
+                    arena.state.vertex_owner.fill(crate::state::EMPTY);
+                } else if change == 2 {
+                    arena.state.robber = (seed as usize % topology.hex_count()) as u8;
+                }
+                for seat in 0..board.seats() {
+                    let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
+                    for params in [
+                        HeuristicParams::default(),
+                        HeuristicParams {
+                            production_weight: 1.75,
+                            scarcity_weight: 3.25,
+                            ..HeuristicParams::default()
+                        },
+                    ] {
+                        let mut scores = [None; crate::state::MAX_VERTICES];
+                        for edge in (0..topology.edge_count())
+                            .rev().cycle().take(topology.edge_count() * 2)
+                        {
+                            let actual = expansion_road_score_with(&view, edge as u8, |vertex| {
+                                *scores[usize::from(vertex)].get_or_insert_with(|| {
+                                    vertex_score(&view, vertex, &params, BuildKind::Settlement)
+                                })
+                            });
+                            let direct = expansion_road_score(&view, edge as u8, &params);
+                            assert_eq!(actual.map(f32::to_bits), direct.map(f32::to_bits));
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

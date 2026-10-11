@@ -72,9 +72,26 @@ pub fn action(
 pub(crate) fn score_offers(
     view: &DecisionView<'_>,
     trading_params: &trading::TradeParams,
+    collect: impl FnMut(ScoredAction),
+) {
+    if view.phase() != DecisionPhase::Action
+        || view.trade_config().is_none()
+        || view.offers_remaining_this_turn() == 0
+        || view.seats() < 2
+        || view.own_hand().iter().all(|held| *held <= 0)
+    {
+        return;
+    }
+    score_offers_inner(view, trading_params, collect);
+}
+
+fn score_offers_inner(
+    view: &DecisionView<'_>,
+    trading_params: &trading::TradeParams,
     mut collect: impl FnMut(ScoredAction),
 ) {
     let mut recipients: [Option<EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
+    let mut bases = [None; MAX_SEATS];
     for seat in 0..view.seats() {
         if seat == view.observer() || trade::embargoed(view, seat) {
             continue;
@@ -113,7 +130,10 @@ pub(crate) fn score_offers(
                     if inputs.belief_expected[get.index()] < 1.0 {
                         continue;
                     }
-                    let score = trading::counterparty_score(inputs, trading_params, &responder);
+                    let base = *bases[seat].get_or_insert_with(|| etw::expected_turns_to_win(inputs));
+                    let score = trading::counterparty_score_with_base(
+                        inputs, trading_params, &responder, base,
+                    );
                     if !score.is_finite() {
                         continue;
                     }
@@ -163,6 +183,11 @@ pub(crate) fn response_margin(
     {
         return None;
     }
+    if let Some(trading_params) = params.trading.as_ref() {
+        // ETW prices the offer independently of which building goal ranks first.
+        return heuristic_v1::has_goal(view, params)
+            .then(|| trading::acceptance_margin(view, trading_params, &config, offer));
+    }
     let denial_context = params
         .denial
         .as_ref()
@@ -171,25 +196,19 @@ pub(crate) fn response_margin(
     let Some(goal) = heuristic_v1::best_goal(view, params, gated) else {
         return None;
     };
-    let margin = match &params.trading {
-        None => {
-            let before = best_missing(view, goal.kind, view.own_hand());
-            let mut hand = *view.own_hand();
-            hand[offer.give.index()] += i16::from(offer.count);
-            hand[offer.get.index()] -= 1;
-            let after = best_missing(view, goal.kind, &hand);
-            let mine = f32::from(before.saturating_sub(after));
-            let theirs = (f32::from(vp_estimate(
-                view,
-                offer.proposer,
-                config.hidden_vp_confidence,
-            )) / f32::from(view.win_vp()))
-            .clamp(0.0, 1.0);
-            mine - config.opponent_gain_weight * theirs
-        }
-        Some(trading_params) => trading::acceptance_margin(view, trading_params, &config, offer),
-    };
-    Some(margin)
+    let before = best_missing(view, goal.kind, view.own_hand());
+    let mut hand = *view.own_hand();
+    hand[offer.give.index()] += i16::from(offer.count);
+    hand[offer.get.index()] -= 1;
+    let after = best_missing(view, goal.kind, &hand);
+    let mine = f32::from(before.saturating_sub(after));
+    let theirs = (f32::from(vp_estimate(
+        view,
+        offer.proposer,
+        config.hidden_vp_confidence,
+    )) / f32::from(view.win_vp()))
+    .clamp(0.0, 1.0);
+    Some(mine - config.opponent_gain_weight * theirs)
 }
 
 fn best_missing(
@@ -202,4 +221,63 @@ fn best_missing(
         .map(|cost| missing_units(hand, cost))
         .min()
         .unwrap_or(u16::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{score_offers, score_offers_inner, trading};
+    use crate::view::{DecisionPhase, DecisionView};
+    use crate::board::{ConversionOptions, SimBoard};
+    use crate::game::{GameArena, GameConfig};
+    use crate::rules::{RuleConfig, TradeConfig};
+    use crate::topology::{Layout, Topology};
+    use crate::wire::WireBoard;
+
+    #[test]
+    fn offer_preflight_matches_direct_score_bits() {
+        let topology = Topology::load(Layout::Extension6).unwrap();
+        let mut rules = RuleConfig::base(Layout::Extension6);
+        let wire = WireBoard::parse_str(include_str!(
+            "../../../../../src/parser/__tests__/expected/board-draft-empty.json"
+        )).unwrap();
+        let board = SimBoard::try_from_wire(
+            wire, &topology, &rules, ConversionOptions::default(),
+        ).unwrap();
+        let mut arena = GameArena::default();
+        let config = GameConfig::default();
+        let params = trading::TradeParams::default();
+        let mut outcomes = [0; 2];
+        for trading in [None, Some(TradeConfig::default())] {
+            rules.player_trading = trading;
+            arena.play(&board, &topology, &rules, &config);
+            for hand in [[0; 5], [1; 5], [3, 0, 1, 2, 4], [0, 0, 0, 0, 2]] {
+                arena.state.players[0].resources = hand;
+                for remaining in [0, 1, 2] {
+                    for phase in [
+                        DecisionPhase::Action,
+                        DecisionPhase::SpecialBuild,
+                        DecisionPhase::TradeResponse,
+                    ] {
+                        let all_rules = std::array::from_fn(|seat| *arena.flattened_rules(seat));
+                        let view = DecisionView::new(
+                            &arena.state, &board, &topology, arena.flattened_rules(0),
+                            &all_rules,
+                            0, board.seats(), 10, false, remaining, phase,
+                        );
+                        let mut direct = Vec::new();
+                        score_offers_inner(&view, &params, |candidate| {
+                            direct.push((candidate.action, candidate.score.to_bits()));
+                        });
+                        let mut actual = Vec::new();
+                        score_offers(&view, &params, |candidate| {
+                            actual.push((candidate.action, candidate.score.to_bits()));
+                        });
+                        outcomes[usize::from(!direct.is_empty())] += 1;
+                        assert_eq!(actual, direct);
+                    }
+                }
+            }
+        }
+        assert!(outcomes.into_iter().all(|count| count > 0));
+    }
 }
