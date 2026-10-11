@@ -194,9 +194,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         const landCenter = center(grid.landKeys.has(axialKey(c1)) ? c1 : c2)
         const outward = { x: midpoint.x - landCenter.x, y: midpoint.y - landCenter.y }
         const length = Math.max(1, Math.hypot(outward.x, outward.y))
+        // The pill is wider than tall, so it reaches further back toward a
+        // vertical edge (normal along x) than toward a slanted one (|nx| = 0.5).
+        // Add that extra reach, so the sea gap is the same on every edge.
+        const offset = PORT_OFFSET + (PORT_HALF_W - PORT_HALF_H) * (Math.abs(outward.x) / length - 0.5)
         const point = {
-          x: midpoint.x + (outward.x / length) * PORT_OFFSET,
-          y: midpoint.y + (outward.y / length) * PORT_OFFSET,
+          x: midpoint.x + (outward.x / length) * offset,
+          y: midpoint.y + (outward.y / length) * offset,
         }
         return { port, a, b, point }
       }),
