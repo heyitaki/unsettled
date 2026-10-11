@@ -3015,3 +3015,60 @@ Step by step on `standard4/full_draft`, same machine: the diversity hoist alone 
 **What is left.** Setup is still about 95% of a game. A profile of the candidate puts `expansion::term` with its walk and inlined site pricing at 59% of samples, `diversity_score` at 13%, `port_delta` at 8%, `legal_row`'s own loop at 4% and `pow` at 4%, from about a third. The next candidate is a per-lookahead cache of site prices, which read only the holdings, the candidate and the site and never the occupancy. It would hit on rival rows only, since the hero's own second-settlement row is keyed by the candidate being weighed, and it was not built.
 
 **Scope.** Code cost only: no placement, policy or rule changed, so no win rate and no earlier measurement moves. The wall ratios are one field, `app_formula_draft` on the default weights with the denial policy; a greedy field never enters the lookahead and gains only the `score_all` ratio.
+
+## M-88: the setup lookahead at an eighth of its cost, and a trade response at a ninth
+
+2026-10-11, base commit `1ff6a7dd`, candidate commit `53578bbe` (branch `sim-speed`). No seed domain: `bench` runs on `PERF_SEED`. **Admissible: yes for the instruction counts and the hashes. The local wall times were taken hours apart under load averages of 3 to 5, base before candidate rather than alternated, and are a cross-check only.**
+
+```text
+# box, from the repo root: both commits built by one toolchain, three alternated wall rounds, then callgrind
+box run simulator/box/bench --ref base=main --ref cand=sim-speed --node none
+
+# local cross-check, from simulator/
+target/release/unsettled-sim bench --filter e2e/ --games 40 --repeats 3
+target/release/unsettled-sim bench --filter full_draft --repeats 5
+```
+
+**What changed, none of which moves an output bit.** `fixtures/bench-hashes.json` and the advice parity fixture are unchanged, and the box reported no differing state or decision hash.
+
+- An uncached lookahead row no longer calls `score_for_owner` per vertex. It reads the board into occupancy bit masks once, takes each candidate's reachable sites from a per-adjacency table of two- and three-edge walks (or from a bit-mask walk when one of the seat's own roads is in reach), and prices sites through a per-holdings `SitePricer`.
+- Per-thread tables remember what repeats across a lookahead's candidates: site prices and base totals by scorer and own vertices, whole expansion values by the site masks they were folded from, reachable sites by the occupancy the scan read, and general walks by the vertices and edges each walk read. Every hit compares its full key; nothing is keyed by a counter the engine maintains.
+- A setup road is chosen from the same masks and remembered prices instead of a second `term` call.
+- A trade response under the ETW trader asks whether any building goal exists instead of ranking all of them, `score_offers` returns before pricing rivals when no offer can be legal, and `best_road` scores each settlement vertex once per call.
+- `expansion::walk`, `expansion::term` and `score_for_owner` are untouched: they are the reference the new tests compare against bit for bit, and the greedy path still runs on them.
+
+Box run `20261011T155123Z-f71231e1`, `rustc 1.99.0`, 4 vCPU. `Ir` is callgrind instructions per call:
+
+| Scenario | Base Ir | Candidate Ir | Ir ratio | Wall ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `placement/standard4/prepare` | 137,352 | 146,337 | 1.065 | 0.998 |
+| `placement/standard4/score_all` | 1,049,127 | 1,053,383 | 1.004 | 1.026 |
+| `placement/standard4/draft/first` | 242,884,628 | 24,661,377 | 0.102 | 0.106 |
+| `placement/standard4/draft/middle` | 86,602,374 | 14,226,489 | 0.164 | 0.164 |
+| `placement/standard4/full_draft` | 512,273,130 | 64,597,129 | 0.126 | 0.144 |
+| `placement/extension6/prepare` | 188,431 | 201,406 | 1.069 | 1.035 |
+| `placement/extension6/score_all` | 1,605,842 | 1,611,612 | 1.004 | 1.009 |
+| `placement/extension6/draft/first` | 885,659,733 | 67,528,779 | 0.076 | 0.087 |
+| `placement/extension6/draft/middle` | 334,702,524 | 37,442,582 | 0.112 | 0.116 |
+| `placement/extension6/full_draft` | 2,651,421,866 | 249,562,403 | 0.094 | 0.112 |
+
+Whole games on the box, wall time only: `e2e/standard4` 0.201 on one core and 0.191 on all, `e2e/extension6` 0.138 and 0.128. That is 5.0x and 5.2x at four seats, 7.2x and 7.8x at six. The `respond_trade` rows count 0.12 to 0.13 of their instructions at four seats and 0.09 to 0.12 at six; the `action` rows 0.77 to 0.97 and `pre_roll` 0.93 to 1.00; `discard`, `robber` and `select_counterparty` count the same instructions to the unit; the `advise` rows move by under 2%. `prepare` costs 6.5% more instructions because a scorer now builds its decay powers and per-vertex token lists; the reach table itself is shared per adjacency per thread.
+
+Acceptance machine, fastest pass per side:
+
+| Scenario | Base | Candidate | Speed-up |
+| --- | ---: | ---: | ---: |
+| `placement/standard4/full_draft` | 16.6 ms | 2.06 ms | 8.1x |
+| `placement/extension6/full_draft` | 73.6 ms | 8.95 ms | 8.2x |
+| `e2e/standard4/single_core` | 53.6 games/s | 273.6 games/s | 5.1x |
+| `e2e/standard4/all_cores` | 564.6 games/s | 2,981 games/s | 5.3x |
+| `e2e/extension6/single_core` | 11.4 to 12.8 games/s | 80.5 games/s | 6.3x to 7.1x |
+| `e2e/extension6/all_cores` | 118.5 games/s | 906 games/s | 7.6x |
+
+**A trap this run found.** A table of `decay.powf(k)` built in a loop over constant `k` is not the reference's `powf`: release builds unroll the loop and LLVM rewrites `pow(x, 2.0)` to `x * x`, which differs from libm's `pow` in the last bit for some decays whose square is inexact (reproduced on arm64 macOS). Every shipped vector has a decay of 0.5 or 1, exact either way, so no committed result was touched, but a sweep arm with any other decay would have diverged from `term` by one ULP in release only. The table is now built through a non-inlined helper with an opaque exponent, and `cached_decays_match_runtime_powers` sweeps 4,094 decays in both profiles.
+
+**Measured and not kept.** The per-vertex token-number list in `duplicate_number_penalty` made the `score_all` and `greedy` rows 6% to 9% slower in wall time on the box at 1% more instructions, and 11% faster on the acceptance machine, so the reference path keeps the dense loop and only `SitePricer` reads the list. Building a row's holdings lazily from the own-vertex mask lost on both layouts. Sharing one legality-and-score predicate between `has_goal` and `best_scored_vertex` slowed `decision/standard4/action/early` by 7%.
+
+**What is left.** Setup is about 57% of a four-seat game and 72% of a six-seat one on the acceptance machine (2.06 of 3.64 ms, 8.95 of 12.4 ms). Not built: a setup road's per-first-edge sites read from the reach table instead of up to three mask walks, and occupancy masks carried across the replay instead of rebuilt from the owner arrays per row.
+
+**Scope.** Code cost only: no placement, policy or rule changed, so no win rate and no earlier measurement moves. The wall ratios are one field, `app_formula_draft` on the default weights with the denial policy and trading on; a greedy field never enters the lookahead and gains only what the `decision` rows show.
