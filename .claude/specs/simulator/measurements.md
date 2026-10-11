@@ -2959,3 +2959,59 @@ Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
 **Prediction against outcome.** **Right on the estimate, in the upper half of the range**, predicted `+0.45pp` to `+0.95pp` centred near `+0.7pp`, delivered `+0.814pp`. **Right on the verdict**, predicted `better` at about 85%. **Right on the half-width**, predicted about `+/-0.11pp`, delivered `+/-0.112pp`. This was named as the seat count most likely to return to today's vector, and it did not.
 
 **Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against five seats on today's vector, so nothing here measures the world the adoption creates in the app, where every seat carries the vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same as on every third-generation domain, so this run controls for seeds and for the shared boards, and not for field-overfit. The vector was chosen on `tuning3` boards that other seat counts shared, and this run did not re-screen, so it says the choice holds on independent boards and nothing about whether another arm would have been chosen there. The shipped value is the lower endpoint of its declared range, so nothing here says it is an optimum, and `diversityWeight` was not read here: M-79 dropped its arm unresolved.
+
+## M-87: where a game's time goes after M-66, and the setup lookahead at half its cost
+
+2026-10-11, base commit `f4f11422`, candidate commit `9406c86a` (measured before it was committed, as commit object `49a5bd92` carrying the same simulator sources on `f4f11422`). No seed domain: `bench` runs on `PERF_SEED` and the profiles on a plain `--seed 7`. Plan in `docs/plans/simulator-lookahead-speed.md`. **Admissible: yes for the instruction counts and the hashes. The local wall times were taken under load averages of 6 to 7 and are a cross-check only.**
+
+```text
+# profile, from simulator/, one thread, sampled for 10 seconds with /usr/bin/sample
+target/release/unsettled-sim simulate --board ../src/parser/__tests__/expected/board-draft-empty.json --games 200000 --heuristics 'app_formula_draft:placement/default-weights.json@placement/default-weights.json' --policy heuristic-v1-trader-aware-threat-devcards-denial --player-trading --seed 7 --threads 1 --out <dir>
+
+# box, from the repo root: both commits built by one toolchain, three alternated wall rounds, then callgrind
+box run simulator/box/bench --ref base=f4f11422 --ref cand=49a5bd92 --node none
+
+# local cross-check, from simulator/, base and candidate binaries alternated, two passes each
+<binary> bench --filter placement/ --json <path>
+<binary> bench --filter e2e/ --json <path>
+```
+
+**Since M-66 the draft-aware setup is nearly all of a game's time.** At the base commit 97% of the samples of a four-seat game sit under `GameArena::setup_pick`, in `draft::first_pick`'s lookahead. `ScoreRows` keeps a rival's scored row only while both formulas carry `expansionWeight` 0, because the expansion walk reads occupancy the replay moves; M-66 set the weight to 0.1, so every replayed pick has rescored every vertex since. The per-decision policy cost, Longest Road included, is the remaining 3%. Whole-game throughput on this field therefore measures placement cost, and the earlier profiles that named Longest Road predate M-66.
+
+**Three changes, none of which moves an output bit.** `expansion::term` scores the holdings' own diversity total once per call instead of once per site. `ScoreRows::legal_row` scores only the vertices a scan can read when rows are not cached. `coverage` keeps its `powf` results in a 64-slot per-thread table keyed by the bits of both operands. `fixtures/bench-hashes.json` did not move, and every state and decision hash matched between base and candidate in every local run.
+
+Box run `20261011T101323Z-b2b7d029`, `rustc 1.94.0`, 4 vCPU. `Ir` is callgrind instructions per call:
+
+| Scenario | Base Ir | Candidate Ir | Ir ratio | Wall ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `placement/standard4/prepare` | 137,582 | 137,584 | 1.000 | 1.008 |
+| `placement/standard4/score_all` | 1,657,629 | 1,048,970 | 0.633 | 0.453 |
+| `placement/standard4/greedy/first` | 1,688,737 | 1,064,914 | 0.631 | 0.457 |
+| `placement/standard4/draft/first` | 485,592,115 | 242,884,646 | 0.500 | 0.385 |
+| `placement/standard4/draft/middle` | 176,986,478 | 86,602,346 | 0.489 | 0.367 |
+| `placement/standard4/full_draft` | 1,040,771,322 | 512,273,077 | 0.492 | 0.371 |
+| `placement/extension6/prepare` | 190,507 | 190,380 | 0.999 | 1.011 |
+| `placement/extension6/score_all` | 2,549,070 | 1,605,480 | 0.630 | 0.434 |
+| `placement/extension6/greedy/first` | 2,582,410 | 1,622,565 | 0.628 | 0.431 |
+| `placement/extension6/draft/first` | 1,715,890,463 | 885,659,733 | 0.516 | 0.412 |
+| `placement/extension6/draft/middle` | 660,571,491 | 334,702,524 | 0.507 | 0.374 |
+| `placement/extension6/full_draft` | 5,214,763,376 | 2,651,421,956 | 0.508 | 0.395 |
+
+The `decision` rows count the same instructions on both sides to the unit, as they should: no policy code changed. The `advise` rows move by at most 1.2% in either direction. Whole games on the box, wall time only: `e2e/standard4` 0.397 on one core and 0.463 on all, `e2e/extension6` 0.408 and 0.470. Wall time falls further than the instruction count because the instructions removed are `pow` calls, which cost more time each than the average instruction. The gap is wider on the box than on the acceptance machine.
+
+Acceptance machine, load `7.28 7.08 6.71` before and `6.42 6.87 6.65` after, fastest pass of two per side:
+
+| Scenario | Base | Candidate | Speed-up |
+| --- | ---: | ---: | ---: |
+| `placement/standard4/full_draft` | 33.0 ms | 16.3 ms | 2.02x |
+| `placement/extension6/full_draft` | 160.1 ms | 81.8 ms | 1.96x |
+| `e2e/standard4/single_core` | 27.7 games/s | 54.0 games/s | 1.95x |
+| `e2e/standard4/all_cores` | 238.1 games/s | 468.6 games/s | 1.97x |
+| `e2e/extension6/single_core` | 5.8 games/s | 11.4 games/s | 1.97x |
+| `e2e/extension6/all_cores` | 50.3 games/s | 85.7 games/s | 1.70x |
+
+Step by step on `standard4/full_draft`, same machine: the diversity hoist alone 1.15x to 1.22x on every row that scores with the expansion term, with `legal_row` 1.65x, with the `powf` table 2.0x. With the four-seat shipped vector (`placement/seat-weights/seats-4.json`, `coverageExponent` 1) the last two read 1.65x and 2.04x, so the table pays at an exponent of 1 as well.
+
+**What is left.** Setup is still about 95% of a game. A profile of the candidate puts `expansion::term` with its walk and inlined site pricing at 59% of samples, `diversity_score` at 13%, `port_delta` at 8%, `legal_row`'s own loop at 4% and `pow` at 4%, from about a third. The next candidate is a per-lookahead cache of site prices, which read only the holdings, the candidate and the site and never the occupancy. It would hit on rival rows only, since the hero's own second-settlement row is keyed by the candidate being weighed, and it was not built.
+
+**Scope.** Code cost only: no placement, policy or rule changed, so no win rate and no earlier measurement moves. The wall ratios are one field, `app_formula_draft` on the default weights with the denial policy; a greedy field never enters the lookahead and gains only the `score_all` ratio.
