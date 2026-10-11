@@ -1,6 +1,6 @@
 # Seat-count weights: independent re-gate on a fourth seed generation
 
-Follow-on to [completed/seat-count-weights.md](completed/seat-count-weights.md). Asked for by the user on 2026-10-10 after the closing report said seat counts on one layout share boards: "great do it. in the future dont ask about creating new generations/seeds. its cheap so just do it".
+Follow-on to [seat-count-weights.md](seat-count-weights.md). Closed 2026-10-11: all five seat counts read `better` on `gate4` (M-82 to M-86) and no vector moved. Asked for by the user on 2026-10-10 after the closing report said seat counts on one layout share boards: "great do it. in the future dont ask about creating new generations/seeds. its cheap so just do it".
 
 ## Decisions
 
@@ -15,7 +15,7 @@ Follow-on to [completed/seat-count-weights.md](completed/seat-count-weights.md).
 | ---: | --- | --- |
 | 1 | Mint `tuning4`/`eval4`/`gate4` with the seat count folded into the seed; pins for disjointness across domains and seat counts; docs | done |
 | 2 | Programme-file revision and five preregistrations (M-82 to M-86), committed before any run | done |
-| 3 | Run the five `gate4` gates one after another: 2, 3, 4, 5, 6 seats | in progress: one background script, logs in the session scratchpad as `m8N.log`, artifacts in `simulator/runs/m8N-seatsN-gate4`; a seat count whose artifact directory exists is spent and must never be rerun |
-| 4 | Record M-82 to M-86; keep or revert each seat count; regenerate; update outcome table, ledger, `CLAUDE.md`, README | not started |
-| 5 | Three number-check passes; final gates (`npm test`, typecheck, lint, `cargo test` both profiles); `/selfreview`; commit | not started |
-| 6 | Move this file to `docs/plans/completed/` | not started |
+| 3 | Run the five `gate4` gates one after another: 2, 3, 4, 5, 6 seats | done |
+| 4 | Record M-82 to M-86; keep or revert each seat count; regenerate; update outcome table, ledger, `CLAUDE.md`, README | done: all five read `better`, no vector moved |
+| 5 | Three number-check passes; final gates (`npm test`, typecheck, lint, `cargo test` both profiles); `/selfreview`; commit | done |
+| 6 | Move this file to `docs/plans/completed/` | done |

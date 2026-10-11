@@ -2784,3 +2784,178 @@ Every preregistration for M-67 through M-81 says board generation consumes layou
 
 **What may no longer be said.** That the five seat counts are independent replications: readings at two, three and four seats share `standard4` boards, and readings at five and six share `extension6` boards, so agreement within a layout is correlated by an amount no run measured. M-79's remark that linear coverage credit reads `better` at the fifth seat count of five is a count of verdicts, not of independent tests. That a held-out spend at one seat count left the others untouched: in board terms `eval3` and `gate3` are spent per layout. The full statement is in `.claude/specs/simulator/seat-count-programme.md` under "Seed domains and the authorization".
 
+
+## M-82: 2-seat independent gate on gate4
+
+2026-10-10, commit `a4fe0fff` (the commit that preregistered all five independent gates; no default moved for this run), domain `gate4` (seed `16890014424357517501`). Preregistered in `docs/plans/preregs/2026-10-10-m82-seats2-gate4.md` (committed before the run). **This run is the one `gate4` spend at 2 seats**, under Revision 2 of `.claude/specs/simulator/seat-count-programme.md` and the user's 2026-10-10 go-ahead quoted there; no further `gate4` command may run at 2 seats. The fourth generation folds the seat count into the seed, so these boards and game seeds are shared with no other seat count and no earlier run.
+
+`evaluate`, `standard4`, 2 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` without `--player-trading` and with `--allow-unofficial`, `--threads 0`, 70,000 boards x 2 reps, 280,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_s2_combined.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout standard4 --seats 2 --domain gate4 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_s2_combined.json@placement/default-weights.json --reference base --boards 70000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --allow-unofficial --threshold 0.005 --alpha 0.05 --out runs/m82-seats2-gate4
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.03s against a warm fingerprint. The five `gate4` invocations ran one after another from one script, each alone, unpiped, and none shared a shell command with a build or a test suite. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate4` at seed `16890014424357517501`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `8.45 9.10 8.39`, after `32.92 34.46 25.22`, other sessions sharing the machine; 716.196s at 18 workers, 781.9 games/s, 560,000 games. `base` won 139,828 of 280,000 (`0.49938571428571427`), 0.650 binomial standard errors below the `0.5` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 147,337 of 280,000 (`0.5262035714285714`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.026817857142857143` | 24901 | 17392 | `[0.0253817, 0.0282540]` | `[0.0253336, 0.0283021]` | clustered `[0.0253336, 0.0283021]` | 0.1484 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 |
+| --- | --- | ---: | ---: | ---: |
+| candidate | +2.682 `[+2.533, +2.830]` | 42293 | +2.80 `[+2.59, +3.01]` | +2.56 `[+2.35, +2.78]` |
+
+**The verdict is `better`, so two seats keeps its vector.** `+2.682pp` on `[+2.533pp, +2.830pp]` over 42,293 discordant units of 280,000, the whole interval above the `+0.5pp` bar with 2.03pp to spare. By the preregistered rule the two-seat vector stays as adopted in M-72, and no file moves.
+
+**The reading on boards no other seat count shares matches the third generation's.** `gate3` read `+2.704pp` and `eval3` `+2.714pp` on boards that three and four seats also played; this run reads 0.02pp under the first. The discordant share is 15.1% here against 15.2% and 15.1% there. Both slots are positive and both slot intervals exclude zero.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+2.2pp` to `+3.1pp` centred near `+2.65pp`, delivered `+2.682pp`. **Right on the verdict**, predicted `better` above 99%.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against one seat on today's vector, so nothing here measures the world the adoption creates in the app, where every seat carries the vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same as on every third-generation domain, so this run controls for seeds and for the shared boards, and not for field-overfit. The vector was chosen on `tuning3` boards that other seat counts shared, and this run did not re-screen, so it says the choice holds on independent boards and nothing about whether another arm would have been chosen there. Both shipped values are screening endpoints, so nothing here says either is an optimum.
+
+## M-83: 3-seat independent gate on gate4
+
+2026-10-11, commit `a4fe0fff` (the commit that preregistered all five independent gates; no default moved for this run), domain `gate4` (seed `9339080276862700003`). Preregistered in `docs/plans/preregs/2026-10-10-m83-seats3-gate4.md` (committed before the run). **This run is the one `gate4` spend at 3 seats**, under Revision 2 of `.claude/specs/simulator/seat-count-programme.md` and the user's 2026-10-10 go-ahead quoted there; no further `gate4` command may run at 3 seats. The fourth generation folds the seat count into the seed, so these boards and game seeds are shared with no other seat count and no earlier run.
+
+`evaluate`, `standard4`, 3 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 42,000 boards x 2 reps, 252,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_s2_combined.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout standard4 --seats 3 --domain gate4 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_s2_combined.json@placement/default-weights.json --reference base --boards 42000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m83-seats3-gate4
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.03s against a warm fingerprint. The five `gate4` invocations ran one after another from one script, each alone, unpiped, and none shared a shell command with a build or a test suite. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate4` at seed `9339080276862700003`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `32.92 34.46 25.22`, after `33.16 34.64 33.33`, other sessions sharing the machine; 1210.075s at 18 workers, 416.5 games/s, 504,000 games. `base` won 84,452 of 252,000 (`0.3351269841269841`), 1.910 binomial standard errors above the `0.3333333333333333` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 88,737 of 252,000 (`0.3521309523809524`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.017003968253968254` | 22316 | 18031 | `[0.0154431, 0.0185648]` | `[0.0154000, 0.0186080]` | clustered `[0.0154000, 0.0186080]` | 0.1604 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| candidate | +1.700 `[+1.540, +1.861]` | 40347 | +1.76 `[+1.48, +2.04]` | +1.65 `[+1.37, +1.93]` | +1.69 `[+1.42, +1.97]` |
+
+**The verdict is `better`, so three seats keeps its vector.** `+1.700pp` on `[+1.540pp, +1.861pp]` over 40,347 discordant units of 252,000, the whole interval above the `+0.5pp` bar with 1.04pp to spare. By the preregistered rule the three-seat vector stays as adopted in M-75, and no file moves.
+
+**The reading is a little under the third generation's and well clear of the bar.** `gate3` read `+1.924pp` and `eval3` `+1.801pp`; this run reads 0.22pp under the first, which is about two standard errors of the difference between two runs of this size and in the direction the preregistration expected from readings that were only taken because the one before them passed. Every slot is positive and every slot interval excludes zero.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+1.4pp` to `+2.3pp` centred near `+1.8pp`, delivered `+1.700pp`. **Right on the verdict**, predicted `better` above 99%.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against two seats on today's vector, so nothing here measures the world the adoption creates in the app, where every seat carries the vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same as on every third-generation domain, so this run controls for seeds and for the shared boards, and not for field-overfit. The vector was chosen on `tuning3` boards that other seat counts shared, and this run did not re-screen, so it says the choice holds on independent boards and nothing about whether another arm would have been chosen there. Both shipped values are screening endpoints, so nothing here says either is an optimum.
+
+## M-84: 4-seat independent gate on gate4
+
+2026-10-11, commit `a4fe0fff` (the commit that preregistered all five independent gates; no default moved for this run), domain `gate4` (seed `16013495161676280900`). Preregistered in `docs/plans/preregs/2026-10-10-m84-seats4-gate4.md` (committed before the run). **This run is the one `gate4` spend at 4 seats**, under Revision 2 of `.claude/specs/simulator/seat-count-programme.md` and the user's 2026-10-10 go-ahead quoted there; no further `gate4` command may run at 4 seats. The fourth generation folds the seat count into the seed, so these boards and game seeds are shared with no other seat count and no earlier run.
+
+`evaluate`, `standard4`, 4 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 36,000 boards x 2 reps, 288,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_coverage_lo.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout standard4 --seats 4 --domain gate4 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --reference base --boards 36000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m84-seats4-gate4
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.03s against a warm fingerprint. The five `gate4` invocations ran one after another from one script, each alone, unpiped, and none shared a shell command with a build or a test suite. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate4` at seed `16013495161676280900`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `33.16 34.64 33.33`, after `49.44 42.59 38.93`, other sessions sharing the machine; 2169.989s at 18 workers, 265.4 games/s, 576,000 games. `base` won 72,001 of 288,000 (`0.25000347222222224`), 0.004 binomial standard errors above the `0.25` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 74,663 of 288,000 (`0.2592465277777778`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.009243055555555555` | 13562 | 10900 | `[0.0081792, 0.0103069]` | `[0.0081516, 0.0103345]` | clustered `[0.0081516, 0.0103345]` | 0.1091 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| candidate | +0.924 `[+0.815, +1.033]` | 24462 | +0.66 `[+0.45, +0.86]` | +1.04 `[+0.82, +1.26]` | +0.86 `[+0.64, +1.09]` | +1.13 `[+0.91, +1.36]` |
+
+**The verdict is `better`, so four seats keeps its vector.** `+0.924pp` on `[+0.815pp, +1.033pp]` over 24,462 discordant units of 288,000, the whole interval above the `+0.5pp` bar with 0.32pp to spare. By the preregistered rule the four-seat vector stays as adopted in M-69, and no file moves.
+
+**At twice the power, on independent boards, the reading sits between the two third-generation ones.** `eval3` read `+0.977pp` and `gate3` `+0.844pp` at 18000 boards; this run reads `+0.924pp` at 36000 with a half-width of 0.109pp against their 0.155pp and 0.153pp. Every slot is positive and every slot interval excludes zero, the first slot lowest at `+0.66pp`.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+0.6pp` to `+1.15pp` centred near `+0.85pp`, delivered `+0.924pp`. **Right on the verdict**, predicted `better` at about 96%. **Right on the half-width**, predicted about `+/-0.11pp`, delivered `+/-0.109pp`.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against three seats on today's vector, so nothing here measures the world the adoption creates in the app, where every seat carries the vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same as on every third-generation domain, so this run controls for seeds and for the shared boards, and not for field-overfit. The vector was chosen on `tuning3` boards that other seat counts shared, and this run did not re-screen, so it says the choice holds on independent boards and nothing about whether another arm would have been chosen there. The shipped value is the lower endpoint of its declared range, so nothing here says it is an optimum, and `diversityWeight` was not read here: M-67 dropped its arm unresolved.
+
+## M-85: 5-seat independent gate on gate4
+
+2026-10-11, commit `a4fe0fff` (the commit that preregistered all five independent gates; no default moved for this run), domain `gate4` (seed `15970491955241482323`). Preregistered in `docs/plans/preregs/2026-10-10-m85-seats5-gate4.md` (committed before the run). **This run is the one `gate4` spend at 5 seats**, under Revision 2 of `.claude/specs/simulator/seat-count-programme.md` and the user's 2026-10-10 go-ahead quoted there; no further `gate4` command may run at 5 seats. The fourth generation folds the seat count into the seed, so these boards and game seeds are shared with no other seat count and no earlier run.
+
+`evaluate`, `extension6`, 5 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 18,000 boards x 2 reps, 180,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_s2_combined.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout extension6 --seats 5 --domain gate4 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_s2_combined.json@placement/default-weights.json --reference base --boards 18000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m85-seats5-gate4
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.03s against a warm fingerprint. The five `gate4` invocations ran one after another from one script, each alone, unpiped, and none shared a shell command with a build or a test suite. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate4` at seed `15970491955241482323`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `49.44 42.59 38.93`, after `45.87 45.29 44.62`, other sessions sharing the machine; 4830.499s at 18 workers, 74.5 games/s, 360,000 games. `base` won 35,831 of 180,000 (`0.1990611111111111`), 0.996 binomial standard errors below the `0.2` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 38,881 of 180,000 (`0.21600555555555556`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.016944444444444446` | 13426 | 10376 | `[0.0152664, 0.0186225]` | `[0.0152101, 0.0186787]` | clustered `[0.0152101, 0.0186787]` | 0.1734 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| candidate | +1.694 `[+1.521, +1.868]` | 23802 | +1.49 `[+1.11, +1.88]` | +1.57 `[+1.17, +1.96]` | +1.93 `[+1.54, +2.31]` | +1.86 `[+1.48, +2.23]` | +1.63 `[+1.25, +2.01]` |
+
+**The verdict is `better`, so five seats keeps its vector.** `+1.694pp` on `[+1.521pp, +1.868pp]` over 23,802 discordant units of 180,000, the whole interval above the `+0.5pp` bar with 1.02pp to spare. By the preregistered rule the five-seat vector stays as adopted in M-78, and no file moves.
+
+**The reading on boards six seats does not share sits between the two third-generation ones.** `eval3` read `+1.738pp` and `gate3` `+1.524pp`; this run reads `+1.694pp`. The discordant share is 13.2%, as it was on both. Every slot is positive and every slot interval excludes zero.
+
+**Prediction against outcome.** **Right on the estimate**, predicted `+1.1pp` to `+2.0pp` centred near `+1.55pp`, delivered `+1.694pp`. **Right on the verdict**, predicted `better` at about 99%.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against four seats on today's vector, so nothing here measures the world the adoption creates in the app, where every seat carries the vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same as on every third-generation domain, so this run controls for seeds and for the shared boards, and not for field-overfit. The vector was chosen on `tuning3` boards that other seat counts shared, and this run did not re-screen, so it says the choice holds on independent boards and nothing about whether another arm would have been chosen there. The run reads the pair of changes together; the case for carrying both halves still rests on M-76. Both shipped values are screening endpoints.
+
+## M-86: 6-seat independent gate on gate4
+
+2026-10-11, commit `a4fe0fff` (the commit that preregistered all five independent gates; no default moved for this run), domain `gate4` (seed `4584976607990361878`). Preregistered in `docs/plans/preregs/2026-10-10-m86-seats6-gate4.md` (committed before the run). **This run is the one `gate4` spend at 6 seats**, under Revision 2 of `.claude/specs/simulator/seat-count-programme.md` and the user's 2026-10-10 go-ahead quoted there; no further `gate4` command may run at 6 seats. The fourth generation folds the seat count into the seed, so these boards and game seeds are shared with no other seat count and no earlier run.
+
+`evaluate`, `extension6`, 6 seats, field `app_formula_draft:placement/default-weights.json@placement/default-weights.json`, every seat on `heuristic-v1-trader-aware-threat-devcards-denial` with `--player-trading`, `--threads 0`, 20,000 boards x 2 reps, 240,000 paired units, `--threshold 0.005`, `--alpha 0.05`, run from `simulator/`. Reference `base` is the field spec; `candidate` carries `simulator/placement/arms/sc_coverage_lo.json` on the hero path with the opponent path pinned to the field's weights.
+
+```text
+RUSTFLAGS="-D warnings" cargo build --release --manifest-path simulator/Cargo.toml -p unsettled-sim
+
+# the single invocation, from simulator/
+target/release/unsettled-sim evaluate --layout extension6 --seats 6 --domain gate4 --field app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm base=app_formula_draft:placement/default-weights.json@placement/default-weights.json --arm candidate=app_formula_draft:placement/arms/sc_coverage_lo.json@placement/default-weights.json --reference base --boards 20000 --reps 2 --policy heuristic-v1-trader-aware-threat-devcards-denial --threads 0 --player-trading --threshold 0.005 --alpha 0.05 --out runs/m86-seats6-gate4
+```
+
+**Provenance and admissibility.** The release binary was rebuilt with `RUSTFLAGS="-D warnings"` in its own command block and reported `Finished` in 0.03s against a warm fingerprint. The five `gate4` invocations ran one after another from one script, each alone, unpiped, and none shared a shell command with a build or a test suite. `rustc 1.94.0 (4a4ef493e 2026-03-02)`. It reported domain `gate4` at seed `4584976607990361878`, as preregistered. **Zero illegal actions**, and 0 draws in `base` and 0 in `candidate`. Load before `45.87 45.29 44.62`, after `54.23 54.56 54.69`, other sessions sharing the machine; 7827.990s at 18 workers, 61.3 games/s, 480,000 games. `base` won 39,999 of 240,000 (`0.1666625`), 0.005 binomial standard errors below the `0.16666666666666666` corner and inside the preregistered 3.29, so the corner check passes. `candidate` won 41,952 of 240,000 (`0.1748`). `simulator/runs/` is gitignored, so this entry is the record.
+
+Pooled, reference `base`:
+
+| Arm | Estimate | b | c | McNemar | Clustered | Selected | Half-width pp | Verdict |
+| --- | ---: | ---: | ---: | --- | --- | --- | ---: | --- |
+| candidate | `0.0081375` | 9713 | 7760 | `[0.0070585, 0.0092165]` | `[0.0070221, 0.0092529]` | clustered `[0.0070221, 0.0092529]` | 0.1115 | better |
+
+Per-hero-seat, record only; hero seat equals draft slot. Percentage points:
+
+| Arm | pp estimate [interval] | discordant | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Slot 5 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| candidate | +0.814 `[+0.702, +0.925]` | 17473 | +0.56 `[+0.30, +0.83]` | +0.64 `[+0.38, +0.91]` | +1.08 `[+0.80, +1.36]` | +0.90 `[+0.62, +1.17]` | +0.71 `[+0.44, +0.98]` | +0.99 `[+0.71, +1.27]` |
+
+**The verdict is `better`, so six seats keeps its vector, and this time with room.** `+0.814pp` on `[+0.702pp, +0.925pp]` over 17,473 discordant units of 240,000, the whole interval above the `+0.5pp` bar with 0.20pp to spare, where `gate3` cleared it by 0.03pp. By the preregistered rule the six-seat vector stays as adopted in M-81, and no file moves.
+
+**At twice the power, on independent boards, the reading is above both third-generation ones.** `eval3` read `+0.782pp` and `gate3` `+0.689pp` at 10000 boards; this run reads `+0.814pp` at 20000 with a half-width of 0.112pp against their 0.157pp. The preregistration centred under both on the argument that readings taken only because the one before them passed run high; that shrinkage did not appear. The discordant share is 7.28%, as on `gate3`. Every slot is positive and every slot interval excludes zero.
+
+**Prediction against outcome.** **Right on the estimate, in the upper half of the range**, predicted `+0.45pp` to `+0.95pp` centred near `+0.7pp`, delivered `+0.814pp`. **Right on the verdict**, predicted `better` at about 85%. **Right on the half-width**, predicted about `+/-0.11pp`, delivered `+/-0.112pp`. This was named as the seat count most likely to return to today's vector, and it did not.
+
+**Scope, and what this entry may not be cited for.** One contrast, one layout, one seat count, one policy, one domain, one spend. The arm moves the hero's weights alone against five seats on today's vector, so nothing here measures the world the adoption creates in the app, where every seat carries the vector. The greedy opponent model inside every hero was measured in M-61 at four seats on `standard4` only, so the verdict may not be described as taken against a correctly specified model. The field is the same as on every third-generation domain, so this run controls for seeds and for the shared boards, and not for field-overfit. The vector was chosen on `tuning3` boards that other seat counts shared, and this run did not re-screen, so it says the choice holds on independent boards and nothing about whether another arm would have been chosen there. The shipped value is the lower endpoint of its declared range, so nothing here says it is an optimum, and `diversityWeight` was not read here: M-79 dropped its arm unresolved.
