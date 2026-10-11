@@ -1,7 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
-import { createBoard, placeBuilding, setHexTile } from '../src/model/board'
+import { createBoard, draftOrder, placeBuilding, setHexTile } from '../src/model/board'
+import { axialToPixel, edgeEndpointVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
+import type { Board, VertexId } from '../src/model/types'
+import { clientToUnits, IDENTITY } from '../src/ui/boardViewport'
+import { buildingSlots } from '../src/ui/placementSlots'
 import { seedBoard, seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
@@ -268,7 +272,8 @@ test.describe('build mode', () => {
       Array.from(root.querySelectorAll<HTMLElement>('*'))
         .filter((el) => getComputedStyle(el).overflowX === 'auto' && el.scrollWidth > el.clientWidth)
         .map((el) => el.className))
-    expect(sideways).toEqual(['tool-grid terrain-grid', 'token-tools', 'tool-grid structure-grid'])
+    // Structures holds four tools, which fit the row without scrolling.
+    expect(sideways).toEqual(['tool-grid terrain-grid', 'token-tools'])
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
     await snap(page, 'build-mode')
 
@@ -346,19 +351,73 @@ test.describe('build mode', () => {
     const players = tools.locator('.player-grid button')
     await expect(players).toHaveText(['Red', 'Blue', 'Orange', 'White'])
     await expect(tools.locator('.player-grid button[aria-pressed="true"]')).toHaveText('Red')
-    await tools.getByRole('button', { name: 'settlement' }).click()
+    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const slots = page.locator('.placement-slot')
     await expect(slots.first()).toHaveAttribute('stroke', '#c23f38')
     await players.filter({ hasText: 'Blue' }).click()
     await expect(tools.locator('.player-grid button[aria-pressed="true"]')).toHaveText('Blue')
     await expect(slots.first()).toHaveAttribute('stroke', '#3063ba')
-    await slots.first().click()
+    // The dots take no pointer events: the click lands on the board at the dot's centre.
+    await slots.first().click({ force: true })
     await expect(page.locator('.board-canvas g[fill="#3063ba"]')).toHaveCount(1)
     await expect(page.locator('.board-canvas g[fill="#c23f38"]')).toHaveCount(0)
     // Buttons cross-fade over 160ms, so an immediate capture shows two pressed.
     await page.waitForTimeout(400)
     await snap(page, 'build-player')
   })
+})
+
+test('pieces maps a coastal tap through the padded svg content box', async ({ page }) => {
+  await open(page)
+  const vertex: VertexId = 'v:-3,1;-2,0;-2,1'
+  const grid = boardGrid('standard4')
+  const inland = vertexIncidentEdgeIds(vertex).find((ref) => grid.edgeIds.includes(ref) && !grid.coastalEdgeIds.includes(ref))!
+  const other = edgeEndpointVertexIds(inland).find((ref) => ref !== vertex)!
+  const [corner, end] = [vertex, other].map((ref) => {
+    const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
+    return { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+  })
+  const reserved = new Set([vertex, ...vertexAdjacentVertexIds(vertex)])
+  let board: Board = { ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: null }
+  for (const player of draftOrder(board)) {
+    const slot = buildingSlots(board, player, 'settlement', 'edit').find((ref) => !reserved.has(ref))!
+    board = placeBuilding(board, slot, player, 'settlement')
+  }
+  await seedBoard(page, board)
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  await page.locator('.phone-build').getByRole('button', { name: 'pieces', exact: true }).click()
+  const svg = page.locator('.board-canvas')
+  await svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`).tap({ force: true })
+  const building = svg.locator(`g[fill="#c23f38"][transform^="translate(${corner.x} ${corner.y})"]`)
+  await expect(building).toHaveAttribute('transform', /scale\(0\.8\)/)
+  const { box, content, view } = await svg.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    const style = getComputedStyle(element)
+    const left = parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth)
+    const right = parseFloat(style.paddingRight) + parseFloat(style.borderRightWidth)
+    const top = parseFloat(style.paddingTop) + parseFloat(style.borderTopWidth)
+    const bottom = parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth)
+    const view = (element as SVGSVGElement).viewBox.baseVal
+    return {
+      box: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      content: { x: rect.x + left, y: rect.y + top, width: rect.width - left - right, height: rect.height - top - bottom },
+      view: { x: view.x, y: view.y, width: view.width, height: view.height },
+    }
+  })
+  const point = { x: corner.x + (end.x - corner.x) / 58 * 12, y: corner.y + (end.y - corner.y) / 58 * 12 }
+  const scale = Math.min(content.width / view.width, content.height / view.height)
+  const tap = {
+    x: content.x + (content.width - view.width * scale) / 2 + (point.x - view.x) * scale,
+    y: content.y + (content.height - view.height * scale) / 2 + (point.y - view.y) * scale,
+  }
+
+  // The border-box mapping crosses the road's halfway boundary at this coastal corner.
+  const wrong = clientToUnits(tap, box, view, IDENTITY)
+  expect(Math.hypot(wrong.x - (corner.x + end.x) / 2, wrong.y - (corner.y + end.y) / 2))
+    .toBeLessThan(Math.hypot(wrong.x - corner.x, wrong.y - corner.y))
+  await page.touchscreen.tap(tap.x, tap.y)
+  await expect(building).toHaveAttribute('transform', /scale\(1\)/)
+  await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
 })
 
 test.describe('maps screen', () => {

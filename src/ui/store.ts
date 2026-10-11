@@ -19,7 +19,6 @@ import { initializeAwards, trackAwards } from '../engine/stats'
 import { inferDraftState } from '../engine/draft'
 import type {
   Board,
-  BuildingTier,
   EdgeId,
   Resource,
   TileKind,
@@ -50,7 +49,7 @@ export type Tool =
   | { kind: 'port'; resource: Resource | null; rate: number }
   | { kind: 'robber' }
   | { kind: 'erase' }
-  | { kind: 'piece'; tier: 'road' | BuildingTier }
+  | { kind: 'piece' }
 
 /**
  * A board mark surfaced from analysis: a highlighted ref (vertex/hex/port id)

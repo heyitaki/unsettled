@@ -139,10 +139,8 @@ button.danger { color: var(--danger); }
 .port-text { font: 700 11px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; font-variant-numeric: lining-nums tabular-nums; }
 .hit-layers > * { fill: transparent; stroke: transparent; cursor: crosshair; pointer-events: all; }
 .hit-layers line { stroke-width: 14; }
-.placement-slot { cursor: default; transition: fill .12s ease; }
-/* Invisible remove-targets over your own pieces: clickable but unpainted. */
-.placement-remove { fill: transparent; stroke: transparent; pointer-events: all; cursor: default; }
-.placement-remove:not(circle) { stroke-width: 14; }
+/* A browser retargets a tap onto any clickable element under the finger, which would pull taps off pieces onto the dots. */
+.placement-layer { pointer-events: none; }
 .highlighted { filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 5px #e72525); }
 .settlement-ordinal text { font: 700 10px Charter, "Bitstream Charter", Cambria, "Noto Serif", serif; }
 .vertex-highlight { r: 12px; fill: rgba(187,76,50,.22); stroke: #8f3425; stroke-width: 2.4; }
@@ -423,7 +421,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .tools-manual > summary:hover, .tally-tabs button:hover { color: var(--ink); }
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }
-  .placement-slot:hover { fill: #fffdf7; }
   .tally-header > span:hover::after, .panel-dots:hover::after { opacity: 1; }
   .analysis-row:hover:not(.current) { border-color: var(--muted); }
   .board-status .menu-trigger:hover:not(:disabled, :where(.phone-shell *)) { color: #fff; background: rgba(255, 255, 255, .16); }
@@ -457,7 +454,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .tally-tabs button::before { content: ''; position: absolute; inset: 0 -5px; }
   .menu-trigger::before { content: ''; position: absolute; inset: -15px -10px; }
   .hit-layers line { stroke-width: 26; }
-  .placement-remove:not(circle) { stroke-width: 26; }
   .board-zoom button { position: relative; }
   /* Hit area only, so the chip stays inside the status row's reserved height. */
   .board-zoom button::before { content: ''; position: absolute; inset: -11px -9px; }

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import {
@@ -39,7 +40,7 @@ import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips 
 import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
-import { buildingSlots, roadSlots } from './placementSlots'
+import { buildingSlots, clickTarget, nextBuildingTier, roadSlots } from './placementSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
 import {
   IDENTITY,
@@ -48,11 +49,16 @@ import {
   panBy,
   transformedViewBox,
   zoomAbout,
+  type Box,
   type ViewTransform,
 } from './boardViewport'
 import { useCoarsePointer } from './useMediaQuery'
 
 const SIZE = 58
+// A click this near the previous one repeats it, unless it lands this near another target.
+const REPEAT_DISTANCE = 10
+const DIRECT_DISTANCE = 8
+const PAN_THRESHOLD = 8
 // How far the port bubble sits beyond its coastal edge, along the outward
 // normal. A full apothem (SIZE·√3/2) would center it on the phantom neighbour
 // hex, making the leaders equilateral; squashing flattens that triangle.
@@ -93,7 +99,7 @@ const LAYOUT_OPTIONS = (Object.keys(LAYOUT_LABEL) as LayoutId[])
   .map((value) => ({ value, label: LAYOUT_LABEL[value] }))
 
 type Point = { x: number; y: number }
-const pointOf = (event: ReactPointerEvent<SVGSVGElement>): Point => ({ x: event.clientX, y: event.clientY })
+const pointOf = (event: { clientX: number; clientY: number }): Point => ({ x: event.clientX, y: event.clientY })
 const midpoint = (points: readonly Point[]): Point => ({
   x: (points[0].x + points[1].x) / 2,
   y: (points[0].y + points[1].y) / 2,
@@ -102,6 +108,21 @@ const distance = (points: readonly Point[]): number =>
   Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)
 
 const center = (coord: AxialCoord) => axialToPixel(coord, SIZE)
+
+function contentBox(svg: SVGSVGElement): Box {
+  const rect = svg.getBoundingClientRect()
+  const style = getComputedStyle(svg)
+  const left = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.borderLeftWidth) || 0)
+  const right = (parseFloat(style.paddingRight) || 0) + (parseFloat(style.borderRightWidth) || 0)
+  const top = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.borderTopWidth) || 0)
+  const bottom = (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderBottomWidth) || 0)
+  return {
+    x: rect.x + left,
+    y: rect.y + top,
+    width: Math.max(0, rect.width - left - right),
+    height: Math.max(0, rect.height - top - bottom),
+  }
+}
 
 function vertexPoint(vertexId: VertexId) {
   const points = parseVertexId(vertexId).map(center)
@@ -142,6 +163,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
   const [pendingLayout, setPendingLayout] = useState<LayoutId | null>(null)
   const [transform, setTransformState] = useState<ViewTransform>(IDENTITY)
+  const [hoveredTarget, setHoveredTarget] = useState<string | null>(null)
   const transformRef = useRef<ViewTransform>(IDENTITY)
   const svgRef = useRef<SVGSVGElement>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -149,6 +171,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const gestureHadPinch = useRef(false)
   const suppressClick = useRef(false)
   const lastTap = useRef<{ time: number; x: number; y: number } | null>(null)
+  const lastClick = useRef<{ ref: string; x: number; y: number } | null>(null)
+  const finePointer = useRef<Point | null>(null)
+  const finePointerDown = useRef<Point | null>(null)
   const setTransform = (next: ViewTransform) => {
     transformRef.current = next
     setTransformState(next)
@@ -162,6 +187,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     setPendingLayout(null)
   }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
+  // Positions depend on the layout alone; the candidates below filter them per board.
+  const targetPositions = useMemo(() => [
+    ...grid.vertexIds.map((ref) => ({ ref, ...vertexPoint(ref) })),
+    ...grid.edgeIds.map((ref) => ({ ref, ...midpoint(edgeEndpointVertexIds(ref).map(vertexPoint)) })),
+  ], [grid])
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
   const highlight = state.highlight ?? restMarks ?? NO_MARKS
   const gridEdgeSet = useMemo<ReadonlySet<string>>(() => new Set(grid.edgeIds), [grid])
@@ -267,13 +297,31 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const placementPlayer = pick ? activePlayerId(tab.game) : tab.activePlayerId
   const placeableVertices = useMemo<VertexId[]>(() => {
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
-    if (state.tool.kind !== 'piece' || state.tool.tier === 'road') return []
-    return buildingSlots(board, placementPlayer, state.tool.tier, 'edit')
+    if (state.tool.kind !== 'piece') return []
+    const occupied = new Set(board.buildings.map((building) => building.vertexId))
+    return buildingSlots(board, placementPlayer, 'settlement', 'edit').filter((vertexId) => !occupied.has(vertexId))
   }, [state.tool, board, placementPlayer, pick])
   const placeableEdges = useMemo<EdgeId[]>(() => {
-    if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece' || state.tool.tier !== 'road') return []
+    if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece') return []
     return roadSlots(board, placementPlayer, pick?.want === 'edge' ? pick.edges : undefined)
   }, [state.tool, board, placementPlayer, pick])
+  const candidates = useMemo(() => {
+    const refs = new Set<string>([...placeableVertices, ...placeableEdges])
+    if (!pick && state.tool.kind === 'piece') {
+      for (const building of board.buildings) refs.add(building.vertexId)
+      for (const road of board.roads) refs.add(road.edgeId)
+    }
+    return targetPositions.filter((target) => refs.has(target.ref))
+  }, [targetPositions, placeableVertices, placeableEdges, board.buildings, board.roads, pick, state.tool])
+  const targetAt = useCallback((point: Point) => {
+    const rect = svgRef.current && contentBox(svgRef.current)
+    // An unmeasured board has no point to resolve; clientToUnits would answer with the view centre.
+    if (!rect || rect.width === 0 || rect.height === 0) return null
+    const units = clientToUnits(point, rect, viewBox, transformRef.current)
+    const ref = clickTarget(units, candidates, lastClick.current, { max: SIZE / 2, repeat: REPEAT_DISTANCE, direct: DIRECT_DISTANCE })
+    return ref === null ? null : { ref, ...units }
+  }, [candidates, viewBox])
+  const draftComplete = useMemo(() => draftIsComplete(board, inferDraftState(board)), [board])
   // Stable across renders that don't change the roster, so the piece layers
   // below can list it as a dependency without re-rendering on every render.
   const playerColor = useCallback(
@@ -316,11 +364,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       if (pick.want === 'edge') dispatch({ type: 'picked', ref: edgeId })
       return
     }
-    if (state.tool.kind === 'piece' && state.tool.tier === 'road' && tab.activePlayerId !== null) {
-      // Clicking your own road again toggles it off.
+    if (state.tool.kind === 'piece') {
       const existing = board.roads.find((road) => road.edgeId === edgeId)
-      if (existing?.playerId === tab.activePlayerId) commit(removeRoad(board, edgeId))
-      else commit(placeRoad(board, edgeId, tab.activePlayerId))
+      if (existing) commit(removeRoad(board, edgeId))
+      else if (tab.activePlayerId !== null) commit(placeRoad(board, edgeId, tab.activePlayerId))
     } else if (state.tool.kind === 'erase') {
       commit(removePort(removeRoad(board, edgeId), edgeId))
     } else if (state.tool.kind === 'port' && grid.coastalEdgeIds.includes(edgeId)) setEditingPort(edgeId)
@@ -330,18 +377,47 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       if (pick.want === 'vertex') dispatch({ type: 'picked', ref: vertexId })
       return
     }
-    if (state.tool.kind === 'piece' && state.tool.tier !== 'road' && tab.activePlayerId !== null) {
-      // Clicking your own building of the same tier toggles it off; a different
-      // tier upgrades it. placeableVertices keeps opponents' pieces unreachable.
+    if (state.tool.kind === 'piece') {
       const existing = board.buildings.find((building) => building.vertexId === vertexId)
-      if (existing?.playerId === tab.activePlayerId && existing.tier === state.tool.tier) {
-        commit(removeBuilding(board, vertexId))
-      } else commit(placeBuilding(board, vertexId, tab.activePlayerId, state.tool.tier))
+      const tier = nextBuildingTier(existing?.tier, {
+        city: draftComplete,
+        superCity: board.buildings.some((building) => building.tier === 'superCity'),
+      })
+      const owner = existing?.playerId ?? tab.activePlayerId
+      if (tier === null) commit(removeBuilding(board, vertexId))
+      else if (owner !== null) commit(placeBuilding(board, vertexId, owner, tier))
     } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
   }
-  const buildTier = !pick && state.tool.kind === 'piece' && state.tool.tier !== 'road' ? state.tool.tier : null
-  const buildActive = pick ? pick.want === 'vertex' : buildTier !== null
-  const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece' && state.tool.tier === 'road'
+  const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece'
+  const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
+  const placementActive = buildActive || roadActive
+  const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
+  const hoverPlayer = hover
+    ? board.buildings.find((building) => building.vertexId === hover.ref)?.playerId
+      ?? board.roads.find((road) => road.edgeId === hover.ref)?.playerId
+      ?? placementPlayer
+    : null
+  useEffect(() => {
+    lastClick.current = null
+    finePointer.current = null
+    finePointerDown.current = null
+  }, [placementActive, state.activeTabId, board.layout])
+  useEffect(() => {
+    setHoveredTarget(!coarse && placementActive && finePointer.current
+      ? targetAt(finePointer.current)?.ref ?? null
+      : null)
+  }, [targetAt, coarse, placementActive, state.activeTabId, board.layout, transform])
+  const actOnTarget = (target: { ref: string; x: number; y: number }) => {
+    lastClick.current = target
+    if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
+    else onEdge(target.ref as EdgeId)
+  }
+  // The dots take no pointer events (editor.css), so a pointer always goes through the svg's
+  // handler; only a click dispatched on a dot itself arrives here, and it names its target.
+  const onSlotClick = (event: ReactMouseEvent<SVGCircleElement>, slot: { ref: string; x: number; y: number }) => {
+    event.stopPropagation()
+    actOnTarget(slot)
+  }
   const eraseActive = !pick && state.tool.kind === 'erase'
   const portActive = !pick && state.tool.kind === 'port'
   const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
@@ -349,8 +425,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const overlayBlocksGestures = () =>
     gesturesBlocked || overlayOpen()
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!coarse || overlayBlocksGestures()) return
+    if (overlayBlocksGestures()) return
     const point = pointOf(event)
+    if (!coarse) {
+      finePointerDown.current = point
+      return
+    }
     pointers.current.set(event.pointerId, point)
     if (pointers.current.size > 1) {
       for (const pointerId of pointers.current.keys()) {
@@ -379,8 +459,15 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     }
   }
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!coarse || overlayBlocksGestures() || !pointers.current.has(event.pointerId)) return
-    const rect = event.currentTarget.getBoundingClientRect()
+    if (!coarse && !placementActive) return
+    if (overlayBlocksGestures()) return
+    if (!coarse) {
+      finePointer.current = pointOf(event)
+      setHoveredTarget(targetAt(finePointer.current)?.ref ?? null)
+      return
+    }
+    if (!pointers.current.has(event.pointerId)) return
+    const rect = contentBox(event.currentTarget)
     const beforePoints = [...pointers.current.values()]
     const point = pointOf(event)
     pointers.current.set(event.pointerId, point)
@@ -414,7 +501,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     const previous = beforePoints[0]
     if (!start || !previous) return
     const wasPanning = start.panning
-    if (!wasPanning && Math.hypot(point.x - start.x, point.y - start.y) <= 8) return
+    if (!wasPanning && Math.hypot(point.x - start.x, point.y - start.y) <= PAN_THRESHOLD) return
     if (!wasPanning) event.currentTarget.setPointerCapture(event.pointerId)
     start.panning = true
     suppressClick.current = true
@@ -466,8 +553,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     suppressClick.current = true
     if (transformRef.current.scale > 1) setTransform(IDENTITY)
     else {
-      const rect = event.currentTarget.getBoundingClientRect()
-      const anchor = clientToUnits(pointOf(event), rect, viewBox, IDENTITY)
+      const anchor = clientToUnits(pointOf(event), contentBox(event.currentTarget), viewBox, IDENTITY)
       setTransform(zoomAbout(IDENTITY, 2.5, anchor, viewBox))
     }
   }
@@ -497,7 +583,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       event.preventDefault()
       const anchor = clientToUnits(
         { x: event.clientX, y: event.clientY },
-        svg.getBoundingClientRect(),
+        contentBox(svg),
         viewBox,
         transformRef.current,
       )
@@ -644,7 +730,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }), [board.roads, playerColor])
 
   const ordinals = useMemo(() =>
-    draftIsComplete(board, inferDraftState(board)) ? new Map<VertexId, 1 | 2>() : settlementOrdinals(board), [board])
+    draftComplete ? new Map<VertexId, 1 | 2>() : settlementOrdinals(board), [board, draftComplete])
   const buildingLayer = useMemo(() => board.buildings.map((building) => {
     const point = vertexPoint(building.vertexId)
     const color = playerColor(building.playerId)
@@ -776,13 +862,24 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         onPointerCancel={cancelPointer}
         onLostPointerCapture={onLostCapture}
         onPointerLeave={(event) => {
+          finePointer.current = null
+          if (hoveredTarget !== null) setHoveredTarget(null)
           if (!event.currentTarget.hasPointerCapture(event.pointerId)) cancelPointer(event)
         }}
         onClickCapture={(event) => {
-          if (!suppressClick.current) return
+          const start = finePointerDown.current
+          finePointerDown.current = null
+          const dragged = !coarse && placementActive && start !== null &&
+            Math.hypot(event.clientX - start.x, event.clientY - start.y) > PAN_THRESHOLD
+          if (!suppressClick.current && !dragged) return
           event.preventDefault()
           event.stopPropagation()
           suppressClick.current = false
+        }}
+        onClick={(event) => {
+          if (!placementActive) return
+          const target = targetAt(pointOf(event))
+          if (target) actOnTarget(target)
         }}
       >
         <defs>
@@ -837,32 +934,18 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r={coarse ? 17 : 9} onClick={() => onVertex(vertexId)} />
             })}
           </g>
-          {/* Placement affordances: visible, normal-cursor dots at every rule-legal
-              vertex/edge for the active building or road tool. */}
+          {/* Placement affordances: a dot at every rule-legal vertex or edge, and the hover ring. */}
           <g className="placement-layer">
             {buildActive && placeableVertices.map((vertexId) => {
               const point = vertexPoint(vertexId)
-              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onVertex(vertexId)} />
+              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
             })}
             {roadActive && placeableEdges.map((edgeId) => {
               const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
-              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={() => onEdge(edgeId)} />
+              const point = midpoint([a, b])
+              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
             })}
-            {/* Invisible targets over the active player's own same-tier pieces so
-                clicking one with the same tool still toggles it off (onVertex /
-                onEdge route to remove); no visible dot, just a normal-cursor hit. */}
-            {buildTier && board.buildings
-              .filter((piece) => piece.playerId === tab.activePlayerId && piece.tier === buildTier)
-              .map((piece) => {
-                const point = vertexPoint(piece.vertexId)
-                return <circle key={`rm:${piece.vertexId}`} className="placement-remove" cx={point.x} cy={point.y} r={coarse ? 18 : 12} onClick={() => onVertex(piece.vertexId)} />
-              })}
-            {roadActive && !pick && board.roads
-              .filter((road) => road.playerId === tab.activePlayerId)
-              .map((road) => {
-                const [a, b] = edgeEndpointVertexIds(road.edgeId).map(vertexPoint)
-                return <line key={`rm:${road.edgeId}`} className="placement-remove" x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(road.edgeId)} />
-              })}
+            {hover && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
           </g>
         </g>
       </svg>

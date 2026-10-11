@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { createBoard, draftOrder, placeBuilding, placeRoad, setHexTile } from '../src/model/board'
-import { edgeEndpointVertexIds } from '../src/model/coords'
+import { axialToPixel, edgeEndpointVertexIds, hexVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
 import type { Board } from '../src/model/types'
 import { LISTED_PICKS } from '../src/ui/restMarks'
+import { buildingSlots } from '../src/ui/placementSlots'
 import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
 
 /**
@@ -378,6 +379,100 @@ test.describe('desktop', () => {
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
     await expect(tools.locator('button.selected')).toHaveCount(0)
+  })
+
+  test('pieces keeps a repeat click on its corner when nearer road slots appear', async ({ page }) => {
+    await page.goto('')
+    const vertex = hexVertexIds({ q: 0, r: 0 })[0]
+    const reserved = new Set([vertex, ...vertexAdjacentVertexIds(vertex)])
+    let board: Board = { ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: null }
+    for (const player of draftOrder(board)) {
+      const slot = buildingSlots(board, player, 'settlement', 'edit').find((ref) => !reserved.has(ref))!
+      board = placeBuilding(board, slot, player, 'settlement')
+    }
+    await seedBoard(page, board)
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
+    const svg = page.locator('.board-canvas')
+    const other = edgeEndpointVertexIds(vertexIncidentEdgeIds(vertex)[0]).find((ref) => ref !== vertex)!
+    const [corner, end] = [vertex, other].map((ref) => {
+      const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
+      return { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+    })
+    const slot = svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`)
+    await expect(slot).toBeVisible()
+    const dot = (await slot.boundingBox())!
+    const scale = await svg.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      const view = (element as SVGSVGElement).viewBox.baseVal
+      return Math.min(rect.width / view.width, rect.height / view.height)
+    })
+
+    // The edge midpoint is eleven units away, but only the corner is actionable on the first click.
+    const x = dot.x + dot.width / 2 + (end.x - corner.x) / 58 * 18 * scale
+    const y = dot.y + dot.height / 2 + (end.y - corner.y) / 58 * 18 * scale
+    const buildings = svg.locator(`g[fill="#c23f38"][transform^="translate(${corner.x} ${corner.y})"]`)
+    const hover = svg.locator('.placement-hover')
+    await page.mouse.move(x, y)
+    await expect(svg.locator('.placement-hover')).toHaveCount(1)
+    await page.mouse.click(x, y)
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings).toHaveAttribute('transform', /scale\(0\.8\)/)
+    await page.mouse.click(x, y)
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings).toHaveAttribute('transform', /scale\(1\)/)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
+    await expect(hover).toHaveAttribute('cx', String(corner.x))
+    await expect(hover).toHaveAttribute('cy', String(corner.y))
+    await page.mouse.click(x, y)
+    await expect(buildings).toHaveCount(0)
+    await page.mouse.move(0, 0)
+    await expect(svg.locator('.placement-hover')).toHaveCount(0)
+  })
+
+  test('pieces removes a settlement on the second click during the draft', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
+    const svg = page.locator('.board-canvas')
+    const slot = svg.locator('.placement-slot').first()
+    await expect(slot).toBeVisible()
+    const dot = (await slot.boundingBox())!
+    const x = dot.x + dot.width / 2
+    const y = dot.y + dot.height / 2
+    const buildings = svg.locator('g[fill="#c23f38"]')
+    await page.mouse.click(x, y)
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings).toHaveAttribute('transform', /scale\(0\.8\)/)
+    await expect(svg.locator('g[fill="#c23f38"][transform$="scale(1)"]')).toHaveCount(0)
+    await page.mouse.click(x, y)
+    await expect(buildings).toHaveCount(0)
+    await expect(svg.locator('g[fill="#c23f38"][transform$="scale(1)"]')).toHaveCount(0)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
+  })
+
+  test('dragging to a legal corner does not place a piece', async ({ page }) => {
+    await page.goto('')
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
+    const svg = page.locator('.board-canvas')
+    const slots = svg.locator('.placement-slot')
+    await expect(slots.first()).toBeVisible()
+    const closest = await slots.evaluateAll((dots) => dots
+      .map((dot, index) => ({ index, x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
+      .sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y))[0])
+    const dot = (await slots.nth(closest.index).boundingBox())!
+    const x = dot.x + dot.width / 2
+    const y = dot.y + dot.height / 2
+    await page.mouse.move(x - 60, y)
+    await page.mouse.down()
+    await page.mouse.move(x, y, { steps: 3 })
+    await page.mouse.up()
+    await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
   })
 
   test('an empty board says so and offers nothing: the import and the way into the tools are already in the left rail', async ({ page }) => {

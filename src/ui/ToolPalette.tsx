@@ -20,18 +20,14 @@ const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
 const TOKEN_VIEW_BOX = `${-NUMBER_TOKEN_EXTENT} ${-NUMBER_TOKEN_EXTENT} ${NUMBER_TOKEN_EXTENT * 2} ${NUMBER_TOKEN_EXTENT * 2}`
 
 const STRUCTURES: { key: StructureShape; label: string; tool: Tool; danger?: boolean }[] = [
-  { key: 'road', label: 'road', tool: { kind: 'piece', tier: 'road' } },
-  { key: 'settlement', label: 'settlement', tool: { kind: 'piece', tier: 'settlement' } },
-  { key: 'city', label: 'city', tool: { kind: 'piece', tier: 'city' } },
-  { key: 'superCity', label: 'super city', tool: { kind: 'piece', tier: 'superCity' } },
+  { key: 'settlement', label: 'pieces', tool: { kind: 'piece' } },
   { key: 'robber', label: 'robber', tool: { kind: 'robber' } },
   { key: 'port', label: 'port', tool: { kind: 'port', resource: null, rate: 3 } },
   { key: 'erase', label: 'erase', tool: { kind: 'erase' }, danger: true },
 ]
 
 const keyOf = (tool: Tool): string => tool.kind === 'tile' ? `${tool.kind}:${tool.tile}`
-  : tool.kind === 'token' ? `${tool.kind}:${tool.number}`
-    : tool.kind === 'piece' ? `${tool.kind}:${tool.tier}` : tool.kind
+  : tool.kind === 'token' ? `${tool.kind}:${tool.number}` : tool.kind
 
 /**
  * The three tool rows, shared by the desktop palette and the phone's build
@@ -46,10 +42,6 @@ export function ToolGroups() {
   // Preview the colour the active player will place with; with nobody selected
   // (their dot toggled off) the palette falls back to the neutral glyph beige.
   const pieceColor = tab.game.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? GLYPH_MUTED
-  // Super cities are a variant piece: offer the tool only on boards that already
-  // have one (e.g. imported from a screenshot), so the palette stays base-game.
-  const hasSuperCity = tab.game.board.buildings.some((building) => building.tier === 'superCity')
-  const structures = hasSuperCity ? STRUCTURES : STRUCTURES.filter((item) => item.key !== 'superCity')
   // The counts the board caption used to carry (spec D3): how much terrain is
   // painted, and how many pieces stand on the board.
   const placed = tab.game.board.hexes.filter((hex) => hex.tile).length
@@ -95,7 +87,7 @@ export function ToolGroups() {
       <div className="tool-group">
         <span className="tool-label">Structures<span className="tool-count">{pieces} {pieces === 1 ? 'piece' : 'pieces'}</span></span>
         <div className="tool-grid structure-grid">
-          {structures.map((item) => {
+          {STRUCTURES.map((item) => {
             const active = selected === keyOf(item.tool)
             return (
               <button
