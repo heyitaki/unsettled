@@ -7,7 +7,7 @@ const wasm = readFileSync(new URL('../advice/engine.wasm', import.meta.url))
 const { cases }: { cases: { name: string; request: { board: Board } }[] } = JSON.parse(
   readFileSync(new URL('../../../simulator/fixtures/analysis-parity.json', import.meta.url), 'utf8'),
 )
-// The `worstCaseBoard()` of `perf.test.ts`: a full six-player extension board with nothing placed.
+// The worst case for a ranking: a full six-player extension board with nothing placed.
 const worstCase = cases.find(({ name }) => name === 'worst-case-default-rollouts')!.request.board
 
 /**

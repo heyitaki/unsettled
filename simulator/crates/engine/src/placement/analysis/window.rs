@@ -1,8 +1,8 @@
 //! Rival picks and the windows they are played in: the rollout layer under the ranking.
 //!
 //! Twin of `opponentPick`, `bestPartners`, `partnerTable`, `bestLegalCandidate` and
-//! `simulateWindowDetailed` in `src/engine/analyze.ts`. A vertex is its grid index, so a scan in
-//! index order is the TypeScript's grid order.
+//! `simulateWindowDetailed` in the deleted `src/engine/analyze.ts`. A vertex is its grid index,
+//! so a scan in index order is the TypeScript's grid order.
 //!
 //! Every scan reads two views of the pieces. `blocked` is every vertex the distance rule bars.
 //! `vertex_owner` is the settlements standing, the board's and the picks made since, each under

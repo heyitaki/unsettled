@@ -1,7 +1,7 @@
 //! Best picks: the ranking of settlement placements during the snake draft.
 //!
-//! Twin of `src/engine/analyze.ts`, down to the order of evaluation, because
-//! `simulator/fixtures/analysis-parity.json` pins the two against each other.
+//! Ported from the TypeScript analysis the app ran before, `src/engine/analyze.ts`, down to the
+//! order of evaluation. That file is deleted: "twin of" names its function at commit `4f911f77`.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -168,7 +168,7 @@ pub struct DraftAnalysis {
     pub warnings: Vec<DraftWarning>,
 }
 
-/// Twin of `mulberry32` in `src/engine/random.ts`: 32-bit wrapping arithmetic throughout.
+/// Twin of `mulberry32` in the deleted `src/engine/random.ts`: 32-bit wrapping arithmetic.
 pub struct Mulberry32 {
     state: u32,
 }
@@ -878,6 +878,9 @@ impl Ranking<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod behaviour;
 
 #[cfg(test)]
 mod tests {

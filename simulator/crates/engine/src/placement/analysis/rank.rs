@@ -1,6 +1,6 @@
 //! The ranking itself: every legal candidate scored across the rollouts' pre-windows.
 //!
-//! Twin of `rankCandidates` in `src/engine/analyze.ts`.
+//! Twin of `rankCandidates` in the deleted `src/engine/analyze.ts`.
 
 use super::window::{Context, Turn, block_vertex};
 use super::{Board, Breakdown, DraftState, Recommendation, TakenVertex};
