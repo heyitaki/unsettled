@@ -1738,3 +1738,67 @@ fn a_desert_neighbour_grants_nothing() {
     assert!(after < before);
     assert!(close(before - after, card, 5e-13));
 }
+
+/// Carries the occupancy tests of `valuation.test.ts`, deleted with the TypeScript formula at
+/// commit `8107fc15`. The owner tags are that file's `occupancyFromBoard`: the pieces themselves,
+/// with no seat in them, so one pair of arrays serves whichever seat is scored.
+#[test]
+fn the_owner_tags_are_the_boards_buildings_and_roads_and_nothing_else() {
+    let relative = PathBuf::from("src/parser/__tests__/expected/board-endgame-pieces.json");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.is_file())
+        .expect("board fixture must be reachable from the worktree or sweep root");
+    let json: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let board = parse(&json);
+    let topology = board.topology;
+    let (vertex_owner, edge_owner) = board.owners();
+    let seat_of = |player: &Value| {
+        list(&json, "players")
+            .iter()
+            .position(|entry| entry["id"] == *player)
+            .unwrap() as u8
+    };
+
+    let buildings = list(&json, "buildings");
+    assert!(!buildings.is_empty());
+    assert_eq!(
+        vertex_owner.iter().filter(|owner| **owner != EMPTY).count(),
+        buildings.len()
+    );
+    for building in buildings {
+        let vertex = topology.vertex_by_id(text(&building["vertexId"])).unwrap();
+        assert_eq!(vertex_owner[usize::from(vertex)], seat_of(&building["playerId"]));
+    }
+    let roads = list(&json, "roads");
+    assert!(!roads.is_empty());
+    assert_eq!(
+        edge_owner.iter().filter(|owner| **owner != EMPTY).count(),
+        roads.len()
+    );
+    for road in roads {
+        let edge = topology.edge_by_id(text(&road["edgeId"])).unwrap();
+        assert_eq!(edge_owner[usize::from(edge)], seat_of(&road["playerId"]));
+    }
+    // The vertices a building bars under the distance rule are not tagged: a walk has to be able
+    // to tell a settlement apart from its neighbour. `blocked` is where they are.
+    let barred = board.blocked();
+    assert!(
+        barred.iter().filter(|barred| **barred).count() > buildings.len(),
+        "the distance rule bars more than the built vertices"
+    );
+    for (vertex, owner) in vertex_owner.iter().enumerate() {
+        assert!(*owner == EMPTY || barred[vertex]);
+    }
+
+    // Whoever is claimed, the tags are the same.
+    for me in [Value::Null, "p1".into(), "p4".into()] {
+        let mut claimed = json.clone();
+        claimed["mePlayerId"] = me;
+        assert_eq!(parse(&claimed).owners(), (vertex_owner.clone(), edge_owner.clone()));
+    }
+    // A board with no piece on it tags nothing.
+    let (no_buildings, no_roads) = parse(&blank_board(4)).owners();
+    assert!(no_buildings.iter().chain(&no_roads).all(|owner| *owner == EMPTY));
+}

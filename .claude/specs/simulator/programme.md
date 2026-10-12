@@ -2,7 +2,7 @@
 
 Class **D**: decisions, their rationale, and what each revision replaced. Not falsifiable by code. See [spec.md](spec.md) for the class rules.
 
-The simulator exists to measure which starting placements win, and ultimately to calibrate the app's own scorer (`src/engine/weights.ts`). The phase order below was revised after two findings, and the revision matters more than the list: **weight tuning now runs last.**
+The simulator exists to measure which starting placements win, and ultimately to calibrate the app's own scorer (the weights under `simulator/placement/`, which the app's WebAssembly engine embeds). The phase order below was revised after two findings, and the revision matters more than the list: **weight tuning now runs last.**
 
 This file covers phases A through J and the knight-timing item, all closed. The successor programme, which sharpens the placement scorer itself rather than the field it is measured against, is [placement-programme.md](placement-programme.md), phases SP0 through SP6.
 

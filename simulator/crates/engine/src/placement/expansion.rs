@@ -1,8 +1,9 @@
 //! SP3's expansion term: what the best sites a candidate opens are worth to the pair.
 //!
-//! Mirror of `src/engine/expansion.ts`, down to the comparison order, because the `W13` parity
-//! class pins the two against each other. The walk reads the occupancy the scorer is handed, so it
-//! is the one component that depends on where everybody else's pieces stand.
+//! Ported from `src/engine/expansion.ts`, down to the comparison order. That file and its tests
+//! are deleted: a comment that names one refers to commit `8107fc15`. The walk reads the occupancy
+//! the scorer is handed, so it is the one component that depends on where everybody else's pieces
+//! stand.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1941,9 +1942,8 @@ pub(super) mod tests {
     /// top-two sum and then on the lower edge index.
     ///
     /// Recomputed here from the per-edge walk on every candidate the board offers, which is what
-    /// `src/engine/__tests__/expansion.test.ts` does to the TypeScript rule. The parity fixture
-    /// pins the term's *value* across the two languages and nothing pins its direction, so an
-    /// arm at a nonzero weight could lay a road the app would not recommend with no test failing.
+    /// `src/engine/__tests__/expansion.test.ts` did to the TypeScript rule. The analysis corpus
+    /// pins the road only on the boards it holds, so this is what pins the rule itself.
     #[test]
     fn the_road_goes_to_the_best_site_and_ties_fall_to_the_lower_edge() {
         let (topology, board) = fixture();
@@ -2100,9 +2100,9 @@ pub(super) mod tests {
     ///
     /// The tie is built by flattening the site scores rather than the board: every weight that
     /// feeds a vertex's value is zeroed, so each site is worth exactly 0 and each edge out of a
-    /// candidate reaches the same best and the same pair. `expansion.ts` breaks the same tie on
-    /// the lower edge *id*, a string comparison, and `topology.rs::pack_edges_are_listed_in_edge_id_order`
-    /// is what keeps the two rules the same rule.
+    /// candidate reaches the same best and the same pair. The app shows the road by its edge *id*,
+    /// and `topology.rs::pack_edges_are_listed_in_edge_id_order` is what makes the lower index
+    /// the lower id.
     #[test]
     fn equal_directions_fall_to_the_lower_edge() {
         let (topology, board) = fixture();

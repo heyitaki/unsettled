@@ -1,3 +1,9 @@
+//! The placement formula: what settling a vertex is worth to a seat.
+//!
+//! The app scored with a TypeScript copy of this formula (`src/engine/valuation.ts` and
+//! `weights.ts`) until Best picks moved onto this one. Those files are deleted: "mirrors" and
+//! "twin of" name their functions at commit `8107fc15`.
+
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1538,6 +1544,9 @@ fn port_deficit_factor(weights: &EngineWeights, total: f64, own: f64) -> f64 {
 fn port_surplus(weights: &EngineWeights, pips: f64) -> f64 {
     js_max(0.0, pips - weights.port_surplus_threshold)
 }
+
+#[cfg(test)]
+mod behaviour;
 
 #[cfg(test)]
 mod tests {

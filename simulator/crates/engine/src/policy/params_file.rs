@@ -1677,7 +1677,7 @@ mod tests {
         [("sc_s2_combined", &["sc_coverage_lo", "sc_diversity_hi"])];
 
     /// Minted after SP6 adoption, these arms anchor to live `default-weights.json` because
-    /// every seat-count run is against the live defaults. If `DEFAULT_WEIGHTS` moves, this
+    /// every seat-count run is against the live defaults. If `default-weights.json` moves, this
     /// family must be re-anchored to a snapshot the way the SP families were.
     #[test]
     fn the_sc_arm_files_are_the_committed_seat_count_perturbations() {
@@ -1971,7 +1971,7 @@ mod tests {
     /// back, so on its own an edit that moved the same leaf in both files would keep every
     /// assertion there green while quietly rewriting what every SP-family arm is a perturbation
     /// of. This is the absolute pin: the literal vector M-61 through M-66 were measured against,
-    /// which is `DEFAULT_WEIGHTS` as it stood before the SP6 adoption.
+    /// which is `default-weights.json` as it stood before the SP6 adoption.
     #[test]
     fn the_sp6_pre_adoption_snapshot_is_the_literal_measured_vector() {
         let source = std::fs::read_to_string(SP6_PRE_ADOPTION_WEIGHTS_PATH)

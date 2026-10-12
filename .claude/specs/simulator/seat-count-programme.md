@@ -6,7 +6,7 @@ This programme asks one question five times: does the settlement placement score
 
 ## What exists before any run
 
-**Selection is by seat count alone, in both scorers, and every seat count ships today's vector.** The app's `analyzeBoard` reads `weights.ts::weightsForSeats(board.players.length)`, which is `DEFAULT_WEIGHTS` overlaid with that seat count's entry in `SEAT_WEIGHT_OVERRIDES`; all five entries start empty, and a roster with no entry (one player) scores on `DEFAULT_WEIGHTS`. The simulator mirrors the five vectors as `simulator/placement/seat-weights/seats-<n>.json` and selects one through the `{seats}` placeholder a placement spec may carry. What the selection must guarantee is a contract; see [contracts.md](contracts.md). Nothing in the UI changed.
+**Selection is by seat count alone, in the app and in the simulator, and every seat count ships today's vector.** The five vectors are `simulator/placement/seat-weights/seats-<n>.json`, each `default-weights.json` with that seat count's adopted leaves moved. The app's Best picks reads them through `placement/analysis.rs::weights_for_seats(board.players.length)`, and a roster with no file (one player) scores on `default-weights.json`. The simulator selects one through the `{seats}` placeholder a placement spec may carry. Until the TypeScript formula was deleted the app read the same vectors from `src/engine/weights.ts`, and a generator wrote the files from it. What the selection must guarantee is a contract; see [contracts.md](contracts.md). Nothing in the UI changed.
 
 **`slotScales` gained no two-seat row.** Both scorers already score a seat count the block has no row for unscaled, and this programme sweeps no slot scale, so adding a row would have cost an exact-key edit to every committed weights file to say what the fallback already says.
 
@@ -73,7 +73,7 @@ Each seat count goes through the same stages. Seat counts run in the order 4, 2,
 
 **Stop conditions.** Any illegal action, or a `base` arm that misses the symmetric corner, stops that seat count at that run and its entry records why. The corner is `(1 - d) / seats` where `d` is `base`'s draw share, and a miss is a `base` win rate more than 3.29 binomial standard errors from it. A looser miss rule would stop a seat count on noise about once in every twenty runs, and the programme makes more than twenty.
 
-**Adoption mechanics.** The candidate's moved leaves go into `SEAT_WEIGHT_OVERRIDES` for that seat count, `simulator/tools/generate-placement-parity.ts` regenerates `seats-<n>.json`, and the Rust adoption table moves with it. `DEFAULT_WEIGHTS` and `default-weights.json` never move in this programme, so the field spelling keeps denoting the same field throughout and every `sc_*` arm stays a single-parameter perturbation of it.
+**Adoption mechanics.** The candidate's moved leaves are edited into `seats-<n>.json` for that seat count together with its row of the Rust adoption table (`params_file.rs::SEAT_ADOPTIONS`), whose test fails unless the file is the defaults with exactly those leaves moved. `engine.wasm` is rebuilt and `analysis-parity.json` regenerated in the same change. `default-weights.json` never moves in this programme, so the field spelling keeps denoting the same field throughout and every `sc_*` arm stays a single-parameter perturbation of it.
 
 ## Revision 1 to the procedure, 2026-10-10
 
