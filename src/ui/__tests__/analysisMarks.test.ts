@@ -10,6 +10,7 @@ const ROAD = 'e:-1,1;0,0' as EdgeId
 const recommendation = (firstRoad: EdgeId | null): Recommendation => ({
   firstPick: FIRST,
   firstRoad,
+  secondRoad: null,
   plannedSecond: [SECOND],
   survival: 1,
   score: 12,

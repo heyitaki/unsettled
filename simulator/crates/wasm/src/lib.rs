@@ -58,6 +58,13 @@ pub unsafe extern "C" fn analyze(ptr: *const u8, len: usize) -> *mut u8 {
     }
 }
 
+/// # Safety
+/// `ptr` must point to `len` readable bytes for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn setup_road(ptr: *const u8, len: usize) -> *mut u8 {
+    unsafe { respond(ptr, len, unsettled_engine::placement::analysis::setup_road) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

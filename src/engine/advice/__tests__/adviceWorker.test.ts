@@ -5,7 +5,7 @@ import type { AdviceRequest } from '../protocol'
 import { createEngine, type Engine } from '../wasm'
 
 vi.mock('../wasm', () => ({ createEngine: vi.fn() }))
-const engine = (advise: Engine['advise']): Engine => ({ advise, analyze: () => ({ error: 'unused' }) })
+const engine = (advise: Engine['advise']): Engine => ({ advise, setupRoad: () => ({ road: null }), analyze: () => ({ error: 'unused' }) })
 afterEach(() => { vi.unstubAllGlobals(); vi.resetAllMocks() })
 
 const request: AdviceRequest = { game: newGame(createBoard('standard4')), observer: 'aki', decision: { kind: 'turn' } }

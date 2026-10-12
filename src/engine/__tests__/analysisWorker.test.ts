@@ -16,6 +16,7 @@ const analysis: DraftAnalysis = {
 function engine(analyze = vi.fn((_request: string): DraftAnalysis | { error: string } => analysis), fractions: number[] = []) {
   vi.mocked(createEngine).mockImplementation(async (_bytes, progress) => ({
     advise: () => '',
+    setupRoad: () => ({ road: null }),
     analyze: (request) => {
       fractions.forEach(progress)
       return analyze(request)

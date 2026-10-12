@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import type { Board } from '../../model/types'
+import type { Board, VertexId } from '../../model/types'
 import { createEngine } from '../advice/wasm'
 import type { DraftAnalysis } from '../analysisProtocol'
 
@@ -14,4 +14,11 @@ export function analyze(
   const response = engine.analyze(JSON.stringify({ board, targetPick, options }))
   if ('error' in response) throw new Error(response.error)
   return response
+}
+
+/** The synchronous setup-road entry on the same committed wasm used for rankings. */
+export function setupRoad(board: Board, playerId: string, vertexId: VertexId) {
+  const response = engine.setupRoad(JSON.stringify({ board, playerId, vertexId }))
+  if ('error' in response) throw new Error(response.error)
+  return response.road
 }

@@ -1,21 +1,23 @@
 //! Rival picks and the windows they are played in: the rollout layer under the ranking.
 //!
 //! Twin of `opponentPick`, `bestPartners`, `partnerTable`, `bestLegalCandidate` and
-//! `simulateWindowDetailed` in the deleted `src/engine/analyze.ts`. A vertex is its grid index,
+//! `simulateWindowDetailed` in `src/engine/analyze.ts` at `5f4b97eb`. A vertex is its grid index,
 //! so a scan in index order is the TypeScript's grid order.
 //!
-//! Every scan reads two views of the pieces. `blocked` is every vertex the distance rule bars.
+//! Every scan reads three views of the pieces. `blocked` is every vertex the distance rule bars.
 //! `vertex_owner` is the settlements standing, the board's and the picks made since, each under
 //! the seat holding it, and never the distance-rule closure: the expansion walk applies that rule
-//! itself. It must give a seat exactly the vertices that seat's holdings fold.
+//! itself. It must give a seat exactly the vertices that seat's holdings fold. `edge_owner` is the
+//! roads standing, the board's and the setup road of each pick made since.
 
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
+use std::collections::HashMap;
 
 use super::{Board, softmax_pick};
 use crate::placement::app_formula::{AppFormulaScorer, Holdings, js_max};
 use crate::placement::expansion;
 use crate::state::{EMPTY, MAX_SEATS};
-use crate::topology::{Topology, Vertex};
+use crate::topology::{Edge, Topology, Vertex};
 
 /// Below this, two pair scores are the same pair read in either order: the pair value is
 /// symmetric apart from float noise unless the grant is priced, and noise must not decide which
@@ -32,18 +34,20 @@ pub(super) struct Turn {
     pub(super) has_later_pick: bool,
 }
 
-/// What a window leaves behind, beside the `blocked` and `vertex_owner` it grew in place.
+/// What a window leaves behind, beside the blocked vertices and piece owners it grew in place.
 pub(super) struct WindowResult {
     /// Every seat's holdings once the window has run.
     pub(super) holdings: Vec<Holdings>,
     /// The seat behind each entry of `taken`. A turn with nothing to pick is in neither.
     pub(super) pickers: Vec<u8>,
     pub(super) taken: Vec<Vertex>,
+    pub(super) roads: Vec<Option<Edge>>,
 }
 
 /// Names a window's pick from the picks made so far, their seats, the seat on turn and its
-/// uniform. `None`, or a vertex that is blocked, leaves the pick to `opponent_pick`.
-pub(super) type PickOverride<'f> = &'f mut dyn FnMut(&[Vertex], &[u8], u8, f64) -> Option<Vertex>;
+/// uniform and earlier roads. `None`, or a blocked vertex, leaves the pick to `opponent_pick`.
+pub(super) type PickOverride<'f> =
+    &'f mut dyn FnMut(&[Vertex], &[u8], u8, f64, &[Option<Edge>]) -> Option<Vertex>;
 
 /// Each legal candidate's best partner as an index into the legal list, `None` when no legal
 /// vertex is clear of it, in which case that candidate is priced alone beside rivals priced as
@@ -61,25 +65,47 @@ pub(super) fn block_vertex(topology: &Topology, blocked: &mut [bool], vertex: Ve
     }
 }
 
-/// A window's settlements as bit masks, one bit per vertex, grown pick by pick so that no scan of
-/// the window rebuilds them from `vertex_owner`.
+/// A window's settlements and roads as bit masks, grown pick by pick between scans.
 #[derive(Clone, Copy)]
 struct Standing {
     by_seat: [u128; MAX_SEATS],
     settled: u128,
     /// Every settled vertex and its neighbours.
     closure: u128,
+    edges_by_seat: [u128; MAX_SEATS],
+    edges: u128,
 }
 
 impl Standing {
-    fn new(topology: &Topology, vertex_owner: &[u8]) -> Self {
-        let mut standing = Self { by_seat: [0; MAX_SEATS], settled: 0, closure: 0 };
+    fn new(topology: &Topology, vertex_owner: &[u8], edge_owner: &[u8]) -> Self {
+        let mut standing = Self {
+            by_seat: [0; MAX_SEATS], settled: 0, closure: 0,
+            edges_by_seat: [0; MAX_SEATS], edges: 0,
+        };
         for (vertex, seat) in vertex_owner.iter().enumerate() {
             if *seat != EMPTY {
                 standing.settle(topology, vertex as Vertex, *seat);
             }
         }
+        for (edge, owner) in edge_owner.iter().enumerate() {
+            if *owner != EMPTY {
+                standing.road(edge as Edge, *owner);
+            }
+        }
         standing
+    }
+
+    fn occupancy(&self, seat: u8) -> expansion::Occupancy {
+        let own = self.by_seat[usize::from(seat)];
+        let roads = self.edges_by_seat[usize::from(seat)];
+        expansion::Occupancy::default()
+            .with_roads(roads, self.edges & !roads)
+            .with_settlements(own, self.settled & !own, self.closure)
+    }
+
+    fn road(&mut self, edge: Edge, seat: u8) {
+        self.edges_by_seat[usize::from(seat)] |= 1 << edge;
+        self.edges |= 1 << edge;
     }
 
     fn settle(&mut self, topology: &Topology, vertex: Vertex, seat: u8) {
@@ -148,41 +174,68 @@ pub(super) fn skipped_pairs() -> usize {
     SKIPPED_PAIRS.with(Cell::get)
 }
 
-/// What every scan of a ranking reads and no pick changes: the scorer, which is the TypeScript's
-/// `BoardContext`, and the board's roads, which a rollout never adds to.
+/// The scorer and partner tables shared by every scan of a ranking.
 pub(super) struct Context<'a> {
     pub(super) scorer: &'a AppFormulaScorer,
     topology: &'static Topology,
+    #[cfg(test)]
     pub(super) edge_owner: Vec<u8>,
     /// One partner table per seat, which is the draft slot the scores scale by, built on first
     /// use.
     partners: Vec<OnceCell<Vec<f64>>>,
     /// The highest entry of each row of a seat's partner table that a partner could read.
     partner_caps: Vec<OnceCell<Vec<f64>>>,
-    /// The roads as each seat's expansion walk reads them, with no settlement standing.
-    roads: Vec<expansion::Occupancy>,
-    /// The settlements of the window on turn, set by `simulate_window` around each pick it leaves
+    /// The pieces of the window on turn, set by `simulate_window` around each pick it leaves
     /// to `opponent_pick`. A scan made outside a window finds none and reads `vertex_owner`.
     standing: Cell<Option<Standing>>,
+    roads: RefCell<HashMap<(Vertex, [u128; 5]), Option<Edge>>>,
 }
 
 impl<'a> Context<'a> {
-    /// `scorer` is `board.scorer(..)`. Pieces other than roads do not enter the context, so one
-    /// serves every scratch board a ranking builds.
+    /// `scorer` is `board.scorer(..)` and serves every scratch board a ranking builds.
     pub(super) fn new(board: &Board, scorer: &'a AppFormulaScorer) -> Self {
         let seats = board.player_ids.len();
+        #[cfg(test)]
         let edge_owner = board.owners().1;
         Self {
             scorer,
             topology: board.topology,
-            roads: (0..seats)
-                .map(|seat| expansion::Occupancy::new(scorer, &[], &edge_owner, seat as u8))
-                .collect(),
+            #[cfg(test)]
             edge_owner,
             partners: vec![OnceCell::new(); seats],
             partner_caps: vec![OnceCell::new(); seats],
             standing: Cell::new(None),
+            roads: RefCell::new(HashMap::new()),
         }
+    }
+
+    /// Repeated rollouts reuse roads by holdings and the occupancy the walk can read.
+    pub(super) fn setup_road(
+        &self,
+        holdings: &Holdings,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        occupancy: Option<&expansion::Occupancy>,
+    ) -> Option<Edge> {
+        let scorer = self.scorer;
+        let occupancy = occupancy.copied().unwrap_or_else(|| {
+            expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat)
+        });
+        let compute = || expansion::row_road(
+            scorer, vertex_owner, edge_owner, seat, candidate, Some(&occupancy),
+        );
+        let road = if let Ok(mut roads) = self.roads.try_borrow_mut() {
+            *roads.entry((candidate, occupancy.road_key(scorer, candidate))).or_insert_with(compute)
+        } else {
+            compute()
+        };
+        #[cfg(any(test, debug_assertions))]
+        assert_eq!(road, expansion::term(scorer, holdings, vertex_owner, edge_owner, seat, candidate).road);
+        #[cfg(not(any(test, debug_assertions)))]
+        let _ = holdings;
+        road
     }
 
     /// The partner half of a first settlement's pair value: row `first`, column `second`, the
@@ -263,6 +316,7 @@ impl<'a> Context<'a> {
         holdings: &Holdings,
         blocked: &[bool],
         vertex_owner: &[u8],
+        edge_owner: &[u8],
         receives_grant: bool,
         floor: &Cell<f64>,
         visit: &mut dyn FnMut(Vertex, f64, f64),
@@ -272,7 +326,7 @@ impl<'a> Context<'a> {
             scorer.marginal_parts(
                 holdings,
                 vertex_owner,
-                &self.edge_owner,
+                edge_owner,
                 seat,
                 vertex,
                 receives_grant,
@@ -293,17 +347,12 @@ impl<'a> Context<'a> {
             };
             let memo = &mut *memo;
             let scale = scorer.slot_scale(seat);
-            let rebuilt = || expansion::Occupancy::new(scorer, vertex_owner, &self.edge_owner, seat);
+            let rebuilt = || expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
             let occupancy = match self.standing.get() {
                 Some(standing) => {
                     #[cfg(test)]
                     CARRIED_SCANS.with(|carried| carried.set(carried.get() + 1));
-                    let own = standing.by_seat[usize::from(seat)];
-                    self.roads[usize::from(seat)].with_settlements(
-                        own,
-                        standing.settled & !own,
-                        standing.closure,
-                    )
+                    standing.occupancy(seat)
                 }
                 None => rebuilt(),
             };
@@ -431,6 +480,7 @@ impl<'a> Context<'a> {
         holdings: &Holdings,
         blocked: &[bool],
         vertex_owner: &[u8],
+        edge_owner: &[u8],
         receives_grant: bool,
         has_later_pick: bool,
     ) -> (Vec<Vertex>, Vec<f64>) {
@@ -440,6 +490,7 @@ impl<'a> Context<'a> {
                 holdings,
                 blocked,
                 vertex_owner,
+                edge_owner,
                 receives_grant,
                 has_later_pick,
                 bounded,
@@ -464,6 +515,7 @@ impl<'a> Context<'a> {
         holdings: &Holdings,
         blocked: &[bool],
         vertex_owner: &[u8],
+        edge_owner: &[u8],
         receives_grant: bool,
         has_later_pick: bool,
         bounded: bool,
@@ -488,7 +540,7 @@ impl<'a> Context<'a> {
                     floor.set(f64::NAN);
                 }
             };
-            self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &floor, &mut rank);
+            self.scan(seat, holdings, blocked, vertex_owner, edge_owner, receives_grant, &floor, &mut rank);
             return (top_vertices, top_scores);
         };
         // Priced as a pair, every vertex is some candidate's partner, so all of them are priced.
@@ -502,7 +554,7 @@ impl<'a> Context<'a> {
             expansion.push(walk);
             own.push(total);
         };
-        self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &floor, &mut keep);
+        self.scan(seat, holdings, blocked, vertex_owner, edge_owner, receives_grant, &floor, &mut keep);
         // Each candidate's mate and partner value. The full scan has `best_partners` find them
         // all; the bounded one finds a row when a candidate that may make the list reads it.
         let mut plans: Vec<Option<(Option<usize>, f64)>> = if bounded {
@@ -571,6 +623,7 @@ impl<'a> Context<'a> {
         holdings: &Holdings,
         blocked: &[bool],
         vertex_owner: &[u8],
+        edge_owner: &[u8],
         uniform: f64,
         receives_grant: bool,
         has_later_pick: bool,
@@ -580,6 +633,7 @@ impl<'a> Context<'a> {
             holdings,
             blocked,
             vertex_owner,
+            edge_owner,
             receives_grant,
             has_later_pick,
         );
@@ -595,6 +649,7 @@ impl<'a> Context<'a> {
         holdings: &Holdings,
         blocked: &[bool],
         vertex_owner: &[u8],
+        edge_owner: &[u8],
         receives_grant: bool,
     ) -> Option<Vertex> {
         // The best vertex and its score's bits, skipping the vertices that cannot beat the best
@@ -613,7 +668,7 @@ impl<'a> Context<'a> {
                     }
                 }
             };
-            self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &floor, &mut keep);
+            self.scan(seat, holdings, blocked, vertex_owner, edge_owner, receives_grant, &floor, &mut keep);
             (best, best_score.to_bits())
         };
         let best = find(true);
@@ -625,16 +680,17 @@ impl<'a> Context<'a> {
     /// Twin of `simulateWindowDetailed`: plays `turns` in order from `initial_holdings`, which is
     /// indexed by seat. Each turn draws one uniform whether or not `pick_override` supplies its
     /// pick, and a turn with nothing to pick is skipped. A pick bars its vertex and neighbours in
-    /// `blocked` and stands in `vertex_owner` on its vertex alone.
+    /// `blocked`, stands in `vertex_owner` on its vertex alone, and lays its road in `edge_owner`.
     ///
-    /// The settlements are read into bit masks once, on entry, and each pick is added to them, so
-    /// the scans of a window do not rebuild the masks from `vertex_owner` turn after turn.
+    /// The pieces are read into bit masks on entry and each pick grows them, so later scans
+    /// read the current settlements and roads without rebuilding them.
     pub(super) fn simulate_window(
         &self,
         turns: &[Turn],
         initial_holdings: &[Holdings],
         blocked: &mut [bool],
         vertex_owner: &mut [u8],
+        edge_owner: &mut [u8],
         next_uniform: &mut dyn FnMut() -> f64,
         mut pick_override: Option<PickOverride<'_>>,
     ) -> WindowResult {
@@ -642,14 +698,15 @@ impl<'a> Context<'a> {
             holdings: initial_holdings.to_vec(),
             pickers: Vec::with_capacity(turns.len()),
             taken: Vec::with_capacity(turns.len()),
+            roads: Vec::with_capacity(turns.len()),
         };
-        let mut standing = Standing::new(self.topology, vertex_owner);
+        let mut standing = Standing::new(self.topology, vertex_owner, edge_owner);
         for turn in turns {
             let uniform = next_uniform();
             let held = result.holdings[usize::from(turn.seat)];
             let forced = pick_override
                 .as_mut()
-                .and_then(|pick| pick(&result.taken, &result.pickers, turn.seat, uniform))
+                .and_then(|pick| pick(&result.taken, &result.pickers, turn.seat, uniform, &result.roads))
                 .filter(|vertex| !blocked[usize::from(*vertex)]);
             let picked = forced.or_else(|| {
                 // Held only across this call: an override may run a nested ranking, whose windows
@@ -660,6 +717,7 @@ impl<'a> Context<'a> {
                     &held,
                     blocked,
                     vertex_owner,
+                    edge_owner,
                     uniform,
                     turn.receives_grant,
                     turn.has_later_pick,
@@ -668,12 +726,21 @@ impl<'a> Context<'a> {
                 picked
             });
             let Some(vertex) = picked else { continue };
+            let road = self.setup_road(
+                &held, vertex_owner, edge_owner, turn.seat, vertex,
+                Some(&standing.occupancy(turn.seat)),
+            );
+            if let Some(edge) = road {
+                edge_owner[usize::from(edge)] = turn.seat;
+                standing.road(edge, turn.seat);
+            }
             block_vertex(self.topology, blocked, vertex);
             vertex_owner[usize::from(vertex)] = turn.seat;
             standing.settle(self.topology, vertex, turn.seat);
             self.scorer
                 .add_to_holdings(&mut result.holdings[usize::from(turn.seat)], vertex);
             result.taken.push(vertex);
+            result.roads.push(road);
             result.pickers.push(turn.seat);
         }
         result
@@ -740,7 +807,7 @@ mod tests {
 
         let holdings = Holdings::empty();
         let best = |blocked: &[bool]| {
-            context.best_legal_candidate(0, &holdings, blocked, &vertex_owner, false)
+            context.best_legal_candidate(0, &holdings, blocked, &vertex_owner, &context.edge_owner, false)
         };
         assert_eq!(best(&blocked), Some(legal[0]));
         blocked[usize::from(legal[0])] = true;
@@ -763,17 +830,17 @@ mod tests {
 
         let holdings = Holdings::empty();
         assert_eq!(
-            context.best_legal_candidate(0, &holdings, &blocked, &vertex_owner, false),
+            context.best_legal_candidate(0, &holdings, &blocked, &vertex_owner, &context.edge_owner, false),
             None
         );
         // Each NaN lands at rank 0 and pushes the list down, so the last three scanned are left.
         let (vertices, scores) =
-            context.top_candidates(0, &holdings, &blocked, &vertex_owner, false, false);
+            context.top_candidates(0, &holdings, &blocked, &vertex_owner, &context.edge_owner, false, false);
         let last: Vec<Vertex> = legal.iter().rev().take(3).copied().collect();
         assert_eq!(vertices, last);
         assert!(scores.iter().all(|score| score.is_nan()));
         assert_eq!(
-            context.opponent_pick(0, &holdings, &blocked, &vertex_owner, 0.0, false, false),
+            context.opponent_pick(0, &holdings, &blocked, &vertex_owner, &context.edge_owner, 0.0, false, false),
             legal.last().copied()
         );
     }
@@ -814,7 +881,7 @@ mod tests {
         // Three equal scores split the draw into thirds, earliest scanned first.
         let pick = |uniform| {
             let holdings = Holdings::empty();
-            context.opponent_pick(0, &holdings, &blocked, &vertex_owner, uniform, false, false)
+            context.opponent_pick(0, &holdings, &blocked, &vertex_owner, &context.edge_owner, uniform, false, false)
         };
         assert_eq!(pick(0.0), Some(legal[0]));
         assert_eq!(pick(0.2), Some(legal[0]));
@@ -842,6 +909,7 @@ mod tests {
                     &holdings,
                     &blocked,
                     &vertex_owner,
+                    &context.edge_owner,
                     false,
                     has_later_pick,
                     bounded,
@@ -851,7 +919,7 @@ mod tests {
 
         let skipped = skipped_vertices();
         assert_eq!(
-            context.best_legal_candidate(0, &holdings, &blocked, &vertex_owner, false),
+            context.best_legal_candidate(0, &holdings, &blocked, &vertex_owner, &context.edge_owner, false),
             Some(legal[0])
         );
         assert_eq!(skipped_vertices() - skipped, legal.len() - 1);
@@ -883,6 +951,7 @@ mod tests {
             &Holdings::empty(),
             &board.blocked(),
             &vertex_owner,
+            &context.edge_owner,
             false,
             true,
         );
@@ -947,7 +1016,7 @@ mod tests {
         let holder = board.buildings[0].seat;
         let holdings = board.holdings(&scorer)[usize::from(holder)];
         let scan = |has_later_pick| {
-            context.top_candidates(holder, &holdings, &blocked, &vertex_owner, true, has_later_pick)
+            context.top_candidates(holder, &holdings, &blocked, &vertex_owner, &context.edge_owner, true, has_later_pick)
         };
         // Pair mode needs both a later pick and empty holdings, so the flag alone changes nothing.
         assert_eq!(scan(true), scan(false));
@@ -978,6 +1047,7 @@ mod tests {
             &board.holdings(context.scorer),
             &mut blocked,
             &mut vertex_owner,
+            &mut context.edge_owner.clone(),
             &mut || {
                 uniforms.push(0.25 * (uniforms.len() + 1) as f64);
                 uniforms[uniforms.len() - 1]
@@ -1029,7 +1099,7 @@ mod tests {
 
         // A scan outside a window has no masks to read and rebuilds them.
         let holdings = Holdings::empty();
-        context.best_legal_candidate(3, &holdings, &ran.blocked, &ran.vertex_owner, false);
+        context.best_legal_candidate(3, &holdings, &ran.blocked, &ran.vertex_owner, &context.edge_owner, false);
         assert_eq!(carried_scans() - carried, 6);
     }
 
@@ -1047,7 +1117,7 @@ mod tests {
             &board,
             &context,
             board.blocked(),
-            Some(&mut |taken: &[Vertex], pickers: &[u8], seat, uniform| {
+            Some(&mut |taken: &[Vertex], pickers: &[u8], seat, uniform, _| {
                 calls.push((taken.to_vec(), pickers.to_vec(), seat, uniform));
                 Some(forced[taken.len()])
             }),
@@ -1060,14 +1130,14 @@ mod tests {
 
         // A forced vertex that is barred by then, like no vertex at all, leaves the pick to
         // `opponent_pick`.
-        let repeated = run_window(&board, &context, board.blocked(), Some(&mut |_, _, _, _| {
+        let repeated = run_window(&board, &context, board.blocked(), Some(&mut |_, _, _, _, _| {
             Some(forced[0])
         }));
         let once = run_window(
             &board,
             &context,
             board.blocked(),
-            Some(&mut |taken: &[Vertex], _, _, _| taken.is_empty().then_some(forced[0])),
+            Some(&mut |taken: &[Vertex], _, _, _, _| taken.is_empty().then_some(forced[0])),
         );
         assert_eq!(repeated.uniforms, [0.25, 0.5, 0.75]);
         assert_eq!(repeated.result.taken[0], forced[0]);
@@ -1082,7 +1152,7 @@ mod tests {
         let context = Context::new(&board, &scorer);
         let all = vec![true; board.topology.vertex_count()];
         for forced in [None, Some(0)] {
-            let ran = run_window(&board, &context, all.clone(), Some(&mut |_, _, _, _| forced));
+            let ran = run_window(&board, &context, all.clone(), Some(&mut |_, _, _, _, _| forced));
             assert_eq!(ran.uniforms, [0.25, 0.5, 0.75]);
             assert!(ran.result.taken.is_empty() && ran.result.pickers.is_empty());
             assert_eq!(ran.blocked, all);

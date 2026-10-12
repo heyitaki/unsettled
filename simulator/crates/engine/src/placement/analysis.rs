@@ -1,7 +1,6 @@
 //! Best picks: the ranking of settlement placements during the snake draft.
 //!
-//! Ported from the TypeScript analysis the app ran before, `src/engine/analyze.ts`, down to the
-//! order of evaluation. That file is deleted: "twin of" names its function at commit `4f911f77`.
+//! Follows `src/engine/analyze.ts` at `5f4b97eb`, including its order of evaluation.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -15,7 +14,7 @@ use super::app_formula::{
 use crate::board::{InitialBuilding, InitialRoad, SimPort};
 use crate::rules::Resource;
 use crate::state::EMPTY;
-use crate::topology::{Hex, Topology, Vertex};
+use crate::topology::{Edge, Hex, Topology, Vertex};
 use crate::wire::{BuildingTier, TileKind, WireBoard};
 
 mod rank;
@@ -134,6 +133,8 @@ pub struct Recommendation {
     pub first_pick: String,
     /// The setup road the expansion walk would lay from `first_pick`, if it opens anything.
     pub first_road: Option<String>,
+    /// The setup road for the second pick drawn from the first surviving rollout.
+    pub second_road: Option<String>,
     pub planned_second: Vec<String>,
     #[serde(serialize_with = "js_number")]
     pub survival: f64,
@@ -149,6 +150,7 @@ pub struct Recommendation {
 pub struct TakenVertex {
     pub vertex_id: String,
     pub player_id: String,
+    pub road: Option<String>,
     #[serde(serialize_with = "js_number")]
     pub frequency: f64,
 }
@@ -580,6 +582,44 @@ pub fn analyze(request_json: &str, progress: &mut dyn FnMut(f64)) -> String {
     response
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SetupRoadRequest {
+    board: serde_json::Value,
+    player_id: String,
+    vertex_id: String,
+}
+
+/// The setup road for a legal empty corner, using this roster's weights and the player's holdings.
+pub fn setup_road(request_json: &str) -> String {
+    match setup_road_request(request_json) {
+        Ok(road) => serde_json::json!({ "road": road }).to_string(),
+        Err(error) => serde_json::json!({ "error": error }).to_string(),
+    }
+}
+
+fn setup_road_request(request_json: &str) -> Result<Option<String>, String> {
+    let request: SetupRoadRequest =
+        serde_json::from_str(request_json).map_err(|error| error.to_string())?;
+    let wire = WireBoard::parse_value(request.board).map_err(|error| error.to_string())?;
+    let board = Board::from_wire(&wire)?;
+    let Some(vertex) = board.topology.vertex_by_id(&request.vertex_id) else {
+        return Ok(None);
+    };
+    if board.blocked()[usize::from(vertex)] {
+        return Ok(None);
+    }
+    // An unknown player owns no pieces, including no empty edge tagged with EMPTY.
+    let seat = board.player_ids.iter().position(|id| *id == request.player_id);
+    let scorer = board.scorer(weights_for_seats(board.player_ids.len()).clone());
+    let holdings = seat.map(|seat| board.holdings(&scorer)[seat]).unwrap_or_else(Holdings::empty);
+    let (vertices, edges) = board.owners();
+    let term = super::expansion::term(
+        &scorer, &holdings, &vertices, &edges, seat.map_or(EMPTY - 1, |seat| seat as u8), vertex,
+    );
+    Ok(term.road.filter(|_| term.value > 0.0).map(|edge| board.topology.edge_id(edge).to_owned()))
+}
+
 fn analyze_request(
     request_json: &str,
     progress: &mut dyn FnMut(f64),
@@ -603,7 +643,6 @@ fn analyze_request(
             (
                 wire.layout,
                 &board.player_ids,
-                &board.roads,
                 &board.tiles,
                 &board.tokens,
                 board.robber,
@@ -618,14 +657,13 @@ fn analyze_request(
     Ok(ranking.analyze(&board, request.target_pick, max_results, true, progress))
 }
 
-/// What a ranking and the rankings nested in it share: the scorer and roads, which no scratch
-/// board changes, and the request's seed and rollout override.
+/// The scorer, partner tables, seed and rollout override shared by nested rankings.
 struct Ranking<'a> {
     context: window::Context<'a>,
     seed: u32,
     rollouts: Option<f64>,
     /// The part of a nested ranking's cache key that no scratch board changes: the layout, the
-    /// roster, the roads, the tiles, tokens, robber and ports, the weights, the seed and the
+    /// roster, the tiles, tokens, robber and ports, the weights, the seed and the
     /// rollout override.
     cache_scope: String,
 }
@@ -635,7 +673,7 @@ impl Ranking<'_> {
     /// share, then the pieces in `board.buildings` order, the seat and the length of the list.
     /// The request's own claimed player is left out, because a nested ranking never reads it.
     fn cache_key(&self, scratch: &Board, max_results: f64) -> String {
-        format!("{}{:?}", self.cache_scope, (scratch.me, &scratch.buildings, max_results))
+        format!("{}{:?}", self.cache_scope, (scratch.me, &scratch.buildings, &scratch.roads, max_results))
     }
 
     /// Twin of `analyzeBoardInternal`. `board` is the request's, or a scratch board holding the
@@ -663,7 +701,7 @@ impl Ranking<'_> {
         let complete = draft_is_complete(board, &draft);
         let me_done = draft.my_remaining_pick_indices.is_empty();
         let holdings = board.holdings(scorer);
-        let (vertex_owner, _) = board.owners();
+        let (vertex_owner, edge_owner) = board.owners();
         // The player to rank for, when there is anything to rank.
         let ranked_seat = board.me.filter(|_| !complete && !me_done && !legal.is_empty());
         let has_positive_score = ranked_seat.is_some_and(|me| {
@@ -675,7 +713,7 @@ impl Ranking<'_> {
                 let (_, total) = scorer.marginal_parts(
                     &holdings[usize::from(me)],
                     &vertex_owner,
-                    &context.edge_owner,
+                    &edge_owner,
                     me,
                     *vertex,
                     receives_grant,
@@ -750,21 +788,29 @@ impl Ranking<'_> {
                 }
                 let mut blocked = base_blocked.clone();
                 let mut owners = vertex_owner.clone();
+                let mut edges = edge_owner.clone();
                 let mut drawn = 0;
                 let modal = pre_windows.first();
                 // Rollout 0 takes each picker's top recommendation from a ranking of the board the
                 // earlier picks leave. Sampled pre-windows draw from those lists only while their
                 // earlier picks still match the modal line.
-                let mut pick_modal = |taken: &[Vertex], pickers: &[u8], seat: u8, uniform: f64| {
+                let mut pick_modal = |taken: &[Vertex], pickers: &[u8], seat: u8, uniform: f64, roads: &[Option<Edge>]| {
                     let Some(modal) = modal else {
                         let mut scratch = board.clone();
                         scratch.me = Some(seat);
-                        for (vertex, picker) in taken.iter().zip(pickers) {
+                        for ((vertex, picker), road) in taken.iter().zip(pickers).zip(roads) {
                             scratch.buildings.push(InitialBuilding {
                                 vertex: *vertex,
                                 seat: *picker,
                                 tier: BuildingTier::Settlement,
                             });
+                            if let Some(edge) = road {
+                                if let Some(placed) = scratch.roads.iter_mut().find(|placed| placed.edge == *edge) {
+                                    placed.seat = *picker;
+                                } else {
+                                    scratch.roads.push(InitialRoad { edge: *edge, seat: *picker });
+                                }
+                            }
                         }
                         // The override runs at most once per turn, so this stays in step with
                         // `pre_turns`.
@@ -821,6 +867,7 @@ impl Ranking<'_> {
                     &holdings,
                     &mut blocked,
                     &mut owners,
+                    &mut edges,
                     &mut || {
                         drawn += 1;
                         uniforms[pre_indices[drawn - 1]]
@@ -830,8 +877,10 @@ impl Ranking<'_> {
                 pre_windows.push(rank::PreWindow {
                     blocked,
                     vertex_owner: owners,
+                    edge_owner: edges,
                     holdings: result.holdings,
                     taken: result.taken,
+                    roads: result.roads,
                     pickers: result.pickers,
                     uniforms,
                 });
@@ -1122,6 +1171,7 @@ mod tests {
         let taken = |frequency| {
             serde_json::to_value(TakenVertex {
                 vertex_id: "v".into(),
+                road: None,
                 player_id: "p".into(),
                 frequency,
             })

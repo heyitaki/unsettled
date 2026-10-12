@@ -26,17 +26,24 @@ export type AnalysisStatus =
 export interface TakenVertex {
   vertexId: VertexId
   playerId: string
+  road: EdgeId | null
   frequency: number
 }
 
 export interface Recommendation {
   firstPick: VertexId
+  /**
+   * The second settlements planned behind this pick: first the one from the rollout the row's
+   * road and the likely-gone line are read off, then the rest by how often they were planned.
+   */
   plannedSecond: VertexId[]
   /**
-   * The setup road the expansion walk would lay from `firstPick`, or null when the walk is off
+   * The setup road SP3's expansion walk would lay from `firstPick`, or null when the walk is off
    * (`expansionWeight` 0) or the pick opens nothing.
    */
   firstRoad: EdgeId | null
+  /** The setup road for `plannedSecond[0]`, read off the same rollout. */
+  secondRoad: EdgeId | null
   survival: number
   score: number
   rankScore: number

@@ -6,8 +6,7 @@ use super::window::{Context, Turn, block_vertex};
 use super::{Board, Breakdown, DraftState, Recommendation, TakenVertex};
 use super::{receives_second_settlement_grant, remaining_turns};
 use crate::placement::app_formula::{Holdings, ScoreBreakdown};
-use crate::placement::expansion;
-use crate::topology::Vertex;
+use crate::topology::{Edge, Vertex};
 
 /// One rollout's picks ahead of the analysed pick, and the board they leave.
 pub(super) struct PreWindow {
@@ -15,9 +14,11 @@ pub(super) struct PreWindow {
     pub(super) blocked: Vec<bool>,
     /// The settlements standing by then, each under the seat holding it.
     pub(super) vertex_owner: Vec<u8>,
+    pub(super) edge_owner: Vec<u8>,
     /// Every seat's holdings by then: the board's, then the window's picks in order.
     pub(super) holdings: Vec<Holdings>,
     pub(super) taken: Vec<Vertex>,
+    pub(super) roads: Vec<Option<Edge>>,
     pub(super) pickers: Vec<u8>,
     /// The rollout's uniforms by draft turn. Its mid-windows draw from the same row.
     pub(super) uniforms: Vec<f64>,
@@ -83,7 +84,7 @@ pub(super) fn rank_candidates(
         }
     }
     // The "likely gone" spots come from the modal pre-window. The picks are mutually legal,
-    // ordered by draft turn, and each carries its picker and its frequency across all rollouts.
+    // ordered by draft turn, with their roads and frequencies across all rollouts.
     let Some(modal) = pre_windows.first() else {
         return (Vec::new(), Vec::new());
     };
@@ -91,9 +92,11 @@ pub(super) fn rank_candidates(
         .taken
         .iter()
         .zip(&modal.pickers)
-        .map(|(vertex, seat)| TakenVertex {
+        .zip(&modal.roads)
+        .map(|((vertex, seat), road)| TakenVertex {
             vertex_id: topology.vertex_id(*vertex).to_owned(),
             player_id: board.player_ids[usize::from(*seat)].clone(),
+            road: road.map(|edge| topology.edge_id(edge).to_owned()),
             frequency: taken_counts[usize::from(*vertex)] as f64 / pre_windows.len() as f64,
         })
         .collect();
@@ -111,14 +114,17 @@ pub(super) fn rank_candidates(
     let second_receives_grant =
         second_pick_index.is_some_and(|second| receives_second_settlement_grant(draft, second));
 
-    // A mid-window's pieces, copied from its pre-window into the same two buffers each time.
+    // A mid-window's pieces and distance closure, copied into reusable buffers.
     let mut blocked = Vec::new();
     let mut vertex_owner = Vec::new();
+    let mut edge_owner = Vec::new();
     let mut ranked: Vec<(Vertex, Recommendation)> = Vec::new();
     for (scored, candidate) in candidates.iter().enumerate() {
         let mut total = NO_SCORE;
         let mut planned_second = vec![0_usize; vertex_count];
         let mut survived = 0_usize;
+        let mut drawn_second = None;
+        let mut drawn_second_road = None;
         for window in pre_windows {
             if window.blocked[usize::from(*candidate)] {
                 continue;
@@ -132,7 +138,7 @@ pub(super) fn rank_candidates(
                 scorer.marginal_breakdown(
                     &my_holdings,
                     &window.vertex_owner,
-                    &context.edge_owner,
+                    &window.edge_owner,
                     me,
                     *candidate,
                     first_receives_grant,
@@ -144,9 +150,15 @@ pub(super) fn rank_candidates(
 
             blocked.clone_from(&window.blocked);
             block_vertex(topology, &mut blocked, *candidate);
-            // Grows with the mid-window's picks, so the second pick is scored against every
-            // settlement standing by then.
+            // The second pick sees the candidate's road and every intervening pick's pieces.
             vertex_owner.clone_from(&window.vertex_owner);
+            edge_owner.clone_from(&window.edge_owner);
+            let road = context.setup_road(
+                &my_holdings, &vertex_owner, &edge_owner, me, *candidate, None,
+            );
+            if let Some(edge) = road {
+                edge_owner[usize::from(edge)] = me;
+            }
             vertex_owner[usize::from(*candidate)] = me;
             let mut first_holdings = my_holdings;
             scorer.add_to_holdings(&mut first_holdings, *candidate);
@@ -156,6 +168,7 @@ pub(super) fn rank_candidates(
                 &window.holdings,
                 &mut blocked,
                 &mut vertex_owner,
+                &mut edge_owner,
                 &mut || {
                     drawn += 1;
                     window.uniforms[mid_indices[drawn - 1]]
@@ -167,6 +180,7 @@ pub(super) fn rank_candidates(
                 &first_holdings,
                 &blocked,
                 &vertex_owner,
+                &edge_owner,
                 second_receives_grant,
             ) else {
                 continue;
@@ -176,12 +190,18 @@ pub(super) fn rank_candidates(
                 scorer.marginal_breakdown(
                     &first_holdings,
                     &vertex_owner,
-                    &context.edge_owner,
+                    &edge_owner,
                     me,
                     second,
                     second_receives_grant,
                 ),
             );
+            if survived == 1 {
+                drawn_second = Some(usize::from(second));
+                drawn_second_road = context.setup_road(
+                    &first_holdings, &vertex_owner, &edge_owner, me, second, None,
+                );
+            }
             planned_second[usize::from(second)] += 1;
         }
         progress((scored + 1) as f64 / candidates.len() as f64);
@@ -201,17 +221,21 @@ pub(super) fn rank_candidates(
         };
         let survival = windows / pre_windows.len() as f64;
         let score = breakdown.total();
-        // The three second picks planned most often, the lower index first among equals. The sort
-        // is stable over a list in index order.
+        // The drawn rollout leads, then frequency with the lower index first among equals.
         let mut seconds: Vec<usize> =
             (0..vertex_count).filter(|vertex| planned_second[*vertex] > 0).collect();
         seconds.sort_by_key(|vertex| std::cmp::Reverse(planned_second[*vertex]));
+        if let Some(drawn) = drawn_second {
+            seconds.retain(|vertex| *vertex != drawn);
+            seconds.insert(0, drawn);
+        }
         ranked.push((
             *candidate,
             Recommendation {
                 first_pick: topology.vertex_id(*candidate).to_owned(),
                 // Filled in below, once the list has been cut to the results the panel shows.
                 first_road: None,
+                second_road: drawn_second_road.map(|edge| topology.edge_id(edge).to_owned()),
                 planned_second: seconds
                     .iter()
                     .take(3)
@@ -254,15 +278,14 @@ pub(super) fn rank_candidates(
                 .iter()
                 .find(|window| !window.blocked[usize::from(vertex)])
                 .unwrap_or(modal);
-            recommendation.first_road = expansion::term(
-                scorer,
+            recommendation.first_road = context.setup_road(
                 &window.holdings[usize::from(me)],
                 &window.vertex_owner,
-                &context.edge_owner,
+                &window.edge_owner,
                 me,
                 vertex,
+                None,
             )
-            .road
             .map(|edge| topology.edge_id(edge).to_owned());
             recommendation
         })

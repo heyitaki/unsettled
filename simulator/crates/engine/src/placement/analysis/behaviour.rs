@@ -128,10 +128,18 @@ fn with_settlement(mut board: Value, vertex_id: &str, player: &str) -> Value {
     board
 }
 
-/// The board with every `takenBeforeFirstPick` entry of `taken` played as a settlement.
+/// The board with each predicted settlement and its setup road played in order.
 fn play_out(board: &Value, taken: &[Value]) -> Value {
     taken.iter().fold(board.clone(), |next, entry| {
-        with_settlement(next, text(&entry["vertexId"]), text(&entry["playerId"]))
+        let mut next = with_settlement(next, text(&entry["vertexId"]), text(&entry["playerId"]));
+        if let Some(road) = entry["road"].as_str() {
+            let roads = next["roads"].as_array_mut().unwrap();
+            if !roads.iter().any(|placed| placed["edgeId"] == road && placed["playerId"] == entry["playerId"]) {
+                roads.retain(|placed| placed["edgeId"] != road);
+                roads.push(json!({ "edgeId": road, "playerId": entry["playerId"] }));
+            }
+        }
+        next
     })
 }
 
@@ -336,6 +344,7 @@ fn modal_window(
             holdings,
             &mut blocked,
             &mut vertex_owner,
+            &mut context.edge_owner.clone(),
             &mut || 0.0,
             None,
         )
@@ -367,6 +376,8 @@ fn pre_window(
     PreWindow {
         blocked,
         vertex_owner,
+        edge_owner: board.owners().1,
+        roads: vec![None; taken.len()],
         holdings,
         taken: taken.iter().map(|(vertex, _)| *vertex).collect(),
         pickers: taken.iter().map(|(_, seat)| *seat).collect(),
@@ -1307,8 +1318,8 @@ fn the_modal_takes_keep_their_frequencies_when_nothing_survives() {
     assert_eq!(
         serde_json::to_value(&taken).unwrap(),
         json!([
-            { "vertexId": vertex_id(0), "playerId": "p2", "frequency": 1.0 },
-            { "vertexId": vertex_id(1), "playerId": "p2", "frequency": 0.5 },
+            { "vertexId": vertex_id(0), "playerId": "p2", "road": null, "frequency": 1.0 },
+            { "vertexId": vertex_id(1), "playerId": "p2", "road": null, "frequency": 0.5 },
         ])
     );
 }
@@ -1801,4 +1812,259 @@ fn the_owner_tags_are_the_boards_buildings_and_roads_and_nothing_else() {
     // A board with no piece on it tags nothing.
     let (no_buildings, no_roads) = parse(&blank_board(4)).owners();
     assert!(no_buildings.iter().chain(&no_roads).all(|owner| *owner == EMPTY));
+}
+
+#[test]
+fn rollout_roads_leave_the_picked_corner_and_match_the_pickers_own_list() {
+    for pattern in LIKELY_GONE_PATTERNS {
+        let board = filled_board(4, pattern);
+        let predicted = likely_gone(&board, "p4");
+        assert_eq!(predicted.len(), 3);
+        for (index, entry) in predicted.iter().enumerate() {
+            let road = topology().edge_by_id(text(&entry["road"])).unwrap();
+            assert!(topology().edge_endpoints(road).contains(&vertex(text(&entry["vertexId"]))));
+            let played = play_out(&board, &predicted[..index]);
+            let own = analysis(&with_me(played, text(&entry["playerId"])), None, few_rollouts());
+            assert_eq!(entry["road"], recommendations(&own)[0]["firstRoad"]);
+        }
+    }
+}
+
+#[test]
+fn ranking_after_the_line_matches_the_board_with_its_settlements_and_roads() {
+    for pattern in LIKELY_GONE_PATTERNS {
+        let board = with_me(filled_board(4, pattern), "p3");
+        for target in [None, Some(5)] {
+            let ahead = analysis(&board, target, json!({ "rollouts": 1, "maxResults": 54 }));
+            let played = modal_analysis(&play_out(&board, taken(&ahead)));
+            assert_eq!(ahead["recommendations"], played["recommendations"]);
+        }
+    }
+}
+
+#[test]
+fn consecutive_picks_plan_the_second_on_the_board_the_first_and_road_leave() {
+    for pattern in LIKELY_GONE_PATTERNS {
+        let opening = filled_board(4, pattern);
+        let line = modal_analysis(&with_me(opening.clone(), "p4"));
+        let board = with_me(play_out(&opening, taken(&line)), "p4");
+        let plans = modal_analysis(&board);
+        assert!(recommendations(&plans).len() > 10);
+        for plan in recommendations(&plans) {
+            let first = json!({ "vertexId": plan["firstPick"], "playerId": "p4", "road": plan["firstRoad"] });
+            let next = modal_analysis(&play_out(&board, &[first]));
+            let second = &recommendations(&next)[0];
+            assert_eq!(plan["plannedSecond"][0], second["firstPick"]);
+            assert_eq!(plan["secondRoad"], second["firstRoad"]);
+        }
+    }
+}
+
+#[test]
+fn planned_second_roads_leave_the_drawn_second() {
+    for pattern in LIKELY_GONE_PATTERNS {
+        let ranked = analysis(&filled_board(4, pattern), None, few_rollouts());
+        assert!(recommendations(&ranked).iter().any(|row| row["secondRoad"].is_string()));
+        for row in recommendations(&ranked) {
+            if let Some(road) = row["secondRoad"].as_str() {
+                let edge = topology().edge_by_id(road).unwrap();
+                assert!(topology().edge_endpoints(edge).contains(&vertex(text(&row["plannedSecond"][0]))));
+            }
+        }
+    }
+}
+
+#[test]
+fn drawn_seconds_and_their_roads_survive_the_likely_gone_line() {
+    for pattern in LIKELY_GONE_PATTERNS {
+        let ranked = analysis(&with_me(filled_board(4, pattern), "p4"), None, json!({}));
+        let gone: Vec<Vertex> = taken(&ranked).iter().map(|entry| vertex(text(&entry["vertexId"]))).collect();
+        let blocked = barred(&gone);
+        for row in recommendations(&ranked) {
+            if blocked[usize::from(vertex(text(&row["firstPick"])))] {
+                continue;
+            }
+            assert!(!blocked[usize::from(vertex(text(&row["plannedSecond"][0])))]);
+            if row["secondRoad"].is_string() {
+                assert!(!taken(&ranked).iter().any(|entry| entry["road"] == row["secondRoad"]));
+            }
+        }
+    }
+}
+
+#[test]
+fn analyses_preserve_the_board_and_its_existing_roads() {
+    let mut json = filled_board(2, 0);
+    json["roads"] = json!([{ "edgeId": topology().edge_id(0), "playerId": "p2" }]);
+    let original = json.clone();
+    let board = parse(&json);
+    let owners = board.owners();
+    assert_eq!(owners.1[0], 1);
+    let first = analysis(&json, None, json!({ "rollouts": 2 }));
+    assert!(!recommendations(&first).is_empty());
+    assert_eq!(analysis(&json, None, json!({ "rollouts": 2 })), first);
+    assert_eq!(json, original);
+    assert_eq!(board.owners(), owners);
+}
+
+fn setup_road_response(board: &Value, player: &str, vertex_id: &str) -> Value {
+    serde_json::from_str(&setup_road(&json!({
+        "board": board, "playerId": player, "vertexId": vertex_id,
+    }).to_string())).unwrap()
+}
+
+#[test]
+fn hand_placed_corners_get_their_ranked_road_and_numberless_corners_get_none() {
+    for pattern in LIKELY_GONE_PATTERNS {
+        let board = filled_board(4, pattern);
+        let ranked = analysis(&board, None, few_rollouts());
+        assert!(!recommendations(&ranked).is_empty());
+        for row in recommendations(&ranked) {
+            assert_eq!(setup_road_response(&board, "aki", text(&row["firstPick"]))["road"], row["firstRoad"]);
+        }
+        assert_eq!(setup_road_response(&blank_board(1), "aki", PORT_VERTEX), json!({ "road": null }));
+    }
+}
+
+#[test]
+fn setup_roads_reject_illegal_corners_and_unknown_players_own_no_road() {
+    let json = filled_board(2, 1);
+    let board = parse(&json);
+    let scorer = board.scorer(weights_for_seats(2).clone());
+    let (mut vertices, mut edges) = board.owners();
+    let candidate = 15;
+    edges[usize::from(topology().vertex_edges(candidate)[0])] = 0;
+    vertices[0] = 0;
+    let mut with_pieces = with_settlement(json, vertex_id(0), "aki");
+    with_pieces["roads"] = json!([{ "edgeId": topology().edge_id(topology().vertex_edges(candidate)[0]), "playerId": "aki" }]);
+    let expected = expansion::term(&scorer, &Holdings::empty(), &vertices, &edges, 254, candidate);
+    assert_eq!(setup_road_response(&with_pieces, "nobody", vertex_id(candidate))["road"],
+        json!(expected.road.filter(|_| expected.value > 0.0).map(|edge| topology().edge_id(edge))));
+    for corner in ["bad", vertex_id(0), vertex_id(topology().vertex_adjacent(0)[0])] {
+        let response = setup_road_response(&with_pieces, "aki", corner);
+        assert!(response == json!({ "road": null }) || response["error"].is_string());
+    }
+    let response: Value = serde_json::from_str(&setup_road("{}" )).unwrap();
+    assert!(response["error"].is_string());
+}
+
+fn setup_opening() -> Board {
+    let mut board = blank_board(2);
+    for hex in 0..topology().hex_count() {
+        set_tile(&mut board, hex, RESOURCES[hex % RESOURCES.len()], 6);
+    }
+    parse(&board)
+}
+
+#[test]
+fn forced_picks_lay_roads_before_settling_with_the_pickers_holdings_and_earlier_roads() {
+    let board = setup_opening();
+    let scorer = board.scorer(engine_weights(&default_weights_with(json!({}))));
+    let context = Context::new(&board, &scorer);
+    let first = board.legal_vertices()[15];
+    let second = (0..topology().vertex_count())
+        .filter(|index| !barred(&[first])[*index]).nth(20).unwrap() as Vertex;
+    let picks = [first, second];
+    let (mut expected_vertices, mut expected_edges) = board.owners();
+    let mut held = Holdings::empty();
+    let expected: Vec<Option<Edge>> = picks.iter().map(|vertex| {
+        let road = expansion::term(&scorer, &held, &expected_vertices, &expected_edges, 1, *vertex).road;
+        expected_vertices[usize::from(*vertex)] = 1;
+        if let Some(edge) = road { expected_edges[usize::from(edge)] = 1; }
+        scorer.add_to_holdings(&mut held, *vertex);
+        road
+    }).collect();
+    assert!(expected.iter().all(Option::is_some));
+    let (mut vertices, mut edges) = board.owners();
+    let initial = board.holdings(&scorer);
+    let result = context.simulate_window(
+        &[first_pick(1), Turn { seat: 1, receives_grant: true, has_later_pick: false }],
+        &initial, &mut board.blocked(), &mut vertices, &mut edges, &mut || 0.0,
+        Some(&mut |taken, _, _, _, _| Some(picks[taken.len()])),
+    );
+    assert_eq!(result.taken, picks);
+    assert_eq!(result.roads, expected);
+    assert_eq!(format!("{:?}", result.holdings[1]), format!("{held:?}"));
+    assert_eq!(vertices, expected_vertices);
+    assert_eq!(edges, expected_edges);
+    assert!(board.owners().1.iter().all(|owner| *owner == EMPTY));
+    assert_eq!(format!("{:?}", initial[1]), format!("{:?}", Holdings::empty()));
+}
+
+#[test]
+fn setup_windows_lay_no_fallback_road_when_disabled_or_boxed_in() {
+    let board = setup_opening();
+    let candidate = board.legal_vertices()[15];
+    for disabled in [false, true] {
+        let weights = default_weights_with(json!({ "expansionWeight": if disabled { 0.0 } else { 0.1 } }));
+        let scorer = board.scorer(engine_weights(&weights));
+        let context = Context::new(&board, &scorer);
+        let mut vertices = vec![if disabled { EMPTY } else { 0 }; topology().vertex_count()];
+        vertices[usize::from(candidate)] = EMPTY;
+        let mut edges = no_roads();
+        let result = context.simulate_window(
+            &[first_pick(1)], &board.holdings(&scorer), &mut vec![false; vertices.len()],
+            &mut vertices, &mut edges, &mut || 0.0, Some(&mut |_, _, _, _, _| Some(candidate)),
+        );
+        assert_eq!(result.taken, [candidate]);
+        assert_eq!(result.roads, [None]);
+        assert!(edges.iter().all(|owner| *owner == EMPTY));
+    }
+    let ranked = analysis(&with_me(filled_board(2, 0), "p2"), None, json!({
+        "rollouts": 1, "weights": default_weights_with(json!({ "expansionWeight": 0 })),
+    }));
+    assert_eq!(taken(&ranked).iter().map(|entry| &entry["road"]).collect::<Vec<_>>(), [&Value::Null]);
+    assert!(!recommendations(&ranked).is_empty());
+    assert!(recommendations(&ranked).iter().all(|row| row["firstRoad"].is_null() && row["secondRoad"].is_null()));
+}
+
+#[test]
+fn drawn_second_leads_even_when_another_second_is_more_frequent() {
+    let board = parse(&with_me(filled_board(4, 0), "p4"));
+    let scorer = board.scorer(weights_for_seats(4).clone());
+    let draft = infer_draft_state(&board);
+    let candidate = 15;
+    let allowed: Vec<Vertex> = (0..topology().vertex_count())
+        .filter(|vertex| !barred(&[candidate])[*vertex]).map(|vertex| vertex as Vertex).collect();
+    let (drawn, frequent) = (allowed[0], allowed[1]);
+    let windows = [drawn, frequent, frequent].map(|second| {
+        pre_window(&board, &scorer, all_barred_but(&[candidate, second]), &[])
+    });
+    let (rows, _) = rank_windows(&board, &scorer, &draft, &windows);
+    let row = ranked(&rows, candidate);
+    assert_eq!(row.planned_second, [vertex_id(drawn), vertex_id(frequent)]);
+}
+
+#[test]
+fn a_rivals_rollout_road_extends_the_walk_for_its_later_pick() {
+    let path = format!("{}/../../fixtures/analysis-parity.json", env!("CARGO_MANIFEST_DIR"));
+    let fixture: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let case = fixture["cases"].as_array().unwrap().iter()
+        .find(|case| case["name"] == "rival-road-reaches-later-pick").unwrap();
+    let board = parse(&case["request"]["board"]);
+    let scorer = board.scorer(weights_for_seats(board.player_ids.len()).clone());
+    let context = Context::new(&board, &scorer);
+    let predicted = analysis(&case["request"]["board"], None, case["request"]["options"].clone());
+    let picks: Vec<Vertex> = taken(&predicted).iter().map(|entry| vertex(text(&entry["vertexId"]))).collect();
+    let (mut vertices, mut edges) = board.owners();
+    let mut blocked = board.blocked();
+    let result = context.simulate_window(
+        &[first_pick(0), first_pick(1)], &board.holdings(&scorer), &mut blocked,
+        &mut vertices, &mut edges, &mut || 0.0,
+        Some(&mut |taken, _, _, _, _| Some(picks[taken.len()])),
+    );
+    let mut witnesses = 0;
+    for (seat, road) in result.pickers.iter().zip(&result.roads) {
+        let mut without = edges.clone();
+        without[usize::from(road.unwrap())] = EMPTY;
+        for candidate in 0..topology().vertex_count() {
+            if blocked[candidate] { continue; }
+            let sites = |roads: &[u8]| -> BTreeSet<Vertex> {
+                expansion::sites_by_edge(&scorer, &vertices, roads, *seat, candidate as Vertex)
+                    .into_iter().flat_map(|(_, sites)| sites.into_iter().map(|site| site.vertex)).collect()
+            };
+            if !sites(&edges).is_subset(&sites(&without)) { witnesses += 1; }
+        }
+    }
+    assert!(witnesses > 0, "no later pick can reach farther over a simulated rival road");
 }

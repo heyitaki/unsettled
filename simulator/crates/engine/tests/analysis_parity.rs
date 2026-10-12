@@ -211,14 +211,58 @@ fn indent(compact: &str) -> String {
     out
 }
 
+/// Road cases are built from fixed corpus boards, keeping fixture edits in this generator.
+fn setup_road_cases(fixture: &Value) -> Vec<Value> {
+    let request = |name: &str| {
+        fixture["cases"].as_array().unwrap().iter()
+            .find(|case| case["name"] == name).unwrap()["request"].clone()
+    };
+    let mut rival = request("empty-first-seat-standard4");
+    rival["board"]["mePlayerId"] = "p3".into();
+    rival["options"]["rollouts"] = 4.into();
+    rival["options"]["maxResults"] = 54.into();
+    let mut seconds = request("first-road-null");
+    seconds["options"]["maxResults"] = 54.into();
+    let topology = unsettled_engine::topology::Topology::shared(
+        unsettled_engine::topology::Layout::Standard4,
+    ).unwrap();
+    seconds["board"]["roads"] = (0..topology.edge_count()).filter(|edge| edge % 3 != 0)
+        .map(|edge| serde_json::json!({ "edgeId": topology.edge_id(edge as u8), "playerId": "aki" }))
+        .collect();
+    let mut drawn = request("blocked-in-modal-window");
+    drawn["board"]["mePlayerId"] = "aki".into();
+    drawn["options"]["rollouts"] = 12.into();
+    drawn["options"]["maxResults"] = 54.into();
+    let mut existing = request("mid-first-round");
+    for edge in [topology.edge_count() - 2, topology.edge_count() - 1] {
+        let edge_id = topology.edge_id(edge as u8);
+        let roads = existing["board"]["roads"].as_array_mut().unwrap();
+        roads.retain(|road| road["edgeId"] != edge_id);
+        roads.push(serde_json::json!({ "edgeId": edge_id, "playerId": "p3" }));
+    }
+    [
+        ("rival-road-reaches-later-pick", rival),
+        ("second-road-present-and-null", seconds),
+        ("drawn-second-before-frequency", drawn),
+        ("roads-already-on-board", existing),
+    ].into_iter().map(|(name, request)| serde_json::json!({ "name": name, "request": request })).collect()
+}
+
 /// Rewrites every case's response, and the `mulberry32` streams, from this engine. The names and
-/// requests are the committed ones, first written from the TypeScript analysis this engine was
-/// checked against, so a new case is added to the file by hand with any response and then
-/// regenerated. Re-verify the diff by hand: nothing else says a changed response is right.
+/// requests are the committed ones plus `setup_road_cases`. Add new requests in the generator,
+/// then regenerate. Re-verify the diff against the specification before accepting new responses.
 #[test]
 #[ignore]
 fn regenerate_analysis_parity_fixture() {
-    let fixture = read_fixture();
+    let mut fixture = read_fixture();
+    for case in setup_road_cases(&fixture) {
+        let cases = fixture["cases"].as_array_mut().unwrap();
+        if let Some(existing) = cases.iter_mut().find(|existing| existing["name"] == case["name"]) {
+            *existing = case;
+        } else {
+            cases.push(case);
+        }
+    }
     let streams: Vec<String> = ["7", "12345"]
         .iter()
         .map(|seed| {
@@ -240,4 +284,34 @@ fn regenerate_analysis_parity_fixture() {
         .collect();
     let text = format!(r#"{{"mulberry32":{{{}}},"cases":[{}]}}"#, streams.join(","), cases.join(","));
     fs::write(fixture_path(), format!("{}\n", indent(&text))).unwrap();
+}
+
+#[test]
+fn the_road_corpus_contains_both_null_and_present_second_roads() {
+    let fixture = read_fixture();
+    let case = fixture["cases"].as_array().unwrap().iter()
+        .find(|case| case["name"] == "second-road-present-and-null").unwrap();
+    let response = run(&case["request"]);
+    let rows = response["recommendations"].as_array().unwrap();
+    assert!(rows.iter().any(|row| row["secondRoad"].is_null()));
+    assert!(rows.iter().any(|row| row["secondRoad"].is_string()));
+}
+
+#[test]
+fn the_drawn_second_case_keeps_the_plan_from_the_first_rollout() {
+    let fixture = read_fixture();
+    let case = fixture["cases"].as_array().unwrap().iter()
+        .find(|case| case["name"] == "drawn-second-before-frequency").unwrap();
+    let mut modal = case["request"].clone();
+    modal["options"]["rollouts"] = 1.into();
+    let modal = run(&modal);
+    let sampled = run(&case["request"]);
+    let rows = sampled["recommendations"].as_array().unwrap();
+    assert!(!rows.is_empty());
+    for row in rows {
+        let first = modal["recommendations"].as_array().unwrap().iter()
+            .find(|first| first["firstPick"] == row["firstPick"]).unwrap();
+        assert_eq!(row["plannedSecond"][0], first["plannedSecond"][0], "{}", row["firstPick"]);
+        assert_eq!(row["secondRoad"], first["secondRoad"], "{}", row["firstPick"]);
+    }
 }

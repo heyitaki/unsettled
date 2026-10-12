@@ -24,7 +24,9 @@ const CONTEXT_MEMO_WAYS: usize = 4;
 const CONTEXT_MEMO_SETS: usize = CONTEXT_MEMO_LEN / CONTEXT_MEMO_WAYS;
 const PRICE_MEMO_LEN: usize = 16_384;
 const VALUE_MEMO_LEN: usize = 8_192;
-const WALK_MEMO_WAYS: usize = 2;
+const WALK_MEMO_WAYS: usize = 32;
+// A bucket marks its ways in one `u32`.
+const _: () = assert!(WALK_MEMO_WAYS <= 32);
 static NEXT_REACH_ID: AtomicU64 = AtomicU64::new(1);
 
 /// A site the candidate opens, at the cost the walk settled it for.
@@ -259,10 +261,26 @@ impl Occupancy {
         masks
     }
 
+    /// Table paths read only local obstacles; own-road walks may reach beyond that table.
+    pub(super) fn road_key(&self, scorer: &AppFormulaScorer, candidate: Vertex) -> [u128; 5] {
+        if scorer.reach.table_path(candidate, self) {
+            let open = &scorer.reach.open[usize::from(candidate)];
+            [self.own_vertices, self.blocked & open.sites,
+                self.rival_vertices & open.through, 0, self.rival_edges & open.edges]
+        } else {
+            [self.own_vertices, self.blocked, self.rival_vertices, self.own_edges, self.rival_edges]
+        }
+    }
+
     /// These roads around other settlements: the vertices the seat holds, the vertices its rivals
     /// hold, and every settled vertex with its neighbours.
     pub(super) fn with_settlements(self, own: u128, rival: u128, blocked: u128) -> Self {
         Self { own_vertices: own, rival_vertices: rival, blocked, ..self }
+    }
+
+    /// These settlements with the roads currently standing in the rollout.
+    pub(super) fn with_roads(self, own: u128, rival: u128) -> Self {
+        Self { own_edges: own, rival_edges: rival, ..self }
     }
 
     pub(super) fn place(
@@ -473,6 +491,8 @@ impl WalkEntry {
 
 struct WalkMemo {
     entries: Vec<[WalkEntry; WALK_MEMO_WAYS]>,
+    tags: Vec<[u64; WALK_MEMO_WAYS]>,
+    buckets: Vec<[u32; 16]>,
     next: [usize; 128],
 }
 
@@ -480,6 +500,8 @@ impl Default for WalkMemo {
     fn default() -> Self {
         Self {
             entries: vec![[WalkEntry::default(); WALK_MEMO_WAYS]; 128],
+            tags: vec![[0; WALK_MEMO_WAYS]; 128],
+            buckets: vec![[0; 16]; 128],
             next: [0; 128],
         }
     }
@@ -493,9 +515,20 @@ impl WalkMemo {
         candidate: Vertex,
     ) -> SiteMasks {
         let index = usize::from(candidate);
-        for entry in &self.entries[index] {
-            if entry.matches(scorer.reach.id, occupancy) {
-                return entry.walk.sites;
+        let tag = mix64(
+            occupancy.own_edges as u64 ^ ((occupancy.own_edges >> 64) as u64).rotate_left(13),
+        ) ^ scorer.reach.id;
+
+        // Reject unrelated road contexts before reading their larger occupancy records.
+        let mut ways = self.buckets[index][tag as usize & 15];
+        while ways != 0 {
+            let way = ways.trailing_zeros() as usize;
+            ways &= ways - 1;
+            if self.tags[index][way] == tag {
+                let entry = &self.entries[index][way];
+                if entry.matches(scorer.reach.id, occupancy) {
+                    return entry.walk.sites;
+                }
             }
         }
         let mut sources = [0; 2];
@@ -509,7 +542,11 @@ impl WalkMemo {
         }
         let mut walk = mask_walk_recorded::<true>(scorer, occupancy, candidate, sources);
         walk.edges |= edges;
-        self.entries[index][self.next[index]] = WalkEntry {
+        let way = self.next[index];
+        self.buckets[index][self.tags[index][way] as usize & 15] &= !(1 << way);
+        self.buckets[index][tag as usize & 15] |= 1 << way;
+        self.tags[index][way] = tag;
+        self.entries[index][way] = WalkEntry {
             table: scorer.reach.id,
             occupancy: occupancy.restricted(walk.vertices, walk.edges),
             walk,

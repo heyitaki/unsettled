@@ -1,4 +1,5 @@
-import { createEngine, type Engine } from './advice/wasm'
+import { fetchEngine } from './advice/fetchEngine'
+import type { Engine } from './advice/wasm'
 import type { AnalysisRequest, AnalysisResponse } from './analysisProtocol'
 
 let engine: Promise<Engine> | null = null
@@ -6,10 +7,7 @@ let engine: Promise<Engine> | null = null
 let onProgress: (fraction: number) => void = () => {}
 
 function loadEngine() {
-  engine ??= fetch(new URL('./advice/engine.wasm', import.meta.url)).then((response) => {
-    if (!response.ok) throw new Error(`Unable to load the analysis engine (${response.status})`)
-    return response.arrayBuffer()
-  }).then((bytes) => createEngine(bytes, (fraction) => onProgress(fraction))).catch((error: unknown) => {
+  engine ??= fetchEngine((fraction) => onProgress(fraction)).catch((error: unknown) => {
     engine = null
     throw error
   })
