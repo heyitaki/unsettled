@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Recommendation } from '../../engine/analyze'
+import type { Recommendation } from '../../engine/analysisProtocol'
 import type { EdgeId, VertexId } from '../../model/types'
 import { recommendationMarks } from '../analysisMarks'
 

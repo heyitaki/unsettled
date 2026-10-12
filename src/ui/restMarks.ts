@@ -1,4 +1,4 @@
-import type { DraftAnalysis } from '../engine/analyze'
+import type { DraftAnalysis } from '../engine/analysisProtocol'
 import type { Board } from '../model/types'
 import type { HighlightMark } from './store'
 

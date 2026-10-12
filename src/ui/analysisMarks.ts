@@ -1,4 +1,4 @@
-import type { Recommendation } from '../engine/analyze'
+import type { Recommendation } from '../engine/analysisProtocol'
 import type { HighlightMark } from './store'
 
 /**

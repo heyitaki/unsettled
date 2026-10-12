@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { Recommendation } from '../engine/analyze'
+import type { Recommendation } from '../engine/analysisProtocol'
 import { draftIsComplete } from '../engine/draft'
 import { placeBuilding, setMe } from '../model/board'
 import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'

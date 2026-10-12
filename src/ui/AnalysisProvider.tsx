@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { DraftAnalysis } from '../engine/analyze'
-import type { AnalysisResult } from '../engine/analysisProtocol'
+import type { AnalysisResult, DraftAnalysis } from '../engine/analysisProtocol'
 import { inferDraftState } from '../engine/draft'
 import { setMe } from '../model/board'
 import type { Board } from '../model/types'
-import { createAnalysisClient } from './analysisClient'
+import { analysisCacheVersion, createAnalysisClient } from './analysisClient'
 import { viewedPlayerId } from './draftSlots'
 import { activeTab, useStore } from './store'
 import { AnalysisContext, type AnalysisState } from './useAnalysis'
@@ -17,10 +16,14 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const analysisBoard = useMemo(() => setMe(board, playerId), [board, playerId])
   const [client] = useState(() => createAnalysisClient(
     () => new Worker(new URL('../engine/analysis.worker.ts', import.meta.url), { type: 'module' }),
-    // A production chunk's URL carries a content hash that moves with the
-    // engine, so it versions the saved results. A dev server keeps one URL
-    // while the engine changes under it, so there nothing is saved.
-    import.meta.env.PROD ? { storage: localStorage, version: import.meta.url } : undefined,
+    // A production chunk's URL and the engine.wasm asset's each carry a
+    // content hash, so together they version the saved results. A dev server
+    // keeps both URLs while the engine changes under them, so there nothing
+    // is saved.
+    import.meta.env.PROD ? {
+      storage: localStorage,
+      version: analysisCacheVersion(import.meta.url, new URL('../engine/advice/engine.wasm', import.meta.url).href),
+    } : undefined,
   ))
   const [completed, setCompleted] = useState<{ board: Board; targetPick: number | null; result: AnalysisResult } | null>(null)
   // Tagged like `completed`, so a new view reads as not started without a reset.

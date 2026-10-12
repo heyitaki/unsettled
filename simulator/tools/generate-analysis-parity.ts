@@ -1,4 +1,5 @@
-import { analyzeBoard, PAIR_TIE, type DraftAnalysis } from '../../src/engine/analyze.ts'
+import { analyzeBoard, PAIR_TIE } from '../../src/engine/analyze.ts'
+import type { DraftAnalysis } from '../../src/engine/analysisProtocol.ts'
 import {
   blockedVertices,
   legalSettlementVertices,

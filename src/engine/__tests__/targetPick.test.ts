@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard, placeBuilding, setMe } from '../../model/board'
 import { setTile } from '../../model/__tests__/helpers'
 import { RESOURCES, type Board } from '../../model/types'
-import { analyzeBoard, type DraftAnalysis } from '../analyze'
+import { analyzeBoard } from '../analyze'
+import type { DraftAnalysis } from '../analysisProtocol'
 import { blockedVertices } from '../legality'
 
 const tokens = [6, 8, 5, 9, 4, 10, 3, 11, 2, 12] as const

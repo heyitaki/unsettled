@@ -1,7 +1,8 @@
 import { placeBuilding, setMe } from '../model/board'
 import { boardGrid } from '../model/layouts'
-import type { Board, EdgeId, LayoutId, VertexId } from '../model/types'
-import { draftIsComplete, inferDraftState, type DraftState, type DraftWarning } from './draft'
+import type { Board, LayoutId, VertexId } from '../model/types'
+import type { AnalysisStatus, DraftAnalysis, Recommendation, ScoreBreakdown, TakenVertex } from './analysisProtocol'
+import { draftIsComplete, inferDraftState, type DraftState } from './draft'
 import { expansionTerm } from './expansion'
 import {
   blockedVertices,
@@ -26,37 +27,8 @@ import {
   type HandCounts,
   type Holdings,
   type Occupancy,
-  type ScoreBreakdown,
 } from './valuation'
 import { weightsForSeats, type EngineWeights } from './weights'
-
-export type AnalysisStatus =
-  | 'ready'
-  | 'no-me'
-  | 'me-done'
-  | 'complete'
-  | 'no-production'
-  | 'no-availability'
-
-export interface TakenVertex {
-  vertexId: VertexId
-  playerId: string
-  frequency: number
-}
-
-export interface Recommendation {
-  firstPick: VertexId
-  plannedSecond: VertexId[]
-  /**
-   * The setup road SP3's expansion walk would lay from `firstPick`, or null when the walk is off
-   * (`expansionWeight` 0) or the pick opens nothing. See `expansion.ts::expansionTerm`.
-   */
-  firstRoad: EdgeId | null
-  survival: number
-  score: number
-  rankScore: number
-  breakdown: ScoreBreakdown
-}
 
 export interface AnalysisOptions {
   seed?: number
@@ -68,14 +40,6 @@ export interface AnalysisOptions {
   modalCache?: Map<string, DraftAnalysis>
   /** Told the fraction of the ranking done so far, which only rises and ends at 1. */
   onProgress?: (fraction: number) => void
-}
-
-export interface DraftAnalysis {
-  status: AnalysisStatus
-  draft: DraftState
-  recommendations: Recommendation[]
-  takenBeforeFirstPick: TakenVertex[]
-  warnings: DraftWarning[]
 }
 
 export interface PreWindowResult {

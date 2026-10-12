@@ -2,10 +2,8 @@
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DraftAnalysis, TakenVertex } from '../../engine/analyze'
-import type { AnalysisRequest } from '../../engine/analysisProtocol'
+import type { AnalysisRequest, DraftAnalysis, TakenVertex } from '../../engine/analysisProtocol'
 import { inferDraftState } from '../../engine/draft'
-import { emptyBreakdown } from '../../engine/valuation'
 import { addPlayer, createBoard, placeBuilding, setMe } from '../../model/board'
 import { boardGrid } from '../../model/layouts'
 import { setTile } from '../../model/__tests__/helpers'
@@ -50,7 +48,7 @@ describe('viewing another player in Best picks', () => {
     const job = jobs.at(-1)!
     await act(async () => job.reply({
       status: 'ready', draft: inferDraftState(job.request.board), warnings: [], takenBeforeFirstPick,
-      recommendations: [{ firstPick: SPACED[6], firstRoad: null, plannedSecond: [], survival: 1, score: 1, rankScore: 1, breakdown: emptyBreakdown() }],
+      recommendations: [{ firstPick: SPACED[6], firstRoad: null, plannedSecond: [], survival: 1, score: 1, rankScore: 1, breakdown: { production: 0, scarcity: 0, robber: 0, diversity: 0, port: 0, handValue: 0, expansion: 0 } }],
     }))
   }
 

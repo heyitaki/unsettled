@@ -10,21 +10,10 @@ import {
   type Resource,
   type VertexId,
 } from '../model/types'
+import type { ScoreBreakdown } from './analysisProtocol'
 import { expansionTerm } from './expansion'
 import { vertexAdjacency } from './legality'
 import type { EngineWeights, SlotScale } from './weights'
-
-export interface ScoreBreakdown {
-  production: number
-  scarcity: number
-  /** The robbed-hex discount, plus the concentration delta. See `concentrationDelta`. */
-  robber: number
-  diversity: number
-  port: number
-  handValue: number
-  /** What the sites this vertex opens are worth. See `expansion.ts::expansionTerm`. */
-  expansion: number
-}
 
 export const emptyBreakdown = (): ScoreBreakdown => ({
   production: 0,

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { DraftAnalysis } from '../engine/analyze'
+import type { DraftAnalysis } from '../engine/analysisProtocol'
 
 export interface AnalysisState {
   analysis: DraftAnalysis

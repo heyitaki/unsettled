@@ -1,4 +1,4 @@
-import type { DraftAnalysis } from '../analyze'
+import type { DraftAnalysis } from '../analysisProtocol'
 
 export interface Engine {
   advise(request: string): string

@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeBoard } from '../../engine/analyze'
+import { analyze } from '../../engine/__tests__/analyzeWasm'
 import { createBoard, randomizeBoard, setMe } from '../../model/board'
 import { restingMarks, SOLID_RANKS } from '../restMarks'
 
 describe('restingMarks', () => {
   it('marks nothing while nobody is claimed or the board is not ready', () => {
     const blank = createBoard('standard4')
-    expect(restingMarks(blank, analyzeBoard(blank))).toBeNull()
+    expect(restingMarks(blank, analyze(blank))).toBeNull()
     const unclaimed = setMe(randomizeBoard(blank), null)
-    expect(restingMarks(unclaimed, analyzeBoard(unclaimed))).toBeNull()
+    expect(restingMarks(unclaimed, analyze(unclaimed))).toBeNull()
   })
 
   it('marks every listed pick in my colour, ranked, with the lower ranks faded', () => {
     const board = randomizeBoard(createBoard('standard4'))
-    const analysis = analyzeBoard(board)
+    const analysis = analyze(board)
     const marks = restingMarks(board, analysis)
     expect(marks).not.toBeNull()
     const me = board.players.find((player) => player.id === board.mePlayerId)

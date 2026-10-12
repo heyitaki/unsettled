@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createBoard } from '../../model/board'
-import type { DraftAnalysis } from '../../engine/analyze'
+import type { DraftAnalysis } from '../../engine/analysisProtocol'
 import { inferDraftState } from '../../engine/draft'
 import { ANALYSIS_CACHE_KEY } from '../../persistence/localStorage'
-import { ANALYSIS_CACHE_SIZE, createAnalysisClient, type AnalysisCachePersistence } from '../analysisClient'
+import { ANALYSIS_CACHE_SIZE, analysisCacheVersion, createAnalysisClient, type AnalysisCachePersistence } from '../analysisClient'
 
 function harness(persist?: AnalysisCachePersistence) {
   const workers: {
@@ -155,6 +155,25 @@ describe('analysis client', () => {
     other.client.run(board, vi.fn())
     expect(other.workers[0].postMessage).toHaveBeenCalledOnce()
     other.client.dispose()
+  })
+
+  it('drops the saved results when the engine.wasm URL changes under the same chunk', () => {
+    const stored = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+      removeItem: (key: string) => void stored.delete(key),
+    }
+    const chunk = 'https://example.test/assets/index-abc.js'
+    const version = (wasm: string) => analysisCacheVersion(chunk, `https://example.test/assets/engine-${wasm}.wasm`)
+    const first = harness({ storage, version: version('one') })
+    first.client.run(board, vi.fn())
+    first.reply(0, analysis)
+    first.client.dispose()
+
+    expect(harness({ storage, version: version('one') }).client.peek(board)).toEqual(analysis)
+    expect(harness({ storage, version: version('two') }).client.peek(board)).toBeUndefined()
+    expect(harness({ storage, version: analysisCacheVersion('https://example.test/assets/index-def.js', 'https://example.test/assets/engine-one.wasm') }).client.peek(board)).toBeUndefined()
   })
 
   it.each(['{not json', '{"version":"a","entries":[null]}', '{"version":"a","entries":5}'])(

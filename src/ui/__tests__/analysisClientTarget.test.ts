@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { DraftAnalysis } from '../../engine/analyze'
+import type { DraftAnalysis } from '../../engine/analysisProtocol'
 import type { AnalysisRequest } from '../../engine/analysisProtocol'
 import { inferDraftState } from '../../engine/draft'
 import { createBoard } from '../../model/board'

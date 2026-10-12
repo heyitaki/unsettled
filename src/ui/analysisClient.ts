@@ -1,5 +1,4 @@
-import type { AnalysisStatus, DraftAnalysis } from '../engine/analyze'
-import type { AnalysisRequest, AnalysisResponse, AnalysisResult } from '../engine/analysisProtocol'
+import type { AnalysisRequest, AnalysisResponse, AnalysisResult, AnalysisStatus, DraftAnalysis } from '../engine/analysisProtocol'
 import { isRecord } from '../model/serialization'
 import type { Board } from '../model/types'
 import { ANALYSIS_CACHE_KEY } from '../persistence/localStorage'
@@ -32,6 +31,9 @@ export interface AnalysisCachePersistence {
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
   version: string
 }
+
+/** The engine is two files, so a production build's version is both of their content-hashed URLs. */
+export const analysisCacheVersion = (chunkUrl: string, wasmUrl: string): string => `${chunkUrl} ${wasmUrl}`
 
 function restore({ storage, version }: AnalysisCachePersistence): Map<string, DraftAnalysis> {
   try {
