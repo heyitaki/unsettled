@@ -7,7 +7,14 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize, Serializer};
 
-use super::app_formula::{EngineWeights, ScoreBreakdown, js_max, js_min};
+use super::app_formula::{
+    AppFormulaScorer, EngineWeights, Holdings, ScoreBreakdown, ScorerBoard, js_max, js_min,
+};
+use crate::board::{InitialBuilding, InitialRoad, SimPort};
+use crate::rules::Resource;
+use crate::state::EMPTY;
+use crate::topology::{Hex, Topology, Vertex};
+use crate::wire::{BuildingTier, TileKind, WireBoard};
 
 /// The request JSON. The app sends `board` and `targetPick`; `options` exists for the corpus and
 /// the tests, which need small rollout counts, other seeds and other weights.
@@ -263,6 +270,304 @@ pub fn weights_for_seats(seats: usize) -> &'static EngineWeights {
         2..=6 => &weights[seats - 1],
         _ => &weights[0],
     }
+}
+
+/// The app's board as the analysis reads it. `SimBoard::try_from_wire` refuses boards the app only
+/// warns about (a blank tile, a resource hex with no number, no robber and no desert, adjacent
+/// buildings, one player), so the analysis converts on its own and accepts every board
+/// `WireBoard::validate` does, which is every board the app's `validateBoard` accepts.
+struct Board {
+    topology: &'static Topology,
+    player_ids: Vec<String>,
+    /// `mePlayerId` as a seat, which is its index in `players`.
+    me: Option<u8>,
+    /// In `board.buildings` order, which is the order holdings fold in.
+    buildings: Vec<InitialBuilding>,
+    roads: Vec<InitialRoad>,
+    /// `None` for a desert and for a blank tile: neither produces.
+    tiles: Vec<Option<Resource>>,
+    tokens: Vec<Option<u8>>,
+    robber: Option<Hex>,
+    ports: Vec<SimPort>,
+}
+
+impl Board {
+    /// `wire` has passed `WireBoard::validate`, so every id it names is on the layout or the
+    /// roster.
+    fn from_wire(wire: &WireBoard) -> Result<Self, String> {
+        let topology = Topology::shared(wire.layout)?;
+        let seat = |id: &str| {
+            wire.players
+                .iter()
+                .position(|player| player.id == id)
+                .expect("wire validation checked the roster") as u8
+        };
+        let mut tiles = vec![None; topology.hex_count()];
+        let mut tokens = vec![None; topology.hex_count()];
+        for item in &wire.hexes {
+            let hex = topology
+                .hex_by_key(&item.coord.key())
+                .expect("wire validation mapped hex");
+            tiles[usize::from(hex)] = item.tile.and_then(TileKind::resource);
+            tokens[usize::from(hex)] = item.number_token.map(|token| token as u8);
+        }
+        Ok(Self {
+            topology,
+            player_ids: wire.players.iter().map(|player| player.id.clone()).collect(),
+            me: wire.me_player_id.as_deref().map(seat),
+            buildings: wire
+                .buildings
+                .iter()
+                .map(|building| InitialBuilding {
+                    vertex: topology
+                        .vertex_by_id(&building.vertex_id)
+                        .expect("wire validation mapped building"),
+                    seat: seat(&building.player_id),
+                    tier: building.tier,
+                })
+                .collect(),
+            roads: wire
+                .roads
+                .iter()
+                .map(|road| InitialRoad {
+                    edge: topology
+                        .edge_by_id(&road.edge_id)
+                        .expect("wire validation mapped road"),
+                    seat: seat(&road.player_id),
+                })
+                .collect(),
+            tiles,
+            tokens,
+            // No stand-in when the robber is unplaced: the TypeScript robs no hex then.
+            robber: wire.robber.as_ref().map(|coord| {
+                topology
+                    .hex_by_key(&coord.key())
+                    .expect("wire validation mapped robber")
+            }),
+            ports: wire
+                .ports
+                .iter()
+                .map(|port| SimPort {
+                    edge: topology
+                        .edge_by_id(&port.edge_id)
+                        .expect("wire validation mapped port"),
+                    resource: port.resource,
+                    rate: port.rate as u32,
+                })
+                .collect(),
+        })
+    }
+
+    /// The scorer over this board's tiles, tokens, robber and ports. Pieces and the claimed
+    /// player do not enter it, so one scorer serves every scratch board a ranking builds.
+    fn scorer(&self, weights: EngineWeights) -> AppFormulaScorer {
+        AppFormulaScorer::from_parts(
+            ScorerBoard {
+                tiles: &self.tiles,
+                tokens: &self.tokens,
+                robber: self.robber,
+                ports: &self.ports,
+                seats: self.player_ids.len(),
+            },
+            self.topology,
+            weights,
+        )
+    }
+
+    /// Every seat's holdings. Twin of `holdingsFromBoard`: buildings of any tier, folded in
+    /// `board.buildings` order.
+    fn holdings(&self, scorer: &AppFormulaScorer) -> Vec<Holdings> {
+        let mut holdings = vec![Holdings::empty(); self.player_ids.len()];
+        for building in &self.buildings {
+            scorer.add_to_holdings(&mut holdings[usize::from(building.seat)], building.vertex);
+        }
+        holdings
+    }
+
+    /// The pieces as the scorer's occupancy reads them: the owning seat per vertex and per edge.
+    /// Twin of `occupancyFromBoard`, whose `blocked` is the built vertices themselves.
+    fn owners(&self) -> (Vec<u8>, Vec<u8>) {
+        let mut vertex_owner = vec![EMPTY; self.topology.vertex_count()];
+        for building in &self.buildings {
+            vertex_owner[usize::from(building.vertex)] = building.seat;
+        }
+        let mut edge_owner = vec![EMPTY; self.topology.edge_count()];
+        for road in &self.roads {
+            edge_owner[usize::from(road.edge)] = road.seat;
+        }
+        (vertex_owner, edge_owner)
+    }
+
+    /// Twin of `legalSettlementVertices`: the vertices neither built on nor beside a building,
+    /// in index order.
+    fn legal_vertices(&self) -> Vec<Vertex> {
+        let mut blocked = vec![false; self.topology.vertex_count()];
+        for building in &self.buildings {
+            blocked[usize::from(building.vertex)] = true;
+            for adjacent in self.topology.vertex_adjacent(building.vertex) {
+                blocked[usize::from(*adjacent)] = true;
+            }
+        }
+        (0..self.topology.vertex_count())
+            .filter(|vertex| !blocked[*vertex])
+            .map(|vertex| vertex as Vertex)
+            .collect()
+    }
+}
+
+fn draft_is_over(board: &Board, placed_count: usize, sequence_len: usize) -> bool {
+    placed_count >= sequence_len
+        || board
+            .buildings
+            .iter()
+            .any(|building| building.tier != BuildingTier::Settlement)
+}
+
+/// Twin of `inferDraftState` in `src/engine/draft.ts`.
+fn infer_draft_state(board: &Board) -> DraftState {
+    let seats = board.player_ids.len();
+    // The snake: every seat in roster order, then back again.
+    let order: Vec<usize> = (0..seats).chain((0..seats).rev()).collect();
+    let mut actual = vec![0_usize; seats];
+    let mut settlements = 0;
+    for building in &board.buildings {
+        if building.tier == BuildingTier::Settlement {
+            actual[usize::from(building.seat)] += 1;
+            settlements += 1;
+        }
+    }
+    let placed_count = settlements.min(order.len());
+    let mut warnings = Vec::new();
+    if settlements != board.buildings.len() {
+        warnings.push(DraftWarning::NonSettlementBuildings);
+    }
+    if seats == 1 {
+        warnings.push(DraftWarning::SoloRoster);
+    }
+    let mut expected = vec![0_usize; seats];
+    for seat in &order[..placed_count] {
+        expected[*seat] += 1;
+    }
+    // Only meaningful while the draft is still running: once it is over, building counts drift
+    // from the snake through ordinary play.
+    if !draft_is_over(board, placed_count, order.len()) && expected != actual {
+        warnings.push(DraftWarning::SnakeInconsistent);
+    }
+
+    let turn_index = (placed_count < order.len()).then_some(placed_count);
+    // A seat holding more settlements than the snake has reached has made that many of its coming
+    // picks already. Every seat picks twice.
+    let mut skips: Vec<usize> = (0..seats)
+        .map(|seat| actual[seat].min(2).saturating_sub(expected[seat]))
+        .collect();
+    let mut remaining_pick_indices = Vec::new();
+    for index in turn_index.unwrap_or(order.len())..order.len() {
+        let skip = &mut skips[order[index]];
+        if *skip > 0 {
+            *skip -= 1;
+        } else {
+            remaining_pick_indices.push(index);
+        }
+    }
+    let mine = |index: &usize| board.me == Some(order[*index] as u8);
+    DraftState {
+        sequence: order.iter().map(|seat| board.player_ids[*seat].clone()).collect(),
+        placed_count,
+        turn_index,
+        current_player_id: turn_index.map(|index| board.player_ids[order[index]].clone()),
+        my_pick_indices: (0..order.len()).filter(mine).collect(),
+        my_remaining_pick_indices: remaining_pick_indices.iter().copied().filter(mine).collect(),
+        remaining_pick_indices,
+        warnings,
+    }
+}
+
+/// Twin of `draftIsComplete`.
+fn draft_is_complete(board: &Board, draft: &DraftState) -> bool {
+    draft_is_over(board, draft.placed_count, draft.sequence.len())
+}
+
+/// Whether the pick at `turn_index` is its player's second, which is the one that pays out a
+/// starting hand.
+fn receives_second_settlement_grant(draft: &DraftState, turn_index: usize) -> bool {
+    draft.sequence.get(turn_index).is_some_and(|player_id| {
+        draft.sequence[..turn_index].iter().filter(|earlier| *earlier == player_id).count() == 1
+    })
+}
+
+/// Twin of `analyzeBoard`: the response JSON for a request, or `{"error": ...}` for one that is
+/// not valid JSON of the request shape or whose board the app's `validateBoard` would refuse.
+/// `progress` receives the fraction of the ranking done so far.
+pub fn analyze(request_json: &str, progress: &mut dyn FnMut(f64)) -> String {
+    match analyze_request(request_json, progress) {
+        Ok(analysis) => serde_json::to_string(&analysis).expect("the response serialises"),
+        Err(error) => serde_json::json!({ "error": error }).to_string(),
+    }
+}
+
+fn analyze_request(
+    request_json: &str,
+    _progress: &mut dyn FnMut(f64),
+) -> Result<DraftAnalysis, String> {
+    let request: AnalysisRequest =
+        serde_json::from_str(request_json).map_err(|error| error.to_string())?;
+    let wire = WireBoard::parse_value(request.board).map_err(|error| error.to_string())?;
+    let board = Board::from_wire(&wire)?;
+    let weights = request
+        .options
+        .weights
+        .unwrap_or_else(|| weights_for_seats(board.player_ids.len()).clone());
+    let scorer = board.scorer(weights);
+
+    let draft = infer_draft_state(&board);
+    let pick_offset = request
+        .target_pick
+        .and_then(|target| {
+            draft.my_remaining_pick_indices.iter().position(|index| *index as f64 == target)
+        })
+        .unwrap_or(0);
+    let legal = board.legal_vertices();
+    let complete = draft_is_complete(&board, &draft);
+    let me_done = draft.my_remaining_pick_indices.is_empty();
+    let has_positive_score = match board.me {
+        Some(me) if !complete && !me_done && !legal.is_empty() => {
+            let receives_grant = draft
+                .my_remaining_pick_indices
+                .get(pick_offset)
+                .is_some_and(|index| receives_second_settlement_grant(&draft, *index));
+            let holdings = board.holdings(&scorer)[usize::from(me)];
+            let (vertex_owner, edge_owner) = board.owners();
+            legal.iter().any(|vertex| {
+                let (_, total) = scorer.marginal_parts(
+                    &holdings,
+                    &vertex_owner,
+                    &edge_owner,
+                    me,
+                    *vertex,
+                    receives_grant,
+                );
+                total > 0.0
+            })
+        }
+        _ => false,
+    };
+
+    let status = resolve_status(&StatusInput {
+        complete,
+        me_valid: board.me.is_some(),
+        me_done,
+        legal_count: legal.len(),
+        has_positive_score,
+        recommendation_count: 0,
+    });
+    Ok(DraftAnalysis {
+        status,
+        warnings: draft.warnings.clone(),
+        draft,
+        // Nothing is ranked yet, so the statuses that keep these lists have nothing to keep.
+        recommendations: Vec::new(),
+        taken_before_first_pick: Vec::new(),
+    })
 }
 
 #[cfg(test)]

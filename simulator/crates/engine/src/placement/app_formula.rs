@@ -6,9 +6,9 @@ use std::sync::{Arc, OnceLock};
 use serde::Deserialize;
 
 use super::expansion;
-use crate::board::SimBoard;
+use crate::board::{SimBoard, SimPort};
 use crate::rules::{RESOURCE_COUNT, Resource};
-use crate::topology::{Edge, Topology, Vertex};
+use crate::topology::{Edge, Hex, Topology, Vertex};
 use crate::view::pips;
 
 const COVERAGE_MEMO_BITS: u32 = 6;
@@ -351,6 +351,18 @@ pub struct AppFormulaScorer {
     slot_scales: Vec<SlotScale>,
 }
 
+/// What the scorer reads off a board, which is what `valuation.ts::computeBoardContext` reads.
+/// `SimBoard` supplies it for the simulator and the adviser. The analysis supplies it from boards
+/// `SimBoard` refuses, which is why a tile may be blank (`None`, as a desert is), a resource hex
+/// may have no token, and the robber may be nowhere.
+pub(super) struct ScorerBoard<'a> {
+    pub(super) tiles: &'a [Option<Resource>],
+    pub(super) tokens: &'a [Option<u8>],
+    pub(super) robber: Option<Hex>,
+    pub(super) ports: &'a [SimPort],
+    pub(super) seats: usize,
+}
+
 /// The scorer's own copy of the board graph around one vertex.
 ///
 /// The scorer keeps no `Topology` handle after `new`, and SP3's expansion term has to walk
@@ -611,11 +623,32 @@ impl ExpansionBounds {
 
 impl AppFormulaScorer {
     pub fn new(board: &SimBoard, topology: &Topology, weights: EngineWeights) -> Self {
+        Self::from_parts(
+            ScorerBoard {
+                tiles: board.tiles(),
+                tokens: board.tokens(),
+                robber: Some(board.robber()),
+                ports: board.ports(),
+                seats: board.seats(),
+            },
+            topology,
+            weights,
+        )
+    }
+
+    pub(super) fn from_parts(
+        board: ScorerBoard<'_>,
+        topology: &Topology,
+        weights: EngineWeights,
+    ) -> Self {
         debug_assert!(topology.vertex_count() <= 128, "vertex masks are 128 bits wide");
         debug_assert!(topology.edge_count() <= 128, "edge masks are 128 bits wide");
+        // Whole pips, so this sum is exact in any order and equals `SimBoard::resource_pips`.
         let mut board_pips = [0.0; RESOURCE_COUNT];
-        for resource in Resource::ALL {
-            board_pips[resource.index()] = f64::from(board.resource_pips()[resource.index()]);
+        for (tile, token) in board.tiles.iter().zip(board.tokens) {
+            if let (Some(resource), Some(token)) = (tile, token) {
+                board_pips[resource.index()] += f64::from(pips(*token));
+            }
         }
         let mean_pips = Resource::ALL
             .iter()
@@ -639,7 +672,7 @@ impl AppFormulaScorer {
                     1.0 + weights.coverage_scarcity_weight * (scarcity[index] - 1.0),
                 );
         }
-        let (has_ports, port_factors) = port_precompute(board, topology, &weights);
+        let (has_ports, port_factors) = port_precompute(board.ports, topology, &weights);
         // One bit per hex in `Holdings::hexes` and `VertexStats::hex_mask`; `extension6` has 30.
         // The same width `expansion.rs::pair_hexes` asserts on the diagnostics side.
         debug_assert!(
@@ -648,7 +681,7 @@ impl AppFormulaScorer {
         );
         let mut hex_pips = vec![0.0; topology.hex_count()];
         for (index, slot) in hex_pips.iter_mut().enumerate() {
-            if let (Some(_), Some(token)) = (board.tiles()[index], board.tokens()[index]) {
+            if let (Some(_), Some(token)) = (board.tiles[index], board.tokens[index]) {
                 *slot = f64::from(pips(token));
             }
         }
@@ -662,7 +695,7 @@ impl AppFormulaScorer {
             let mut hex_mask = 0_u64;
             for hex in topology.vertex_hexes(vertex) {
                 let index = usize::from(*hex);
-                if let (Some(resource), Some(token)) = (board.tiles()[index], board.tokens()[index])
+                if let (Some(resource), Some(token)) = (board.tiles[index], board.tokens[index])
                 {
                     let amount = f64::from(pips(token));
                     raw_pips[resource.index()] += amount;
@@ -673,10 +706,11 @@ impl AppFormulaScorer {
                     }
                 }
             }
-            if topology.vertex_hexes(vertex).contains(&board.robber())
+            if let Some(robber) = board.robber
+                && topology.vertex_hexes(vertex).contains(&robber)
                 && let (Some(resource), Some(token)) = (
-                    board.tiles()[usize::from(board.robber())],
-                    board.tokens()[usize::from(board.robber())],
+                    board.tiles[usize::from(robber)],
+                    board.tokens[usize::from(robber)],
                 )
             {
                 robbed_pips[resource.index()] = f64::from(pips(token));
@@ -735,9 +769,9 @@ impl AppFormulaScorer {
         // scales off the seat it is already given.
         let slot_scales = weights
             .slot_scales
-            .get(&board.seats().to_string())
+            .get(&board.seats.to_string())
             .map(|row| {
-                (0..board.seats())
+                (0..board.seats)
                     .map(|slot| {
                         row.get(&slot.to_string())
                             .copied()
@@ -903,6 +937,27 @@ impl AppFormulaScorer {
         self.scaled_total_with_holdings(holdings, candidate, receives_grant, scale.diversity)
             + scale.expansion
                 * expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value
+    }
+
+    /// `marginal_total_for_owner` over holdings the caller folded, with the slot-scaled expansion
+    /// part beside the total: `(expansion, total)`. Twin of `valuation.ts::marginalParts`. The
+    /// analysis folds a seat's holdings in `board.buildings` order, which `holdings_for_owner`
+    /// does not, and `vertex_owner` must give `seat` exactly the vertices those holdings hold.
+    pub(super) fn marginal_parts(
+        &self,
+        holdings: &Holdings,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> (f64, f64) {
+        let scale = self.slot_scale(seat);
+        let expansion = scale.expansion
+            * expansion::term(self, holdings, vertex_owner, edge_owner, seat, candidate).value;
+        let rest =
+            self.scaled_total_with_holdings(*holdings, candidate, receives_grant, scale.diversity);
+        (expansion, expansion + rest)
     }
 
     /// The setup road SP3's road rule points at: the first edge of the cheapest path to the best
@@ -1385,7 +1440,7 @@ fn port_factor(rate: u32) -> f64 {
 }
 
 fn port_precompute(
-    board: &SimBoard,
+    ports: &[SimPort],
     topology: &Topology,
     weights: &EngineWeights,
 ) -> (Vec<bool>, Vec<[f64; RESOURCE_COUNT]>) {
@@ -1397,7 +1452,7 @@ fn port_precompute(
     } else {
         0.0
     };
-    for port in board.ports() {
+    for port in ports {
         let mut distances = vec![None; topology.vertex_count()];
         let mut queue = Vec::with_capacity(topology.vertex_count());
         for vertex in topology.edge_endpoints(port.edge) {
