@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { newBoardTitle } from './boardFiles'
 import { ContextMenu } from './ContextMenu'
 import { DotsGlyph, PlusGlyph } from './glyphs'
 import { LibraryLists } from './LibraryLists'
@@ -11,7 +12,7 @@ import { useJsonFiles } from './useJsonFiles'
  * `LibraryLists`, the list the phone's Maps screen shows under its import button.
  */
 export function MapsPanel() {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
   const { items, fileInput } = useJsonFiles()
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   return (
@@ -24,7 +25,7 @@ export function MapsPanel() {
             className="panel-dots"
             aria-label="New board"
             data-label="New"
-            onClick={() => dispatch({ type: 'tab-add' })}
+            onClick={() => dispatch({ type: 'tab-add', title: newBoardTitle(state.tabs) })}
           >
             <PlusGlyph />
           </button>

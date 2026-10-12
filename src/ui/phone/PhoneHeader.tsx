@@ -25,7 +25,7 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
   onToggleMode: () => void
   onOpen: (overlay: PhoneOverlay) => void
 }) {
-  const { state, dispatch } = useStore()
+  const { state } = useStore()
   const tab = activeTab(state)
   const { board } = tab.game
   const { exportJson } = useJsonFiles()
@@ -51,7 +51,7 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
     observer.observe(brand)
     return () => observer.disconnect()
   }, [])
-  const { history, randomize, clear, confirm } = useBoardMenu(tab, dispatch)
+  const { history, randomize, clear, confirm } = useBoardMenu()
   const items = [randomize, { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson }, clear]
   return (
     <>

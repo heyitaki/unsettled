@@ -113,10 +113,9 @@ export function ToolGroups() {
  * with `or randomize` beside that label.
  */
 export function ToolPalette() {
-  const { state, dispatch } = useStore()
-  const tab = activeTab(state)
+  const { dispatch } = useStore()
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
-  const { history, randomize, clear, confirm } = useBoardMenu(tab, dispatch)
+  const { history, randomize, clear, confirm } = useBoardMenu()
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -140,7 +139,7 @@ export function ToolPalette() {
           dispatch({ type: 'tool', tool: { kind: event.currentTarget.open ? 'piece' : 'none' } })
         }}
       >
-        <summary>
+        <summary aria-label="Edit manually">
           <span className="tools-manual-label">Edit manually<ChevronGlyph className="menu-chevron" /></span>
           or
           <button

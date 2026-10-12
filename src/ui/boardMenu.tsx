@@ -1,22 +1,27 @@
-import { useRef, useState, type Dispatch, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { clearBoard, isBlank, randomizeBoard } from '../model/board'
 import { newGame } from '../model/game'
+import { newBoardTitle } from './boardFiles'
 import { ConfirmDialog } from './ConfirmDialog'
 import type { ContextMenuItem } from './ContextMenu'
 import { ClearBoardGlyph, DiceGlyph, RedoGlyph, UndoGlyph } from './glyphs'
 import type { Board } from '../model/types'
-import type { StoreAction, TabState } from './store'
+import { activeTab, useStore } from './store'
 
-export function useBoardMenu(tab: TabState, dispatch: Dispatch<StoreAction>): {
+export function useBoardMenu(): {
   history: ContextMenuItem[]
   randomize: ContextMenuItem
   clear: ContextMenuItem
   /** The randomize question, to render while it is open. */
   confirm: ReactNode
 } {
-  const [asking, setAsking] = useState(false)
+  const { state, dispatch } = useStore()
+  const tab = activeTab(state)
+  // The board the question is about. Another window can delete it while the
+  // question is up, and the board that takes its place was never asked about.
+  const [asking, setAsking] = useState<string | null>(null)
   const { board } = tab.game
-  const close = () => setAsking(false)
+  const close = () => setAsking(null)
   // The last map dealt here. While a board is still that very map, dealing again loses nothing.
   const dealt = useRef<Board | null>(null)
   const deal = () => (dealt.current = randomizeBoard(board))
@@ -31,7 +36,7 @@ export function useBoardMenu(tab: TabState, dispatch: Dispatch<StoreAction>): {
       // Like the layout switch: a blank board has nothing to lose, so only a filled one asks.
       onClick: () => {
         if (isBlank(board) || board === dealt.current) dispatch({ type: 'commit', board: deal() })
-        else setAsking(true)
+        else setAsking(tab.id)
       },
     },
     clear: {
@@ -40,7 +45,7 @@ export function useBoardMenu(tab: TabState, dispatch: Dispatch<StoreAction>): {
       danger: true,
       onClick: () => dispatch({ type: 'commit', board: clearBoard(board) }),
     },
-    confirm: asking && (
+    confirm: asking === tab.id && (
       <ConfirmDialog
         title="Randomize this board?"
         message="Replace swaps this board's tiles, tokens, ports and pieces for a random map. New board keeps this one and deals the random map on a new board. Your players are kept either way."
@@ -57,7 +62,7 @@ export function useBoardMenu(tab: TabState, dispatch: Dispatch<StoreAction>): {
             label: 'New board',
             variant: 'primary',
             onClick: () => {
-              dispatch({ type: 'tab-add', game: newGame(deal()) })
+              dispatch({ type: 'tab-add', game: newGame(deal()), title: newBoardTitle(state.tabs) })
               close()
             },
           },
