@@ -28,15 +28,18 @@ async function fastest(board: Board): Promise<number> {
   return best
 }
 
-// Each bound is under twice the fastest of three measured when it was set: 31 ms and 105 ms.
-it('ranks the worst-case six-player opening in under 60 ms', async () => {
+// The fastest of three measured 31 ms and 105 ms on the development machine when these were set. CI's runner took
+// three times as long as that machine on the ranking this replaced, so the bounds leave it room: a wall-clock bound
+// tight enough to catch a small regression there would fail without one. The speed suite's `analyze/` rows are the
+// fine measure.
+it('ranks the worst-case six-player opening in under 300 ms', async () => {
   const time = await fastest(worstCase)
   console.info(`analyze worst-case opening: fastest ${time.toFixed(0)} ms of 3`)
-  expect(time).toBeLessThan(60)
+  expect(time).toBeLessThan(300)
 }, 45_000)
 
-it('ranks it with three rival rankings ahead in under 200 ms', async () => {
+it('ranks it with three rival rankings ahead in under 1200 ms', async () => {
   const time = await fastest({ ...worstCase, mePlayerId: 'p4' })
   console.info(`analyze worst-case as p4: fastest ${time.toFixed(0)} ms of 3`)
-  expect(time).toBeLessThan(200)
+  expect(time).toBeLessThan(1200)
 }, 90_000)
