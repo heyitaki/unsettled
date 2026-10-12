@@ -934,8 +934,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {robberLayer}
           {robberTokenLayer}
           {portLayer}
-          {roadLayer}
-          {buildingLayer}
+          {/* Pieces step back during the draft so the Best picks circles lead. */}
+          <g opacity={draftComplete ? undefined : 0.7}>
+            {roadLayer}
+            {buildingLayer}
+          </g>
           {markLayer}
           <g className="hit-layers">
             {(hexActive || eraseActive) && board.hexes.map((hex) => (
