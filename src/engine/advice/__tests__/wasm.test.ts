@@ -1,4 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { finishedDraft } from '../../../ui/__tests__/finishedDraft'
+import type { AdviceResponse } from '../protocol'
 import { createAdviser } from '../wasm'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -39,3 +42,18 @@ it('frees the caller-owned request if the engine throws', async () => {
   expect(() => advise('{}')).toThrow('Engine stopped')
   expect(module.dealloc.mock.calls).toEqual([[8, 2]])
 })
+
+it('counts and repeats a finished four-seat draft through the committed wasm', async () => {
+  const game = finishedDraft()
+  const { board } = game
+  const advise = await createAdviser(readFileSync(new URL('../engine.wasm', import.meta.url)))
+  const request = JSON.stringify({ game, observer: board.players[0].id,
+    decision: { kind: 'recap', games: 10, batch: 0 } })
+  const first = advise(request)
+  const response: AdviceResponse = JSON.parse(first)
+  expect(response).toMatchObject({ kind: 'recap', games: 10 })
+  if (!('kind' in response) || response.kind !== 'recap') throw new Error(first)
+  expect(Object.keys(response.wins).sort()).toEqual(board.players.map(({ id }) => id).sort())
+  expect(Object.values(response.wins).reduce((sum, n) => sum + n, response.draws)).toBe(10)
+  expect(advise(request)).toBe(first)
+}, 30_000)

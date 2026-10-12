@@ -130,6 +130,10 @@ impl DevCards {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum Decision {
+    Recap {
+        games: u32,
+        batch: u64,
+    },
     Turn,
     PreRoll,
     Discard,
@@ -160,6 +164,9 @@ fn advise_value(source: &str) -> Result<Value, String> {
         return Err("unsupported game schemaVersion".into());
     }
     let wire = WireBoard::parse_value(game.board).map_err(|error| error.to_string())?;
+    if let Decision::Recap { games, batch } = request.decision {
+        return crate::recap::recap(wire, games, batch, POLICY);
+    }
     let claimed = wire
         .me_player_id
         .as_ref()
@@ -467,6 +474,7 @@ fn advise_value(source: &str) -> Result<Value, String> {
             )
         }
         Decision::Produce { .. } => Err("production was already handled".into()),
+        Decision::Recap { .. } => Err("recap was already handled".into()),
     }
 }
 

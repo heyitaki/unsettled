@@ -4,6 +4,7 @@ import type { AxialCoord, EdgeId, Resource, VertexId } from '../../model/types'
 export type Cards = Record<Resource, number>
 
 export type Decision =
+  | { kind: 'recap'; games: number; batch: number }
   | { kind: 'turn' }
   | { kind: 'preRoll' }
   | { kind: 'discard' }
@@ -57,6 +58,7 @@ export interface ScoredAdvice {
 }
 
 export type AdviceResponse =
+  | { kind: 'recap'; games: number; wins: Record<string, number>; draws: number }
   | { kind: 'turn'; actions: ScoredAdvice[]; derived: Derived }
   | { kind: 'preRoll'; play: PreRollPlay | null; reason: string; derived: Derived }
   | { kind: 'discard'; count: number; cards: Cards; reason: string; derived: Derived }
