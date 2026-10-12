@@ -7,7 +7,9 @@ import type { HighlightMark } from './store'
  * colour, so selecting a card shows the pair I would end the round holding and the direction I
  * would expand in. The road is absent whenever the recommendation has none. The follow-up sits
  * back, faded: it is where the second settlement would go, not what the card places (spec S5);
- * the road rides the first pick and is never faded.
+ * the road rides the first pick and is never faded. The numbers are the player's own settlement
+ * count, so a row ranking their second settlement stamps `2`, matching the number that
+ * settlement wears once placed.
  *
  * Every mark carries a label, but only the vertex ones show it: `BoardCanvas` draws the road as a
  * bare stroke, because a stub short enough to clear both endpoints has no room for a glyph.
@@ -15,9 +17,10 @@ import type { HighlightMark } from './store'
 export const recommendationMarks = (
   recommendation: Recommendation,
   color: string,
+  pickNumber = 1,
 ): HighlightMark[] => [
-  { ref: recommendation.firstPick, color, label: '1' },
-  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: '2', faded: true })),
+  { ref: recommendation.firstPick, color, label: String(pickNumber) },
+  ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: String(pickNumber + 1), faded: true })),
   ...(recommendation.firstRoad === null
     ? []
     : [{ ref: recommendation.firstRoad, color, label: 'R', kind: 'road' as const }]),

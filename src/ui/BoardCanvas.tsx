@@ -772,20 +772,23 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
             {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
           </g>
         </g>
-        {ordinal && (
-          <g
+        {/* The pick number sits where a Best picks mark stamps its own, which wins when both land here. */}
+        {ordinal && !highlight.some((mark) => mark.ref === building.vertexId && mark.label) && (
+          <text
             className="settlement-ordinal"
-            transform={`translate(${point.x + 0.33 * SIZE} ${point.y - 0.1 * SIZE})`}
+            x={point.x}
+            y={point.y + TIER_BASE_Y.settlement * scale - 4.2}
+            textAnchor="middle"
+            fill={readableInk(color)}
             pointerEvents="none"
             aria-hidden="true"
           >
-            <circle r={0.135 * SIZE} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth="1.4" />
-            <text y="3" textAnchor="middle" fill={INK_COLOR}>{ordinal === 1 ? 'i' : 'ii'}</text>
-          </g>
+            {ordinal}
+          </text>
         )}
       </g>
     )
-  }), [board.buildings, markedBuildings, ordinals, playerColor])
+  }), [board.buildings, highlight, markedBuildings, ordinals, playerColor])
   const markLayer = useMemo(() => highlight
     .filter((mark) => (mark.kind === 'hex' ? grid.landKeys : mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
     .map((mark) => {

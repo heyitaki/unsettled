@@ -40,4 +40,10 @@ describe('recommendationMarks', () => {
       { ref: SECOND, color: '#3063ba', label: '2', faded: true },
     ])
   })
+
+  it("numbers the mark as the player's second settlement when that is the pick ranked", () => {
+    expect(recommendationMarks({ ...recommendation(null), plannedSecond: [] }, '#3063ba', 2)).toEqual([
+      { ref: FIRST, color: '#3063ba', label: '2' },
+    ])
+  })
 })

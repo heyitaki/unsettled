@@ -210,6 +210,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const playerId = viewedPlayerId(board, state.viewedPick)
   const viewedPlayer = board.players.find((player) => player.id === playerId)
   const viewedColor = viewedPlayer?.color ?? '#8a7a63'
+  // Which of the viewed player's two settlements the rows rank, stamped on their marks.
+  const pickNumber = analysis.draft.myPickIndices.indexOf(state.viewedPick ?? analysis.draft.myRemainingPickIndices[0]) + 1 || 1
 
   // Reset the board marks whenever the board or viewed pick changes: the
   // previous window's circles are stale. The shell's resting marks show through
@@ -271,7 +273,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     const next = selectedPick === recommendation.firstPick ? null : recommendation.firstPick
     setSelectedPick(next)
     setSelectedLikelyGone(false)
-    mark(next === null ? null : recommendationMarks(recommendation, viewedColor))
+    mark(next === null ? null : recommendationMarks(recommendation, viewedColor, pickNumber))
     // A mark moved on a board scrolled out of view is a change nobody sees
     // (spec B2), and only the phone's one document can scroll past the board.
     if (onBuild && next !== null) revealBoardIfScrolledPast()
@@ -374,7 +376,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 className="analysis-row-select"
                 title={vertexDescription(board, recommendation.firstPick)}
                 onClick={() => selectRecommendation(recommendation)}
-                onMouseEnter={() => preview(recommendationMarks(recommendation, viewedColor))}
+                onMouseEnter={() => preview(recommendationMarks(recommendation, viewedColor, pickNumber))}
               >
                 <span
                   className="analysis-rank"

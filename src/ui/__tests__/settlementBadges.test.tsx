@@ -40,7 +40,7 @@ describe('settlement order badges', () => {
 
   it('shows the imported first settlement with a decorative badge', () => {
     draw(imported as Board)
-    expect(badges().map((badge) => badge.textContent)).toEqual(['i'])
+    expect(badges().map((badge) => badge.textContent)).toEqual(['1'])
     expect(badges()[0].getAttribute('aria-hidden')).toBe('true')
     expect(badges()[0].getAttribute('pointer-events')).toBe('none')
   })
@@ -57,9 +57,9 @@ describe('settlement order badges', () => {
     board = placeBuilding(board, a, board.players[0].id, 'settlement')
     board = placeBuilding(board, b, board.players[0].id, 'settlement')
     draw(board)
-    expect(badges().map((badge) => badge.textContent)).toEqual(['i', 'ii'])
+    expect(badges().map((badge) => badge.textContent)).toEqual(['1', '2'])
     draw(removeBuilding(board, a))
-    expect(badges().map((badge) => badge.textContent)).toEqual(['i'])
+    expect(badges().map((badge) => badge.textContent)).toEqual(['1'])
   })
 
   it('hides badges after the last draft pick and when a city exists', () => {
