@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createEngine, reviveNonFinite, type Engine } from '../wasm'
 
-const { cases }: { cases: { name: string; request: object; response: { status: string } }[] } = JSON.parse(
+const { cases }: { cases: { name: string; request: object; response: { status: string; recommendations: object[]; takenBeforeFirstPick: object[] } }[] } = JSON.parse(
   readFileSync(new URL('../../../../simulator/fixtures/analysis-parity.json', import.meta.url), 'utf8'),
   reviveNonFinite,
 )
@@ -62,5 +62,18 @@ describe('analysis WebAssembly parity', () => {
   it('revives the three non-finite strings in number fields alone', () => {
     const text = '{"score":"NaN","survival":"Infinity","expansion":"-Infinity","playerId":"NaN","rankScore":"v:1"}'
     expect(JSON.parse(text, reviveNonFinite)).toEqual({ score: NaN, survival: Infinity, expansion: -Infinity, playerId: 'NaN', rankScore: 'v:1' })
+  })
+
+  it('revives every number field a ranked response carries', () => {
+    const numberFields = new Set<string>()
+    const collect = (value: object) => {
+      for (const [key, entry] of Object.entries(value)) {
+        if (typeof entry === 'number') numberFields.add(key)
+        else if (entry !== null && typeof entry === 'object') collect(entry)
+      }
+    }
+    for (const { response } of cases) collect([response.recommendations, response.takenBeforeFirstPick])
+    expect(numberFields.size).toBeGreaterThan(0)
+    for (const field of numberFields) expect(reviveNonFinite(field, 'NaN'), field).toBeNaN()
   })
 })
