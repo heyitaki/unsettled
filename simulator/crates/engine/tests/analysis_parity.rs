@@ -48,49 +48,21 @@ fn assert_close(actual: &Value, expected: &Value, path: &str) {
 }
 
 #[test]
-fn draft_and_warnings_match_the_fixture() {
+fn every_corpus_case_matches_the_fixture() {
     let fixture = read_fixture();
-    for case in fixture["cases"].as_array().unwrap() {
-        let response = run(&case["request"]);
-        assert_eq!(response["draft"], case["response"]["draft"], "{}", case["name"]);
-        assert_eq!(response["warnings"], case["response"]["warnings"], "{}", case["name"]);
-    }
-}
-
-#[test]
-fn unranked_statuses_match_the_fixture() {
-    let fixture = read_fixture();
-    let mut seen = BTreeSet::new();
+    let mut statuses = BTreeSet::new();
+    let mut with_picks_ahead = 0;
     for case in fixture["cases"].as_array().unwrap() {
         let expected = &case["response"];
-        let status = expected["status"].as_str().unwrap();
-        if status == "ready" {
-            continue;
-        }
-        seen.insert(status);
+        statuses.insert(expected["status"].as_str().unwrap());
+        // A pick ahead of the analysed one is what brings a nested ranking into the response.
+        with_picks_ahead +=
+            usize::from(!expected["takenBeforeFirstPick"].as_array().unwrap().is_empty());
         assert_close(&run(&case["request"]), expected, case["name"].as_str().unwrap());
     }
     // The corpus holds no `no-availability` case: see the plan's note on the class.
-    assert_eq!(seen, BTreeSet::from(["complete", "me-done", "no-me", "no-production"]));
-}
-
-#[test]
-fn ready_cases_with_no_pick_ahead_match_the_fixture() {
-    let fixture = read_fixture();
-    let mut checked = 0;
-    for case in fixture["cases"].as_array().unwrap() {
-        let expected = &case["response"];
-        // Nobody picks between the board and the analysed pick, so the pre-window is empty and no
-        // nested ranking enters the response.
-        if expected["status"] != "ready"
-            || !expected["takenBeforeFirstPick"].as_array().unwrap().is_empty()
-        {
-            continue;
-        }
-        checked += 1;
-        assert_close(&run(&case["request"]), expected, case["name"].as_str().unwrap());
-    }
-    assert!(checked >= 15, "only {checked} corpus cases rank with nobody ahead");
+    assert_eq!(statuses, BTreeSet::from(["complete", "me-done", "no-me", "no-production", "ready"]));
+    assert!(with_picks_ahead >= 10, "only {with_picks_ahead} corpus cases have a pick ahead");
 }
 
 #[test]

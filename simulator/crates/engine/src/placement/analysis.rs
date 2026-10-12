@@ -279,6 +279,7 @@ pub fn weights_for_seats(seats: usize) -> &'static EngineWeights {
 /// warns about (a blank tile, a resource hex with no number, no robber and no desert, adjacent
 /// buildings, one player), so the analysis converts on its own and accepts every board
 /// `WireBoard::validate` does, which is every board the app's `validateBoard` accepts.
+#[derive(Clone)]
 struct Board {
     topology: &'static Topology,
     player_ids: Vec<String>,
@@ -556,136 +557,208 @@ fn analyze_request(
         serde_json::from_str(request_json).map_err(|error| error.to_string())?;
     let wire = WireBoard::parse_value(request.board).map_err(|error| error.to_string())?;
     let board = Board::from_wire(&wire)?;
-    let weights = request
-        .options
-        .weights
-        .unwrap_or_else(|| weights_for_seats(board.player_ids.len()).clone());
+    let options = request.options;
+    let weights =
+        options.weights.unwrap_or_else(|| weights_for_seats(board.player_ids.len()).clone());
     let scorer = board.scorer(weights);
+    let ranking = Ranking {
+        context: window::Context::new(&board, &scorer),
+        seed: options.seed.unwrap_or(7),
+        rollouts: options.rollouts,
+    };
+    let max_results = options.max_results.unwrap_or(scorer.weights().max_results);
+    Ok(ranking.analyze(&board, request.target_pick, max_results, true))
+}
 
-    let draft = infer_draft_state(&board);
-    let pick_offset = request
-        .target_pick
-        .and_then(|target| {
-            draft.my_remaining_pick_indices.iter().position(|index| *index as f64 == target)
-        })
-        .unwrap_or(0);
-    let legal = board.legal_vertices();
-    let complete = draft_is_complete(&board, &draft);
-    let me_done = draft.my_remaining_pick_indices.is_empty();
-    let holdings = board.holdings(&scorer);
-    let (vertex_owner, edge_owner) = board.owners();
-    // The player to rank for, when there is anything to rank.
-    let ranked_seat = board.me.filter(|_| !complete && !me_done && !legal.is_empty());
-    let has_positive_score = ranked_seat.is_some_and(|me| {
-        let receives_grant = draft
-            .my_remaining_pick_indices
-            .get(pick_offset)
-            .is_some_and(|index| receives_second_settlement_grant(&draft, *index));
-        legal.iter().any(|vertex| {
-            let (_, total) = scorer.marginal_parts(
-                &holdings[usize::from(me)],
-                &vertex_owner,
-                &edge_owner,
-                me,
-                *vertex,
-                receives_grant,
-            );
-            total > 0.0
-        })
-    });
-    let mut recommendations = Vec::new();
-    let mut taken_before_first_pick = Vec::new();
+/// What a ranking and the rankings nested in it share: the scorer and roads, which no scratch
+/// board changes, and the request's seed and rollout override.
+struct Ranking<'a> {
+    context: window::Context<'a>,
+    seed: u32,
+    rollouts: Option<f64>,
+}
 
-    if let Some(me) = ranked_seat.filter(|_| has_positive_score) {
-        let first_pick_index = draft.my_remaining_pick_indices[pick_offset];
-        let second_pick_index = draft.my_remaining_pick_indices.get(pick_offset + 1).copied();
-        let turn_index = draft.turn_index.unwrap_or(first_pick_index);
-        // A later pick of the player's is ranked with their own earlier pick in the window ahead.
-        let (pre_turns, pre_indices) = remaining_turns(
-            &board,
-            &draft,
-            turn_index,
-            first_pick_index,
-            (pick_offset == 0).then_some(me),
-        );
-        let mid_picks = second_pick_index.map_or(0, |second| {
-            remaining_turns(&board, &draft, first_pick_index + 1, second, Some(me)).0.len()
-        });
+impl Ranking<'_> {
+    /// Twin of `analyzeBoardInternal`. `board` is the request's, or a scratch board holding the
+    /// picks a pre-window has made so far, claimed by the seat on turn. `rank_modal_picks` is off
+    /// in a nested ranking, which bounds the recursion on a snake-inconsistent board.
+    fn analyze(
+        &self,
+        board: &Board,
+        target_pick: Option<f64>,
+        max_results: f64,
+        rank_modal_picks: bool,
+    ) -> DraftAnalysis {
+        let context = &self.context;
+        let scorer = context.scorer;
         let weights = scorer.weights();
-        // The TypeScript throws on a count that is not a whole number; this truncates it.
-        let rollouts = request
-            .options
-            .rollouts
-            .unwrap_or_else(|| rollout_count(legal.len(), pre_turns.len(), mid_picks, weights))
-            as usize;
-        let mut random = mulberry32(request.options.seed.unwrap_or(7));
-        let context = window::Context::new(&board, &scorer);
-        let base_blocked = board.blocked();
-        let mut pre_windows = Vec::with_capacity(rollouts);
-        for rollout in 0..rollouts {
-            // One row of uniforms per rollout, indexed by draft turn and shared by its pre-window
-            // and mid-windows. Row 0 is drawn to keep the stream in step and then discarded:
-            // rollout 0 is the modal line and reads 0 everywhere.
-            let mut uniforms: Vec<f64> =
-                draft.sequence.iter().map(|_| random.next_f64()).collect();
-            if rollout == 0 {
-                uniforms.fill(0.0);
-            }
-            let mut blocked = base_blocked.clone();
-            let mut owners = vertex_owner.clone();
-            let mut drawn = 0;
-            let result = context.simulate_window(
-                &pre_turns,
-                &holdings,
-                &mut blocked,
-                &mut owners,
-                &mut || {
-                    drawn += 1;
-                    uniforms[pre_indices[drawn - 1]]
-                },
-                None,
-            );
-            pre_windows.push(rank::PreWindow {
-                blocked,
-                vertex_owner: owners,
-                holdings: result.holdings,
-                taken: result.taken,
-                pickers: result.pickers,
-                uniforms,
-            });
-        }
-        (recommendations, taken_before_first_pick) = rank::rank_candidates(
-            &context,
-            &board,
-            &draft,
-            &legal,
-            &pre_windows,
-            request.options.max_results.unwrap_or(weights.max_results),
-            pick_offset,
-        );
-    }
+        let draft = infer_draft_state(board);
+        // A target that is not a remaining pick of the player's, or is their next, is offset 0.
+        let pick_offset = target_pick
+            .and_then(|target| {
+                draft.my_remaining_pick_indices.iter().position(|index| *index as f64 == target)
+            })
+            .unwrap_or(0);
+        let legal = board.legal_vertices();
+        let complete = draft_is_complete(board, &draft);
+        let me_done = draft.my_remaining_pick_indices.is_empty();
+        let holdings = board.holdings(scorer);
+        let (vertex_owner, _) = board.owners();
+        // The player to rank for, when there is anything to rank.
+        let ranked_seat = board.me.filter(|_| !complete && !me_done && !legal.is_empty());
+        let has_positive_score = ranked_seat.is_some_and(|me| {
+            let receives_grant = draft
+                .my_remaining_pick_indices
+                .get(pick_offset)
+                .is_some_and(|index| receives_second_settlement_grant(&draft, *index));
+            legal.iter().any(|vertex| {
+                let (_, total) = scorer.marginal_parts(
+                    &holdings[usize::from(me)],
+                    &vertex_owner,
+                    &context.edge_owner,
+                    me,
+                    *vertex,
+                    receives_grant,
+                );
+                total > 0.0
+            })
+        });
+        let mut recommendations = Vec::new();
+        let mut taken_before_first_pick = Vec::new();
 
-    let status = resolve_status(&StatusInput {
-        complete,
-        me_valid: board.me.is_some(),
-        me_done,
-        legal_count: legal.len(),
-        has_positive_score,
-        recommendation_count: recommendations.len(),
-    });
-    if status != AnalysisStatus::Ready {
-        recommendations.clear();
-        if status != AnalysisStatus::NoAvailability {
-            taken_before_first_pick.clear();
+        if let Some(me) = ranked_seat.filter(|_| has_positive_score) {
+            let first_pick_index = draft.my_remaining_pick_indices[pick_offset];
+            let second_pick_index = draft.my_remaining_pick_indices.get(pick_offset + 1).copied();
+            let turn_index = draft.turn_index.unwrap_or(first_pick_index);
+            // A later pick of the player's is ranked with their own earlier pick in the window
+            // ahead.
+            let (pre_turns, pre_indices) = remaining_turns(
+                board,
+                &draft,
+                turn_index,
+                first_pick_index,
+                (pick_offset == 0).then_some(me),
+            );
+            let mid_picks = second_pick_index.map_or(0, |second| {
+                remaining_turns(board, &draft, first_pick_index + 1, second, Some(me)).0.len()
+            });
+            // The TypeScript throws on a count that is not a whole number; this truncates it.
+            let rollouts = self
+                .rollouts
+                .unwrap_or_else(|| rollout_count(legal.len(), pre_turns.len(), mid_picks, weights))
+                as usize;
+            let mut random = mulberry32(self.seed);
+            let base_blocked = board.blocked();
+            let mut pre_windows: Vec<rank::PreWindow> = Vec::with_capacity(rollouts);
+            // Each picker's ranked list from the modal pre-window, as vertices beside their rank
+            // scores, by how many picks the window had made when that picker was on turn.
+            let mut modal_lists: Vec<Option<(Vec<Vertex>, Vec<f64>)>> = Vec::new();
+            for rollout in 0..rollouts {
+                // One row of uniforms per rollout, indexed by draft turn and shared by its
+                // pre-window and mid-windows. Row 0 is drawn to keep the stream in step and then
+                // discarded: rollout 0 is the modal line and reads 0 everywhere.
+                let mut uniforms: Vec<f64> =
+                    draft.sequence.iter().map(|_| random.next_f64()).collect();
+                if rollout == 0 {
+                    uniforms.fill(0.0);
+                }
+                let mut blocked = base_blocked.clone();
+                let mut owners = vertex_owner.clone();
+                let mut drawn = 0;
+                let modal = pre_windows.first();
+                // Rollout 0 takes each picker's top recommendation from a ranking of the board the
+                // earlier picks leave. Sampled pre-windows draw from those lists only while their
+                // earlier picks still match the modal line.
+                let mut pick_modal = |taken: &[Vertex], pickers: &[u8], seat: u8, uniform: f64| {
+                    let Some(modal) = modal else {
+                        let mut scratch = board.clone();
+                        scratch.me = Some(seat);
+                        for (vertex, picker) in taken.iter().zip(pickers) {
+                            scratch.buildings.push(InitialBuilding {
+                                vertex: *vertex,
+                                seat: *picker,
+                                tier: BuildingTier::Settlement,
+                            });
+                        }
+                        let nested =
+                            self.analyze(&scratch, None, js_max(1.0, weights.opponent_top_k), false);
+                        if nested.status != AnalysisStatus::Ready {
+                            return None;
+                        }
+                        let list = nested.recommendations.iter().map(|recommendation| {
+                            let vertex = board
+                                .topology
+                                .vertex_by_id(&recommendation.first_pick)
+                                .expect("a recommendation names a vertex of the layout");
+                            (vertex, recommendation.rank_score)
+                        });
+                        if modal_lists.len() <= taken.len() {
+                            modal_lists.resize(taken.len() + 1, None);
+                        }
+                        let (vertices, _) = modal_lists[taken.len()].insert(list.unzip());
+                        return vertices.first().copied();
+                    };
+                    let on_modal_line = taken.len() <= modal.taken.len()
+                        && taken == &modal.taken[..taken.len()]
+                        && pickers == &modal.pickers[..taken.len()];
+                    let (vertices, rank_scores) =
+                        modal_lists.get(taken.len())?.as_ref().filter(|_| on_modal_line)?;
+                    softmax_pick(rank_scores, uniform, weights.softmax_temperature)
+                        .map(|index| vertices[index])
+                };
+                let result = context.simulate_window(
+                    &pre_turns,
+                    &holdings,
+                    &mut blocked,
+                    &mut owners,
+                    &mut || {
+                        drawn += 1;
+                        uniforms[pre_indices[drawn - 1]]
+                    },
+                    if rank_modal_picks { Some(&mut pick_modal) } else { None },
+                );
+                pre_windows.push(rank::PreWindow {
+                    blocked,
+                    vertex_owner: owners,
+                    holdings: result.holdings,
+                    taken: result.taken,
+                    pickers: result.pickers,
+                    uniforms,
+                });
+            }
+            (recommendations, taken_before_first_pick) = rank::rank_candidates(
+                context,
+                board,
+                &draft,
+                &legal,
+                &pre_windows,
+                max_results,
+                pick_offset,
+            );
+        }
+
+        let status = resolve_status(&StatusInput {
+            complete,
+            me_valid: board.me.is_some(),
+            me_done,
+            legal_count: legal.len(),
+            has_positive_score,
+            recommendation_count: recommendations.len(),
+        });
+        if status != AnalysisStatus::Ready {
+            recommendations.clear();
+            if status != AnalysisStatus::NoAvailability {
+                taken_before_first_pick.clear();
+            }
+        }
+        DraftAnalysis {
+            status,
+            warnings: draft.warnings.clone(),
+            draft,
+            recommendations,
+            taken_before_first_pick,
         }
     }
-    Ok(DraftAnalysis {
-        status,
-        warnings: draft.warnings.clone(),
-        draft,
-        recommendations,
-        taken_before_first_pick,
-    })
 }
 
 #[cfg(test)]
