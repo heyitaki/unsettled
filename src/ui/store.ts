@@ -49,6 +49,7 @@ export type Tool =
   | { kind: 'port'; resource: Resource | null; rate: number }
   | { kind: 'robber' }
   | { kind: 'erase' }
+  // The tool rows are open and no other tool is selected: a board click places pieces.
   | { kind: 'piece' }
 
 /**

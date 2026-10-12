@@ -20,7 +20,6 @@ const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
 const TOKEN_VIEW_BOX = `${-NUMBER_TOKEN_EXTENT} ${-NUMBER_TOKEN_EXTENT} ${NUMBER_TOKEN_EXTENT * 2} ${NUMBER_TOKEN_EXTENT * 2}`
 
 const STRUCTURES: { key: StructureShape; label: string; tool: Tool; danger?: boolean }[] = [
-  { key: 'settlement', label: 'pieces', tool: { kind: 'piece' } },
   { key: 'robber', label: 'robber', tool: { kind: 'robber' } },
   { key: 'port', label: 'port', tool: { kind: 'port', resource: null, rate: 3 } },
   { key: 'erase', label: 'erase', tool: { kind: 'erase' }, danger: true },
@@ -38,7 +37,7 @@ export function ToolGroups() {
   const tab = activeTab(state)
   const selected = keyOf(state.tool)
   const selectTool = (tool: Tool) =>
-    dispatch({ type: 'tool', tool: selected === keyOf(tool) ? { kind: 'none' } : tool })
+    dispatch({ type: 'tool', tool: selected === keyOf(tool) ? { kind: 'piece' } : tool })
   // Preview the colour the active player will place with; with nobody selected
   // (their dot toggled off) the palette falls back to the neutral glyph beige.
   const pieceColor = tab.game.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? GLYPH_MUTED
@@ -102,6 +101,7 @@ export function ToolGroups() {
             )
           })}
         </div>
+        <p className="tool-hint">With no tool selected, tap a corner to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.</p>
       </div>
     </>
   )
@@ -136,7 +136,7 @@ export function ToolPalette() {
         className="tools-manual"
         // A tool nobody can see must not paint, so folding the rows drops it.
         onToggle={(event) => {
-          if (!event.currentTarget.open) dispatch({ type: 'tool', tool: { kind: 'none' } })
+          dispatch({ type: 'tool', tool: { kind: event.currentTarget.open ? 'piece' : 'none' } })
         }}
       >
         <summary>Edit manually<ChevronGlyph className="menu-chevron" /></summary>

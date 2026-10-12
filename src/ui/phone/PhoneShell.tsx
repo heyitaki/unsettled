@@ -66,7 +66,10 @@ export function PhoneShell() {
     setSession(null)
     dispatch({ type: 'tool', tool: { kind: 'none' } })
   }, [session, building, dispatch])
-  const enter = () => setSession(openBuildSession(tab))
+  const enter = () => {
+    setSession(openBuildSession(tab))
+    dispatch({ type: 'tool', tool: { kind: 'piece' } })
+  }
   const done = () => {
     setSession(null)
     dispatch({ type: 'tool', tool: { kind: 'none' } })

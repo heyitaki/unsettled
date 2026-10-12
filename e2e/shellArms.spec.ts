@@ -381,6 +381,78 @@ test.describe('desktop', () => {
     await expect(tools.locator('button.selected')).toHaveCount(0)
   })
 
+  test('corners place pieces only while Edit manually is open', async ({ page }) => {
+    await page.goto('')
+    const tools = page.locator('.tools-panel')
+    const toggle = tools.getByText('Edit manually')
+    const svg = page.locator('.board-canvas')
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
+    const corners = hexVertexIds({ q: 0, r: 0 })
+    const clickCorner = async (vertex: typeof corners[number]) => {
+      const points = parseVertexId(vertex).map((coord) => axialToPixel(coord, 58))
+      const corner = { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+      const point = await svg.evaluate((element, corner) => {
+        const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+        return { x: point.x, y: point.y }
+      }, corner)
+      await page.mouse.click(point.x, point.y)
+    }
+    await expect(tools.locator('.structure-grid')).toBeHidden()
+    await clickCorner(corners[0])
+    await expect(buildings).toHaveCount(0)
+
+    await toggle.click()
+    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase'])
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('.tool-hint')).toHaveText('With no tool selected, tap a corner to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.')
+    await expect(svg.locator('.placement-slot').first()).toBeVisible()
+    await clickCorner(corners[0])
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings.locator('g[transform*="scale(0.8)"]')).toHaveCount(1)
+
+    await toggle.click()
+    await expect(svg.locator('.placement-slot')).toHaveCount(0)
+    await clickCorner(corners[3])
+    await expect(buildings).toHaveCount(1)
+  })
+
+  test('deselecting robber returns to placing pieces', async ({ page }) => {
+    await page.goto('')
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    const robber = tools.getByRole('button', { name: 'robber', exact: true })
+    await robber.click()
+    await expect(robber).toHaveClass('selected')
+    await robber.click()
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+    const svg = page.locator('.board-canvas')
+    await expect(svg.locator('.placement-slot').first()).toBeVisible()
+    await svg.locator('.placement-slot').first().click({ force: true })
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings.locator('g[transform*="scale(0.8)"]')).toHaveCount(1)
+  })
+
+  test('a port badge opens its editor with no tool selected', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+    const svg = page.locator('.board-canvas')
+    const badge = svg.locator('.port-text').first()
+    await badge.hover()
+    await expect(svg.locator('.placement-hover')).toHaveAttribute('stroke', '#333')
+    await badge.click()
+    const popover = page.locator('.port-popover')
+    await expect(popover).toBeVisible()
+    await expect(popover.locator('h3')).toHaveText('Edit port')
+    await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
+    await popover.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(popover).toHaveCount(0)
+  })
+
   test('pieces keeps a repeat click on its corner when nearer road slots appear', async ({ page }) => {
     await page.goto('')
     const vertex = hexVertexIds({ q: 0, r: 0 })[0]
@@ -393,7 +465,6 @@ test.describe('desktop', () => {
     await seedBoard(page, board)
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const svg = page.locator('.board-canvas')
     const other = edgeEndpointVertexIds(vertexIncidentEdgeIds(vertex)[0]).find((ref) => ref !== vertex)!
     const [corner, end] = [vertex, other].map((ref) => {
@@ -436,7 +507,6 @@ test.describe('desktop', () => {
     await seedUnclaimedRoster(page)
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const svg = page.locator('.board-canvas')
     const slot = svg.locator('.placement-slot').first()
     await expect(slot).toBeVisible()
@@ -458,7 +528,6 @@ test.describe('desktop', () => {
     await page.goto('')
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const svg = page.locator('.board-canvas')
     const slots = svg.locator('.placement-slot')
     await expect(slots.first()).toBeVisible()

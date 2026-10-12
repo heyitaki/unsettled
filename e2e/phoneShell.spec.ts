@@ -258,6 +258,21 @@ test.describe('reveal on select', () => {
 })
 
 test.describe('build mode', () => {
+  test('entering build mode arms piece placing without a tool button', async ({ page }) => {
+    await open(page)
+    await page.getByRole('button', { name: 'Edit the board' }).click()
+    const tools = page.locator('.phone-build')
+    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase'])
+    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('.tool-hint')).toBeVisible()
+    const svg = page.locator('.board-canvas')
+    await expect(svg.locator('.placement-slot').first()).toBeVisible()
+    await svg.locator('.placement-slot').first().tap({ force: true })
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings.locator('g[transform*="scale(0.8)"]')).toHaveCount(1)
+  })
+
   test('the pencil swaps in the tools without moving the board, a layout switch leaves as Done, and Cancel restores the board', async ({ page }) => {
     await open(page)
     const boardTop = (await page.locator('.board-canvas').boundingBox())!.y
@@ -354,12 +369,13 @@ test.describe('build mode', () => {
     const players = tools.locator('.player-grid button')
     await expect(players).toHaveText(['Red', 'Blue', 'Orange', 'White'])
     await expect(tools.locator('.player-grid button[aria-pressed="true"]')).toHaveText('Red')
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const slots = page.locator('.placement-slot')
     await expect(slots.first()).toHaveAttribute('stroke', '#c23f38')
     await players.filter({ hasText: 'Blue' }).click()
     await expect(tools.locator('.player-grid button[aria-pressed="true"]')).toHaveText('Blue')
     await expect(slots.first()).toHaveAttribute('stroke', '#3063ba')
+    // Reaching the Player row scrolled the board's top under the sticky header.
+    await page.evaluate(() => window.scrollTo(0, 0))
     // The dots take no pointer events: the click lands on the board at the dot's centre.
     await slots.first().click({ force: true })
     await expect(page.locator('.board-canvas g[fill="#3063ba"]')).toHaveCount(1)
@@ -368,6 +384,23 @@ test.describe('build mode', () => {
     await page.waitForTimeout(400)
     await snap(page, 'build-player')
   })
+})
+
+test('double tapping the board outside build mode still zooms', async ({ page }) => {
+  await open(page)
+  await expect(page.getByRole('button', { name: 'Edit the board' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.phone-build')).toHaveCount(0)
+  const svg = page.locator('.board-canvas')
+  const before = (await svg.getAttribute('viewBox'))!
+  const box = (await svg.boundingBox())!
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  await page.touchscreen.tap(x, y)
+  await page.touchscreen.tap(x, y)
+  await expect(svg).not.toHaveAttribute('viewBox', before)
+  await expect(page.locator('.board-zoom')).toContainText('2.5×')
+  await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
+  await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
 })
 
 test('pieces maps a coastal tap through the padded svg content box', async ({ page }) => {
@@ -388,7 +421,6 @@ test('pieces maps a coastal tap through the padded svg content box', async ({ pa
   }
   await seedBoard(page, board)
   await page.getByRole('button', { name: 'Edit the board' }).click()
-  await page.locator('.phone-build').getByRole('button', { name: 'pieces', exact: true }).click()
   const svg = page.locator('.board-canvas')
   await svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`).tap({ force: true })
   const building = svg.locator(`g[fill="#c23f38"][transform^="translate(${corner.x} ${corner.y})"]`)

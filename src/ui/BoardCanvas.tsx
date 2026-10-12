@@ -311,8 +311,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       for (const building of board.buildings) refs.add(building.vertexId)
       for (const road of board.roads) refs.add(road.edgeId)
     }
-    return targetPositions.filter((target) => refs.has(target.ref))
-  }, [targetPositions, placeableVertices, placeableEdges, board.buildings, board.roads, pick, state.tool])
+    return [
+      ...targetPositions.filter((target) => refs.has(target.ref)),
+      ...(!pick && state.tool.kind === 'piece' ? ports.map(({ port, point }) => ({ ref: `port:${port.edgeId}`, ...point })) : []),
+    ]
+  }, [targetPositions, placeableVertices, placeableEdges, board.buildings, board.roads, ports, pick, state.tool])
   const targetAt = useCallback((point: Point) => {
     const rect = svgRef.current && contentBox(svgRef.current)
     // An unmeasured board has no point to resolve; clientToUnits would answer with the view centre.
@@ -392,7 +395,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
   const placementActive = buildActive || roadActive
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
-  const hoverPlayer = hover
+  const hoverPlayer = hover && !hover.ref.startsWith('port:')
     ? board.buildings.find((building) => building.vertexId === hover.ref)?.playerId
       ?? board.roads.find((road) => road.edgeId === hover.ref)?.playerId
       ?? placementPlayer
@@ -409,7 +412,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }, [targetAt, coarse, placementActive, state.activeTabId, board.layout, transform])
   const actOnTarget = (target: { ref: string; x: number; y: number }) => {
     lastClick.current = target
-    if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
+    if (target.ref.startsWith('port:')) setEditingPort(target.ref.slice(5) as EdgeId)
+    else if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
     else onEdge(target.ref as EdgeId)
   }
   // The dots take no pointer events (editor.css), so a pointer always goes through the svg's
