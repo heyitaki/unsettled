@@ -9,6 +9,7 @@ export const TILE_COLORS: Record<TileKind, string> = {
   desert: '#e1c88a',
 }
 
+export const BLANK_TILE_COLOR = '#d8d7cc'
 export const SEA_COLOR = '#3c7fbf'
 // The page's Sand (--page in editor.css).
 export const TOKEN_COLOR = '#efe8d9'

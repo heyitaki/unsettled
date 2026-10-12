@@ -170,8 +170,8 @@ test.describe('desktop', () => {
     await expect(slots.nth(7)).toHaveClass(/\bviewing\b/)
     await expect(panel.locator('.draft-ribbon-slot.viewing')).toHaveCount(1)
     await expect(context).toHaveText('Red · Picking 8th', { useInnerText: true })
-    await expect(gone).toContainText('7. Blue:', { timeout: 60_000 })
-    await expect(gone).toContainText('1. Red:')
+    await expect(gone.locator('.analysis-gone-entry > span:first-child').last()).toHaveText('7. Blue', { timeout: 60_000 })
+    await expect(gone.locator('.analysis-gone-entry > span:first-child').first()).toHaveText('1. Red')
     await expect(panel.locator('.analysis-row').first()).toBeVisible()
 
     // A rival's circle shows that rival's pick and leaves YOU on Red.
@@ -183,7 +183,7 @@ test.describe('desktop', () => {
     await expect(context).toHaveText('Blue · Picking 2nd and 7th', { useInnerText: true })
     // The last view's cards stay in place while this one is ranked, so wait for the bar to go.
     await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
-    await expect(gone).toContainText('1. Red:', { timeout: 60_000 })
+    await expect(gone).toContainText('1. Red', { timeout: 60_000 })
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
     await expect(rows.locator('.you-chip')).toHaveCount(1)
     await expect(rows.nth(0).locator('.you-chip')).toBeVisible()
@@ -194,8 +194,8 @@ test.describe('desktop', () => {
     await slots.nth(6).click()
     await expect(slots.nth(6)).toHaveClass(/\bviewing\b/)
     await expect(context).toHaveText('Blue · Picking 7th', { useInnerText: true })
-    await expect(gone).toContainText('6. Orange:', { timeout: 60_000 })
-    await expect(gone).toContainText('2. Blue:')
+    await expect(gone).toContainText('6. Orange', { timeout: 60_000 })
+    await expect(gone).toContainText('2. Blue')
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
 
     // The name menu switches the view the same way.
@@ -550,7 +550,7 @@ test.describe('desktop', () => {
     await snap(page, 'desktop-placed')
   })
 
-  test('the cards are the phone cards: claimed rank circle, plain survival, flat chips', async ({ page }) => {
+  test('the ledger rows show a claimed rank circle, plain survival and plain text factors', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
     await randomize(page)
@@ -565,12 +565,10 @@ test.describe('desktop', () => {
     await expect(rank).toHaveCSS('background-color', mine)
     await expect(rank).not.toHaveCSS('border-top-width', '0px')
 
-    // The list is collapsed: a row is its pick line until it is selected, and
-    // the factors open with it as flat tinted chips, not the bordered pills.
     await expect(panel.locator('.analysis-factors')).toHaveCount(0)
     await panel.locator('.analysis-row-select').first().click()
     await expect(panel.locator('.analysis-factors')).toHaveCount(1)
-    await expect(panel.locator('.analysis-factors span').first()).toHaveCSS('border-top-width', '0px')
+    await expect(panel.locator('.analysis-factors > span').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
     // Survival only renders on a spot the rollouts expect to be contested, and a
     // random board holds none more often than not, so the rule is read off a

@@ -34,7 +34,7 @@ import {
   upsertPort,
 } from '../model/board'
 import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
-import { INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { BLANK_TILE_COLOR, INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
 import { MenuSelect } from './MenuSelect'
@@ -607,7 +607,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     <polygon
       key={axialKey(hex.coord)}
       points={hexPoints(hex.coord)}
-      fill={hex.tile ? TILE_COLORS[hex.tile] : '#d8d7cc'}
+      fill={hex.tile ? TILE_COLORS[hex.tile] : BLANK_TILE_COLOR}
       stroke="#f8f1dc"
       strokeWidth="4"
       className={highlightSet.has(axialKey(hex.coord)) ? 'highlighted' : ''}

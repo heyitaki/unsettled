@@ -1,17 +1,17 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Recommendation } from '../engine/analyze'
 import { draftIsComplete } from '../engine/draft'
-import { placeBuilding, setMe } from '../model/board'
-import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'
-import type { Board, Resource, VertexId } from '../model/types'
+import { isRedToken, placeBuilding, setMe } from '../model/board'
+import { axialKey, axialToPixel, edgeEndpointVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
+import type { AxialCoord, Board, Resource, TileKind, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { useAnalysis } from './useAnalysis'
 import { useDraftSteps } from './useDraftSteps'
-import { readableInk } from './colors'
+import { BLANK_TILE_COLOR, INK_COLOR, readableInk, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { DraftRibbon } from './DraftRibbon'
 import { viewedPlayerId } from './draftSlots'
 import { BestMovesPanel } from './BestMovesPanel'
-import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { ArrowLeftGlyph, ArrowRightGlyph, DesertGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
@@ -28,64 +28,94 @@ const RESOURCE_LABELS: Record<Resource, string> = {
 
 /** What a vertex touches: its hexes, then any port on an edge it ends. */
 type VertexPart =
-  | { kind: 'hex'; resource: Resource; number: number | null }
-  | { kind: 'word'; word: 'Desert' | 'Unassigned' }
-  | { kind: 'port'; resource: Resource | null; rate: number }
+  | { kind: 'hex'; coord: AxialCoord; tile: TileKind | null; number: number | null }
+  | { kind: 'port'; coord: AxialCoord; tile: Resource | null; rate: number }
 
 function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
   const touching = new Set(parseVertexId(vertexId).map(axialKey))
+  const land = new Set(board.hexes.map((hex) => axialKey(hex.coord)))
   const hexes = board.hexes
     .filter((hex) => touching.has(axialKey(hex.coord)))
-    .map((hex): VertexPart => {
-      if (hex.tile === 'desert') return { kind: 'word', word: 'Desert' }
-      if (hex.tile === null) return { kind: 'word', word: 'Unassigned' }
-      return { kind: 'hex', resource: hex.tile, number: hex.numberToken }
-    })
+    .map((hex): VertexPart => ({ kind: 'hex', coord: hex.coord, tile: hex.tile, number: hex.numberToken }))
   const ports = board.ports
     .filter((port) => edgeEndpointVertexIds(port.edgeId).includes(vertexId))
-    .map((port): VertexPart => ({ kind: 'port', resource: port.resource, rate: port.rate }))
+    .map((port): VertexPart => {
+      const edge = parseEdgeId(port.edgeId)
+      const coord = edge.find((member) => !land.has(axialKey(member))) ?? edge[0]
+      return { kind: 'port', coord, tile: port.resource, rate: port.rate }
+    })
   return [...hexes, ...ports]
 }
 
 /** The vertex in words, for tooltips and accessible names. */
 function vertexDescription(board: Board, vertexId: VertexId): string {
   return vertexParts(board, vertexId).map((part) => {
-    if (part.kind === 'word') return part.word
-    if (part.kind === 'hex') return `${RESOURCE_LABELS[part.resource]} ${part.number ?? '?'}`
-    return part.resource === null ? `${part.rate}:1 port` : `${RESOURCE_LABELS[part.resource]} ${part.rate}:1 port`
+    if (part.kind === 'hex') {
+      if (part.tile === 'desert') return 'Desert'
+      if (part.tile === null) return 'Unassigned'
+      return `${RESOURCE_LABELS[part.tile]} ${part.number ?? '?'}`
+    }
+    return part.tile === null ? `${part.rate}:1 port` : `${RESOURCE_LABELS[part.tile]} ${part.rate}:1 port`
   }).join(' · ')
 }
 
-/**
- * The vertex as glyphs (spec D4): each hex is its resource card beside its
- * number, a port its anchor (or its resource card) beside the rate, so a triple
- * and the follow-up line read at a glance and fit one line.
- */
-function VertexLabel({ board, vertexId }: { board: Board; vertexId: VertexId }) {
-  return (
-    <>
-      {vertexParts(board, vertexId).map((part, index) => (
-        <Fragment key={index}>
-          {index > 0 && ' · '}
-          {part.kind === 'word' ? part.word : (
-            <span className="hex-label">
-              {part.kind === 'hex' ? <ResourceGlyph resource={part.resource} />
-                : part.resource === null ? <StructureGlyph shape="port" color="currentColor" size={12} />
-                  : <ResourceGlyph resource={part.resource} />}
-              {part.kind === 'hex' ? part.number ?? '?' : `${part.rate}:1`}
-            </span>
-          )}
-        </Fragment>
-      ))}
-    </>
-  )
-}
+const PICK_TILE_SIDE = 14
+const SMALL_TILE_SIDE = 11.5
 
-/** React children joined by a separator, the way `Array.join` joins strings. */
-function joined(items: ReactNode[], separator: string): ReactNode {
-  return items.map((item, index) => (
-    <Fragment key={index}>{index > 0 && separator}{item}</Fragment>
-  ))
+function SpotTiles({ board, vertexId, small = false }: { board: Board; vertexId: VertexId; small?: boolean }) {
+  const side = small ? SMALL_TILE_SIDE : PICK_TILE_SIDE
+  const k = side / PICK_TILE_SIDE
+  const parts = vertexParts(board, vertexId)
+  // A ranking held from another board can name a corner this board lacks.
+  if (parts.length === 0) return null
+  const centres = parts.map((part) => axialToPixel(part.coord, side))
+  const halfWidth = Math.sqrt(3) / 2 * side
+  const left = Math.min(...centres.map(({ x }) => x)) - halfWidth
+  const top = Math.min(...centres.map(({ y }) => y)) - side
+  const width = Number((Math.max(...centres.map(({ x }) => x)) + halfWidth - left).toFixed(2))
+  const height = Number((Math.max(...centres.map(({ y }) => y)) + side - top).toFixed(2))
+  const points = Array.from({ length: 6 }, (_, index) => {
+    const angle = (-90 + 60 * index) * Math.PI / 180
+    return `${(side - 0.8) * Math.cos(angle)},${(side - 0.8) * Math.sin(angle)}`
+  }).join(' ')
+  return (
+    <svg
+      className={`spot-tiles${small ? ' spot-tiles-small' : ''}`}
+      role="img"
+      aria-label={vertexDescription(board, vertexId)}
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+    >
+      {parts.map((part, index) => {
+        const { x, y } = centres[index]
+        const transform = `translate(${x - left} ${y - top})`
+        if (part.kind === 'port') {
+          const fill = part.tile === null ? TOKEN_COLOR : TILE_COLORS[part.tile]
+          return (
+            <g key={index} className="spot-tile spot-port" transform={transform}>
+              <rect x={-10 * k} y={-6 * k} width={20 * k} height={12 * k} rx={6 * k} strokeWidth={k} stroke={INK_COLOR} fill={fill} />
+              <text textAnchor="middle" y={2.7 * k} fill={readableInk(fill)} style={{ fontSize: 7.5 * k }}>{part.rate}:1</text>
+            </g>
+          )
+        }
+        const fontSize = (part.number !== null && part.number >= 10 ? 8.5 : 10) * k
+        return (
+          <g key={index} className="spot-tile" transform={transform}>
+            <polygon points={points} fill={part.tile === null ? BLANK_TILE_COLOR : TILE_COLORS[part.tile]} />
+            {part.tile === 'desert' ? (
+              <g transform={`translate(${-7 * k} ${-7 * k}) scale(${0.7 * k})`}><DesertGlyph /></g>
+            ) : part.number !== null && (
+              <>
+                <circle r={7.6 * k} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth={0.8 * k} />
+                <text textAnchor="middle" className={isRedToken(part.number) ? 'token-text hot' : 'token-text'} y={0.35 * fontSize} style={{ fontSize }}>{part.number}</text>
+              </>
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
 }
 
 function formatFactor(value: number): string {
@@ -123,9 +153,9 @@ const ordinal = (pick: number): string => `${pick}${['st', 'nd', 'rd'][pick - 1]
 
 /**
  * The ranked picks (mobile spec S5, desktop D4). One rendering for every
- * pointer and both trees: a click or a tap selects a card, which pins its marks
+ * pointer and both trees: a click or a tap selects a row, which pins its marks
  * on the board and opens the actions under it, and a fine pointer previews a
- * card's marks on hover while nothing is pinned. Placing is never a side effect
+ * row's marks on hover while nothing is pinned. Placing is never a side effect
  * of selecting.
  *
  * Only the phone shell passes `onBuild`, so that prop also tells the trees apart
@@ -159,7 +189,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
-  // External highlights, such as import issues, replace the selected card's marks.
+  // External highlights, such as import issues, replace the selected row's marks.
   const own = useRef<readonly HighlightMark[] | null>(null)
   const mark = (marks: HighlightMark[] | null) => {
     own.current = marks
@@ -172,7 +202,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     || (state.highlight !== null && state.highlight !== own.current)
   // A hover is a preview, not a choice: it paints only while nothing is pinned
   // (spec DB2). A tap's compatibility mouseenter is harmless, since the click
-  // that follows selects the very card the preview just painted.
+  // that follows selects the very row the preview just painted.
   const preview = (marks: HighlightMark[] | null) => {
     if (!pinned) mark(marks)
   }
@@ -184,7 +214,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   // Reset the board marks whenever the board or viewed pick changes: the
   // previous window's circles are stale. The shell's resting marks show through
   // the cleared highlight (spec S5). A layout effect, so the next ranking is
-  // never painted with the last one's card still open.
+  // never painted with the last one's row still open.
   useLayoutEffect(() => {
     setSelectedPick(null)
     setSelectedLikelyGone(false)
@@ -281,9 +311,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     <div className="analysis-placeholder">
       <p>{emptyMessage[shown.status]}</p>
       {shown.status === 'no-availability' && likelyGone.length > 0 && (
-        <span>
-          likely gone: {joined(likelyGone.map(({ vertexId }) =>
-            <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ', ')}
+        <span className="analysis-gone-spots">
+          likely gone:
+          {likelyGone.map(({ vertexId }) => <SpotTiles key={vertexId} board={board} vertexId={vertexId} small />)}
         </span>
       )}
     </div>
@@ -301,14 +331,18 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             onMouseEnter={() => preview(likelyGoneMarks)}
           >
             <span className="analysis-likely-gone-title">Likely gone before this pick</span>
-            {joined(likelyGone.map(({ vertexId, playerId, frequency }, index) => {
-              const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
-              return (
-                <Fragment key={vertexId}>
-                  {index + 1}. {name}: <VertexLabel board={board} vertexId={vertexId} /> {Math.round(frequency * 100)}%
-                </Fragment>
-              )
-            }), ' · ')}
+            <span className="analysis-gone-entries">
+              {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+                const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+                return (
+                  <span key={vertexId} className="analysis-gone-entry">
+                    <span>{index + 1}. {name}</span>
+                    <SpotTiles board={board} vertexId={vertexId} small />
+                    <span>{Math.round(frequency * 100)}%</span>
+                  </span>
+                )
+              })}
+            </span>
           </button>
           {selectedLikelyGone && (
             <div className="analysis-touch-actions">
@@ -326,14 +360,10 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
           )}
         </div>
       )}
-      <div className="analysis-list" onMouseLeave={() => preview(null)}>
+      <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
         {recommendations.map((recommendation, index) => {
           const factors = displayedFactors(recommendation)
           const current = selectedPick === recommendation.firstPick
-          // The desktop list is collapsed: a row is its pick line, score and
-          // follow-up until it is selected, and the factors open with it. The
-          // phone card carries everything at rest (mobile spec S5).
-          const expanded = onBuild !== undefined || current
           return (
             <div
               key={recommendation.firstPick}
@@ -352,30 +382,34 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 >
                   {index + 1}
                 </span>
+                <SpotTiles board={board} vertexId={recommendation.firstPick} />
                 <span className="analysis-row-body">
-                  <span className="analysis-pick-line">
-                    <strong><VertexLabel board={board} vertexId={recommendation.firstPick} /></strong>
-                    <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
-                  </span>
                   {recommendation.survival < 1 && (
                     <span className="analysis-availability">
                       {Math.round(recommendation.survival * 100)}% likely available
                     </span>
                   )}
                   {recommendation.plannedSecond.length > 0 && (
-                    <span className="analysis-second">
-                      then: {joined(recommendation.plannedSecond
-                        .map((vertexId) => <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ' or ')}
-                    </span>
-                  )}
-                  {expanded && (
-                    <span className="analysis-factors">
-                      {factors.map(([label, value]) => (
-                        <span key={label}>{label} {formatFactor(value)}</span>
+                    <span className="analysis-follow">
+                      {recommendation.plannedSecond.map((vertexId, index) => (
+                        <span key={vertexId} className="analysis-follow-spot">
+                          <span>{index === 0 ? 'then' : 'or'}</span>
+                          <SpotTiles board={board} vertexId={vertexId} small />
+                        </span>
                       ))}
                     </span>
                   )}
                 </span>
+                <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
+
+                {/* Both trees show factors only for the selected row. */}
+                {current && (
+                  <span className="analysis-factors">
+                    {factors.map(([label, value]) => (
+                      <span key={label}>{label} <b>{formatFactor(value)}</b></span>
+                    ))}
+                  </span>
+                )}
               </button>
               {current && (
                 <div className="analysis-touch-actions">
@@ -486,7 +520,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             ) : (!pending || stale) ? (
               <div ref={bodyRef} className={pending ? 'analysis-stale' : undefined} inert={pending}>{body}</div>
             ) : ghosts && (
-              <div className="analysis-ghosts" aria-hidden>
+              <div className="analysis-ghosts pick-ledger" aria-hidden>
                 {Array.from({ length: LISTED_PICKS }, (_, index) => (
                   <div key={index} className="analysis-ghost"><span /><span /><span /><span /></div>
                 ))}

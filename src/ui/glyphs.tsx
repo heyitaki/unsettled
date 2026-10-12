@@ -115,6 +115,16 @@ export function StructureGlyph({ shape, color, size = 16 }: {
   }
 }
 
+export function DesertGlyph() {
+  return (
+    <g>
+      <path d="M4.4 17.7h11.2" fill="none" stroke={PIECE_INK} strokeWidth="1.6" strokeLinecap="round" />
+      <rect x="8.1" y="2.6" width="3.8" height="14.4" rx="1.9" fill="#c29b4a" />
+      <path d="M5.1 7.6v2.7a2 2 0 0 0 2 2h1.6M14.9 5.6v3.7a2 2 0 0 1-2 2h-1.6" fill="none" stroke="#c29b4a" strokeWidth="2.4" strokeLinecap="round" />
+    </g>
+  )
+}
+
 /** A hand resource: a flat terrain-coloured mark with its ink details. */
 export function ResourceGlyph({ resource }: { resource: Resource }) {
   const fill = TILE_COLORS[resource]

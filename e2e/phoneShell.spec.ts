@@ -235,12 +235,15 @@ test.describe('reveal on select', () => {
 
     const cards = block.locator('.analysis-row-select')
     await expect(cards).toHaveCount(5)
+    // The factors open with the selection, as on the desktop.
+    await expect(block.locator('.analysis-factors')).toHaveCount(0)
     await page.evaluate(() => window.scrollBy(0, 2000))
     const scrolledBoard = (await page.locator('.board-canvas').boundingBox())!
     const header = (await page.locator('.phone-head').boundingBox())!
     expect(scrolledBoard.y + scrolledBoard.height).toBeLessThan(header.y + header.height + 120)
     await cards.last().click()
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    await expect(block.locator('.analysis-factors')).toHaveCount(1)
     await expect(marks).toHaveCount(2)
     await expect(page.locator('.vertex-highlight.faded')).toHaveCount(1)
     await snap(page, 'selected-card')
