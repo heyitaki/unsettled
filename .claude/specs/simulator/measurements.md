@@ -3131,3 +3131,195 @@ Acceptance machine, fastest pass per side, base read earlier the same evening:
 **What is left.** Setup is about 41% of a four-seat game and 61% of a six-seat one on the acceptance machine (0.93 of 2.24 ms, 4.07 of 6.73 ms). Not built: M-88's two leftovers, capped by the profile at about 2% (occupancy masks carried across the replay) and 4% (setup road sites from the reach table); the proposer's win-distance inputs computed twice in a trade response; `denial::contest_term`, 4.6% of a four-seat game from `best_road`, which was not the same kind of repeat.
 
 **Scope.** Code cost only: no placement, policy or rule changed, so no win rate and no earlier measurement moves. The wall ratios are one field, `app_formula_draft` on the default weights with the denial policy and trading on. A weight vector that fails the bound's gate keeps M-88's cost in the lookahead.
+
+
+## M-90: cheaper setup roads, carried occupancy and indexed row bounds
+
+2026-10-12, baseline is this worktree before the edits, candidate is the local result. No seed domain: `bench` uses `PERF_SEED`. **Admissible: yes for the unchanged hashes and bit comparisons. Wall times are five-repeat medians from sequential local runs, not paired measurements or instruction counts.**
+
+Whole games fell from 2.231 to 2.083 ms at four seats (6.64%) and from 6.551 to 5.944 ms at six (9.27%). **The 10% and 15% whole-game targets were missed.** Full drafts fell from 0.950 to 0.869 ms (8.53%) and from 4.131 to 3.496 ms (15.37%). Every acceptance command passed.
+
+```text
+# From simulator/, before any edit and after the final source change:
+cargo build --release -p unsettled-sim
+uptime
+target/release/unsettled-sim bench --filter e2e/ --repeats 5
+uptime
+target/release/unsettled-sim bench --filter placement/ --repeats 5
+uptime
+target/release/unsettled-sim bench --filter analyze/ --repeats 5
+
+# Each mechanism was also measured separately after adding it:
+uptime
+target/release/unsettled-sim bench --filter e2e/ --repeats 5
+uptime
+target/release/unsettled-sim bench --filter full_draft --repeats 5
+```
+
+**What changed, without moving an output bit.**
+
+- `ReachTable` retains each first edge's span. `row_road` reads that span when `table_path` permits it and keeps the mask walk otherwise. Edge ordering and both tie comparisons are unchanged. A borrowed `PRICE_MEMO` uses the reference road calculation through `try_borrow_mut`.
+- Each lookahead snapshots occupancy by seat, copies it at the start of a candidate replay and updates it for every settlement and road. Each consumed mask is compared with a rebuild in debug and test builds. Owner arrays remain the source for the initial snapshot.
+- Opponent rows reuse their base scores and expansion bounds through the existing seat/held-vertex/grant index. The cache validates scorer identity, own vertices, own edges, seat and grant by content. Rival pieces still determine legality and exact expansion. More than one held vertex and the hero's one-use rows keep the previous calculation. Every cached operand is compared by bits with a fresh calculation in debug and test builds.
+
+Incremental measurements, four-seat / six-seat medians in milliseconds. The final acceptance run below is a separate pass; these stage differences are not added together.
+
+| Mechanism | Full draft before | Full draft after | Draft time saved | Whole game before | Whole game after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Road sites from the reach table | 0.950281 / 4.130677 | 0.909223 / 3.997688 | 4.3% / 3.2% | 2.231167 / 6.551415 | 2.168825 / 6.318925 |
+| Occupancy carried across replay | 0.909223 / 3.997688 | 0.886050 / 3.653792 | 2.5% / 8.6% | 2.168825 / 6.318925 | 2.119204 / 6.044898 |
+| Indexed base and bound rows | 0.886050 / 3.653792 | 0.854508 / 3.491016 | 3.6% / 4.5% | 2.119204 / 6.044898 | 2.096402 / 5.968204 |
+
+Stage load averages (1 / 5 / 15 minutes): road e2e `3.84 / 4.21 / 4.34`, road draft `3.94 / 4.22 / 4.34`; occupancy e2e and draft `2.72 / 3.41 / 3.96`; indexed rows e2e and draft `2.90 / 3.14 / 3.53`.
+
+**What the counters justified.** Temporary counters were added after the two required mechanisms, before choosing the third, then removed. Each observation ran one whole game with `bench --filter e2e/<layout>/single_core --games 1 --repeats 1`. Counts exclude reference assertions because the instrumented CLI was a release build. The sets used to count duplicates never supplied a score or a pick.
+
+| Per-game count | Four seats | Six seats |
+| --- | ---: | ---: |
+| Pruned argmax rows | 808 | 2,670 |
+| Duplicate whole-row inputs within a pick | 10 | 43 |
+| Distinct base/bound keys within picks, including one-use hero rows | 221 | 519 |
+| Legal candidates scanned | 31,925 | 159,460 |
+| Bound skips | 27,122 | 141,335 |
+| `row_value` calls | 5,133 | 18,868 |
+| Calls with value memo enabled | 3,869 | 15,703 |
+| Value memo hits | 2,577 | 12,577 |
+| Calls without a value memo (hero rows) | 1,264 | 3,165 |
+| Table-path expansion calls | 2,356 | 8,092 |
+| Base price lookups / hits | 25,701 / 24,496 | 138,163 / 132,699 |
+| Bound lookups / hits | 25,371 / 25,008 | 137,420 / 134,968 |
+| Site price lookups / hits, including roads | 20,113 / 17,397 | 55,452 / 46,692 |
+| `SitePricer::new` calls | 8,784 | 30,550 |
+| `diversity_coverage` calls | 16,926 | 59,467 |
+
+Only 1.2% and 1.6% of whole rows repeated, so no whole-row result cache was added. Base and bound scalar lookups already hit 95% to 99% of the time; the third mechanism removes those repeated lookups by indexing the rows. A linear search over row keys measured 0.865 / 3.541 ms per draft; indexing measured 0.855 / 3.491 ms. `SitePricer`, coverage arithmetic and bound arithmetic are unchanged.
+
+**Identity and deliberate faults.** New tests use convertible boards from the analysis corpus with generated occupancy, including own-road fallbacks and direct owner-array edits. Existing scrambled-board tests cover additional weights, NaNs and road ties. No existing test was edited.
+
+| New test | Comparison | Deliberate fault and observed failure |
+| --- | --- | --- |
+| `road_table_matches_each_first_edge_and_reference_road` | Per-edge site masks against the walk and the chosen edge against `expansion_road` | Returning empty table masks failed with `[0, 0, 0]` versus `[0, 16, 128]` |
+| `road_uses_reference_when_price_memo_is_borrowed` | Every candidate's road while the price memo is held | Returning `None` instead of the reference fallback failed against `Some(6)` |
+| `carried_replay_matches_rebuilt_rows_on_corpus_boards` | Full replay owner arrays, roads, denial score bits, per-seat masks and second-pick score bits | Omitting adjacent vertices from the blocked mask failed the carried/rebuilt comparison at seat 2 |
+| `prepared_rows_follow_owner_content_scorer_seat_and_grant` | Cached and repeated rows against a full unmemoized argmax, across scorers and direct state edits | Omitting scorer identity from invalidation failed with score bits `4619770462287049449` versus `4620042704884523995` |
+
+Each fault test failed under `cargo test --release -p unsettled-engine --lib <test-filter> -- --nocapture`. All faults were restored before the full acceptance runs.
+
+**Acceptance.**
+
+```text
+cd simulator && cargo test
+PASS: 777 passed, 0 failed, 15 intentionally ignored
+cd simulator && cargo test --release
+PASS: 749 passed, 0 failed, 15 intentionally ignored
+
+git diff --stat -- simulator/fixtures simulator/placement simulator/topology
+PASS: empty output
+
+simulator/tools/build-wasm.sh
+PASS: release wasm built; binary and source hash written by the script
+simulator/tools/build-wasm.sh --check
+PASS: exit 0
+
+npx vitest run src/engine/advice
+PASS: 5 files, 201 tests
+npx vitest run src/engine/__tests__/analysisPerf.test.ts
+PASS: 1 file, 2 tests
+
+cd simulator && cargo build --release -p unsettled-sim
+PASS: release build
+```
+
+Both Rust suites passed `hashes_match_the_committed_fixture`, both parity corpora and all seven allocation tests. The original test modules and `app_formula.rs` were also compared with the pre-edit copies and are unchanged.
+
+**Before and after tables.** Times below are the bench command's nanoseconds per call; each row has five repeats. All runs use seed `9e4f5eed20261010`, the denial policy and `placement/default-weights.json`.
+
+Before `e2e/`, load averages `3.81 / 5.01 / 4.63`:
+
+```text
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+e2e/standard4/single_core                             20       5     2195529.1     2231166.6       448.20
+e2e/standard4/all_cores                               20       5      245100.0      275848.0      3625.19
+e2e/extension6/single_core                            20       5     6532881.2     6551414.6       152.64
+e2e/extension6/all_cores                              20       5      672410.4      680568.8      1469.36
+```
+
+After `e2e/`, load averages `4.07 / 5.26 / 4.69`:
+
+```text
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+e2e/standard4/single_core                             20       5     2080275.0     2083058.3       480.06
+e2e/standard4/all_cores                               20       5      219718.8      232310.5      4304.58
+e2e/extension6/single_core                            20       5     5938439.6     5943925.0       168.24
+e2e/extension6/all_cores                              20       5      612358.3      628668.8      1590.66
+```
+
+Before `placement/`, load averages `3.66 / 4.91 / 4.60`:
+
+```text
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+placement/standard4/prepare                         4096       5        5577.3        5654.7
+placement/standard4/score_all                       1024       5       29103.8       29364.1
+placement/standard4/greedy/first                    1024       5       29457.8       29578.9
+placement/standard4/greedy/middle                   1024       5       22043.3       22355.9
+placement/standard4/greedy/turn                     2048       5       17835.7       18069.7
+placement/standard4/greedy/last                     2048       5       11174.1       11203.1
+placement/standard4/draft/first                       64       5      327469.4      328753.2
+placement/standard4/draft/middle                     128       5      183491.5      185088.2
+placement/standard4/full_draft                        32       5      933322.9      950281.2
+placement/extension6/prepare                        2048       5        7763.7        7791.7
+placement/extension6/score_all                       512       5       44710.4       45058.5
+placement/extension6/greedy/first                    512       5       44775.6       44884.1
+placement/extension6/greedy/middle                  1024       5       33537.9       33832.1
+placement/extension6/greedy/turn                    1024       5       28918.7       29257.6
+placement/extension6/greedy/last                    2048       5       17179.5       17337.3
+placement/extension6/draft/first                      32       5     1019423.2     1037049.5
+placement/extension6/draft/middle                     64       5      499613.3      504853.5
+placement/extension6/full_draft                        8       5     4094473.9     4130677.1
+```
+
+After `placement/`, load averages `3.81 / 5.09 / 4.65`:
+
+```text
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+placement/standard4/prepare                         4096       5        5577.0        5604.8
+placement/standard4/score_all                       1024       5       29531.0       29554.1
+placement/standard4/greedy/first                    1024       5       29511.3       29818.9
+placement/standard4/greedy/middle                   1024       5       22116.7       22425.3
+placement/standard4/greedy/turn                     2048       5       17773.8       17802.9
+placement/standard4/greedy/last                     2048       5       11098.5       11125.8
+placement/standard4/draft/first                      128       5      292003.9      292953.4
+placement/standard4/draft/middle                     128       5      170820.6      171112.0
+placement/standard4/full_draft                        32       5      865808.6      869207.0
+placement/extension6/prepare                        2048       5        7591.0        7673.0
+placement/extension6/score_all                       512       5       44943.0       45286.7
+placement/extension6/greedy/first                    512       5       44957.8       45161.5
+placement/extension6/greedy/middle                  1024       5       33681.2       34086.7
+placement/extension6/greedy/turn                    1024       5       29117.3       29408.6
+placement/extension6/greedy/last                    2048       5       17450.1       17478.0
+placement/extension6/draft/first                      32       5      833494.8      839296.9
+placement/extension6/draft/middle                     64       5      452496.1      452634.1
+placement/extension6/full_draft                        8       5     3477062.5     3495916.6
+```
+
+Before `analyze/`, load averages `3.15 / 4.69 / 4.53`:
+
+```text
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+analyze/standard4/opening                              2       5    13601979.5    13620229.5
+analyze/extension6/opening                             2       5    15791146.0    15917291.5
+analyze/extension6/behind_three                        1       5    55358125.0    55876708.0
+```
+
+After `analyze/`, load averages `2.95 / 4.67 / 4.52`:
+
+```text
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+analyze/standard4/opening                              2       5    13575000.0    13721895.5
+analyze/extension6/opening                             2       5    15903479.0    16090604.0
+analyze/extension6/behind_three                        1       5    55331042.0    55619458.0
+```
+
+**What is left.** A final full draft costs 0.869 ms at four seats and 3.496 ms at six, against whole games of 2.083 and 5.944 ms. The counters still identify thousands of exact expansion evaluations and one-use hero rows, whose bounds and site pricers cannot use the opponent row cache. A fresh sampled profile was attempted on the candidate with `sample <pid> 3 1`; the sandbox denied attachment, so no new self-time percentages are claimed. The profiling run is excluded from the timing tables. The whole-game targets remain unmet.
+
+**Scope.** Only `draft.rs`, `expansion.rs`, their new adjacent tests, the rebuilt wasm and its hash, and this entry changed. No placement, policy, analysis result, seed domain, fixture, weight or topology changed. No mechanism was approximated to reach a timing target.
