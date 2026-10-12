@@ -914,11 +914,25 @@ impl AppFormulaScorer {
         receives_grant: bool,
     ) -> ScoreBreakdown {
         let holdings = self.holdings_for_owner(vertex_owner, seat);
+        self.marginal_breakdown(&holdings, vertex_owner, edge_owner, seat, candidate, receives_grant)
+    }
+
+    /// `breakdown_for_owner` over holdings the caller folded. Twin of
+    /// `valuation.ts::marginalBreakdown`, under the same contract as `marginal_parts`.
+    pub(super) fn marginal_breakdown(
+        &self,
+        holdings: &Holdings,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+        candidate: Vertex,
+        receives_grant: bool,
+    ) -> ScoreBreakdown {
         let scale = self.slot_scale(seat);
-        let mut breakdown = self.breakdown_with_holdings(holdings, candidate, receives_grant);
+        let mut breakdown = self.breakdown_with_holdings(*holdings, candidate, receives_grant);
         breakdown.diversity *= scale.diversity;
         breakdown.expansion = scale.expansion
-            * expansion::term(self, &holdings, vertex_owner, edge_owner, seat, candidate).value;
+            * expansion::term(self, holdings, vertex_owner, edge_owner, seat, candidate).value;
         breakdown
     }
 

@@ -64,18 +64,33 @@ fn unranked_statuses_match_the_fixture() {
     for case in fixture["cases"].as_array().unwrap() {
         let expected = &case["response"];
         let status = expected["status"].as_str().unwrap();
-        let response = run(&case["request"]);
         if status == "ready" {
-            // Nothing is ranked yet, so a case that passed the positive-score check stops at the
-            // status for a ranking that came back empty.
-            assert_eq!(response["status"], "no-availability", "{}", case["name"]);
             continue;
         }
         seen.insert(status);
-        assert_close(&response, expected, case["name"].as_str().unwrap());
+        assert_close(&run(&case["request"]), expected, case["name"].as_str().unwrap());
     }
     // The corpus holds no `no-availability` case: see the plan's note on the class.
     assert_eq!(seen, BTreeSet::from(["complete", "me-done", "no-me", "no-production"]));
+}
+
+#[test]
+fn ready_cases_with_no_pick_ahead_match_the_fixture() {
+    let fixture = read_fixture();
+    let mut checked = 0;
+    for case in fixture["cases"].as_array().unwrap() {
+        let expected = &case["response"];
+        // Nobody picks between the board and the analysed pick, so the pre-window is empty and no
+        // nested ranking enters the response.
+        if expected["status"] != "ready"
+            || !expected["takenBeforeFirstPick"].as_array().unwrap().is_empty()
+        {
+            continue;
+        }
+        checked += 1;
+        assert_close(&run(&case["request"]), expected, case["name"].as_str().unwrap());
+    }
+    assert!(checked >= 15, "only {checked} corpus cases rank with nobody ahead");
 }
 
 #[test]
