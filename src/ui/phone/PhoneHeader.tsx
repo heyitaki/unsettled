@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { boardMenu } from '../boardMenu'
+import { useBoardMenu } from '../boardMenu'
 import { boardColor } from '../boardColor'
 import { Brand } from '../Brand'
 import { ContextMenu } from '../ContextMenu'
@@ -18,7 +18,7 @@ import type { PhoneOverlay } from './PhoneShell'
  * The phone's header (spec S1): the brand row, which scrolls away with the
  * page, over the sticky controls row that holds the board's identity, the
  * roster, the pencil that toggles build mode, and the dots menu with what the
- * desktop tool palette's heading holds plus Export JSON.
+ * desktop tool palette's heading holds plus Randomize board and Export JSON.
  */
 export function PhoneHeader({ building, onToggleMode, onOpen }: {
   building: boolean
@@ -51,8 +51,8 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
     observer.observe(brand)
     return () => observer.disconnect()
   }, [])
-  const { history, items } = boardMenu(tab, dispatch)
-  items.splice(1, 0, { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson })
+  const { history, randomize, clear, confirm } = useBoardMenu(tab, dispatch)
+  const items = [randomize, { label: 'Export JSON', icon: <ExportGlyph />, onClick: exportJson }, clear]
   return (
     <>
       <div className="phone-brand" ref={brandRef}>
@@ -109,6 +109,7 @@ export function PhoneHeader({ building, onToggleMode, onOpen }: {
           />
         )}
       </header>
+      {confirm}
     </>
   )
 }

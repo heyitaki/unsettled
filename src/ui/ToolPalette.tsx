@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { boardMenu } from './boardMenu'
+import { useBoardMenu } from './boardMenu'
 import { RESOURCES, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
 import { ContextMenu } from './ContextMenu'
@@ -108,14 +108,15 @@ export function ToolGroups() {
 }
 
 /**
- * The desktop tools panel: the phone header's dots menu, the import entry, then
- * the shared tool rows folded behind `Edit manually`.
+ * The desktop tools panel: the phone header's dots menu less `Randomize board`
+ * and `Export JSON`, the import entry, then the shared tool rows folded behind `Edit manually`,
+ * with `or randomize` beside that label.
  */
 export function ToolPalette() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
-  const { history, items } = boardMenu(tab, dispatch)
+  const { history, randomize, clear, confirm } = useBoardMenu(tab, dispatch)
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
@@ -139,7 +140,19 @@ export function ToolPalette() {
           dispatch({ type: 'tool', tool: { kind: event.currentTarget.open ? 'piece' : 'none' } })
         }}
       >
-        <summary>Edit manually<ChevronGlyph className="menu-chevron" /></summary>
+        <summary>
+          <span className="tools-manual-label">Edit manually<ChevronGlyph className="menu-chevron" /></span>
+          or
+          <button
+            type="button"
+            className="tools-randomize"
+            aria-label={randomize.label}
+            // A click on a button inside a summary never toggles the fold.
+            onClick={randomize.onClick}
+          >
+            randomize
+          </button>
+        </summary>
         <ToolGroups />
       </details>
       {menuTrigger && (
@@ -147,10 +160,11 @@ export function ToolPalette() {
           ariaLabel="Board options"
           trigger={menuTrigger}
           history={history}
-          items={items}
+          items={[clear]}
           onClose={() => setMenuTrigger(null)}
         />
       )}
+      {confirm}
     </section>
   )
 }

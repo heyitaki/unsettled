@@ -56,6 +56,26 @@ test('the dots menu holds undo, redo and the board actions', async ({ page }) =>
     .getByRole('menuitem', { name: 'Undo' })).toHaveText('Undo')
 })
 
+test('randomizing a board that has something on it asks first, and can deal a new board instead', async ({ page }) => {
+  await open(page)
+  const randomize = async () => {
+    await page.getByRole('button', { name: 'Board options' }).click()
+    await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+  }
+  const dialog = page.getByRole('dialog', { name: 'Randomize this board?' })
+  await randomize()
+  await expect(dialog).toHaveCount(0)
+  // Reopened, the board is a saved one and no longer the deal just made.
+  await page.reload()
+  await randomize()
+  await expect(dialog).toBeVisible()
+  // A viewport capture: the dialog sits in the top layer over the page.
+  await page.screenshot({ path: 'test-results/phone/randomize-confirm.png' })
+  await dialog.getByRole('button', { name: 'New board' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.locator('.phone-title')).toHaveText('Board 2')
+})
+
 test('the window is the only scroller and nothing overflows sideways', async ({ page }) => {
   await open(page)
   // Judged on the declared overflow, not on whether the content happens to

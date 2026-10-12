@@ -25,10 +25,9 @@ import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from 
 const snap = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
-/** The board actions live in the tools panel's dots menu, as in the phone header (spec D3). */
+/** On the desktop `Randomize` sits beside `Edit manually`, outside the dots menu (spec D3). */
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Board options' }).click()
-  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Randomize board' }).click()
 }
 
 test.describe('desktop', () => {
@@ -285,6 +284,8 @@ test.describe('desktop', () => {
     await back.click()
     await expect(forward).toBeEnabled()
     await randomize(page)
+    // The board has pieces on it, so randomize asks first.
+    await page.getByRole('dialog', { name: 'Randomize this board?' }).getByRole('button', { name: 'Replace' }).click()
     await expect(back).toBeDisabled()
     await expect(forward).toBeDisabled()
   })
@@ -295,14 +296,17 @@ test.describe('desktop', () => {
     await expect(heading.getByRole('button')).toHaveCount(1)
     await heading.getByRole('button', { name: 'Board options' }).click()
     const menu = page.getByRole('menu', { name: 'Board options' })
-    await expect(menu.getByRole('menuitem')).toHaveText(['Undo', 'Redo', 'Randomize board', 'Clear board'])
+    await expect(menu.getByRole('menuitem')).toHaveText(['Undo', 'Redo', 'Clear board'])
     await expect(menu.getByRole('menuitem', { name: 'Undo' })).toBeDisabled()
     // Clearing the board reads as destructive, as it does in the phone's menu (spec D3).
     await expect(menu.getByRole('menuitem', { name: 'Clear board' })).toHaveClass(/\bdanger\b/)
     // A viewport capture, not a full-page one: the full-page resize closes the menu.
     await page.screenshot({ path: 'test-results/phone/desktop-tools-menu.png' })
-    await menu.getByRole('menuitem', { name: 'Randomize board' }).click()
+    await page.keyboard.press('Escape')
     await expect(menu).toHaveCount(0)
+    // The underlined `randomize` beside `Edit manually` deals a board and leaves the fold shut.
+    await page.locator('.tools-manual').getByRole('button', { name: 'Randomize board' }).click()
+    await expect(page.locator('.tools-manual')).not.toHaveAttribute('open')
 
     const labels = page.locator('.tools-panel .tool-label')
     const terrain = labels.filter({ hasText: 'Terrain' }).locator('.tool-count')
@@ -317,6 +321,51 @@ test.describe('desktop', () => {
     await heading.getByRole('button', { name: 'Board options' }).click()
     await page.getByRole('menuitem', { name: 'Redo' }).click()
     await expect(terrain).toHaveText('19/19')
+  })
+
+  test('randomize asks before replacing a board that has something on it, and offers a new board', async ({ page }) => {
+    await page.goto('')
+    const dialog = page.getByRole('dialog', { name: 'Randomize this board?' })
+    const tokenText = page.locator('.board-canvas .token-text')
+    const tokens = () => tokenText.allTextContents()
+    const boards = page.locator('.maps-panel .group-label')
+
+    // A blank board has nothing to lose, and neither does a deal nobody has touched.
+    await randomize(page)
+    await expect(tokenText).toHaveCount(18)
+    const first = await tokens()
+    await randomize(page)
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(tokens).not.toEqual(first)
+    const second = await tokens()
+
+    // Reopened, the same board is a saved one, so it asks.
+    await page.reload()
+    await randomize(page)
+    await expect(dialog).toBeVisible()
+    await page.screenshot({ path: 'test-results/phone/desktop-randomize-confirm.png' })
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(dialog).toHaveCount(0)
+    expect(await tokens()).toEqual(second)
+
+    await randomize(page)
+    await dialog.getByRole('button', { name: 'New board' }).click()
+    await expect(boards).toContainText('Boards (2)')
+    await expect(tokenText).toHaveCount(18)
+    const third = await tokens()
+    expect(third).not.toEqual(second)
+    // The new board is itself a fresh deal, so it deals again without asking.
+    await randomize(page)
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(tokens).not.toEqual(third)
+    await page.getByRole('button', { name: 'Switch to Board 1', exact: true }).click()
+    await expect.poll(tokens).toEqual(second)
+
+    await randomize(page)
+    await dialog.getByRole('button', { name: 'Replace' }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(tokens).not.toEqual(second)
+    await expect(boards).toContainText('Boards (2)')
   })
 
   test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {

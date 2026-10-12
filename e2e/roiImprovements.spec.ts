@@ -11,8 +11,7 @@ async function downloadedBackup(download: Download) {
 }
 
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Board options' }).click()
-  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Randomize board' }).click()
 }
 
 test('screenshot import contains keyboard focus and Escape restores the opener', async ({ page }) => {

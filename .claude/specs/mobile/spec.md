@@ -34,7 +34,7 @@ Two rows. The **brand row** (the 26px by 25px three-hex mark and 20px Georgia `U
 1. **Board title**: the active tab's `title`, preceded by a hex in that board's colour (see B4) and followed by a chevron. The whole thing is one button that opens the Maps screen. This is the phone's document switcher.
 2. **Player dots**: one dot per player in roster order, the claimed player ringed. One button; opens the Players screen. The unclaimed pulse uses a translucent accent ring.
 3. **Pencil**: toggles build mode (S6). `aria-pressed` reflects the mode.
-4. **Dots menu**: undo, redo, randomize board, export JSON, clear board. Undo and redo sit together as a pair at the top of the menu, the rest below a rule. Clear board uses the danger red. The popup is a plain surface sheet with a hairline border, 14px radius and the shared floating shadow.
+4. **Dots menu**: undo, redo, randomize board, export JSON, clear board. Undo and redo sit together as a pair at the top of the menu, the rest below a rule. Clear board uses the danger red. Randomize asks before replacing a board that is not blank, with the desktop's dialog (desktop D3). The popup is a plain surface sheet with a hairline border, 14px radius and the shared floating shadow.
 
 Undo prints as `Undo`, with no stack-depth count. The count is a quantity the user cannot act on and reads as a badge.
 
@@ -160,7 +160,7 @@ Do not rebuild these; move or restyle them.
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, under the `LibraryLists.tsx` body that `MapsPanel.tsx` and `phone/MapsScreen.tsx` both render |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx`, `phone/MapsScreen.tsx` and the phone header |
 | Layout switch with a confirm when the board is not blank | `BoardCanvas.tsx`, `choose` + `pendingLayout` |
-| Undo, redo, randomize, clear | `ToolPalette.tsx` heading; on the phone the header's dots menu in `phone/PhoneHeader.tsx`, with the tool rows shared as `ToolGroups` |
+| Undo, redo, randomize, clear | `ToolPalette.tsx` heading, with randomize beside `Edit manually`; on the phone the header's dots menu in `phone/PhoneHeader.tsx`, with the tool rows shared as `ToolGroups` |
 | Open, delete, select, rename boards | the board list in `LibraryLists.tsx` (rows are `ListRow.tsx`), `useLibrary.ts` and `store.ts` (`tab-*` actions) |
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |

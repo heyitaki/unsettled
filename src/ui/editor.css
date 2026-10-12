@@ -216,8 +216,10 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .group-label .menu-trigger { display: inline-flex; align-items: center; gap: 5px; margin-right: -6px; padding: 3px 6px 3px 8px; border-radius: var(--r-control); }
 .group-label .menu-sort-glyph { flex: none; margin-left: -1px; }
 .tools-manual { margin-top: 2px; }
-.tools-manual > summary { display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; margin-bottom: -10px; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.tools-manual > summary { display: flex; align-items: center; justify-content: center; gap: 5px; height: 36px; margin-bottom: -10px; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .tools-manual > summary::-webkit-details-marker { display: none; }
+.tools-manual-label { display: inline-flex; align-items: center; gap: 3px; }
+.tools-randomize { padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-weight: 600; text-decoration: underline; text-decoration-thickness: 1.4px; text-underline-offset: 2.5px; }
 .tools-manual[open] > summary { margin-bottom: 4px; }
 .tools-manual[open] > summary .menu-chevron { transform: rotate(180deg); }
 .hero-import { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px; border: 0; border-radius: var(--r-row); background: var(--accent); color: #fff; font-size: 13.5px; font-weight: 700; }
@@ -439,14 +441,14 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .list-row-x:hover:not(:disabled) { color: var(--ink); background: transparent; }
   .token-tools button:hover:not(:disabled), .token-tools button.selected:hover:not(:disabled) { background: none; }
   .token-tools button:hover:not(.selected, :where(.phone-shell *)) .token-disc { fill: var(--tint); }
-  .tools-manual > summary:hover, .tally-tabs button:hover { color: var(--ink); }
+  .tools-manual > summary:hover:not(:has(.tools-randomize:hover)), .tools-randomize:hover, .tally-tabs button:hover { color: var(--ink); }
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }
   .tally-header > span:hover::after, .panel-dots:hover::after { opacity: 1; }
   .analysis-row:hover:not(.current, :where(.pick-ledger *)) { border-color: var(--muted); }
   .pick-ledger .analysis-row:hover:not(.current, :where(.phone-shell *)) .analysis-score { color: var(--accent-dark); }
   .board-status .menu-trigger:hover:not(:disabled, :where(.phone-shell *)) { color: #fff; background: rgba(255, 255, 255, .16); }
-  .menu-trigger:hover:not(:disabled), .move-table .move-who:hover:not(:disabled), .list-row-name:hover:not(:disabled), .tally-header button:hover:not(:disabled), .tally-tabs button:hover:not(:disabled), .player-list .roster-vp:hover:not(:disabled), .list-row-select:hover:not(:disabled), .menu-backdrop:hover:not(:disabled), .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled), .panel-dots:hover:not(:disabled) { background: transparent; }
+  .menu-trigger:hover:not(:disabled), .move-table .move-who:hover:not(:disabled), .list-row-name:hover:not(:disabled), .tally-header button:hover:not(:disabled), .tally-tabs button:hover:not(:disabled), .player-list .roster-vp:hover:not(:disabled), .list-row-select:hover:not(:disabled), .menu-backdrop:hover:not(:disabled), .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled), .panel-dots:hover:not(:disabled), .tools-randomize:hover:not(:disabled) { background: transparent; }
   .global-notice-close:hover:not(:disabled) { background: color-mix(in srgb, var(--surface) 12%, transparent); }
   @media (pointer: fine) {
     .list-row:not(:where(.phone-shell *)) { height: 34px; padding-right: 3px; }
@@ -474,6 +476,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
   .tally-header button { align-items: flex-end; }
   .menu-trigger, .tally-tabs button { position: relative; }
   .tally-tabs button::before { content: ''; position: absolute; inset: 0 -5px; }
+  .tools-randomize { position: relative; }
+  .tools-randomize::before { content: ''; position: absolute; inset: -13px -8px -13px -3px; }
   .menu-trigger::before { content: ''; position: absolute; inset: -15px -10px; }
   .hit-layers line { stroke-width: 26; }
   .board-zoom button { position: relative; }
