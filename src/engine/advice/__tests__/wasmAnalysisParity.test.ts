@@ -12,7 +12,14 @@ beforeAll(async () => {
   engine = await createEngine(readFileSync(new URL('../engine.wasm', import.meta.url)), (fraction) => fractions.push(fraction))
 })
 
-/** The comparison of `analysis_parity.rs`: order, names, strings and nulls exactly, numbers within `1e-9`. */
+/**
+ * Cases the wasm does not return bit for bit. The fixture is written by the native build, which takes `pow` from the
+ * platform's maths library, where the wasm carries Rust's own. The two round `x ** 1.5` one bit apart on some inputs,
+ * and 1.5 is the coverage exponent of the default weights, which only a one-player roster is scored with.
+ */
+const LAST_BIT_CASES = ['roster-1']
+
+/** Order, names, strings and nulls exactly, numbers within `1e-9`. */
 function expectClose(actual: unknown, expected: unknown, path: string): void {
   if (typeof actual === 'number' && typeof expected === 'number' && Number.isFinite(expected)) {
     expect(Math.abs(actual - expected), path).toBeLessThanOrEqual(1e-9)
@@ -20,7 +27,6 @@ function expectClose(actual: unknown, expected: unknown, path: string): void {
     expect(Array.isArray(actual) && actual.length, `${path}: length`).toBe(expected.length)
     expected.forEach((value, index) => expectClose((actual as unknown[])[index], value, `${path}[${index}]`))
   } else if (expected !== null && typeof expected === 'object') {
-    // Key order is the writer's own and is not part of the response.
     expect(Object.keys(actual as object).sort(), `${path}: keys`).toEqual(Object.keys(expected).sort())
     for (const [key, value] of Object.entries(expected)) expectClose((actual as Record<string, unknown>)[key], value, `${path}.${key}`)
   } else {
@@ -30,7 +36,14 @@ function expectClose(actual: unknown, expected: unknown, path: string): void {
 
 describe('analysis WebAssembly parity', () => {
   it.each(cases)('$name matches the fixture', ({ name, request, response }) => {
-    expectClose(engine.analyze(JSON.stringify(request)), response, name)
+    const actual = engine.analyze(JSON.stringify(request))
+    if (LAST_BIT_CASES.includes(name)) {
+      expectClose(actual, response, name)
+      // Fails once the case is exact again, so the list cannot outlive its reason.
+      expect(actual).not.toEqual(response)
+    } else {
+      expect(actual).toEqual(response)
+    }
   })
 
   it('reports progress through the import, ending near 1 when a ranking ran', () => {

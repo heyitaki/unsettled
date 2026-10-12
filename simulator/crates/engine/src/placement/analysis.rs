@@ -87,7 +87,7 @@ pub struct DraftState {
     pub warnings: Vec<DraftWarning>,
 }
 
-/// JSON has no non-finite numbers, so they travel as the strings the corpus generator writes.
+/// JSON has no non-finite numbers, so they travel as the strings the app's loader reads back.
 fn js_number<S: Serializer>(value: &f64, serializer: S) -> Result<S::Ok, S::Error> {
     if value.is_finite() {
         serializer.serialize_f64(*value)

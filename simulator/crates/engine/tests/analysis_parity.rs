@@ -14,37 +14,16 @@ fn simulator_path(relative: &str) -> PathBuf {
         .join(relative)
 }
 
+fn fixture_path() -> PathBuf {
+    simulator_path("fixtures/analysis-parity.json")
+}
+
 fn read_fixture() -> Value {
-    let path = simulator_path("fixtures/analysis-parity.json");
-    serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+    serde_json::from_str(&fs::read_to_string(fixture_path()).unwrap()).unwrap()
 }
 
 fn run(request: &Value) -> Value {
     serde_json::from_str(&analyze(&request.to_string(), &mut |_| {})).unwrap()
-}
-
-/// The fixture's comparison: order, names, strings and nulls exactly, numbers within `1e-9`. A
-/// non-finite number is a string on both sides, so it compares exactly too.
-fn assert_close(actual: &Value, expected: &Value, path: &str) {
-    match (actual, expected) {
-        (Value::Number(actual), Value::Number(expected)) => {
-            let (actual, expected) = (actual.as_f64().unwrap(), expected.as_f64().unwrap());
-            assert!((actual - expected).abs() <= 1e-9, "{path}: {actual} != {expected}");
-        }
-        (Value::Array(actual), Value::Array(expected)) => {
-            assert_eq!(actual.len(), expected.len(), "{path}: length");
-            for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-                assert_close(actual, expected, &format!("{path}[{index}]"));
-            }
-        }
-        (Value::Object(actual), Value::Object(expected)) => {
-            assert!(actual.keys().eq(expected.keys()), "{path}: keys");
-            for (key, actual) in actual {
-                assert_close(actual, &expected[key], &format!("{path}.{key}"));
-            }
-        }
-        _ => assert_eq!(actual, expected, "{path}"),
-    }
 }
 
 #[test]
@@ -58,7 +37,7 @@ fn every_corpus_case_matches_the_fixture() {
         // A pick ahead of the analysed one is what brings a nested ranking into the response.
         with_picks_ahead +=
             usize::from(!expected["takenBeforeFirstPick"].as_array().unwrap().is_empty());
-        assert_close(&run(&case["request"]), expected, case["name"].as_str().unwrap());
+        assert_eq!(&run(&case["request"]), expected, "{}", case["name"]);
     }
     // The corpus holds no `no-availability` case: see the plan's note on the class.
     assert_eq!(statuses, BTreeSet::from(["complete", "me-done", "no-me", "no-production", "ready"]));
@@ -174,4 +153,87 @@ fn every_corpus_request_reads_as_a_request() {
         with_weights += usize::from(request.options.weights.is_some());
     }
     assert!(with_weights > 0, "no corpus case carries its own weights");
+}
+
+/// Indents compact JSON as `serde_json::to_string_pretty` does, copying each number's text as it
+/// stands. Reading a response into a `Value` first would not do: `serde_json` can read a 17-digit
+/// number one bit off, and the fixture has to hold the digits the engine wrote.
+fn indent(compact: &str) -> String {
+    let line = |out: &mut String, depth: usize| {
+        out.push('\n');
+        out.push_str(&"  ".repeat(depth));
+    };
+    let mut out = String::new();
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut chars = compact.chars().peekable();
+    while let Some(c) = chars.next() {
+        if in_string {
+            out.push(c);
+            match c {
+                '\\' => out.extend(chars.next()),
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => {
+                in_string = true;
+                out.push(c);
+            }
+            '{' | '[' => {
+                out.push(c);
+                if matches!(chars.peek(), Some('}' | ']')) {
+                    out.extend(chars.next());
+                } else {
+                    depth += 1;
+                    line(&mut out, depth);
+                }
+            }
+            '}' | ']' => {
+                depth -= 1;
+                line(&mut out, depth);
+                out.push(c);
+            }
+            ',' => {
+                out.push(c);
+                line(&mut out, depth);
+            }
+            ':' => out.push_str(": "),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Rewrites every case's response, and the `mulberry32` streams, from this engine. The names and
+/// requests are the committed ones, first written from the TypeScript analysis this engine was
+/// checked against, so a new case is added to the file by hand with any response and then
+/// regenerated. Re-verify the diff by hand: nothing else says a changed response is right.
+#[test]
+#[ignore]
+fn regenerate_analysis_parity_fixture() {
+    let fixture = read_fixture();
+    let streams: Vec<String> = ["7", "12345"]
+        .iter()
+        .map(|seed| {
+            let mut random = mulberry32(seed.parse().unwrap());
+            let values: Vec<f64> = (0..16).map(|_| random.next_f64()).collect();
+            format!(r#""{seed}":{}"#, serde_json::to_string(&values).unwrap())
+        })
+        .collect();
+    let cases: Vec<String> = fixture["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|case| {
+            let (name, request) = (&case["name"], &case["request"]);
+            let response = analyze(&request.to_string(), &mut |_| {});
+            assert!(!response.starts_with(r#"{"error""#), "{name}: {response}");
+            format!(r#"{{"name":{name},"request":{request},"response":{response}}}"#)
+        })
+        .collect();
+    let text = format!(r#"{{"mulberry32":{{{}}},"cases":[{}]}}"#, streams.join(","), cases.join(","));
+    fs::write(fixture_path(), format!("{}\n", indent(&text))).unwrap();
 }
