@@ -24,19 +24,21 @@ export async function seedUnclaimedRoster(page: Page) {
 /**
  * Writes `fields` over the stored board, a whole `Board` replacing it, and `stats` over the
  * game's per-player stats. The tab's active player goes with them, since the seeded roster need
- * not hold that id.
+ * not hold that id. A `turn` marks the game as started, which takes a finished draft past the
+ * recap to Best moves.
  */
-export async function seedBoard(page: Page, fields: Partial<Board>, stats: Game['stats'] = {}) {
-  await page.addInitScript(({ seed, stats }) => {
+export async function seedBoard(page: Page, fields: Partial<Board>, stats: Game['stats'] = {}, turn?: Game['turn']) {
+  await page.addInitScript(({ seed, stats, turn }) => {
     const key = 'unsettled.workspace.v1'
     const raw = localStorage.getItem(key)
     if (raw === null) return
     const workspace = JSON.parse(raw)
     Object.assign(workspace.tabs[0].game.board, seed)
     workspace.tabs[0].game.stats = stats
+    if (turn) workspace.tabs[0].game.turn = turn
     delete workspace.tabs[0].activePlayerId
     localStorage.setItem(key, JSON.stringify(workspace))
-  }, { seed: fields, stats })
+  }, { seed: fields, stats, turn })
   await page.reload()
 }
 

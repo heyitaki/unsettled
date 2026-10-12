@@ -6,6 +6,7 @@ pub mod game;
 pub mod longest_road;
 pub mod placement;
 pub mod policy;
+mod recap;
 pub mod rng;
 pub mod rules;
 pub mod state;

@@ -9,9 +9,82 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Unsettled" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>Unsettled</title>
+    <!-- Brand first, so a narrow tab or a bookmark still reads "Unsettled". -->
+    <title>Unsettled: Catan Analyzer for Starting Placements and Moves</title>
+    <meta name="description" content="Free Catan analyzer that runs in your browser. Set up your board and Unsettled ranks the best starting settlements for your seat, then the best move on every turn." />
+    <!-- The site serves the app at /unsettled with no trailing slash; the slashed form 404s.
+         Vite rewrites none of these URLs, so they are absolute. -->
+    <link rel="canonical" href="https://akshath.me/unsettled" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Unsettled" />
+    <meta property="og:url" content="https://akshath.me/unsettled" />
+    <meta property="og:title" content="Unsettled: a Catan analyzer for starting placements and every turn" />
+    <meta property="og:description" content="Set up your board and Unsettled ranks the best starting settlements for your seat in the draft, then the best move on every turn. Free, with no account." />
+    <meta property="og:image" content="https://akshath.me/unsettled/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A Catan board in Unsettled with the best starting settlements ranked beside it" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Unsettled",
+        "alternateName": "Unsettled Catan Analyzer",
+        "url": "https://akshath.me/unsettled",
+        "description": "A free Catan analyzer that runs in your browser. It ranks the best starting settlements for your seat in the snake draft, then the best move on every turn of the game.",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "screenshot": "https://akshath.me/unsettled/og.png",
+        "featureList": [
+          "Ranks the best starting settlement placements for your picks in the snake draft",
+          "Estimates which spots the players ahead of you are likely to take",
+          "Ranks the best moves on every turn after the draft",
+          "Board editor for the base game and the 5 to 6 player extension",
+          "Reads tiles, numbers, ports and players from a Settled screenshot",
+          "No account; boards stay in your browser"
+        ],
+        "author": { "@type": "Person", "name": "Akshath Sivaprasad", "url": "https://akshath.me" }
+      }
+    </script>
   </head>
   <body>
+    <!-- Read by crawlers and previewers that do not run scripts; a browser running the app never
+         renders it. It sits above #root, which is a full screen tall even when empty. -->
+    <noscript>
+      <main style="max-width: 40em; margin: 40px auto; padding: 0 16px; line-height: 1.5">
+        <h1>Unsettled: a Catan analyzer for starting placements and every turn after</h1>
+        <p>
+          Unsettled is a free Catan analyzer that runs in your browser. Set up your board, or import a screenshot
+          from the Settled app, and it ranks the best places to put your starting settlements, then the best move
+          on each turn of the game. It needs JavaScript, so turn it on to use the app.
+        </p>
+        <h2>What it does</h2>
+        <ul>
+          <li>Scores every legal starting spot for your seat in the snake draft and lists the best ones, with the reasons behind a score: production, resource mix, ports and room to expand.</li>
+          <li>Estimates which spots the players picking before you are likely to take, so the ranking shows what will still be open on your turn.</li>
+          <li>After the draft, tracks the game turn by turn. It ranks what to build and trade, and recommends where to move the robber and when to play a development card.</li>
+          <li>Includes a board editor for the base game and the 5 to 6 player extension, and reads tiles, numbers, ports and players from a Settled screenshot.</li>
+          <li>There is no account, and your boards never leave your browser.</li>
+        </ul>
+        <h2>Questions</h2>
+        <h3>What is the best starting position in Catan?</h3>
+        <p>
+          It depends on the board and on your place in the turn order. High-probability numbers matter most, but so do
+          a mix of resources, a useful port and space to build toward. Unsettled scores all of these for your board
+          and ranks the spots for each of your two picks.
+        </p>
+        <h3>Does it work for 2, 3, 5 or 6 players?</h3>
+        <p>Yes. It handles two to six players and tunes its scoring to the number of players at the table.</p>
+        <h3>Is it free?</h3>
+        <p>Yes. There are no ads, no sign-up and nothing to pay for.</p>
+        <h3>Is Unsettled an official Catan product?</h3>
+        <p>No. It is a fan-made tool and is not affiliated with Catan GmbH or Catan Studio.</p>
+      </main>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -3,6 +3,7 @@ import type { Game } from '../model/game'
 
 export function decisionKey(decision: Decision): string {
   switch (decision.kind) {
+    case 'recap': return JSON.stringify({ kind: decision.kind, games: decision.games, batch: decision.batch })
     case 'produce': return JSON.stringify({ kind: decision.kind, total: decision.total })
     case 'tradeResponse': return JSON.stringify({ kind: decision.kind, proposer: decision.proposer, give: decision.give, get: decision.get, count: decision.count })
     default: return JSON.stringify({ kind: decision.kind })

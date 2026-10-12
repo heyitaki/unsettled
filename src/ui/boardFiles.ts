@@ -18,6 +18,19 @@ export function fileTitle(name: string): string {
 }
 
 /**
+ * The first `Board n` that neither an open board nor a saved map carries. The
+ * store's own default only knows the open boards, so a map that is saved but
+ * not open would get a second row under its name.
+ */
+export function newBoardTitle(tabs: readonly { title: string }[]): string {
+  const taken = takenMapNames()
+  for (const tab of tabs) taken.add(tab.title)
+  let index = 1
+  while (taken.has(`Board ${index}`)) index += 1
+  return `Board ${index}`
+}
+
+/**
  * The library map a save writes back into, and the name it writes there — or
  * null when the save should add a new map instead.
  *

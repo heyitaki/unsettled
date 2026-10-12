@@ -246,6 +246,22 @@ export function settlementOrdinals(board: Board): Map<VertexId, 1 | 2> {
   return ordinals
 }
 
+export function setupGrants(board: Board): Record<string, Record<Resource, number>> | null {
+  if (board.buildings.some((building) => building.tier !== 'settlement')) return null
+  const grants = new Map<string, Record<Resource, number>>()
+  for (const player of board.players) {
+    const buildings = board.buildings.filter((building) => building.playerId === player.id)
+    if (buildings.length !== 2) return null
+    const hand = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+    for (const coord of parseVertexId(buildings[1].vertexId)) {
+      const tile = board.hexes.find((hex) => sameCoord(hex.coord, coord))?.tile
+      if (tile && tile !== 'desert') hand[tile] += 1
+    }
+    grants.set(player.id, hand)
+  }
+  return Object.fromEntries(grants)
+}
+
 export function placeBuilding(
   board: Board,
   vertexId: VertexId,

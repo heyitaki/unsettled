@@ -16,28 +16,25 @@ import {
   parseEdgeId,
   parseVertexId,
 } from '../model/coords'
-import { draftIsComplete, inferDraftState } from '../engine/draft'
+import { setupRoad } from '../engine/setupRoad'
+import { draftIsComplete, inferDraftState, restoreDraftPick } from '../engine/draft'
 import { activePlayerId } from '../model/turn'
 import { boardGrid } from '../model/layouts'
 import {
-  isBlank,
   placeBuilding,
   placeRoad,
   removeBuilding,
   removePort,
   removeRoad,
   setHexTile,
-  setLayout,
   setNumberToken,
   setRobber,
   settlementOrdinals,
   upsertPort,
 } from '../model/board'
-import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
-import { INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
-import { ConfirmDialog } from './ConfirmDialog'
+import type { AxialCoord, Board, BuildingTier, EdgeId, Port, VertexId } from '../model/types'
+import { BLANK_TILE_COLOR, INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
-import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
 import { buildingSlots, clickTarget, nextBuildingTier, roadSlots } from './placementSlots'
@@ -83,6 +80,7 @@ const ROAD_RADIUS = 2.5
 // Fraction of an edge trimmed from each end of a highlighted road direction, so the stub sits
 // between the vertex circles the same recommendation draws rather than running under them.
 const MARK_EDGE_INSET = 0.26
+const SETTLEMENT_PATH = 'M-15,13 V-3 L0,-15 L15,-3 V13 Z'
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 1, superCity: 1.18 }
@@ -90,13 +88,6 @@ const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, 
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers/scales (city annex ≈ 20 + outline). Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
-
-const LAYOUT_LABEL: Record<LayoutId, string> = {
-  standard4: '4 player',
-  extension6: '5–6 player',
-}
-const LAYOUT_OPTIONS = (Object.keys(LAYOUT_LABEL) as LayoutId[])
-  .map((value) => ({ value, label: LAYOUT_LABEL[value] }))
 
 type Point = { x: number; y: number }
 const pointOf = (event: { clientX: number; clientY: number }): Point => ({ x: event.clientX, y: event.clientY })
@@ -132,6 +123,27 @@ function vertexPoint(vertexId: VertexId) {
   }
 }
 
+/** A road's drawn length, centre and angle; the hover preview shares it so the two cannot drift. */
+function roadGeometry(edgeId: EdgeId) {
+  const [vaId, vbId] = edgeEndpointVertexIds(edgeId)
+  const a = vertexPoint(vaId)
+  const b = vertexPoint(vbId)
+  const length = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
+  const dir = { x: (b.x - a.x) / length, y: (b.y - a.y) / length }
+  // Pull both ends toward the midpoint by the same gap, so every road is
+  // drawn the same length no matter what sits at its endpoints: roads
+  // meeting at a bare vertex don't pile up, and a road running into a
+  // building is simply hidden by it — buildings paint after roads, and
+  // the inset already tucks the road's tip inside the silhouette.
+  const inset = length * 0.07
+  const a2 = { x: a.x + dir.x * inset, y: a.y + dir.y * inset }
+  const b2 = { x: b.x - dir.x * inset, y: b.y - dir.y * inset }
+  const roadLength = Math.max(0, Math.hypot(b2.x - a2.x, b2.y - a2.y))
+  const mid = { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }
+  const angle = (Math.atan2(b2.y - a2.y, b2.x - a2.x) * 180) / Math.PI
+  return { roadLength, mid, angle }
+}
+
 function hexPoints(coord: AxialCoord, radius = SIZE): string {
   const point = center(coord)
   return Array.from({ length: 6 }, (_, index) => {
@@ -161,7 +173,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const tab = activeTab(state)
   const { board } = tab.game
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
-  const [pendingLayout, setPendingLayout] = useState<LayoutId | null>(null)
   const [transform, setTransformState] = useState<ViewTransform>(IDENTITY)
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null)
   const transformRef = useRef<ViewTransform>(IDENTITY)
@@ -174,6 +185,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const lastClick = useRef<{ ref: string; x: number; y: number } | null>(null)
   const finePointer = useRef<Point | null>(null)
   const finePointerDown = useRef<Point | null>(null)
+  const draftTapPending = useRef(false)
   const setTransform = (next: ViewTransform) => {
     transformRef.current = next
     setTransformState(next)
@@ -182,9 +194,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   // tab switch would edit (or crash on) a different board's coastline.
   useEffect(() => {
     setEditingPort(null)
-    // A pending layout change belongs to the tab it was raised on; drop it on a
-    // switch so confirming can't reset a different board.
-    setPendingLayout(null)
   }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   // Positions depend on the layout alone; the candidates below filter them per board.
@@ -292,15 +301,21 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }, [state.activeTabId, board.layout, fitX, fitY, fitWidth, fitHeight])
   const renderedViewBox = transformedViewBox(viewBox, transform)
   const pick = state.pick
+  const draft = useMemo(() => inferDraftState(board), [board])
+  const draftComplete = draftIsComplete(board, draft)
+  const viewedSlot = state.viewedPick ?? draft.myRemainingPickIndices[0]
 
-  // A pick places for the turn player; a tool places for the editor's selected player.
-  const placementPlayer = pick ? activePlayerId(tab.game) : tab.activePlayerId
+  // With the tools closed, a draft tap places only the viewed player's settlement.
+  const draftPlayer = !pick && state.tool.kind === 'none' && !draftComplete &&
+    board.hexes.some((hex) => hex.tile !== null) && draft.remainingPickIndices.includes(viewedSlot)
+    ? draft.sequence[viewedSlot] : null
+  const placementPlayer = pick ? activePlayerId(tab.game) : draftPlayer ?? tab.activePlayerId
   const placeableVertices = useMemo<VertexId[]>(() => {
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
-    if (state.tool.kind !== 'piece') return []
+    if (state.tool.kind !== 'piece' && draftPlayer === null) return []
     const occupied = new Set(board.buildings.map((building) => building.vertexId))
     return buildingSlots(board, placementPlayer, 'settlement', 'edit').filter((vertexId) => !occupied.has(vertexId))
-  }, [state.tool, board, placementPlayer, pick])
+  }, [state.tool, board, placementPlayer, pick, draftPlayer])
   const placeableEdges = useMemo<EdgeId[]>(() => {
     if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece') return []
     return roadSlots(board, placementPlayer, pick?.want === 'edge' ? pick.edges : undefined)
@@ -311,8 +326,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       for (const building of board.buildings) refs.add(building.vertexId)
       for (const road of board.roads) refs.add(road.edgeId)
     }
-    return targetPositions.filter((target) => refs.has(target.ref))
-  }, [targetPositions, placeableVertices, placeableEdges, board.buildings, board.roads, pick, state.tool])
+    return [
+      ...targetPositions.filter((target) => refs.has(target.ref)),
+      ...(!pick && state.tool.kind === 'piece' ? ports.map(({ port, point }) => ({ ref: `port:${port.edgeId}`, ...point })) : []),
+    ]
+  }, [targetPositions, placeableVertices, placeableEdges, board.buildings, board.roads, ports, pick, state.tool])
   const targetAt = useCallback((point: Point) => {
     const rect = svgRef.current && contentBox(svgRef.current)
     // An unmeasured board has no point to resolve; clientToUnits would answer with the view centre.
@@ -321,7 +339,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     const ref = clickTarget(units, candidates, lastClick.current, { max: SIZE / 2, repeat: REPEAT_DISTANCE, direct: DIRECT_DISTANCE })
     return ref === null ? null : { ref, ...units }
   }, [candidates, viewBox])
-  const draftComplete = useMemo(() => draftIsComplete(board, inferDraftState(board)), [board])
   // Stable across renders that don't change the roster, so the piece layers
   // below can list it as a dependency without re-rendering on every render.
   const playerColor = useCallback(
@@ -329,12 +346,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     [board.players],
   )
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
-  const choose = (layout: LayoutId) => {
-    if (layout === board.layout) return
-    // Only confirm when the switch would destroy something.
-    if (isBlank(board)) commit(setLayout(board, layout))
-    else setPendingLayout(layout)
-  }
   const onHex = (coord: AxialCoord) => {
     if (pick) {
       if (pick.want === 'hex') dispatch({ type: 'picked', ref: axialKey(coord) })
@@ -377,6 +388,19 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       if (pick.want === 'vertex') dispatch({ type: 'picked', ref: vertexId })
       return
     }
+    if (draftPlayer !== null) {
+      // One tap at a time: the first one waits for the engine to load, and a second tap meanwhile would place on a stale board.
+      if (draftTapPending.current) return
+      draftTapPending.current = true
+      // Chosen before the settlement lands, as a ranking of this seat would choose it. With no engine the settlement lands without a road.
+      void setupRoad(board, draftPlayer, vertexId).catch(() => null).then((road) => {
+        draftTapPending.current = false
+        const nextBoard = restoreDraftPick(board, { vertexId, playerId: draftPlayer, roads: road === null ? [] : [road] })
+        commit(nextBoard)
+        dispatch({ type: 'view-pick', slot: inferDraftState(nextBoard).remainingPickIndices[0] ?? null })
+      })
+      return
+    }
     if (state.tool.kind === 'piece') {
       const existing = board.buildings.find((building) => building.vertexId === vertexId)
       const tier = nextBuildingTier(existing?.tier, {
@@ -388,15 +412,17 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       else if (owner !== null) commit(placeBuilding(board, vertexId, owner, tier))
     } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
   }
-  const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece'
+  const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece' || draftPlayer !== null
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
   const placementActive = buildActive || roadActive
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
-  const hoverPlayer = hover
-    ? board.buildings.find((building) => building.vertexId === hover.ref)?.playerId
-      ?? board.roads.find((road) => road.edgeId === hover.ref)?.playerId
-      ?? placementPlayer
+  const hoverBuilding = hover && board.buildings.find((building) => building.vertexId === hover.ref)
+  const hoverRoad = hover && board.roads.find((road) => road.edgeId === hover.ref)
+  const hoverPlayer = hover && !hover.ref.startsWith('port:')
+    ? hoverBuilding?.playerId ?? hoverRoad?.playerId ?? placementPlayer
     : null
+  const preview = hover && !hover.ref.startsWith('port:') && !hoverBuilding && !hoverRoad ? hover : undefined
+  const previewRoad = preview?.ref.startsWith('e:') ? roadGeometry(preview.ref as EdgeId) : undefined
   useEffect(() => {
     lastClick.current = null
     finePointer.current = null
@@ -409,7 +435,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }, [targetAt, coarse, placementActive, state.activeTabId, board.layout, transform])
   const actOnTarget = (target: { ref: string; x: number; y: number }) => {
     lastClick.current = target
-    if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
+    if (target.ref.startsWith('port:')) setEditingPort(target.ref.slice(5) as EdgeId)
+    else if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
     else onEdge(target.ref as EdgeId)
   }
   // The dots take no pointer events (editor.css), so a pointer always goes through the svg's
@@ -421,7 +448,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const eraseActive = !pick && state.tool.kind === 'erase'
   const portActive = !pick && state.tool.kind === 'port'
   const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
-  const gesturesBlocked = editingPort !== null || pendingLayout !== null
+  const gesturesBlocked = editingPort !== null
   const overlayBlocksGestures = () =>
     gesturesBlocked || overlayOpen()
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -536,7 +563,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     // tool selected, taps place and pinch is the way to zoom. Clearing the
     // stored tap keeps one made under a tool from later pairing with a tap made
     // after the tool was dropped.
-    if (pick || state.tool.kind !== 'none') {
+    if (pick || state.tool.kind !== 'none' || draftPlayer !== null) {
       lastTap.current = null
       return
     }
@@ -607,8 +634,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     <polygon
       key={axialKey(hex.coord)}
       points={hexPoints(hex.coord)}
-      fill={hex.tile ? TILE_COLORS[hex.tile] : '#d8d7cc'}
-      stroke="#f8f1dc"
+      fill={hex.tile ? TILE_COLORS[hex.tile] : BLANK_TILE_COLOR}
+      stroke={TOKEN_COLOR}
       strokeWidth="4"
       className={highlightSet.has(axialKey(hex.coord)) ? 'highlighted' : ''}
     />
@@ -678,34 +705,19 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         }
         style={portActive ? { cursor: 'pointer' } : eraseActive ? { cursor: 'crosshair' } : undefined}
       >
-        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
-        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
-        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke="#fff" strokeWidth="2.5" />
+        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
+        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
+        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke={TOKEN_COLOR} strokeWidth="2.5" />
         <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
       </g>
     )
   }), [ports, highlightSet, portActive, eraseActive, board, dispatch])
   const roadLayer = useMemo(() => board.roads.map((road) => {
-    const [vaId, vbId] = edgeEndpointVertexIds(road.edgeId)
-    const a = vertexPoint(vaId)
-    const b = vertexPoint(vbId)
-    const length = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
-    const dir = { x: (b.x - a.x) / length, y: (b.y - a.y) / length }
-    // Pull both ends toward the midpoint by the same gap, so every road is
-    // drawn the same length no matter what sits at its endpoints: roads
-    // meeting at a bare vertex don't pile up, and a road running into a
-    // building is simply hidden by it — buildings paint after roads, and
-    // the inset already tucks the road's tip inside the silhouette.
-    const inset = length * 0.07
-    const a2 = { x: a.x + dir.x * inset, y: a.y + dir.y * inset }
-    const b2 = { x: b.x - dir.x * inset, y: b.y - dir.y * inset }
     // Draw the road as a slim rounded rectangle rather than a round-capped
     // stroke: squarer ends read as a plank, not a capsule. Rotate a
     // midpoint-centred rect to the edge's angle; the casing is the same
     // rect grown by PIECE_STROKE on every side.
-    const roadLength = Math.max(0, Math.hypot(b2.x - a2.x, b2.y - a2.y))
-    const mid = { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }
-    const angle = (Math.atan2(b2.y - a2.y, b2.x - a2.x) * 180) / Math.PI
+    const { roadLength, mid, angle } = roadGeometry(road.edgeId)
     return (
       <g key={`road:${road.edgeId}`} transform={`translate(${mid.x} ${mid.y}) rotate(${angle})`}>
         {/* Casing = colored core + PIECE_STROKE outline on each side, matching buildings. */}
@@ -754,28 +766,31 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
             {/* One closed silhouette per tier, matching the source app's pieces:
                 a house, a house with a rectangle annex, and a twin-gable keep.
                 strokeWidth is divided by scale so every piece renders the same border. */}
-            {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
+            {building.tier === 'settlement' && <path d={SETTLEMENT_PATH} />}
             {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
             {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
           </g>
         </g>
-        {ordinal && (
-          <g
+        {/* The pick number sits where a Best picks mark stamps its own, which wins when both land here. */}
+        {ordinal && !highlight.some((mark) => mark.ref === building.vertexId && mark.label) && (
+          <text
             className="settlement-ordinal"
-            transform={`translate(${point.x + 0.33 * SIZE} ${point.y - 0.1 * SIZE})`}
+            x={point.x}
+            y={point.y + TIER_BASE_Y.settlement * scale - 4.2}
+            textAnchor="middle"
+            fill={readableInk(color)}
             pointerEvents="none"
             aria-hidden="true"
           >
-            <circle r={0.135 * SIZE} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth="1.4" />
-            <text y="3" textAnchor="middle" fill={INK_COLOR}>{ordinal === 1 ? 'i' : 'ii'}</text>
-          </g>
+            {ordinal}
+          </text>
         )}
       </g>
     )
-  }), [board.buildings, markedBuildings, ordinals, playerColor])
+  }), [board.buildings, highlight, markedBuildings, ordinals, playerColor])
   const markLayer = useMemo(() => highlight
     .filter((mark) => (mark.kind === 'hex' ? grid.landKeys : mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
-    .map((mark) => {
+    .map((mark, index) => {
       if (mark.kind === 'hex') return <polygon key={`hl:${mark.ref}`} className="hex-highlight" points={hexPoints(parseAxialKey(mark.ref), SIZE - 6)} fill="none" stroke={mark.color ?? INK_COLOR} strokeWidth="3.5" strokeDasharray="7 4" pointerEvents="none" />
       // A road mark is a direction, not a place: the analysis panel's road recommendation.
       // Draw it as a stub of road along the edge, short enough to leave both endpoints clear of
@@ -786,7 +801,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         const from = { x: a.x + (b.x - a.x) * MARK_EDGE_INSET, y: a.y + (b.y - a.y) * MARK_EDGE_INSET }
         const to = { x: b.x - (b.x - a.x) * MARK_EDGE_INSET, y: b.y - (b.y - a.y) * MARK_EDGE_INSET }
         return (
-          <g key={`hl:${mark.ref}`} pointerEvents="none">
+          <g key={`hl:${mark.ref}:${index}`} pointerEvents="none" opacity={mark.faded ? 0.55 : undefined}>
             <line
               className="edge-highlight"
               x1={from.x}
@@ -918,8 +933,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {robberLayer}
           {robberTokenLayer}
           {portLayer}
-          {roadLayer}
-          {buildingLayer}
+          {/* Pieces step back during the draft so the Best picks circles lead. */}
+          <g opacity={draftComplete ? undefined : 0.7}>
+            {roadLayer}
+            {buildingLayer}
+          </g>
           {markLayer}
           <g className="hit-layers">
             {(hexActive || eraseActive) && board.hexes.map((hex) => (
@@ -934,18 +952,45 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r={coarse ? 17 : 9} onClick={() => onVertex(vertexId)} />
             })}
           </g>
-          {/* Placement affordances: a dot at every rule-legal vertex or edge, and the hover ring. */}
+          {/* Placement affordances: legal dots, a piece preview at an empty target, or a ring. */}
           <g className="placement-layer">
             {buildActive && placeableVertices.map((vertexId) => {
+              if (vertexId === preview?.ref || (draftPlayer !== null && highlightSet.has(vertexId))) return null
               const point = vertexPoint(vertexId)
-              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
+              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 4.7 : 3.6} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
             })}
             {roadActive && placeableEdges.map((edgeId) => {
+              if (edgeId === preview?.ref) return null
               const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
               const point = midpoint([a, b])
-              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
+              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 3.6 : 2.8} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
             })}
-            {hover && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
+            {preview && !previewRoad && <path
+              className="placement-hover"
+              d={SETTLEMENT_PATH}
+              transform={`translate(${preview.x} ${preview.y}) scale(${TIER_SCALE.settlement})`}
+              fill={playerColor(hoverPlayer)}
+              fillOpacity={0.7}
+              stroke="#30271f"
+              strokeOpacity={0.75}
+              strokeWidth={PIECE_STROKE / TIER_SCALE.settlement}
+              strokeLinejoin="round"
+            />}
+            {previewRoad && <rect
+              className="placement-hover"
+              x={-previewRoad.roadLength / 2}
+              y={-ROAD_CORE / 2}
+              width={previewRoad.roadLength}
+              height={ROAD_CORE}
+              rx={ROAD_RADIUS}
+              transform={`translate(${previewRoad.mid.x} ${previewRoad.mid.y}) rotate(${previewRoad.angle})`}
+              fill={playerColor(hoverPlayer)}
+              fillOpacity={0.7}
+              stroke="#30271f"
+              strokeOpacity={0.75}
+              strokeWidth={PIECE_STROKE}
+            />}
+            {hover && !preview && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
           </g>
         </g>
       </svg>
@@ -964,41 +1009,14 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           }}
         />
       )}
-      {pendingLayout && (
-        <ConfirmDialog
-          title="Change layout?"
-          message="Switching layouts clears the tiles, tokens, and pieces on this board. Your players are kept."
-          actions={[
-            {
-              label: 'Change layout',
-              variant: 'danger',
-              onClick: () => {
-                commit(setLayout(board, pendingLayout))
-                setPendingLayout(null)
-              },
-            },
-            { label: 'Cancel', onClick: () => setPendingLayout(null) },
-          ]}
-          onCancel={() => setPendingLayout(null)}
-        />
-      )}
-      <div className="board-status">
-        <MenuSelect
-          ariaLabel="Board layout"
-          value={board.layout}
-          options={LAYOUT_OPTIONS}
-          onSelect={choose}
-          align="center"
-        >
-          <strong>{LAYOUT_LABEL[board.layout]}</strong>
-        </MenuSelect>
-        {transform.scale > 1 && (
+      {transform.scale > 1 && (
+        <div className="board-status">
           <span className="board-zoom">
             {transform.scale.toFixed(1)}×
             <button type="button" onClick={() => setTransform(IDENTITY)}>Reset</button>
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   )
 }

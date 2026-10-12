@@ -11,9 +11,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Unsettled — Catan Draft Analyzer',
+        name: 'Unsettled: Catan Analyzer',
         short_name: 'Unsettled',
-        description: 'An offline Catan board editor and starting-position draft analyzer.',
+        description: 'A Catan analyzer: ranks the best starting settlements and the best move on every turn.',
         id: '/unsettled/',
         start_url: '/unsettled/',
         scope: '/unsettled/',
@@ -34,6 +34,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,wasm}'],
+        // The link-preview image is fetched by scrapers, never by the app.
+        globIgnores: ['og.png'],
         navigateFallback: '/unsettled/index.html',
       },
       devOptions: { enabled: false },

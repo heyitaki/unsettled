@@ -16,8 +16,7 @@ const optionId = (baseId: string, index: number) => `${baseId}-option-${index}`
 /**
  * The shared popup-listbox dropdown: a transparent trigger showing the current
  * value, a fixed full-screen backdrop that closes on any outside click, and an
- * absolutely-positioned option menu. Used by the board header's layout picker
- * and the analysis panel's player selector so both look identical.
+ * absolutely-positioned option menu.
  *
  * Keyboard: the popup itself takes focus and holds the single tab stop, moving
  * an `aria-activedescendant` marker rather than focus between options, so the
@@ -30,7 +29,6 @@ export function MenuSelect<T extends string>({
   value,
   options,
   onSelect,
-  align = 'start',
   caret = <ChevronGlyph className="menu-chevron" />,
   children,
 }: {
@@ -38,8 +36,6 @@ export function MenuSelect<T extends string>({
   value: T | null
   options: readonly { value: T; label: string }[]
   onSelect: (value: T) => void
-  /** Which edge of the trigger the popup lines up with: its left edge, or its centre. */
-  align?: 'start' | 'center'
   /** The open affordance after the trigger content; the chevron unless a caller draws its own. */
   caret?: ReactNode
   /** Trigger content; the caret is appended by this component. */
@@ -70,11 +66,8 @@ export function MenuSelect<T extends string>({
     const popupBox = { width: popup.offsetWidth, height: popup.offsetHeight }
     // clientWidth excludes a classic scrollbar, which is not usable popup space.
     const { clientWidth, clientHeight } = document.documentElement
-    const left = align === 'center'
-      ? triggerBox.left + (triggerBox.width - popupBox.width) / 2
-      : triggerBox.left
     const placed = placeBelow({
-      left,
+      left: triggerBox.left,
       top: triggerBox.top - 6,
       bottom: triggerBox.bottom + 6,
     }, popupBox, {
@@ -82,7 +75,7 @@ export function MenuSelect<T extends string>({
       height: clientHeight,
     })
     setAt({ left: placed.left - wrapBox.left, top: placed.top - wrapBox.top })
-  }, [open, options.length, align])
+  }, [open, options.length])
   // preventScroll: the popup is already beside its trigger, and letting focus
   // scroll to the not-yet-positioned first paint would jolt the page.
   useEffect(() => {
@@ -166,7 +159,7 @@ export function MenuSelect<T extends string>({
       {/* What the menu is for, which the trigger's own content never says. A
           hidden node still contributes its text when aria-labelledby points at
           it directly, and naming the trigger by label *and* self keeps the
-          current value in the announcement ("Board layout, 4 player layout")
+          current value in the announcement ("Sort boards, Last modified")
           where a plain aria-label would have replaced it. */}
       <span id={labelId} hidden>{ariaLabel}</span>
       <button

@@ -33,11 +33,12 @@ describe('buildSessionEnded', () => {
     expect(buildSessionEnded(session, tab('b'))).toBe(true)
   })
 
-  it('ends when the layout is switched under the tools', () => {
+  it('holds when the layout is switched so Cancel restores the entry game', () => {
     const opened = tab('a')
     const session = openBuildSession(opened)
     const switched = { ...opened, game: withBoard(opened.game, setLayout(opened.game.board, 'extension6')) }
-    expect(buildSessionEnded(session, switched)).toBe(true)
+    expect(buildSessionEnded(session, switched)).toBe(false)
+    expect(cancelTarget(session, switched)).toBe(opened.game)
   })
 })
 

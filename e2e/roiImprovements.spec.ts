@@ -11,8 +11,7 @@ async function downloadedBackup(download: Download) {
 }
 
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Board options' }).click()
-  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Randomize board' }).click()
 }
 
 test('screenshot import contains keyboard focus and Escape restores the opener', async ({ page }) => {
@@ -93,11 +92,9 @@ test('award corrections survive undo, redo and reload', async ({ page }) => {
   await holder.click()
   await page.getByRole('option', { name: 'Blue', exact: true }).click()
   await expect(holder).toContainText('Blue')
-  await page.getByRole('button', { name: 'Board options' }).click()
-  await page.getByRole('menuitem', { name: 'Undo', exact: true }).click()
+  await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(holder).toContainText('Unknown')
-  await page.getByRole('button', { name: 'Board options' }).click()
-  await page.getByRole('menuitem', { name: 'Redo', exact: true }).click()
+  await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
   await expect(holder).toContainText('Blue')
   await page.reload()
   await page.locator('.award-controls summary').click()

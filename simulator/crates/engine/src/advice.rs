@@ -136,6 +136,10 @@ impl DevCards {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum Decision {
+    Recap {
+        games: u32,
+        batch: u64,
+    },
     Turn,
     PreRoll,
     Discard,
@@ -213,6 +217,9 @@ fn advise_game(
 ) -> Result<Value, String> {
     let game = request.game;
     let wire = game.board;
+    if let Decision::Recap { games, batch } = request.decision {
+        return crate::recap::recap(wire, games, batch, POLICY);
+    }
     let claimed = wire
         .me_player_id
         .as_ref()
@@ -519,6 +526,7 @@ fn advise_game(
             )
         }
         Decision::Produce { .. } => Err("production was already handled".into()),
+        Decision::Recap { .. } => Err("recap was already handled".into()),
     }
 }
 

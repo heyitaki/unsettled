@@ -9,11 +9,12 @@ export const TILE_COLORS: Record<TileKind, string> = {
   desert: '#e1c88a',
 }
 
+export const BLANK_TILE_COLOR = '#d8d7cc'
 export const SEA_COLOR = '#3c7fbf'
-// The page's Sand (--page in editor.css).
-export const TOKEN_COLOR = '#efe8d9'
+// The panels' off-white (--surface in editor.css).
+export const TOKEN_COLOR = '#fbf8f1'
 export const INK_COLOR = '#3a2c1c'
-export const PAPER_COLOR = '#fbf4df'
+export const PAPER_COLOR = TOKEN_COLOR
 
 /** Pick dark ink or light paper text for legibility on an arbitrary fill color. */
 export function readableInk(hex: string): string {

@@ -49,14 +49,14 @@ export type Tool =
   | { kind: 'port'; resource: Resource | null; rate: number }
   | { kind: 'robber' }
   | { kind: 'erase' }
+  // The tool rows are open and no other tool is selected: a board click places pieces.
   | { kind: 'piece' }
 
 /**
  * A board mark surfaced from analysis: a highlighted ref (vertex/hex/port id)
  * optionally tinted to a player's colour and stamped with a short label (a pick
  * number). Drives the coloured, numbered circles the AnalysisPanel draws. A
- * faded mark is a pick that sits back from the others: a planned follow-up, or
- * a lower rank shown alongside the top three.
+ * faded mark sits back from the others: a planned follow-up pick or its road.
  *
  * `kind: 'road'` names a direction rather than a place, and it exists because a
  * road and a port are both keyed by the edge they sit on: without it the canvas
@@ -296,12 +296,21 @@ function unusedBoardTitle(tabs: TabState[]): string {
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   const next = reduceAction(state, action)
-  if (next === state || next.viewedPick == null) return next
+  if (next === state) return next
   if (next.activeTabId !== state.activeTabId) return withViewedPick(next, null)
   const board = activeTab(next).game.board
   const previous = activeTab(state).game.board
+  if (board === previous) return next
   if (board.mePlayerId !== previous.mePlayerId) return withViewedPick(next, null)
-  return board === previous ? next : withViewedPick(next, next.viewedPick)
+  const before = inferDraftState(previous)
+  const after = inferDraftState(board)
+  const viewedSlot = state.viewedPick ?? before.myRemainingPickIndices[0]
+
+  // The view follows the draft while it is on the earliest open pick.
+  if (viewedSlot !== undefined && viewedSlot === before.remainingPickIndices[0]) {
+    return withViewedPick(next, after.remainingPickIndices[0] ?? null)
+  }
+  return next.viewedPick == null ? next : withViewedPick(next, next.viewedPick)
 }
 
 function withViewedPick(state: StoreState, slot: number | null): StoreState {

@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { createBoard, draftOrder, placeBuilding, placeRoad, setHexTile } from '../src/model/board'
+import { createEngine } from '../src/engine/advice/wasm'
+import { inferDraftState } from '../src/engine/draft'
 import { axialToPixel, edgeEndpointVertexIds, hexVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
-import type { Board } from '../src/model/types'
+import type { Board, VertexId } from '../src/model/types'
 import { LISTED_PICKS } from '../src/ui/restMarks'
 import { buildingSlots } from '../src/ui/placementSlots'
 import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
@@ -24,10 +26,9 @@ import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from 
 const snap = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
-/** The board actions live in the tools panel's dots menu, as in the phone header (spec D3). */
+/** On desktop, Randomize sits beside Edit manually. */
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Board options' }).click()
-  await page.getByRole('menuitem', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Randomize board' }).click()
 }
 
 test.describe('desktop', () => {
@@ -116,15 +117,12 @@ test.describe('desktop', () => {
     await expect(slots).toHaveCount(players * 2)
     await expect(slots.first()).toHaveClass(/\bviewing\b/)
 
-    // The board rests on the ranked picks, the lower ranks faded (spec D4).
+    // The board rests on the ranked picks, all solid (spec D4).
     const marks = page.locator('.vertex-highlight')
     await expect(marks).toHaveCount(LISTED_PICKS)
-    await expect(marks.nth(3)).toHaveClass(/\bfaded\b/)
-    await expect(marks.nth(4)).toHaveClass(/\bfaded\b/)
+    await expect(page.locator('.vertex-highlight.faded')).toHaveCount(0)
 
-    // The counts moved to the tool labels, so the caption is the layout alone.
-    const caption = await page.locator('.board-status').innerText()
-    expect(caption).not.toMatch(/terrain|pieces/)
+    await expect(page.locator('.board-status')).toHaveCount(0)
     await snap(page, 'desktop-ribbon')
 
     await slots.nth(1).click()
@@ -170,8 +168,8 @@ test.describe('desktop', () => {
     await expect(slots.nth(7)).toHaveClass(/\bviewing\b/)
     await expect(panel.locator('.draft-ribbon-slot.viewing')).toHaveCount(1)
     await expect(context).toHaveText('Red · Picking 8th', { useInnerText: true })
-    await expect(gone).toContainText('7. Blue:', { timeout: 60_000 })
-    await expect(gone).toContainText('1. Red:')
+    await expect(gone.locator('.analysis-gone-entry > span:first-child').last()).toHaveText('7. Blue', { timeout: 60_000 })
+    await expect(gone.locator('.analysis-gone-entry > span:first-child').first()).toHaveText('1. Red')
     await expect(panel.locator('.analysis-row').first()).toBeVisible()
 
     // A rival's circle shows that rival's pick and leaves YOU on Red.
@@ -183,7 +181,7 @@ test.describe('desktop', () => {
     await expect(context).toHaveText('Blue · Picking 2nd and 7th', { useInnerText: true })
     // The last view's cards stay in place while this one is ranked, so wait for the bar to go.
     await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
-    await expect(gone).toContainText('1. Red:', { timeout: 60_000 })
+    await expect(gone).toContainText('1. Red', { timeout: 60_000 })
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
     await expect(rows.locator('.you-chip')).toHaveCount(1)
     await expect(rows.nth(0).locator('.you-chip')).toBeVisible()
@@ -194,8 +192,8 @@ test.describe('desktop', () => {
     await slots.nth(6).click()
     await expect(slots.nth(6)).toHaveClass(/\bviewing\b/)
     await expect(context).toHaveText('Blue · Picking 7th', { useInnerText: true })
-    await expect(gone).toContainText('6. Orange:', { timeout: 60_000 })
-    await expect(gone).toContainText('2. Blue:')
+    await expect(gone).toContainText('6. Orange', { timeout: 60_000 })
+    await expect(gone).toContainText('2. Blue')
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
 
     // The name menu switches the view the same way.
@@ -228,7 +226,7 @@ test.describe('desktop', () => {
     let board = setHexTile({ ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: null }, { q: 0, r: 0 }, 'ore')
     const grid = boardGrid(board.layout)
     const vertices = grid.vertexIds.filter((_, index) => index % 6 === 0).slice(0, 8)
-    // One pick short of done: a finished draft shows Best moves, which has no step buttons.
+    // One pick short of done: a finished draft shows the recap or Best moves, neither with step buttons.
     draftOrder(board).slice(0, 7).forEach((playerId, index) => {
       board = placeBuilding(board, vertices[index], playerId, 'settlement')
     })
@@ -268,12 +266,10 @@ test.describe('desktop', () => {
     await back.click()
     // The claim moves in Players; a ribbon circle only changes the view, which is no edit to undo.
     await page.locator('.player-list .roster-row').first().click()
-    await page.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Undo' }).click()
+    await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
     await expect(forward).toBeDisabled()
-    await page.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Redo' }).click()
+    await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Red')
     await expect(forward).toBeDisabled()
 
@@ -285,57 +281,98 @@ test.describe('desktop', () => {
     await back.click()
     await expect(forward).toBeEnabled()
     await randomize(page)
+    // The board has pieces on it, so randomize asks first.
+    await page.getByRole('dialog', { name: 'Randomize this board?' }).getByRole('button', { name: 'Replace' }).click()
     await expect(back).toBeDisabled()
     await expect(forward).toBeDisabled()
   })
 
-  test('the tool heading is a dots menu like the phone header, and the labels carry the counts the caption lost', async ({ page }) => {
+  test('the tool heading holds undo and redo, and the tool labels carry the counts', async ({ page }) => {
     await page.goto('')
     const heading = page.locator('.tools-panel .panel-heading')
-    await expect(heading.getByRole('button')).toHaveCount(1)
-    await heading.getByRole('button', { name: 'Board options' }).click()
-    const menu = page.getByRole('menu', { name: 'Board options' })
-    await expect(menu.getByRole('menuitem')).toHaveText(['Undo', 'Redo', 'Randomize board', 'Clear board'])
-    await expect(menu.getByRole('menuitem', { name: 'Undo' })).toBeDisabled()
-    // Clearing the board reads as destructive, as it does in the phone's menu (spec D3).
-    await expect(menu.getByRole('menuitem', { name: 'Clear board' })).toHaveClass(/\bdanger\b/)
-    // A viewport capture, not a full-page one: the full-page resize closes the menu.
-    await page.screenshot({ path: 'test-results/phone/desktop-tools-menu.png' })
-    await menu.getByRole('menuitem', { name: 'Randomize board' }).click()
-    await expect(menu).toHaveCount(0)
+    await expect(heading.getByRole('button')).toHaveCount(2)
+    await expect(heading.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+    await expect(heading.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled()
+    await expect(page.locator('.tools-panel .structure-grid button').filter({ hasText: 'clear all' })).toHaveClass(/\bdanger\b/)
+    await page.screenshot({ path: 'test-results/phone/desktop-tools-actions.png' })
+    // The underlined `randomize` beside `Edit manually` deals a board and leaves the fold shut.
+    await page.locator('.tools-manual').getByRole('button', { name: 'Randomize board' }).click()
+    await expect(page.locator('.tools-manual')).not.toHaveAttribute('open')
 
     const labels = page.locator('.tools-panel .tool-label')
     const terrain = labels.filter({ hasText: 'Terrain' }).locator('.tool-count')
     await expect(terrain).toHaveText('19/19')
-    await expect(labels.filter({ hasText: 'Structures' }).locator('.tool-count')).toHaveText('0 pieces')
+    await expect(labels.filter({ hasText: 'Other tools' }).locator('.tool-count')).toHaveText('0 pieces')
     await snap(page, 'desktop-tools')
 
-    // The chords are gone, so the menu's undo and redo are the only way back (spec D3).
-    await heading.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Undo' }).click()
+    await heading.getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(terrain).toHaveText('0/19')
-    await heading.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Redo' }).click()
+    await heading.getByRole('button', { name: 'Redo', exact: true }).click()
     await expect(terrain).toHaveText('19/19')
   })
 
-  test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {
+  test('randomize asks before replacing a board that has something on it, and offers a new board', async ({ page }) => {
     await page.goto('')
-    const trigger = page.getByRole('button', { name: 'Board layout' })
+    const dialog = page.getByRole('dialog', { name: 'Randomize this board?' })
+    const tokenText = page.locator('.board-canvas .token-text')
+    const tokens = () => tokenText.allTextContents()
+    const boards = page.locator('.maps-panel .group-label')
+
+    // A blank board has nothing to lose, and neither does a deal nobody has touched.
+    await randomize(page)
+    await expect(tokenText).toHaveCount(18)
+    const first = await tokens()
+    await randomize(page)
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(tokens).not.toEqual(first)
+    const second = await tokens()
+
+    // Reopened, the same board is a saved one, so it asks.
+    await page.reload()
+    await randomize(page)
+    await expect(dialog).toBeVisible()
+    await page.screenshot({ path: 'test-results/phone/desktop-randomize-confirm.png' })
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(dialog).toHaveCount(0)
+    expect(await tokens()).toEqual(second)
+
+    await randomize(page)
+    await dialog.getByRole('button', { name: 'New board' }).click()
+    await expect(boards).toContainText('Boards (2)')
+    await expect(tokenText).toHaveCount(18)
+    const third = await tokens()
+    expect(third).not.toEqual(second)
+    // The new board is itself a fresh deal, so it deals again without asking.
+    await randomize(page)
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(tokens).not.toEqual(third)
+    await page.getByRole('button', { name: 'Switch to Board 1', exact: true }).click()
+    await expect.poll(tokens).toEqual(second)
+
+    await randomize(page)
+    await dialog.getByRole('button', { name: 'Replace' }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect.poll(tokens).not.toEqual(second)
+    await expect(boards).toContainText('Boards (2)')
+  })
+
+  test('dropdowns are the phone sheet: a glyph trigger and a tick on the current option', async ({ page }) => {
+    await page.goto('')
+    const trigger = page.getByRole('button', { name: /Sort boards/ })
     await expect(trigger.locator('svg')).toHaveCount(1)
     await expect(trigger).not.toContainText('▾')
 
     await trigger.click()
-    const popup = page.getByRole('listbox', { name: 'Board layout' })
+    const popup = page.getByRole('listbox', { name: 'Sort boards' })
     const active = popup.locator('button.active')
     await expect(active).toHaveCount(1)
     await expect(active.locator('.menu-tick')).toBeVisible()
     // Laid out on every option so the labels line up, painted on the current one only.
-    await expect(popup.getByRole('option')).toHaveCount(2)
-    await expect(popup.locator('.menu-tick')).toHaveCount(2)
+    await expect(popup.getByRole('option')).toHaveCount(4)
+    await expect(popup.locator('.menu-tick')).toHaveCount(4)
     const others = popup.locator('button:not(.active) .menu-tick')
-    await expect(others).toHaveCount(1)
-    await expect(others).toBeHidden()
+    await expect(others).toHaveCount(3)
+    for (const tick of await others.all()) await expect(tick).toBeHidden()
     await page.keyboard.press('Escape')
 
     // The dots menu is the phone's sheet (spec D6 menus).
@@ -359,9 +396,9 @@ test.describe('desktop', () => {
     await expect(terrain).toHaveText('0/19')
 
     await toggle.click()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     await tools.getByRole('button', { name: 'wood' }).click()
-    await expect(tools.locator('button.selected')).toHaveCount(1)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(1)
     await clickBoard()
     await expect(terrain).toHaveText('1/19')
 
@@ -369,7 +406,7 @@ test.describe('desktop', () => {
     await toggle.click()
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
 
     // Nor does a tool outlive a trip through the phone tree, which never showed it.
     await tools.getByRole('button', { name: 'wood' }).click()
@@ -378,7 +415,186 @@ test.describe('desktop', () => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
+  })
+
+  test('corners place pieces only while Edit manually is open', async ({ page }) => {
+    await page.goto('')
+    const tools = page.locator('.tools-panel')
+    const toggle = tools.getByText('Edit manually')
+    const svg = page.locator('.board-canvas')
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
+    const corners = hexVertexIds({ q: 0, r: 0 })
+    const clickCorner = async (vertex: typeof corners[number]) => {
+      const points = parseVertexId(vertex).map((coord) => axialToPixel(coord, 58))
+      const corner = { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+      const point = await svg.evaluate((element, corner) => {
+        const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+        return { x: point.x, y: point.y }
+      }, corner)
+      await page.mouse.click(point.x, point.y)
+    }
+    await expect(tools.locator('.structure-grid')).toBeHidden()
+    await clickCorner(corners[0])
+    await expect(buildings).toHaveCount(0)
+
+    await toggle.click()
+    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase', 'clear all'])
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
+    await expect(tools.locator('.tool-hint')).toHaveText('With no tool selected, tap a corner on the board to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.')
+    await expect(svg.locator('.placement-slot').first()).toBeVisible()
+    await clickCorner(corners[0])
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings.locator('g[transform*="scale(0.8)"]')).toHaveCount(1)
+
+    await toggle.click()
+    await expect(svg.locator('.placement-slot')).toHaveCount(0)
+    await clickCorner(corners[3])
+    await expect(buildings).toHaveCount(1)
+  })
+
+  test('draft taps place the viewed settlement and advance with Edit manually closed', async ({ page }) => {
+    // A tap lays the settlement with the setup road a ranking of that seat would draw for it.
+    const engine = await createEngine(readFileSync('src/engine/advice/engine.wasm'), () => {})
+    const tapPlaced = (board: Board, vertexId: VertexId, playerId: string) => {
+      const response = engine.setupRoad(JSON.stringify({ board, playerId, vertexId }))
+      if ('error' in response) throw new Error(response.error)
+      const { road } = response
+      const settled = placeBuilding(board, vertexId, playerId, 'settlement')
+      return road === null ? settled : placeRoad(settled, road, playerId)
+    }
+    await page.goto('')
+    let board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
+    board = { ...board, players: UNCLAIMED_ROSTER, mePlayerId: UNCLAIMED_ROSTER[0].id }
+    await seedBoard(page, board)
+    await expect(page.locator('.tools-panel .structure-grid')).toBeHidden()
+    const panel = page.locator('.analysis-panel')
+    const slots = panel.locator('.draft-ribbon-slot')
+    const viewedSlot = 1
+    const player = board.players.find((player) => player.id === inferDraftState(board).sequence[viewedSlot])!
+    await slots.nth(viewedSlot).click()
+    await expect(slots.nth(viewedSlot)).toHaveClass(/\bviewing\b/)
+    await page.mouse.move(0, 0)
+    await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
+    const svg = page.locator('.board-canvas')
+    const marks = svg.locator('.vertex-highlight')
+    const dots = svg.locator('.placement-slot')
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g')
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    await expect(svg.locator('.vertex-highlight-label').first()).toHaveText('1')
+    await expect(dots.first()).toBeVisible()
+    const marked = await marks.evaluateAll((marks) => marks.map((mark) => ({ x: Number(mark.getAttribute('cx')), y: Number(mark.getAttribute('cy')) })))
+    const corners = boardGrid(board.layout).vertexIds.map((ref) => {
+      const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
+      return { ref, x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+    })
+    await expect(dots).toHaveCount(buildingSlots(board, player.id, 'settlement', 'edit').length - LISTED_PICKS)
+    expect(await dots.evaluateAll((dots) => [...new Set(dots.map((dot) => dot.getAttribute('fill')))])).toEqual([player.color])
+    for (const corner of marked) await expect(svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`)).toHaveCount(0)
+    const clickCorner = async (corner: typeof corners[number]) => {
+      const point = await svg.evaluate((element, corner) => {
+        const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+        return { x: point.x, y: point.y }
+      }, corner)
+      await page.mouse.click(point.x, point.y)
+    }
+    const first = corners.find((corner) => corner.x === marked[0].x && corner.y === marked[0].y)!
+    await clickCorner(first)
+    board = tapPlaced(board, first.ref, player.id)
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings).toHaveAttribute('fill', player.color)
+    await expect(buildings).toHaveAttribute('transform', `translate(${first.x} ${first.y}) scale(0.8)`)
+    const nextSlot = inferDraftState(board).remainingPickIndices[0]
+    await expect(slots.nth(nextSlot)).toHaveClass(/\bviewing\b/)
+    await expect(panel.locator('.draft-ribbon-slot.viewing')).toHaveCount(1)
+    await page.mouse.move(0, 0)
+    await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    const nextPlayer = board.players.find((player) => player.id === inferDraftState(board).sequence[nextSlot])!
+    await expect(dots.first()).toHaveAttribute('fill', nextPlayer.color)
+    const unmarked = await dots.first().evaluate((dot) => ({ x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
+    const second = corners.find((corner) => corner.x === unmarked.x && corner.y === unmarked.y)!
+    expect(buildingSlots(board, nextPlayer.id, 'settlement', 'edit')).toContain(second.ref)
+    await expect(svg.locator(`.vertex-highlight[cx="${second.x}"][cy="${second.y}"]`)).toHaveCount(0)
+    await clickCorner(second)
+    board = tapPlaced(board, second.ref, nextPlayer.id)
+    await expect(buildings).toHaveCount(2)
+    await expect(buildings.nth(1)).toHaveAttribute('fill', nextPlayer.color)
+    await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
+    const followingSlot = inferDraftState(board).remainingPickIndices[0]
+    await expect(slots.nth(followingSlot)).toHaveClass(/\bviewing\b/)
+    await clickCorner(second)
+    await expect(buildings).toHaveCount(2)
+    await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
+    await expect(slots.nth(followingSlot)).toHaveClass(/\bviewing\b/)
+    expect(board.roads).toHaveLength(2)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(board.roads.length)
+  })
+
+  test('deselecting robber returns to placing pieces', async ({ page }) => {
+    await page.goto('')
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    const robber = tools.getByRole('button', { name: 'robber', exact: true })
+    await robber.click()
+    await expect(robber).toHaveClass('selected')
+    await robber.click()
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
+    const svg = page.locator('.board-canvas')
+    await expect(svg.locator('.placement-slot').first()).toBeVisible()
+    await svg.locator('.placement-slot').first().click({ force: true })
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings.locator('g[transform*="scale(0.8)"]')).toHaveCount(1)
+  })
+
+  test('a port badge opens its editor with no tool selected', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    const tools = page.locator('.tools-panel')
+    await tools.getByText('Edit manually').click()
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
+    const svg = page.locator('.board-canvas')
+    const badge = svg.locator('.port-text').first()
+    await badge.hover()
+    await expect(svg.locator('.placement-hover')).toHaveAttribute('stroke', '#333')
+    await badge.click()
+    const popover = page.locator('.port-popover')
+    await expect(popover).toBeVisible()
+    await expect(popover.locator('h3')).toHaveText('Edit port')
+    await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
+    await popover.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(popover).toHaveCount(0)
+  })
+
+  test('a solid corner dot previews a settlement and becomes a ring after placing it', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    await page.locator('.tools-panel').getByText('Edit manually').click()
+    const svg = page.locator('.board-canvas')
+    const vertex = hexVertexIds({ q: 0, r: 0 })[0]
+    const points = parseVertexId(vertex).map((coord) => axialToPixel(coord, 58))
+    const corner = { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+    const color = UNCLAIMED_ROSTER[0].color
+    const slot = svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`)
+    await expect(slot).toHaveAttribute('fill', color)
+    await expect(slot).toHaveAttribute('r', '3.6')
+    const dot = (await slot.boundingBox())!
+    const x = dot.x + dot.width / 2
+    const y = dot.y + dot.height / 2
+    await page.mouse.move(x, y)
+    const preview = svg.locator('path.placement-hover')
+    await expect(preview).toHaveCount(1)
+    await expect(preview).toHaveAttribute('fill', color)
+    await expect(slot).toHaveCount(0)
+    await expect(svg.locator('circle.placement-hover')).toHaveCount(0)
+
+    await page.mouse.click(x, y)
+    const building = svg.locator(`g[fill="${color}"][transform^="translate(${corner.x} ${corner.y})"]`)
+    await expect(building).toHaveAttribute('transform', /scale\(0\.8\)/)
+    await expect(svg.locator('circle.placement-hover')).toHaveCount(1)
+    await expect(preview).toHaveCount(0)
   })
 
   test('pieces keeps a repeat click on its corner when nearer road slots appear', async ({ page }) => {
@@ -393,7 +609,6 @@ test.describe('desktop', () => {
     await seedBoard(page, board)
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const svg = page.locator('.board-canvas')
     const other = edgeEndpointVertexIds(vertexIncidentEdgeIds(vertex)[0]).find((ref) => ref !== vertex)!
     const [corner, end] = [vertex, other].map((ref) => {
@@ -436,7 +651,6 @@ test.describe('desktop', () => {
     await seedUnclaimedRoster(page)
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const svg = page.locator('.board-canvas')
     const slot = svg.locator('.placement-slot').first()
     await expect(slot).toBeVisible()
@@ -458,7 +672,6 @@ test.describe('desktop', () => {
     await page.goto('')
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await tools.getByRole('button', { name: 'pieces', exact: true }).click()
     const svg = page.locator('.board-canvas')
     const slots = svg.locator('.placement-slot')
     await expect(slots.first()).toBeVisible()
@@ -535,22 +748,23 @@ test.describe('desktop', () => {
 
     // Clearing drops back to the resting marks, and nothing was placed on the way.
     const structures = page.locator('.tools-panel .tool-label')
-      .filter({ hasText: 'Structures' }).locator('.tool-count')
+      .filter({ hasText: 'Other tools' }).locator('.tool-count')
     await expect(structures).toHaveText('0 pieces')
     await cards.first().getByRole('button', { name: 'Clear' }).click()
     await page.mouse.move(0, 0)
     await expect(marks).toHaveCount(LISTED_PICKS)
     await expect(cards.first()).not.toHaveClass(/\bcurrent\b/)
 
-    // Placing is the button's job alone, and it ends the selection with it.
+    // Placing is the button's job alone, and it ends the selection with it. The settlement
+    // lands with its setup road, so the count is two.
     await cards.first().locator('.analysis-row-select').click()
     await cards.first().getByRole('button', { name: 'Place settlement' }).click()
-    await expect(structures).toHaveText('1 piece')
+    await expect(structures).toHaveText('2 pieces')
     await expect(panel.locator('.analysis-row.current')).toHaveCount(0)
     await snap(page, 'desktop-placed')
   })
 
-  test('the cards are the phone cards: claimed rank circle, plain survival, flat chips', async ({ page }) => {
+  test('the ledger rows show a claimed rank circle, plain survival and plain text factors', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
     await randomize(page)
@@ -565,12 +779,10 @@ test.describe('desktop', () => {
     await expect(rank).toHaveCSS('background-color', mine)
     await expect(rank).not.toHaveCSS('border-top-width', '0px')
 
-    // The list is collapsed: a row is its pick line until it is selected, and
-    // the factors open with it as flat tinted chips, not the bordered pills.
     await expect(panel.locator('.analysis-factors')).toHaveCount(0)
     await panel.locator('.analysis-row-select').first().click()
     await expect(panel.locator('.analysis-factors')).toHaveCount(1)
-    await expect(panel.locator('.analysis-factors span').first()).toHaveCSS('border-top-width', '0px')
+    await expect(panel.locator('.analysis-factors > span').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
     // Survival only renders on a spot the rollouts expect to be contested, and a
     // random board holds none more often than not, so the rule is read off a

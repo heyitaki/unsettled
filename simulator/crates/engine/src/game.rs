@@ -109,6 +109,17 @@ impl GameArena {
         self.play_inner(board, topology, rules, config, None)
     }
 
+    pub(crate) fn play_from_draft(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+    ) -> GameResult {
+        self.prepare_from_draft(board, topology, rules, config);
+        self.play_turns(board, topology, rules, config)
+    }
+
     /// Plays a game and appends every setup pick to `trace`, in `setup_order` order. Identical to
     /// `play` in every other respect: the trace only observes, so a traced and an untraced game on
     /// the same seed play out the same. `play` passes `None`, which keeps the hot path
@@ -122,101 +133,6 @@ impl GameArena {
         trace: &mut Vec<SetupPick>,
     ) -> GameResult {
         self.play_inner(board, topology, rules, config, Some(trace))
-    }
-
-    fn play_inner(
-        &mut self,
-        board: &SimBoard,
-        topology: &Topology,
-        rules: &RuleConfig,
-        config: &GameConfig,
-        setup_trace: Option<&mut Vec<SetupPick>>,
-    ) -> GameResult {
-        self.prepare(board, topology, rules, config);
-        self.setup(board, topology, rules, config, setup_trace);
-        debug_assert!(self.invariants_hold(board, topology, rules));
-        let seats = board.seats();
-        let mut turns = 0_u16;
-        let mut winner = None;
-        'rounds: for round in 0..rules.turn_cap {
-            self.state.round = round;
-            for seat in 0..seats {
-                self.state.current_seat = seat as u8;
-                turns = turns.saturating_add(1);
-                if self.begin_turn(board, topology, rules, config, seat) {
-                    winner = Some(seat as u8);
-                    break 'rounds;
-                }
-                let roll = self.streams.dice.range(6) + self.streams.dice.range(6) + 2;
-                if roll == 7 {
-                    self.resolve_seven(board, topology, rules, config, seat);
-                } else {
-                    self.produce(board, topology, roll as u8, seats);
-                }
-                loop {
-                    let action =
-                        self.ask_action(board, topology, config, seat, DecisionPhase::Action);
-                    if action == Action::Pass {
-                        break;
-                    }
-                    if !self.apply_action_internal(
-                        board,
-                        topology,
-                        rules,
-                        config,
-                        seat,
-                        action,
-                        DecisionPhase::Action,
-                    ) {
-                        break;
-                    }
-                    if self.total_vp(seat) >= rules.win_vp {
-                        winner = Some(seat as u8);
-                        break 'rounds;
-                    }
-                }
-                if rules.special_building_phase(seats) {
-                    for offset in 1..seats {
-                        let builder = (seat + offset) % seats;
-                        loop {
-                            let action = self.ask_action(
-                                board,
-                                topology,
-                                config,
-                                builder,
-                                DecisionPhase::SpecialBuild,
-                            );
-                            if action == Action::Pass {
-                                break;
-                            }
-                            if !self.apply_action_internal(
-                                board,
-                                topology,
-                                rules,
-                                config,
-                                builder,
-                                action,
-                                DecisionPhase::SpecialBuild,
-                            ) {
-                                break;
-                            }
-                        }
-                    }
-                }
-                debug_assert!(self.invariants_hold(board, topology, rules));
-            }
-        }
-        let mut vp = [0; MAX_SEATS];
-        for (seat, value) in vp.iter_mut().enumerate().take(seats) {
-            *value = self.total_vp(seat);
-        }
-        GameResult {
-            winner,
-            vp,
-            turns,
-            draw: winner.is_none(),
-            illegal_actions: self.illegal_actions,
-        }
     }
 
     pub fn prepare(
@@ -505,6 +421,17 @@ impl GameArena {
     }
 
     #[doc(hidden)]
+    pub fn prepare_from_draft_for_test(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+    ) {
+        self.prepare_from_draft(board, topology, rules, config);
+    }
+
+    #[doc(hidden)]
     pub fn setup_for_test(
         &mut self,
         board: &SimBoard,
@@ -624,6 +551,148 @@ impl GameArena {
         true
     }
 
+    fn grant_setup_resources(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        seat: usize,
+        vertex: Vertex,
+    ) {
+        for hex in topology.vertex_hexes(vertex) {
+            if let Some(resource) = board.tiles()[usize::from(*hex)] {
+                let index = resource.index();
+                if self.state.bank[index] > 0 {
+                    self.state.bank[index] -= 1;
+                    self.state.players[seat].resources[index] += 1;
+                    self.state.belief.gain(seat, index, 1);
+                }
+            }
+        }
+    }
+
+    fn play_inner(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+        setup_trace: Option<&mut Vec<SetupPick>>,
+    ) -> GameResult {
+        self.prepare(board, topology, rules, config);
+        self.setup(board, topology, rules, config, setup_trace);
+        self.play_turns(board, topology, rules, config)
+    }
+
+    fn play_turns(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+    ) -> GameResult {
+        debug_assert!(self.invariants_hold(board, topology, rules));
+        let seats = board.seats();
+        let mut turns = 0_u16;
+        let mut winner = None;
+        'rounds: for round in 0..rules.turn_cap {
+            self.state.round = round;
+            for seat in 0..seats {
+                self.state.current_seat = seat as u8;
+                turns = turns.saturating_add(1);
+                if self.begin_turn(board, topology, rules, config, seat) {
+                    winner = Some(seat as u8);
+                    break 'rounds;
+                }
+                let roll = self.streams.dice.range(6) + self.streams.dice.range(6) + 2;
+                if roll == 7 {
+                    self.resolve_seven(board, topology, rules, config, seat);
+                } else {
+                    self.produce(board, topology, roll as u8, seats);
+                }
+                loop {
+                    let action =
+                        self.ask_action(board, topology, config, seat, DecisionPhase::Action);
+                    if action == Action::Pass {
+                        break;
+                    }
+                    if !self.apply_action_internal(
+                        board,
+                        topology,
+                        rules,
+                        config,
+                        seat,
+                        action,
+                        DecisionPhase::Action,
+                    ) {
+                        break;
+                    }
+                    if self.total_vp(seat) >= rules.win_vp {
+                        winner = Some(seat as u8);
+                        break 'rounds;
+                    }
+                }
+                if rules.special_building_phase(seats) {
+                    for offset in 1..seats {
+                        let builder = (seat + offset) % seats;
+                        loop {
+                            let action = self.ask_action(
+                                board,
+                                topology,
+                                config,
+                                builder,
+                                DecisionPhase::SpecialBuild,
+                            );
+                            if action == Action::Pass {
+                                break;
+                            }
+                            if !self.apply_action_internal(
+                                board,
+                                topology,
+                                rules,
+                                config,
+                                builder,
+                                action,
+                                DecisionPhase::SpecialBuild,
+                            ) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                debug_assert!(self.invariants_hold(board, topology, rules));
+            }
+        }
+        let mut vp = [0; MAX_SEATS];
+        for (seat, value) in vp.iter_mut().enumerate().take(seats) {
+            *value = self.total_vp(seat);
+        }
+        GameResult {
+            winner,
+            vp,
+            turns,
+            draw: winner.is_none(),
+            illegal_actions: self.illegal_actions,
+        }
+    }
+
+    fn prepare_from_draft(
+        &mut self,
+        board: &SimBoard,
+        topology: &Topology,
+        rules: &RuleConfig,
+        config: &GameConfig,
+    ) {
+        self.prepare(board, topology, rules, config);
+        for seat in (0..board.seats()).rev() {
+            if let Some(second) = board.buildings().iter()
+                .filter(|b| usize::from(b.seat) == seat).nth(1)
+            {
+                self.grant_setup_resources(board, topology, seat, second.vertex);
+            }
+        }
+        self.recompute_all_roads(topology, rules, board.seats());
+    }
+
     fn setup(
         &mut self,
         board: &SimBoard,
@@ -714,16 +783,7 @@ impl GameArena {
         self.state.players[seat].vp_public += self.flattened[seat].vp(Buildable::Settlement);
         self.refresh_player_rules(board, topology, rules, seat, &config.modifiers[seat]);
         if grant {
-            for hex in topology.vertex_hexes(vertex) {
-                if let Some(resource) = board.tiles()[usize::from(*hex)] {
-                    let index = resource.index();
-                    if self.state.bank[index] > 0 {
-                        self.state.bank[index] -= 1;
-                        self.state.players[seat].resources[index] += 1;
-                        self.state.belief.gain(seat, index, 1);
-                    }
-                }
-            }
+            self.grant_setup_resources(board, topology, seat, vertex);
         }
         Some(vertex)
     }

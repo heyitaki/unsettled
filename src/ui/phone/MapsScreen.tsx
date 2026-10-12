@@ -1,3 +1,4 @@
+import { newBoardTitle } from '../boardFiles'
 import { ImportButton } from '../ImportDialog'
 import { PlusGlyph } from '../glyphs'
 import { LibraryLists } from '../LibraryLists'
@@ -11,7 +12,7 @@ import { PhoneOverlay } from './PhoneOverlay'
  * Rename, delete and sort keep it open.
  */
 export function MapsScreen({ onClose }: { onClose: () => void }) {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
   const { items, fileInput } = useJsonFiles({ onImported: onClose })
   return (
     <PhoneOverlay
@@ -22,7 +23,7 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
           className="phone-ohead-btn"
           aria-label="New board"
           onClick={() => {
-            dispatch({ type: 'tab-add' })
+            dispatch({ type: 'tab-add', title: newBoardTitle(state.tabs) })
             onClose()
           }}
         >

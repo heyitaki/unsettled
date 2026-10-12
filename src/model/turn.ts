@@ -1,4 +1,4 @@
-import { placeBuilding, placeRoad, setRobber } from './board'
+import { placeBuilding, placeRoad, setRobber, setupGrants } from './board'
 import { edgeEndpointVertexIds } from './coords'
 import {
   adjustCounter, DEV_KINDS, devHandTotal, ensureStats, withBoard,
@@ -23,6 +23,10 @@ export type DevPlay =
 
 export function activePlayerId(game: Game): string | null {
   return game.turn?.playerId ?? game.board.mePlayerId
+}
+
+export function awaitingFirstTurn(game: Game): boolean {
+  return game.turn === undefined && setupGrants(game.board) !== null
 }
 
 export function turnState(game: Game): TurnState | null {

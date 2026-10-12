@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Recommendation } from '../engine/analysisProtocol'
-import { draftIsComplete } from '../engine/draft'
-import { placeBuilding, setMe } from '../model/board'
-import { axialKey, edgeEndpointVertexIds, parseVertexId } from '../model/coords'
-import type { Board, Resource, VertexId } from '../model/types'
+import { draftIsComplete, restoreDraftPick } from '../engine/draft'
+import { setMe } from '../model/board'
+import { awaitingFirstTurn } from '../model/turn'
+import type { Board, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { useAnalysis } from './useAnalysis'
 import { useDraftSteps } from './useDraftSteps'
@@ -11,82 +11,15 @@ import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
 import { viewedPlayerId } from './draftSlots'
 import { BestMovesPanel } from './BestMovesPanel'
-import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { DraftRecapPanel } from './DraftRecapPanel'
+import { SpotTiles } from './SpotTiles'
+import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
-
-const RESOURCE_LABELS: Record<Resource, string> = {
-  wood: 'Wood',
-  sheep: 'Sheep',
-  wheat: 'Wheat',
-  brick: 'Brick',
-  ore: 'Ore',
-}
-
-/** What a vertex touches: its hexes, then any port on an edge it ends. */
-type VertexPart =
-  | { kind: 'hex'; resource: Resource; number: number | null }
-  | { kind: 'word'; word: 'Desert' | 'Unassigned' }
-  | { kind: 'port'; resource: Resource | null; rate: number }
-
-function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
-  const touching = new Set(parseVertexId(vertexId).map(axialKey))
-  const hexes = board.hexes
-    .filter((hex) => touching.has(axialKey(hex.coord)))
-    .map((hex): VertexPart => {
-      if (hex.tile === 'desert') return { kind: 'word', word: 'Desert' }
-      if (hex.tile === null) return { kind: 'word', word: 'Unassigned' }
-      return { kind: 'hex', resource: hex.tile, number: hex.numberToken }
-    })
-  const ports = board.ports
-    .filter((port) => edgeEndpointVertexIds(port.edgeId).includes(vertexId))
-    .map((port): VertexPart => ({ kind: 'port', resource: port.resource, rate: port.rate }))
-  return [...hexes, ...ports]
-}
-
-/** The vertex in words, for tooltips and accessible names. */
-function vertexDescription(board: Board, vertexId: VertexId): string {
-  return vertexParts(board, vertexId).map((part) => {
-    if (part.kind === 'word') return part.word
-    if (part.kind === 'hex') return `${RESOURCE_LABELS[part.resource]} ${part.number ?? '?'}`
-    return part.resource === null ? `${part.rate}:1 port` : `${RESOURCE_LABELS[part.resource]} ${part.rate}:1 port`
-  }).join(' · ')
-}
-
-/**
- * The vertex as glyphs (spec D4): each hex is its resource card beside its
- * number, a port its anchor (or its resource card) beside the rate, so a triple
- * and the follow-up line read at a glance and fit one line.
- */
-function VertexLabel({ board, vertexId }: { board: Board; vertexId: VertexId }) {
-  return (
-    <>
-      {vertexParts(board, vertexId).map((part, index) => (
-        <Fragment key={index}>
-          {index > 0 && ' · '}
-          {part.kind === 'word' ? part.word : (
-            <span className="hex-label">
-              {part.kind === 'hex' ? <ResourceGlyph resource={part.resource} />
-                : part.resource === null ? <StructureGlyph shape="port" color="currentColor" size={12} />
-                  : <ResourceGlyph resource={part.resource} />}
-              {part.kind === 'hex' ? part.number ?? '?' : `${part.rate}:1`}
-            </span>
-          )}
-        </Fragment>
-      ))}
-    </>
-  )
-}
-
-/** React children joined by a separator, the way `Array.join` joins strings. */
-function joined(items: ReactNode[], separator: string): ReactNode {
-  return items.map((item, index) => (
-    <Fragment key={index}>{index > 0 && separator}{item}</Fragment>
-  ))
-}
+import { vertexDescription } from './vertexParts'
 
 function formatFactor(value: number): string {
   const magnitude = Math.abs(value).toFixed(1)
@@ -123,9 +56,9 @@ const ordinal = (pick: number): string => `${pick}${['st', 'nd', 'rd'][pick - 1]
 
 /**
  * The ranked picks (mobile spec S5, desktop D4). One rendering for every
- * pointer and both trees: a click or a tap selects a card, which pins its marks
+ * pointer and both trees: a click or a tap selects a row, which pins its marks
  * on the board and opens the actions under it, and a fine pointer previews a
- * card's marks on hover while nothing is pinned. Placing is never a side effect
+ * row's marks on hover while nothing is pinned. Placing is never a side effect
  * of selecting.
  *
  * Only the phone shell passes `onBuild`, so that prop also tells the trees apart
@@ -137,7 +70,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   onBuild?: () => void
 } = {}) {
   const { state, dispatch } = useStore()
-  const board = activeTab(state).game.board
+  const game = activeTab(state).game
+  const { board } = game
   const { analysis, pending, settled, progress = 0, error, retry } = useAnalysis()
   const { canStepBack, canStepForward, stepBack, stepForward } = useDraftSteps()
   // While a ranking is pending the last one stays in place, inert and drawn as
@@ -159,7 +93,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const [selectedLikelyGone, setSelectedLikelyGone] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
-  // External highlights, such as import issues, replace the selected card's marks.
+  // External highlights, such as import issues, replace the selected row's marks.
   const own = useRef<readonly HighlightMark[] | null>(null)
   const mark = (marks: HighlightMark[] | null) => {
     own.current = marks
@@ -172,7 +106,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     || (state.highlight !== null && state.highlight !== own.current)
   // A hover is a preview, not a choice: it paints only while nothing is pinned
   // (spec DB2). A tap's compatibility mouseenter is harmless, since the click
-  // that follows selects the very card the preview just painted.
+  // that follows selects the very row the preview just painted.
   const preview = (marks: HighlightMark[] | null) => {
     if (!pinned) mark(marks)
   }
@@ -180,11 +114,13 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const playerId = viewedPlayerId(board, state.viewedPick)
   const viewedPlayer = board.players.find((player) => player.id === playerId)
   const viewedColor = viewedPlayer?.color ?? '#8a7a63'
+  // Which of the viewed player's two settlements the rows rank, stamped on their marks.
+  const pickNumber = analysis.draft.myPickIndices.indexOf(state.viewedPick ?? analysis.draft.myRemainingPickIndices[0]) + 1 || 1
 
   // Reset the board marks whenever the board or viewed pick changes: the
   // previous window's circles are stale. The shell's resting marks show through
   // the cleared highlight (spec S5). A layout effect, so the next ranking is
-  // never painted with the last one's card still open.
+  // never painted with the last one's row still open.
   useLayoutEffect(() => {
     setSelectedPick(null)
     setSelectedLikelyGone(false)
@@ -210,29 +146,30 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const likelyGone = shown.takenBeforeFirstPick
   // Numbered in draft order and tinted to each picker so selecting shows who goes
   // where, and playing them out advances the draft to the viewed pick.
-  const likelyGoneMarks: HighlightMark[] = likelyGone.map(({ vertexId, playerId }, index) => ({
-    ref: vertexId,
-    color: playerColor(playerId),
-    label: String(index + 1),
-  }))
+  const likelyGoneMarks: HighlightMark[] = likelyGone.flatMap(({ vertexId, playerId, road }, index) => [
+    { ref: vertexId, color: playerColor(playerId), label: String(index + 1) },
+    ...(road === null ? [] : [{ ref: road, color: playerColor(playerId), label: 'R', kind: 'road' as const }]),
+  ])
+  // The line's settlements with their setup roads, less a pick whose corner the selected row takes.
+  const playLine = (skip?: VertexId) => likelyGone.reduce((next, { vertexId, playerId, road }) =>
+    !playerId || vertexId === skip
+      ? next
+      : restoreDraftPick(next, { vertexId, playerId, roads: road === null ? [] : [road] }), board)
   const placeLikelyGone = () => {
-    let next = board
-    for (const { vertexId, playerId } of likelyGone) {
-      if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
-    }
+    const next = playLine()
     if (next !== board) dispatch({ type: 'commit', board: next })
     setSelectedLikelyGone(false)
     clearHighlight()
   }
   const placeRecommendation = (recommendation: Recommendation) => {
     if (playerId === null) return
-    let next = board
-    for (const { vertexId, playerId } of likelyGone) {
-      if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
-    }
+    const { firstPick, firstRoad } = recommendation
+    const line = playLine(firstPick)
+    // A row the line blocks reads its road off another rollout, where the edge can be a rival's.
+    const free = firstRoad !== null && !line.roads.some(({ edgeId }) => edgeId === firstRoad)
     dispatch({
       type: 'commit',
-      board: placeBuilding(next, recommendation.firstPick, playerId, 'settlement'),
+      board: restoreDraftPick(line, { vertexId: firstPick, playerId, roads: free ? [firstRoad] : [] }),
     })
     setSelectedPick(null)
     clearHighlight()
@@ -241,7 +178,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     const next = selectedPick === recommendation.firstPick ? null : recommendation.firstPick
     setSelectedPick(next)
     setSelectedLikelyGone(false)
-    mark(next === null ? null : recommendationMarks(recommendation, viewedColor))
+    mark(next === null ? null : recommendationMarks(recommendation, viewedColor, pickNumber))
     // A mark moved on a board scrolled out of view is a change nobody sees
     // (spec B2), and only the phone's one document can scroll past the board.
     if (onBuild && next !== null) revealBoardIfScrolledPast()
@@ -281,9 +218,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     <div className="analysis-placeholder">
       <p>{emptyMessage[shown.status]}</p>
       {shown.status === 'no-availability' && likelyGone.length > 0 && (
-        <span>
-          likely gone: {joined(likelyGone.map(({ vertexId }) =>
-            <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ', ')}
+        <span className="analysis-gone-spots">
+          likely gone:
+          {likelyGone.map(({ vertexId }) => <SpotTiles key={vertexId} board={board} vertexId={vertexId} small />)}
         </span>
       )}
     </div>
@@ -301,14 +238,18 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             onMouseEnter={() => preview(likelyGoneMarks)}
           >
             <span className="analysis-likely-gone-title">Likely gone before this pick</span>
-            {joined(likelyGone.map(({ vertexId, playerId, frequency }, index) => {
-              const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
-              return (
-                <Fragment key={vertexId}>
-                  {index + 1}. {name}: <VertexLabel board={board} vertexId={vertexId} /> {Math.round(frequency * 100)}%
-                </Fragment>
-              )
-            }), ' · ')}
+            <span className="analysis-gone-entries">
+              {likelyGone.map(({ vertexId, playerId, frequency }, index) => {
+                const name = board.players.find((player) => player.id === playerId)?.name ?? 'Someone'
+                return (
+                  <span key={vertexId} className="analysis-gone-entry">
+                    <span>{index + 1}. {name}</span>
+                    <SpotTiles board={board} vertexId={vertexId} small />
+                    <span>{Math.round(frequency * 100)}%</span>
+                  </span>
+                )
+              })}
+            </span>
           </button>
           {selectedLikelyGone && (
             <div className="analysis-touch-actions">
@@ -326,14 +267,10 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
           )}
         </div>
       )}
-      <div className="analysis-list" onMouseLeave={() => preview(null)}>
+      <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
         {recommendations.map((recommendation, index) => {
           const factors = displayedFactors(recommendation)
           const current = selectedPick === recommendation.firstPick
-          // The desktop list is collapsed: a row is its pick line, score and
-          // follow-up until it is selected, and the factors open with it. The
-          // phone card carries everything at rest (mobile spec S5).
-          const expanded = onBuild !== undefined || current
           return (
             <div
               key={recommendation.firstPick}
@@ -344,7 +281,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 className="analysis-row-select"
                 title={vertexDescription(board, recommendation.firstPick)}
                 onClick={() => selectRecommendation(recommendation)}
-                onMouseEnter={() => preview(recommendationMarks(recommendation, viewedColor))}
+                onMouseEnter={() => preview(recommendationMarks(recommendation, viewedColor, pickNumber))}
               >
                 <span
                   className="analysis-rank"
@@ -352,30 +289,34 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 >
                   {index + 1}
                 </span>
+                <SpotTiles board={board} vertexId={recommendation.firstPick} />
                 <span className="analysis-row-body">
-                  <span className="analysis-pick-line">
-                    <strong><VertexLabel board={board} vertexId={recommendation.firstPick} /></strong>
-                    <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
-                  </span>
                   {recommendation.survival < 1 && (
                     <span className="analysis-availability">
                       {Math.round(recommendation.survival * 100)}% likely available
                     </span>
                   )}
                   {recommendation.plannedSecond.length > 0 && (
-                    <span className="analysis-second">
-                      then: {joined(recommendation.plannedSecond
-                        .map((vertexId) => <VertexLabel key={vertexId} board={board} vertexId={vertexId} />), ' or ')}
-                    </span>
-                  )}
-                  {expanded && (
-                    <span className="analysis-factors">
-                      {factors.map(([label, value]) => (
-                        <span key={label}>{label} {formatFactor(value)}</span>
+                    <span className="analysis-follow">
+                      {recommendation.plannedSecond.map((vertexId, index) => (
+                        <span key={vertexId} className="analysis-follow-spot">
+                          <span>{index === 0 ? 'then' : 'or'}</span>
+                          <SpotTiles board={board} vertexId={vertexId} small />
+                        </span>
                       ))}
                     </span>
                   )}
                 </span>
+                <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
+
+                {/* Both trees show factors only for the selected row. */}
+                {current && (
+                  <span className="analysis-factors">
+                    {factors.map(([label, value]) => (
+                      <span key={label}>{label} <b>{formatFactor(value)}</b></span>
+                    ))}
+                  </span>
+                )}
               </button>
               {current && (
                 <div className="analysis-touch-actions">
@@ -486,7 +427,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
             ) : (!pending || stale) ? (
               <div ref={bodyRef} className={pending ? 'analysis-stale' : undefined} inert={pending}>{body}</div>
             ) : ghosts && (
-              <div className="analysis-ghosts" aria-hidden>
+              <div className="analysis-ghosts pick-ledger" aria-hidden>
                 {Array.from({ length: LISTED_PICKS }, (_, index) => (
                   <div key={index} className="analysis-ghost"><span /><span /><span /><span /></div>
                 ))}
@@ -502,7 +443,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   // dialog must outlive both to show any parse issues.
   return (
     <>
-      {!empty && draftIsComplete(board, analysis.draft) ? <BestMovesPanel className={className} /> : panel}
+      {!empty && draftIsComplete(board, analysis.draft)
+        ? awaitingFirstTurn(game) ? <DraftRecapPanel className={className} /> : <BestMovesPanel className={className} />
+        : panel}
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </>
   )

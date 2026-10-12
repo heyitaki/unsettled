@@ -212,7 +212,7 @@ describe('viewing another player in Best picks', () => {
     const pickers = ['aki', 'b', 'c', 'd', 'd', 'c']
     await click(button('Pick 7: Blue'))
     await reply(pickers.map((playerId, index) => ({ playerId, vertexId: SPACED[index], road: null, frequency: 1 })))
-    expect(container.querySelector('.analysis-likely-gone')?.textContent).toContain('2. Blue:')
+    expect(container.querySelector('.analysis-likely-gone')?.textContent).toContain('2. Blue')
     await click(container.querySelector(action === 'Play these out' ? '.analysis-touch-select' : '.analysis-row-select'))
     await click(button(action))
     expect(board().mePlayerId).toBe('aki')

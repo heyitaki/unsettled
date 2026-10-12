@@ -4,7 +4,8 @@
 // resumed mid-play; the Board schema itself stays untouched (parser fixtures
 // and geometry validation are unaffected).
 
-import type { Board, Issue, Player, Resource } from './types'
+import { setupGrants } from './board'
+import { RESOURCES, type Board, type Issue, type Player, type Resource } from './types'
 
 export interface PlayerStats {
   hand: Record<Resource, number>
@@ -99,7 +100,28 @@ export const newGame = (board: Board): Game => ({
  * the same game reference when nothing changed.
  */
 export function withBoard(game: Game, board: Board): Game {
-  const stats = reconcileStats(game.stats, board.players)
+  let stats = reconcileStats(game.stats, board.players)
+
+  // Only hands still matching the previous setup grant follow draft edits.
+  if (game.turn === undefined && board !== game.board) {
+    const oldGrants = setupGrants(game.board)
+    const newGrants = setupGrants(board)
+    for (const { id } of board.players) {
+      const current = stats[id]
+      const oldHand = oldGrants && Object.hasOwn(oldGrants, id) ? oldGrants[id] : emptyStats().hand
+      const hand = newGrants?.[id] ?? emptyStats().hand
+      if (current.handUnknown === 0
+        && RESOURCES.every((resource) => current.hand[resource] === oldHand[resource])
+        && RESOURCES.some((resource) => current.hand[resource] !== hand[resource])) {
+        if (stats === game.stats) stats = { ...stats }
+        stats[id] = { ...current, hand }
+      }
+    }
+  }
+  return replaceBoard(game, board, stats)
+}
+
+function replaceBoard(game: Game, board: Board, stats: Record<string, PlayerStats>): Game {
   const dropTurn = game.turn !== undefined && !Object.hasOwn(stats, game.turn.playerId)
   const dropDevHand = game.devHand !== undefined && !Object.hasOwn(stats, game.devHand.playerId)
   if (board === game.board && stats === game.stats && !dropTurn && !dropDevHand) return game
@@ -169,17 +191,15 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
   const claim = savedClaim !== null && players.some((player) => player.id === savedClaim)
     ? savedClaim
     : ids.get(shot.board.mePlayerId ?? '') ?? null
-  return withBoard({
-    ...saved,
-    stats: Object.fromEntries(players.map((player) => [player.id, stats.get(player.id) ?? saved.stats[player.id]])),
-  }, {
+  // Not withBoard: a screenshot says what each hand holds now, so no hand follows the draft here.
+  return replaceBoard(saved, {
     ...shot.board,
     robber: shot.board.robber ?? saved.board.robber,
     players,
     roads: shot.board.roads.map(remapOwner),
     buildings: shot.board.buildings.map(remapOwner),
     mePlayerId: claim,
-  })
+  }, Object.fromEntries(players.map((player) => [player.id, stats.get(player.id) ?? saved.stats[player.id]])))
 }
 
 export function ensureStats(game: Game, playerId: string): PlayerStats {
