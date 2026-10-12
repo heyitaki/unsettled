@@ -39,8 +39,10 @@ fn every_corpus_case_matches_the_fixture() {
             usize::from(!expected["takenBeforeFirstPick"].as_array().unwrap().is_empty());
         assert_eq!(&run(&case["request"]), expected, "{}", case["name"]);
     }
-    // The corpus holds no `no-availability` case: see the plan's note on the class.
-    assert_eq!(statuses, BTreeSet::from(["complete", "me-done", "no-me", "no-production", "ready"]));
+    assert_eq!(
+        statuses,
+        BTreeSet::from(["complete", "me-done", "no-availability", "no-me", "no-production", "ready"])
+    );
     assert!(with_picks_ahead >= 10, "only {with_picks_ahead} corpus cases have a pick ahead");
 }
 
@@ -55,7 +57,9 @@ fn progress_climbs_to_one_when_a_ranking_ran() {
         for run in 0..2 {
             let mut fractions = Vec::new();
             analyze(&case["request"].to_string(), &mut |fraction| fractions.push(fraction));
-            if case["response"]["status"] != "ready" {
+            // `no-availability` here is a ranking that ran and kept none of its candidates.
+            let status = &case["response"]["status"];
+            if status != "ready" && status != "no-availability" {
                 assert!(fractions.is_empty(), "{name} run {run}: progress with nothing ranked");
                 continue;
             }

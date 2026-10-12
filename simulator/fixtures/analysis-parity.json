@@ -19150,6 +19150,295 @@
         "takenBeforeFirstPick": [],
         "warnings": []
       }
+    },
+    {
+      "name": "max-results-0",
+      "request": {
+        "board": {
+          "buildings": [],
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "numberToken": 9,
+              "tile": "brick"
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "numberToken": 12,
+              "tile": "brick"
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "numberToken": 10,
+              "tile": "sheep"
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "numberToken": 8,
+              "tile": "wood"
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "numberToken": 3,
+              "tile": "wood"
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "numberToken": 9,
+              "tile": "wheat"
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "numberToken": 11,
+              "tile": "wood"
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "numberToken": 4,
+              "tile": "ore"
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "numberToken": 2,
+              "tile": "ore"
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "numberToken": 5,
+              "tile": "sheep"
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "numberToken": 4,
+              "tile": "wheat"
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "numberToken": 6,
+              "tile": "sheep"
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "numberToken": 8,
+              "tile": "wood"
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "numberToken": 11,
+              "tile": "sheep"
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "numberToken": 6,
+              "tile": "brick"
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "numberToken": 10,
+              "tile": "ore"
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "numberToken": 5,
+              "tile": "wheat"
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "numberToken": null,
+              "tile": "desert"
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "numberToken": 3,
+              "tile": "wheat"
+            }
+          ],
+          "layout": "standard4",
+          "mePlayerId": "p2",
+          "players": [
+            {
+              "color": "#c23f38",
+              "id": "aki",
+              "name": "aki"
+            },
+            {
+              "color": "#3063ba",
+              "id": "p2",
+              "name": "P2"
+            },
+            {
+              "color": "#e58331",
+              "id": "p3",
+              "name": "P3"
+            },
+            {
+              "color": "#ffffff",
+              "id": "p4",
+              "name": "P4"
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "rate": 3,
+              "resource": null
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "rate": 2,
+              "resource": "wheat"
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "rate": 3,
+              "resource": null
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "rate": 2,
+              "resource": "sheep"
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "rate": 3,
+              "resource": null
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "rate": 2,
+              "resource": "brick"
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "rate": 2,
+              "resource": "wood"
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "rate": 3,
+              "resource": null
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "rate": 2,
+              "resource": "ore"
+            }
+          ],
+          "roads": [],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "schemaVersion": 1
+        },
+        "options": {
+          "maxResults": 0,
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "no-availability",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 0,
+          "turnIndex": 0,
+          "currentPlayerId": "aki",
+          "myPickIndices": [
+            1,
+            6
+          ],
+          "myRemainingPickIndices": [
+            1,
+            6
+          ],
+          "remainingPickIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [],
+        "takenBeforeFirstPick": [
+          {
+            "vertexId": "v:0,1;1,0;1,1",
+            "playerId": "aki",
+            "frequency": 0.6666666666666666
+          }
+        ],
+        "warnings": []
+      }
     }
   ]
 }
