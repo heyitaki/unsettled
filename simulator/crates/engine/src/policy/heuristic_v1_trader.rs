@@ -303,31 +303,74 @@ mod cache_tests {
     use super::*;
 
     #[test]
-    fn action_etw_cache_matches_direct_bits() {
+    fn offer_scores_match_direct_bits_with_distinct_hands_and_rivals() {
         let (topology, board, mut arena) = crate::etw::tests::fixture();
-        let params = HeuristicParams {
-            trading: Some(trading::TradeParams::default()),
-            denial: Some(denial::DenialParams::default()),
-            ..HeuristicParams::default()
-        };
-        for held in 0..6 {
-            arena.state.players[0].resources = [held; crate::rules::RESOURCE_COUNT];
-            for seat in 0..board.seats() {
-                arena.state.players[seat].vp_public = (held as u8 + seat as u8) % 8;
-            }
-            for phase in [DecisionPhase::Action, DecisionPhase::SpecialBuild] {
-                let view = arena.decision_view(&board, &topology, 0, phase);
-                let mut actual = PolicyScratch::default();
-                let mut direct = PolicyScratch::default();
-                let mut rng = Xoshiro256StarStar::from_seed(held as u64);
-                let mut direct_rng = rng.clone();
-                assert_eq!(action(&view, &mut actual, &params, &mut rng),
-                    action_inner(&view, &mut direct, &params, &mut direct_rng));
-                assert_eq!(actual.actions.as_slice().len(), direct.actions.as_slice().len());
-                for (a, b) in actual.actions.as_slice().iter().zip(direct.actions.as_slice()) {
-                    assert_eq!(a.action, b.action);
-                    assert_eq!(a.score.to_bits(), b.score.to_bits());
+        let params = trading::TradeParams::default();
+        for resource in Resource::ALL {
+            for held in [3, 6, 9] {
+                arena.state.players[0].resources = [0; crate::rules::RESOURCE_COUNT];
+                arena.state.players[0].resources[resource.index()] = held;
+                for seat in 0..board.seats() {
+                    arena.state.players[seat].vp_public = seat as u8 + 2;
+                    arena.state.players[seat].playable_dev = [0; crate::state::DEV_KIND_COUNT];
+                    arena.state.players[seat].bought_dev = [0; crate::state::DEV_KIND_COUNT];
+                    arena.state.players[seat].pieces[1] = 4;
+                    arena.state.players[seat].pieces[2] = 4;
+                    arena.state.belief.set_known_hand(seat, [1; crate::rules::RESOURCE_COUNT], seat as u16);
                 }
+                arena.state.belief.set_known_hand(0, [0; crate::rules::RESOURCE_COUNT], held as u16);
+                let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+                let mut own = crate::etw::compute_inputs_for_seat(&view, view.observer());
+                let belief = own.belief_expected;
+                own.belief_expected = view.own_hand().map(|amount| f64::from(amount.max(0)));
+                assert_ne!(own.belief_expected, belief);
+                assert_ne!(view.public_vp(1), view.public_vp(2));
+                let base = crate::etw::expected_turns_to_win(&own);
+                let recipients: Vec<_> = (0..view.seats()).map(|seat| {
+                    if seat == view.observer() || trade::embargoed(&view, seat) {
+                        None
+                    } else {
+                        Some(crate::etw::compute_inputs_for_seat(&view, seat))
+                    }
+                }).collect();
+                let mut direct = Vec::new();
+                let mut priced = [false; MAX_SEATS];
+                for give in Resource::ALL {
+                    for get in Resource::ALL {
+                        for count in [1, 2] {
+                            if !view.legal_offer_trade(give, get, count) { continue; }
+                            let offer = TradeOffer { proposer: view.observer(), give, get, count };
+                            let mine = trading::trade_benefit_with_base(
+                                &own, &params, &trading::proposer_delta(offer), base,
+                            );
+                            if mine <= 0.0 { continue; }
+                            let mut theirs = None;
+                            for (seat, inputs) in recipients.iter().enumerate() {
+                                let Some(inputs) = inputs else { continue; };
+                                if inputs.belief_expected[get.index()] < 1.0 { continue; }
+                                let score = trading::counterparty_score(
+                                    inputs, &params, &trading::responder_delta(offer),
+                                );
+                                priced[seat] = true;
+                                if !score.is_finite() { continue; }
+                                if theirs.is_none_or(|current| score < current) {
+                                    theirs = Some(score);
+                                }
+                            }
+                            let Some(theirs) = theirs else { continue; };
+                            let net = mine - params.offer_gain_weight * theirs;
+                            direct.push((Action::OfferTrade { give, get, count },
+                                (params.offer_base + params.offer_span * net as f32).to_bits()));
+                        }
+                    }
+                }
+                let mut actual = Vec::new();
+                score_offers(&view, &params, |scored| {
+                    actual.push((scored.action, scored.score.to_bits()));
+                });
+                assert!(!actual.is_empty(), "resource={resource:?} held={held}");
+                assert!(priced[1..view.seats()].iter().filter(|priced| **priced).count() >= 2);
+                assert_eq!(actual, direct, "resource={resource:?} held={held}");
             }
         }
     }

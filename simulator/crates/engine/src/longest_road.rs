@@ -40,7 +40,7 @@ struct RoadMemo {
 // Hands and dice change between decisions without changing the road graph.
 std::thread_local! {
     static ROAD_MEMOS: [RefCell<Option<RoadMemo>>; MAX_SEATS] =
-        [const { RefCell::new(None) }; MAX_SEATS];
+        const { [const { RefCell::new(None) }; MAX_SEATS] };
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -401,33 +401,33 @@ pub fn update_road_card(card: &mut RoadCard, lengths: &[u8], minimum: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::topology::Layout;
 
     #[test]
     fn remembered_roads_match_fresh_search_after_content_changes() {
-        for layout in [Layout::Standard4, Layout::Extension6] {
-            let topology = Topology::load(layout).unwrap();
-            let mut owners = [EMPTY; MAX_EDGES];
-            let mut vertices = [EMPTY; MAX_VERTICES];
-            let mut seed = 918273_u64;
-            for variant in 0..160 {
-                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                let edge = seed as usize % topology.edge_count();
-                owners[edge] = if variant % 3 == 0 { EMPTY } else { (variant % 2) as u8 };
-                let vertex = (seed >> 32) as usize % topology.vertex_count();
-                vertices[vertex] = if variant % 5 == 0 { 1 } else { EMPTY };
+        let mut owners = [EMPTY; MAX_EDGES];
+        let mut vertices = [EMPTY; MAX_VERTICES];
+        let mut seed = 918273_u64;
+        let standard = Topology::load(Layout::Standard4).unwrap();
+        let extension = Topology::load(Layout::Extension6).unwrap();
+        for variant in 0..160 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let edge = seed as usize % standard.edge_count();
+            owners[edge] = if variant % 3 == 0 { EMPTY } else { (variant % 2) as u8 };
+            let vertex = (seed >> 32) as usize % standard.vertex_count();
+            vertices[vertex] = if variant % 5 == 0 { 1 } else { EMPTY };
+            for topology in [&standard, &extension, &standard] {
                 for seat in 0..2 {
                     let edges: Vec<_> = (0..topology.edge_count())
                         .filter(|edge| owners[*edge] == seat)
                         .map(|edge| topology.edge_endpoints(edge as Edge)).collect();
                     let blocked = vertices.map(|owner| owner != EMPTY && owner != seat);
                     for pass in 0..3 {
-                        let mut actual = RoadNetwork::for_seat(&topology, &vertices, &owners, seat);
+                        let mut actual = RoadNetwork::for_seat(topology, &vertices, &owners, seat);
                         let mut direct = RoadNetwork::from_edges(&edges, &blocked);
                         assert_eq!(actual.base_length(), direct.base_length());
                         if pass == 1 {
                             // Another view may replace the memo while this graph is still in use.
-                            RoadNetwork::for_seat(&topology, &vertices, &[EMPTY; MAX_EDGES], seat);
+                            RoadNetwork::for_seat(topology, &vertices, &[EMPTY; MAX_EDGES], seat);
                         }
                         for edge in 0..topology.edge_count() {
                             if owners[edge] == seat { continue; }

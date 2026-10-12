@@ -37,7 +37,7 @@ pub struct EtwInputs {
     pub hand_total: u32,
 }
 
-/// Borrowed only by an immutable decision that repeatedly prices hands for the same seats.
+/// Cached values are valid for the borrowed state of one view.
 pub(crate) struct EtwCache {
     inputs: [OnceCell<EtwInputs>; crate::state::MAX_SEATS],
     estimates: [OnceCell<EtwEstimate>; crate::state::MAX_SEATS],
@@ -108,7 +108,7 @@ pub(crate) fn compute_inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> E
     }
 }
 
-/// Keyed by every input except the hand; route costs and income stay fixed across offers.
+/// Fixed seat inputs prepare route costs and income; only the hand varies across evaluations.
 #[derive(Clone)]
 pub(crate) struct EtwEstimate {
     routes: [Option<EtwRoute>; 3],
@@ -360,7 +360,7 @@ pub(crate) mod tests {
         let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
         for seat in 0..view.seats() {
             for variant in 0..32 {
-                let mut inputs = direct_inputs(&view, seat);
+                let mut inputs = compute_inputs_for_seat(&view, seat);
                 inputs.public_vp = variant % 12;
                 inputs.dev_count = variant % 5;
                 inputs.all_seats_dev_count_sum = u16::from(variant % 7);
@@ -408,7 +408,7 @@ pub(crate) mod tests {
                 view.with_etw_cache(|cached| {
                     for _ in 0..2 {
                         for seat in 0..board.seats() {
-                            let direct = direct_inputs(&view, seat);
+                            let direct = compute_inputs_for_seat(&view, seat);
                             assert_eq!(inputs_for_seat(cached, seat), direct);
                             let expected = expected_turns_to_win(&direct).to_bits();
                             assert_eq!(etw_for_seat(&view, seat).to_bits(), expected);
@@ -419,39 +419,6 @@ pub(crate) mod tests {
                     }
                 });
             }
-        }
-    }
-
-    fn direct_inputs(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
-        let rules = view.rules_for(seat);
-        let settlements_on_board = (0..view.topology().vertex_count())
-            .filter(|vertex| {
-                view.vertex_owner(*vertex as u8) == Some(seat as u8)
-                    && view.vertex_tier(*vertex as u8) == 1
-            })
-            .count() as u8;
-        EtwInputs {
-            win_vp: rules.win_vp(),
-            public_vp: view.public_vp(seat),
-            dev_count: view.dev_count(seat),
-            all_seats_dev_count_sum: (0..view.seats())
-                .map(|other| u16::from(view.dev_count(other)))
-                .sum(),
-            dev_deck_remaining: view.dev_deck_remaining(),
-            dev_victory_points: rules.dev_victory_points(),
-            production_pips: view.production_pips(seat),
-            pieces_settlement: view.pieces(seat, Buildable::Settlement),
-            pieces_city: view.pieces(seat, Buildable::City),
-            settlements_on_board,
-            settlement_cost: minimum_cost(rules.costs(Buildable::Settlement)),
-            city_cost: minimum_cost(rules.costs(Buildable::City)),
-            road_cost: minimum_cost(rules.costs(Buildable::Road)),
-            dev_cost: Some(*rules.dev_cost()),
-            settlement_vp: rules.vp(Buildable::Settlement),
-            city_vp: rules.vp(Buildable::City),
-            trade_rates: Resource::ALL.map(|resource| view.trade_rate_for(seat, resource)),
-            belief_expected: view.belief().expected(seat),
-            hand_total: view.hand_total(seat),
         }
     }
 }

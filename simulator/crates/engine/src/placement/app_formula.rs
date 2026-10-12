@@ -464,6 +464,7 @@ impl<'a> SitePricer<'a> {
         }
     }
 
+    // ExpansionBounds::with_pricer mirrors this operation order and must change with it.
     pub(super) fn price(&self, site: Vertex) -> f64 {
         if self.fallback {
             return self.scorer.site_total_with_holdings(self.holdings, site, self.total);
@@ -571,6 +572,8 @@ impl ExpansionBounds {
         let sites = if table_path { &self.table[usize::from(candidate)] } else { &self.general };
         let weights = &pricer.scorer.weights;
         let diversity = self.diversity - pricer.total;
+
+        // A share delta lies in [-1, 1], so either weight sign is bounded by its magnitude.
         let concentration = weights.robber_concentration_weight.abs();
         let q = |i: usize| {
             js_max(0.0, pricer.holdings.pips[i] + sites.adjusted[i] - weights.port_surplus_threshold)
@@ -581,6 +584,8 @@ impl ExpansionBounds {
         let port = weights.port_weight
             * (q(0) - pp[0] + q(1) - pp[1] + q(2) - pp[2]
                 + q(3) - pp[3] + q(4) - pp[4]);
+
+        // Zero also bounds missing sites and negative exact prices.
         let mut first = 0.0;
         let mut second = 0.0;
         for (bases, decay) in sites.bases.iter().zip(sites.decay) {
@@ -789,6 +794,8 @@ impl AppFormulaScorer {
         {
             return None;
         }
+
+        // Rival blocks can raise a class 0 site's cost from one paid build to two.
         let decay = [js_max(self.decay_pow[1], self.decay_pow[2]), self.decay_pow[2]];
         let table = (0..self.vertices.len()).map(|vertex| {
             let masks = self.reach.open_masks(vertex as Vertex);

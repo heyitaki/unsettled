@@ -32,20 +32,10 @@ pub(crate) struct DraftScorers {
     pub opponent: AppFormulaScorer,
 }
 
-#[derive(Clone, Copy)]
 struct RowArgmax {
     taken: Option<(Vertex, f64)>,
     free: Option<(Vertex, f64)>,
     occupancy: Option<expansion::Occupancy>,
-}
-
-#[cfg(test)]
-use std::cell::Cell;
-
-#[cfg(test)]
-thread_local! {
-    // Per row kind: legal candidates and exact evaluations, excluding the reference check.
-    static ARGMAX_COUNTS: Cell<[[usize; 2]; 2]> = const { Cell::new([[0; 2]; 2]) };
 }
 
 /// One seat's vertex scores, at one holdings set and one setup grant.
@@ -54,8 +44,8 @@ thread_local! {
 /// the candidate alone, so a row computed while weighing one hero candidate is exactly the row
 /// wanted for the next. `expansion` is the exception: it walks the occupancy around the
 /// candidate, which the lookahead moves as it replays. Rows are therefore kept only while both
-/// formulas carry `expansionWeight` 0. Otherwise the lookahead scores only legal vertices into
-/// `scratch`, including those reopened for denial.
+/// formulas carry `expansionWeight` 0. Otherwise `scratch` holds a full fallback row or the
+/// candidate bases used by the pruned argmax, including vertices reopened for denial.
 struct ScoreRows {
     /// Row length: the board's vertices, which is what `best_legal` scans.
     vertices: usize,
@@ -273,7 +263,7 @@ impl ScoreRows {
                     bounds.value(scorer, &holdings, vertex, table_path)
                 };
                 let bound = base + scale.expansion * expansion;
-                if !base.is_finite() || !bound.is_finite() {
+                if !bound.is_finite() {
                     return None;
                 }
                 self.scratch[usize::from(vertex)] = base;
@@ -895,6 +885,15 @@ pub(super) fn lookahead_plan(
 }
 
 #[cfg(test)]
+use std::cell::Cell;
+
+#[cfg(test)]
+thread_local! {
+    // Per row kind: legal candidates and exact evaluations, excluding the reference check.
+    static ARGMAX_COUNTS: Cell<[[usize; 2]; 2]> = const { Cell::new([[0; 2]; 2]) };
+}
+
+#[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::PathBuf;
@@ -936,11 +935,25 @@ mod tests {
             }
         }
         let mut concentration = default_weights();
-        concentration.robber_concentration_weight = -3.0;
-        let mut ports = default_weights();
+        concentration.resource_value = super::super::app_formula::ResourceValues {
+            wood: 0.0, sheep: 0.0, wheat: 0.0, brick: 0.0, ore: 0.0,
+        };
+        concentration.scarcity_weight = 0.0;
+        concentration.diversity_weight = 0.0;
+        concentration.recipe_road_bonus = 0.0;
+        concentration.recipe_city_bonus = 0.0;
+        concentration.recipe_settlement_bonus = 0.0;
+        concentration.recipe_dev_card_bonus = 0.0;
+        concentration.duplicate_number_penalty = 0.0;
+        concentration.port_weight = 0.0;
+        concentration.robber_concentration_weight = 3.0;
+        let mut negative_concentration = concentration.clone();
+        negative_concentration.robber_concentration_weight = -3.0;
+        let mut ports = concentration.clone();
+        ports.robber_concentration_weight = 0.0;
         ports.port_weight = 12.0;
         ports.near_port_radius = 3.0;
-        let mut weights = vec![default_weights(), scaled, concentration, ports];
+        let mut weights = vec![default_weights(), scaled, concentration, negative_concentration, ports];
         let mut random = 0x4250_554e_4445_4421_u64;
         let mut draw = || {
             random = random.wrapping_mul(6_364_136_223_846_793_005)
@@ -996,22 +1009,22 @@ mod tests {
                         let occupancy = expansion::Occupancy::new(&scorer, vertices, edges, seat);
                         let scale = scorer.slot_scale(seat).expansion;
                         let bounds = scorer.expansion_bounds(scale).unwrap();
-                        for grant in [false, true] {
-                            expansion::PRICE_MEMO.with_borrow_mut(|memo| {
-                                let serial = memo.serial(scorer.id, occupancy.own_vertices);
-                                for vertex in 0..topology.vertex_count() as Vertex {
-                                    if !legal_with_vacancy(&topology, vertices, vacancy, vertex) {
-                                        continue;
-                                    }
-                                    let upper = bounds.value(&scorer, &holdings, vertex,
-                                        scorer.reach.table_path(vertex, &occupancy));
-                                    let exact = expansion::row_value(
-                                        &scorer, &holdings, vertex, &occupancy, memo, Some(serial),
-                                    );
-                                    assert!(scale * exact <= scale * upper,
-                                        "weight={weight_index} board={board_index} seat={seat} grant={grant} vertex={vertex} exact={exact:?} upper={upper:?}");
+                        expansion::PRICE_MEMO.with_borrow_mut(|memo| {
+                            let serial = memo.serial(scorer.id, occupancy.own_vertices);
+                            for vertex in 0..topology.vertex_count() as Vertex {
+                                if !legal_with_vacancy(&topology, vertices, vacancy, vertex) {
+                                    continue;
                                 }
-                            });
+                                let upper = bounds.value(&scorer, &holdings, vertex,
+                                    scorer.reach.table_path(vertex, &occupancy));
+                                let exact = expansion::row_value(
+                                    &scorer, &holdings, vertex, &occupancy, memo, Some(serial),
+                                );
+                                assert!(scale * exact <= scale * upper,
+                                    "weight={weight_index} board={board_index} seat={seat} vertex={vertex} exact={exact:?} upper={upper:?}");
+                            }
+                        });
+                        for grant in [false, true] {
                             for vacated in [None, vacancy] {
                                 let memoize = (board_index + usize::from(grant)) % 2 == 0;
                                 let actual = rows.pruned_argmax(&scorer, &topology, vertices, edges,
@@ -1030,60 +1043,115 @@ mod tests {
         }
     }
 
-    /// Invalid proof signs take the full path, while exact ties keep the lowest legal index.
     #[test]
-    fn bounded_rows_fall_back_for_unsupported_weights_and_preserve_ties() {
+    fn keep_best_preserves_lower_vertex_score_bits() {
+        for (higher, lower) in [(7.0, 7.0), (0.0, -0.0), (-0.0, 0.0)] {
+            let mut best = None;
+            keep_best(&mut best, 9, higher);
+            keep_best(&mut best, 3, lower);
+            keep_best(&mut best, 7, higher);
+            assert_eq!(answer_bits(best), Some((3, lower.to_bits())));
+        }
+    }
+
+    #[test]
+    fn bounded_rows_refuse_unsupported_weights() {
+        let cases: &[(&str, fn(&mut EngineWeights))] = &[
+            ("expansion_weight", |w| w.expansion_weight = -0.3),
+            ("port_weight", |w| w.port_weight = -1.0),
+            ("resource_nan", |w| w.resource_value.wheat = f64::NAN),
+            ("recipe_cap", |w| w.recipe_cap += 1.0),
+            ("port_coverage_deficit_weight", |w| w.port_coverage_deficit_weight = 1.0),
+            ("diversity_cap_zero", |w| w.diversity_cap = 0.0),
+            ("diversity_cap_negative", |w| w.diversity_cap = -1.0),
+            ("diversity_cap_infinite", |w| w.diversity_cap = f64::INFINITY),
+            ("diversity_weight", |w| w.diversity_weight = -1.0),
+            ("recipe_road_bonus", |w| w.recipe_road_bonus = -1.0),
+            ("recipe_city_bonus", |w| w.recipe_city_bonus = -1.0),
+            ("recipe_settlement_bonus", |w| w.recipe_settlement_bonus = -1.0),
+            ("recipe_dev_card_bonus", |w| w.recipe_dev_card_bonus = -1.0),
+            ("duplicate_number_penalty", |w| w.duplicate_number_penalty = -1.0),
+            ("coverage_exponent", |w| w.coverage_exponent = -1.0),
+            ("resource_negative", |w| w.resource_value.wheat = -1.0),
+            ("port_surplus_threshold", |w| w.port_surplus_threshold = f64::INFINITY),
+            ("robber_concentration_weight", |w| w.robber_concentration_weight = f64::NAN),
+            ("decay_negative", |w| w.expansion_decay = -0.5),
+            ("decay_infinite", |w| w.expansion_decay = f64::INFINITY),
+            ("coverage_infinite", |w| w.coverage_scarcity_weight = f64::INFINITY),
+            ("base_infinite", |w| w.scarcity_weight = f64::INFINITY),
+            ("adjusted_infinite", |w| w.robber_discount = f64::INFINITY),
+            ("port_factor_infinite", |w| w.generic_port_factor = f64::INFINITY),
+        ];
         for (topology, board) in expansion::tests::walk_fixtures() {
-            let mut negative_expansion = default_weights();
-            negative_expansion.expansion_weight = -0.3;
-            let mut negative_port = default_weights();
-            negative_port.port_weight = -1.0;
-            let mut nan = default_weights();
-            nan.resource_value.wheat = f64::NAN;
-            let mut recipe = default_weights();
-            recipe.recipe_cap += 1.0;
-            let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
-            for weights in [negative_expansion, negative_port, nan, recipe] {
-                let scorer = AppFormulaScorer::new(&board, &topology, weights);
-                assert!(scorer.expansion_bounds(1.0).is_none());
-                let before = ARGMAX_COUNTS.with(Cell::get);
-                for (vertices, edges) in expansion::tests::scrambled_owners(&topology) {
-                    for seat in 0..6 {
-                        for grant in [false, true] {
-                            for vacated in [None, Some(0)] {
-                                let actual = rows.argmax_row(&scorer, &topology, &vertices, &edges,
-                                    seat, grant, vacated, true);
-                                let expected = rows.full_argmax(&scorer, &topology, &vertices, &edges,
-                                    seat, grant, vacated, true);
-                                assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken));
-                                assert_eq!(answer_bits(actual.free), answer_bits(expected.free));
-                            }
-                        }
-                    }
-                }
-                assert_eq!(ARGMAX_COUNTS.with(Cell::get), before);
-            }
-            let mut tie = default_weights();
-            tie.resource_value = super::super::app_formula::ResourceValues {
-                wood: 0.0, sheep: 0.0, wheat: 0.0, brick: 0.0, ore: 0.0,
-            };
-            tie.scarcity_weight = 0.0;
-            tie.robber_discount = 0.0;
-            tie.diversity_weight = 0.0;
-            tie.recipe_road_bonus = 0.0;
-            tie.recipe_city_bonus = 0.0;
-            tie.recipe_settlement_bonus = 0.0;
-            tie.recipe_dev_card_bonus = 0.0;
-            tie.port_weight = 0.0;
-            tie.duplicate_number_penalty = 0.0;
-            let scorer = AppFormulaScorer::new(&board, &topology, tie);
+            let passing = default_weights();
+            let scorer = AppFormulaScorer::new(&board, &topology, passing.clone());
             assert!(scorer.expansion_bounds(1.0).is_some());
-            let vertices = vec![EMPTY; topology.vertex_count()];
-            let edges = vec![EMPTY; topology.edge_count()];
-            let actual = rows.argmax_row(&scorer, &topology, &vertices, &edges, 0, true, None, false);
-            let row = rows.legal_row(&scorer, &topology, &vertices, &edges, 0, true, None);
-            assert!(row.iter().all(|score| score.to_bits() == row[0].to_bits()));
-            assert_eq!(answer_bits(actual.taken), Some((0, row[0].to_bits())));
+            assert!(scorer.expansion_bounds(0.0).is_some());
+            for scale in [-1.0, f64::INFINITY, f64::NAN] {
+                assert!(scorer.expansion_bounds(scale).is_none(), "scale={scale}");
+            }
+            for (name, change) in cases {
+                let mut weights = passing.clone();
+                change(&mut weights);
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                assert!(scorer.expansion_bounds(1.0).is_none(), "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn bounded_row_evaluates_lower_vertex_tied_with_seed() {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().next().unwrap();
+        let mut weights = default_weights();
+        weights.resource_value = super::super::app_formula::ResourceValues {
+            wood: 1.0, sheep: 1.0, wheat: 0.0, brick: 0.0, ore: 0.0,
+        };
+        weights.scarcity_weight = 0.0;
+        weights.robber_discount = 0.0;
+        weights.diversity_weight = 0.0;
+        weights.recipe_road_bonus = 0.0;
+        weights.recipe_city_bonus = 0.0;
+        weights.recipe_settlement_bonus = 0.0;
+        weights.recipe_dev_card_bonus = 0.0;
+        weights.duplicate_number_penalty = 0.0;
+        weights.port_weight = 0.0;
+        weights.expansion_weight = 1.0;
+        weights.expansion_decay = 1.0;
+        let scorer = AppFormulaScorer::new(&board, &topology, weights);
+        let mut vertices = vec![EMPTY; topology.vertex_count()];
+        let mut edges = vec![EMPTY; topology.edge_count()];
+        vertices[26] = 2;
+        vertices[28] = 0;
+        edges[32] = 2;
+        edges[52] = 0;
+        let holdings = scorer.holdings_for_owner(&vertices, 1);
+        let total = scorer.holdings_diversity_total(&holdings);
+        let base = |vertex| scorer.scaled_total_with_diversity(holdings, vertex, false, 1.0, total);
+        let mut seed = None;
+        for vertex in 0..topology.vertex_count() as Vertex {
+            if can_place_settlement(&topology, &vertices, vertex) {
+                keep_best(&mut seed, vertex, base(vertex));
+            }
+        }
+        assert_eq!(seed.unwrap().0, 33);
+        let mut rows = ScoreRows::new(4, topology.vertex_count(), topology.vertex_count(), false);
+        let row = rows.legal_row(&scorer, &topology, &vertices, &edges, 1, false, None);
+        assert_eq!(row[5], 28.0);
+        assert_eq!(row[33], row[5]);
+        assert!(row[0] < row[5]);
+        let occupancy = expansion::Occupancy::new(&scorer, &vertices, &edges, 1);
+        let upper = base(5) + scorer.expansion_bounds(1.0).unwrap().value(
+            &scorer, &holdings, 5, scorer.reach.table_path(5, &occupancy),
+        );
+        assert_eq!(upper, row[5]);
+        for memoize in [false, true] {
+            let expected = rows.full_argmax(&scorer, &topology, &vertices, &edges,
+                1, false, None, memoize);
+            assert_eq!(answer_bits(expected.taken), Some((5, 28.0_f64.to_bits())));
+            let actual = rows.pruned_argmax(&scorer, &topology, &vertices, &edges,
+                1, false, None, memoize).unwrap();
+            assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken));
+            assert_eq!(answer_bits(actual.free), answer_bits(expected.free));
         }
     }
 
@@ -1137,9 +1205,6 @@ mod tests {
                 let evaluated = after[kind][1] - before[kind][1];
                 assert!(legal > 0);
                 assert!(evaluated * 2 < legal, "kind={kind} evaluated={evaluated} legal={legal}");
-                println!("vertices={} memoize={} evaluated={} legal={} skipped={:.2}%",
-                    topology.vertex_count(), kind == 1, evaluated, legal,
-                    100.0 * (legal - evaluated) as f64 / legal as f64);
             }
         }
     }

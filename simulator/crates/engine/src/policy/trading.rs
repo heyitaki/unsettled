@@ -86,7 +86,7 @@ pub fn counterparty_score(
     counterparty_score_with_base(inputs, params, delta, base)
 }
 
-pub(crate) fn counterparty_score_with_base(
+fn counterparty_score_with_base(
     inputs: &EtwInputs,
     params: &TradeParams,
     delta: &[f64; RESOURCE_COUNT],
@@ -185,7 +185,7 @@ pub fn trade_benefit_with_base(
     params.etw_weight * gain + params.tempo_weight * tempo
 }
 
-/// Keyed by one seat's inputs and trade parameters, preserving the direct pricing arithmetic.
+/// Fixed seat inputs and trade parameters prepare exact pricing for varying offer deltas.
 pub(crate) struct TradeValue<'a> {
     inputs: &'a EtwInputs,
     params: &'a TradeParams,

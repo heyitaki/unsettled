@@ -1044,7 +1044,6 @@ pub const fn pips(token: u8) -> u8 {
 #[cfg(test)]
 mod reach_tests {
     use super::*;
-    use crate::topology::Layout;
 
     #[test]
     fn one_step_matches_direct_after_content_changes() {
