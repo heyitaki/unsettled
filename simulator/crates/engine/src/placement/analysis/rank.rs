@@ -61,7 +61,8 @@ fn slice_end(length: usize, end: f64) -> usize {
 ///
 /// `candidates` is the board's legal vertices in index order. `pick_offset` is which of the
 /// player's remaining picks is ranked; past 0 the pre-windows hold the player's own earlier pick,
-/// which is why each window's holdings for the player are read from the window.
+/// which is why each window's holdings for the player are read from the window. `progress`
+/// receives the fraction of the candidates scored so far.
 pub(super) fn rank_candidates(
     context: &Context<'_>,
     board: &Board,
@@ -70,6 +71,7 @@ pub(super) fn rank_candidates(
     pre_windows: &[PreWindow],
     max_results: f64,
     pick_offset: usize,
+    progress: &mut dyn FnMut(f64),
 ) -> (Vec<Recommendation>, Vec<TakenVertex>) {
     let topology = board.topology;
     let scorer = context.scorer;
@@ -110,7 +112,7 @@ pub(super) fn rank_candidates(
         second_pick_index.is_some_and(|second| receives_second_settlement_grant(draft, second));
 
     let mut ranked: Vec<(Vertex, Recommendation)> = Vec::new();
-    for candidate in candidates {
+    for (scored, candidate) in candidates.iter().enumerate() {
         let mut total = NO_SCORE;
         let mut planned_second = vec![0_usize; vertex_count];
         let mut survived = 0_usize;
@@ -179,6 +181,7 @@ pub(super) fn rank_candidates(
             );
             planned_second[usize::from(second)] += 1;
         }
+        progress((scored + 1) as f64 / candidates.len() as f64);
         if survived == 0 {
             continue;
         }

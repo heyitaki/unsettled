@@ -3,6 +3,8 @@
 //! Twin of `src/engine/analyze.ts`, down to the order of evaluation, because
 //! `simulator/fixtures/analysis-parity.json` pins the two against each other.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize, Serializer};
@@ -539,19 +541,46 @@ fn remaining_turns(
         .unzip()
 }
 
+/// A nested ranking as a pre-window reads it: the recommended vertices beside their rank scores,
+/// best first, or `None` for a status other than `ready`.
+type ModalList = Option<(Vec<Vertex>, Vec<f64>)>;
+
+/// The cache holds this many nested rankings before a request empties it.
+const NESTED_RANKINGS_MAX: usize = 300;
+
+thread_local! {
+    /// Nested rankings by `Ranking::cache_key`, kept between requests: viewing a board as another
+    /// seat, or after one more pick, asks for mostly the same ones. Looked up and never iterated,
+    /// so its order reaches no output.
+    static NESTED_RANKINGS: RefCell<HashMap<String, ModalList>> = RefCell::new(HashMap::new());
+}
+
+/// Runs `action` on the nested-ranking cache, or returns `None` when it is already borrowed and
+/// the caller computes without it. No borrow is held across a ranking, so that only follows a
+/// wasm call that trapped inside one of these short borrows and never released it.
+fn with_nested_rankings<T>(action: impl FnOnce(&mut HashMap<String, ModalList>) -> T) -> Option<T> {
+    NESTED_RANKINGS.with(|cache| cache.try_borrow_mut().ok().map(|mut cache| action(&mut cache)))
+}
+
 /// Twin of `analyzeBoard`: the response JSON for a request, or `{"error": ...}` for one that is
 /// not valid JSON of the request shape or whose board the app's `validateBoard` would refuse.
 /// `progress` receives the fraction of the ranking done so far.
 pub fn analyze(request_json: &str, progress: &mut dyn FnMut(f64)) -> String {
-    match analyze_request(request_json, progress) {
+    let response = match analyze_request(request_json, progress) {
         Ok(analysis) => serde_json::to_string(&analysis).expect("the response serialises"),
         Err(error) => serde_json::json!({ "error": error }).to_string(),
-    }
+    };
+    with_nested_rankings(|cache| {
+        if cache.len() > NESTED_RANKINGS_MAX {
+            cache.clear();
+        }
+    });
+    response
 }
 
 fn analyze_request(
     request_json: &str,
-    _progress: &mut dyn FnMut(f64),
+    progress: &mut dyn FnMut(f64),
 ) -> Result<DraftAnalysis, String> {
     let request: AnalysisRequest =
         serde_json::from_str(request_json).map_err(|error| error.to_string())?;
@@ -561,13 +590,30 @@ fn analyze_request(
     let weights =
         options.weights.unwrap_or_else(|| weights_for_seats(board.player_ids.len()).clone());
     let scorer = board.scorer(weights);
+    let seed = options.seed.unwrap_or(7);
     let ranking = Ranking {
         context: window::Context::new(&board, &scorer),
-        seed: options.seed.unwrap_or(7),
+        seed,
         rollouts: options.rollouts,
+        // Debug text prints every float exactly, and none of these types has `Hash`.
+        cache_scope: format!(
+            "{:?}",
+            (
+                wire.layout,
+                &board.player_ids,
+                &board.roads,
+                &board.tiles,
+                &board.tokens,
+                board.robber,
+                &board.ports,
+                scorer.weights(),
+                seed,
+                options.rollouts,
+            )
+        ),
     };
     let max_results = options.max_results.unwrap_or(scorer.weights().max_results);
-    Ok(ranking.analyze(&board, request.target_pick, max_results, true))
+    Ok(ranking.analyze(&board, request.target_pick, max_results, true, progress))
 }
 
 /// What a ranking and the rankings nested in it share: the scorer and roads, which no scratch
@@ -576,9 +622,20 @@ struct Ranking<'a> {
     context: window::Context<'a>,
     seed: u32,
     rollouts: Option<f64>,
+    /// The part of a nested ranking's cache key that no scratch board changes: the layout, the
+    /// roster, the roads, the tiles, tokens, robber and ports, the weights, the seed and the
+    /// rollout override.
+    cache_scope: String,
 }
 
 impl Ranking<'_> {
+    /// Everything that determines the ranking of `scratch` for the seat claiming it: the request's
+    /// share, then the pieces in `board.buildings` order, the seat and the length of the list.
+    /// The request's own claimed player is left out, because a nested ranking never reads it.
+    fn cache_key(&self, scratch: &Board, max_results: f64) -> String {
+        format!("{}{:?}", self.cache_scope, (scratch.me, &scratch.buildings, max_results))
+    }
+
     /// Twin of `analyzeBoardInternal`. `board` is the request's, or a scratch board holding the
     /// picks a pre-window has made so far, claimed by the seat on turn. `rank_modal_picks` is off
     /// in a nested ranking, which bounds the recursion on a snake-inconsistent board.
@@ -588,6 +645,7 @@ impl Ranking<'_> {
         target_pick: Option<f64>,
         max_results: f64,
         rank_modal_picks: bool,
+        progress: &mut dyn FnMut(f64),
     ) -> DraftAnalysis {
         let context = &self.context;
         let scorer = context.scorer;
@@ -647,6 +705,32 @@ impl Ranking<'_> {
                 .rollouts
                 .unwrap_or_else(|| rollout_count(legal.len(), pre_turns.len(), mid_picks, weights))
                 as usize;
+            // Progress counts rankings: the nested one per pick ahead, then this one, each moved
+            // along by its candidate loop, which is nearly all of its cost. The costs are an
+            // estimate for pacing a bar, not a measurement: a ranking's work grows with the picks
+            // between its player's two settlements, and one with no second pick to plan is a
+            // fraction of the smallest of those.
+            let cost = |seat: u8, pick_index: usize| {
+                let player_id = &board.player_ids[usize::from(seat)];
+                let second = draft
+                    .remaining_pick_indices
+                    .iter()
+                    .copied()
+                    .find(|index| *index > pick_index && draft.sequence[*index] == *player_id);
+                second.map_or(0.3, |second| {
+                    let between = remaining_turns(board, &draft, pick_index + 1, second, Some(seat));
+                    between.0.len() as f64 + 1.0
+                })
+            };
+            let nested_costs: Vec<f64> = if rank_modal_picks {
+                pre_turns.iter().zip(&pre_indices).map(|(turn, index)| cost(turn.seat, *index)).collect()
+            } else {
+                Vec::new()
+            };
+            let own_cost = cost(me, first_pick_index);
+            let mut done_cost = 0.0;
+            let mut total_cost = nested_costs.iter().fold(own_cost, |sum, value| sum + value);
+            let mut nested_count = 0;
             let mut random = mulberry32(self.seed);
             let base_blocked = board.blocked();
             let mut pre_windows: Vec<rank::PreWindow> = Vec::with_capacity(rollouts);
@@ -680,22 +764,46 @@ impl Ranking<'_> {
                                 tier: BuildingTier::Settlement,
                             });
                         }
-                        let nested =
-                            self.analyze(&scratch, None, js_max(1.0, weights.opponent_top_k), false);
-                        if nested.status != AnalysisStatus::Ready {
-                            return None;
-                        }
-                        let list = nested.recommendations.iter().map(|recommendation| {
-                            let vertex = board
-                                .topology
-                                .vertex_by_id(&recommendation.first_pick)
-                                .expect("a recommendation names a vertex of the layout");
-                            (vertex, recommendation.rank_score)
-                        });
+                        // The override runs at most once per turn, so this stays in step with
+                        // `pre_turns`.
+                        let size = nested_costs[nested_count];
+                        nested_count += 1;
+                        let top_k = js_max(1.0, weights.opponent_top_k);
+                        let key = self.cache_key(&scratch, top_k);
+                        let cached = with_nested_rankings(|cache| cache.get(&key).cloned());
+                        let list = if let Some(list) = cached.flatten() {
+                            // A ranking already held costs nothing, so it leaves the bar to the
+                            // rest.
+                            total_cost -= size;
+                            list
+                        } else {
+                            let nested =
+                                self.analyze(&scratch, None, top_k, false, &mut |fraction| {
+                                    progress(js_min(1.0, (done_cost + fraction * size) / total_cost))
+                                });
+                            let list = (nested.status == AnalysisStatus::Ready).then(|| {
+                                nested
+                                    .recommendations
+                                    .iter()
+                                    .map(|recommendation| {
+                                        let vertex = board
+                                            .topology
+                                            .vertex_by_id(&recommendation.first_pick)
+                                            .expect("a recommendation names a vertex of the layout");
+                                        (vertex, recommendation.rank_score)
+                                    })
+                                    .unzip()
+                            });
+                            // Stored only here, whole, so a call that never returned left nothing
+                            // behind.
+                            with_nested_rankings(|cache| cache.insert(key, list.clone()));
+                            done_cost += size;
+                            list
+                        };
                         if modal_lists.len() <= taken.len() {
                             modal_lists.resize(taken.len() + 1, None);
                         }
-                        let (vertices, _) = modal_lists[taken.len()].insert(list.unzip());
+                        let (vertices, _) = modal_lists[taken.len()].insert(list?);
                         return vertices.first().copied();
                     };
                     let on_modal_line = taken.len() <= modal.taken.len()
@@ -734,6 +842,9 @@ impl Ranking<'_> {
                 &pre_windows,
                 max_results,
                 pick_offset,
+                &mut |fraction| {
+                    progress(js_min(1.0, (done_cost + fraction * own_cost) / total_cost))
+                },
             );
         }
 
@@ -764,6 +875,109 @@ impl Ranking<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every corpus case's name and request JSON.
+    fn corpus_requests() -> Vec<(String, String)> {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/analysis-parity.json");
+        let fixture: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        fixture["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|case| (case["name"].as_str().unwrap().to_owned(), case["request"].to_string()))
+            .collect()
+    }
+
+    fn corpus_request(name: &str) -> String {
+        let requests = corpus_requests();
+        let (_, request) = requests.iter().find(|(case, _)| case == name).unwrap();
+        request.clone()
+    }
+
+    fn run(request: &str) -> String {
+        analyze(request, &mut |_| {})
+    }
+
+    /// The response computed with the cache borrowed, which is the cache switched off.
+    fn run_without_cache(request: &str) -> String {
+        NESTED_RANKINGS.with(|cache| {
+            let _held = cache.borrow_mut();
+            run(request)
+        })
+    }
+
+    fn cached_rankings() -> usize {
+        NESTED_RANKINGS.with(|cache| cache.borrow().len())
+    }
+
+    fn fill_cache(entries: usize) {
+        NESTED_RANKINGS.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            cache.clear();
+            cache.extend((0..entries).map(|entry| (entry.to_string(), None)));
+        });
+    }
+
+    #[test]
+    fn a_warm_cache_returns_what_no_cache_does() {
+        let requests = corpus_requests();
+        let uncached: Vec<String> =
+            requests.iter().map(|(_, request)| run_without_cache(request)).collect();
+        assert_eq!(cached_rankings(), 0);
+        // Cases share boards, so the order decides which case computes an entry and which reads
+        // it.
+        for reversed in [false, true] {
+            fill_cache(0);
+            let mut order: Vec<usize> = (0..requests.len()).collect();
+            if reversed {
+                order.reverse();
+            }
+            let mut filled = 0;
+            // The first pass fills the cache and the second reads every nested ranking from it.
+            for pass in 0..2 {
+                for index in &order {
+                    assert_eq!(
+                        run(&requests[*index].1),
+                        uncached[*index],
+                        "{} pass {pass} reversed {reversed}",
+                        requests[*index].0
+                    );
+                }
+                if pass == 0 {
+                    filled = cached_rankings();
+                    assert!(filled > 0, "no corpus case cached a nested ranking");
+                } else {
+                    assert_eq!(cached_rankings(), filled, "a warm pass ranked a nested board");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_call_made_while_the_cache_is_borrowed_returns_the_same_response() {
+        let request = corpus_request("roster-2");
+        let free = run(&request);
+        assert!(cached_rankings() > 0, "the case has no pick ahead");
+        fill_cache(0);
+        assert_eq!(run_without_cache(&request), free);
+        assert_eq!(cached_rankings(), 0);
+        // The call left the cache usable.
+        assert_eq!(run(&request), free);
+        assert!(cached_rankings() > 0);
+    }
+
+    #[test]
+    fn the_cache_is_emptied_once_it_passes_its_limit() {
+        // Nobody picks ahead of the first seat, so this request adds no entry of its own.
+        let request = corpus_request("empty-first-seat-standard4");
+        fill_cache(NESTED_RANKINGS_MAX);
+        run(&request);
+        assert_eq!(cached_rankings(), NESTED_RANKINGS_MAX);
+        fill_cache(NESTED_RANKINGS_MAX + 1);
+        run(&request);
+        assert_eq!(cached_rankings(), 0);
+    }
 
     #[test]
     fn rollout_count_matches_the_values_the_app_pins() {

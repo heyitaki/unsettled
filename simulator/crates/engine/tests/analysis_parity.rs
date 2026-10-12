@@ -66,6 +66,37 @@ fn every_corpus_case_matches_the_fixture() {
 }
 
 #[test]
+fn progress_climbs_to_one_when_a_ranking_ran() {
+    let fixture = read_fixture();
+    let mut ranked = 0;
+    for case in fixture["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        // The second run reads its nested rankings from the cache, which takes them out of the
+        // total the bar is paced against.
+        for run in 0..2 {
+            let mut fractions = Vec::new();
+            analyze(&case["request"].to_string(), &mut |fraction| fractions.push(fraction));
+            if case["response"]["status"] != "ready" {
+                assert!(fractions.is_empty(), "{name} run {run}: progress with nothing ranked");
+                continue;
+            }
+            ranked += 1;
+            assert!(
+                fractions.iter().all(|fraction| (0.0..=1.0).contains(fraction)),
+                "{name} run {run}: outside 0 to 1: {fractions:?}"
+            );
+            assert!(
+                fractions.windows(2).all(|pair| pair[0] <= pair[1]),
+                "{name} run {run}: decreasing: {fractions:?}"
+            );
+            let last = fractions.last().copied().unwrap_or(0.0);
+            assert!(1.0 - last <= 0.05, "{name} run {run}: ends at {last}");
+        }
+    }
+    assert!(ranked > 0, "no corpus case ranked");
+}
+
+#[test]
 fn a_malformed_request_is_an_error() {
     let only_error = |response: Value, what: &str| {
         assert!(response["error"].is_string(), "{what}: {response}");
