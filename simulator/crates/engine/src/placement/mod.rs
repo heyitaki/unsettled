@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+pub mod analysis;
 pub mod app_formula;
 pub(crate) mod draft;
 mod expansion;

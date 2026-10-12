@@ -6,11 +6,12 @@ cd "$repo_root"
 wasm=src/engine/advice/engine.wasm
 
 source_hash() {
-  # Include the embedded topology packs and test-only default weights as well as crate inputs.
+  # Include the embedded topology packs and placement weights as well as crate inputs.
   git ls-files -co --exclude-standard -- \
     simulator/crates/engine/src simulator/crates/engine/Cargo.toml \
     simulator/crates/wasm simulator/topology \
-    simulator/placement/default-weights.json simulator/Cargo.toml simulator/Cargo.lock |
+    simulator/placement/default-weights.json simulator/placement/seat-weights \
+    simulator/Cargo.toml simulator/Cargo.lock |
     grep -E '\.(rs|toml|json|lock)$' |
     LC_ALL=C sort -u |
     while IFS= read -r path; do
