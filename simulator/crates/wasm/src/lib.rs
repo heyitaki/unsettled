@@ -10,23 +10,52 @@ pub unsafe extern "C" fn dealloc(ptr: *mut u8, len: usize) {
     unsafe { drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len))) }
 }
 
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    /// The host's progress bar: the fraction of the running `analyze` call done so far.
+    safe fn progress(fraction: f64);
+}
+
+/// A native build has no host to report to.
+#[cfg(not(target_arch = "wasm32"))]
+fn progress(_fraction: f64) {}
+
+/// Reads a UTF-8 request and returns the response behind its 4-byte little-endian length.
+///
 /// # Safety
 /// `ptr` must point to `len` readable bytes for the duration of this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn advise(ptr: *const u8, len: usize) -> *mut u8 {
+unsafe fn respond(ptr: *const u8, len: usize, run: impl FnOnce(&str) -> String) -> *mut u8 {
     let input = if len == 0 {
         &[]
     } else {
         unsafe { std::slice::from_raw_parts(ptr, len) }
     };
     let response = match std::str::from_utf8(input) {
-        Ok(request) => unsettled_engine::advice::advise(request),
+        Ok(request) => run(request),
         Err(_) => r#"{"error":"request is not valid UTF-8"}"#.into(),
     };
     let mut output = Vec::with_capacity(4 + response.len());
     output.extend_from_slice(&(response.len() as u32).to_le_bytes());
     output.extend_from_slice(response.as_bytes());
     Box::into_raw(output.into_boxed_slice()) as *mut u8
+}
+
+/// # Safety
+/// `ptr` must point to `len` readable bytes for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn advise(ptr: *const u8, len: usize) -> *mut u8 {
+    unsafe { respond(ptr, len, unsettled_engine::advice::advise) }
+}
+
+/// # Safety
+/// `ptr` must point to `len` readable bytes for the duration of this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn analyze(ptr: *const u8, len: usize) -> *mut u8 {
+    unsafe {
+        respond(ptr, len, |request| {
+            unsettled_engine::placement::analysis::analyze(request, &mut |fraction| progress(fraction))
+        })
+    }
 }
 
 #[cfg(test)]
