@@ -3072,3 +3072,62 @@ Acceptance machine, fastest pass per side:
 **What is left.** Setup is about 57% of a four-seat game and 72% of a six-seat one on the acceptance machine (2.06 of 3.64 ms, 8.95 of 12.4 ms). Not built: a setup road's per-first-edge sites read from the reach table instead of up to three mask walks, and occupancy masks carried across the replay instead of rebuilt from the owner arrays per row.
 
 **Scope.** Code cost only: no placement, policy or rule changed, so no win rate and no earlier measurement moves. The wall ratios are one field, `app_formula_draft` on the default weights with the denial policy and trading on; a greedy field never enters the lookahead and gains only what the `decision` rows show.
+
+## M-89: the lookahead's rows without the losing candidates, and play's repeated estimates
+
+2026-10-11, base commit `f619a83a` (`main`, code equal to M-88's candidate), candidate commit `0a91a5e8` (branch `sim-speed`, measured before its rebase as `d358bfc6`; the two commits after it change tests, comments and the rebuilt `engine.wasm`). No seed domain: `bench` runs on `PERF_SEED`. **Admissible: yes for the instruction counts and the hashes. The local wall times were taken under load averages of 4 to 8 and are a cross-check only.**
+
+```text
+# box, from the repo root
+box run simulator/box/bench --ref base=main --ref cand=sim-speed --node none
+
+# local cross-check, from simulator/
+target/release/unsettled-sim bench --filter e2e/ --games 40 --repeats 3
+target/release/unsettled-sim bench --filter full_draft --repeats 5
+```
+
+**Where the time was.** A sampled profile of whole games at M-88's commit: the hero's own second-pick row 26% of a four-seat game and 25% of a six-seat one, the rivals' replay rows 26% and 41%, setup roads 6% and 6%, turn-by-turn play 39% and 24%. Inside play at four seats, `etw::expected_turns_to_win` was 7.5% of the game and `etw::inputs_for_seat` 5.0%, most of both from trade pricing; `RoadNetwork::search` was 5.8%, three quarters of it from one-edge probes.
+
+**What changed, none of which moves an output bit.** `fixtures/bench-hashes.json` and the advice parity fixture are unchanged, and the box reported no differing state or decision hash.
+
+- Every lookahead row is read only through an argmax, so a row no longer prices the expansion term for a candidate that cannot win. Each candidate gets an upper bound on `scale.expansion * row_value(v)` built from its exact base, its exact `SitePricer` total and port products, and per-vertex tables of the two largest site bases and the largest port terms over the sites it could reach. The exact term is computed for the first legal vertex, for the legal vertex with the largest base, and then only where the bound is not strictly below the best score so far. The hero's row skips 80% of its candidates at four seats and 84% at six; rivals' rows skip 86% and 90%.
+- The bound is exact by construction, with no slack constant: it repeats `SitePricer::price` and `row_value` operation for operation with operands that are never smaller, and rounding is monotone. That needs signs, so `build_expansion_bounds` refuses any vector with a negative or non-finite weight on the path (and the pricer's fallback form), and such a vector takes the full row as before. A non-finite bound or a NaN score also abandons the row to the full path. Debug builds compute the full row as well and assert the same vertex and score bits.
+- The argmax keeps `best_legal_mask`'s rule: the lowest index among equal maxima, and the first legal vertex held unless something is strictly greater.
+- A decision that prices trade offers computes each seat's win-distance inputs, prepared estimate and base value once (`EtwCache`, alive for that decision only). `EtwEstimate` holds the part of `expected_turns_to_win` that does not read the hand, and `TradeValue` the part of `trade_benefit_with_base` that does not read the offer, so pricing an offer re-evaluates the hand alone. The direct functions are untouched and are what the new tests compare against.
+- A seat's road network and its one-edge probe results are remembered per thread while the seat's own edges and the vertices rivals hold are unchanged, and the denial policy's one-road reach while vertex and edge ownership are unchanged. Over eight four-seat games probe searches fell from about 18,600 to 2,000 and reach scans from 7,870 to 830. Both validate by content, never by a counter the engine maintains.
+
+Box run `20261012T004505Z-3f1dfc3e`, 4 vCPU. `Ir` is callgrind instructions per call:
+
+| Scenario | Base Ir | Candidate Ir | Ir ratio | Wall ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `placement/standard4/prepare` | 146,308 | 146,735 | 1.003 | 1.004 |
+| `placement/standard4/score_all` | 1,053,208 | 1,053,179 | 1.000 | 1.001 |
+| `placement/standard4/draft/first` | 24,661,567 | 13,916,453 | 0.564 | 0.508 |
+| `placement/standard4/draft/middle` | 14,226,489 | 7,940,834 | 0.558 | 0.530 |
+| `placement/standard4/full_draft` | 64,597,204 | 36,543,145 | 0.566 | 0.528 |
+| `placement/extension6/prepare` | 200,876 | 202,228 | 1.007 | 1.009 |
+| `placement/extension6/score_all` | 1,611,591 | 1,611,703 | 1.000 | 1.008 |
+| `placement/extension6/draft/first` | 67,528,483 | 37,396,193 | 0.554 | 0.461 |
+| `placement/extension6/draft/middle` | 37,442,445 | 19,568,033 | 0.523 | 0.498 |
+| `placement/extension6/full_draft` | 249,562,371 | 134,010,563 | 0.537 | 0.479 |
+
+Whole games on the box, wall time only: `e2e/standard4` 0.601 on one core and 0.602 on all, `e2e/extension6` 0.525 and 0.535. That is 1.66x at four seats and 1.90x at six on top of M-88. The `action` rows count 0.52 to 0.75 of their instructions at four seats (`long_road` 0.91) and 0.50 to 0.62 at six; `pre_roll` 0.50 to 0.55 early and late at four seats, unchanged mid, and 0.53 to 0.61 at six. `discard` counts the same instructions to the unit, `robber`, `respond_trade` and `select_counterparty` within 0.7%, and the `advise` rows between 0.5% fewer and 1.3% more.
+
+Acceptance machine, fastest pass per side, base read earlier the same evening:
+
+| Scenario | Base | Candidate | Speed-up |
+| --- | ---: | ---: | ---: |
+| `placement/standard4/full_draft` | 2.06 ms | 0.93 ms | 2.2x |
+| `placement/extension6/full_draft` | 8.95 ms | 4.07 ms | 2.2x |
+| `e2e/standard4/single_core` | 274 games/s | 448 games/s | 1.6x |
+| `e2e/standard4/all_cores` | 2,981 games/s | 4,627 games/s | 1.6x |
+| `e2e/extension6/single_core` | 80.5 games/s | 151.6 games/s | 1.9x |
+| `e2e/extension6/all_cores` | 906 games/s | 1,430 games/s | 1.6x |
+
+**Read the `decision` rows with care from here on.** A `decision` row replays one state, so the per-thread road and reach memos hit on every pass after the first, which a real game does only while the board is unchanged between decisions. The `pre_roll` and `action` ratios above overstate what a game gains from those two memos; the `e2e` rows and the call counts are the honest reading.
+
+**Measured and not kept.** A bound from board-wide maxima alone, without the candidate's own pricer total and port products, came out 8 to 9 times the true value because of the port term and skipped only 21% to 45% of candidates. Keeping the win-distance cache inside every `DecisionView` made each view 1,056 bytes instead of 288 and slowed `respond_trade`, `robber` and `select_counterparty` by 3% to 5%, so the cache is borrowed by the decisions that price offers instead. Carrying the outer view's cached masks into that scope cost 2.5% to 2.9% on `decision/extension6/action/full_hand`.
+
+**What is left.** Setup is about 41% of a four-seat game and 61% of a six-seat one on the acceptance machine (0.93 of 2.24 ms, 4.07 of 6.73 ms). Not built: M-88's two leftovers, capped by the profile at about 2% (occupancy masks carried across the replay) and 4% (setup road sites from the reach table); the proposer's win-distance inputs computed twice in a trade response; `denial::contest_term`, 4.6% of a four-seat game from `best_road`, which was not the same kind of repeat.
+
+**Scope.** Code cost only: no placement, policy or rule changed, so no win rate and no earlier measurement moves. The wall ratios are one field, `app_formula_draft` on the default weights with the denial policy and trading on. A weight vector that fails the bound's gate keeps M-88's cost in the lookahead.

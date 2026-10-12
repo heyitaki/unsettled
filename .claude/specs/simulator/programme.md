@@ -58,7 +58,7 @@ G4 therefore registered no all-seat games-per-second floor. M-20 observes a fixe
 
 H closes the question it owned: **the per-decision fixed-state metric in M-22's form is the programme's registered efficiency measure, and there is no all-seat games-per-second floor of any kind.** A per-decision measurement isolates code cost from game length, which is the exact confusion `SIM-GAP-21` diagnosed; an all-seat affordability floor would re-import it, and the H screens themselves demonstrated affordability is not the binding constraint (176,000-game invocations complete in tens of seconds). A per-game throughput miss is a prompt to measure per-decision cost, never an efficiency verdict by itself.
 
-On a draft-aware field the per-decision cost is not where a game's time goes. Since M-66 put `expansionWeight` 0.1 in the field, the setup lookahead has been the larger share of a whole game, before and after M-87 and M-88 cut its cost. Games per second on that field tracks placement cost first, so read the speed suite's `placement` rows before its `decision` rows.
+On a draft-aware field the per-decision cost is not where a game's time goes. Since M-66 put `expansionWeight` 0.1 in the field, the setup lookahead was the larger share of a whole game, before and after M-87 and M-88 cut its cost. M-89 halved it again, to about 41% of a four-seat game and 61% of a six-seat one, so games per second on that field tracks placement cost first at six seats and both halves at four: read the speed suite's `placement` rows and its `decision` rows.
 
 ## How to read the A/B results so far — settled by the composite arm
 
