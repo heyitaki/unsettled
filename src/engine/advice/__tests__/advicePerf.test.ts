@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import type { AdviceRequest } from '../protocol'
-import { createAdviser } from '../wasm'
+import { createEngine } from '../wasm'
 
 it('advises a six-player extension turn with a median below 50 ms', async () => {
   const { cases }: { cases: { name: string; request: AdviceRequest }[] } = JSON.parse(
@@ -9,7 +9,7 @@ it('advises a six-player extension turn with a median below 50 ms', async () => 
   )
   const entry = cases.find(({ request }) => request.decision.kind === 'turn' && request.game.board.layout === 'extension6' && request.game.board.players.length === 6)
   if (!entry) throw new Error('Missing six-player extension turn fixture')
-  const advise = await createAdviser(readFileSync(new URL('../engine.wasm', import.meta.url)))
+  const { advise } = await createEngine(readFileSync(new URL('../engine.wasm', import.meta.url)), () => {})
   const request = JSON.stringify(entry.request)
   advise(request)
   const times = Array.from({ length: 20 }, () => {

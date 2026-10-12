@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { AdviceRequest, AdviceResponse } from '../protocol'
-import { createAdviser } from '../wasm'
+import { createEngine, type Engine } from '../wasm'
 
 const { cases }: { cases: { name: string; request: AdviceRequest; response: AdviceResponse }[] } = JSON.parse(
   readFileSync(new URL('../../../../simulator/fixtures/advice-parity.json', import.meta.url), 'utf8'),
 )
-let advise: Awaited<ReturnType<typeof createAdviser>>
-beforeAll(async () => { advise = await createAdviser(readFileSync(new URL('../engine.wasm', import.meta.url))) })
+let advise: Engine['advise']
+beforeAll(async () => { ({ advise } = await createEngine(readFileSync(new URL('../engine.wasm', import.meta.url)), () => {})) })
 
 describe('adviser WebAssembly parity', () => {
   it('covers at least 120 cases across both layouts', () => {

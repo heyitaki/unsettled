@@ -48,8 +48,3 @@ export async function createEngine(bytes: BufferSource, progress: (fraction: num
   const analyzeText = call(analyze)
   return { advise: call(advise), analyze: (request) => JSON.parse(analyzeText(request), reviveNonFinite) }
 }
-
-/** The adviser's half of the engine, which reports no progress. */
-export async function createAdviser(bytes: BufferSource): Promise<Engine['advise']> {
-  return (await createEngine(bytes, () => {})).advise
-}

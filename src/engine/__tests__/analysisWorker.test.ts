@@ -67,12 +67,13 @@ it('returns the error of a request the engine refuses', async () => {
   expect(worker.postMessage.mock.calls).toEqual([[{ id: 1, error: 'Board has no players' }]])
 })
 
-it('reports a thrown engine call and remains usable for the next request', async () => {
+it('reports a thrown engine call and answers the next request from a fresh instance', async () => {
   engine(vi.fn((_request: string): DraftAnalysis => analysis).mockImplementationOnce(() => { throw new Error('unreachable') }))
   const worker = await startWorker()
   await worker.send(1)
   await worker.send(2)
   expect(worker.postMessage.mock.calls).toEqual([[{ id: 1, error: 'unreachable' }], [{ id: 2, analysis }]])
+  expect(createEngine).toHaveBeenCalledTimes(2)
 })
 
 it.each(['fetch', 'HTTP', 'instantiate'])('returns a %s load failure for every waiting request', async (stage) => {

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { createAdviser } from '../wasm'
+import { createEngine } from '../wasm'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -23,7 +23,7 @@ function moduleWithGrowingMemory() {
 
 it('uses fresh memory views after allocations and calls and frees both UTF-8 buffers', async () => {
   const module = moduleWithGrowingMemory()
-  const advise = await createAdviser(new Uint8Array())
+  const { advise } = await createEngine(new Uint8Array(), () => {})
   for (let call = 0; call < 2; call += 1) {
     expect(advise('{"observer":"赤"}')).toBe('{"reason":"木材"}')
     expect(module.dealloc).toHaveBeenNthCalledWith(call * 2 + 1, (2 + call * 2) * 65536, new TextEncoder().encode('{"reason":"木材"}').length + 4)
@@ -35,7 +35,7 @@ it('uses fresh memory views after allocations and calls and frees both UTF-8 buf
 it('frees the caller-owned request if the engine throws', async () => {
   const module = moduleWithGrowingMemory()
   module.advise.mockImplementationOnce(() => { throw new Error('Engine stopped') })
-  const advise = await createAdviser(new Uint8Array())
+  const { advise } = await createEngine(new Uint8Array(), () => {})
   expect(() => advise('{}')).toThrow('Engine stopped')
   expect(module.dealloc.mock.calls).toEqual([[8, 2]])
 })

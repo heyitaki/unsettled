@@ -32,6 +32,8 @@ self.onmessage = async (event: MessageEvent<AnalysisRequest>) => {
     const result = analyze(JSON.stringify({ board, targetPick }))
     response = 'error' in result ? { id, error: result.error } : { id, analysis: result }
   } catch (error) {
+    // A trap leaves the instance's state half-written, so the next request loads a fresh one.
+    engine = null
     response = { id, error: error instanceof Error ? error.message : 'Unable to analyze this board' }
   }
   self.postMessage(response)
