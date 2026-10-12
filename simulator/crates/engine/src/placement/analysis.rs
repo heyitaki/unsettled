@@ -16,6 +16,10 @@ use crate::state::EMPTY;
 use crate::topology::{Hex, Topology, Vertex};
 use crate::wire::{BuildingTier, TileKind, WireBoard};
 
+// Reached only from its own tests until the ranking plays windows through it.
+#[allow(dead_code)]
+mod window;
+
 /// The request JSON. The app sends `board` and `targetPick`; `options` exists for the corpus and
 /// the tests, which need small rollout counts, other seeds and other weights.
 #[derive(Clone, Debug, Deserialize)]
@@ -398,16 +402,19 @@ impl Board {
         (vertex_owner, edge_owner)
     }
 
+    /// Twin of `blockedVertices` over the board's buildings: every vertex the distance rule bars.
+    fn blocked(&self) -> Vec<bool> {
+        let mut blocked = vec![false; self.topology.vertex_count()];
+        for building in &self.buildings {
+            window::block_vertex(self.topology, &mut blocked, building.vertex);
+        }
+        blocked
+    }
+
     /// Twin of `legalSettlementVertices`: the vertices neither built on nor beside a building,
     /// in index order.
     fn legal_vertices(&self) -> Vec<Vertex> {
-        let mut blocked = vec![false; self.topology.vertex_count()];
-        for building in &self.buildings {
-            blocked[usize::from(building.vertex)] = true;
-            for adjacent in self.topology.vertex_adjacent(building.vertex) {
-                blocked[usize::from(*adjacent)] = true;
-            }
-        }
+        let blocked = self.blocked();
         (0..self.topology.vertex_count())
             .filter(|vertex| !blocked[*vertex])
             .map(|vertex| vertex as Vertex)
