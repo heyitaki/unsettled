@@ -5,7 +5,7 @@ use unsettled_engine::topology::{Hex, Layout, Topology};
 use unsettled_engine::wire::{Coord, TileKind, WireBoard, WireHex, WirePlayer, WirePort};
 
 pub fn generate_board(layout: Layout, seats: usize, seed: u64) -> Result<SimBoard, String> {
-    let topology = Topology::load(layout)?;
+    let topology = Topology::shared(layout)?;
     let mut rng = Xoshiro256StarStar::from_seed(seed);
     let mut tile_pool = Vec::with_capacity(topology.hex_count());
     for (index, count) in topology.resource_counts().into_iter().enumerate() {
@@ -44,7 +44,7 @@ pub fn generate_board(layout: Layout, seats: usize, seed: u64) -> Result<SimBoar
         .collect();
     rng.shuffle(&mut candidates);
     let mut red_hexes = Vec::with_capacity(red_tokens.len());
-    if !select_independent_reds(&topology, &candidates, 0, red_tokens.len(), &mut red_hexes) {
+    if !select_independent_reds(topology, &candidates, 0, red_tokens.len(), &mut red_hexes) {
         return Err("topology has no independent placement for red tokens".into());
     }
     let mut numbers = vec![None; topology.hex_count()];
@@ -135,7 +135,7 @@ pub fn generate_board(layout: Layout, seats: usize, seed: u64) -> Result<SimBoar
     wire.validate().map_err(|error| error.to_string())?;
     SimBoard::try_from_wire(
         wire,
-        &topology,
+        topology,
         &RuleConfig::base(layout),
         ConversionOptions {
             allow_unofficial: true,

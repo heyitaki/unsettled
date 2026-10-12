@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -117,6 +118,19 @@ impl Topology {
         };
         let raw: RawPack = serde_json::from_str(json).map_err(|error| error.to_string())?;
         Self::from_raw(raw)
+    }
+
+    /// The layout's topology, parsed once per process, so each `advise` call skips the pack parse.
+    pub fn shared(layout: Layout) -> Result<&'static Self, String> {
+        static STANDARD4: OnceLock<Result<Topology, String>> = OnceLock::new();
+        static EXTENSION6: OnceLock<Result<Topology, String>> = OnceLock::new();
+        let pack = match layout {
+            Layout::Standard4 => &STANDARD4,
+            Layout::Extension6 => &EXTENSION6,
+        };
+        pack.get_or_init(|| Self::load(layout))
+            .as_ref()
+            .map_err(Clone::clone)
     }
 
     pub const fn layout(&self) -> Layout {

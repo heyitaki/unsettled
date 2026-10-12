@@ -1,7 +1,8 @@
-use std::collections::HashSet;
 use std::fmt;
+use std::marker::PhantomData;
 
-use serde::{Deserialize, Serialize};
+use serde::de::{MapAccess, Visitor, value::MapAccessDeserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
 use crate::rules::Resource;
@@ -23,8 +24,11 @@ impl Coord {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WireHex {
+    #[serde(deserialize_with = "object")]
     pub coord: Coord,
+    #[serde(deserialize_with = "required_nullable")]
     pub tile: Option<TileKind>,
+    #[serde(deserialize_with = "required_nullable")]
     pub number_token: Option<f64>,
 }
 
@@ -56,6 +60,7 @@ impl TileKind {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WirePort {
     pub edge_id: String,
+    #[serde(deserialize_with = "required_nullable")]
     pub resource: Option<Resource>,
     pub rate: f64,
 }
@@ -96,13 +101,74 @@ pub struct WirePlayer {
 pub struct WireBoard {
     pub schema_version: u8,
     pub layout: Layout,
+    #[serde(deserialize_with = "objects")]
     pub hexes: Vec<WireHex>,
+    #[serde(deserialize_with = "objects")]
     pub ports: Vec<WirePort>,
+    #[serde(deserialize_with = "nullable_object")]
     pub robber: Option<Coord>,
+    #[serde(deserialize_with = "objects")]
     pub roads: Vec<WireRoad>,
+    #[serde(deserialize_with = "objects")]
     pub buildings: Vec<WireBuilding>,
+    #[serde(deserialize_with = "objects")]
     pub players: Vec<WirePlayer>,
+    #[serde(deserialize_with = "required_nullable")]
     pub me_player_id: Option<String>,
+}
+
+// Rejects the JSON array form that derived structs also accept; `presence_pass` requires objects.
+pub(crate) struct Object<T>(T);
+
+impl Object<WireBoard> {
+    pub(crate) fn validated(self) -> Result<WireBoard, WireError> {
+        self.0.validate()?;
+        Ok(self.0)
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Object<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ObjectVisitor<T>(PhantomData<T>);
+
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for ObjectVisitor<T> {
+            type Value = Object<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("an object")
+            }
+
+            fn visit_map<M: MapAccess<'de>>(self, map: M) -> Result<Self::Value, M::Error> {
+                T::deserialize(MapAccessDeserializer::new(map)).map(Object)
+            }
+        }
+
+        deserializer.deserialize_map(ObjectVisitor(PhantomData))
+    }
+}
+
+fn object<'de, D: Deserializer<'de>, T: Deserialize<'de>>(deserializer: D) -> Result<T, D::Error> {
+    Object::deserialize(deserializer).map(|value| value.0)
+}
+
+fn objects<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Vec<T>, D::Error> {
+    Vec::<Object<T>>::deserialize(deserializer)
+        .map(|values| values.into_iter().map(|value| value.0).collect())
+}
+
+fn nullable_object<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    required_nullable::<D, Object<T>>(deserializer).map(|value| value.map(|value| value.0))
+}
+
+// Identity on purpose: serde treats a missing `Option` field as `None` only when the field has no `deserialize_with`, so naming this function makes the key required.
+fn required_nullable<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    Option::<T>::deserialize(deserializer)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -127,14 +193,14 @@ impl WireBoard {
         if self.schema_version != 1 {
             return Err(WireError("unsupported schemaVersion".into()));
         }
-        let topology = Topology::load(self.layout).map_err(WireError)?;
-        let hex_keys: Vec<_> = self.hexes.iter().map(|hex| hex.coord.key()).collect();
-        let unique_hexes: HashSet<_> = hex_keys.iter().collect();
-        if hex_keys.len() != topology.hex_count()
-            || unique_hexes.len() != hex_keys.len()
-            || hex_keys
-                .iter()
-                .any(|key| topology.hex_by_key(key).is_none())
+        let topology = Topology::shared(self.layout).map_err(WireError)?;
+        let mut hexes = [false; 256];
+        if self.hexes.len() != topology.hex_count()
+            || self.hexes.iter().any(|hex| {
+                topology.hex_by_key(&hex.coord.key()).is_none_or(|hex| {
+                    std::mem::replace(&mut hexes[usize::from(hex)], true)
+                })
+            })
         {
             return Err(WireError("hex set does not match layout".into()));
         }
@@ -152,13 +218,14 @@ impl WireBoard {
                 }
             }
         }
-        let coastal: HashSet<_> = topology.coastal_edges().iter().copied().collect();
-        let mut port_edges = HashSet::new();
+        let mut port_edges = [false; 256];
         for port in &self.ports {
             let edge = topology
                 .edge_by_id(&port.edge_id)
                 .ok_or_else(|| WireError(format!("unknown port edge {}", port.edge_id)))?;
-            if !coastal.contains(&edge) || !port_edges.insert(edge) {
+            if !topology.coastal_edges().contains(&edge)
+                || std::mem::replace(&mut port_edges[usize::from(edge)], true)
+            {
                 return Err(WireError("ports must be unique and coastal".into()));
             }
             if !port.rate.is_finite() || port.rate.trunc() != port.rate || port.rate < 2.0 {
@@ -167,14 +234,11 @@ impl WireBoard {
                 ));
             }
         }
-        let player_ids: HashSet<_> = self
-            .players
-            .iter()
-            .map(|player| player.id.as_str())
-            .collect();
         if self.players.is_empty()
             || self.players.len() > 6
-            || player_ids.len() != self.players.len()
+            || self.players.iter().enumerate().any(|(index, player)| {
+                self.players[..index].iter().any(|other| other.id == player.id)
+            })
         {
             return Err(WireError(
                 "Board must contain one to six unique players".into(),
@@ -183,31 +247,31 @@ impl WireBoard {
         if self
             .me_player_id
             .as_ref()
-            .is_some_and(|player| !player_ids.contains(player.as_str()))
+            .is_some_and(|id| !self.players.iter().any(|player| player.id == *id))
         {
             return Err(WireError("mePlayerId is not in the roster".into()));
         }
-        let mut road_edges = HashSet::new();
+        let mut road_edges = [false; 256];
         for road in &self.roads {
             let edge = topology
                 .edge_by_id(&road.edge_id)
                 .ok_or_else(|| WireError(format!("unknown road edge {}", road.edge_id)))?;
-            if !road_edges.insert(edge) {
+            if std::mem::replace(&mut road_edges[usize::from(edge)], true) {
                 return Err(WireError("duplicate road edge".into()));
             }
-            if !player_ids.contains(road.player_id.as_str()) {
+            if !self.players.iter().any(|player| player.id == road.player_id) {
                 return Err(WireError("unknown road owner".into()));
             }
         }
-        let mut building_vertices = HashSet::new();
+        let mut building_vertices = [false; 256];
         for building in &self.buildings {
             let vertex = topology.vertex_by_id(&building.vertex_id).ok_or_else(|| {
                 WireError(format!("unknown building vertex {}", building.vertex_id))
             })?;
-            if !building_vertices.insert(vertex) {
+            if std::mem::replace(&mut building_vertices[usize::from(vertex)], true) {
                 return Err(WireError("duplicate building vertex".into()));
             }
-            if !player_ids.contains(building.player_id.as_str()) {
+            if !self.players.iter().any(|player| player.id == building.player_id) {
                 return Err(WireError("unknown building owner".into()));
             }
         }

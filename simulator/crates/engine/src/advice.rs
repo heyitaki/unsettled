@@ -1,5 +1,7 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -12,23 +14,27 @@ use crate::state::{DEV_KNIGHT, DEV_MONOPOLY, DEV_ROAD_BUILDING, DEV_YEAR_OF_PLEN
 use crate::topology::{Hex, Topology};
 use crate::trade::TradeOffer;
 use crate::view::{Action, DecisionPhase, DecisionView, DevPlay};
-use crate::wire::{BuildingTier, WireBoard};
+use crate::wire::{BuildingTier, Object, WireBoard, WireError};
 
 const POLICY: PolicyKind = PolicyKind::HeuristicV1TraderAwareThreatDevcardsDenial;
 
+thread_local! {
+    static WORK: Cell<Option<Box<(GameArena, PolicyScratch)>>> = const { Cell::new(None) };
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Request {
-    game: Game,
+struct Request<B> {
+    game: Game<B>,
     decision: Decision,
     observer: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Game {
+struct Game<B> {
     schema_version: u8,
-    board: Value,
+    board: B,
     stats: BTreeMap<String, Stats>,
     awards: Option<Awards>,
     dev_hand: Option<Value>,
@@ -147,19 +153,66 @@ enum Decision {
 
 /// Runs the reference turn policy on an app game without changing the input game.
 pub fn advise(request_json: &str) -> String {
-    match advise_value(request_json) {
+    let response = match parse_request(request_json, Object::<WireBoard>::validated) {
+        Ok(request) => advise_value(request),
+
+        // The typed parse rejects duplicate keys and words errors differently; the untyped path defines accepted input and error text.
+        Err(_) => advise_untyped(request_json),
+    };
+    render(response)
+}
+
+fn render(response: Result<Value, String>) -> String {
+    match response {
         Ok(response) => response.to_string(),
         Err(error) => json!({"error": error}).to_string(),
     }
 }
 
-fn advise_value(source: &str) -> Result<Value, String> {
-    let request: Request = serde_json::from_str(source).map_err(|error| error.to_string())?;
+fn advise_untyped(source: &str) -> Result<Value, String> {
+    let request = parse_request(source, WireBoard::parse_value)?;
+    advise_value(request)
+}
+
+fn parse_request<B: DeserializeOwned>(
+    source: &str,
+    parse_board: impl FnOnce(B) -> Result<WireBoard, WireError>,
+) -> Result<Request<WireBoard>, String> {
+    let request: Request<B> = serde_json::from_str(source).map_err(|error| error.to_string())?;
     let game = request.game;
     if game.schema_version != 1 {
         return Err("unsupported game schemaVersion".into());
     }
-    let wire = WireBoard::parse_value(game.board).map_err(|error| error.to_string())?;
+    let board = parse_board(game.board).map_err(|error| error.to_string())?;
+    Ok(Request {
+        game: Game {
+            schema_version: game.schema_version,
+            board,
+            stats: game.stats,
+            awards: game.awards,
+            dev_hand: game.dev_hand,
+            turn: game.turn,
+        },
+        decision: request.decision,
+        observer: request.observer,
+    })
+}
+
+fn advise_value(request: Request<WireBoard>) -> Result<Value, String> {
+    // Taken out for the call, so a WebAssembly call that traps leaves nothing half-borrowed.
+    let mut work = WORK.take().unwrap_or_default();
+    let response = advise_game(request, &mut work.0, &mut work.1);
+    WORK.set(Some(work));
+    response
+}
+
+fn advise_game(
+    request: Request<WireBoard>,
+    arena: &mut GameArena,
+    scratch: &mut PolicyScratch,
+) -> Result<Value, String> {
+    let game = request.game;
+    let wire = game.board;
     let claimed = wire
         .me_player_id
         .as_ref()
@@ -174,12 +227,12 @@ fn advise_value(source: &str) -> Result<Value, String> {
         .iter()
         .map(|player| player.name.clone())
         .collect();
-    let topology = Topology::load(wire.layout)?;
+    let topology = Topology::shared(wire.layout)?;
     let mut rules = RuleConfig::base(wire.layout);
     rules.player_trading = Some(TradeConfig::default());
     let board = SimBoard::try_from_wire(
         wire,
-        &topology,
+        topology,
         &rules,
         ConversionOptions {
             allow_unofficial: true,
@@ -196,10 +249,9 @@ fn advise_value(source: &str) -> Result<Value, String> {
         .map(serde_json::from_value::<DevHand>)
         .transpose()
         .map_err(|error| error.to_string())?;
-    let mut arena = GameArena::default();
     arena.prepare(
         &board,
-        &topology,
+        topology,
         &rules,
         &GameConfig {
             policies: [POLICY; MAX_SEATS],
@@ -284,7 +336,7 @@ fn advise_value(source: &str) -> Result<Value, String> {
             .as_ref()
             .is_some_and(|turn| turn.dev_played && turn.player_id == board.player_ids()[observer]),
     );
-    arena.recompute_all_roads(&topology, &rules, board.seats());
+    arena.recompute_all_roads(topology, &rules, board.seats());
     if let Some(awards) = game.awards {
         let road = awards
             .longest_road
@@ -348,7 +400,7 @@ fn advise_value(source: &str) -> Result<Value, String> {
             {
                 return Err("production exceeds the engine's 255-card limit".into());
             }
-            arena.produce(&board, &topology, total, board.seats());
+            arena.produce(&board, topology, total, board.seats());
         }
         let gains: BTreeMap<_, _> = board
             .player_ids()
@@ -368,7 +420,7 @@ fn advise_value(source: &str) -> Result<Value, String> {
         Decision::TradeResponse { .. } => DecisionPhase::TradeResponse,
         _ => DecisionPhase::Action,
     };
-    let view = arena.decision_view(&board, &topology, observer, phase);
+    let view = arena.decision_view(&board, topology, observer, phase);
     let unknown_own = game
         .stats
         .get(&board.player_ids()[observer])
@@ -389,7 +441,7 @@ fn advise_value(source: &str) -> Result<Value, String> {
         gated,
     };
     let mut rng = Xoshiro256StarStar::from_seed(0);
-    let mut scratch = PolicyScratch::default();
+    scratch.reset();
     match request.decision {
         Decision::Turn => {
             let mut actions = heuristic_v1::recommend(&view, &params);
@@ -413,7 +465,7 @@ fn advise_value(source: &str) -> Result<Value, String> {
             Ok(json!({"kind":"turn", "actions":actions, "derived":derived}))
         }
         Decision::PreRoll => {
-            let play = policy::pre_roll(POLICY, &view, &mut scratch, &mut rng);
+            let play = policy::pre_roll(POLICY, &view, scratch, &mut rng);
             let reason = play.map_or_else(
                 || "No dev card is worth playing yet".into(),
                 |play| reason_line(reasons.play(play), reasons.wins(Action::PlayDev(play))),
@@ -432,14 +484,14 @@ fn advise_value(source: &str) -> Result<Value, String> {
                 0
             };
             let known_count = known_total.min(u32::from(count)) as u8;
-            let cards = policy::discard(POLICY, &view, known_count, &mut scratch, &mut rng);
+            let cards = policy::discard(POLICY, &view, known_count, scratch, &mut rng);
             Ok(
                 json!({"kind":"discard", "count":count, "cards":Resources::from(cards), "reason":reason_line(reasons.discard(count, cards), false), "derived":derived}),
             )
         }
         Decision::Robber => {
             let (hex, victim) = policy::robber(POLICY, &view, &mut rng);
-            Ok(json!({"kind":"robber", "hex":hex_json(hex, &topology),
+            Ok(json!({"kind":"robber", "hex":hex_json(hex, topology),
                 "victim":victim.map(|seat| &board.player_ids()[usize::from(seat)]), "reason":reason_line(reasons.robber(hex, victim, false), false), "derived":derived}))
         }
         Decision::TradeResponse {
@@ -976,4 +1028,442 @@ fn reason_line(reason: String, wins: bool) -> String {
         }
     }
     reason.trim_end_matches(['.', ' ']).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixtures() -> Vec<(String, Value)> {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../fixtures/advice-parity.json")).unwrap();
+        fixture["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|case| {
+                (
+                    case["name"].as_str().unwrap().to_owned(),
+                    case["request"].clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn fixture(name: &str) -> Value {
+        fixtures()
+            .into_iter()
+            .find(|(candidate, _)| candidate == name)
+            .unwrap()
+            .1
+    }
+
+    fn typed(source: &str) -> Result<Request<Object<WireBoard>>, serde_json::Error> {
+        serde_json::from_str(source)
+    }
+
+    fn assert_equivalent(name: &str, source: &str) -> String {
+        let reference = render(advise_untyped(source));
+        let actual = advise(source);
+        assert_eq!(actual, reference, "{name}");
+        actual
+    }
+
+    fn fresh_response(source: &str) -> String {
+        let source = source.to_owned();
+        std::thread::spawn(move || advise(&source)).join().unwrap()
+    }
+
+    fn with_raw_literal(request: &Value, path: &str, literal: &str) -> String {
+        let mut request = request.clone();
+        *request.pointer_mut(path).unwrap() = json!("__raw_advice_test_value__");
+        let source = request.to_string();
+        let marker = r#""__raw_advice_test_value__""#;
+        assert_eq!(source.matches(marker).count(), 1);
+        source.replacen(marker, literal, 1)
+    }
+
+    #[test]
+    fn history_independent_in_both_orders() {
+        let cases: Vec<_> = fixtures()
+            .into_iter()
+            .map(|(name, request)| {
+                let source = request.to_string();
+                let fresh = fresh_response(&source);
+                (name, source, fresh)
+            })
+            .collect();
+        std::thread::spawn(move || {
+            for (name, source, fresh) in cases.iter().chain(cases.iter().rev()) {
+                assert_eq!(&advise(source), fresh, "{name}");
+            }
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn history_independent_after_failed_request() {
+        let before = fixture("standard4-11-turn");
+        let after = fixture("extension6-23-preRoll");
+        let mut failure = before.clone();
+        failure["game"]["awards"] = json!({
+            "longestRoad": "missing-award-holder", "largestArmy": null,
+        });
+        let failure = failure.to_string();
+        let before = before.to_string();
+        let after = after.to_string();
+        let fresh_before = fresh_response(&before);
+        let fresh_after = fresh_response(&after);
+        std::thread::spawn(move || {
+            assert_eq!(advise(&before), fresh_before);
+
+            // Award holders are checked after prepare and the per-player state writes.
+            assert_eq!(
+                advise(&failure),
+                json!({"error":"unknown player missing-award-holder"}).to_string()
+            );
+            assert_eq!(
+                advise(&after),
+                fresh_after,
+                "response after a partially applied request"
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn scratch_goal_does_not_cross_requests() {
+        let pre_roll = fixture("standard4-23-preRoll");
+        let discard = fixture("extension6-11-discard");
+        assert_ne!(pre_roll["game"]["board"], discard["game"]["board"]);
+        let pre_roll = pre_roll.to_string();
+        let discard = discard.to_string();
+        let fresh_pre_roll = fresh_response(&pre_roll);
+        let fresh_discard = fresh_response(&discard);
+        let play: Value = serde_json::from_str(&fresh_pre_roll).unwrap();
+        let cards: Value = serde_json::from_str(&fresh_discard).unwrap();
+        assert_eq!(play["kind"], "preRoll");
+        assert!(play["play"].is_null());
+        assert!(cards["count"].as_u64().unwrap() > 0);
+        std::thread::spawn(move || {
+            assert_eq!(advise(&pre_roll), fresh_pre_roll);
+            let work = WORK.take().unwrap();
+            assert!(work.1.goal.is_some());
+            WORK.set(Some(work));
+            assert_eq!(advise(&discard), fresh_discard);
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn duplicate_keys_use_the_last_value_at_every_board_level() {
+        let request = fixture("standard4-11-turn");
+        let expected = advise(&request.to_string());
+        for (path, key, first) in [
+            ("/game/board", "mePlayerId", json!("p2")),
+            ("/game/board/hexes/0", "tile", json!("wood")),
+            ("/game/board/hexes/0/coord", "q", json!(1)),
+            ("/game/board/ports/0", "rate", json!(3)),
+            ("/game/board/roads/0", "playerId", json!("p1")),
+            ("/game/board/buildings/0", "tier", json!("city")),
+            ("/game/board/players/0", "name", json!("X")),
+            ("/game/board/robber", "r", json!(0)),
+        ] {
+            let object = request.pointer(path).unwrap();
+            assert_ne!(first, object[key]);
+            let mut first_only = request.clone();
+            first_only.pointer_mut(path).unwrap()[key] = first.clone();
+            assert!(typed(&first_only.to_string()).is_ok());
+            let duplicate = format!("{{{}:{first},{}", json!(key), &object.to_string()[1..]);
+            let source = with_raw_literal(&request, path, &duplicate);
+            let error = typed(&source).err().unwrap();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("duplicate field `{key}`")),
+                "{path}: {error}"
+            );
+            let response = assert_equivalent(&format!("duplicate {path}/{key}"), &source);
+            assert_eq!(response, expected, "last value at {path}/{key}");
+            if key == "mePlayerId" {
+                assert_ne!(
+                    response,
+                    advise(&first_only.to_string()),
+                    "the observer must use the last value"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn typed_parse_matches_reference_on_raw_literals() {
+        let request = fixture("standard4-11-turn");
+        for (path, literal) in [
+            ("/game/board/hexes/0/tile", r#"{"wood":null}"#),
+            ("/game/board/buildings/0/tier", r#"{"city":null}"#),
+            ("/game/board/layout", r#"{"standard4":null}"#),
+        ] {
+            let source = with_raw_literal(&request, path, literal);
+            assert_equivalent(&format!("enum object {path}"), &source);
+        }
+        for path in [
+            "/game/schemaVersion",
+            "/game/board/schemaVersion",
+            "/game/board/hexes/0/numberToken",
+            "/game/board/ports/0/rate",
+            "/game/board/hexes/0/coord/q",
+            "/game/board/hexes/0/coord/r",
+            "/game/board/robber/q",
+            "/game/board/robber/r",
+        ] {
+            for literal in ["-0", "6.0", "6e0", "1E1", "18446744073709551616", "1.0"] {
+                let source = with_raw_literal(&request, path, literal);
+                assert_equivalent(&format!("number {path}: {literal}"), &source);
+            }
+        }
+        let object = request["game"]["board"]["players"][0].to_string();
+        let escaped_key = object.replacen(r#""name":"#, r#""\u006eame":"#, 1);
+        assert_ne!(object, escaped_key);
+        let source = with_raw_literal(&request, "/game/board/players/0", &escaped_key);
+        assert_eq!(
+            assert_equivalent("escaped key", &source),
+            advise(&request.to_string())
+        );
+
+        let source = with_raw_literal(&request, "/game/board/players/0/name", r#""R\u0065d""#);
+        let mut decoded = request.clone();
+        decoded["game"]["board"]["players"][0]["name"] = json!("Red");
+        assert_eq!(
+            assert_equivalent("escaped string", &source),
+            advise(&decoded.to_string())
+        );
+
+        let source = with_raw_literal(&request, "/game/board/players/0/name", r#""\ud800""#);
+        let response: Value =
+            serde_json::from_str(&assert_equivalent("lone surrogate", &source)).unwrap();
+        assert!(response["error"].is_string());
+    }
+
+    #[test]
+    fn board_validation_keeps_error_order() {
+        let request = fixture("standard4-11-turn");
+        let board = &request["game"]["board"];
+        let topology = Topology::shared(crate::topology::Layout::Standard4).unwrap();
+        let inland = (0..topology.edge_count())
+            .map(|edge| edge as u8)
+            .find(|edge| !topology.coastal_edges().contains(edge))
+            .unwrap();
+        for (path, value, expected) in [
+            ("/schemaVersion", json!(2), "unsupported schemaVersion"),
+            ("/hexes", json!([]), "hex set does not match layout"),
+            (
+                "/hexes/0/coord",
+                json!({"q":99,"r":99}),
+                "hex set does not match layout",
+            ),
+            (
+                "/hexes/0/coord",
+                board["hexes"][1]["coord"].clone(),
+                "hex set does not match layout",
+            ),
+            (
+                "/ports/0/edgeId",
+                json!("missing"),
+                "unknown port edge missing",
+            ),
+            (
+                "/ports/0/edgeId",
+                json!(topology.edge_id(inland)),
+                "ports must be unique and coastal",
+            ),
+            (
+                "/ports/1/edgeId",
+                board["ports"][0]["edgeId"].clone(),
+                "ports must be unique and coastal",
+            ),
+            (
+                "/players",
+                json!([]),
+                "Board must contain one to six unique players",
+            ),
+            (
+                "/players",
+                json!(vec![board["players"][0].clone(); 7]),
+                "Board must contain one to six unique players",
+            ),
+            (
+                "/players/1/id",
+                board["players"][0]["id"].clone(),
+                "Board must contain one to six unique players",
+            ),
+            (
+                "/mePlayerId",
+                json!("missing"),
+                "mePlayerId is not in the roster",
+            ),
+            (
+                "/roads/0/edgeId",
+                json!("missing"),
+                "unknown road edge missing",
+            ),
+            (
+                "/roads/1/edgeId",
+                board["roads"][0]["edgeId"].clone(),
+                "duplicate road edge",
+            ),
+            ("/roads/0/playerId", json!("missing"), "unknown road owner"),
+            (
+                "/buildings/0/vertexId",
+                json!("missing"),
+                "unknown building vertex missing",
+            ),
+            (
+                "/buildings/1/vertexId",
+                board["buildings"][0]["vertexId"].clone(),
+                "duplicate building vertex",
+            ),
+            (
+                "/buildings/0/playerId",
+                json!("missing"),
+                "unknown building owner",
+            ),
+        ] {
+            let mut changed = board.clone();
+            *changed.pointer_mut(path).unwrap() = value;
+
+            // A later failure must not replace the first validation error.
+            changed["robber"] = json!({"q":99,"r":99});
+            assert_eq!(
+                WireBoard::parse_value(changed.clone())
+                    .unwrap_err()
+                    .to_string(),
+                expected,
+                "{path}"
+            );
+            assert_eq!(
+                WireBoard::parse_str(&changed.to_string())
+                    .unwrap_err()
+                    .to_string(),
+                expected,
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn typed_parse_matches_reference_on_fixtures_and_mutations() {
+        let levels: [(&str, &[&str]); 8] = [
+            (
+                "/game/board",
+                &[
+                    "schemaVersion",
+                    "layout",
+                    "hexes",
+                    "ports",
+                    "robber",
+                    "roads",
+                    "buildings",
+                    "players",
+                    "mePlayerId",
+                ],
+            ),
+            ("/game/board/hexes/0", &["coord", "tile", "numberToken"]),
+            ("/game/board/hexes/0/coord", &["q", "r"]),
+            ("/game/board/ports/0", &["edgeId", "resource", "rate"]),
+            ("/game/board/robber", &["q", "r"]),
+            ("/game/board/roads/0", &["edgeId", "playerId"]),
+            ("/game/board/buildings/0", &["vertexId", "playerId", "tier"]),
+            ("/game/board/players/0", &["id", "name", "color"]),
+        ];
+        for (name, request) in fixtures() {
+            typed(&request.to_string())
+                .unwrap()
+                .game
+                .board
+                .validated()
+                .unwrap();
+            assert_equivalent(&name, &request.to_string());
+            for (path, keys) in levels {
+                for &key in keys {
+                    let mut changed = request.clone();
+                    changed
+                        .pointer_mut(path)
+                        .unwrap()
+                        .as_object_mut()
+                        .unwrap()
+                        .remove(key);
+                    assert_equivalent(
+                        &format!("{name}: missing {path}/{key}"),
+                        &changed.to_string(),
+                    );
+
+                    let mut changed = request.clone();
+                    changed.pointer_mut(path).unwrap()[key] = json!(false);
+                    assert_equivalent(
+                        &format!("{name}: wrong type {path}/{key}"),
+                        &changed.to_string(),
+                    );
+                }
+                let mut changed = request.clone();
+                changed.pointer_mut(path).unwrap()["unexpected"] = json!(0);
+                assert_equivalent(&format!("{name}: unknown key {path}"), &changed.to_string());
+            }
+            for path in [
+                "/game/board/hexes/0/tile",
+                "/game/board/hexes/0/numberToken",
+                "/game/board/ports/0/resource",
+                "/game/board/robber",
+                "/game/board/mePlayerId",
+                "/game/awards",
+                "/game/awards/longestRoad",
+                "/game/awards/largestArmy",
+                "/game/turn/rolled",
+                "/game/devHand",
+                "/game/turn",
+                "/observer",
+            ] {
+                let mut changed = request.clone();
+                let (parent, key) = path.rsplit_once('/').unwrap();
+                let Some(parent) = changed.pointer_mut(parent) else {
+                    continue;
+                };
+                parent[key] = Value::Null;
+                assert_equivalent(&format!("{name}: null {path}"), &changed.to_string());
+            }
+            for path in ["/game/schemaVersion", "/game/board/schemaVersion"] {
+                let mut changed = request.clone();
+                *changed.pointer_mut(path).unwrap() = json!(2);
+                assert_equivalent(&format!("{name}: {path} 2"), &changed.to_string());
+            }
+            let mut missing = request.clone();
+            missing["game"].as_object_mut().unwrap().remove("board");
+            assert_equivalent(&format!("{name}: missing game.board"), &missing.to_string());
+
+            for player_id in [
+                json!("someone else"),
+                request["game"]["board"]["mePlayerId"].clone(),
+            ] {
+                let mut changed = request.clone();
+                changed["game"]["devHand"] = json!({"playerId":player_id,"playable":false});
+                assert_equivalent(
+                    &format!("{name}: malformed devHand {player_id}"),
+                    &changed.to_string(),
+                );
+            }
+
+            // Derived structs accept sequences, but the board presence check requires objects.
+            for (path, keys) in levels {
+                let mut changed = request.clone();
+                let object = changed.pointer_mut(path).unwrap();
+                *object = keys.iter().map(|key| object[*key].clone()).collect();
+                assert_equivalent(&format!("{name}: sequence {path}"), &changed.to_string());
+            }
+        }
+        for source in ["not JSON", "", "{", "null", "{}", "[]", "{} trailing"] {
+            assert_equivalent(source, source);
+        }
+    }
 }
