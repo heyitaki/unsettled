@@ -25,6 +25,13 @@ export function activePlayerId(game: Game): string | null {
   return game.turn?.playerId ?? game.board.mePlayerId
 }
 
+export function awaitingFirstTurn(game: Game): boolean {
+  const { board } = game
+  return game.turn === undefined
+    && board.buildings.every((building) => building.tier === 'settlement')
+    && board.players.every((player) => board.buildings.filter((building) => building.playerId === player.id).length === 2)
+}
+
 export function turnState(game: Game): TurnState | null {
   if (game.turn) return game.turn
   const playerId = activePlayerId(game)

@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { draftOrder, placeBuilding, placeRoad } from '../src/model/board'
 import { edgeEndpointVertexIds, vertexAdjacentVertexIds } from '../src/model/coords'
-import type { PlayerStats } from '../src/model/game'
+import { newGame, type PlayerStats } from '../src/model/game'
 import { boardGrid } from '../src/model/layouts'
+import { awaitingFirstTurn, setActivePlayer } from '../src/model/turn'
 import type { Board, Resource } from '../src/model/types'
 import { seedBoard } from './seed'
 
@@ -38,7 +39,9 @@ const hand = (cards: Partial<Record<Resource, number>>): PlayerStats => ({
 
 async function open(page: Page, board: Board, stats: Record<string, PlayerStats> = {}) {
   await page.goto('')
-  await seedBoard(page, board, stats)
+  // A finished draft opens on the recap; these tests start past it, on the first player's turn.
+  const game = newGame(board)
+  await seedBoard(page, board, stats, awaitingFirstTurn(game) ? setActivePlayer(game, board.players[0].id).turn : undefined)
   await page.emulateMedia({ reducedMotion: 'reduce' })
 }
 
@@ -46,12 +49,13 @@ const panel = (page: Page) => page.locator('.best-moves-panel')
 const redRow = (page: Page) => panel(page).locator('.move-table tbody tr').first().locator('td')
 
 function suite() {
-  test('Best moves replaces Best picks when the last draft pick is placed', async ({ page }) => {
+  test('Best moves follows the recap after the last draft pick is placed', async ({ page }) => {
     const board = drafted(9)
     await open(page, board)
     await expect(page.getByRole('heading', { name: 'Best picks' })).toBeVisible()
     await page.locator('.analysis-row-select').first().click()
     await page.getByRole('button', { name: 'Place settlement' }).click()
+    await page.getByRole('button', { name: 'Start game' }).click()
     await expect(panel(page).getByRole('heading', { name: 'Best moves' })).toBeVisible()
     await expect(panel(page).getByRole('group', { name: 'Turn order' }).getByRole('button')).toHaveCount(board.players.length)
     await expect(panel(page).getByRole('button', { name: 'Turn 1: P1' })).toHaveAttribute('aria-pressed', 'true')

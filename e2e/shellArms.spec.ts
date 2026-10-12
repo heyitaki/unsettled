@@ -227,7 +227,7 @@ test.describe('desktop', () => {
     let board = setHexTile({ ...createBoard('standard4'), players: UNCLAIMED_ROSTER, mePlayerId: null }, { q: 0, r: 0 }, 'ore')
     const grid = boardGrid(board.layout)
     const vertices = grid.vertexIds.filter((_, index) => index % 6 === 0).slice(0, 8)
-    // One pick short of done: a finished draft shows Best moves, which has no step buttons.
+    // One pick short of done: a finished draft shows the recap or Best moves, neither with step buttons.
     draftOrder(board).slice(0, 7).forEach((playerId, index) => {
       board = placeBuilding(board, vertices[index], playerId, 'settlement')
     })

@@ -277,9 +277,15 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .spot-tiles { display: block; flex: none; }
 .spot-port text { font-family: Inter, sans-serif; font-weight: 700; }
 .analysis-list { display: grid; gap: 6px; }
-.analysis-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--r-row); background: var(--surface); overflow: hidden; text-align: left; }
+.analysis-row, .recap-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--r-row); background: var(--surface); overflow: hidden; text-align: left; }
 .analysis-rank { display: grid; place-items: center; align-self: start; width: 26px; height: 26px; border: 1.5px solid var(--ink); border-radius: 50%; font: 800 13px Inter, sans-serif; }
 .analysis-row-body { min-width: 0; display: grid; }
+.recap-row { grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; }
+.recap-row .analysis-row-body { gap: 6px; overflow-wrap: anywhere; }
+.recap-spots { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.recap-bar { height: 6px; overflow: hidden; border-radius: var(--r-control); background: var(--tint); }
+.recap-bar > span { display: block; height: 100%; border-radius: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent); }
+.recap-start { width: 100%; min-height: 44px; margin-top: 6px; }
 .analysis-pick-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .analysis-pick-line strong { min-width: 0; font: 700 13px/1.25 Inter, sans-serif; }
 .hex-label { display: inline-flex; align-items: center; gap: 2px; vertical-align: -2px; white-space: nowrap; }

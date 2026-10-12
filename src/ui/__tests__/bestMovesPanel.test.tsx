@@ -8,7 +8,7 @@ import { addPlayer, createBoard, placeBuilding, setMe } from '../../model/board'
 import { adjustCounter, adjustHand, emptyStats, newGame, type Game } from '../../model/game'
 import { edgeEndpointVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
-import { adjustDevHand, recordRoll } from '../../model/turn'
+import { adjustDevHand, recordRoll, setActivePlayer } from '../../model/turn'
 import { RESOURCES } from '../../model/types'
 import { AdviceProvider } from '../AdviceProvider'
 import { AnalysisPanel } from '../AnalysisPanel'
@@ -507,7 +507,7 @@ describe('Best moves recording', () => {
     let board = game().board
     const vertices = boardGrid(board.layout).vertexIds
     for (const [index, id] of [[10, 'aki'], [20, 'b'], [30, 'b']] as const) board = placeBuilding(board, vertices[index], id, 'settlement')
-    await act(async () => seen.dispatch({ type: 'commit-game', game: { ...game(), board } }))
+    await act(async () => seen.dispatch({ type: 'commit-game', game: setActivePlayer({ ...game(), board }, 'aki') }))
     const render = async (pending: boolean) => act(async () => root.render(<StoreProvider><AdviceProvider>
       <Capture report={(value) => { seen = value }} /><BoardCanvas />
       <AnalysisContext.Provider value={{ analysis: { status: pending ? 'no-production' : 'complete', draft: inferDraftState(board), recommendations: [], takenBeforeFirstPick: [], warnings: [] }, pending, error: null, retry() {} }}>

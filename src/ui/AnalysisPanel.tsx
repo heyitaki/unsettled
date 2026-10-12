@@ -1,122 +1,25 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Recommendation } from '../engine/analyze'
 import { draftIsComplete } from '../engine/draft'
-import { isRedToken, placeBuilding, setMe } from '../model/board'
-import { axialKey, axialToPixel, edgeEndpointVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
-import type { AxialCoord, Board, Resource, TileKind, VertexId } from '../model/types'
+import { placeBuilding, setMe } from '../model/board'
+import { awaitingFirstTurn } from '../model/turn'
+import type { Board, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
 import { useAnalysis } from './useAnalysis'
 import { useDraftSteps } from './useDraftSteps'
-import { BLANK_TILE_COLOR, INK_COLOR, readableInk, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { readableInk } from './colors'
 import { DraftRibbon } from './DraftRibbon'
 import { viewedPlayerId } from './draftSlots'
 import { BestMovesPanel } from './BestMovesPanel'
-import { ArrowLeftGlyph, ArrowRightGlyph, DesertGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
+import { DraftRecapPanel } from './DraftRecapPanel'
+import { SpotTiles } from './SpotTiles'
+import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
-
-const RESOURCE_LABELS: Record<Resource, string> = {
-  wood: 'Wood',
-  sheep: 'Sheep',
-  wheat: 'Wheat',
-  brick: 'Brick',
-  ore: 'Ore',
-}
-
-/** What a vertex touches: its hexes, then any port on an edge it ends. */
-type VertexPart =
-  | { kind: 'hex'; coord: AxialCoord; tile: TileKind | null; number: number | null }
-  | { kind: 'port'; coord: AxialCoord; tile: Resource | null; rate: number }
-
-function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
-  const touching = new Set(parseVertexId(vertexId).map(axialKey))
-  const land = new Set(board.hexes.map((hex) => axialKey(hex.coord)))
-  const hexes = board.hexes
-    .filter((hex) => touching.has(axialKey(hex.coord)))
-    .map((hex): VertexPart => ({ kind: 'hex', coord: hex.coord, tile: hex.tile, number: hex.numberToken }))
-  const ports = board.ports
-    .filter((port) => edgeEndpointVertexIds(port.edgeId).includes(vertexId))
-    .map((port): VertexPart => {
-      const edge = parseEdgeId(port.edgeId)
-      const coord = edge.find((member) => !land.has(axialKey(member))) ?? edge[0]
-      return { kind: 'port', coord, tile: port.resource, rate: port.rate }
-    })
-  return [...hexes, ...ports]
-}
-
-/** The vertex in words, for tooltips and accessible names. */
-function vertexDescription(board: Board, vertexId: VertexId): string {
-  return vertexParts(board, vertexId).map((part) => {
-    if (part.kind === 'hex') {
-      if (part.tile === 'desert') return 'Desert'
-      if (part.tile === null) return 'Unassigned'
-      return `${RESOURCE_LABELS[part.tile]} ${part.number ?? '?'}`
-    }
-    return part.tile === null ? `${part.rate}:1 port` : `${RESOURCE_LABELS[part.tile]} ${part.rate}:1 port`
-  }).join(' · ')
-}
-
-const PICK_TILE_SIDE = 14
-const SMALL_TILE_SIDE = 11.5
-
-function SpotTiles({ board, vertexId, small = false }: { board: Board; vertexId: VertexId; small?: boolean }) {
-  const side = small ? SMALL_TILE_SIDE : PICK_TILE_SIDE
-  const k = side / PICK_TILE_SIDE
-  const parts = vertexParts(board, vertexId)
-  // A ranking held from another board can name a corner this board lacks.
-  if (parts.length === 0) return null
-  const centres = parts.map((part) => axialToPixel(part.coord, side))
-  const halfWidth = Math.sqrt(3) / 2 * side
-  const left = Math.min(...centres.map(({ x }) => x)) - halfWidth
-  const top = Math.min(...centres.map(({ y }) => y)) - side
-  const width = Number((Math.max(...centres.map(({ x }) => x)) + halfWidth - left).toFixed(2))
-  const height = Number((Math.max(...centres.map(({ y }) => y)) + side - top).toFixed(2))
-  const points = Array.from({ length: 6 }, (_, index) => {
-    const angle = (-90 + 60 * index) * Math.PI / 180
-    return `${(side - 0.8) * Math.cos(angle)},${(side - 0.8) * Math.sin(angle)}`
-  }).join(' ')
-  return (
-    <svg
-      className={`spot-tiles${small ? ' spot-tiles-small' : ''}`}
-      role="img"
-      aria-label={vertexDescription(board, vertexId)}
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-    >
-      {parts.map((part, index) => {
-        const { x, y } = centres[index]
-        const transform = `translate(${x - left} ${y - top})`
-        if (part.kind === 'port') {
-          const fill = part.tile === null ? TOKEN_COLOR : TILE_COLORS[part.tile]
-          return (
-            <g key={index} className="spot-tile spot-port" transform={transform}>
-              <rect x={-10 * k} y={-6 * k} width={20 * k} height={12 * k} rx={6 * k} strokeWidth={k} stroke={INK_COLOR} fill={fill} />
-              <text textAnchor="middle" y={2.7 * k} fill={readableInk(fill)} style={{ fontSize: 7.5 * k }}>{part.rate}:1</text>
-            </g>
-          )
-        }
-        const fontSize = (part.number !== null && part.number >= 10 ? 8.5 : 10) * k
-        return (
-          <g key={index} className="spot-tile" transform={transform}>
-            <polygon points={points} fill={part.tile === null ? BLANK_TILE_COLOR : TILE_COLORS[part.tile]} />
-            {part.tile === 'desert' ? (
-              <g transform={`translate(${-7 * k} ${-7 * k}) scale(${0.7 * k})`}><DesertGlyph /></g>
-            ) : part.number !== null && (
-              <>
-                <circle r={7.6 * k} fill={TOKEN_COLOR} stroke={INK_COLOR} strokeWidth={0.8 * k} />
-                <text textAnchor="middle" className={isRedToken(part.number) ? 'token-text hot' : 'token-text'} y={0.35 * fontSize} style={{ fontSize }}>{part.number}</text>
-              </>
-            )}
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
+import { vertexDescription } from './vertexParts'
 
 function formatFactor(value: number): string {
   const magnitude = Math.abs(value).toFixed(1)
@@ -167,7 +70,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   onBuild?: () => void
 } = {}) {
   const { state, dispatch } = useStore()
-  const board = activeTab(state).game.board
+  const game = activeTab(state).game
+  const { board } = game
   const { analysis, pending, settled, progress = 0, error, retry } = useAnalysis()
   const { canStepBack, canStepForward, stepBack, stepForward } = useDraftSteps()
   // While a ranking is pending the last one stays in place, inert and drawn as
@@ -538,7 +442,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   // dialog must outlive both to show any parse issues.
   return (
     <>
-      {!empty && draftIsComplete(board, analysis.draft) ? <BestMovesPanel className={className} /> : panel}
+      {!empty && draftIsComplete(board, analysis.draft)
+        ? awaitingFirstTurn(game) ? <DraftRecapPanel className={className} /> : <BestMovesPanel className={className} />
+        : panel}
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </>
   )

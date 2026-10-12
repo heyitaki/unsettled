@@ -10,9 +10,10 @@ import {
 import { BestMovesTable, CardAmounts } from './BestMovesTable'
 import { AdviceFeedback, BestMovesTray, type Discards, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { readableInk } from './colors'
-import { ArrowLeftGlyph, ArrowRightGlyph, ResourceGlyph } from './glyphs'
+import { ResourceGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
+import { UndoRedoButtons } from './UndoRedoButtons'
 import { useCoarsePointer } from './useMediaQuery'
 
 const EMPTY_DISCARDS: Discards = []
@@ -202,28 +203,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     <section className={`${className} best-moves-panel`}>
       <div className="panel-heading">
         <h2>Best moves</h2>
-        <div className="panel-actions">
-          <button
-            type="button"
-            className="panel-dots"
-            aria-label="Undo"
-            data-label="Undo"
-            disabled={tab.past.length === 0}
-            onClick={() => dispatch({ type: 'undo' })}
-          >
-            <ArrowLeftGlyph />
-          </button>
-          <button
-            type="button"
-            className="panel-dots"
-            aria-label="Redo"
-            data-label="Redo"
-            disabled={tab.future.length === 0}
-            onClick={() => dispatch({ type: 'redo' })}
-          >
-            <ArrowRightGlyph />
-          </button>
-        </div>
+        <UndoRedoButtons />
       </div>
       {order}
       <p className="analysis-context move-context">
