@@ -995,6 +995,35 @@ mod tests {
     }
 
     #[test]
+    fn fast_scans_return_the_reference_scans_bits() {
+        // `Context::scan` prices every vertex both ways in a test build and panics on a vertex
+        // whose expansion or total differs in any bit, so running the corpus is the comparison.
+        // Scans read the same vertices in the same order either way, so equal scores are equal
+        // picks.
+        let before = window::checked_vertices();
+        for (_, request) in corpus_requests() {
+            run_without_cache(&request);
+        }
+        assert!(window::checked_vertices() > before, "no corpus scan took the fast path");
+    }
+
+    #[test]
+    fn a_scan_made_while_the_price_memo_is_borrowed_returns_the_same_response() {
+        let request = corpus_request("roster-2");
+        let free = run_without_cache(&request);
+        let before = window::checked_vertices();
+        let held = crate::placement::expansion::PRICE_MEMO.with(|memo| {
+            let _held = memo.borrow_mut();
+            run_without_cache(&request)
+        });
+        assert_eq!(held, free);
+        assert_eq!(window::checked_vertices(), before, "a scan read the borrowed memo");
+        // The call left the memo usable.
+        assert_eq!(run_without_cache(&request), free);
+        assert!(window::checked_vertices() > before);
+    }
+
+    #[test]
     fn rollout_count_matches_the_values_the_app_pins() {
         let weights = weights_for_seats(6);
         assert_eq!(rollout_count(80, 0, 10, weights), 7.0);

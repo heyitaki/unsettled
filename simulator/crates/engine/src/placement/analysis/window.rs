@@ -13,6 +13,7 @@ use std::cell::OnceCell;
 
 use super::{Board, softmax_pick};
 use crate::placement::app_formula::{AppFormulaScorer, Holdings, js_max};
+use crate::placement::expansion;
 use crate::topology::{Topology, Vertex};
 
 /// Below this, two pair scores are the same pair read in either order: the pair value is
@@ -83,6 +84,17 @@ fn insert_top(
     }
 }
 
+// Vertices this thread priced both ways and found equal, so a test can tell the fast path ran.
+#[cfg(test)]
+thread_local! {
+    static CHECKED_VERTICES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn checked_vertices() -> usize {
+    CHECKED_VERTICES.with(std::cell::Cell::get)
+}
+
 /// What every scan of a ranking reads and no pick changes: the scorer, which is the TypeScript's
 /// `BoardContext`, and the board's roads, which a rollout never adds to.
 pub(super) struct Context<'a> {
@@ -136,6 +148,91 @@ impl<'a> Context<'a> {
             }
             table
         })
+    }
+
+    /// Calls `visit` with every unblocked vertex in index order and what `marginal_parts` gives
+    /// `seat` for it: the slot-scaled expansion part, then the total.
+    ///
+    /// The numbers come off the scorer's fast paths and carry the reference's bits. The part
+    /// without expansion is read from the price memo. The expansion part is `row_value`, which
+    /// takes a candidate's sites from the shared reach table or a masked walk over the window's
+    /// pieces as bit masks, prices them through `SitePricer`, and remembers the result. Debug and
+    /// test builds price every vertex both ways and compare.
+    ///
+    /// The memo keys a seat's holdings by the set of vertices it holds, and here that set does
+    /// name one holdings value per scorer although holdings fold in `board.buildings` order: a
+    /// seat already on the board has at most one pick left, and the two picks of a seat that is
+    /// not fold from zero, where either order gives the same sums.
+    fn scan(
+        &self,
+        seat: u8,
+        holdings: &Holdings,
+        blocked: &[bool],
+        vertex_owner: &[u8],
+        receives_grant: bool,
+        visit: &mut dyn FnMut(Vertex, f64, f64),
+    ) {
+        let scorer = self.scorer;
+        let reference = |vertex: Vertex| {
+            scorer.marginal_parts(
+                holdings,
+                vertex_owner,
+                &self.edge_owner,
+                seat,
+                vertex,
+                receives_grant,
+            )
+        };
+        let legal = (0..self.topology.vertex_count())
+            .filter(|vertex| !blocked[*vertex])
+            .map(|vertex| vertex as Vertex);
+        expansion::PRICE_MEMO.with(|memo| {
+            // The memo outlives the call, so a wasm call that trapped inside a scan left it
+            // borrowed for good. Every later scan then takes the reference path.
+            let Ok(mut memo) = memo.try_borrow_mut() else {
+                for vertex in legal {
+                    let (walk, total) = reference(vertex);
+                    visit(vertex, walk, total);
+                }
+                return;
+            };
+            let memo = &mut *memo;
+            let scale = scorer.slot_scale(seat);
+            let occupancy = expansion::Occupancy::new(scorer, vertex_owner, &self.edge_owner, seat);
+            let serial = memo.serial(scorer.id, occupancy.own_vertices);
+            let base_tag = expansion::base_tag(seat, receives_grant);
+            let mut holdings_total = None;
+            for vertex in legal {
+                let rest = memo.price(expansion::price_key(serial, vertex, base_tag), || {
+                    let total = *holdings_total
+                        .get_or_insert_with(|| scorer.holdings_diversity_total(holdings));
+                    scorer.scaled_total_with_diversity(
+                        *holdings,
+                        vertex,
+                        receives_grant,
+                        scale.diversity,
+                        total,
+                    )
+                });
+                let sites =
+                    expansion::row_value(scorer, holdings, vertex, &occupancy, memo, Some(serial));
+                let walk = scale.expansion * sites;
+                let total = walk + rest;
+                #[cfg(any(test, debug_assertions))]
+                {
+                    let (reference_walk, reference_total) = reference(vertex);
+                    assert_eq!(
+                        (walk.to_bits(), total.to_bits()),
+                        (reference_walk.to_bits(), reference_total.to_bits()),
+                        "vertex {vertex} for seat {seat}: {walk} and {total} on the fast path, \
+                         {reference_walk} and {reference_total} on the reference path"
+                    );
+                    #[cfg(test)]
+                    CHECKED_VERTICES.with(|checked| checked.set(checked.get() + 1));
+                }
+                visit(vertex, walk, total);
+            }
+        });
     }
 
     /// Twin of `bestPartners`. `legal` is in index order and `expansion` runs parallel to it.
@@ -205,22 +302,12 @@ impl<'a> Context<'a> {
         let mut own = Vec::new();
         // The scan's two halves kept apart: the walk's value is also the partner's expansion.
         let mut expansion = Vec::new();
-        for vertex in 0..self.topology.vertex_count() {
-            if blocked[vertex] {
-                continue;
-            }
-            let (walk, total) = self.scorer.marginal_parts(
-                holdings,
-                vertex_owner,
-                &self.edge_owner,
-                seat,
-                vertex as Vertex,
-                receives_grant,
-            );
-            legal.push(vertex as Vertex);
+        let mut keep = |vertex, walk, total| {
+            legal.push(vertex);
             expansion.push(walk);
             own.push(total);
-        }
+        };
+        self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &mut keep);
         let plan = table.map(|table| self.best_partners(&legal, table, &expansion));
         let mut top_vertices = Vec::new();
         let mut top_scores = Vec::new();
@@ -290,23 +377,13 @@ impl<'a> Context<'a> {
     ) -> Option<Vertex> {
         let mut best = None;
         let mut best_score = f64::NEG_INFINITY;
-        for vertex in 0..self.topology.vertex_count() {
-            if blocked[vertex] {
-                continue;
-            }
-            let (_, score) = self.scorer.marginal_parts(
-                holdings,
-                vertex_owner,
-                &self.edge_owner,
-                seat,
-                vertex as Vertex,
-                receives_grant,
-            );
+        let mut keep = |vertex, _, score| {
             if score > best_score {
-                best = Some(vertex as Vertex);
+                best = Some(vertex);
                 best_score = score;
             }
-        }
+        };
+        self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &mut keep);
         best
     }
 
