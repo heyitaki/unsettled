@@ -260,7 +260,7 @@ describe('Best picks rows', () => {
     const k = side / 14
     const fixtures = [
       { fill: TOKEN_COLOR, text: '3:1', ink: INK_COLOR, land: { q: -1, r: 2 }, sea: { q: -1, r: 3 } },
-      { fill: TILE_COLORS.ore, text: '2:1', ink: '#fbf4df', land: { q: -2, r: 0 }, sea: { q: -3, r: 0 } },
+      { fill: TILE_COLORS.ore, text: '2:1', ink: TOKEN_COLOR, land: { q: -2, r: 0 }, sea: { q: -3, r: 0 } },
     ]
     fixtures.forEach(({ fill, text, ink, land, sea }, index) => {
       const parts = tiles(spots[index])

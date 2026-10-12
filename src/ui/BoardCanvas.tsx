@@ -636,7 +636,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       key={axialKey(hex.coord)}
       points={hexPoints(hex.coord)}
       fill={hex.tile ? TILE_COLORS[hex.tile] : BLANK_TILE_COLOR}
-      stroke="#f8f1dc"
+      stroke={TOKEN_COLOR}
       strokeWidth="4"
       className={highlightSet.has(axialKey(hex.coord)) ? 'highlighted' : ''}
     />
@@ -706,9 +706,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         }
         style={portActive ? { cursor: 'pointer' } : eraseActive ? { cursor: 'crosshair' } : undefined}
       >
-        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
-        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke="#fff" strokeWidth="2" strokeDasharray="5 5" />
-        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke="#fff" strokeWidth="2.5" />
+        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
+        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
+        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke={TOKEN_COLOR} strokeWidth="2.5" />
         <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
       </g>
     )
