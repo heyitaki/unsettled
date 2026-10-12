@@ -73,7 +73,7 @@ pub fn acceptance_margin(
     let own = own_inputs(view);
     let proposer = view.etw_inputs(offer.proposer);
     let mine = trade_benefit(&own, params, &responder_delta(offer));
-    let theirs = counterparty_score(proposer, params, &proposer_delta(offer));
+    let theirs = counterparty_score(&proposer, params, &proposer_delta(offer));
     (params.margin_scale * (mine - f64::from(config.opponent_gain_weight) * theirs)) as f32
 }
 
@@ -130,7 +130,7 @@ pub fn select_counterparty(
         .expect("counterparty selection requires an acceptor");
     let mut best_score = f64::INFINITY;
     for seat in acceptors {
-        let score = counterparty_score(view.etw_inputs(*seat), params, delta);
+        let score = counterparty_score(&view.etw_inputs(*seat), params, delta);
         if !score.is_finite() {
             continue;
         }
@@ -185,6 +185,7 @@ pub fn trade_benefit_with_base(
     params.etw_weight * gain + params.tempo_weight * tempo
 }
 
+/// Keyed by one seat's inputs and trade parameters, preserving the direct pricing arithmetic.
 pub(crate) struct TradeValue<'a> {
     inputs: &'a EtwInputs,
     params: &'a TradeParams,
@@ -197,11 +198,13 @@ pub(crate) struct TradeValue<'a> {
 }
 
 impl<'a> TradeValue<'a> {
-    pub(crate) fn new(inputs: &'a EtwInputs, params: &'a TradeParams, base: f64) -> Self {
+    pub(crate) fn new(
+        inputs: &'a EtwInputs, params: &'a TradeParams, estimate: etw::EtwEstimate, base: f64,
+    ) -> Self {
         Self {
             inputs,
             params,
-            estimate: etw::EtwEstimate::new(inputs),
+            estimate,
             base,
             gain_denominator: base + params.etw_floor,
             standing_danger: params.danger_weight * threat::danger_from_etw(base, params.danger_floor),
@@ -211,6 +214,7 @@ impl<'a> TradeValue<'a> {
         }
     }
 
+    // trade_benefit_with_base is the reference; prepared_trade_values_match_direct_bits_for_every_offer pins equality.
     pub(crate) fn benefit(
         &self,
         delta: &[f64; RESOURCE_COUNT],
@@ -494,7 +498,10 @@ mod prepared_tests {
                     etw_floor: 2.0, scarcity_floor: 0.125, tempo_weight: 0.7,
                     ..TradeParams::default()
                 }] {
-                    let prepared = TradeValue::new(&inputs, &params, base);
+                    let estimate = etw::EtwEstimate::new(&inputs);
+                    let prepared_base = estimate.with_hand(&inputs.belief_expected);
+                    assert_eq!(prepared_base.to_bits(), base.to_bits());
+                    let prepared = TradeValue::new(&inputs, &params, estimate, prepared_base);
                     for give in 0..RESOURCE_COUNT {
                         for get in 0..RESOURCE_COUNT {
                             for count in [-2.0, -1.0, 1.0, 2.0] {

@@ -1,4 +1,4 @@
-use crate::etw::{self, EtwInputs};
+use crate::etw::EtwInputs;
 use crate::policy::PolicyScratch;
 use crate::policy::denial;
 use crate::policy::heuristic_v1::{self, HeuristicParams, missing_units};
@@ -10,6 +10,19 @@ use crate::trade::{self, TradeOffer, softened_accept, vp_estimate};
 use crate::view::{Action, DecisionPhase, DecisionView, ScoredAction};
 
 pub fn action(
+    view: &DecisionView<'_>,
+    scratch: &mut PolicyScratch,
+    params: &HeuristicParams,
+    rng: &mut Xoshiro256StarStar,
+) -> Action {
+    if params.trading.is_some() && can_score_offers(view) {
+        view.with_etw_cache(|view| action_inner(view, scratch, params, rng))
+    } else {
+        action_inner(view, scratch, params, rng)
+    }
+}
+
+fn action_inner(
     view: &DecisionView<'_>,
     scratch: &mut PolicyScratch,
     params: &HeuristicParams,
@@ -74,16 +87,19 @@ pub(crate) fn score_offers(
     trading_params: &trading::TradeParams,
     collect: impl FnMut(ScoredAction),
 ) {
-    // Mirrors legal_offer_trade's offer-independent clauses: no legal offer means no rival pricing.
-    if view.phase() != DecisionPhase::Action
-        || view.trade_config().is_none()
-        || view.offers_remaining_this_turn() == 0
-        || view.seats() < 2
-        || view.own_hand().iter().all(|held| *held <= 0)
-    {
+    if !can_score_offers(view) {
         return;
     }
-    score_offers_inner(view, trading_params, collect);
+    view.with_etw_cache(|view| score_offers_inner(view, trading_params, collect));
+}
+
+fn can_score_offers(view: &DecisionView<'_>) -> bool {
+    // Mirrors legal_offer_trade's offer-independent clauses to avoid unused ETW preparation.
+    view.phase() == DecisionPhase::Action
+        && view.trade_config().is_some()
+        && view.offers_remaining_this_turn() > 0
+        && view.seats() >= 2
+        && view.own_hand().iter().any(|held| *held > 0)
 }
 
 fn score_offers_inner(
@@ -91,8 +107,7 @@ fn score_offers_inner(
     trading_params: &trading::TradeParams,
     mut collect: impl FnMut(ScoredAction),
 ) {
-    let mut recipients: [Option<&EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
-    let mut bases = [None; MAX_SEATS];
+    let mut recipients: [Option<EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
     for seat in 0..view.seats() {
         if seat == view.observer() || trade::embargoed(view, seat) {
             continue;
@@ -100,8 +115,9 @@ fn score_offers_inner(
         recipients[seat] = Some(view.etw_inputs(seat));
     }
     let own = trading::own_inputs(view);
-    let own_base = etw::expected_turns_to_win(&own);
-    let own_value = trading::TradeValue::new(&own, trading_params, own_base);
+    let own_estimate = view.etw_estimate(view.observer());
+    let own_base = own_estimate.with_hand(&own.belief_expected);
+    let own_value = trading::TradeValue::new(&own, trading_params, own_estimate, own_base);
     let mut values: [Option<trading::TradeValue<'_>>; MAX_SEATS] = [const { None }; MAX_SEATS];
     for give in Resource::ALL {
         for get in Resource::ALL {
@@ -130,8 +146,9 @@ fn score_offers_inner(
                     if inputs.belief_expected[get.index()] < 1.0 {
                         continue;
                     }
-                    let base = *bases[seat].get_or_insert_with(|| etw::etw_for_seat(view, seat));
-                    let value = values[seat].get_or_insert_with(|| trading::TradeValue::new(inputs, trading_params, base));
+                    let value = values[seat].get_or_insert_with(|| trading::TradeValue::new(
+                        inputs, trading_params, view.etw_estimate(seat), view.etw_for_seat(seat),
+                    ));
                     let score = value.counterparty_score(&responder);
                     if !score.is_finite() {
                         continue;
@@ -278,5 +295,40 @@ mod tests {
             }
         }
         assert!(outcomes.into_iter().all(|count| count > 0));
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    #[test]
+    fn action_etw_cache_matches_direct_bits() {
+        let (topology, board, mut arena) = crate::etw::tests::fixture();
+        let params = HeuristicParams {
+            trading: Some(trading::TradeParams::default()),
+            denial: Some(denial::DenialParams::default()),
+            ..HeuristicParams::default()
+        };
+        for held in 0..6 {
+            arena.state.players[0].resources = [held; crate::rules::RESOURCE_COUNT];
+            for seat in 0..board.seats() {
+                arena.state.players[seat].vp_public = (held as u8 + seat as u8) % 8;
+            }
+            for phase in [DecisionPhase::Action, DecisionPhase::SpecialBuild] {
+                let view = arena.decision_view(&board, &topology, 0, phase);
+                let mut actual = PolicyScratch::default();
+                let mut direct = PolicyScratch::default();
+                let mut rng = Xoshiro256StarStar::from_seed(held as u64);
+                let mut direct_rng = rng.clone();
+                assert_eq!(action(&view, &mut actual, &params, &mut rng),
+                    action_inner(&view, &mut direct, &params, &mut direct_rng));
+                assert_eq!(actual.actions.as_slice().len(), direct.actions.as_slice().len());
+                for (a, b) in actual.actions.as_slice().iter().zip(direct.actions.as_slice()) {
+                    assert_eq!(a.action, b.action);
+                    assert_eq!(a.score.to_bits(), b.score.to_bits());
+                }
+            }
+        }
     }
 }

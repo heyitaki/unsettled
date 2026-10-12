@@ -1,3 +1,5 @@
+use std::cell::{Cell, OnceCell};
+
 use crate::rules::{Buildable, RESOURCE_COUNT, Resource};
 use crate::view::DecisionView;
 
@@ -35,8 +37,42 @@ pub struct EtwInputs {
     pub hand_total: u32,
 }
 
+/// Borrowed only by an immutable decision that repeatedly prices hands for the same seats.
+pub(crate) struct EtwCache {
+    inputs: [OnceCell<EtwInputs>; crate::state::MAX_SEATS],
+    estimates: [OnceCell<EtwEstimate>; crate::state::MAX_SEATS],
+    bases: [Cell<Option<f64>>; crate::state::MAX_SEATS],
+}
+
+impl EtwCache {
+    pub(crate) const fn new() -> Self {
+        Self {
+            inputs: [const { OnceCell::new() }; crate::state::MAX_SEATS],
+            estimates: [const { OnceCell::new() }; crate::state::MAX_SEATS],
+            bases: [const { Cell::new(None) }; crate::state::MAX_SEATS],
+        }
+    }
+
+    pub(crate) fn inputs(&self, view: &DecisionView<'_>, seat: usize) -> &EtwInputs {
+        self.inputs[seat].get_or_init(|| compute_inputs_for_seat(view, seat))
+    }
+
+    pub(crate) fn estimate(&self, view: &DecisionView<'_>, seat: usize) -> &EtwEstimate {
+        self.estimates[seat].get_or_init(|| EtwEstimate::new(self.inputs(view, seat)))
+    }
+
+    pub(crate) fn base(&self, view: &DecisionView<'_>, seat: usize) -> f64 {
+        if let Some(base) = self.bases[seat].get() {
+            return base;
+        }
+        let base = self.estimate(view, seat).with_hand(&self.inputs(view, seat).belief_expected);
+        self.bases[seat].set(Some(base));
+        base
+    }
+}
+
 pub fn inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
-    view.etw_inputs(seat).clone()
+    view.etw_inputs(seat)
 }
 
 pub(crate) fn compute_inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> EtwInputs {
@@ -72,7 +108,8 @@ pub(crate) fn compute_inputs_for_seat(view: &DecisionView<'_>, seat: usize) -> E
     }
 }
 
-/// Route costs and income stay fixed while an offer changes only the hand.
+/// Keyed by every input except the hand; route costs and income stay fixed across offers.
+#[derive(Clone)]
 pub(crate) struct EtwEstimate {
     routes: [Option<EtwRoute>; 3],
     income: f64,
@@ -80,6 +117,7 @@ pub(crate) struct EtwEstimate {
     ceiling: f64,
 }
 
+#[derive(Clone)]
 struct EtwRoute {
     cost: [f64; RESOURCE_COUNT],
     cards_per_vp: f64,
@@ -146,6 +184,7 @@ impl EtwEstimate {
         estimate
     }
 
+    // expected_turns_to_win is the reference; prepared_hand_estimate_matches_direct_bits pins equality.
     pub(crate) fn with_hand(&self, hand: &[f64; RESOURCE_COUNT]) -> f64 {
         if hand.iter().any(|expected| !expected.is_finite()) {
             return ETW_CAP;
@@ -366,13 +405,19 @@ pub(crate) mod tests {
             arena.state.belief.gain(1, variant as usize % RESOURCE_COUNT, 1);
             for observer in 0..board.seats() {
                 let view = arena.decision_view(&board, &topology, observer, DecisionPhase::Action);
-                for _ in 0..2 {
-                    for seat in 0..board.seats() {
-                        let direct = direct_inputs(&view, seat);
-                        assert_eq!(inputs_for_seat(&view, seat), direct);
-                        assert_eq!(etw_for_seat(&view, seat).to_bits(), expected_turns_to_win(&direct).to_bits());
+                view.with_etw_cache(|cached| {
+                    for _ in 0..2 {
+                        for seat in 0..board.seats() {
+                            let direct = direct_inputs(&view, seat);
+                            assert_eq!(inputs_for_seat(cached, seat), direct);
+                            let expected = expected_turns_to_win(&direct).to_bits();
+                            assert_eq!(etw_for_seat(&view, seat).to_bits(), expected);
+                            assert_eq!(etw_for_seat(cached, seat).to_bits(), expected);
+                            assert_eq!(cached.etw_estimate(seat)
+                                .with_hand(&direct.belief_expected).to_bits(), expected);
+                        }
                     }
-                }
+                });
             }
         }
     }
@@ -409,6 +454,4 @@ pub(crate) mod tests {
             hand_total: view.hand_total(seat),
         }
     }
-
-
 }

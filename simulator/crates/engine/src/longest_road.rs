@@ -12,6 +12,7 @@ const _: () = assert!(MAX_VERTICES <= u128::BITS as usize);
 /// Board geometry gives every vertex two or three incident edges.
 const MAX_VERTEX_DEGREE: usize = 3;
 
+/// The layout, seat's edges and rival-held vertices contain everything a trail search reads.
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct RoadKey {
     layout: Layout,
@@ -26,6 +27,7 @@ struct RoadProbe {
     length: u8,
 }
 
+/// A graph keyed by RoadKey, with probes remembered per segment and cap.
 struct RoadMemo {
     key: RoadKey,
     network: RoadNetwork,
@@ -120,9 +122,8 @@ impl RoadNetwork {
                     owned &= owned - 1;
                     network.push(topology.edge_endpoints(edge));
                 }
-                network.owned = network.len;
+                let mut network = network.sealed();
                 network.memo = Some((seat, key));
-                network.base = network.search(u128::MAX, network.len, 0);
                 *memo = Some(RoadMemo {
                     key, network,
                     vertex_owner: [EMPTY; MAX_VERTICES], edge_owner: [EMPTY; MAX_EDGES],
@@ -425,7 +426,6 @@ mod tests {
                         let mut direct = RoadNetwork::from_edges(&edges, &blocked);
                         assert_eq!(actual.base_length(), direct.base_length());
                         if pass == 1 {
-
                             // Another view may replace the memo while this graph is still in use.
                             RoadNetwork::for_seat(&topology, &vertices, &[EMPTY; MAX_EDGES], seat);
                         }

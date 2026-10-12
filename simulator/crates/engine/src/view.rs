@@ -1,4 +1,4 @@
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, RefCell};
 
 use serde::Serialize;
 
@@ -10,7 +10,7 @@ use crate::rules::{Buildable, FlattenedRules, OwnedPort, RESOURCE_COUNT, Resourc
 use crate::state::{
     DEV_KIND_COUNT, DEV_VP, EMPTY, GameState, MAX_EDGES, MAX_SEATS, MAX_VERTICES,
 };
-use crate::topology::{Edge, Hex, Topology, Vertex};
+use crate::topology::{Edge, Hex, Layout, Topology, Vertex};
 
 pub const MAX_ACTIONS: usize = 4096;
 
@@ -152,10 +152,9 @@ struct OwnRoads {
 /// decision. Without this, board-wide sums are recomputed inside loops that already run once per
 /// vertex and once per edge -- `vertex_score` alone re-derived the observer's entire production
 /// on every call.
-struct ViewCache {
+struct ViewCache<'a> {
+    etw: Option<&'a crate::etw::EtwCache>,
     production: [Cell<Option<[u16; RESOURCE_COUNT]>>; MAX_SEATS],
-    etw_inputs: [OnceCell<crate::etw::EtwInputs>; MAX_SEATS],
-    etw: [Cell<Option<f64>>; MAX_SEATS],
     own_roads: Cell<Option<OwnRoads>>,
     /// Legal placements as vertex and edge bitsets. Several passes ask for these across the whole
     /// board within one decision, so they are derived as a set rather than tested one at a time.
@@ -164,18 +163,29 @@ struct ViewCache {
     sites: Cell<Option<u128>>,
 }
 
-impl ViewCache {
+impl ViewCache<'_> {
     const fn new() -> Self {
         Self {
             production: [const { Cell::new(None) }; MAX_SEATS],
-            etw_inputs: [const { OnceCell::new() }; MAX_SEATS],
-            etw: [const { Cell::new(None) }; MAX_SEATS],
+            etw: None,
             own_roads: Cell::new(None),
             settlements: Cell::new(None),
             roads: Cell::new(None),
             sites: Cell::new(None),
         }
     }
+}
+
+/// Reach changes only with ownership, layout or whether the seat has a road left.
+struct OneStepMemo {
+    layout: Layout,
+    vertex_owner: [u8; MAX_VERTICES],
+    edge_owner: [u8; MAX_EDGES],
+    values: [Option<u128>; MAX_SEATS],
+}
+
+std::thread_local! {
+    static ONE_STEP_MEMO: RefCell<Option<OneStepMemo>> = const { RefCell::new(None) };
 }
 
 pub struct DecisionView<'a> {
@@ -190,7 +200,7 @@ pub struct DecisionView<'a> {
     dev_played_this_turn: bool,
     offers_remaining_this_turn: u8,
     phase: DecisionPhase,
-    cache: ViewCache,
+    cache: ViewCache<'a>,
 }
 
 impl<'a> DecisionView<'a> {
@@ -488,16 +498,37 @@ impl<'a> DecisionView<'a> {
     }
 
     pub fn compute_one_step(&self, seat: usize) -> u128 {
-        let mut vertices = 0_u128;
-        for edge in 0..self.topology.edge_count() {
-            let edge = edge as Edge;
-            if self.legal_road_for(seat, edge) {
-                for vertex in self.topology.edge_endpoints(edge) {
-                    vertices |= 1 << vertex;
-                }
-            }
+        if self.pieces(seat, Buildable::Road) == 0 {
+            return 0;
         }
-        vertices
+        ONE_STEP_MEMO.with_borrow_mut(|memo| {
+            let vertices = &self.state.vertex_owner[..self.topology.vertex_count()];
+            let edges = &self.state.edge_owner[..self.topology.edge_count()];
+            if memo.as_ref().is_none_or(|cached| {
+                cached.layout != self.topology.layout()
+                    || &cached.vertex_owner[..vertices.len()] != vertices
+                    || &cached.edge_owner[..edges.len()] != edges
+            }) {
+                *memo = Some(OneStepMemo {
+                    layout: self.topology.layout(),
+                    vertex_owner: self.state.vertex_owner,
+                    edge_owner: self.state.edge_owner,
+                    values: [None; MAX_SEATS],
+                });
+            }
+            *memo.as_mut().unwrap().values[seat].get_or_insert_with(|| {
+                let mut vertices = 0_u128;
+                for edge in 0..self.topology.edge_count() {
+                    let edge = edge as Edge;
+                    if self.legal_road_for(seat, edge) {
+                        for vertex in self.topology.edge_endpoints(edge) {
+                            vertices |= 1 << vertex;
+                        }
+                    }
+                }
+                vertices
+            })
+        })
     }
 
     /// As [`Self::legal_road`], for an arbitrary seat and without the observer's bitmask cache.
@@ -902,18 +933,40 @@ impl<'a> DecisionView<'a> {
             .sum()
     }
 
-    pub(crate) fn etw_inputs(&self, seat: usize) -> &crate::etw::EtwInputs {
-        self.cache.etw_inputs[seat]
-            .get_or_init(|| crate::etw::compute_inputs_for_seat(self, seat))
+    pub(crate) fn with_etw_cache<T>(&self, run: impl FnOnce(&DecisionView<'_>) -> T) -> T {
+        if self.cache.etw.is_some() {
+            return run(self);
+        }
+        let cache = crate::etw::EtwCache::new();
+        let mut view = DecisionView::new(
+            self.state, self.board, self.topology, self.rules, self.all_rules,
+            self.observer, self.seats, self.dev_deck_remaining, self.dev_played_this_turn,
+            self.offers_remaining_this_turn, self.phase,
+        );
+        view.cache.etw = Some(&cache);
+        run(&view)
+    }
+
+    #[inline]
+    pub(crate) fn etw_inputs(&self, seat: usize) -> crate::etw::EtwInputs {
+        if let Some(cache) = self.cache.etw {
+            return cache.inputs(self, seat).clone();
+        }
+        crate::etw::compute_inputs_for_seat(self, seat)
+    }
+
+    pub(crate) fn etw_estimate(&self, seat: usize) -> crate::etw::EtwEstimate {
+        if let Some(cache) = self.cache.etw {
+            return cache.estimate(self, seat).clone();
+        }
+        crate::etw::EtwEstimate::new(&self.etw_inputs(seat))
     }
 
     pub(crate) fn etw_for_seat(&self, seat: usize) -> f64 {
-        if let Some(value) = self.cache.etw[seat].get() {
-            return value;
+        if let Some(cache) = self.cache.etw {
+            return cache.base(self, seat);
         }
-        let value = crate::etw::expected_turns_to_win(self.etw_inputs(seat));
-        self.cache.etw[seat].set(Some(value));
-        value
+        crate::etw::expected_turns_to_win(&self.etw_inputs(seat))
     }
 
     pub fn production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {
@@ -986,4 +1039,48 @@ pub fn can_pay(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_COUNT]) -> boo
 
 pub const fn pips(token: u8) -> u8 {
     6_u8.saturating_sub(7_u8.abs_diff(token))
+}
+
+#[cfg(test)]
+mod reach_tests {
+    use super::*;
+    use crate::topology::Layout;
+
+    #[test]
+    fn one_step_matches_direct_after_content_changes() {
+        let (_, board, mut arena) = crate::etw::tests::fixture();
+        for layout in [Layout::Standard4, Layout::Extension6, Layout::Standard4] {
+            let topology = Topology::load(layout).unwrap();
+            for variant in 0..160 {
+                let owner = match variant % 3 { 0 => 0, 1 => 1, _ => EMPTY };
+                if variant % 2 == 0 {
+                    arena.state.vertex_owner[(variant * 7 / 2) % topology.vertex_count()] = owner;
+                } else {
+                    arena.state.edge_owner[(variant * 11 / 2) % topology.edge_count()] = owner;
+                }
+                for pieces in [1, 0, 2] {
+                    for seat in 0..2 {
+                        arena.state.players[seat].pieces[Buildable::Road.index()] = pieces;
+                    }
+                    for _ in 0..2 {
+                        let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+                        for seat in 0..2 {
+                            let mut direct = 0_u128;
+                            for edge in 0..topology.edge_count() {
+                                if can_build_road(
+                                    &topology, &arena.state.vertex_owner, &arena.state.edge_owner,
+                                    seat as u8, edge as Edge, pieces,
+                                ) {
+                                    for vertex in topology.edge_endpoints(edge as Edge) {
+                                        direct |= 1 << vertex;
+                                    }
+                                }
+                            }
+                            assert_eq!(view.compute_one_step(seat), direct);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
