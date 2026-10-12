@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { setActivePlayer } from '../model/turn'
 import { adviceBlockers } from './bestMoves'
+import { CardAmounts } from './BestMovesTable'
 import { readableInk } from './colors'
 import { SpotTiles } from './SpotTiles'
 import { activeTab, useStore } from './store'
@@ -43,6 +44,7 @@ export function DraftRecapPanel({ className = 'panel analysis-panel' }: { classN
             {players.map((player, index) => {
               const share = games === 0 ? 0 : wins[player.id] / games * 100
               const percentage = games === 0 ? '…' : `${Math.round(share)}%`
+              const { hand } = game.stats[player.id]
               return (
                 <div key={player.id} className="recap-row" role="listitem"
                   aria-label={`${player.name}: ${percentage} win chance`}>
@@ -55,6 +57,7 @@ export function DraftRecapPanel({ className = 'panel analysis-panel' }: { classN
                       {board.buildings.filter((building) => building.playerId === player.id).map(({ vertexId }) =>
                         <SpotTiles key={vertexId} board={board} vertexId={vertexId} small />)}
                     </div>
+                    {Object.values(hand).some((count) => count > 0) && <div className="recap-hand"><CardAmounts cards={hand} /></div>}
                     <div className="recap-bar"><span style={{ width: `${share}%`, background: player.color }} /></div>
                   </div>
                   <span className="analysis-score">{percentage}</span>

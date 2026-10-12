@@ -117,11 +117,21 @@ Heading, turn-order row, standings table, action bar, the open action's own cont
 
 ## Draft recap
 
-Status: built 2026-10-12. Between the last starting settlement and the first recorded turn, the analysis panel shows each player's estimated chance of winning from the drafted position.
+Status: built 2026-10-12; starting hands (below) built the same day. Between the last starting settlement and the first recorded turn, the analysis panel shows each player's estimated chance of winning from the drafted position.
 
 ### When it shows
 
 The panel is the recap when the board has tiles, `game.turn` is absent, every building is a settlement and every player owns exactly two. Any other finished draft (a recorded turn, a city, an extra or missing settlement) shows Best moves as before. `Start game` commits `setActivePlayer(game, board.players[0].id)` as one `commit-game`, which records a turn and so switches to Best moves; undo brings the recap back.
+
+### Starting hands
+
+The moment the last starting settlement lands, every player is dealt their starting resources into `Game.stats`, so the recap, the Players panel and the first turn all show the same hands. `Start game` changes no hand.
+
+- `setupGrants(board)` (`model/board.ts`) is null unless every building is a settlement and every player owns exactly two. Otherwise it gives each player one card per resource hex touching their second settlement, taken as their second building in board order: the rule the engine's `grant_setup_resources` applies, so the dealt hands are the ones the recap simulates with. A desert or blank hex gives nothing. `awaitingFirstTurn` is this predicate plus `game.turn === undefined`.
+- The deal lives in `withBoard`, the one write path for board edits, and only while `game.turn` is absent. A player whose hand still equals what the old board dealt them (all zeros when it dealt nothing) and who has no `handUnknown` cards gets what the new board deals, zeros when it deals nothing. So the last settlement deals, a step back or a removed settlement takes the cards back, and a second settlement moved to another corner swaps them.
+- A hand that does not match the old board's deal is never touched: one corrected in Players, or one whose size a screenshot read. A finished draft that arrives whole (a screenshot or JSON import, a game saved before this) is not dealt on load, and `mergeScreenshot` skips the rule altogether: a later screenshot says what each hand holds now, so a dealt hand is neither cleared nor replaced by it.
+- Undo and redo restore whole games, so they need nothing.
+- `withBoard` still returns the same game reference when nothing changed.
 
 ### The estimate
 
@@ -130,7 +140,7 @@ Win chance is measured, not scored: the engine plays the game out from the draft
 - New decision on the existing `advise` export: `{ kind: 'recap', games, batch }`. No new wasm export. `observer` stays in the request shape and is ignored.
 - Response: `{ kind: 'recap', games, wins: { <playerId>: count }, draws }`. `wins` names every player, and the counts plus `draws` (games that hit the turn cap) sum to `games`.
 - Rules and policy are the adviser's: `RuleConfig::base(layout)` with player trading on, `POLICY` in every seat, default modifiers.
-- Hands: each seat is dealt the setup grant of its second settlement, taken as its second building in board order, by the same rule `setup_pick` applies (shared helper, dealt in reverse seat order). `Game.stats` is not read: a draft placed by taps has no hands, and a screenshot gives only hand sizes.
+- Hands: each seat is dealt the setup grant of its second settlement, taken as its second building in board order, by the same rule `setup_pick` applies (shared helper, dealt in reverse seat order). `Game.stats` is not read: the app deals the same hands by the same rule (Starting hands, above), and a screenshot gives only hand sizes.
 - Game `i` of a call is seeded `derive_game_seed(RECAP_SEED, batch, i)`, so one board always gives the same numbers and batches never repeat a game. `RECAP_SEED` is a literal in the engine and spends no simulator seed domain.
 - `GameArena::play_from_draft` is `prepare`, the grants, the road recompute and the same turn loop `play` runs, shared through one private function. `play` itself must not change: `bench-hashes.json` passing unregenerated is the proof.
 - The request is refused with an `error` when `games` is outside 1 to 1000 or a seat does not hold exactly two settlements. The board checks the adviser already makes apply unchanged.
@@ -145,7 +155,7 @@ Win chance is measured, not scored: the engine plays the game out from the draft
 One component in both trees, in place of Best moves:
 
 - Heading `Draft recap`, with the same `Undo` and `Redo` buttons as Best moves.
-- One row per player, highest win chance first, ties in turn order: rank circle in the player's colour, name, the player's two spots as the Best picks tile thumbnails, a bar as wide as the share, and the whole percentage. Rows are not selectable and put no marks on the board. Before the first batch the percentage reads `…`.
+- One row per player, highest win chance first, ties in turn order: rank circle in the player's colour, name, the player's two spots as the Best picks tile thumbnails, the player's hand from `Game.stats` as `CardAmounts` when it holds a card, a bar as wide as the share, and the whole percentage. Rows are not selectable and put no marks on the board. Before the first batch the percentage reads `…`.
 - While batches are outstanding, the Best picks progress bar with `Simulating games…`.
 - `Start game`, the primary button, as wide as the rows and enabled at all times.
 - Once every game is counted, one note: `Win chance over 1,000 simulated games, every seat played by the adviser. Expect about 3 points of noise.` A second line gives the draw count when any game hit the turn cap. Neither shows mid-run, after an error or on a blocked board, where the claim would be false.
@@ -163,6 +173,10 @@ One component in both trees, in place of Best moves:
 | R6 e2e spec for draft end, recap, `Start game`, undo; run by the main session, not the sandbox | done: `e2e/draftRecap.spec.ts`, desktop and phone |
 | R7 Desktop D8, mobile S10 and `CLAUDE.md` describe the recap as built | done |
 | R8 Measure 1,000 games in wasm at four and six seats and settle `RECAP_GAMES` | done: 2.0s at four seats and 4.6s at six under Node at load 8.7, so 1,000 stays |
+| R9 Model: `setupGrants` in `model/board.ts`, `awaitingFirstTurn` built on it, the deal and take-back in `withBoard`, tests first | done |
+| R10 Recap rows show each player's hand with `CardAmounts`; panel test | done |
+| R11 `e2e/draftRecap.spec.ts`: the last tap deals, a step back takes the cards away, the hands survive `Start game`; run by the main session, not the sandbox | done: the last pick is placed through `Place settlement`, the rivals' rows show their dealt cards, and they are still there after `Start game`, undo and a replaced pick; the take-back itself is covered in `setupGrants.test.ts` |
+| R12 `CLAUDE.md` describes the deal | done |
 
 ## Left as built
 

@@ -1,4 +1,4 @@
-import { placeBuilding, placeRoad, setRobber } from './board'
+import { placeBuilding, placeRoad, setRobber, setupGrants } from './board'
 import { edgeEndpointVertexIds } from './coords'
 import {
   adjustCounter, DEV_KINDS, devHandTotal, ensureStats, withBoard,
@@ -26,10 +26,7 @@ export function activePlayerId(game: Game): string | null {
 }
 
 export function awaitingFirstTurn(game: Game): boolean {
-  const { board } = game
-  return game.turn === undefined
-    && board.buildings.every((building) => building.tier === 'settlement')
-    && board.players.every((player) => board.buildings.filter((building) => building.playerId === player.id).length === 2)
+  return game.turn === undefined && setupGrants(game.board) !== null
 }
 
 export function turnState(game: Game): TurnState | null {

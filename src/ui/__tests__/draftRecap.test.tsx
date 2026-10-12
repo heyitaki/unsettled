@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AdviceRequest, AdviceResponse } from '../../engine/advice/protocol'
 import { inferDraftState } from '../../engine/draft'
-import type { Game } from '../../model/game'
+import { adjustCounter, adjustHand, type Game } from '../../model/game'
 import { awaitingFirstTurn, setActivePlayer } from '../../model/turn'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { DraftRecapPanel } from '../DraftRecapPanel'
@@ -164,6 +164,25 @@ it('orders plain rows by wins with ties in roster order and keeps settlements in
   expect(seen.state.highlight).toBeNull()
   expect(rows().every((row) => row.querySelector('button') === null)).toBe(true)
   expect(container.querySelector<HTMLElement>('.recap-bar > span')!.style.width).toBe('40%')
+})
+
+it('shows each known hand between the spots and bar and omits empty hands', async () => {
+  await mount()
+  let seed = finishedDraft(1)
+  const [first, second, third, fourth] = seed.board.players
+  seed = adjustHand(adjustHand(seed, first.id, 'wood', 2), first.id, 'ore', 1)
+  seed = adjustHand(seed, second.id, 'sheep', 1)
+  seed = adjustCounter(seed, third.id, 'handUnknown', 3)
+  seed = adjustHand(adjustHand(seed, fourth.id, 'wheat', 4), fourth.id, 'brick', 1)
+  await commit(seed)
+  expect(rows().map((row) => [...row.querySelectorAll('.hex-label')].map((card) => card.getAttribute('aria-label'))))
+    .toEqual([['2 wood', '1 ore'], ['1 sheep'], [], ['4 wheat', '1 brick']])
+  for (const row of rows()) {
+    const spots = row.querySelector('.recap-spots')!
+    const cards = row.querySelector('.hex-label')?.parentElement
+    expect(spots.nextElementSibling).toBe(cards ?? row.querySelector('.recap-bar'))
+    if (cards) expect(cards.nextElementSibling).toBe(row.querySelector('.recap-bar'))
+  }
 })
 
 it('sets bar widths to each player share, including zero wins', async () => {
