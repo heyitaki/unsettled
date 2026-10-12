@@ -21,7 +21,7 @@ use std::ops::Range;
 use super::app_formula::{AppFormulaScorer, js_max};
 use super::expansion;
 use crate::game::{can_place_settlement, setup_order};
-use crate::state::EMPTY;
+use crate::state::{EMPTY, MAX_SEATS};
 use crate::topology::{Edge, Topology, Vertex};
 
 /// The two formulas a draft arm runs: the hero's, which an arm sweeps, and the opponent model's,
@@ -36,6 +36,17 @@ struct RowArgmax {
     taken: Option<(Vertex, f64)>,
     free: Option<(Vertex, f64)>,
     occupancy: Option<expansion::Occupancy>,
+}
+
+/// Bases and bounds stay fixed while only rival pieces move.
+struct PreparedRow {
+    scorer: u64,
+    own_vertices: u128,
+    own_edges: u128,
+    seat: u8,
+    grant: bool,
+    /// (base, bound), with NaN marking a bound not yet evaluated.
+    values: [(f64, f64); 128],
 }
 
 /// One seat's vertex scores, at one holdings set and one setup grant.
@@ -55,6 +66,12 @@ struct ScoreRows {
     reusable: bool,
     rows: Vec<Option<Vec<f64>>>,
     scratch: Vec<f64>,
+    /// Each seat's occupancy as of the replay's latest piece, set by `Lookahead::replay`. While it
+    /// is set, every row must be asked for with the replay's own owner arrays: a release build does
+    /// not compare these masks with the arrays it is handed.
+    occupancies: Option<[expansion::Occupancy; MAX_SEATS]>,
+    prepared: Vec<PreparedRow>,
+    prepared_index: Vec<usize>,
 }
 
 impl ScoreRows {
@@ -70,6 +87,9 @@ impl ScoreRows {
             reusable,
             rows: vec![None; slots],
             scratch: Vec::new(),
+            occupancies: None,
+            prepared: Vec::new(),
+            prepared_index: vec![usize::MAX; seats * (owner_slots + 1) * 2],
         }
     }
 
@@ -110,7 +130,7 @@ impl ScoreRows {
         let holdings = scorer.holdings_for_owner(vertex_owner, seat);
         let mut holdings_total = None;
         let scale = scorer.slot_scale(seat);
-        let occupancy = expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
+        let occupancy = self.occupancy(scorer, vertex_owner, edge_owner, seat);
         self.scratch.clear();
         expansion::PRICE_MEMO.with_borrow_mut(|memo| {
             let serial = memoize.then(|| memo.serial(scorer.id, occupancy.own_vertices));
@@ -223,7 +243,7 @@ impl ScoreRows {
     ) -> Option<RowArgmax> {
         let scale = scorer.slot_scale(seat);
         let bounds = scorer.expansion_bounds(scale.expansion)?;
-        let occupancy = expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
+        let occupancy = self.occupancy(scorer, vertex_owner, edge_owner, seat);
         let taken = !occupancy.blocked & (u128::MAX >> (128 - self.vertices));
         let free = if vacated.is_some() {
             (0..self.vertices as Vertex)
@@ -234,6 +254,38 @@ impl ScoreRows {
         };
         let holdings = scorer.holdings_for_owner(vertex_owner, seat);
         let mut holdings_total = None;
+        let mut prepared = if memoize && occupancy.own_vertices.count_ones() <= 1 {
+            let held = (occupancy.own_vertices != 0)
+                .then(|| occupancy.own_vertices.trailing_zeros() as Vertex);
+            let slot = slot_index(self.owner_slots, seat, held, grant);
+            let mut index = self.prepared_index[slot];
+            if index == usize::MAX {
+                index = self.prepared.len();
+                self.prepared_index[slot] = index;
+                self.prepared.push(PreparedRow {
+                    scorer: 0,
+                    own_vertices: 0,
+                    own_edges: 0,
+                    seat,
+                    grant,
+                    values: [(0.0, f64::NAN); 128],
+                });
+            }
+            let row = &mut self.prepared[index];
+            if row.scorer != scorer.id || row.own_vertices != occupancy.own_vertices
+                || row.own_edges != occupancy.own_edges || row.seat != seat || row.grant != grant
+            {
+                row.scorer = scorer.id;
+                row.own_vertices = occupancy.own_vertices;
+                row.own_edges = occupancy.own_edges;
+                row.seat = seat;
+                row.grant = grant;
+                row.values.fill((0.0, f64::NAN));
+            }
+            Some(&mut row.values)
+        } else {
+            None
+        };
         let mut upper = [0.0; 128];
         self.scratch.resize(self.vertices, f64::NEG_INFINITY);
         expansion::PRICE_MEMO.with_borrow_mut(|memo| {
@@ -244,27 +296,50 @@ impl ScoreRows {
             while rest != 0 {
                 let vertex = rest.trailing_zeros() as Vertex;
                 rest &= rest - 1;
-                let mut base_total = || {
-                    let total = *holdings_total
-                        .get_or_insert_with(|| scorer.holdings_diversity_total(&holdings));
-                    scorer.scaled_total_with_diversity(holdings, vertex, grant, scale.diversity, total)
-                };
-                let base = if let Some(serial) = serial {
-                    memo.price(expansion::price_key(serial, vertex, base_tag), base_total)
+                let cached = prepared.as_ref().map(|row| row[usize::from(vertex)]);
+                let (base, bound) = if let Some((base, bound)) = cached.filter(|(_, upper)| upper.is_finite()) {
+                    #[cfg(test)]
+                    PREPARED_HITS.with(|hits| hits.set(hits.get() + 1));
+                    #[cfg(any(test, debug_assertions))]
+                    {
+                        let total = scorer.holdings_diversity_total(&holdings);
+                        let expected = scorer.scaled_total_with_diversity(
+                            holdings, vertex, grant, scale.diversity, total,
+                        );
+                        let upper = expected + scale.expansion * bounds.value(
+                            scorer, &holdings, vertex, scorer.reach.table_path(vertex, &occupancy),
+                        );
+                        assert_eq!(base.to_bits(), expected.to_bits());
+                        assert_eq!(bound.to_bits(), upper.to_bits());
+                    }
+                    (base, bound)
                 } else {
-                    base_total()
-                };
-                let table_path = scorer.reach.table_path(vertex, &occupancy);
-                let expansion = if let Some(serial) = serial {
-                    memo.price(expansion::bound_key(serial, vertex, table_path), || {
+                    let mut base_total = || {
+                        let total = *holdings_total
+                            .get_or_insert_with(|| scorer.holdings_diversity_total(&holdings));
+                        scorer.scaled_total_with_diversity(holdings, vertex, grant, scale.diversity, total)
+                    };
+                    let base = if let Some(serial) = serial {
+                        memo.price(expansion::price_key(serial, vertex, base_tag), base_total)
+                    } else {
+                        base_total()
+                    };
+                    let table_path = scorer.reach.table_path(vertex, &occupancy);
+                    let expansion = if let Some(serial) = serial {
+                        memo.price(expansion::bound_key(serial, vertex, table_path), || {
+                            bounds.value(scorer, &holdings, vertex, table_path)
+                        })
+                    } else {
                         bounds.value(scorer, &holdings, vertex, table_path)
-                    })
-                } else {
-                    bounds.value(scorer, &holdings, vertex, table_path)
+                    };
+                    let bound = base + scale.expansion * expansion;
+                    (base, bound)
                 };
-                let bound = base + scale.expansion * expansion;
                 if !bound.is_finite() {
                     return None;
+                }
+                if let Some(row) = prepared.as_mut() {
+                    row[usize::from(vertex)] = (base, bound);
                 }
                 self.scratch[usize::from(vertex)] = base;
                 upper[usize::from(vertex)] = bound;
@@ -326,6 +401,20 @@ impl ScoreRows {
             });
             Some(RowArgmax { taken: best[0], free: best[1], occupancy: Some(occupancy) })
         })
+    }
+
+    fn occupancy(
+        &self,
+        scorer: &AppFormulaScorer,
+        vertex_owner: &[u8],
+        edge_owner: &[u8],
+        seat: u8,
+    ) -> expansion::Occupancy {
+        let rebuilt = || expansion::Occupancy::new(scorer, vertex_owner, edge_owner, seat);
+        let occupancy = self.occupancies.as_ref().map_or_else(rebuilt, |held| held[usize::from(seat)]);
+        #[cfg(any(test, debug_assertions))]
+        assert_eq!(occupancy, rebuilt(), "seat {seat}: the masks carried against rebuilt");
+        occupancy
     }
 
     /// The seat's score for every vertex on this state, computed once per distinct
@@ -563,6 +652,7 @@ struct Lookahead<'a> {
     hero: u8,
     /// The unchanged input board shared by all candidate replays.
     hero_occupancy: expansion::Occupancy,
+    initial_occupancies: [expansion::Occupancy; MAX_SEATS],
     order: Vec<u8>,
     /// The positions in `order` strictly between the hero's two picks. Empty for the seat that
     /// picks last in the first round, which picks twice in a row and has nothing to look past.
@@ -593,13 +683,17 @@ impl<'a> Lookahead<'a> {
         let last = order.iter().rposition(|seat| *seat == hero)?;
         let reusable = hero_scorer.weights().expansion_weight == 0.0
             && opponent_scorer.weights().expansion_weight == 0.0;
+        let initial_occupancies = std::array::from_fn(|seat| {
+            expansion::Occupancy::new(hero_scorer, vertex_owner, edge_owner, seat as u8)
+        });
         Some(Self {
             hero_scorer,
             opponent_scorer,
             topology,
             seats,
             hero,
-            hero_occupancy: expansion::Occupancy::new(hero_scorer, vertex_owner, edge_owner, hero),
+            hero_occupancy: initial_occupancies[usize::from(hero)],
+            initial_occupancies,
             order,
             intervening: first + 1..last,
             rows: ScoreRows::new(seats, topology.vertex_count(), vertex_owner.len(), reusable),
@@ -659,6 +753,14 @@ impl<'a> Lookahead<'a> {
         ).taken
     }
 
+    fn place(&mut self, owner: u8, vertex: Vertex, edge: Edge) {
+        self.owners[usize::from(vertex)] = owner;
+        self.edges[usize::from(edge)] = owner;
+        for (seat, occupancy) in self.rows.occupancies.as_mut().unwrap().iter_mut().enumerate() {
+            occupancy.place(self.hero_scorer, seat as u8, owner, vertex, edge);
+        }
+    }
+
     /// Places the candidate for the hero and lets every intervening seat take its argmax, in
     /// `setup_order` order, leaving the replayed state in `owners` and `edges`.
     ///
@@ -678,6 +780,7 @@ impl<'a> Lookahead<'a> {
         self.owners.copy_from_slice(vertex_owner);
         self.edges.copy_from_slice(edge_owner);
         self.denial = 0.0;
+        self.rows.occupancies = Some(self.initial_occupancies);
         // `new` read the hero's occupancy from the board it was given, which every caller
         // passes here again.
         debug_assert_eq!(
@@ -693,8 +796,7 @@ impl<'a> Lookahead<'a> {
             candidate,
             Some(&self.hero_occupancy),
         );
-        self.owners[usize::from(candidate)] = self.hero;
-        self.edges[usize::from(road)] = self.hero;
+        self.place(self.hero, candidate, road);
         for position in self.intervening.clone() {
             let seat = self.order[position];
             // `setup_order` runs the first round forward and the second reversed, so a position
@@ -727,8 +829,7 @@ impl<'a> Lookahead<'a> {
                 pick,
                 result.occupancy.as_ref(),
             );
-            self.owners[usize::from(pick)] = seat;
-            self.edges[usize::from(road)] = seat;
+            self.place(seat, pick, road);
             if let Some(picks) = picks.as_deref_mut() {
                 picks.push((seat, pick));
             }
@@ -891,6 +992,7 @@ use std::cell::Cell;
 thread_local! {
     // Per row kind: legal candidates and exact evaluations, excluding the reference check.
     static ARGMAX_COUNTS: Cell<[[usize; 2]; 2]> = const { Cell::new([[0; 2]; 2]) };
+    static PREPARED_HITS: Cell<usize> = const { Cell::new(0) };
 }
 
 #[cfg(test)]
@@ -1872,5 +1974,112 @@ mod tests {
         assert_eq!(denial_gain(Some((3, 0.5)), Some((7, 2.0))), 0.0);
         assert_eq!(denial_gain(None, Some((7, 2.0))), 0.0);
         assert_eq!(denial_gain(Some((3, 2.0)), None), 0.0);
+    }
+}
+
+#[cfg(test)]
+mod speed_tests {
+    use super::*;
+
+    #[test]
+    fn prepared_rows_follow_owner_content_scorer_seat_and_grant() {
+        let mut hits = 0;
+        for (topology, board) in expansion::speed_tests::corpus_boards() {
+            let mut weights: super::super::app_formula::EngineWeights = serde_json::from_str(
+                include_str!("../../../../placement/default-weights.json")
+            ).unwrap();
+            let first = AppFormulaScorer::new(&board, &topology, weights.clone());
+            weights.diversity_weight *= 1.7;
+            weights.expansion_decay = 0.35;
+            let second = AppFormulaScorer::new(&board, &topology, weights);
+            let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+            for (mut vertices, mut edges) in expansion::tests::scrambled_owners(&topology).into_iter().take(4) {
+                for pass in 0..3 {
+                    for scorer in [&first, &second] {
+                        for seat in 0..6 {
+                            for grant in [false, true] {
+                                let before = PREPARED_HITS.with(Cell::get);
+                                let actual = rows.argmax_row(scorer, &topology, &vertices, &edges,
+                                    seat, grant, None, true);
+                                let repeated = rows.argmax_row(scorer, &topology, &vertices, &edges,
+                                    seat, grant, None, true);
+                                hits += PREPARED_HITS.with(Cell::get) - before;
+                                let expected = rows.full_argmax(scorer, &topology, &vertices, &edges,
+                                    seat, grant, None, false);
+                                let bits = |answer: Option<(Vertex, f64)>| {
+                                    answer.map(|(vertex, score)| (vertex, score.to_bits()))
+                                };
+                                assert_eq!(bits(actual.taken), bits(expected.taken));
+                                assert_eq!(bits(actual.free), bits(expected.free));
+                                assert_eq!(bits(repeated.taken), bits(expected.taken));
+                            }
+                        }
+                    }
+                    if pass == 1 {
+                        vertices[0] = 0;
+                        edges[0] = 1;
+                    }
+                }
+            }
+        }
+        assert!(hits > 1_000, "prepared row hits={hits}");
+    }
+
+    #[test]
+    fn carried_replay_matches_rebuilt_rows_on_corpus_boards() {
+        for (topology, board) in expansion::speed_tests::corpus_boards() {
+            let seats = board.seats();
+            if !(2..=6).contains(&seats) {
+                continue;
+            }
+            let mut weights: super::super::app_formula::EngineWeights = serde_json::from_str(
+                include_str!("../../../../placement/default-weights.json")
+            ).unwrap();
+            weights.setup_denial_weight = 0.25;
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            for (vertices, edges) in expansion::tests::scrambled_owners(&topology).into_iter().take(3) {
+                for hero in 0..seats as u8 {
+                    let mut replay = Lookahead::new(
+                        &scorer, &scorer, &topology, seats, hero, &vertices, &edges,
+                    ).unwrap();
+                    for candidate in (0..topology.vertex_count() as Vertex)
+                        .filter(|v| can_place_settlement(&topology, &vertices, *v)).take(4)
+                    {
+                        replay.replay(&vertices, &edges, candidate, None);
+                        let mut owners = vertices.clone();
+                        let mut roads = edges.clone();
+                        let road = setup_road(&scorer, &topology, &owners, &roads, hero, candidate, None);
+                        owners[usize::from(candidate)] = hero;
+                        roads[usize::from(road)] = hero;
+                        let mut reference = ScoreRows::new(seats, topology.vertex_count(), owners.len(), false);
+                        let mut denial = 0.0;
+                        for position in replay.intervening.clone() {
+                            let seat = replay.order[position];
+                            let row = reference.full_argmax(
+                                &scorer, &topology, &owners, &roads, seat,
+                                position >= seats, Some(candidate), false,
+                            );
+                            denial += denial_gain(row.free, row.taken);
+                            if let Some((vertex, _)) = row.taken {
+                                let edge = setup_road(&scorer, &topology, &owners, &roads, seat, vertex, None);
+                                owners[usize::from(vertex)] = seat;
+                                roads[usize::from(edge)] = seat;
+                            }
+                        }
+                        assert_eq!(replay.owners, owners);
+                        assert_eq!(replay.edges, roads);
+                        assert_eq!(replay.denial.to_bits(), denial.to_bits());
+                        for seat in 0..seats as u8 {
+                            assert_eq!(replay.rows.occupancies.unwrap()[usize::from(seat)],
+                                expansion::Occupancy::new(&scorer, &owners, &roads, seat));
+                        }
+                        let expected = reference.full_argmax(
+                            &scorer, &topology, &owners, &roads, hero, true, None, false,
+                        ).taken.map(|(vertex, score)| (vertex, score.to_bits()));
+                        assert_eq!(replay.planned_second().map(|(vertex, score)| (vertex, score.to_bits())), expected);
+                    }
+                }
+            }
+        }
     }
 }

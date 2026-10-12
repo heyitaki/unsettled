@@ -68,6 +68,7 @@ pub(super) struct ReachTable {
     id: u64,
     entries: Vec<ReachEntry>,
     spans: Vec<std::ops::Range<usize>>,
+    first_spans: Vec<[(Edge, std::ops::Range<usize>); VERTEX_FANOUT]>,
     /// With no own roads here, the free first edge leaves at most two paid edges, all in the table.
     near_edges: Vec<u128>,
     open: Vec<OpenReach>,
@@ -105,7 +106,9 @@ impl ReachTable {
             let start = table.entries.len();
             let mut near_edges = 0;
             let is_site = |site| site != vertex && !links[index].adjacent().contains(&site);
-            for (first, a) in links[index].steps() {
+            let mut first_spans = std::array::from_fn(|_| (Edge::MAX, 0..0));
+            for (direction, (first, a)) in links[index].steps().enumerate() {
+                let first_start = table.entries.len();
                 near_edges |= 1 << first;
                 for (second, b) in links[usize::from(a)].steps() {
                     near_edges |= 1 << second;
@@ -133,7 +136,9 @@ impl ReachTable {
                         }
                     }
                 }
+                first_spans[direction] = (first, first_start..table.entries.len());
             }
+            table.first_spans.push(first_spans);
             let mut open = OpenReach::default();
             for entry in &table.entries[start..] {
                 open.edges |= entry.edges;
@@ -179,8 +184,18 @@ impl ReachTable {
     }
 
     fn scan_sites(&self, candidate: Vertex, occupancy: &Occupancy) -> SiteMasks {
+        self.scan_span(self.spans[usize::from(candidate)].clone(), occupancy)
+    }
+
+    fn road_sites(&self, candidate: Vertex, edge: Edge, occupancy: &Occupancy) -> SiteMasks {
+        let span = &self.first_spans[usize::from(candidate)].iter()
+            .find(|(first, _)| *first == edge).expect("incident edge has a span").1;
+        self.scan_span(span.clone(), occupancy)
+    }
+
+    fn scan_span(&self, span: std::ops::Range<usize>, occupancy: &Occupancy) -> SiteMasks {
         let mut sites = SiteMasks::default();
-        for entry in &self.entries[self.spans[usize::from(candidate)].clone()] {
+        for entry in &self.entries[span] {
             let bit = 1 << entry.site;
             if bit & occupancy.blocked == 0
                 && entry.edges & occupancy.rival_edges == 0
@@ -207,7 +222,7 @@ pub(super) struct Occupancy {
     rival_vertices: u128,
     pub(super) blocked: u128,
     rival_edges: u128,
-    own_edges: u128,
+    pub(super) own_edges: u128,
     pub(super) own_vertices: u128,
 }
 
@@ -248,6 +263,33 @@ impl Occupancy {
     /// hold, and every settled vertex with its neighbours.
     pub(super) fn with_settlements(self, own: u128, rival: u128, blocked: u128) -> Self {
         Self { own_vertices: own, rival_vertices: rival, blocked, ..self }
+    }
+
+    pub(super) fn place(
+        &mut self,
+        scorer: &AppFormulaScorer,
+        seat: u8,
+        owner: u8,
+        vertex: Vertex,
+        edge: Edge,
+    ) {
+        let vertex_bit = 1 << vertex;
+        let edge_bit = 1 << edge;
+        self.own_vertices &= !vertex_bit;
+        self.rival_vertices &= !vertex_bit;
+        self.own_edges &= !edge_bit;
+        self.rival_edges &= !edge_bit;
+        if seat == owner {
+            self.own_vertices |= vertex_bit;
+            self.own_edges |= edge_bit;
+        } else {
+            self.rival_vertices |= vertex_bit;
+            self.rival_edges |= edge_bit;
+        }
+        self.blocked |= vertex_bit;
+        for adjacent in scorer.vertex_adjacent(vertex) {
+            self.blocked |= 1 << adjacent;
+        }
     }
 
     fn restricted(&self, vertices: u128, edges: u128) -> [u128; 4] {
@@ -707,7 +749,11 @@ pub(super) fn row_road(
         }
     }
     firsts[..len].sort_unstable();
-    PRICE_MEMO.with_borrow_mut(|memo| {
+    let road = PRICE_MEMO.with(|memo| {
+        let Ok(mut memo) = memo.try_borrow_mut() else {
+            return scorer.expansion_road(vertex_owner, edge_owner, seat, candidate);
+        };
+        let table_path = scorer.reach.table_path(candidate, occupancy);
         let serial = memo.serial(scorer.id, occupancy.own_vertices);
         let mut pricer = None;
         let mut road = None;
@@ -716,7 +762,14 @@ pub(super) fn row_road(
         for (first_edge, to) in &firsts[..len] {
             let mut sources = [0; 2];
             sources[usize::from(occupancy.own_edges & (1 << first_edge) == 0)] = 1 << to;
-            let sites = mask_walk(scorer, occupancy, candidate, sources);
+            let sites = if table_path {
+                let sites = scorer.reach.road_sites(candidate, *first_edge, occupancy);
+                #[cfg(any(test, debug_assertions))]
+                assert_eq!(sites, mask_walk(scorer, occupancy, candidate, sources));
+                sites
+            } else {
+                mask_walk(scorer, occupancy, candidate, sources)
+            };
             let mut rest = sites[0] | sites[1] | sites[2];
             if rest == 0 {
                 continue;
@@ -770,7 +823,10 @@ pub(super) fn row_road(
             }
         }
         road
-    })
+    });
+    #[cfg(any(test, debug_assertions))]
+    assert_eq!(road, scorer.expansion_road(vertex_owner, edge_owner, seat, candidate));
+    road
 }
 
 // Separate reference walks from row valuations, which may hit tables or memos.
@@ -2202,5 +2258,92 @@ pub(super) mod tests {
                     && crate::game::can_place_settlement(topology, vertex_owner, *vertex)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+pub(super) mod speed_tests {
+    use super::*;
+    use crate::board::{ConversionOptions, SimBoard};
+    use crate::placement::app_formula::EngineWeights;
+    use crate::rules::RuleConfig;
+    use crate::topology::{Layout, Topology};
+    use crate::wire::WireBoard;
+
+    pub(in crate::placement) fn corpus_boards() -> Vec<(Topology, SimBoard)> {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/analysis-parity.json"
+        )).unwrap();
+        let boards: Vec<_> = corpus["cases"].as_array().unwrap().iter().filter_map(|case| {
+            let value = &case["request"]["board"];
+            let layout = if value["layout"] == "standard4" {
+                Layout::Standard4
+            } else {
+                Layout::Extension6
+            };
+            let topology = Topology::load(layout).unwrap();
+            let wire = WireBoard::parse_value(value.clone()).unwrap();
+            let board = SimBoard::try_from_wire(
+                wire, &topology, &RuleConfig::base(layout),
+                ConversionOptions { allow_unofficial: true },
+            ).ok()?;
+            Some((topology, board))
+        }).collect();
+        assert!(boards.len() >= 10);
+        boards
+    }
+
+    #[test]
+    fn road_table_matches_each_first_edge_and_reference_road() {
+        let mut fast = 0;
+        let mut fallback = 0;
+        for (topology, board) in corpus_boards() {
+            let weights: EngineWeights = serde_json::from_str(include_str!(
+                "../../../../placement/default-weights.json"
+            )).unwrap();
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            for (vertices, edges) in tests::scrambled_owners(&topology).into_iter().take(12) {
+                for seat in 0..6 {
+                    let occupancy = Occupancy::new(&scorer, &vertices, &edges, seat);
+                    for candidate in 0..topology.vertex_count() as Vertex {
+                        if scorer.reach.table_path(candidate, &occupancy) {
+                            fast += 1;
+                            for (edge, to) in scorer.steps(candidate) {
+                                let expected = mask_walk(&scorer, &occupancy, candidate, [0, 1 << to]);
+                                if occupancy.rival_edges & (1 << edge) == 0 {
+                                    assert_eq!(scorer.reach.road_sites(candidate, edge, &occupancy), expected);
+                                }
+                            }
+                        } else {
+                            fallback += 1;
+                        }
+                        assert_eq!(
+                            row_road(&scorer, &vertices, &edges, seat, candidate, Some(&occupancy)),
+                            scorer.expansion_road(&vertices, &edges, seat, candidate),
+                        );
+                    }
+                }
+            }
+        }
+        assert!(fast > 1_000 && fallback > 100, "fast={fast} fallback={fallback}");
+    }
+
+    #[test]
+    fn road_uses_reference_when_price_memo_is_borrowed() {
+        let (topology, board) = tests::walk_fixtures().into_iter().next().unwrap();
+        let weights = serde_json::from_str(include_str!(
+            "../../../../placement/default-weights.json"
+        )).unwrap();
+        let scorer = AppFormulaScorer::new(&board, &topology, weights);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        PRICE_MEMO.with_borrow_mut(|_| {
+            for candidate in 0..topology.vertex_count() as Vertex {
+                assert_eq!(
+                    row_road(&scorer, &vertices, &edges, 0, candidate, None),
+                    scorer.expansion_road(&vertices, &edges, 0, candidate),
+                );
+            }
+        });
     }
 }
