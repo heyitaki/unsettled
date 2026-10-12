@@ -106,7 +106,7 @@ Heading, turn-order row, standings table, action bar, the open action's own cont
 
 ### Build and staleness
 
-- New `simulator/crates/wasm`: a small `cdylib` exporting `alloc(len)`, `dealloc(ptr, len)` and `advise(ptr, len)`, JSON in and out. `advise` returns a pointer to a buffer holding a 4-byte little-endian length followed by that many bytes of UTF-8 JSON, which the caller frees with `dealloc(ptr, len + 4)`. No `wasm-bindgen`, no `wasm-pack`. Best picks later added `analyze(ptr, len)` with the same buffer convention and the crate's one import, `env.progress(f64)`, to which the adviser's worker passes a no-op.
+- New `simulator/crates/wasm`: a small `cdylib` exporting `alloc(len)`, `dealloc(ptr, len)` and `advise(ptr, len)`, JSON in and out. `advise` returns a pointer to a buffer holding a 4-byte little-endian length followed by that many bytes of UTF-8 JSON, which the caller frees with `dealloc(ptr, len + 4)`. No `wasm-bindgen`, no `wasm-pack`. Best picks later added `analyze(ptr, len)` and `setup_road(ptr, len)` with the same buffer convention and the crate's one import, `env.progress(f64)`, to which the adviser's worker passes a no-op.
 - `simulator/tools/build-wasm.sh` builds it and writes `src/engine/advice/engine.wasm` plus `engine.wasm.src-hash`, which holds a SHA-256 over the engine sources, the wasm crate, the topology files, `simulator/placement/default-weights.json`, the `simulator/placement/seat-weights` files and the workspace manifests and lock file, then a SHA-256 of the binary. `--check` recomputes both and fails on a mismatch. The CI `rust` job runs it.
 - CI does not rebuild and byte-compare: identical bytes from a macOS build and a Linux build are unproven. Behavioural staleness is caught separately, because the wasm parity test and the native parity test read the same fixture.
 - `npm run build` needs no Rust: the `.wasm` is a committed asset the worker loads by URL. Workbox precaches `*.wasm`.
@@ -127,7 +127,7 @@ The panel is the recap when the board has tiles, `game.turn` is absent, every bu
 
 The moment the last starting settlement lands, every player is dealt their starting resources into `Game.stats`, so the recap, the Players panel and the first turn all show the same hands. `Start game` changes no hand.
 
-- `setupGrants(board)` (`model/board.ts`) is null unless every building is a settlement and every player owns exactly two. Otherwise it gives each player one card per resource hex touching their second settlement, taken as their second building in board order: the rule the engine's `grant_setup_resources` applies, so the dealt hands are the ones the recap simulates with. A desert or blank hex gives nothing. `awaitingFirstTurn` is this predicate plus `game.turn === undefined`.
+- `setupGrants(board)` (`src/model/board.ts`) is null unless every building is a settlement and every player owns exactly two. Otherwise it gives each player one card per resource hex touching their second settlement, taken as their second building in board order: the rule the engine's `grant_setup_resources` applies, so the dealt hands are the ones the recap simulates with. A desert or blank hex gives nothing. `awaitingFirstTurn` is this predicate plus `game.turn === undefined`.
 - The deal lives in `withBoard`, the one write path for board edits, and only while `game.turn` is absent. A player whose hand still equals what the old board dealt them (all zeros when it dealt nothing) and who has no `handUnknown` cards gets what the new board deals, zeros when it deals nothing. So the last settlement deals, a step back or a removed settlement takes the cards back, and a second settlement moved to another corner swaps them.
 - A hand that does not match the old board's deal is never touched: one corrected in Players, or one whose size a screenshot read. A finished draft that arrives whole (a screenshot or JSON import, a game saved before this) is not dealt on load, and `mergeScreenshot` skips the rule altogether: a later screenshot says what each hand holds now, so a dealt hand is neither cleared nor replaced by it.
 - Undo and redo restore whole games, so they need nothing.
@@ -160,23 +160,6 @@ One component in both trees, in place of Best moves:
 - `Start game`, the primary button, as wide as the rows and enabled at all times.
 - Once every game is counted, one note: `Win chance over 1,000 simulated games, every seat played by the adviser. Expect about 3 points of noise.` A second line gives the draw count when any game hit the turn cap. Neither shows mid-run, after an error or on a blocked board, where the claim would be false.
 - When `adviceBlockers` is not empty the rows give way to the same `Finish the board to get advice:` list, and an engine error shows as an alert with `Retry`. `Start game` stays in both cases.
-
-### Queue
-
-| Item | State |
-| --- | --- |
-| R1 Engine: `recap` decision, `play_from_draft`, native tests, both cargo profiles, `bench_contract` unregenerated | done |
-| R2 Rebuild `engine.wasm` and its hash; wasm-side recap test | done |
-| R3 Client: protocol types, `decisionKey`, `useDraftRecap`, tests | done |
-| R4 Surface: `DraftRecapPanel`, the switch in `AnalysisPanel`, `Start game`, tests | done |
-| R5 Existing tests that expect Best moves on a finished draft with no turn: seed a turn or press `Start game` | done: `bestMovesPanel.test.tsx` and `e2e/bestMoves.spec.ts`, the latter through `seedBoard`'s `turn` argument |
-| R6 e2e spec for draft end, recap, `Start game`, undo; run by the main session, not the sandbox | done: `e2e/draftRecap.spec.ts`, desktop and phone |
-| R7 Desktop D8, mobile S10 and `CLAUDE.md` describe the recap as built | done |
-| R8 Measure 1,000 games in wasm at four and six seats and settle `RECAP_GAMES` | done: 2.0s at four seats and 4.6s at six under Node at load 8.7, so 1,000 stays |
-| R9 Model: `setupGrants` in `model/board.ts`, `awaitingFirstTurn` built on it, the deal and take-back in `withBoard`, tests first | done |
-| R10 Recap rows show each player's hand with `CardAmounts`; panel test | done |
-| R11 `e2e/draftRecap.spec.ts`: the last tap deals, a step back takes the cards away, the hands survive `Start game`; run by the main session, not the sandbox | done: the last pick is placed through `Place settlement`, the rivals' rows show their dealt cards, and they are still there after `Start game`, undo and a replaced pick; the take-back itself is covered in `setupGrants.test.ts` |
-| R12 `CLAUDE.md` describes the deal | done |
 
 ## Left as built
 

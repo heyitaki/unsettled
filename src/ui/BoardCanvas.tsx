@@ -555,7 +555,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       onePointer.current = { ...remaining, panning: false }
     } else onePointer.current = null
     if (!wasSingleTap) return
-    // Double-tap-to-zoom only exists when no placement tool is selected. The
+    // Double-tap-to-zoom only exists with the tool rows closed and no pick or
+    // draft placement live. The
     // first tap of a pair is never suppressed — suppressing it would mean
     // holding every single placement for the full double-tap window — so with a
     // tool active a double tap would zoom *and* edit the board under the first

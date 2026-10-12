@@ -1060,7 +1060,6 @@ test.describe('landscape phone', () => {
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.board-tabs')).toHaveCount(0)
     await expect(page.locator('.maps-panel')).toBeVisible()
-    // Seeded, not randomized: at this height the menu's items open outside the viewport.
     await seedBoard(page, setHexTile(createBoard('standard4'), { q: 0, r: 0 }, 'ore'))
 
     // The ribbon opens Best picks on every workspace width (spec DB6).

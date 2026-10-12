@@ -1,6 +1,6 @@
 # Repository improvements
 
-Approved on 2026-09-05. Work through every unblocked item. Existing analyzer, valuation, analyzer-test, simulator-gap, and CLAUDE.md edits predate this task and must be preserved.
+Approved on 2026-09-05. Work through every unblocked item.
 
 | Item | State | Evidence and remaining work |
 | --- | --- | --- |

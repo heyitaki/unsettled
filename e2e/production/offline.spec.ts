@@ -14,7 +14,7 @@ test('reloads offline and imports a board', async ({ page, context }) => {
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   await dialog.locator('input[type=file]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
   await expect(page.getByRole('button', { name: 'Rename board-endgame-pieces', exact: true })).toBeVisible()
-  // The fixture is a finished draft: the move adviser's wasm engine must answer from the precache.
+  // The fixture is a game past its draft: the move adviser's wasm engine must answer from the precache.
   await expect(page.getByRole('heading', { name: 'Best moves' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Done' }).click()
   await page.getByRole('button', { name: /^Turn 1: / }).click()

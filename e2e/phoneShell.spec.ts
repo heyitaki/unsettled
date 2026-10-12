@@ -202,7 +202,7 @@ test('an import with parse issues keeps its dialog over the new board, and close
   // survive that to show the warning.
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
   await expect(page.locator('.phone-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
-  // The fixture is a finished draft, so the block is the move adviser.
+  // The fixture is a game past its draft, so the block is the move adviser.
   await expect(block.locator('h2')).toHaveText('Best moves')
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.issue-list button.warning')).not.toHaveCount(0)

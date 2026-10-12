@@ -6,9 +6,9 @@ This programme asks one question five times: does the settlement placement score
 
 ## What exists before any run
 
-**Selection is by seat count alone, in the app and in the simulator, and every seat count ships today's vector.** The five vectors are `simulator/placement/seat-weights/seats-<n>.json`, each `default-weights.json` with that seat count's adopted leaves moved. The app's Best picks reads them through `placement/analysis.rs::weights_for_seats(board.players.length)`, and a roster with no file (one player) scores on `default-weights.json`. The simulator selects one through the `{seats}` placeholder a placement spec may carry. Until the TypeScript formula was deleted the app read the same vectors from `src/engine/weights.ts`, and a generator wrote the files from it. What the selection must guarantee is a contract; see [contracts.md](contracts.md). Nothing in the UI changed.
+**Selection is by seat count alone, in the app and in the simulator, and every seat count ships today's vector.** The five vectors are `simulator/placement/seat-weights/seats-<n>.json`, each `default-weights.json` with that seat count's adopted leaves moved. The app's Best picks reads them through `analysis.rs::weights_for_seats(board.players.length)`, and a roster with no file (one player) scores on `default-weights.json`. The simulator selects one through the `{seats}` placeholder a placement spec may carry. Until the TypeScript formula was deleted the app read the same vectors from its own `weights.ts`, and a generator wrote the files from it. What the selection must guarantee is a contract; see [contracts.md](contracts.md). Nothing in the UI changed.
 
-**`slotScales` gained no two-seat row.** Both scorers already score a seat count the block has no row for unscaled, and this programme sweeps no slot scale, so adding a row would have cost an exact-key edit to every committed weights file to say what the fallback already says.
+**`slotScales` gained no two-seat row.** The scorer already scores a seat count the block has no row for unscaled, and this programme sweeps no slot scale, so adding a row would have cost an exact-key edit to every committed weights file to say what the fallback already says.
 
 ## Field statement
 

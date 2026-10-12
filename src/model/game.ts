@@ -24,7 +24,6 @@ export interface TurnState {
   playerId: string
   /** This turn's dice total, null before the roll. */
   rolled: number | null
-  /** A dev card was played this turn. */
   devPlayed: boolean
   /** Progress cards (not knights) recorded as played over the whole game: they have left the dev deck. */
   progressPlayed: Record<Exclude<DevKind, 'knight'>, number>
@@ -44,7 +43,7 @@ export interface Game {
   stats: Record<string, PlayerStats>
   /** Absent in legacy snapshots. Null records an award with no known holder. */
   awards?: AwardHolders
-  /** Absent in games saved before turn tracking: the claimed player's turn, not yet rolled. */
+  /** Absent until `Start game`, and in saves older than turn tracking, where it reads as the claimed player's turn, not yet rolled. */
   turn?: TurnState
   /** Absent until the claimed player's dev cards are entered by type. */
   devHand?: DevHand

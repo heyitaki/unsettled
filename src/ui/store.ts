@@ -85,8 +85,7 @@ export interface TabState {
   future: Game[]
   /**
    * Whose pieces board edits place, or null when nobody is selected: clicking
-   * the selected player's swatch deselects, which parks the piece tools the
-   * same way clicking the selected tool does.
+   * the selected player's swatch deselects, which parks the piece tools.
    */
   activePlayerId: string | null
   /**
