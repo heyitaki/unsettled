@@ -93,7 +93,7 @@ cargo run --release -p unsettled-sim -- simulate \
 
 ## Speed suite
 
-`bench` measures placement, policy decisions, the adviser call, and whole-game throughput on both layouts (four seats on `standard4`, six on `extension6`). Use `--filter` to keep scenario IDs containing a substring.
+`bench` measures placement, policy decisions, the adviser call, the Best picks ranking, and whole-game throughput on both layouts (four seats on `standard4`, six on `extension6`). Use `--filter` to keep scenario IDs containing a substring.
 
 ```sh
 cargo run --release -p unsettled-sim -- bench --quick
@@ -121,6 +121,8 @@ All counts must be positive, and a `--filter` that matches no scenario is an err
 Decision scenarios cover `pre_roll`, `action`, `discard`, `robber`, `respond_trade`, and `select_counterparty` at early, mid, and late stages, plus `action/long_road` and `action/full_hand`. The stages use 25%, 50%, and 75% of each reference game's length, rounded down to whole rounds. A scenario with no legal decision is reported as skipped, with a reason.
 
 Advise scenarios time the app's adviser call, `advice.rs::advise`, from request JSON to response JSON, once per decision the app can ask about: `turn`, `pre_roll`, `discard`, `robber`, `trade_response`, and `produce`. `--policy` and `--weights` do not reach them, and the timing is native, not WebAssembly.
+
+Analyze scenarios time the app's Best picks call, `placement/analysis.rs::analyze`, from request JSON to response JSON at its default rollouts. `analyze/standard4/opening` and `analyze/extension6/opening` rank the first seat's pick on an empty board. `analyze/extension6/behind_three` ranks the same six-seat board as its fourth seat, which ranks the three seats ahead of it first. Every call starts with no rival ranking cached. `--policy` and `--weights` do not reach them, and the timing is native, not WebAssembly.
 
 The table reports minimum and median nanoseconds per call, plus games per second for e2e rows. E2e games use the measured policy and draft-aware weights in every seat, with trading enabled.
 

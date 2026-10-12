@@ -42,6 +42,13 @@ const ADVISE: [&str; 6] = [
     "trade_response",
     "produce",
 ];
+// The settlement ranking: an opening on each layout, and the six-seat opening seen from the fourth
+// seat, which ranks the three seats ahead of it first.
+const ANALYZE: [&str; 3] = [
+    "standard4/opening",
+    "extension6/opening",
+    "extension6/behind_three",
+];
 
 fn simulator_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -67,6 +74,9 @@ fn expected_ids() -> BTreeSet<String> {
         for kind in ADVISE {
             ids.insert(format!("advise/{layout}/{kind}"));
         }
+    }
+    for row in ANALYZE {
+        ids.insert(format!("analyze/{row}"));
     }
     ids
 }

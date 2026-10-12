@@ -47,6 +47,18 @@
     "decisionHash": "9407c5977f391fe3",
     "stateHash": "cd0cf1855b10fa48"
   },
+  "analyze/extension6/behind_three": {
+    "decisionHash": "8129e5fd5d620413",
+    "stateHash": "e762e2c59d6f54f8"
+  },
+  "analyze/extension6/opening": {
+    "decisionHash": "81cbfdef83b41b90",
+    "stateHash": "3fd41169c1cf23ab"
+  },
+  "analyze/standard4/opening": {
+    "decisionHash": "6646848ff101b550",
+    "stateHash": "3eb00f7d347f518f"
+  },
   "decision/extension6/action/early": {
     "decisionHash": "903eea6647d756bf",
     "stateHash": "4fa8d697658623dc"

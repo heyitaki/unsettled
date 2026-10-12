@@ -873,3 +873,74 @@ fn advise_fixture_is_lazy_and_shared() {
     assert!(fixture.get().is_some());
     assert_eq!(ADVICE_PARSES.get(), 1);
 }
+
+fn analysis_fixture() -> serde_json::Value {
+    serde_json::from_str(include_str!("../../../../fixtures/analysis-parity.json")).unwrap()
+}
+
+// A row sends what the app's worker sends: the board alone, so the ranking runs its default
+// rollouts and not the few a corpus case asks for.
+#[test]
+fn analyze_rows_send_a_corpus_board_alone() {
+    let fixture = analysis_fixture();
+    let board = |name: &str| {
+        fixture["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|case| case["name"] == name)
+            .unwrap()["request"]["board"]
+            .clone()
+    };
+    let mut fourth_seat = board("worst-case-default-rollouts");
+    assert_eq!(fourth_seat["players"][3]["id"], "p4");
+    fourth_seat["mePlayerId"] = "p4".into();
+    let expected = [
+        ("analyze/standard4/opening", board("empty-first-seat-standard4")),
+        ("analyze/extension6/opening", board("worst-case-default-rollouts")),
+        ("analyze/extension6/behind_three", fourth_seat),
+    ];
+    assert_eq!(ANALYZE_ROWS.len(), expected.len());
+    for ((layout, kind, case, me), (id, board)) in ANALYZE_ROWS.into_iter().zip(expected) {
+        assert_eq!(analyze_id(layout, kind), id);
+        assert_eq!(
+            analysis_request(&fixture, case, me).unwrap(),
+            serde_json::json!({ "board": board }).to_string(),
+            "{id}"
+        );
+    }
+}
+
+// Only the four-seat row runs here: a six-seat ranking takes many seconds in a debug build, and
+// `bench_cli.rs` already runs all three against the committed hashes.
+#[test]
+fn analyze_row_hashes_its_request_and_first_response() {
+    let id = "analyze/standard4/opening";
+    let text = analysis_request(&analysis_fixture(), "empty-first-seat-standard4", None).unwrap();
+    let mut state = Fingerprint(PERF_SEED);
+    state.bytes(text.as_bytes());
+    let mut decision = Fingerprint(scenario_seed(id));
+    decision.bytes(analyze(&text, &mut |_| {}).as_bytes());
+    let mut request = request();
+    request.filter = Some(id);
+    let mut result = result();
+    analyze_scenarios(&mut result, &request, Layout::Standard4).unwrap();
+    analyze_scenarios(&mut result, &request, Layout::Extension6).unwrap();
+    assert_eq!(result.scenarios.len(), 1);
+    let row = &result.scenarios[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.group, "analyze");
+    let Outcome::Measured { measurement, .. } = &row.outcome else {
+        panic!("{id} skipped");
+    };
+    assert_eq!(measurement.state_hash, format!("{:016x}", state.0));
+    assert_eq!(measurement.decision_hash, format!("{:016x}", decision.0));
+}
+
+#[test]
+fn analyze_missing_case_is_a_named_error() {
+    let name = "absent-case";
+    let error = analysis_request(&analysis_fixture(), name, None)
+        .expect_err("a missing case must fail");
+    assert!(error.contains(name), "{error}");
+}

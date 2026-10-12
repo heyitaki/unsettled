@@ -562,6 +562,13 @@ fn with_nested_rankings<T>(action: impl FnOnce(&mut HashMap<String, ModalList>) 
     NESTED_RANKINGS.with(|cache| cache.try_borrow_mut().ok().map(|mut cache| action(&mut cache)))
 }
 
+/// Empties the nested-ranking cache, so the next request ranks every seat ahead afresh. The bench
+/// calls it before each timed request, which would otherwise time a lookup from its second call
+/// on. The app never needs it: a new worker starts with an empty cache.
+pub fn forget_nested_rankings() {
+    with_nested_rankings(HashMap::clear);
+}
+
 /// Twin of `analyzeBoard`: the response JSON for a request, or `{"error": ...}` for one that is
 /// not valid JSON of the request shape or whose board the app's `validateBoard` would refuse.
 /// `progress` receives the fraction of the ranking done so far.
@@ -976,6 +983,14 @@ mod tests {
         assert_eq!(cached_rankings(), NESTED_RANKINGS_MAX);
         fill_cache(NESTED_RANKINGS_MAX + 1);
         run(&request);
+        assert_eq!(cached_rankings(), 0);
+    }
+
+    #[test]
+    fn forgetting_the_nested_rankings_empties_the_cache() {
+        run(&corpus_request("roster-2"));
+        assert!(cached_rankings() > 0, "the case has no pick ahead");
+        forget_nested_rankings();
         assert_eq!(cached_rankings(), 0);
     }
 

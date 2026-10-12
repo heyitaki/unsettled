@@ -10,6 +10,7 @@ use unsettled_engine::board::SimBoard;
 use unsettled_engine::game::{
     GameArena, GameConfig, GameResult, can_place_settlement, setup_order,
 };
+use unsettled_engine::placement::analysis::{analyze, forget_nested_rankings};
 use unsettled_engine::placement::{self, PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::{self, PolicyKind, PolicyScratch};
 use unsettled_engine::rng::{Xoshiro256StarStar, mix64};
@@ -196,6 +197,7 @@ pub fn benchmark(request: &BenchRequest<'_>) -> Result<BenchResult, String> {
         decision_scenarios(&mut result, request, &board, &topology, reference_greedy);
         e2e_scenarios(&mut result, request, &board, &topology)?;
         advise_scenarios(&mut result, request, layout, &advice_fixture)?;
+        analyze_scenarios(&mut result, request, layout)?;
     }
     Ok(result)
 }
@@ -228,9 +230,21 @@ const ADVISE_KINDS: [(&str, &str); 6] = [
     ("trade_response", "tradeResponse"),
     ("produce", "produce"),
 ];
+// Layout, row, case of the analysis parity fixture, and the player the board is viewed as when
+// that is not the case's own. `behind_three` is the worst-case opening seen from the fourth seat,
+// which ranks the three seats ahead of it before its own pick.
+const ANALYZE_ROWS: [(Layout, &str, &str, Option<&str>); 3] = [
+    (Layout::Standard4, "opening", "empty-first-seat-standard4", None),
+    (Layout::Extension6, "opening", "worst-case-default-rollouts", None),
+    (Layout::Extension6, "behind_three", "worst-case-default-rollouts", Some("p4")),
+];
 
 fn advise_id(layout: Layout, kind: &str) -> String {
     format!("advise/{}/{kind}", layout.as_str())
+}
+
+fn analyze_id(layout: Layout, kind: &str) -> String {
+    format!("analyze/{}/{kind}", layout.as_str())
 }
 
 fn placement_id(layout: Layout, suffix: &str) -> String {
@@ -280,6 +294,12 @@ fn scenario_ids(layout: Layout) -> impl Iterator<Item = String> {
         ADVISE_KINDS
             .into_iter()
             .map(move |(kind, _)| advise_id(layout, kind)),
+    )
+    .chain(
+        ANALYZE_ROWS
+            .into_iter()
+            .filter(move |row| row.0 == layout)
+            .map(move |(_, kind, ..)| analyze_id(layout, kind)),
     )
 }
 
@@ -1439,6 +1459,65 @@ fn advise_scenarios(
             .map_err(|error| format!("{id}: invalid advice response: {error}"))?;
         if let Some(error) = value.get("error") {
             return Err(format!("{id}: advice failed: {error}"));
+        }
+        result.push(id, layout, outcome);
+    }
+    Ok(())
+}
+
+// The request the app's worker sends for a corpus board: the board alone, without the case's test
+// options, so the ranking runs its default rollouts.
+fn analysis_request(fixture: &Value, name: &str, me: Option<&str>) -> Result<String, String> {
+    let mut board = fixture
+        .get("cases")
+        .and_then(Value::as_array)
+        .and_then(|cases| cases.iter().find(|case| case["name"] == name))
+        .map(|case| case["request"]["board"].clone())
+        .ok_or_else(|| format!("bench analysis fixture is missing case {name}"))?;
+    if let Some(me) = me {
+        board["mePlayerId"] = me.into();
+    }
+    Ok(serde_json::json!({ "board": board }).to_string())
+}
+
+fn analyze_scenarios(
+    result: &mut BenchResult,
+    request: &BenchRequest<'_>,
+    layout: Layout,
+) -> Result<(), String> {
+    let fixture = LazyCell::new(|| {
+        serde_json::from_str::<Value>(include_str!("../../../fixtures/analysis-parity.json"))
+            .map_err(|error| format!("invalid bench analysis fixture: {error}"))
+    });
+    for (row_layout, kind, case, me) in ANALYZE_ROWS {
+        let id = analyze_id(layout, kind);
+        if row_layout != layout || !matches_filter(request, &id) {
+            continue;
+        }
+        let request_text = analysis_request(fixture.as_ref().map_err(Clone::clone)?, case, me)?;
+        let mut state = Fingerprint(PERF_SEED);
+        state.bytes(request_text.as_bytes());
+        let mut response = String::new();
+        let outcome = measure(
+            request,
+            &id,
+            state,
+            |_| (),
+            // Every call ranks the seats ahead afresh: with the rankings the last call cached,
+            // `behind_three` would time three lookups from its second call on.
+            |_, _| {
+                forget_nested_rankings();
+                analyze(black_box(&request_text), &mut |_| {})
+            },
+            |hash, first, _| {
+                hash.bytes(first.as_bytes());
+                response = first;
+            },
+        );
+        let value: Value = serde_json::from_str(&response)
+            .map_err(|error| format!("{id}: invalid analysis response: {error}"))?;
+        if value["status"] != "ready" {
+            return Err(format!("{id}: analysis ranked nothing: {response}"));
         }
         result.push(id, layout, outcome);
     }
