@@ -996,15 +996,37 @@ mod tests {
 
     #[test]
     fn fast_scans_return_the_reference_scans_bits() {
-        // `Context::scan` prices every vertex both ways in a test build and panics on a vertex
-        // whose expansion or total differs in any bit, so running the corpus is the comparison.
-        // Scans read the same vertices in the same order either way, so equal scores are equal
-        // picks.
+        // `Context::scan` prices every vertex it visits both ways in a test build and panics on
+        // one whose expansion or total differs in any bit. A scan that skips vertices by their
+        // bound is run again without the bound and panics unless both return the same vertices
+        // and the same score bits. So running the corpus is the comparison.
         let before = window::checked_vertices();
+        let skipped = (window::skipped_vertices(), window::skipped_pairs());
         for (_, request) in corpus_requests() {
             run_without_cache(&request);
         }
         assert!(window::checked_vertices() > before, "no corpus scan took the fast path");
+        assert!(window::skipped_vertices() > skipped.0, "no corpus scan skipped a vertex");
+        assert!(window::skipped_pairs() > skipped.1, "no corpus scan skipped a pair");
+    }
+
+    #[test]
+    fn weights_the_bound_refuses_take_the_full_scan() {
+        let supported = corpus_request("mutual-mate");
+        let skipped = window::skipped_vertices();
+        run_without_cache(&supported);
+        assert!(window::skipped_vertices() > skipped, "the case skips nothing as it stands");
+
+        // `build_expansion_bounds` has no bound for a priced port coverage deficit.
+        let mut refused: serde_json::Value = serde_json::from_str(&supported).unwrap();
+        refused["options"]["weights"]["portCoverageDeficitWeight"] = 0.5.into();
+        let checked = window::checked_vertices();
+        let skipped = window::skipped_vertices();
+        let response: serde_json::Value =
+            serde_json::from_str(&run_without_cache(&refused.to_string())).unwrap();
+        assert_eq!(response["status"], "ready");
+        assert!(window::checked_vertices() > checked, "no scan took the fast path");
+        assert_eq!(window::skipped_vertices(), skipped, "a scan skipped a vertex unbounded");
     }
 
     #[test]

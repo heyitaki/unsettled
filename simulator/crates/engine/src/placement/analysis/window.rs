@@ -9,7 +9,7 @@
 //! the seat holding it, and never the distance-rule closure: the expansion walk applies that rule
 //! itself. It must give a seat exactly the vertices that seat's holdings fold.
 
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 
 use super::{Board, softmax_pick};
 use crate::placement::app_formula::{AppFormulaScorer, Holdings, js_max};
@@ -84,15 +84,28 @@ fn insert_top(
     }
 }
 
-// Vertices this thread priced both ways and found equal, so a test can tell the fast path ran.
+// Vertices this thread priced both ways and found equal, vertices a scan skipped by their bound,
+// and pair candidates skipped by theirs, so a test can tell the fast path ran and that it skipped.
 #[cfg(test)]
 thread_local! {
-    static CHECKED_VERTICES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static CHECKED_VERTICES: Cell<usize> = const { Cell::new(0) };
+    static SKIPPED_VERTICES: Cell<usize> = const { Cell::new(0) };
+    static SKIPPED_PAIRS: Cell<usize> = const { Cell::new(0) };
 }
 
 #[cfg(test)]
 pub(super) fn checked_vertices() -> usize {
-    CHECKED_VERTICES.with(std::cell::Cell::get)
+    CHECKED_VERTICES.with(Cell::get)
+}
+
+#[cfg(test)]
+pub(super) fn skipped_vertices() -> usize {
+    SKIPPED_VERTICES.with(Cell::get)
+}
+
+#[cfg(test)]
+pub(super) fn skipped_pairs() -> usize {
+    SKIPPED_PAIRS.with(Cell::get)
 }
 
 /// What every scan of a ranking reads and no pick changes: the scorer, which is the TypeScript's
@@ -104,6 +117,8 @@ pub(super) struct Context<'a> {
     /// One partner table per seat, which is the draft slot the scores scale by, built on first
     /// use.
     partners: Vec<OnceCell<Vec<f64>>>,
+    /// The highest entry of each row of a seat's partner table that a partner could read.
+    partner_caps: Vec<OnceCell<Vec<f64>>>,
 }
 
 impl<'a> Context<'a> {
@@ -115,6 +130,7 @@ impl<'a> Context<'a> {
             topology: board.topology,
             edge_owner: board.owners().1,
             partners: vec![OnceCell::new(); board.player_ids.len()],
+            partner_caps: vec![OnceCell::new(); board.player_ids.len()],
         }
     }
 
@@ -150,8 +166,35 @@ impl<'a> Context<'a> {
         })
     }
 
+    /// The most a first settlement's partner can score without its expansion component: the
+    /// highest entry of its table row outside the vertex and its neighbours. A NaN entry never
+    /// wins a partner scan, so it is passed over here as well.
+    fn partner_caps(&self, seat: u8) -> &[f64] {
+        self.partner_caps[usize::from(seat)].get_or_init(|| {
+            let count = self.topology.vertex_count();
+            let table = self.partner_table(seat);
+            (0..count)
+                .map(|first| {
+                    let row = &table[first * count..][..count];
+                    let adjacent = self.topology.vertex_adjacent(first as Vertex);
+                    (0..count)
+                        .filter(|second| {
+                            *second != first && !adjacent.contains(&(*second as Vertex))
+                        })
+                        .fold(f64::NEG_INFINITY, |cap, second| cap.max(row[second]))
+                })
+                .collect()
+        })
+    }
+
     /// Calls `visit` with every unblocked vertex in index order and what `marginal_parts` gives
     /// `seat` for it: the slot-scaled expansion part, then the total.
+    ///
+    /// `floor` is the total a vertex has to beat to matter to the caller, who may raise it from
+    /// `visit`; NaN is no floor. A vertex is neither priced nor visited when the scorer's upper
+    /// bound on its expansion part puts its total at or below the floor. The bound is added up
+    /// with the operations of the total, which round in step with their operands, so a skipped
+    /// vertex's total is at or below the floor too. Weights the bound does not cover skip nothing.
     ///
     /// The numbers come off the scorer's fast paths and carry the reference's bits. The part
     /// without expansion is read from the price memo. The expansion part is `row_value`, which
@@ -170,6 +213,7 @@ impl<'a> Context<'a> {
         blocked: &[bool],
         vertex_owner: &[u8],
         receives_grant: bool,
+        floor: &Cell<f64>,
         visit: &mut dyn FnMut(Vertex, f64, f64),
     ) {
         let scorer = self.scorer;
@@ -201,6 +245,7 @@ impl<'a> Context<'a> {
             let occupancy = expansion::Occupancy::new(scorer, vertex_owner, &self.edge_owner, seat);
             let serial = memo.serial(scorer.id, occupancy.own_vertices);
             let base_tag = expansion::base_tag(seat, receives_grant);
+            let bounds = scorer.expansion_bounds(scale.expansion);
             let mut holdings_total = None;
             for vertex in legal {
                 let rest = memo.price(expansion::price_key(serial, vertex, base_tag), || {
@@ -214,6 +259,20 @@ impl<'a> Context<'a> {
                         total,
                     )
                 });
+                let floor = floor.get();
+                if let Some(bounds) = bounds
+                    && !floor.is_nan()
+                {
+                    let table_path = scorer.reach.table_path(vertex, &occupancy);
+                    let key = expansion::bound_key(serial, vertex, table_path);
+                    let upper =
+                        memo.price(key, || bounds.value(scorer, holdings, vertex, table_path));
+                    if scale.expansion * upper + rest <= floor {
+                        #[cfg(test)]
+                        SKIPPED_VERTICES.with(|skipped| skipped.set(skipped.get() + 1));
+                        continue;
+                    }
+                }
                 let sites =
                     expansion::row_value(scorer, holdings, vertex, &occupancy, memo, Some(serial));
                 let walk = scale.expansion * sites;
@@ -236,44 +295,58 @@ impl<'a> Context<'a> {
     }
 
     /// Twin of `bestPartners`. `legal` is in index order and `expansion` runs parallel to it.
-    /// Strict `>` from negative infinity, so the lowest index wins a tie.
     pub(super) fn best_partners(
         &self,
         legal: &[Vertex],
         table: &[f64],
         expansion: &[f64],
     ) -> Partners {
-        let count = self.topology.vertex_count();
-        // Vertices the current row cannot pair with: itself and its neighbours, marked then
-        // unmarked.
-        let mut skip = vec![false; count];
+        let mut skip = vec![false; self.topology.vertex_count()];
         let mut partners = Partners {
             mate: Vec::with_capacity(legal.len()),
             value: Vec::with_capacity(legal.len()),
         };
-        for vertex in legal {
-            let row = &table[usize::from(*vertex) * count..][..count];
-            block_vertex(self.topology, &mut skip, *vertex);
-            let mut best = f64::NEG_INFINITY;
-            let mut best_index = None;
-            for (other, candidate) in legal.iter().enumerate() {
-                if skip[usize::from(*candidate)] {
-                    continue;
-                }
-                let partner = row[usize::from(*candidate)] + expansion[other];
-                if partner > best {
-                    best = partner;
-                    best_index = Some(other);
-                }
-            }
-            skip[usize::from(*vertex)] = false;
-            for adjacent in self.topology.vertex_adjacent(*vertex) {
-                skip[usize::from(*adjacent)] = false;
-            }
-            partners.mate.push(best_index);
-            partners.value.push(if best_index.is_some() { best } else { 0.0 });
+        for index in 0..legal.len() {
+            let (mate, value) = self.best_partner(legal, table, expansion, index, &mut skip);
+            partners.mate.push(mate);
+            partners.value.push(value);
         }
         partners
+    }
+
+    /// One row of `best_partners`: the mate and value of `legal[index]`. Strict `>` from negative
+    /// infinity, so the lowest index wins a tie. `skip` is scratch, one flag per vertex, all
+    /// clear on entry and on return.
+    fn best_partner(
+        &self,
+        legal: &[Vertex],
+        table: &[f64],
+        expansion: &[f64],
+        index: usize,
+        skip: &mut [bool],
+    ) -> (Option<usize>, f64) {
+        let count = self.topology.vertex_count();
+        let vertex = legal[index];
+        let row = &table[usize::from(vertex) * count..][..count];
+        // Vertices the row cannot pair with: itself and its neighbours, marked then unmarked.
+        block_vertex(self.topology, skip, vertex);
+        let mut best = f64::NEG_INFINITY;
+        let mut best_index = None;
+        for (other, candidate) in legal.iter().enumerate() {
+            if skip[usize::from(*candidate)] {
+                continue;
+            }
+            let partner = row[usize::from(*candidate)] + expansion[other];
+            if partner > best {
+                best = partner;
+                best_index = Some(other);
+            }
+        }
+        skip[usize::from(vertex)] = false;
+        for adjacent in self.topology.vertex_adjacent(vertex) {
+            skip[usize::from(*adjacent)] = false;
+        }
+        (best_index, if best_index.is_some() { best } else { 0.0 })
     }
 
     /// A rival's candidates, best first, and their scores: everything `opponentPick` does ahead
@@ -295,9 +368,64 @@ impl<'a> Context<'a> {
         receives_grant: bool,
         has_later_pick: bool,
     ) -> (Vec<Vertex>, Vec<f64>) {
+        let find = |bounded| {
+            self.top_candidates_scan(
+                seat,
+                holdings,
+                blocked,
+                vertex_owner,
+                receives_grant,
+                has_later_pick,
+                bounded,
+            )
+        };
+        let top = find(true);
+        #[cfg(any(test, debug_assertions))]
+        {
+            let bits = |top: &(Vec<Vertex>, Vec<f64>)| {
+                (top.0.clone(), top.1.iter().map(|score| score.to_bits()).collect::<Vec<_>>())
+            };
+            assert_eq!(bits(&top), bits(&find(false)), "seat {seat}: bounded against full");
+        }
+        top
+    }
+
+    /// `top_candidates`, skipping the vertices that cannot make the list when `bounded`.
+    #[allow(clippy::too_many_arguments)]
+    fn top_candidates_scan(
+        &self,
+        seat: u8,
+        holdings: &Holdings,
+        blocked: &[bool],
+        vertex_owner: &[u8],
+        receives_grant: bool,
+        has_later_pick: bool,
+        bounded: bool,
+    ) -> (Vec<Vertex>, Vec<f64>) {
         let top_k = js_max(1.0, self.scorer.weights().opponent_top_k);
-        let table =
-            (has_later_pick && !vertex_owner.contains(&seat)).then(|| self.partner_table(seat));
+        let floor = Cell::new(f64::NAN);
+        let mut top_vertices = Vec::new();
+        let mut top_scores = Vec::new();
+        let Some(table) =
+            (has_later_pick && !vertex_owner.contains(&seat)).then(|| self.partner_table(seat))
+        else {
+            // Priced alone, a vertex is ranked as it is visited, and once the list is full a
+            // score at or below its last ranks past the cut. A NaN score ranks first and lets
+            // every later score in ahead of it, so nothing is skipped once one is listed.
+            let mut any_nan = false;
+            let mut rank = |vertex, _, total: f64| {
+                insert_top(&mut top_vertices, &mut top_scores, top_k, vertex, total);
+                any_nan |= total.is_nan();
+                if bounded && !any_nan && top_scores.len() as f64 >= top_k {
+                    floor.set(top_scores[top_scores.len() - 1]);
+                } else {
+                    floor.set(f64::NAN);
+                }
+            };
+            self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &floor, &mut rank);
+            return (top_vertices, top_scores);
+        };
+        // Priced as a pair, every vertex is some candidate's partner, so all of them are priced.
         let mut legal = Vec::new();
         let mut own = Vec::new();
         // The scan's two halves kept apart: the walk's value is also the partner's expansion.
@@ -307,21 +435,47 @@ impl<'a> Context<'a> {
             expansion.push(walk);
             own.push(total);
         };
-        self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &mut keep);
-        let plan = table.map(|table| self.best_partners(&legal, table, &expansion));
-        let mut top_vertices = Vec::new();
-        let mut top_scores = Vec::new();
+        self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &floor, &mut keep);
+        // Each candidate's mate and partner value. The full scan has `best_partners` find them
+        // all; the bounded one finds a row when a candidate that may make the list reads it.
+        let mut plans: Vec<Option<(Option<usize>, f64)>> = if bounded {
+            vec![None; legal.len()]
+        } else {
+            let plan = self.best_partners(&legal, table, &expansion);
+            plan.mate.into_iter().zip(plan.value).map(Some).collect()
+        };
+        let mut skip = vec![false; self.topology.vertex_count()];
+        let mut plan = |index: usize| {
+            *plans[index].get_or_insert_with(|| {
+                self.best_partner(&legal, table, &expansion, index, &mut skip)
+            })
+        };
+        // No partner is worth more than the best its table row holds beside the highest
+        // expansion on the board, and a candidate with no partner adds 0.
+        let caps = self.partner_caps(seat);
+        let reach = expansion.iter().copied().fold(f64::NEG_INFINITY, js_max);
+        let mut any_nan = false;
         for (index, vertex) in legal.iter().enumerate() {
-            let mut score = own[index];
-            if let Some(plan) = &plan {
-                score += plan.value[index];
-                if let Some(other) = plan.mate[index]
-                    && plan.mate[other] == Some(index)
-                {
+            // The cut of the alone branch above, on the most the pair can score.
+            if bounded
+                && !any_nan
+                && top_scores.len() as f64 >= top_k
+                && own[index] + js_max(caps[usize::from(*vertex)] + reach, 0.0)
+                    <= top_scores[top_scores.len() - 1]
+            {
+                #[cfg(test)]
+                SKIPPED_PAIRS.with(|skipped| skipped.set(skipped.get() + 1));
+                continue;
+            }
+            let (mate, value) = plan(index);
+            let score = own[index] + value;
+            if let Some(other) = mate {
+                let (mate_of_other, value_of_other) = plan(other);
+                if mate_of_other == Some(index) {
                     // The grant goes to the second settlement, so with it priced the two
                     // orientations of a pair differ and the better one is the candidate; otherwise
                     // they tie to the bit and the half worth more alone goes first.
-                    let gap = score - (own[other] + plan.value[other]);
+                    let gap = score - (own[other] + value_of_other);
                     let weaker = if gap.abs() > PAIR_TIE {
                         gap < 0.0
                     } else {
@@ -333,6 +487,7 @@ impl<'a> Context<'a> {
                 }
             }
             insert_top(&mut top_vertices, &mut top_scores, top_k, *vertex, score);
+            any_nan |= score.is_nan();
         }
         (top_vertices, top_scores)
     }
@@ -375,16 +530,29 @@ impl<'a> Context<'a> {
         vertex_owner: &[u8],
         receives_grant: bool,
     ) -> Option<Vertex> {
-        let mut best = None;
-        let mut best_score = f64::NEG_INFINITY;
-        let mut keep = |vertex, _, score| {
-            if score > best_score {
-                best = Some(vertex);
-                best_score = score;
-            }
+        // The best vertex and its score's bits, skipping the vertices that cannot beat the best
+        // so far when `bounded`. A later vertex has to score higher, so one that can only tie is
+        // skipped as well.
+        let find = |bounded| {
+            let mut best = None;
+            let mut best_score = f64::NEG_INFINITY;
+            let floor = Cell::new(f64::NAN);
+            let mut keep = |vertex, _, score| {
+                if score > best_score {
+                    best = Some(vertex);
+                    best_score = score;
+                    if bounded {
+                        floor.set(score);
+                    }
+                }
+            };
+            self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &floor, &mut keep);
+            (best, best_score.to_bits())
         };
-        self.scan(seat, holdings, blocked, vertex_owner, receives_grant, &mut keep);
-        best
+        let best = find(true);
+        #[cfg(any(test, debug_assertions))]
+        assert_eq!(best, find(false), "seat {seat}: bounded against full");
+        best.0
     }
 
     /// Twin of `simulateWindowDetailed`: plays `turns` in order from `initial_holdings`, which is
@@ -575,6 +743,49 @@ mod tests {
         assert_eq!(pick(0.2), Some(legal[0]));
         assert_eq!(pick(0.5), Some(legal[1]));
         assert_eq!(pick(0.9), Some(legal[2]));
+    }
+
+    #[test]
+    fn bounded_scans_keep_the_lowest_index_among_equal_scores() {
+        // Nothing produces and expansion is unpriced, so every score ties and every bound is the
+        // score it caps: each tie is settled by a skip.
+        let (board, mut weights) = corpus("numberless-board");
+        weights.expansion_weight = 0.0;
+        weights.opponent_top_k = 3.0;
+        let scorer = board.scorer(weights);
+        let context = Context::new(&board, &scorer);
+        let (vertex_owner, _) = board.owners();
+        let blocked = board.blocked();
+        let legal = board.legal_vertices();
+        let holdings = Holdings::empty();
+        let top = |has_later_pick, bounded| {
+            context
+                .top_candidates_scan(
+                    0,
+                    &holdings,
+                    &blocked,
+                    &vertex_owner,
+                    false,
+                    has_later_pick,
+                    bounded,
+                )
+                .0
+        };
+
+        let skipped = skipped_vertices();
+        assert_eq!(
+            context.best_legal_candidate(0, &holdings, &blocked, &vertex_owner, false),
+            Some(legal[0])
+        );
+        assert_eq!(skipped_vertices() - skipped, legal.len() - 1);
+        assert_eq!(top(false, true), legal[..3]);
+        assert_eq!(skipped_vertices() - skipped, 2 * legal.len() - 4);
+
+        let skipped = skipped_pairs();
+        let pairs = top(true, true);
+        assert!(skipped_pairs() > skipped, "no pair was skipped");
+        assert_eq!(pairs, top(true, false));
+        assert_eq!(pairs[0], legal[0]);
     }
 
     /// Runs the first seat's pair-mode scan on a corpus board and checks every mutual pair: the
