@@ -12422,6 +12422,6734 @@
         "takenBeforeFirstPick": [],
         "warnings": []
       }
+    },
+    {
+      "name": "snake-inconsistent",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "p3",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p4"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 1,
+          "turnIndex": 1,
+          "currentPlayerId": "p2",
+          "myPickIndices": [
+            3,
+            4
+          ],
+          "myRemainingPickIndices": [
+            3,
+            4
+          ],
+          "remainingPickIndices": [
+            1,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": [
+            "snake-inconsistent"
+          ]
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-1,-1;-1,0",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:0,0;1,-1;1,0"
+            ],
+            "survival": 1,
+            "score": 34.23620133089133,
+            "rankScore": 34.23620133089133,
+            "breakdown": {
+              "production": 20.71666666666667,
+              "scarcity": 0.4033333333333328,
+              "robber": 0,
+              "diversity": 10.582200732600732,
+              "port": 0.2673611111111111,
+              "handValue": 0,
+              "expansion": 2.2666394871794875
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:0,0;1,-1;1,0"
+            ],
+            "survival": 1,
+            "score": 33.95894680708181,
+            "rankScore": 33.95894680708181,
+            "breakdown": {
+              "production": 20.71666666666667,
+              "scarcity": 0.4033333333333328,
+              "robber": 0,
+              "diversity": 10.582200732600732,
+              "port": 0.2673611111111111,
+              "handValue": 0,
+              "expansion": 1.9893849633699636
+            }
+          },
+          {
+            "firstPick": "v:0,0;1,-1;1,0",
+            "firstRoad": "e:1,-1;1,0",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:0,1;0,2;1,1"
+            ],
+            "survival": 1,
+            "score": 33.117695137362645,
+            "rankScore": 33.117695137362645,
+            "breakdown": {
+              "production": 22.11666666666667,
+              "scarcity": 0.2076923076923071,
+              "robber": 0,
+              "diversity": 8.588301831501832,
+              "port": 0.2902777777777778,
+              "handValue": 0,
+              "expansion": 1.914756553724054
+            }
+          },
+          {
+            "firstPick": "v:-1,-1;0,-2;0,-1",
+            "firstRoad": "e:-1,-1;0,-1",
+            "plannedSecond": [
+              "v:0,0;1,-1;1,0",
+              "v:0,1;0,2;1,1",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 32.31056382783883,
+            "rankScore": 32.31056382783883,
+            "breakdown": {
+              "production": 20.383333333333336,
+              "scarcity": 0.026564102564101983,
+              "robber": 0,
+              "diversity": 8.955264468864469,
+              "port": 0.7333333333333334,
+              "handValue": 0,
+              "expansion": 2.21206858974359
+            }
+          },
+          {
+            "firstPick": "v:-2,-1;-2,0;-1,-1",
+            "firstRoad": "e:-2,0;-1,-1",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:0,0;1,-1;1,0"
+            ],
+            "survival": 1,
+            "score": 32.21614104395604,
+            "rankScore": 32.21614104395604,
+            "breakdown": {
+              "production": 19.416666666666668,
+              "scarcity": 0.17333333333333276,
+              "robber": 0,
+              "diversity": 9.724676923076922,
+              "port": 0.5805555555555555,
+              "handValue": 0,
+              "expansion": 2.3209085653235655
+            }
+          },
+          {
+            "firstPick": "v:1,-1;1,0;2,-1",
+            "firstRoad": "e:1,-1;1,0",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:0,1;0,2;1,1",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 32.18138271367521,
+            "rankScore": 32.18138271367521,
+            "breakdown": {
+              "production": 21.55,
+              "scarcity": 0.2133333333333328,
+              "robber": 0,
+              "diversity": 7.7099208791208795,
+              "port": 0.38958333333333334,
+              "handValue": 0,
+              "expansion": 2.318545167887668
+            }
+          },
+          {
+            "firstPick": "v:-3,1;-2,0;-2,1",
+            "firstRoad": "e:-2,0;-2,1",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:0,0;1,-1;1,0",
+              "v:0,1;0,2;1,1"
+            ],
+            "survival": 1,
+            "score": 31.810088023504278,
+            "rankScore": 31.810088023504278,
+            "breakdown": {
+              "production": 19.26666666666667,
+              "scarcity": 0.4958974358974353,
+              "robber": 0,
+              "diversity": 9.082273992673993,
+              "port": 0.8250000000000002,
+              "handValue": 0,
+              "expansion": 2.1402499282661784
+            }
+          },
+          {
+            "firstPick": "v:0,-1;0,0;1,-1",
+            "firstRoad": "e:0,0;1,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:0,1;0,2;1,1",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 31.79529935897436,
+            "rankScore": 31.79529935897436,
+            "breakdown": {
+              "production": 20.5,
+              "scarcity": 0.08641025641025579,
+              "robber": 0,
+              "diversity": 8.714682783882784,
+              "port": 0.2597222222222222,
+              "handValue": 0,
+              "expansion": 2.234484096459097
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [
+          {
+            "vertexId": "v:1,0;1,1;2,0",
+            "playerId": "p2",
+            "frequency": 0.3333333333333333
+          }
+        ],
+        "warnings": [
+          "snake-inconsistent"
+        ]
+      }
+    },
+    {
+      "name": "blank-tile",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": null,
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": null,
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [
+            {
+              "edgeId": "e:-2,1;-1,1",
+              "playerId": "aki"
+            },
+            {
+              "edgeId": "e:1,-1;1,0",
+              "playerId": "p2"
+            }
+          ],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,0;1,-1;1,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p3"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 2,
+          "turnIndex": 2,
+          "currentPlayerId": "p3",
+          "myPickIndices": [
+            2,
+            5
+          ],
+          "myRemainingPickIndices": [
+            2,
+            5
+          ],
+          "remainingPickIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:0,1;1,0;1,1",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 35.26263271520146,
+            "rankScore": 35.26263271520146,
+            "breakdown": {
+              "production": 20.3,
+              "scarcity": 1.9449999999999996,
+              "robber": 0,
+              "diversity": 9.828179487179488,
+              "port": 1.4361111111111111,
+              "handValue": 0,
+              "expansion": 1.7533421169108674
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:1,-1;2,-2;2,-1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 33.30484921398047,
+            "rankScore": 33.30484921398047,
+            "breakdown": {
+              "production": 19.400000000000002,
+              "scarcity": 1.7434615384615382,
+              "robber": 0,
+              "diversity": 9.516417582417583,
+              "port": 0.9625,
+              "handValue": 0,
+              "expansion": 1.6824700931013432
+            }
+          },
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-1,1;0,0;0,1"
+            ],
+            "survival": 1,
+            "score": 31.041464133089136,
+            "rankScore": 31.041464133089136,
+            "breakdown": {
+              "production": 20.200000000000003,
+              "scarcity": 1.161153846153846,
+              "robber": 0,
+              "diversity": 7.50589010989011,
+              "port": 0.4583333333333333,
+              "handValue": 0,
+              "expansion": 1.7160868437118442
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:-1,1;0,0;0,1",
+              "v:-1,2;0,1;0,2",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 29.788411011904763,
+            "rankScore": 29.788411011904763,
+            "breakdown": {
+              "production": 18.166666666666668,
+              "scarcity": 1.222307692307692,
+              "robber": 0,
+              "diversity": 8.292542124542125,
+              "port": 0.5423611111111112,
+              "handValue": 0,
+              "expansion": 1.5645334172771672
+            }
+          },
+          {
+            "firstPick": "v:-1,1;0,0;0,1",
+            "firstRoad": "e:0,0;0,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-2,0;-2,1;-1,0",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 29.303600213675214,
+            "rankScore": 29.303600213675214,
+            "breakdown": {
+              "production": 17.71666666666667,
+              "scarcity": 1.2088461538461537,
+              "robber": 0,
+              "diversity": 7.671538461538461,
+              "port": 0.49652777777777773,
+              "handValue": 0,
+              "expansion": 2.210021153846154
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:-1,1;0,0;0,1",
+              "v:-1,2;0,1;0,2"
+            ],
+            "survival": 1,
+            "score": 29.10059793192918,
+            "rankScore": 29.10059793192918,
+            "breakdown": {
+              "production": 17.099999999999998,
+              "scarcity": 1.6619230769230766,
+              "robber": 0,
+              "diversity": 8.522388278388279,
+              "port": 0.4277777777777778,
+              "handValue": 0,
+              "expansion": 1.3885087988400489
+            }
+          },
+          {
+            "firstPick": "v:-1,2;0,1;0,2",
+            "firstRoad": "e:0,1;0,2",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 29.032325175518928,
+            "rankScore": 29.032325175518928,
+            "breakdown": {
+              "production": 15.466666666666669,
+              "scarcity": 1.8557692307692306,
+              "robber": 0,
+              "diversity": 8.921831501831502,
+              "port": 0.6416666666666667,
+              "handValue": 0,
+              "expansion": 2.14639110958486
+            }
+          },
+          {
+            "firstPick": "v:1,-1;2,-2;2,-1",
+            "firstRoad": "e:1,-1;2,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-1,1;0,0;0,1"
+            ],
+            "survival": 1,
+            "score": 28.040748542429796,
+            "rankScore": 28.040748542429796,
+            "breakdown": {
+              "production": 18.21666666666667,
+              "scarcity": -0.07346153846153869,
+              "robber": 0,
+              "diversity": 7.856234432234433,
+              "port": 0.4659722222222223,
+              "handValue": 0,
+              "expansion": 1.5753367597680097
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "resource-without-number",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [
+            {
+              "edgeId": "e:-2,1;-1,1",
+              "playerId": "aki"
+            },
+            {
+              "edgeId": "e:1,-1;1,0",
+              "playerId": "p2"
+            }
+          ],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,0;1,-1;1,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p3"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 2,
+          "turnIndex": 2,
+          "currentPlayerId": "p3",
+          "myPickIndices": [
+            2,
+            5
+          ],
+          "myRemainingPickIndices": [
+            2,
+            5
+          ],
+          "remainingPickIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:0,1;1,0;1,1",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 34.95924476495726,
+            "rankScore": 34.95924476495726,
+            "breakdown": {
+              "production": 20.3,
+              "scarcity": 1.6933333333333334,
+              "robber": 0,
+              "diversity": 9.751025641025644,
+              "port": 1.4361111111111111,
+              "handValue": 0,
+              "expansion": 1.7787746794871797
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 33.75377549603174,
+            "rankScore": 33.75377549603174,
+            "breakdown": {
+              "production": 19.366666666666664,
+              "scarcity": 2.1482051282051287,
+              "robber": 0,
+              "diversity": 9.0589010989011,
+              "port": 1.4666666666666668,
+              "handValue": 0,
+              "expansion": 1.713335935592186
+            }
+          },
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 30.93622052808303,
+            "rankScore": 30.93622052808303,
+            "breakdown": {
+              "production": 20.46666666666667,
+              "scarcity": 0.2889743589743592,
+              "robber": 0,
+              "diversity": 7.5840659340659355,
+              "port": 1.0083333333333335,
+              "handValue": 0,
+              "expansion": 1.5881802350427352
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:-1,2;0,1;0,2",
+              "v:1,-2;1,-1;2,-2",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 29.6687880952381,
+            "rankScore": 29.6687880952381,
+            "breakdown": {
+              "production": 18.150000000000002,
+              "scarcity": 0.7189743589743592,
+              "robber": 0,
+              "diversity": 8.756208791208792,
+              "port": 0.5118055555555556,
+              "handValue": 0,
+              "expansion": 1.5317993894993895
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:1,-2;1,-1;2,-2",
+              "v:-1,2;0,1;0,2"
+            ],
+            "survival": 1,
+            "score": 28.947950144993897,
+            "rankScore": 28.947950144993897,
+            "breakdown": {
+              "production": 17.066666666666666,
+              "scarcity": 0.6558974358974362,
+              "robber": 0,
+              "diversity": 9.436739926739927,
+              "port": 0.3666666666666667,
+              "handValue": 0,
+              "expansion": 1.4219794490231992
+            }
+          },
+          {
+            "firstPick": "v:-1,1;0,0;0,1",
+            "firstRoad": "e:0,0;0,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 28.873375427350428,
+            "rankScore": 28.873375427350428,
+            "breakdown": {
+              "production": 17.71666666666667,
+              "scarcity": 0.9476923076923081,
+              "robber": 0,
+              "diversity": 7.585076923076923,
+              "port": 0.49652777777777773,
+              "handValue": 0,
+              "expansion": 2.127411752136752
+            }
+          },
+          {
+            "firstPick": "v:-1,2;0,1;0,2",
+            "firstRoad": "e:0,1;0,2",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 28.665231402625153,
+            "rankScore": 28.665231402625153,
+            "breakdown": {
+              "production": 15.466666666666669,
+              "scarcity": 1.5782051282051288,
+              "robber": 0,
+              "diversity": 8.838520146520148,
+              "port": 0.6416666666666667,
+              "handValue": 0,
+              "expansion": 2.1401727945665443
+            }
+          },
+          {
+            "firstPick": "v:1,-1;2,-2;2,-1",
+            "firstRoad": "e:1,-1;2,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-1,1;0,0;0,1"
+            ],
+            "survival": 1,
+            "score": 28.09230772283273,
+            "rankScore": 28.09230772283273,
+            "breakdown": {
+              "production": 18.21666666666667,
+              "scarcity": -0.09025641025640989,
+              "robber": 0,
+              "diversity": 7.864754578754578,
+              "port": 0.4659722222222223,
+              "handValue": 0,
+              "expansion": 1.635170665445666
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "numberless-board",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": null
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "aki"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "no-production",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 0,
+          "turnIndex": 0,
+          "currentPlayerId": "aki",
+          "myPickIndices": [
+            0,
+            7
+          ],
+          "myRemainingPickIndices": [
+            0,
+            7
+          ],
+          "remainingPickIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "no-robber-no-desert",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "wood",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": null,
+          "roads": [
+            {
+              "edgeId": "e:-2,1;-1,1",
+              "playerId": "aki"
+            },
+            {
+              "edgeId": "e:1,-1;1,0",
+              "playerId": "p2"
+            }
+          ],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,0;1,-1;1,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p3"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 2,
+          "turnIndex": 2,
+          "currentPlayerId": "p3",
+          "myPickIndices": [
+            2,
+            5
+          ],
+          "myRemainingPickIndices": [
+            2,
+            5
+          ],
+          "remainingPickIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:0,1;1,0;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 34.90893096509972,
+            "rankScore": 34.90893096509972,
+            "breakdown": {
+              "production": 20.733333333333334,
+              "scarcity": 1.3144444444444447,
+              "robber": 0,
+              "diversity": 9.694421326821328,
+              "port": 1.0694444444444444,
+              "handValue": 0,
+              "expansion": 2.0972874160561656
+            }
+          },
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-1,1;-1,2;0,1"
+            ],
+            "survival": 1,
+            "score": 34.14801055250305,
+            "rankScore": 34.14801055250305,
+            "breakdown": {
+              "production": 20.400000000000002,
+              "scarcity": 0.46598290598290637,
+              "robber": 0,
+              "diversity": 10.740247130647127,
+              "port": 0.5041666666666667,
+              "handValue": 0,
+              "expansion": 2.0376138492063496
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 33.68221246693122,
+            "rankScore": 33.68221246693122,
+            "breakdown": {
+              "production": 19.366666666666667,
+              "scarcity": 1.6432478632478633,
+              "robber": 0,
+              "diversity": 8.951851526251527,
+              "port": 1.4666666666666668,
+              "handValue": 0,
+              "expansion": 2.253779744098494
+            }
+          },
+          {
+            "firstPick": "v:-1,2;0,1;0,2",
+            "firstRoad": "e:0,1;0,2",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:1,1;2,0;2,1"
+            ],
+            "survival": 1,
+            "score": 31.664603668091168,
+            "rankScore": 31.664603668091168,
+            "breakdown": {
+              "production": 18.583333333333332,
+              "scarcity": 0.5125071225071227,
+              "robber": 0,
+              "diversity": 9.12213724053724,
+              "port": 0.9777777777777779,
+              "handValue": 0,
+              "expansion": 2.468848193935694
+            }
+          },
+          {
+            "firstPick": "v:-1,1;-1,2;0,1",
+            "firstRoad": "e:-1,2;0,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:0,1;0,2;1,1",
+              "v:0,2;1,1;1,2"
+            ],
+            "survival": 1,
+            "score": 30.15605930759056,
+            "rankScore": 30.15605930759056,
+            "breakdown": {
+              "production": 17.500000000000004,
+              "scarcity": 0.7414245014245017,
+              "robber": 0,
+              "diversity": 8.552159218559218,
+              "port": 1.1152777777777778,
+              "handValue": 0,
+              "expansion": 2.24719780982906
+            }
+          },
+          {
+            "firstPick": "v:1,-2;1,-1;2,-2",
+            "firstRoad": "e:1,-2;1,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0"
+            ],
+            "survival": 1,
+            "score": 29.956448739316244,
+            "rankScore": 29.956448739316244,
+            "breakdown": {
+              "production": 17.650000000000002,
+              "scarcity": 0.4349401709401712,
+              "robber": 0,
+              "diversity": 9.905299877899878,
+              "port": 0.20625000000000002,
+              "handValue": 0,
+              "expansion": 1.759958690476191
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-1,-1;-1,0",
+            "plannedSecond": [
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 29.919607271062272,
+            "rankScore": 29.919607271062272,
+            "breakdown": {
+              "production": 17.650000000000002,
+              "scarcity": 0.4349401709401712,
+              "robber": 0,
+              "diversity": 9.905299877899878,
+              "port": 0.20625000000000002,
+              "handValue": 0,
+              "expansion": 1.7231172222222222
+            }
+          },
+          {
+            "firstPick": "v:1,0;2,-1;2,0",
+            "firstRoad": "e:1,0;2,0",
+            "plannedSecond": [
+              "v:-1,2;0,1;0,2",
+              "v:-2,0;-1,-1;-1,0"
+            ],
+            "survival": 1,
+            "score": 29.846720977818475,
+            "rankScore": 29.846720977818475,
+            "breakdown": {
+              "production": 19.066666666666666,
+              "scarcity": -0.3196296296296294,
+              "robber": 0,
+              "diversity": 7.88312039072039,
+              "port": 0.6111111111111112,
+              "handValue": 0,
+              "expansion": 2.605452438949939
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "adjacent-buildings",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [
+            {
+              "edgeId": "e:-2,1;-1,1",
+              "playerId": "aki"
+            }
+          ],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-2,1;-1,0;-1,1",
+              "playerId": "p2",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p3"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 2,
+          "turnIndex": 2,
+          "currentPlayerId": "p3",
+          "myPickIndices": [
+            2,
+            5
+          ],
+          "myRemainingPickIndices": [
+            2,
+            5
+          ],
+          "remainingPickIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:0,1;1,0;1,1",
+            "firstRoad": "e:0,1;1,0",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 35.00040938644688,
+            "rankScore": 35.00040938644688,
+            "breakdown": {
+              "production": 20.71666666666667,
+              "scarcity": 1.4002564102564097,
+              "robber": 0,
+              "diversity": 9.608883516483516,
+              "port": 1.2374999999999998,
+              "handValue": 0,
+              "expansion": 2.0371027930402934
+            }
+          },
+          {
+            "firstPick": "v:0,0;0,1;1,0",
+            "firstRoad": "e:0,1;1,0",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 34.48261758241758,
+            "rankScore": 34.48261758241758,
+            "breakdown": {
+              "production": 21.083333333333332,
+              "scarcity": 0.432564102564102,
+              "robber": 0,
+              "diversity": 10.12261978021978,
+              "port": 0.3284722222222222,
+              "handValue": 0,
+              "expansion": 2.5156281440781445
+            }
+          },
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:0,1;0,2;1,1"
+            ],
+            "survival": 1,
+            "score": 34.204305109890115,
+            "rankScore": 34.204305109890115,
+            "breakdown": {
+              "production": 21.100000000000005,
+              "scarcity": 0.44446153846153774,
+              "robber": 0,
+              "diversity": 10.219000732600731,
+              "port": 0.3284722222222222,
+              "handValue": 0,
+              "expansion": 2.1123706166056166
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:1,0;1,1;2,0"
+            ],
+            "survival": 1,
+            "score": 34.19019406288157,
+            "rankScore": 34.19019406288157,
+            "breakdown": {
+              "production": 20.633333333333336,
+              "scarcity": 1.4002564102564097,
+              "robber": 0,
+              "diversity": 8.774194871794874,
+              "port": 0.8784722222222223,
+              "handValue": 0,
+              "expansion": 2.503937225274725
+            }
+          },
+          {
+            "firstPick": "v:0,0;1,-1;1,0",
+            "firstRoad": "e:0,0;1,0",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-1,-2;-1,-1;0,-2"
+            ],
+            "survival": 1,
+            "score": 32.57853618589744,
+            "rankScore": 32.57853618589744,
+            "breakdown": {
+              "production": 20.983333333333334,
+              "scarcity": -0.11584615384615438,
+              "robber": 0,
+              "diversity": 8.514206593406593,
+              "port": 0.9625,
+              "handValue": 0,
+              "expansion": 2.2343424130036635
+            }
+          },
+          {
+            "firstPick": "v:0,-1;0,0;1,-1",
+            "firstRoad": "e:0,0;1,-1",
+            "plannedSecond": [
+              "v:0,1;0,2;1,1",
+              "v:-2,0;-1,-1;-1,0"
+            ],
+            "survival": 1,
+            "score": 32.438993424908425,
+            "rankScore": 32.438993424908425,
+            "breakdown": {
+              "production": 20.133333333333333,
+              "scarcity": 0.29230769230769166,
+              "robber": 0,
+              "diversity": 9.538816117216118,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 2.199536282051282
+            }
+          },
+          {
+            "firstPick": "v:1,-1;1,0;2,-1",
+            "firstRoad": "e:1,0;2,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:0,1;0,2;1,1",
+              "v:1,1;2,0;2,1"
+            ],
+            "survival": 1,
+            "score": 31.067586572039076,
+            "rankScore": 31.067586572039076,
+            "breakdown": {
+              "production": 20.2,
+              "scarcity": 0.25102564102564046,
+              "robber": 0,
+              "diversity": 7.7899208791208805,
+              "port": 0.3666666666666667,
+              "handValue": 0,
+              "expansion": 2.4599733852258856
+            }
+          },
+          {
+            "firstPick": "v:-1,-1;0,-2;0,-1",
+            "firstRoad": "e:-1,-1;0,-1",
+            "plannedSecond": [
+              "v:0,0;1,-1;1,0"
+            ],
+            "survival": 1,
+            "score": 31.02851666666667,
+            "rankScore": 31.02851666666667,
+            "breakdown": {
+              "production": 21.25,
+              "scarcity": -0.6998461538461541,
+              "robber": 0,
+              "diversity": 7.873520879120878,
+              "port": 0.55,
+              "handValue": 0,
+              "expansion": 2.0548419413919414
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "no-legal-vertex",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [
+            {
+              "vertexId": "v:-1,-1;-1,0;0,-1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-1,-2;-1,-1;0,-2",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-1,0;-1,1;0,0",
+              "playerId": "p3",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-1,1;-1,2;0,1",
+              "playerId": "p4",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-1,2;-1,3;0,2",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-2,-1;-2,0;-1,-1",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-2,0;-2,1;-1,0",
+              "playerId": "p3",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "p4",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-2,2;-2,3;-1,2",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-3,0;-3,1;-2,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-3,1;-3,2;-2,1",
+              "playerId": "p3",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:-3,2;-3,3;-2,2",
+              "playerId": "p4",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,-1;0,0;1,-1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,-2;0,-1;1,-2",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,-3;0,-2;1,-3",
+              "playerId": "p3",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,0;0,1;1,0",
+              "playerId": "p4",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,1;0,2;1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,2;0,3;1,2",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:1,-1;1,0;2,-1",
+              "playerId": "p3",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:1,-2;1,-1;2,-2",
+              "playerId": "p4",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:1,-3;1,-2;2,-3",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:1,0;1,1;2,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:1,1;1,2;2,1",
+              "playerId": "p3",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:2,-1;2,0;3,-1",
+              "playerId": "p4",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:2,-2;2,-1;3,-2",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:2,-3;2,-2;3,-3",
+              "playerId": "p2",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:2,0;2,1;3,0",
+              "playerId": "p3",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "aki"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "complete",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 8,
+          "turnIndex": null,
+          "currentPlayerId": null,
+          "myPickIndices": [
+            0,
+            7
+          ],
+          "myRemainingPickIndices": [],
+          "remainingPickIndices": [],
+          "warnings": []
+        },
+        "recommendations": [],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "nested-not-ready",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "wood",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "ore",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "brick",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "wood",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wood",
+              "numberToken": null
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": "ore",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;-1,-1",
+              "resource": "wood",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [
+            {
+              "vertexId": "v:-1,0;0,-1;0,0",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,0;0,1;1,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            }
+          ],
+          "mePlayerId": "p2"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 2,
+          "turnIndex": 2,
+          "currentPlayerId": "p3",
+          "myPickIndices": [
+            1,
+            4
+          ],
+          "myRemainingPickIndices": [
+            4
+          ],
+          "remainingPickIndices": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:-1,3;0,2;0,3",
+            "firstRoad": "e:-1,3;0,2",
+            "plannedSecond": [],
+            "survival": 1,
+            "score": 1.1,
+            "rankScore": 1.1,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 1.1,
+              "handValue": 0,
+              "expansion": 0
+            }
+          },
+          {
+            "firstPick": "v:-1,2;-1,3;0,2",
+            "firstRoad": "e:-1,2;-1,3",
+            "plannedSecond": [],
+            "survival": 0.6666666666666666,
+            "score": 1.1,
+            "rankScore": 0.7333333333333334,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 1.1,
+              "handValue": 0,
+              "expansion": 0
+            }
+          },
+          {
+            "firstPick": "v:-2,-1;-1,-2;-1,-1",
+            "firstRoad": "e:-2,-1;-1,-1",
+            "plannedSecond": [],
+            "survival": 0.6666666666666666,
+            "score": 1.1,
+            "rankScore": 0.7333333333333334,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 1.1,
+              "handValue": 0,
+              "expansion": 0
+            }
+          },
+          {
+            "firstPick": "v:0,2;1,1;1,2",
+            "firstRoad": "e:0,2;1,2",
+            "plannedSecond": [],
+            "survival": 1,
+            "score": 0.33,
+            "rankScore": 0.33,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 0.055000000000000014
+            }
+          },
+          {
+            "firstPick": "v:-2,2;-2,3;-1,2",
+            "firstRoad": "e:-2,3;-1,2",
+            "plannedSecond": [],
+            "survival": 1,
+            "score": 0.32312500000000005,
+            "rankScore": 0.32312500000000005,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 0.04812500000000001
+            }
+          },
+          {
+            "firstPick": "v:-2,3;-1,2;-1,3",
+            "firstRoad": "e:-1,2;-1,3",
+            "plannedSecond": [],
+            "survival": 1,
+            "score": 0.31625000000000003,
+            "rankScore": 0.31625000000000003,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 0.04125000000000001
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-2,0;-1,-1",
+            "plannedSecond": [],
+            "survival": 1,
+            "score": 0.30250000000000005,
+            "rankScore": 0.30250000000000005,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 0.027500000000000007
+            }
+          },
+          {
+            "firstPick": "v:-3,0;-2,-1;-2,0",
+            "firstRoad": "e:-2,-1;-2,0",
+            "plannedSecond": [],
+            "survival": 1,
+            "score": 0.30250000000000005,
+            "rankScore": 0.30250000000000005,
+            "breakdown": {
+              "production": 0,
+              "scarcity": 0,
+              "robber": 0,
+              "diversity": 0,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 0.027500000000000007
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [
+          {
+            "vertexId": "v:-1,-1;0,-2;0,-1",
+            "playerId": "p3",
+            "frequency": 0.6666666666666666
+          },
+          {
+            "vertexId": "v:-1,-2;0,-3;0,-2",
+            "playerId": "p3",
+            "frequency": 0.3333333333333333
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "mutual-mate",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p2"
+        },
+        "options": {
+          "rollouts": 3,
+          "weights": {
+            "resourceValue": {
+              "wheat": 1.35,
+              "ore": 1.3,
+              "wood": 0.8,
+              "brick": 0.8,
+              "sheep": 0.75
+            },
+            "handValueWeight": 0.4,
+            "scarcityWeight": 0.35,
+            "scarcityClampMin": 0.5,
+            "scarcityClampMax": 2,
+            "diversityWeight": 1.6,
+            "diversityCap": 4,
+            "coverageExponent": 1,
+            "coverageScarcityWeight": 0.5,
+            "duplicateNumberPenalty": 0.08,
+            "recipeRoadBonus": 1.5,
+            "recipeCityBonus": 2,
+            "recipeSettlementBonus": 1,
+            "recipeDevCardBonus": 0,
+            "recipeCap": 4,
+            "portWeight": 0.55,
+            "genericPortFactor": 0.5,
+            "portSurplusThreshold": 3,
+            "portCoverageDeficitWeight": 0,
+            "nearPortRadius": 2,
+            "nearPortDecay": 0.5,
+            "expansionWeight": 0.1,
+            "expansionDecay": 0.5,
+            "robberDiscount": 0.35,
+            "robberConcentrationWeight": 0,
+            "setupDenialWeight": 0,
+            "opponentTopK": 3,
+            "softmaxTemperature": 1.25,
+            "rolloutBudget": 500000,
+            "rolloutsMin": 4,
+            "rolloutsMax": 24,
+            "maxResults": 8,
+            "slotScales": {
+              "3": {
+                "0": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "1": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "2": {
+                  "expansion": 1,
+                  "diversity": 1
+                }
+              },
+              "4": {
+                "0": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "1": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "2": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "3": {
+                  "expansion": 1,
+                  "diversity": 1
+                }
+              },
+              "5": {
+                "0": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "1": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "2": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "3": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "4": {
+                  "expansion": 1,
+                  "diversity": 1
+                }
+              },
+              "6": {
+                "0": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "1": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "2": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "3": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "4": {
+                  "expansion": 1,
+                  "diversity": 1
+                },
+                "5": {
+                  "expansion": 1,
+                  "diversity": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 0,
+          "turnIndex": 0,
+          "currentPlayerId": "aki",
+          "myPickIndices": [
+            1,
+            6
+          ],
+          "myRemainingPickIndices": [
+            1,
+            6
+          ],
+          "remainingPickIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,1;-1,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1"
+            ],
+            "survival": 1,
+            "score": 31.773634068986567,
+            "rankScore": 31.773634068986567,
+            "breakdown": {
+              "production": 20.1,
+              "scarcity": 0.049230769230768634,
+              "robber": 0,
+              "diversity": 8.125978021978021,
+              "port": 0.3208333333333333,
+              "handValue": 1.1600000000000001,
+              "expansion": 2.0175919444444443
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-1,-1;-1,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1"
+            ],
+            "survival": 1,
+            "score": 31.662608510378508,
+            "rankScore": 31.662608510378508,
+            "breakdown": {
+              "production": 20.1,
+              "scarcity": 0.049230769230768634,
+              "robber": 0,
+              "diversity": 8.125978021978021,
+              "port": 0.3208333333333333,
+              "handValue": 1.1600000000000001,
+              "expansion": 1.906566385836386
+            }
+          },
+          {
+            "firstPick": "v:0,0;1,-1;1,0",
+            "firstRoad": "e:1,-1;1,0",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-1,-2;-1,-1;0,-2"
+            ],
+            "survival": 1,
+            "score": 30.86225233516484,
+            "rankScore": 30.86225233516484,
+            "breakdown": {
+              "production": 20.11666666666667,
+              "scarcity": -0.2691794871794877,
+              "robber": 0,
+              "diversity": 7.720301831501833,
+              "port": 0.8708333333333332,
+              "handValue": 0.7733333333333334,
+              "expansion": 1.6502966575091575
+            }
+          },
+          {
+            "firstPick": "v:-2,-1;-2,0;-1,-1",
+            "firstRoad": "e:-2,0;-1,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1"
+            ],
+            "survival": 1,
+            "score": 29.611248858363858,
+            "rankScore": 29.611248858363858,
+            "breakdown": {
+              "production": 18.849999999999998,
+              "scarcity": -0.11846153846153906,
+              "robber": 0,
+              "diversity": 6.80559706959707,
+              "port": 0.8250000000000001,
+              "handValue": 1.2400000000000002,
+              "expansion": 2.0091133272283273
+            }
+          },
+          {
+            "firstPick": "v:-1,1;0,0;0,1",
+            "firstRoad": "e:0,0;0,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1"
+            ],
+            "survival": 1,
+            "score": 29.593560508241758,
+            "rankScore": 29.593560508241758,
+            "breakdown": {
+              "production": 19.4,
+              "scarcity": -0.6507692307692312,
+              "robber": 0,
+              "diversity": 7.713520879120879,
+              "port": 0.22916666666666663,
+              "handValue": 1.1600000000000001,
+              "expansion": 1.7416421932234434
+            }
+          },
+          {
+            "firstPick": "v:1,-1;1,0;2,-1",
+            "firstRoad": "e:1,0;2,-1",
+            "plannedSecond": [
+              "v:-2,-1;-2,0;-1,-1",
+              "v:1,1;2,0;2,1"
+            ],
+            "survival": 1,
+            "score": 29.33642964896215,
+            "rankScore": 29.33642964896215,
+            "breakdown": {
+              "production": 18.866666666666667,
+              "scarcity": 0.006153846153845621,
+              "robber": 0,
+              "diversity": 6.797216117216117,
+              "port": 0.7333333333333333,
+              "handValue": 0.8333333333333334,
+              "expansion": 2.0997263522588523
+            }
+          },
+          {
+            "firstPick": "v:-3,1;-2,0;-2,1",
+            "firstRoad": "e:-3,1;-2,1",
+            "plannedSecond": [
+              "v:1,-1;1,0;2,-1",
+              "v:-2,1;-2,2;-1,1"
+            ],
+            "survival": 1,
+            "score": 29.226700476190477,
+            "rankScore": 29.226700476190477,
+            "breakdown": {
+              "production": 18.900000000000002,
+              "scarcity": -0.05615384615384672,
+              "robber": 0,
+              "diversity": 6.67607326007326,
+              "port": 0.18333333333333332,
+              "handValue": 1.3200000000000003,
+              "expansion": 2.203447728937729
+            }
+          },
+          {
+            "firstPick": "v:-1,-1;0,-2;0,-1",
+            "firstRoad": "e:-1,-1;0,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1"
+            ],
+            "survival": 1,
+            "score": 29.162596321733822,
+            "rankScore": 29.162596321733822,
+            "breakdown": {
+              "production": 19.750000000000004,
+              "scarcity": -0.704461538461539,
+              "robber": 0,
+              "diversity": 6.422092307692309,
+              "port": 0.48125,
+              "handValue": 1.2400000000000002,
+              "expansion": 1.9737155525030528
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [
+          {
+            "vertexId": "v:0,1;0,2;1,1",
+            "playerId": "aki",
+            "frequency": 0.6666666666666666
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "pair-inside-tie",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "wood",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "brick",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "sheep",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "ore",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "brick",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "wood",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wood",
+              "numberToken": 9
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": "ore",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": null,
+              "rate": 3
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            }
+          ],
+          "mePlayerId": "p2"
+        },
+        "options": {
+          "rollouts": 3
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 0,
+          "turnIndex": 0,
+          "currentPlayerId": "aki",
+          "myPickIndices": [
+            1,
+            4
+          ],
+          "myRemainingPickIndices": [
+            1,
+            4
+          ],
+          "remainingPickIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:0,-1;1,-2;1,-1",
+            "firstRoad": "e:0,-1;1,-1",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0"
+            ],
+            "survival": 1,
+            "score": 39.26884807440925,
+            "rankScore": 39.26884807440925,
+            "breakdown": {
+              "production": 19.25,
+              "scarcity": 0.45454072398189993,
+              "robber": 0,
+              "diversity": 16.881811764705883,
+              "port": 0.1375,
+              "handValue": 0,
+              "expansion": 2.5449955857214683
+            }
+          },
+          {
+            "firstPick": "v:2,-1;2,0;3,-1",
+            "firstRoad": "e:2,-1;2,0",
+            "plannedSecond": [
+              "v:0,0;1,-1;1,0",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 39.11684593325792,
+            "rankScore": 39.11684593325792,
+            "breakdown": {
+              "production": 19.083333333333332,
+              "scarcity": 0.4221168929110101,
+              "robber": 0,
+              "diversity": 16.177207843137257,
+              "port": 0.8784722222222222,
+              "handValue": 0,
+              "expansion": 2.5557156416540976
+            }
+          },
+          {
+            "firstPick": "v:0,-2;0,-1;1,-2",
+            "firstRoad": "e:0,-1;1,-2",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:-2,0;-1,-1;-1,0"
+            ],
+            "survival": 1,
+            "score": 38.559977853192564,
+            "rankScore": 38.559977853192564,
+            "breakdown": {
+              "production": 20.7,
+              "scarcity": -0.13950904977375608,
+              "robber": 0,
+              "diversity": 15.098945098039216,
+              "port": 0.2673611111111111,
+              "handValue": 0,
+              "expansion": 2.6331806938159885
+            }
+          },
+          {
+            "firstPick": "v:0,0;0,1;1,0",
+            "firstRoad": "e:0,0;1,0",
+            "plannedSecond": [
+              "v:0,-1;1,-2;1,-1",
+              "v:1,0;2,-1;2,0",
+              "v:2,-2;2,-1;3,-2"
+            ],
+            "survival": 1,
+            "score": 38.16472181749623,
+            "rankScore": 38.16472181749623,
+            "breakdown": {
+              "production": 20.683333333333334,
+              "scarcity": 0.07456636500754105,
+              "robber": 0,
+              "diversity": 14.701145098039214,
+              "port": 0.4277777777777778,
+              "handValue": 0,
+              "expansion": 2.277899243338361
+            }
+          },
+          {
+            "firstPick": "v:0,-1;0,0;1,-1",
+            "firstRoad": "e:0,0;1,-1",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:1,-2;1,-1;2,-2",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 37.88873515082956,
+            "rankScore": 37.88873515082956,
+            "breakdown": {
+              "production": 19.51666666666667,
+              "scarcity": 0.11614404223227702,
+              "robber": 0,
+              "diversity": 15.14361176470588,
+              "port": 0.3131944444444445,
+              "handValue": 0,
+              "expansion": 2.799118232780291
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:0,-1;1,-2;1,-1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 36.58054890774259,
+            "rankScore": 36.58054890774259,
+            "breakdown": {
+              "production": 17.033333333333335,
+              "scarcity": 0.3440505279034687,
+              "robber": 0,
+              "diversity": 16.032945098039217,
+              "port": 0.4583333333333333,
+              "handValue": 0,
+              "expansion": 2.7118866151332335
+            }
+          },
+          {
+            "firstPick": "v:-3,1;-2,0;-2,1",
+            "firstRoad": "e:-2,0;-2,1",
+            "plannedSecond": [
+              "v:0,-2;0,-1;1,-2",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 36.487569731020606,
+            "rankScore": 36.487569731020606,
+            "breakdown": {
+              "production": 17.849999999999998,
+              "scarcity": 0.24945022624434343,
+              "robber": 0,
+              "diversity": 15.24514117647059,
+              "port": 0.5652777777777779,
+              "handValue": 0,
+              "expansion": 2.577700550527904
+            }
+          },
+          {
+            "firstPick": "v:1,-2;2,-3;2,-2",
+            "firstRoad": "e:1,-2;2,-2",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:2,-1;2,0;3,-1"
+            ],
+            "survival": 1,
+            "score": 36.19009318124686,
+            "rankScore": 36.19009318124686,
+            "breakdown": {
+              "production": 17.383333333333333,
+              "scarcity": 0.5027066365007536,
+              "robber": 0,
+              "diversity": 15.279074509803925,
+              "port": 0.4659722222222222,
+              "handValue": 0,
+              "expansion": 2.559006479386626
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [
+          {
+            "vertexId": "v:1,-1;2,-2;2,-1",
+            "playerId": "aki",
+            "frequency": 0.3333333333333333
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "blocked-in-modal-window",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [],
+          "buildings": [],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p2"
+        },
+        "options": {
+          "rollouts": 6,
+          "maxResults": 54
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 0,
+          "turnIndex": 0,
+          "currentPlayerId": "aki",
+          "myPickIndices": [
+            1,
+            6
+          ],
+          "myRemainingPickIndices": [
+            1,
+            6
+          ],
+          "remainingPickIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,1;-1,0",
+            "plannedSecond": [
+              "v:0,-1;0,0;1,-1",
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 30.436333173840055,
+            "rankScore": 30.436333173840055,
+            "breakdown": {
+              "production": 18.96666666666667,
+              "scarcity": 0.14856410256410196,
+              "robber": 0,
+              "diversity": 8.98679230769231,
+              "port": 0.2673611111111111,
+              "handValue": 0,
+              "expansion": 2.0669489858058605
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-1,-1;-1,0",
+            "plannedSecond": [
+              "v:0,-1;0,0;1,-1",
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 30.325307615231996,
+            "rankScore": 30.325307615231996,
+            "breakdown": {
+              "production": 18.96666666666667,
+              "scarcity": 0.14856410256410196,
+              "robber": 0,
+              "diversity": 8.98679230769231,
+              "port": 0.2673611111111111,
+              "handValue": 0,
+              "expansion": 1.955923427197802
+            }
+          },
+          {
+            "firstPick": "v:0,0;1,-1;1,0",
+            "firstRoad": "e:1,-1;1,0",
+            "plannedSecond": [
+              "v:-1,-2;-1,-1;0,-2",
+              "v:-3,1;-2,0;-2,1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 30.318731722374856,
+            "rankScore": 30.318731722374856,
+            "breakdown": {
+              "production": 20.000000000000004,
+              "scarcity": -0.3468461538461544,
+              "robber": 0,
+              "diversity": 7.758606593406596,
+              "port": 1.3368055555555556,
+              "handValue": 0,
+              "expansion": 1.5701657272588523
+            }
+          },
+          {
+            "firstPick": "v:-2,1;-2,2;-1,1",
+            "firstRoad": "e:-2,1;-1,1",
+            "plannedSecond": [
+              "v:-1,1;0,0;0,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 28.428954728327227,
+            "rankScore": 28.428954728327227,
+            "breakdown": {
+              "production": 19.400000000000002,
+              "scarcity": -0.6111025641025646,
+              "robber": 0,
+              "diversity": 7.260930402930402,
+              "port": 0.3666666666666667,
+              "handValue": 0,
+              "expansion": 2.0124602228327233
+            }
+          },
+          {
+            "firstPick": "v:1,-1;1,0;2,-1",
+            "firstRoad": "e:1,-1;1,0",
+            "plannedSecond": [
+              "v:1,1;2,0;2,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 28.234125815018317,
+            "rankScore": 28.234125815018317,
+            "breakdown": {
+              "production": 19.125,
+              "scarcity": -0.18917948717948765,
+              "robber": 0,
+              "diversity": 6.665825641025642,
+              "port": 0.5729166666666669,
+              "handValue": 0,
+              "expansion": 2.059562994505495
+            }
+          },
+          {
+            "firstPick": "v:-2,-1;-2,0;-1,-1",
+            "firstRoad": "e:-2,0;-1,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 28.190643473748473,
+            "rankScore": 28.190643473748473,
+            "breakdown": {
+              "production": 18.575,
+              "scarcity": -0.09846153846153904,
+              "robber": 0,
+              "diversity": 6.917978021978023,
+              "port": 0.7791666666666665,
+              "handValue": 0,
+              "expansion": 2.0169603235653235
+            }
+          },
+          {
+            "firstPick": "v:-1,1;0,0;0,1",
+            "firstRoad": "e:0,0;0,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:-2,-1;-2,0;-1,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 27.794245093101345,
+            "rankScore": 27.794245093101345,
+            "breakdown": {
+              "production": 18.625000000000004,
+              "scarcity": -0.47064102564102606,
+              "robber": 0,
+              "diversity": 7.379143589743589,
+              "port": 0.4086805555555555,
+              "handValue": 0,
+              "expansion": 1.8520619734432235
+            }
+          },
+          {
+            "firstPick": "v:-3,1;-2,0;-2,1",
+            "firstRoad": "e:-3,1;-2,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:0,-1;0,0;1,-1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 27.77046904151404,
+            "rankScore": 27.77046904151404,
+            "breakdown": {
+              "production": 18.09166666666667,
+              "scarcity": -0.11143589743589803,
+              "robber": 0,
+              "diversity": 7.5254589743589735,
+              "port": 0.1489583333333333,
+              "handValue": 0,
+              "expansion": 2.1158209645909647
+            }
+          },
+          {
+            "firstPick": "v:0,-1;0,0;1,-1",
+            "firstRoad": "e:0,0;1,-1",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 27.74756241300366,
+            "rankScore": 27.74756241300366,
+            "breakdown": {
+              "production": 18.2,
+              "scarcity": -0.3161025641025647,
+              "robber": 0,
+              "diversity": 7.8269684981684975,
+              "port": 0.21388888888888882,
+              "handValue": 0,
+              "expansion": 1.8228075900488407
+            }
+          },
+          {
+            "firstPick": "v:1,1;2,0;2,1",
+            "firstRoad": "e:1,1;2,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;2,-2;2,-1",
+              "v:1,-1;1,0;2,-1"
+            ],
+            "survival": 1,
+            "score": 27.727881831501833,
+            "rankScore": 27.727881831501833,
+            "breakdown": {
+              "production": 18.025000000000002,
+              "scarcity": -0.10961538461538518,
+              "robber": 0,
+              "diversity": 7.511120879120878,
+              "port": 0.37812500000000004,
+              "handValue": 0,
+              "expansion": 1.923251336996337
+            }
+          },
+          {
+            "firstPick": "v:-1,-1;0,-2;0,-1",
+            "firstRoad": "e:-1,-1;0,-1",
+            "plannedSecond": [
+              "v:0,-1;0,0;1,-1",
+              "v:-2,1;-2,2;-1,1",
+              "v:0,2;1,1;1,2"
+            ],
+            "survival": 1,
+            "score": 27.5331870497558,
+            "rankScore": 27.5331870497558,
+            "breakdown": {
+              "production": 18.158333333333335,
+              "scarcity": -0.5229230769230774,
+              "robber": 0,
+              "diversity": 7.490154578754578,
+              "port": 0.3743055555555556,
+              "handValue": 0,
+              "expansion": 2.033316659035409
+            }
+          },
+          {
+            "firstPick": "v:1,-2;1,-1;2,-2",
+            "firstRoad": "e:1,-1;2,-2",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 27.12690637362638,
+            "rankScore": 27.12690637362638,
+            "breakdown": {
+              "production": 16.350000000000005,
+              "scarcity": 0.11523076923076876,
+              "robber": 0,
+              "diversity": 8.580006593406594,
+              "port": 0.15277777777777776,
+              "handValue": 0,
+              "expansion": 1.9288912332112333
+            }
+          },
+          {
+            "firstPick": "v:1,-1;2,-2;2,-1",
+            "firstRoad": "e:1,-1;2,-1",
+            "plannedSecond": [
+              "v:-2,-1;-2,0;-1,-1",
+              "v:-3,1;-2,0;-2,1",
+              "v:-1,-1;0,-2;0,-1"
+            ],
+            "survival": 1,
+            "score": 26.973439938949937,
+            "rankScore": 26.973439938949937,
+            "breakdown": {
+              "production": 17.258333333333333,
+              "scarcity": -0.15843589743589795,
+              "robber": 0,
+              "diversity": 7.474235164835165,
+              "port": 0.3743055555555555,
+              "handValue": 0,
+              "expansion": 2.025001782661783
+            }
+          },
+          {
+            "firstPick": "v:1,0;2,-1;2,0",
+            "firstRoad": "e:1,0;2,-1",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 26.723015670787547,
+            "rankScore": 26.723015670787547,
+            "breakdown": {
+              "production": 17.900000000000002,
+              "scarcity": -0.5337435897435902,
+              "robber": 0,
+              "diversity": 7.332654945054945,
+              "port": 0.18333333333333332,
+              "handValue": 0,
+              "expansion": 1.8407709821428568
+            }
+          },
+          {
+            "firstPick": "v:-1,-2;-1,-1;0,-2",
+            "firstRoad": "e:-1,-2;-1,-1",
+            "plannedSecond": [
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1",
+              "v:-2,1;-2,2;-1,1"
+            ],
+            "survival": 1,
+            "score": 26.557975373931626,
+            "rankScore": 26.557975373931626,
+            "breakdown": {
+              "production": 16.883333333333336,
+              "scarcity": -0.3468974358974363,
+              "robber": 0,
+              "diversity": 6.857213186813186,
+              "port": 1.2527777777777778,
+              "handValue": 0,
+              "expansion": 1.911548511904762
+            }
+          },
+          {
+            "firstPick": "v:-3,2;-2,1;-2,2",
+            "firstRoad": "e:-3,2;-2,1",
+            "plannedSecond": [
+              "v:-1,1;0,0;0,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 26.463668122710626,
+            "rankScore": 26.463668122710626,
+            "breakdown": {
+              "production": 17.750000000000004,
+              "scarcity": -0.39343589743589785,
+              "robber": 0,
+              "diversity": 7.015006593406594,
+              "port": 0.31319444444444444,
+              "handValue": 0,
+              "expansion": 1.7789029822954825
+            }
+          },
+          {
+            "firstPick": "v:-1,1;-1,2;0,1",
+            "firstRoad": "e:-1,1;-1,2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 25.85348809523809,
+            "rankScore": 25.85348809523809,
+            "breakdown": {
+              "production": 16.125,
+              "scarcity": -0.39076923076923126,
+              "robber": 0,
+              "diversity": 7.727663736263733,
+              "port": 0.36284722222222227,
+              "handValue": 0,
+              "expansion": 2.0287463675213675
+            }
+          },
+          {
+            "firstPick": "v:0,-1;1,-2;1,-1",
+            "firstRoad": "e:0,-1;1,-1",
+            "plannedSecond": [
+              "v:1,1;2,0;2,1",
+              "v:-3,1;-2,0;-2,1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 25.793360376221,
+            "rankScore": 25.793360376221,
+            "breakdown": {
+              "production": 15.575000000000001,
+              "scarcity": 0.17523076923076866,
+              "robber": 0,
+              "diversity": 7.88814945054945,
+              "port": 0.15659722222222222,
+              "handValue": 0,
+              "expansion": 1.998382934218559
+            }
+          },
+          {
+            "firstPick": "v:0,-2;0,-1;1,-2",
+            "firstRoad": "e:0,-1;1,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 25.37950499084249,
+            "rankScore": 25.37950499084249,
+            "breakdown": {
+              "production": 16.25,
+              "scarcity": -0.40448717948718005,
+              "robber": 0,
+              "diversity": 7.192890842490843,
+              "port": 0.24826388888888887,
+              "handValue": 0,
+              "expansion": 2.0928374389499393
+            }
+          },
+          {
+            "firstPick": "v:-2,2;-1,1;-1,2",
+            "firstRoad": "e:-1,1;-1,2",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 24.326985184676435,
+            "rankScore": 24.326985184676435,
+            "breakdown": {
+              "production": 15.250000000000002,
+              "scarcity": -0.17376923076923115,
+              "robber": 0,
+              "diversity": 7.240035164835166,
+              "port": 0.24444444444444446,
+              "handValue": 0,
+              "expansion": 1.7662748061660565
+            }
+          },
+          {
+            "firstPick": "v:-1,-1;-1,0;0,-1",
+            "firstRoad": "e:-1,0;0,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 24.135532771672768,
+            "rankScore": 24.135532771672768,
+            "breakdown": {
+              "production": 17.441666666666666,
+              "scarcity": -0.6491282051282055,
+              "robber": 0,
+              "diversity": 4.778030402930403,
+              "port": 0.4392361111111111,
+              "handValue": 0,
+              "expansion": 2.125727796092797
+            }
+          },
+          {
+            "firstPick": "v:-3,0;-2,-1;-2,0",
+            "firstRoad": "e:-2,-1;-2,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 24.04000879120879,
+            "rankScore": 24.04000879120879,
+            "breakdown": {
+              "production": 14.575000000000001,
+              "scarcity": 0.2015384615384611,
+              "robber": 0,
+              "diversity": 6.825406593406593,
+              "port": 0.27499999999999997,
+              "handValue": 0,
+              "expansion": 2.163063736263736
+            }
+          },
+          {
+            "firstPick": "v:-3,0;-3,1;-2,0",
+            "firstRoad": "e:-3,1;-2,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:0,-1;0,0;1,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 23.778625276251528,
+            "rankScore": 23.778625276251528,
+            "breakdown": {
+              "production": 14.225000000000001,
+              "scarcity": 0.1592307692307688,
+              "robber": 0,
+              "diversity": 7.27112087912088,
+              "port": 0.05347222222222222,
+              "handValue": 0,
+              "expansion": 2.069801405677656
+            }
+          },
+          {
+            "firstPick": "v:-2,1;-1,0;-1,1",
+            "firstRoad": "e:-2,1;-1,0",
+            "plannedSecond": [
+              "v:-1,2;0,1;0,2",
+              "v:0,-1;0,0;1,-1",
+              "v:1,-1;1,0;2,-1"
+            ],
+            "survival": 1,
+            "score": 23.72509550518926,
+            "rankScore": 23.72509550518926,
+            "breakdown": {
+              "production": 15.066666666666668,
+              "scarcity": -0.282589743589744,
+              "robber": 0,
+              "diversity": 6.4516406593406606,
+              "port": 0.36284722222222227,
+              "handValue": 0,
+              "expansion": 2.1265307005494507
+            }
+          },
+          {
+            "firstPick": "v:-1,0;0,-1;0,0",
+            "firstRoad": "e:0,-1;0,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 23.72391604090354,
+            "rankScore": 23.72391604090354,
+            "breakdown": {
+              "production": 16.575,
+              "scarcity": -0.618461538461539,
+              "robber": 0,
+              "diversity": 5.341978021978022,
+              "port": 0.27499999999999997,
+              "handValue": 0,
+              "expansion": 2.150399557387057
+            }
+          },
+          {
+            "firstPick": "v:1,1;1,2;2,1",
+            "firstRoad": "e:1,1;2,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 23.576497032967033,
+            "rankScore": 23.576497032967033,
+            "breakdown": {
+              "production": 14.575000000000001,
+              "scarcity": 0.2015384615384611,
+              "robber": 0,
+              "diversity": 6.865406593406593,
+              "port": 0.06874999999999999,
+              "handValue": 0,
+              "expansion": 1.8658019780219781
+            }
+          },
+          {
+            "firstPick": "v:-1,0;-1,1;0,0",
+            "firstRoad": "e:-1,0;-1,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 23.395753124236876,
+            "rankScore": 23.395753124236876,
+            "breakdown": {
+              "production": 16.474999999999998,
+              "scarcity": -0.6184615384615387,
+              "robber": 0,
+              "diversity": 4.889406593406593,
+              "port": 0.4010416666666667,
+              "handValue": 0,
+              "expansion": 2.2487664026251526
+            }
+          },
+          {
+            "firstPick": "v:0,-2;1,-3;1,-2",
+            "firstRoad": "e:0,-2;1,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:0,-1;0,0;1,-1",
+              "v:1,-1;1,0;2,-1"
+            ],
+            "survival": 1,
+            "score": 22.871896878815626,
+            "rankScore": 22.871896878815626,
+            "breakdown": {
+              "production": 14.524999999999999,
+              "scarcity": -0.24333333333333365,
+              "robber": 0,
+              "diversity": 6.2936527472527475,
+              "port": 0.2635416666666667,
+              "handValue": 0,
+              "expansion": 2.0330357982295477
+            }
+          },
+          {
+            "firstPick": "v:-1,-2;0,-3;0,-2",
+            "firstRoad": "e:-1,-2;0,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 22.66628708028083,
+            "rankScore": 22.66628708028083,
+            "breakdown": {
+              "production": 13.875,
+              "scarcity": -0.2644615384615388,
+              "robber": 0,
+              "diversity": 6.013568498168499,
+              "port": 1.1458333333333333,
+              "handValue": 0,
+              "expansion": 1.8963467872405377
+            }
+          },
+          {
+            "firstPick": "v:-2,2;-2,3;-1,2",
+            "firstRoad": "e:-2,2;-1,2",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 22.536763519536017,
+            "rankScore": 22.536763519536017,
+            "breakdown": {
+              "production": 13.6,
+              "scarcity": 0.04389743589743549,
+              "robber": 0,
+              "diversity": 6.5564923076923085,
+              "port": 0.5118055555555556,
+              "handValue": 0,
+              "expansion": 1.82456822039072
+            }
+          },
+          {
+            "firstPick": "v:2,-1;2,0;3,-1",
+            "firstRoad": "e:2,-1;2,0",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 22.33303894993895,
+            "rankScore": 22.33303894993895,
+            "breakdown": {
+              "production": 16.025,
+              "scarcity": -0.9084615384615388,
+              "robber": 0,
+              "diversity": 4.151120879120881,
+              "port": 0.8937499999999999,
+              "handValue": 0,
+              "expansion": 2.1716296092796097
+            }
+          },
+          {
+            "firstPick": "v:-3,3;-2,2;-2,3",
+            "firstRoad": "e:-3,3;-2,2",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:-3,1;-2,0;-2,1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 22.2758902991453,
+            "rankScore": 22.2758902991453,
+            "breakdown": {
+              "production": 13.558333333333332,
+              "scarcity": 0.04389743589743549,
+              "robber": 0,
+              "diversity": 6.544301831501833,
+              "port": 0.3895833333333332,
+              "handValue": 0,
+              "expansion": 1.7397743650793656
+            }
+          },
+          {
+            "firstPick": "v:-3,2;-3,3;-2,2",
+            "firstRoad": "e:-3,2;-2,2",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 1,
+            "score": 22.076015440323566,
+            "rankScore": 22.076015440323566,
+            "breakdown": {
+              "production": 13.408333333333333,
+              "scarcity": 0.14156410256410212,
+              "robber": 0,
+              "diversity": 6.6593304029304035,
+              "port": 0.14131944444444441,
+              "handValue": 0,
+              "expansion": 1.7254681570512818
+            }
+          },
+          {
+            "firstPick": "v:0,-3;0,-2;1,-3",
+            "firstRoad": "e:0,-3;0,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:0,-1;0,0;1,-1",
+              "v:1,-1;1,0;2,-1"
+            ],
+            "survival": 1,
+            "score": 21.724662530525034,
+            "rankScore": 21.724662530525034,
+            "breakdown": {
+              "production": 13.725000000000001,
+              "scarcity": -0.29933333333333373,
+              "robber": 0,
+              "diversity": 6.2936527472527475,
+              "port": 0.240625,
+              "handValue": 0,
+              "expansion": 1.764718116605617
+            }
+          },
+          {
+            "firstPick": "v:2,-2;2,-1;3,-2",
+            "firstRoad": "e:2,-2;2,-1",
+            "plannedSecond": [
+              "v:0,-1;0,0;1,-1",
+              "v:-2,1;-2,2;-1,1",
+              "v:-1,1;0,0;0,1"
+            ],
+            "survival": 1,
+            "score": 21.61854874923688,
+            "rankScore": 21.61854874923688,
+            "breakdown": {
+              "production": 13.9,
+              "scarcity": -0.7589743589743593,
+              "robber": 0,
+              "diversity": 4.148381684981686,
+              "port": 2.0854166666666667,
+              "handValue": 0,
+              "expansion": 2.243724756562882
+            }
+          },
+          {
+            "firstPick": "v:1,-2;2,-3;2,-2",
+            "firstRoad": "e:1,-2;2,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 20.549630219780216,
+            "rankScore": 20.549630219780216,
+            "breakdown": {
+              "production": 13.749999999999998,
+              "scarcity": -0.6261794871794876,
+              "robber": 0,
+              "diversity": 4.812567032967034,
+              "port": 0.5118055555555555,
+              "handValue": 0,
+              "expansion": 2.101437118437119
+            }
+          },
+          {
+            "firstPick": "v:2,0;3,-1;3,0",
+            "firstRoad": "e:2,0;3,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 20.28933923992674,
+            "rankScore": 20.28933923992674,
+            "breakdown": {
+              "production": 14.424999999999999,
+              "scarcity": -0.7884615384615388,
+              "robber": 0,
+              "diversity": 4.01854945054945,
+              "port": 0.6645833333333333,
+              "handValue": 0,
+              "expansion": 1.9696679945054942
+            }
+          },
+          {
+            "firstPick": "v:-2,-1;-1,-2;-1,-1",
+            "firstRoad": "e:-2,-1;-1,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:-1,1;0,0;0,1"
+            ],
+            "survival": 1,
+            "score": 19.958674571123318,
+            "rankScore": 19.958674571123318,
+            "breakdown": {
+              "production": 14.399999999999999,
+              "scarcity": -0.7166666666666671,
+              "robber": 0,
+              "diversity": 3.7690007326007335,
+              "port": 0.3819444444444445,
+              "handValue": 0,
+              "expansion": 2.124396060744811
+            }
+          },
+          {
+            "firstPick": "v:-3,1;-3,2;-2,1",
+            "firstRoad": "e:-3,1;-2,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:-1,1;0,0;0,1"
+            ],
+            "survival": 1,
+            "score": 19.779497968559216,
+            "rankScore": 19.779497968559216,
+            "breakdown": {
+              "production": 14.549999999999999,
+              "scarcity": -0.726666666666667,
+              "robber": 0,
+              "diversity": 3.610905494505495,
+              "port": 0.15277777777777776,
+              "handValue": 0,
+              "expansion": 2.192481362942613
+            }
+          },
+          {
+            "firstPick": "v:2,0;2,1;3,0",
+            "firstRoad": "e:2,0;2,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 19.765240979853477,
+            "rankScore": 19.765240979853477,
+            "breakdown": {
+              "production": 14.424999999999999,
+              "scarcity": -0.7884615384615388,
+              "robber": 0,
+              "diversity": 4.01854945054945,
+              "port": 0.32083333333333336,
+              "handValue": 0,
+              "expansion": 1.7893197344322342
+            }
+          },
+          {
+            "firstPick": "v:-1,3;0,2;0,3",
+            "firstRoad": "e:0,2;0,3",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,1;-2,2;-1,1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 19.747418337148964,
+            "rankScore": 19.747418337148964,
+            "breakdown": {
+              "production": 11.700000000000001,
+              "scarcity": -0.23617948717948745,
+              "robber": 0,
+              "diversity": 4.780896703296705,
+              "port": 1.9364583333333334,
+              "handValue": 0,
+              "expansion": 1.5662427876984129
+            }
+          },
+          {
+            "firstPick": "v:2,-2;3,-3;3,-2",
+            "firstRoad": "e:2,-2;3,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:0,-1;0,0;1,-1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 19.66053110347985,
+            "rankScore": 19.66053110347985,
+            "breakdown": {
+              "production": 12.6,
+              "scarcity": -0.7244871794871798,
+              "robber": 0,
+              "diversity": 3.9333956043956046,
+              "port": 1.7836805555555557,
+              "handValue": 0,
+              "expansion": 2.067942123015873
+            }
+          },
+          {
+            "firstPick": "v:-1,2;-1,3;0,2",
+            "firstRoad": "e:-1,2;0,2",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,1;-2,2;-1,1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 19.655233967490844,
+            "rankScore": 19.655233967490844,
+            "breakdown": {
+              "production": 11.700000000000001,
+              "scarcity": -0.23617948717948745,
+              "robber": 0,
+              "diversity": 4.780896703296705,
+              "port": 1.8600694444444448,
+              "handValue": 0,
+              "expansion": 1.550447306929182
+            }
+          },
+          {
+            "firstPick": "v:0,2;0,3;1,2",
+            "firstRoad": "e:0,2;1,2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 18.387176311813185,
+            "rankScore": 18.387176311813185,
+            "breakdown": {
+              "production": 12.4,
+              "scarcity": -0.3611025641025644,
+              "robber": 0,
+              "diversity": 4.396902564102565,
+              "port": 0.44687499999999997,
+              "handValue": 0,
+              "expansion": 1.504501311813187
+            }
+          },
+          {
+            "firstPick": "v:2,-3;2,-2;3,-3",
+            "firstRoad": "e:2,-3;2,-2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 18.219392536630036,
+            "rankScore": 18.219392536630036,
+            "breakdown": {
+              "production": 12.950000000000001,
+              "scarcity": -0.6821794871794875,
+              "robber": 0,
+              "diversity": 3.8419670329670335,
+              "port": 0.3170138888888889,
+              "handValue": 0,
+              "expansion": 1.792591101953602
+            }
+          },
+          {
+            "firstPick": "v:1,-3;1,-2;2,-3",
+            "firstRoad": "e:1,-2;2,-3",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 17.4823393009768,
+            "rankScore": 17.4823393009768,
+            "breakdown": {
+              "production": 11.5,
+              "scarcity": -0.44617948717948747,
+              "robber": 0,
+              "diversity": 4.180662271062271,
+              "port": 0.29027777777777775,
+              "handValue": 0,
+              "expansion": 1.9575787393162398
+            }
+          },
+          {
+            "firstPick": "v:2,-1;3,-2;3,-1",
+            "firstRoad": "e:2,-1;3,-1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:0,-1;0,0;1,-1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 17.480507524420023,
+            "rankScore": 17.480507524420023,
+            "breakdown": {
+              "production": 11.950000000000001,
+              "scarcity": -0.6644871794871798,
+              "robber": 0,
+              "diversity": 3.8450146520146515,
+              "port": 0.1680555555555555,
+              "handValue": 0,
+              "expansion": 2.181924496336996
+            }
+          },
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1"
+            ],
+            "survival": 0.5,
+            "score": 33.843003653846154,
+            "rankScore": 16.921501826923077,
+            "breakdown": {
+              "production": 20.5,
+              "scarcity": 0.08092307692307626,
+              "robber": 0,
+              "diversity": 11.005169230769232,
+              "port": 0.27499999999999997,
+              "handValue": 0,
+              "expansion": 1.9819113461538462
+            }
+          },
+          {
+            "firstPick": "v:0,0;0,1;1,0",
+            "firstRoad": "e:0,1;1,0",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-2,-1;-2,0;-1,-1"
+            ],
+            "survival": 0.5,
+            "score": 32.312992216117216,
+            "rankScore": 16.156496108058608,
+            "breakdown": {
+              "production": 18.95,
+              "scarcity": 0.31692307692307636,
+              "robber": 0,
+              "diversity": 10.765169230769231,
+              "port": 0.2291666666666666,
+              "handValue": 0,
+              "expansion": 2.0517332417582423
+            }
+          },
+          {
+            "firstPick": "v:-2,3;-1,2;-1,3",
+            "firstRoad": "e:-1,2;-1,3",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,-1;1,0;2,-1",
+              "v:1,-1;2,-2;2,-1"
+            ],
+            "survival": 1,
+            "score": 15.527126445360194,
+            "rankScore": 15.527126445360194,
+            "breakdown": {
+              "production": 10.674999999999999,
+              "scarcity": -0.4884615384615387,
+              "robber": 0,
+              "diversity": 3.332835164835165,
+              "port": 0.18333333333333332,
+              "handValue": 0,
+              "expansion": 1.8244194856532359
+            }
+          },
+          {
+            "firstPick": "v:0,2;1,1;1,2",
+            "firstRoad": "e:0,2;1,1",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 0.5,
+            "score": 26.57997174908425,
+            "rankScore": 13.289985874542126,
+            "breakdown": {
+              "production": 17,
+              "scarcity": 0.05641025641025591,
+              "robber": 0,
+              "diversity": 7.322930402930403,
+              "port": 0.25972222222222224,
+              "handValue": 0,
+              "expansion": 1.9409088675213673
+            }
+          },
+          {
+            "firstPick": "v:-1,2;0,1;0,2",
+            "firstRoad": "e:0,1;0,2",
+            "plannedSecond": [
+              "v:-2,1;-2,2;-1,1",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 0.5,
+            "score": 26.37027773962149,
+            "rankScore": 13.185138869810745,
+            "breakdown": {
+              "production": 16.6,
+              "scarcity": -0.04589743589743637,
+              "robber": 0,
+              "diversity": 7.479000732600731,
+              "port": 0.5958333333333333,
+              "handValue": 0,
+              "expansion": 1.7413411095848597
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [
+          {
+            "vertexId": "v:0,1;1,0;1,1",
+            "playerId": "aki",
+            "frequency": 0.5
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "planned-second-three",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [
+            {
+              "edgeId": "e:-2,1;-1,1",
+              "playerId": "aki"
+            }
+          ],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p2"
+        },
+        "options": {
+          "rollouts": 4
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 1,
+          "turnIndex": 1,
+          "currentPlayerId": "p2",
+          "myPickIndices": [
+            1,
+            6
+          ],
+          "myRemainingPickIndices": [
+            1,
+            6
+          ],
+          "remainingPickIndices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:0,1;1,0;1,1",
+            "firstRoad": "e:0,1;1,0",
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1",
+              "v:-1,-1;0,-2;0,-1",
+              "v:1,0;2,-1;2,0"
+            ],
+            "survival": 1,
+            "score": 33.900728187957874,
+            "rankScore": 33.900728187957874,
+            "breakdown": {
+              "production": 20.45,
+              "scarcity": 0.8696538461538454,
+              "robber": 0,
+              "diversity": 9.416685714285713,
+              "port": 1.2890625,
+              "handValue": 0,
+              "expansion": 1.875326127518315
+            }
+          },
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;1,1",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1"
+            ],
+            "survival": 1,
+            "score": 33.89552300137363,
+            "rankScore": 33.89552300137363,
+            "breakdown": {
+              "production": 20.5,
+              "scarcity": 0.08092307692307625,
+              "robber": 0,
+              "diversity": 11.005169230769232,
+              "port": 0.27499999999999997,
+              "handValue": 0,
+              "expansion": 2.034430693681319
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;1,1",
+            "plannedSecond": [
+              "v:0,-1;0,0;1,-1"
+            ],
+            "survival": 1,
+            "score": 33.52283456959707,
+            "rankScore": 33.52283456959707,
+            "breakdown": {
+              "production": 20.6,
+              "scarcity": 0.38384615384615306,
+              "robber": 0,
+              "diversity": 9.770949450549452,
+              "port": 0.275,
+              "handValue": 0,
+              "expansion": 2.4930389652014653
+            }
+          },
+          {
+            "firstPick": "v:0,0;0,1;1,0",
+            "firstRoad": "e:0,1;1,0",
+            "plannedSecond": [
+              "v:-2,-1;-2,0;-1,-1",
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 33.13523728250916,
+            "rankScore": 33.13523728250916,
+            "breakdown": {
+              "production": 19.275000000000002,
+              "scarcity": 0.37442307692307636,
+              "robber": 0,
+              "diversity": 10.937883516483517,
+              "port": 0.3208333333333333,
+              "handValue": 0,
+              "expansion": 2.227097355769231
+            }
+          },
+          {
+            "firstPick": "v:0,0;1,-1;1,0",
+            "firstRoad": "e:0,0;1,0",
+            "plannedSecond": [
+              "v:-1,-2;-1,-1;0,-2"
+            ],
+            "survival": 1,
+            "score": 31.35633354739011,
+            "rankScore": 31.35633354739011,
+            "breakdown": {
+              "production": 19.650000000000002,
+              "scarcity": -0.5798461538461542,
+              "robber": 0,
+              "diversity": 7.87352087912088,
+              "port": 2.291666666666667,
+              "handValue": 0,
+              "expansion": 2.1209921554487186
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-1,-1;-1,0",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:1,-1;2,-2;2,-1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 30.472594585622712,
+            "rankScore": 30.472594585622712,
+            "breakdown": {
+              "production": 18.7375,
+              "scarcity": 0.28707692307692256,
+              "robber": 0,
+              "diversity": 9.462695054945055,
+              "port": 0.24635416666666665,
+              "handValue": 0,
+              "expansion": 1.738968440934066
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:0,0;0,1;1,0",
+              "v:1,-1;2,-2;2,-1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 30.13423506181319,
+            "rankScore": 30.13423506181319,
+            "breakdown": {
+              "production": 18.7375,
+              "scarcity": 0.28707692307692256,
+              "robber": 0,
+              "diversity": 9.462695054945055,
+              "port": 0.24635416666666665,
+              "handValue": 0,
+              "expansion": 1.4006089171245422
+            }
+          },
+          {
+            "firstPick": "v:1,-1;1,0;2,-1",
+            "firstRoad": "e:1,0;2,-1",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1",
+              "v:-2,-1;-2,0;-1,-1",
+              "v:-2,0;-1,-1;-1,0"
+            ],
+            "survival": 1,
+            "score": 29.68012336309524,
+            "rankScore": 29.68012336309524,
+            "breakdown": {
+              "production": 20.2875,
+              "scarcity": -0.19861538461538503,
+              "robber": 0,
+              "diversity": 6.544678021978022,
+              "port": 0.5729166666666667,
+              "handValue": 0,
+              "expansion": 2.473644059065934
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "first-road-null",
+      "request": {
+        "board": {
+          "schemaVersion": 1,
+          "layout": "standard4",
+          "hexes": [
+            {
+              "coord": {
+                "q": 0,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -2
+              },
+              "tile": "brick",
+              "numberToken": 12
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -2
+              },
+              "tile": "sheep",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 3
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": -1
+              },
+              "tile": "wheat",
+              "numberToken": 9
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": -1
+              },
+              "tile": "wood",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 0
+              },
+              "tile": "ore",
+              "numberToken": 2
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 0
+              },
+              "tile": "wheat",
+              "numberToken": 4
+            },
+            {
+              "coord": {
+                "q": 2,
+                "r": 0
+              },
+              "tile": "sheep",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 1
+              },
+              "tile": "wood",
+              "numberToken": 8
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 1
+              },
+              "tile": "sheep",
+              "numberToken": 11
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 1
+              },
+              "tile": "brick",
+              "numberToken": 6
+            },
+            {
+              "coord": {
+                "q": 1,
+                "r": 1
+              },
+              "tile": "ore",
+              "numberToken": 10
+            },
+            {
+              "coord": {
+                "q": -2,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 5
+            },
+            {
+              "coord": {
+                "q": -1,
+                "r": 2
+              },
+              "tile": "desert",
+              "numberToken": null
+            },
+            {
+              "coord": {
+                "q": 0,
+                "r": 2
+              },
+              "tile": "wheat",
+              "numberToken": 3
+            }
+          ],
+          "ports": [
+            {
+              "edgeId": "e:-2,-1;-2,0",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-1,-2;0,-2",
+              "resource": "wheat",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:1,-2;2,-3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:2,-2;3,-2",
+              "resource": "sheep",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:2,0;3,-1",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:1,1;1,2",
+              "resource": "brick",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-1,3;0,2",
+              "resource": "wood",
+              "rate": 2
+            },
+            {
+              "edgeId": "e:-2,2;-2,3",
+              "resource": null,
+              "rate": 3
+            },
+            {
+              "edgeId": "e:-3,1;-2,1",
+              "resource": "ore",
+              "rate": 2
+            }
+          ],
+          "robber": {
+            "q": -1,
+            "r": 2
+          },
+          "roads": [
+            {
+              "edgeId": "e:-2,1;-1,1",
+              "playerId": "aki"
+            },
+            {
+              "edgeId": "e:1,-1;1,0",
+              "playerId": "p2"
+            },
+            {
+              "edgeId": "e:0,1;1,0",
+              "playerId": "p4"
+            },
+            {
+              "edgeId": "e:0,1;1,1",
+              "playerId": "p4"
+            },
+            {
+              "edgeId": "e:1,0;1,1",
+              "playerId": "p4"
+            }
+          ],
+          "buildings": [
+            {
+              "vertexId": "v:-2,1;-2,2;-1,1",
+              "playerId": "aki",
+              "tier": "settlement"
+            },
+            {
+              "vertexId": "v:0,0;1,-1;1,0",
+              "playerId": "p2",
+              "tier": "settlement"
+            }
+          ],
+          "players": [
+            {
+              "id": "aki",
+              "name": "aki",
+              "color": "#c23f38"
+            },
+            {
+              "id": "p2",
+              "name": "P2",
+              "color": "#3063ba"
+            },
+            {
+              "id": "p3",
+              "name": "P3",
+              "color": "#e58331"
+            },
+            {
+              "id": "p4",
+              "name": "P4",
+              "color": "#ffffff"
+            }
+          ],
+          "mePlayerId": "p3"
+        },
+        "options": {
+          "rollouts": 2
+        }
+      },
+      "response": {
+        "status": "ready",
+        "draft": {
+          "sequence": [
+            "aki",
+            "p2",
+            "p3",
+            "p4",
+            "p4",
+            "p3",
+            "p2",
+            "aki"
+          ],
+          "placedCount": 2,
+          "turnIndex": 2,
+          "currentPlayerId": "p3",
+          "myPickIndices": [
+            2,
+            5
+          ],
+          "myRemainingPickIndices": [
+            2,
+            5
+          ],
+          "remainingPickIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "warnings": []
+        },
+        "recommendations": [
+          {
+            "firstPick": "v:1,0;1,1;2,0",
+            "firstRoad": "e:1,0;2,0",
+            "plannedSecond": [
+              "v:-1,-1;0,-2;0,-1"
+            ],
+            "survival": 1,
+            "score": 33.27729075091575,
+            "rankScore": 33.27729075091575,
+            "breakdown": {
+              "production": 20.5,
+              "scarcity": 0.08092307692307626,
+              "robber": 0,
+              "diversity": 11.00516923076923,
+              "port": 0.27499999999999997,
+              "handValue": 0,
+              "expansion": 1.4161984432234433
+            }
+          },
+          {
+            "firstPick": "v:0,1;1,0;1,1",
+            "firstRoad": null,
+            "plannedSecond": [
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 33.1869122481685,
+            "rankScore": 33.1869122481685,
+            "breakdown": {
+              "production": 19.85,
+              "scarcity": 1.2469230769230761,
+              "robber": 0,
+              "diversity": 9.608883516483516,
+              "port": 1.9708333333333332,
+              "handValue": 0,
+              "expansion": 0.5102723214285714
+            }
+          },
+          {
+            "firstPick": "v:0,1;0,2;1,1",
+            "firstRoad": "e:0,1;0,2",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:-3,1;-2,0;-2,1"
+            ],
+            "survival": 1,
+            "score": 32.38424740155678,
+            "rankScore": 32.38424740155678,
+            "breakdown": {
+              "production": 19.150000000000002,
+              "scarcity": 1.3996153846153838,
+              "robber": 0,
+              "diversity": 8.83796043956044,
+              "port": 1.6500000000000001,
+              "handValue": 0,
+              "expansion": 1.3466715773809523
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-1,-1;-1,0",
+            "firstRoad": "e:-1,-1;-1,0",
+            "plannedSecond": [
+              "v:0,1;0,2;1,1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 31.323997367216116,
+            "rankScore": 31.323997367216116,
+            "breakdown": {
+              "production": 18.725,
+              "scarcity": 0.9299230769230763,
+              "robber": 0,
+              "diversity": 9.304412087912088,
+              "port": 0.6531250000000001,
+              "handValue": 0,
+              "expansion": 1.7115372023809525
+            }
+          },
+          {
+            "firstPick": "v:-2,0;-2,1;-1,0",
+            "firstRoad": "e:-2,0;-1,0",
+            "plannedSecond": [
+              "v:0,1;0,2;1,1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 31.04674284340659,
+            "rankScore": 31.04674284340659,
+            "breakdown": {
+              "production": 18.725,
+              "scarcity": 0.9299230769230763,
+              "robber": 0,
+              "diversity": 9.304412087912088,
+              "port": 0.6531250000000001,
+              "handValue": 0,
+              "expansion": 1.4342826785714287
+            }
+          },
+          {
+            "firstPick": "v:1,-1;2,-2;2,-1",
+            "firstRoad": "e:1,-1;2,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0",
+              "v:0,1;0,2;1,1"
+            ],
+            "survival": 1,
+            "score": 30.6872924496337,
+            "rankScore": 30.6872924496337,
+            "breakdown": {
+              "production": 19.15,
+              "scarcity": 0.306538461538461,
+              "robber": 0,
+              "diversity": 9.108463736263737,
+              "port": 0.2979166666666666,
+              "handValue": 0,
+              "expansion": 1.8243735851648353
+            }
+          },
+          {
+            "firstPick": "v:1,-2;1,-1;2,-2",
+            "firstRoad": "e:1,-2;1,-1",
+            "plannedSecond": [
+              "v:-2,0;-1,-1;-1,0"
+            ],
+            "survival": 1,
+            "score": 29.648398017399263,
+            "rankScore": 29.648398017399263,
+            "breakdown": {
+              "production": 17.65,
+              "scarcity": 0.3452307692307688,
+              "robber": 0,
+              "diversity": 9.770863736263736,
+              "port": 0.20625000000000002,
+              "handValue": 0,
+              "expansion": 1.676053511904762
+            }
+          },
+          {
+            "firstPick": "v:-3,1;-2,0;-2,1",
+            "firstRoad": "e:-2,0;-2,1",
+            "plannedSecond": [
+              "v:0,1;0,2;1,1",
+              "v:1,-2;1,-1;2,-2"
+            ],
+            "survival": 1,
+            "score": 29.606605343406596,
+            "rankScore": 29.606605343406596,
+            "breakdown": {
+              "production": 17.425,
+              "scarcity": 0.6999230769230762,
+              "robber": 0,
+              "diversity": 8.708983516483517,
+              "port": 1.1343750000000001,
+              "handValue": 0,
+              "expansion": 1.6383237499999999
+            }
+          }
+        ],
+        "takenBeforeFirstPick": [],
+        "warnings": []
+      }
     }
   ]
 }

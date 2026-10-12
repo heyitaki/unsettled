@@ -45,6 +45,19 @@ const CLASSES: Record<string, string> = {
   'expansionWeight 0': 'expansion-weight-0',
   'seed 12345': 'seed-12345',
   'default rollouts on the worst-case board': 'worst-case-default-rollouts',
+  'a snake-inconsistent board': 'snake-inconsistent',
+  'a blank tile': 'blank-tile',
+  'a resource hex with no number': 'resource-without-number',
+  'a numberless board': 'numberless-board',
+  'no robber and no desert': 'no-robber-no-desert',
+  'adjacent buildings': 'adjacent-buildings',
+  'no legal vertex': 'no-legal-vertex',
+  'a nested ranking that is not ready': 'nested-not-ready',
+  'the mutual-mate rule': 'mutual-mate',
+  'a mutual pair inside PAIR_TIE': 'pair-inside-tie',
+  'a candidate blocked in the modal pre-window that survives another': 'blocked-in-modal-window',
+  'a plannedSecond list of three': 'planned-second-three',
+  'a null firstRoad': 'first-road-null',
 }
 
 const committed = readFileSync(analysisFile.path, 'utf8')
