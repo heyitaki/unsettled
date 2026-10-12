@@ -14,6 +14,7 @@ use std::cell::{Cell, OnceCell};
 use super::{Board, softmax_pick};
 use crate::placement::app_formula::{AppFormulaScorer, Holdings, js_max};
 use crate::placement::expansion;
+use crate::state::{EMPTY, MAX_SEATS};
 use crate::topology::{Topology, Vertex};
 
 /// Below this, two pair scores are the same pair read in either order: the pair value is
@@ -60,6 +61,38 @@ pub(super) fn block_vertex(topology: &Topology, blocked: &mut [bool], vertex: Ve
     }
 }
 
+/// A window's settlements as bit masks, one bit per vertex, grown pick by pick so that no scan of
+/// the window rebuilds them from `vertex_owner`.
+#[derive(Clone, Copy)]
+struct Standing {
+    by_seat: [u128; MAX_SEATS],
+    settled: u128,
+    /// Every settled vertex and its neighbours.
+    closure: u128,
+}
+
+impl Standing {
+    fn new(topology: &Topology, vertex_owner: &[u8]) -> Self {
+        let mut standing = Self { by_seat: [0; MAX_SEATS], settled: 0, closure: 0 };
+        for (vertex, seat) in vertex_owner.iter().enumerate() {
+            if *seat != EMPTY {
+                standing.settle(topology, vertex as Vertex, *seat);
+            }
+        }
+        standing
+    }
+
+    fn settle(&mut self, topology: &Topology, vertex: Vertex, seat: u8) {
+        let bit = 1 << vertex;
+        self.by_seat[usize::from(seat)] |= bit;
+        self.settled |= bit;
+        self.closure |= bit;
+        for adjacent in topology.vertex_adjacent(vertex) {
+            self.closure |= 1 << adjacent;
+        }
+    }
+}
+
 /// Keeps the best `top_k` scores in order. `<=` ranks a later equal score below an earlier one,
 /// and a NaN score never compares, so it lands at rank 0.
 fn insert_top(
@@ -85,12 +118,19 @@ fn insert_top(
 }
 
 // Vertices this thread priced both ways and found equal, vertices a scan skipped by their bound,
-// and pair candidates skipped by theirs, so a test can tell the fast path ran and that it skipped.
+// pair candidates skipped by theirs, and scans that read their window's masks, so a test can tell
+// the fast path ran, that it skipped, and that a window carried its settlements.
 #[cfg(test)]
 thread_local! {
+    static CARRIED_SCANS: Cell<usize> = const { Cell::new(0) };
     static CHECKED_VERTICES: Cell<usize> = const { Cell::new(0) };
     static SKIPPED_VERTICES: Cell<usize> = const { Cell::new(0) };
     static SKIPPED_PAIRS: Cell<usize> = const { Cell::new(0) };
+}
+
+#[cfg(test)]
+fn carried_scans() -> usize {
+    CARRIED_SCANS.with(Cell::get)
 }
 
 #[cfg(test)]
@@ -119,18 +159,29 @@ pub(super) struct Context<'a> {
     partners: Vec<OnceCell<Vec<f64>>>,
     /// The highest entry of each row of a seat's partner table that a partner could read.
     partner_caps: Vec<OnceCell<Vec<f64>>>,
+    /// The roads as each seat's expansion walk reads them, with no settlement standing.
+    roads: Vec<expansion::Occupancy>,
+    /// The settlements of the window on turn, set by `simulate_window` around each pick it leaves
+    /// to `opponent_pick`. A scan made outside a window finds none and reads `vertex_owner`.
+    standing: Cell<Option<Standing>>,
 }
 
 impl<'a> Context<'a> {
     /// `scorer` is `board.scorer(..)`. Pieces other than roads do not enter the context, so one
     /// serves every scratch board a ranking builds.
     pub(super) fn new(board: &Board, scorer: &'a AppFormulaScorer) -> Self {
+        let seats = board.player_ids.len();
+        let edge_owner = board.owners().1;
         Self {
             scorer,
             topology: board.topology,
-            edge_owner: board.owners().1,
-            partners: vec![OnceCell::new(); board.player_ids.len()],
-            partner_caps: vec![OnceCell::new(); board.player_ids.len()],
+            roads: (0..seats)
+                .map(|seat| expansion::Occupancy::new(scorer, &[], &edge_owner, seat as u8))
+                .collect(),
+            edge_owner,
+            partners: vec![OnceCell::new(); seats],
+            partner_caps: vec![OnceCell::new(); seats],
+            standing: Cell::new(None),
         }
     }
 
@@ -242,7 +293,22 @@ impl<'a> Context<'a> {
             };
             let memo = &mut *memo;
             let scale = scorer.slot_scale(seat);
-            let occupancy = expansion::Occupancy::new(scorer, vertex_owner, &self.edge_owner, seat);
+            let rebuilt = || expansion::Occupancy::new(scorer, vertex_owner, &self.edge_owner, seat);
+            let occupancy = match self.standing.get() {
+                Some(standing) => {
+                    #[cfg(test)]
+                    CARRIED_SCANS.with(|carried| carried.set(carried.get() + 1));
+                    let own = standing.by_seat[usize::from(seat)];
+                    self.roads[usize::from(seat)].with_settlements(
+                        own,
+                        standing.settled & !own,
+                        standing.closure,
+                    )
+                }
+                None => rebuilt(),
+            };
+            #[cfg(any(test, debug_assertions))]
+            assert_eq!(occupancy, rebuilt(), "seat {seat}: the masks carried against rebuilt");
             let serial = memo.serial(scorer.id, occupancy.own_vertices);
             let base_tag = expansion::base_tag(seat, receives_grant);
             let bounds = scorer.expansion_bounds(scale.expansion);
@@ -426,10 +492,11 @@ impl<'a> Context<'a> {
             return (top_vertices, top_scores);
         };
         // Priced as a pair, every vertex is some candidate's partner, so all of them are priced.
-        let mut legal = Vec::new();
-        let mut own = Vec::new();
+        let count = self.topology.vertex_count();
+        let mut legal = Vec::with_capacity(count);
+        let mut own = Vec::with_capacity(count);
         // The scan's two halves kept apart: the walk's value is also the partner's expansion.
-        let mut expansion = Vec::new();
+        let mut expansion = Vec::with_capacity(count);
         let mut keep = |vertex, walk, total| {
             legal.push(vertex);
             expansion.push(walk);
@@ -444,7 +511,7 @@ impl<'a> Context<'a> {
             let plan = self.best_partners(&legal, table, &expansion);
             plan.mate.into_iter().zip(plan.value).map(Some).collect()
         };
-        let mut skip = vec![false; self.topology.vertex_count()];
+        let mut skip = vec![false; count];
         let mut plan = |index: usize| {
             *plans[index].get_or_insert_with(|| {
                 self.best_partner(&legal, table, &expansion, index, &mut skip)
@@ -559,6 +626,9 @@ impl<'a> Context<'a> {
     /// indexed by seat. Each turn draws one uniform whether or not `pick_override` supplies its
     /// pick, and a turn with nothing to pick is skipped. A pick bars its vertex and neighbours in
     /// `blocked` and stands in `vertex_owner` on its vertex alone.
+    ///
+    /// The settlements are read into bit masks once, on entry, and each pick is added to them, so
+    /// the scans of a window do not rebuild the masks from `vertex_owner` turn after turn.
     pub(super) fn simulate_window(
         &self,
         turns: &[Turn],
@@ -570,9 +640,10 @@ impl<'a> Context<'a> {
     ) -> WindowResult {
         let mut result = WindowResult {
             holdings: initial_holdings.to_vec(),
-            pickers: Vec::new(),
-            taken: Vec::new(),
+            pickers: Vec::with_capacity(turns.len()),
+            taken: Vec::with_capacity(turns.len()),
         };
+        let mut standing = Standing::new(self.topology, vertex_owner);
         for turn in turns {
             let uniform = next_uniform();
             let held = result.holdings[usize::from(turn.seat)];
@@ -581,7 +652,10 @@ impl<'a> Context<'a> {
                 .and_then(|pick| pick(&result.taken, &result.pickers, turn.seat, uniform))
                 .filter(|vertex| !blocked[usize::from(*vertex)]);
             let picked = forced.or_else(|| {
-                self.opponent_pick(
+                // Held only across this call: an override may run a nested ranking, whose windows
+                // share the context.
+                self.standing.set(Some(standing));
+                let picked = self.opponent_pick(
                     turn.seat,
                     &held,
                     blocked,
@@ -589,11 +663,14 @@ impl<'a> Context<'a> {
                     uniform,
                     turn.receives_grant,
                     turn.has_later_pick,
-                )
+                );
+                self.standing.set(None);
+                picked
             });
             let Some(vertex) = picked else { continue };
             block_vertex(self.topology, blocked, vertex);
             vertex_owner[usize::from(vertex)] = turn.seat;
+            standing.settle(self.topology, vertex, turn.seat);
             self.scorer
                 .add_to_holdings(&mut result.holdings[usize::from(turn.seat)], vertex);
             result.taken.push(vertex);
@@ -935,6 +1012,25 @@ mod tests {
         assert_eq!(ran.blocked, blocked);
         assert_eq!(ran.vertex_owner, vertex_owner);
         assert_eq!(format!("{:?}", ran.result.holdings), format!("{holdings:?}"));
+    }
+
+    #[test]
+    fn a_window_carries_its_settlements_from_pick_to_pick() {
+        // The board already holds settlements, and every scan of a test build compares the masks
+        // it was handed with the masks rebuilt from `vertex_owner`.
+        let (board, weights) = corpus("mid-first-round");
+        let scorer = board.scorer(weights);
+        let context = Context::new(&board, &scorer);
+        let carried = carried_scans();
+        let ran = run_window(&board, &context, board.blocked(), None);
+        assert_eq!(ran.result.taken.len(), 3);
+        // Each pick is scanned twice in a test build: bounded, then in full.
+        assert_eq!(carried_scans() - carried, 6);
+
+        // A scan outside a window has no masks to read and rebuilds them.
+        let holdings = Holdings::empty();
+        context.best_legal_candidate(3, &holdings, &ran.blocked, &ran.vertex_owner, false);
+        assert_eq!(carried_scans() - carried, 6);
     }
 
     #[test]

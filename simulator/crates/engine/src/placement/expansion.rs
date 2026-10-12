@@ -243,6 +243,12 @@ impl Occupancy {
         masks
     }
 
+    /// These roads around other settlements: the vertices the seat holds, the vertices its rivals
+    /// hold, and every settled vertex with its neighbours.
+    pub(super) fn with_settlements(self, own: u128, rival: u128, blocked: u128) -> Self {
+        Self { own_vertices: own, rival_vertices: rival, blocked, ..self }
+    }
+
     fn restricted(&self, vertices: u128, edges: u128) -> [u128; 4] {
         [
             self.blocked & vertices,

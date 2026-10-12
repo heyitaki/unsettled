@@ -28,15 +28,15 @@ async function fastest(board: Board): Promise<number> {
   return best
 }
 
-// Bounds for the straight port; the speed tasks tighten them.
-it('ranks the worst-case six-player opening in under 1500 ms', async () => {
+// Each bound is under twice the fastest of three measured when it was set: 31 ms and 105 ms.
+it('ranks the worst-case six-player opening in under 60 ms', async () => {
   const time = await fastest(worstCase)
   console.info(`analyze worst-case opening: fastest ${time.toFixed(0)} ms of 3`)
-  expect(time).toBeLessThan(1500)
+  expect(time).toBeLessThan(60)
 }, 45_000)
 
-it('ranks it with three rival rankings ahead in under 5500 ms', async () => {
+it('ranks it with three rival rankings ahead in under 200 ms', async () => {
   const time = await fastest({ ...worstCase, mePlayerId: 'p4' })
   console.info(`analyze worst-case as p4: fastest ${time.toFixed(0)} ms of 3`)
-  expect(time).toBeLessThan(5500)
+  expect(time).toBeLessThan(200)
 }, 90_000)

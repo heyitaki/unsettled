@@ -111,6 +111,9 @@ pub(super) fn rank_candidates(
     let second_receives_grant =
         second_pick_index.is_some_and(|second| receives_second_settlement_grant(draft, second));
 
+    // A mid-window's pieces, copied from its pre-window into the same two buffers each time.
+    let mut blocked = Vec::new();
+    let mut vertex_owner = Vec::new();
     let mut ranked: Vec<(Vertex, Recommendation)> = Vec::new();
     for (scored, candidate) in candidates.iter().enumerate() {
         let mut total = NO_SCORE;
@@ -139,11 +142,11 @@ pub(super) fn rank_candidates(
                 continue;
             }
 
-            let mut blocked = window.blocked.clone();
+            blocked.clone_from(&window.blocked);
             block_vertex(topology, &mut blocked, *candidate);
             // Grows with the mid-window's picks, so the second pick is scored against every
             // settlement standing by then.
-            let mut vertex_owner = window.vertex_owner.clone();
+            vertex_owner.clone_from(&window.vertex_owner);
             vertex_owner[usize::from(*candidate)] = me;
             let mut first_holdings = my_holdings;
             scorer.add_to_holdings(&mut first_holdings, *candidate);
