@@ -83,5 +83,5 @@ export function useJsonFiles({ onImported }: { onImported?: () => void } = {}) {
     { label: 'Back up library', icon: <ExportGlyph />, onClick: exportLibrary },
     { label: 'Restore library backup', icon: <ImportGlyph />, onClick: restoreLibrary },
   ]
-  return { exportJson, items, fileInput }
+  return { items, fileInput }
 }

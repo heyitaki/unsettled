@@ -5,13 +5,10 @@ export interface ContextMenuItem {
   onClick(): void
   /** A glyph before the label. */
   icon?: ReactNode
-  disabled?: boolean
-  /** Styled as destructive, for the actions that throw board work away. */
-  danger?: boolean
 }
 
-const enabledItems = (menu: HTMLElement | null): HTMLButtonElement[] =>
-  Array.from(menu?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
+const menuButtons = (menu: HTMLElement | null): HTMLButtonElement[] =>
+  Array.from(menu?.querySelectorAll<HTMLButtonElement>('button') ?? [])
 
 type FocusStep = 1 | -1 | 'first' | 'last'
 
@@ -23,11 +20,10 @@ const FOCUS_KEYS: Record<string, FocusStep> = {
 }
 
 /** An anchored sheet with native light-dismiss and arrow-key menu navigation. */
-export function ContextMenu({ ariaLabel, trigger, items, history, className, onClose }: {
+export function ContextMenu({ ariaLabel, trigger, items, className, onClose }: {
   ariaLabel: string
   trigger: HTMLButtonElement
   items: readonly ContextMenuItem[]
-  history?: readonly ContextMenuItem[]
   className?: string
   onClose: () => void
 }) {
@@ -36,7 +32,7 @@ export function ContextMenu({ ariaLabel, trigger, items, history, className, onC
     const menu = menuRef.current
     if (!menu) return
     menu.showPopover({ source: trigger })
-    enabledItems(menu)[0]?.focus({ preventScroll: true })
+    menuButtons(menu)[0]?.focus({ preventScroll: true })
     return () => menu.hidePopover()
   }, [trigger])
 
@@ -45,7 +41,7 @@ export function ContextMenu({ ariaLabel, trigger, items, history, className, onC
     onClose()
   }
   const moveFocus = (step: FocusStep) => {
-    const buttons = enabledItems(menuRef.current)
+    const buttons = menuButtons(menuRef.current)
     if (buttons.length === 0) return
     const current = buttons.indexOf(document.activeElement as HTMLButtonElement)
     const next = step === 'first' ? 0
@@ -60,8 +56,6 @@ export function ContextMenu({ ariaLabel, trigger, items, history, className, onC
       type="button"
       role="menuitem"
       tabIndex={-1}
-      className={item.danger ? 'danger' : undefined}
-      disabled={item.disabled}
       onClick={() => {
         close()
         item.onClick()
@@ -94,7 +88,6 @@ export function ContextMenu({ ariaLabel, trigger, items, history, className, onC
         }
       }}
     >
-      {history && <div className="menu-history">{history.map(renderItem)}</div>}
       {items.map(renderItem)}
     </div>
   )

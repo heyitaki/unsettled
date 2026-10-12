@@ -16,10 +16,10 @@ export const openBuildSession = (tab: TabState): BuildSession => ({ tabId: tab.i
 /**
  * Build mode ends as Done when the board under the tools is replaced rather
  * than edited: the shell now shows another tab (a switch, or an import landing
- * in a new tab) or the layout was switched, which rebuilds the board.
+ * in a new tab). Layout edits stay in the session so Cancel can restore them.
  */
 export function buildSessionEnded(session: BuildSession, tab: TabState): boolean {
-  return tab.id !== session.tabId || tab.game.board.layout !== session.game.board.layout
+  return tab.id !== session.tabId
 }
 
 /** The game Cancel restores, or null when nothing changed, so a no-op cancel owes no undo entry. */

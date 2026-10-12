@@ -26,7 +26,7 @@ import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from 
 const snap = (page: Page, name: string, fullPage = true) =>
   page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
-/** On the desktop `Randomize` sits beside `Edit manually`, outside the dots menu (spec D3). */
+/** On desktop, Randomize sits beside Edit manually. */
 async function randomize(page: Page) {
   await page.getByRole('button', { name: 'Randomize board' }).click()
 }
@@ -122,9 +122,7 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(LISTED_PICKS)
     await expect(page.locator('.vertex-highlight.faded')).toHaveCount(0)
 
-    // The counts moved to the tool labels, so the caption is the layout alone.
-    const caption = await page.locator('.board-status').innerText()
-    expect(caption).not.toMatch(/terrain|pieces/)
+    await expect(page.locator('.board-status')).toHaveCount(0)
     await snap(page, 'desktop-ribbon')
 
     await slots.nth(1).click()
@@ -268,12 +266,10 @@ test.describe('desktop', () => {
     await back.click()
     // The claim moves in Players; a ribbon circle only changes the view, which is no edit to undo.
     await page.locator('.player-list .roster-row').first().click()
-    await page.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Undo' }).click()
+    await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
     await expect(forward).toBeDisabled()
-    await page.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Redo' }).click()
+    await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Red')
     await expect(forward).toBeDisabled()
 
@@ -291,20 +287,14 @@ test.describe('desktop', () => {
     await expect(forward).toBeDisabled()
   })
 
-  test('the tool heading is a dots menu like the phone header, and the labels carry the counts the caption lost', async ({ page }) => {
+  test('the tool heading holds undo and redo, and the tool labels carry the counts', async ({ page }) => {
     await page.goto('')
     const heading = page.locator('.tools-panel .panel-heading')
-    await expect(heading.getByRole('button')).toHaveCount(1)
-    await heading.getByRole('button', { name: 'Board options' }).click()
-    const menu = page.getByRole('menu', { name: 'Board options' })
-    await expect(menu.getByRole('menuitem')).toHaveText(['Undo', 'Redo', 'Clear board'])
-    await expect(menu.getByRole('menuitem', { name: 'Undo' })).toBeDisabled()
-    // Clearing the board reads as destructive, as it does in the phone's menu (spec D3).
-    await expect(menu.getByRole('menuitem', { name: 'Clear board' })).toHaveClass(/\bdanger\b/)
-    // A viewport capture, not a full-page one: the full-page resize closes the menu.
-    await page.screenshot({ path: 'test-results/phone/desktop-tools-menu.png' })
-    await page.keyboard.press('Escape')
-    await expect(menu).toHaveCount(0)
+    await expect(heading.getByRole('button')).toHaveCount(2)
+    await expect(heading.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
+    await expect(heading.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled()
+    await expect(page.locator('.tools-panel .structure-grid button').filter({ hasText: 'clear all' })).toHaveClass(/\bdanger\b/)
+    await page.screenshot({ path: 'test-results/phone/desktop-tools-actions.png' })
     // The underlined `randomize` beside `Edit manually` deals a board and leaves the fold shut.
     await page.locator('.tools-manual').getByRole('button', { name: 'Randomize board' }).click()
     await expect(page.locator('.tools-manual')).not.toHaveAttribute('open')
@@ -312,15 +302,12 @@ test.describe('desktop', () => {
     const labels = page.locator('.tools-panel .tool-label')
     const terrain = labels.filter({ hasText: 'Terrain' }).locator('.tool-count')
     await expect(terrain).toHaveText('19/19')
-    await expect(labels.filter({ hasText: 'Structures' }).locator('.tool-count')).toHaveText('0 pieces')
+    await expect(labels.filter({ hasText: 'Other tools' }).locator('.tool-count')).toHaveText('0 pieces')
     await snap(page, 'desktop-tools')
 
-    // The chords are gone, so the menu's undo and redo are the only way back (spec D3).
-    await heading.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Undo' }).click()
+    await heading.getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(terrain).toHaveText('0/19')
-    await heading.getByRole('button', { name: 'Board options' }).click()
-    await page.getByRole('menuitem', { name: 'Redo' }).click()
+    await heading.getByRole('button', { name: 'Redo', exact: true }).click()
     await expect(terrain).toHaveText('19/19')
   })
 
@@ -369,23 +356,23 @@ test.describe('desktop', () => {
     await expect(boards).toContainText('Boards (2)')
   })
 
-  test('dropdowns are the phone sheet: a chevron trigger and a tick on the current option', async ({ page }) => {
+  test('dropdowns are the phone sheet: a glyph trigger and a tick on the current option', async ({ page }) => {
     await page.goto('')
-    const trigger = page.getByRole('button', { name: 'Board layout' })
+    const trigger = page.getByRole('button', { name: /Sort boards/ })
     await expect(trigger.locator('svg')).toHaveCount(1)
     await expect(trigger).not.toContainText('▾')
 
     await trigger.click()
-    const popup = page.getByRole('listbox', { name: 'Board layout' })
+    const popup = page.getByRole('listbox', { name: 'Sort boards' })
     const active = popup.locator('button.active')
     await expect(active).toHaveCount(1)
     await expect(active.locator('.menu-tick')).toBeVisible()
     // Laid out on every option so the labels line up, painted on the current one only.
-    await expect(popup.getByRole('option')).toHaveCount(2)
-    await expect(popup.locator('.menu-tick')).toHaveCount(2)
+    await expect(popup.getByRole('option')).toHaveCount(4)
+    await expect(popup.locator('.menu-tick')).toHaveCount(4)
     const others = popup.locator('button:not(.active) .menu-tick')
-    await expect(others).toHaveCount(1)
-    await expect(others).toBeHidden()
+    await expect(others).toHaveCount(3)
+    for (const tick of await others.all()) await expect(tick).toBeHidden()
     await page.keyboard.press('Escape')
 
     // The dots menu is the phone's sheet (spec D6 menus).
@@ -409,9 +396,9 @@ test.describe('desktop', () => {
     await expect(terrain).toHaveText('0/19')
 
     await toggle.click()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     await tools.getByRole('button', { name: 'wood' }).click()
-    await expect(tools.locator('button.selected')).toHaveCount(1)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(1)
     await clickBoard()
     await expect(terrain).toHaveText('1/19')
 
@@ -419,7 +406,7 @@ test.describe('desktop', () => {
     await toggle.click()
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
 
     // Nor does a tool outlive a trip through the phone tree, which never showed it.
     await tools.getByRole('button', { name: 'wood' }).click()
@@ -428,7 +415,7 @@ test.describe('desktop', () => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
   })
 
   test('corners place pieces only while Edit manually is open', async ({ page }) => {
@@ -452,9 +439,9 @@ test.describe('desktop', () => {
     await expect(buildings).toHaveCount(0)
 
     await toggle.click()
-    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase'])
-    await expect(tools.locator('button.selected')).toHaveCount(0)
-    await expect(tools.locator('.tool-hint')).toHaveText('With no tool selected, tap a corner to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.')
+    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase', 'clear all'])
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
+    await expect(tools.locator('.tool-hint')).toHaveText('With no tool selected, tap a corner on the board to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.')
     await expect(svg.locator('.placement-slot').first()).toBeVisible()
     await clickCorner(corners[0])
     await expect(buildings).toHaveCount(1)
@@ -549,7 +536,7 @@ test.describe('desktop', () => {
     await robber.click()
     await expect(robber).toHaveClass('selected')
     await robber.click()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     const svg = page.locator('.board-canvas')
     await expect(svg.locator('.placement-slot').first()).toBeVisible()
     await svg.locator('.placement-slot').first().click({ force: true })
@@ -563,7 +550,7 @@ test.describe('desktop', () => {
     await seedUnclaimedRoster(page)
     const tools = page.locator('.tools-panel')
     await tools.getByText('Edit manually').click()
-    await expect(tools.locator('button.selected')).toHaveCount(0)
+    await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     const svg = page.locator('.board-canvas')
     const badge = svg.locator('.port-text').first()
     await badge.hover()
@@ -758,7 +745,7 @@ test.describe('desktop', () => {
 
     // Clearing drops back to the resting marks, and nothing was placed on the way.
     const structures = page.locator('.tools-panel .tool-label')
-      .filter({ hasText: 'Structures' }).locator('.tool-count')
+      .filter({ hasText: 'Other tools' }).locator('.tool-count')
     await expect(structures).toHaveText('0 pieces')
     await cards.first().getByRole('button', { name: 'Clear' }).click()
     await page.mouse.move(0, 0)

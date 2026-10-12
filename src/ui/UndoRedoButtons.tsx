@@ -1,11 +1,14 @@
+import type { ReactNode } from 'react'
 import { ArrowLeftGlyph, ArrowRightGlyph } from './glyphs'
 import { activeTab, useStore } from './store'
 
-export function UndoRedoButtons() {
+/** The undo and redo heading buttons, after any `children` the heading puts before them. */
+export function UndoRedoButtons({ children }: { children?: ReactNode } = {}) {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   return (
     <div className="panel-actions">
+      {children}
       <button
         type="button"
         className="panel-dots"

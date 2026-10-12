@@ -1,11 +1,9 @@
-import { useState } from 'react'
-import { useBoardMenu } from './boardMenu'
-import { RESOURCES, type TileKind } from '../model/types'
+import { useBoardActions } from './boardActions'
+import { RESOURCES, type LayoutId, type TileKind } from '../model/types'
 import { TILE_COLORS } from './colors'
-import { ContextMenu } from './ContextMenu'
 import {
   ChevronGlyph,
-  DotsGlyph,
+  ClearBoardGlyph,
   GLYPH_MUTED,
   NUMBER_TOKEN_EXTENT,
   NumberTokenFace,
@@ -14,10 +12,15 @@ import {
 } from './glyphs'
 import { ImportButton } from './ImportDialog'
 import { activeTab, useStore, type Tool } from './store'
+import { UndoRedoButtons } from './UndoRedoButtons'
 
 const TILES: TileKind[] = [...RESOURCES, 'desert']
 const TOKENS = [2, 3, 4, 5, 6, 8, 9, 10, 11, 12]
 const TOKEN_VIEW_BOX = `${-NUMBER_TOKEN_EXTENT} ${-NUMBER_TOKEN_EXTENT} ${NUMBER_TOKEN_EXTENT * 2} ${NUMBER_TOKEN_EXTENT * 2}`
+const LAYOUT_LABEL: Record<LayoutId, string> = {
+  standard4: '4 players',
+  extension6: '5–6 players',
+}
 
 const STRUCTURES: { key: StructureShape; label: string; tool: Tool; danger?: boolean }[] = [
   { key: 'robber', label: 'robber', tool: { kind: 'robber' } },
@@ -29,10 +32,10 @@ const keyOf = (tool: Tool): string => tool.kind === 'tile' ? `${tool.kind}:${too
   : tool.kind === 'token' ? `${tool.kind}:${tool.number}` : tool.kind
 
 /**
- * The three tool rows, shared by the desktop palette and the phone's build
+ * The tool rows, shared by the desktop palette and the phone's build
  * block: each tree lays them out through its own CSS.
  */
-export function ToolGroups() {
+export function ToolGroups({ onLayout, onClear }: { onLayout(layout: LayoutId): void; onClear(): void }) {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const selected = keyOf(state.tool)
@@ -41,12 +44,26 @@ export function ToolGroups() {
   // Preview the colour the active player will place with; with nobody selected
   // (their dot toggled off) the palette falls back to the neutral glyph beige.
   const pieceColor = tab.game.board.players.find((player) => player.id === tab.activePlayerId)?.color ?? GLYPH_MUTED
-  // The counts the board caption used to carry (spec D3): how much terrain is
-  // painted, and how many pieces stand on the board.
   const placed = tab.game.board.hexes.filter((hex) => hex.tile).length
   const pieces = tab.game.board.roads.length + tab.game.board.buildings.length
   return (
     <>
+      <div className="tool-group">
+        <span className="tool-label">Layout</span>
+        <div className="tool-grid layout-grid">
+          {(Object.keys(LAYOUT_LABEL) as LayoutId[]).map((layout) => (
+            <button
+              type="button"
+              key={layout}
+              className={tab.game.board.layout === layout ? 'selected' : ''}
+              aria-pressed={tab.game.board.layout === layout}
+              onClick={() => onLayout(layout)}
+            >
+              {LAYOUT_LABEL[layout]}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="tool-group">
         <span className="tool-label">Terrain<span className="tool-count">{placed}/{tab.game.board.hexes.length}</span></span>
         <div className="tool-grid terrain-grid">
@@ -84,7 +101,7 @@ export function ToolGroups() {
         </div>
       </div>
       <div className="tool-group">
-        <span className="tool-label">Structures<span className="tool-count">{pieces} {pieces === 1 ? 'piece' : 'pieces'}</span></span>
+        <span className="tool-label">Other tools<span className="tool-count">{pieces} {pieces === 1 ? 'piece' : 'pieces'}</span></span>
         <div className="tool-grid structure-grid">
           {STRUCTURES.map((item) => {
             const active = selected === keyOf(item.tool)
@@ -100,36 +117,26 @@ export function ToolGroups() {
               </button>
             )
           })}
+          <button type="button" className="danger" onClick={onClear}>
+            <ClearBoardGlyph />
+            clear all
+          </button>
         </div>
-        <p className="tool-hint">With no tool selected, tap a corner to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.</p>
+        <p className="tool-hint">With no tool selected, tap a corner on the board to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.</p>
       </div>
     </>
   )
 }
 
-/**
- * The desktop tools panel: the phone header's dots menu less `Randomize board`
- * and `Export JSON`, the import entry, then the shared tool rows folded behind `Edit manually`,
- * with `or randomize` beside that label.
- */
+/** The desktop import entry and tool rows folded behind Edit manually. */
 export function ToolPalette() {
-  const { dispatch } = useStore()
-  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
-  const { history, randomize, clear, confirm } = useBoardMenu()
+  const { state, dispatch } = useStore()
+  const { randomize, clear, chooseLayout, confirm } = useBoardActions(activeTab(state), dispatch)
   return (
     <section className="panel tools-panel">
       <div className="panel-heading">
         <h2>Board tools</h2>
-        <button
-          type="button"
-          className="panel-dots"
-          aria-label="Board options"
-          aria-haspopup="menu"
-          aria-expanded={menuTrigger !== null}
-          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
-        >
-          <DotsGlyph />
-        </button>
+        <UndoRedoButtons />
       </div>
       <ImportButton />
       <details
@@ -145,24 +152,15 @@ export function ToolPalette() {
           <button
             type="button"
             className="tools-randomize"
-            aria-label={randomize.label}
+            aria-label="Randomize board"
             // A click on a button inside a summary never toggles the fold.
-            onClick={randomize.onClick}
+            onClick={randomize}
           >
             randomize
           </button>
         </summary>
-        <ToolGroups />
+        <ToolGroups onLayout={chooseLayout} onClear={clear} />
       </details>
-      {menuTrigger && (
-        <ContextMenu
-          ariaLabel="Board options"
-          trigger={menuTrigger}
-          history={history}
-          items={[clear]}
-          onClose={() => setMenuTrigger(null)}
-        />
-      )}
       {confirm}
     </section>
   )

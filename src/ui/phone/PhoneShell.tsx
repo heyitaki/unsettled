@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAnalysis } from '../useAnalysis'
 import { AnalysisPanel } from '../AnalysisPanel'
+import { useBoardActions } from '../boardActions'
 import { BoardCanvas } from '../BoardCanvas'
 import { viewedPlayerId } from '../draftSlots'
 import { GlobalNotice } from '../GlobalNotice'
@@ -28,6 +29,7 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 export function PhoneShell() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
+  const actions = useBoardActions(tab, dispatch)
   const { analysis } = useAnalysis()
   const [session, setSession] = useState<BuildSession | null>(null)
   const [overlay, setOverlay] = useState<PhoneOverlay | null>(null)
@@ -59,7 +61,7 @@ export function PhoneShell() {
     () => building ? null : restingMarks(board, analysis, playerId),
     [board, building, analysis, playerId],
   )
-  // The board under the tools was replaced (tab switch, import, layout change):
+  // The board under the tools was replaced by a tab switch or import:
   // that exit is a Done, so the session is dropped without a restore.
   useEffect(() => {
     if (session === null || building) return
@@ -84,10 +86,11 @@ export function PhoneShell() {
       <PhoneHeader building={building} onToggleMode={building ? done : enter} onOpen={openOverlay} />
       <main className="phone-page">
         <BoardCanvas restMarks={restMarks} />
-        {building ? <PhoneBuild onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
+        {building ? <PhoneBuild actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
       </main>
       {overlay === 'maps' && <MapsScreen onClose={closeOverlay} />}
       {overlay === 'players' && <PlayersScreen onClose={closeOverlay} />}
+      {actions.confirm}
       <GlobalNotice />
     </div>
   )

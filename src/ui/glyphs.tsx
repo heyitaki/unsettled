@@ -387,24 +387,6 @@ export function SortGlyph({ className }: { className?: string }) {
   )
 }
 
-export function UndoGlyph() {
-  return (
-    <svg {...LINE_ART} width="15" height="15" viewBox="0 0 20 20" strokeWidth="1.7">
-      <path d="M4 8h8a4 4 0 0 1 0 8H8" />
-      <path d="M7 5 4 8l3 3" />
-    </svg>
-  )
-}
-
-export function RedoGlyph() {
-  return (
-    <svg {...LINE_ART} width="15" height="15" viewBox="0 0 20 20" strokeWidth="1.7">
-      <path d="M16 8H8a4 4 0 0 0 0 8h4" />
-      <path d="M13 5l3 3-3 3" />
-    </svg>
-  )
-}
-
 export function ArrowLeftGlyph() {
   return (
     <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.7">
@@ -458,7 +440,7 @@ export function ImportGlyph() {
 /** A hex struck through, for clearing the board. */
 export function ClearBoardGlyph() {
   return (
-    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.6">
+    <svg {...LINE_ART} width="22" height="22" viewBox="0 0 20 20" strokeWidth="1.5">
       <path d="M10 2.6 16.4 6.3V13.7L10 17.4 3.6 13.7V6.3Z" />
       <path d="M6.3 13.4 13.7 6.4" />
     </svg>

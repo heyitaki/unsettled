@@ -21,24 +21,20 @@ import { draftIsComplete, inferDraftState, restoreDraftPick } from '../engine/dr
 import { activePlayerId } from '../model/turn'
 import { boardGrid } from '../model/layouts'
 import {
-  isBlank,
   placeBuilding,
   placeRoad,
   removeBuilding,
   removePort,
   removeRoad,
   setHexTile,
-  setLayout,
   setNumberToken,
   setRobber,
   settlementOrdinals,
   upsertPort,
 } from '../model/board'
-import type { AxialCoord, Board, BuildingTier, EdgeId, LayoutId, Port, VertexId } from '../model/types'
+import type { AxialCoord, Board, BuildingTier, EdgeId, Port, VertexId } from '../model/types'
 import { BLANK_TILE_COLOR, INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
-import { ConfirmDialog } from './ConfirmDialog'
 import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
-import { MenuSelect } from './MenuSelect'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
 import { buildingSlots, clickTarget, nextBuildingTier, roadSlots } from './placementSlots'
@@ -92,13 +88,6 @@ const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, 
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers/scales (city annex ≈ 20 + outline). Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
-
-const LAYOUT_LABEL: Record<LayoutId, string> = {
-  standard4: '4 player',
-  extension6: '5–6 player',
-}
-const LAYOUT_OPTIONS = (Object.keys(LAYOUT_LABEL) as LayoutId[])
-  .map((value) => ({ value, label: LAYOUT_LABEL[value] }))
 
 type Point = { x: number; y: number }
 const pointOf = (event: { clientX: number; clientY: number }): Point => ({ x: event.clientX, y: event.clientY })
@@ -184,7 +173,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const tab = activeTab(state)
   const { board } = tab.game
   const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
-  const [pendingLayout, setPendingLayout] = useState<LayoutId | null>(null)
   const [transform, setTransformState] = useState<ViewTransform>(IDENTITY)
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null)
   const transformRef = useRef<ViewTransform>(IDENTITY)
@@ -205,9 +193,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   // tab switch would edit (or crash on) a different board's coastline.
   useEffect(() => {
     setEditingPort(null)
-    // A pending layout change belongs to the tab it was raised on; drop it on a
-    // switch so confirming can't reset a different board.
-    setPendingLayout(null)
   }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   // Positions depend on the layout alone; the candidates below filter them per board.
@@ -360,12 +345,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     [board.players],
   )
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
-  const choose = (layout: LayoutId) => {
-    if (layout === board.layout) return
-    // Only confirm when the switch would destroy something.
-    if (isBlank(board)) commit(setLayout(board, layout))
-    else setPendingLayout(layout)
-  }
   const onHex = (coord: AxialCoord) => {
     if (pick) {
       if (pick.want === 'hex') dispatch({ type: 'picked', ref: axialKey(coord) })
@@ -463,7 +442,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const eraseActive = !pick && state.tool.kind === 'erase'
   const portActive = !pick && state.tool.kind === 'port'
   const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
-  const gesturesBlocked = editingPort !== null || pendingLayout !== null
+  const gesturesBlocked = editingPort !== null
   const overlayBlocksGestures = () =>
     gesturesBlocked || overlayOpen()
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -1024,41 +1003,14 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           }}
         />
       )}
-      {pendingLayout && (
-        <ConfirmDialog
-          title="Change layout?"
-          message="Switching layouts clears the tiles, tokens, and pieces on this board. Your players are kept."
-          actions={[
-            {
-              label: 'Change layout',
-              variant: 'danger',
-              onClick: () => {
-                commit(setLayout(board, pendingLayout))
-                setPendingLayout(null)
-              },
-            },
-            { label: 'Cancel', onClick: () => setPendingLayout(null) },
-          ]}
-          onCancel={() => setPendingLayout(null)}
-        />
-      )}
-      <div className="board-status">
-        <MenuSelect
-          ariaLabel="Board layout"
-          value={board.layout}
-          options={LAYOUT_OPTIONS}
-          onSelect={choose}
-          align="center"
-        >
-          <strong>{LAYOUT_LABEL[board.layout]}</strong>
-        </MenuSelect>
-        {transform.scale > 1 && (
+      {transform.scale > 1 && (
+        <div className="board-status">
           <span className="board-zoom">
             {transform.scale.toFixed(1)}×
             <button type="button" onClick={() => setTransform(IDENTITY)}>Reset</button>
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   )
 }
