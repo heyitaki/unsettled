@@ -10,7 +10,7 @@ A policy decision already costs 0.02 to 2.5 µs. The entry points built on top o
 | Best picks in the browser (`analyzeBoard`, TypeScript) | about 1.4 s | 1.6 s, 6.3 s with three rival rankings | Rust in WebAssembly: at most 300 ms, and 1200 ms with three rival rankings |
 | Whole self-play game | 2.2 ms | 6.4 ms | set after item 4's profile |
 
-No item may change an output: `fixtures/advice-parity.json`, `fixtures/bench-hashes.json` and `fixtures/placement-parity.json` stay byte-identical unless a row says otherwise.
+No item may change an output: `fixtures/advice-parity.json`, `fixtures/bench-hashes.json` and `fixtures/analysis-parity.json` stay byte-identical unless a row says otherwise.
 
 ## Queue
 
