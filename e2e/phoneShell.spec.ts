@@ -228,7 +228,7 @@ test.describe('reveal on select', () => {
     await expect(block.locator('.analysis-context')).toHaveText('aki · Picking 1st and 2nd', { useInnerText: true })
     const marks = page.locator('.vertex-highlight')
     await expect(marks).toHaveCount(5)
-    await expect(page.locator('.vertex-highlight.faded')).toHaveCount(2)
+    await expect(page.locator('.vertex-highlight.faded')).toHaveCount(0)
     const myColor = await page.locator('.phone-dot.me').evaluate((dot) => getComputedStyle(dot).backgroundColor)
     await expect(marks.first()).toHaveCSS('fill', myColor)
     await snap(page, 'rest-marks')

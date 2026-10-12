@@ -116,11 +116,10 @@ test.describe('desktop', () => {
     await expect(slots).toHaveCount(players * 2)
     await expect(slots.first()).toHaveClass(/\bviewing\b/)
 
-    // The board rests on the ranked picks, the lower ranks faded (spec D4).
+    // The board rests on the ranked picks, all solid (spec D4).
     const marks = page.locator('.vertex-highlight')
     await expect(marks).toHaveCount(LISTED_PICKS)
-    await expect(marks.nth(3)).toHaveClass(/\bfaded\b/)
-    await expect(marks.nth(4)).toHaveClass(/\bfaded\b/)
+    await expect(page.locator('.vertex-highlight.faded')).toHaveCount(0)
 
     // The counts moved to the tool labels, so the caption is the layout alone.
     const caption = await page.locator('.board-status').innerText()

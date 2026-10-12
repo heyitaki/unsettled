@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { analyzeBoard } from '../../engine/analyze'
 import { createBoard, randomizeBoard, setMe } from '../../model/board'
-import { restingMarks, SOLID_RANKS } from '../restMarks'
+import { restingMarks } from '../restMarks'
 
 describe('restingMarks', () => {
   it('marks nothing while nobody is claimed or the board is not ready', () => {
@@ -11,7 +11,7 @@ describe('restingMarks', () => {
     expect(restingMarks(unclaimed, analyzeBoard(unclaimed))).toBeNull()
   })
 
-  it('marks every listed pick in my colour, ranked, with the lower ranks faded', () => {
+  it('marks every listed pick in my colour, ranked, all solid', () => {
     const board = randomizeBoard(createBoard('standard4'))
     const analysis = analyzeBoard(board)
     const marks = restingMarks(board, analysis)
@@ -20,6 +20,6 @@ describe('restingMarks', () => {
     expect(marks!.map((mark) => mark.ref)).toEqual(analysis.recommendations.slice(0, 5).map((pick) => pick.firstPick))
     expect(marks!.map((mark) => mark.label)).toEqual(['1', '2', '3', '4', '5'])
     expect(marks!.every((mark) => mark.color === me?.color)).toBe(true)
-    expect(marks!.map((mark) => mark.faded)).toEqual(marks!.map((_, index) => index >= SOLID_RANKS))
+    expect(marks!.every((mark) => !mark.faded)).toBe(true)
   })
 })

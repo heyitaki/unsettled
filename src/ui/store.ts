@@ -56,8 +56,7 @@ export type Tool =
  * A board mark surfaced from analysis: a highlighted ref (vertex/hex/port id)
  * optionally tinted to a player's colour and stamped with a short label (a pick
  * number). Drives the coloured, numbered circles the AnalysisPanel draws. A
- * faded mark is a pick that sits back from the others: a planned follow-up, or
- * a lower rank shown alongside the top three.
+ * faded mark is a pick that sits back from the others: a planned follow-up.
  *
  * `kind: 'road'` names a direction rather than a place, and it exists because a
  * road and a port are both keyed by the edge they sit on: without it the canvas
