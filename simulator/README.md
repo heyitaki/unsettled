@@ -14,6 +14,8 @@ cargo test --workspace
 cargo test --release -p unsettled-sim --test alloc
 ```
 
+The engine crate is also what the app runs, as the committed `src/engine/advice/engine.wasm`: Best picks is `placement/analysis.rs::analyze` and Best moves is `advice.rs::advise`. After a change to the engine sources, the wasm crate, the topology packs, `placement/default-weights.json`, `placement/seat-weights` or the manifests, rebuild it with `tools/build-wasm.sh` (needs the `wasm32-unknown-unknown` target) and commit the binary and its hash; `tools/build-wasm.sh --check` verifies both without Rust. Each export has a fixture of requests and expected responses that a native test and a test of the committed wasm both read, and that an ignored test rewrites from the native engine: `fixtures/analysis-parity.json` by `cargo test --release -p unsettled-engine --test analysis_parity regenerate -- --ignored`, and `fixtures/advice-parity.json` by `cargo test -p unsettled-engine --test advice_parity -- --ignored regenerate`. Read the diff of a regenerated fixture by hand before committing it: no second implementation is left to check it against.
+
 ## CLI
 
 Compare all six placement heuristics on generated four-player boards:

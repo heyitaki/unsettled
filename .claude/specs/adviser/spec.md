@@ -4,7 +4,7 @@ Status: built and landed on main. The sections below describe the adviser as shi
 
 ## Goal
 
-When the draft is complete, Best picks becomes Best moves. The panel tracks the game turn by turn for every player and advises whoever's turn it is. The advice is the existing Rust turn policy (`simulator/crates/engine/src/policy/`) compiled to WebAssembly and run in a worker. Settlement picks stay on the TypeScript engine.
+When the draft is complete, Best picks becomes Best moves. The panel tracks the game turn by turn for every player and advises whoever's turn it is. The advice is the existing Rust turn policy (`simulator/crates/engine/src/policy/`) compiled to WebAssembly and run in a worker. Settlement picks stayed on the TypeScript engine when this was built and have since moved into the same `engine.wasm`: Best picks is its `analyze` export, `simulator/crates/engine/src/placement/analysis.rs`, and the TypeScript analysis is deleted.
 
 ## Findings that shape the plan
 
@@ -106,8 +106,8 @@ Heading, turn-order row, standings table, action bar, the open action's own cont
 
 ### Build and staleness
 
-- New `simulator/crates/wasm`: a small `cdylib` exporting `alloc(len)`, `dealloc(ptr, len)` and `advise(ptr, len)`, JSON in and out. `advise` returns a pointer to a buffer holding a 4-byte little-endian length followed by that many bytes of UTF-8 JSON, which the caller frees with `dealloc(ptr, len + 4)`. No `wasm-bindgen`, no `wasm-pack`.
-- `simulator/tools/build-wasm.sh` builds it and writes `src/engine/advice/engine.wasm` plus `engine.wasm.src-hash`, which holds a SHA-256 over the engine sources, the wasm crate, the topology files, `simulator/placement/default-weights.json` and the workspace manifests and lock file, then a SHA-256 of the binary. `--check` recomputes both and fails on a mismatch. The CI `rust` job runs it.
+- New `simulator/crates/wasm`: a small `cdylib` exporting `alloc(len)`, `dealloc(ptr, len)` and `advise(ptr, len)`, JSON in and out. `advise` returns a pointer to a buffer holding a 4-byte little-endian length followed by that many bytes of UTF-8 JSON, which the caller frees with `dealloc(ptr, len + 4)`. No `wasm-bindgen`, no `wasm-pack`. Best picks later added `analyze(ptr, len)` with the same buffer convention and the crate's one import, `env.progress(f64)`, to which the adviser's worker passes a no-op.
+- `simulator/tools/build-wasm.sh` builds it and writes `src/engine/advice/engine.wasm` plus `engine.wasm.src-hash`, which holds a SHA-256 over the engine sources, the wasm crate, the topology files, `simulator/placement/default-weights.json`, the `simulator/placement/seat-weights` files and the workspace manifests and lock file, then a SHA-256 of the binary. `--check` recomputes both and fails on a mismatch. The CI `rust` job runs it.
 - CI does not rebuild and byte-compare: identical bytes from a macOS build and a Linux build are unproven. Behavioural staleness is caught separately, because the wasm parity test and the native parity test read the same fixture.
 - `npm run build` needs no Rust: the `.wasm` is a committed asset the worker loads by URL. Workbox precaches `*.wasm`.
 
@@ -121,7 +121,7 @@ Deferred by choice: `pick?:` stays optional on the store (requiring it edits fou
 
 ## Out of scope
 
-Choosing among several accepting trade partners for the active player. The `extension6` special build phase. Any change to `simulator/topology/*.json`. Boons and curses. Moving settlement picks to WebAssembly. Tuning any parameter. Player trades of more than one resource a side.
+Choosing among several accepting trade partners for the active player. The `extension6` special build phase. Any change to `simulator/topology/*.json`. Boons and curses. Tuning any parameter. Player trades of more than one resource a side. Moving settlement picks to WebAssembly was out of scope here and was done afterwards as its own piece of work.
 
 ## Stop conditions
 
