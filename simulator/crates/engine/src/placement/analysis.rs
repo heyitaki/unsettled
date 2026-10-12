@@ -121,15 +121,10 @@ pub struct Breakdown {
 
 impl From<ScoreBreakdown> for Breakdown {
     fn from(value: ScoreBreakdown) -> Self {
-        Self {
-            production: value.production,
-            scarcity: value.scarcity,
-            robber: value.robber,
-            diversity: value.diversity,
-            port: value.port,
-            hand_value: value.hand_value,
-            expansion: value.expansion,
-        }
+        // Named in full, so a component added to the scorer fails to compile until it is here.
+        let ScoreBreakdown { production, scarcity, robber, diversity, port, hand_value, expansion } =
+            value;
+        Self { production, scarcity, robber, diversity, port, hand_value, expansion }
     }
 }
 
