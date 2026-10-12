@@ -16,6 +16,7 @@ const MAX_PAID_BUILDS = 2
 /** One step out of a vertex: the edge taken, and the index of the vertex it lands on. */
 interface Step {
   edgeId: EdgeId
+  edgeIndex: number
   to: number
 }
 
@@ -32,6 +33,7 @@ interface Step {
 interface RoadGraph {
   vertexIds: readonly VertexId[]
   indexOf: ReadonlyMap<VertexId, number>
+  edgeIndexOf: ReadonlyMap<EdgeId, number>
   /** Steps out of each vertex, in `vertexIncidentEdgeIds` order, which fixes the walk's order. */
   steps: readonly (readonly Step[])[]
   /** Each vertex's grid neighbours as indices, in `vertexAdjacency` order. */
@@ -45,7 +47,8 @@ function roadGraph(layout: LayoutId): RoadGraph {
   if (cached) return cached
   const grid = boardGrid(layout)
   const adjacency = vertexAdjacency(layout)
-  const edges = new Set(grid.edgeIds)
+  const edgeIndexOf = new Map<EdgeId, number>()
+  grid.edgeIds.forEach((edgeId, index) => edgeIndexOf.set(edgeId, index))
   const vertexIds = grid.vertexIds
   const indexOf = new Map<VertexId, number>()
   vertexIds.forEach((vertexId, index) => indexOf.set(vertexId, index))
@@ -54,16 +57,17 @@ function roadGraph(layout: LayoutId): RoadGraph {
   for (const vertexId of vertexIds) {
     const out: Step[] = []
     for (const edgeId of vertexIncidentEdgeIds(vertexId)) {
-      if (!edges.has(edgeId)) continue
+      const edgeIndex = edgeIndexOf.get(edgeId)
+      if (edgeIndex === undefined) continue
       const to = edgeEndpointVertexIds(edgeId).find((endpoint) => endpoint !== vertexId)
       const toIndex = to === undefined ? undefined : indexOf.get(to)
       if (toIndex === undefined) continue
-      out.push({ edgeId, to: toIndex })
+      out.push({ edgeId, edgeIndex, to: toIndex })
     }
     steps.push(out)
     neighbours.push((adjacency.get(vertexId) ?? []).map((neighbour) => indexOf.get(neighbour)!))
   }
-  const graph: RoadGraph = { vertexIds, indexOf, steps, neighbours }
+  const graph: RoadGraph = { vertexIds, indexOf, edgeIndexOf, steps, neighbours }
   graphs.set(layout, graph)
   return graph
 }
@@ -75,6 +79,11 @@ function roadGraph(layout: LayoutId): RoadGraph {
  * into the millions over a session and an exact integer up to 2^53 cannot wrap.
  */
 interface Scratch {
+  /** Per call: standing roads, 1 for the seat's own and 2 for a rival's. */
+  edgeStamp: Float64Array
+  edgeOwner: Uint8Array
+  seat: Occupancy['seat']
+  stampEdge: (owner: string, edgeId: EdgeId) => void
   /** Per call: `blocked` and `own` membership, bit 0 and bit 1, for a vertex the walk asked about. */
   flagStamp: Float64Array
   flags: Uint8Array
@@ -117,10 +126,22 @@ interface WalkOutput {
 
 const scratches = new Map<LayoutId, Scratch>()
 
-function scratchFor(layout: LayoutId, size: number): Scratch {
+function scratchFor(layout: LayoutId, graph: RoadGraph): Scratch {
   const cached = scratches.get(layout)
   if (cached) return cached
+  const size = graph.vertexIds.length
   const scratch: Scratch = {
+    edgeStamp: new Float64Array(graph.edgeIndexOf.size),
+    edgeOwner: new Uint8Array(graph.edgeIndexOf.size),
+    seat: null,
+
+    // Reuse the callback so stamping roads allocates no iterator or closure per walk.
+    stampEdge: (owner, edgeId) => {
+      const index = graph.edgeIndexOf.get(edgeId)
+      if (index === undefined) return
+      scratch.edgeStamp[index] = scratch.call
+      scratch.edgeOwner[index] = owner === scratch.seat ? 1 : 2
+    },
     flagStamp: new Float64Array(size),
     flags: new Uint8Array(size),
     siteStamp: new Float64Array(size),
@@ -174,9 +195,14 @@ export function walkSites(
   if (from === undefined) return null
   const { vertexIds, steps, neighbours } = graph
   const { blocked, edgeOwner, seat } = occupancy
-  const scratch = scratchFor(layout, vertexIds.length)
+  const scratch = scratchFor(layout, graph)
   scratch.call += 1
   const call = scratch.call
+  const hasRoads = edgeOwner.size !== 0
+  if (hasRoads) {
+    scratch.seat = seat
+    edgeOwner.forEach(scratch.stampEdge)
+  }
   const candidateNeighbours = neighbours[from]
   const out = scratch.output
   out.edgeIds.length = 0
@@ -222,8 +248,9 @@ export function walkSites(
   }
 
   for (const first of steps[from]) {
-    const firstOwner = edgeOwner.get(first.edgeId)
-    if (firstOwner !== undefined && firstOwner !== seat) continue
+    const firstOwner = hasRoads && scratch.edgeStamp[first.edgeIndex] === call
+      ? scratch.edgeOwner[first.edgeIndex] : 0
+    if (firstOwner === 2) continue
     scratch.walk += 1
     const walk = scratch.walk
     // Cheapest-first: a free step joins the band being drained, a paid one the next band, so a
@@ -234,7 +261,7 @@ export function walkSites(
     bands[2].length = 0
     // The free setup road is spent only on an edge nobody owns; travelling the seat's own road
     // keeps it in hand for later on the same path.
-    bands[0].push(packState(first.to, firstOwner === undefined))
+    bands[0].push(packState(first.to, firstOwner === 0))
     const spanStart = out.siteVertex.length
     for (let cost = 0; cost <= MAX_PAID_BUILDS; cost += 1) {
       const band = bands[cost]
@@ -259,9 +286,10 @@ export function walkSites(
         }
         if (rival(index)) continue
         for (const step of steps[index]) {
-          const owner = edgeOwner.get(step.edgeId)
-          if (owner !== undefined && owner !== seat) continue
-          const unowned = owner === undefined
+          const owner = hasRoads && scratch.edgeStamp[step.edgeIndex] === call
+            ? scratch.edgeOwner[step.edgeIndex] : 0
+          if (owner === 2) continue
+          const unowned = owner === 0
           const nextCost = cost + (unowned && roadUsed ? 1 : 0)
           if (nextCost > MAX_PAID_BUILDS) continue
           const next = packState(step.to, roadUsed || unowned)

@@ -232,6 +232,7 @@ describe('joint draft analysis', () => {
         new Map(),
         blockedVertices(board.layout, [first.vertexId]),
         new Set([first.vertexId]),
+        new Map(occupancyFromBoard(board).edgeOwner),
         () => 0,
       )
       const analysis = analyzeBoard(board, { rollouts: 1, maxResults: 54 })
@@ -378,6 +379,7 @@ describe('joint draft analysis', () => {
       new Map(),
       new Set(),
       new Set(),
+      new Map(occupancyFromBoard(board).edgeOwner),
       () => 0,
     )
     expect(taken).toEqual([pick])
@@ -397,6 +399,7 @@ describe('joint draft analysis', () => {
       new Map(),
       new Set(),
       new Set(),
+      new Map(occupancyFromBoard(board).edgeOwner),
       () => 0,
     )
     expect(taken).toHaveLength(pickers.length)
@@ -429,6 +432,7 @@ describe('joint draft analysis', () => {
       new Map(),
       new Set(),
       new Set(),
+      new Map(occupancyFromBoard(board).edgeOwner),
       () => 0,
     )
     expect(taken[0]).toBe(pick)
@@ -532,6 +536,7 @@ describe('joint draft analysis', () => {
         new Map([['p3', addToHoldings(ctx, emptyHoldings(), existing)]]),
         blockedVertices(board.layout, [existing, entry.firstPick]),
         new Set([existing, entry.firstPick]),
+        new Map(occupancyFromBoard(board).edgeOwner),
         () => 0,
       )
       expect(taken).toHaveLength(1)
@@ -665,6 +670,7 @@ describe('joint draft analysis', () => {
     const result = rankCandidates(ctx, board, draft, [{
       blocked,
       taken: [taken],
+      roads: [null],
       pickerIds: ['p2'],
       uniforms: draft.sequence.map(() => 0),
     }], 54)
@@ -713,6 +719,7 @@ describe('joint draft analysis', () => {
       new Map<string, Holdings>(),
       new Set(barred),
       new Set(),
+      new Map(occupancyFromBoard(board).edgeOwner),
       () => 0,
     )
     expect(taken).toHaveLength(2)
@@ -803,6 +810,7 @@ describe('hostile states and simulator seams', () => {
       new Map<string, Holdings>(),
       blocked,
       new Set(),
+      new Map(occupancyFromBoard(board).edgeOwner),
       () => 0,
     ).taken).toEqual([])
   })
@@ -843,6 +851,7 @@ describe('hostile states and simulator seams', () => {
     const result = rankCandidates(ctx, board, draft, [{
       blocked,
       taken: [],
+      roads: [],
       pickerIds: [],
       uniforms: draft.sequence.map(() => 0),
     }], 54)
@@ -885,12 +894,14 @@ describe('hostile states and simulator seams', () => {
       {
         blocked: modalBlocked,
         taken: [takenBySeat],
+        roads: [null],
         pickerIds: ['p2'],
         uniforms: draft.sequence.map(() => 0),
       },
       {
         blocked: survivable,
         taken: [],
+        roads: [],
         pickerIds: [],
         uniforms: draft.sequence.map(() => 0),
       },
@@ -914,12 +925,14 @@ describe('hostile states and simulator seams', () => {
       {
         blocked: new Set(allBlocked),
         taken: [firstTake, secondTake],
+        roads: [null, null],
         pickerIds: ['p2', 'p2'],
         uniforms: draft.sequence.map(() => 0),
       },
       {
         blocked: new Set(allBlocked),
         taken: [firstTake],
+        roads: [null],
         pickerIds: ['p2'],
         uniforms: draft.sequence.map(() => 0),
       },
@@ -929,8 +942,8 @@ describe('hostile states and simulator seams', () => {
     // takenBeforeFirstPick reflects the modal (first) pre-window in pick order,
     // each spot annotated with its picker and frequency across all rollouts.
     expect(result.takenBeforeFirstPick).toEqual([
-      { vertexId: firstTake, playerId: 'p2', frequency: 1 },
-      { vertexId: secondTake, playerId: 'p2', frequency: 0.5 },
+      { vertexId: firstTake, playerId: 'p2', road: null, frequency: 1 },
+      { vertexId: secondTake, playerId: 'p2', road: null, frequency: 0.5 },
     ])
   })
 

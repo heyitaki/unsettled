@@ -72,7 +72,7 @@ describe('Best picks rows', () => {
     await act(async () => job.reply({
       status, draft: inferDraftState(job.request.board), warnings: [], takenBeforeFirstPick,
       recommendations: firstPicks.map((firstPick) => ({
-        firstPick, firstRoad: null, plannedSecond,
+        firstPick, firstRoad: null, secondRoad: null, plannedSecond,
         survival, score: 0.5, rankScore: 0.5,
         breakdown: { ...emptyBreakdown(), production: 0.7, robber: -0.2 },
       })),
@@ -129,8 +129,8 @@ describe('Best picks rows', () => {
   })
 
   const gone: TakenVertex[] = [
-    { playerId: 'b', vertexId: ANY_PORT, frequency: 0.54 },
-    { playerId: 'aki', vertexId: ORE_PORT, frequency: 0.31 },
+    { playerId: 'b', vertexId: ANY_PORT, road: null, frequency: 0.54 },
+    { playerId: 'aki', vertexId: ORE_PORT, road: null, frequency: 0.31 },
   ]
 
   it('a: draws each pick, follow-up and Likely gone spot as one SVG at its own size', async () => {

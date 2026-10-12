@@ -6,10 +6,12 @@ import { recommendationMarks } from '../analysisMarks'
 const FIRST = 'v:-1,0;-1,1;0,0' as VertexId
 const SECOND = 'v:0,0;0,1;1,0' as VertexId
 const ROAD = 'e:-1,1;0,0' as EdgeId
+const SECOND_ROAD = 'e:0,1;1,0' as EdgeId
 
-const recommendation = (firstRoad: EdgeId | null): Recommendation => ({
+const recommendation = (firstRoad: EdgeId | null, secondRoad: EdgeId | null = null): Recommendation => ({
   firstPick: FIRST,
   firstRoad,
+  secondRoad,
   plannedSecond: [SECOND],
   survival: 1,
   score: 12,
@@ -44,6 +46,15 @@ describe('recommendationMarks', () => {
   it("numbers the mark as the player's second settlement when that is the pick ranked", () => {
     expect(recommendationMarks({ ...recommendation(null), plannedSecond: [] }, '#3063ba', 2)).toEqual([
       { ref: FIRST, color: '#3063ba', label: '2' },
+    ])
+  })
+
+  it('marks the planned second pick\'s road faded, after the first pick\'s', () => {
+    expect(recommendationMarks(recommendation(ROAD, SECOND_ROAD), '#3063ba')).toEqual([
+      { ref: FIRST, color: '#3063ba', label: '1' },
+      { ref: SECOND, color: '#3063ba', label: '2', faded: true },
+      { ref: ROAD, color: '#3063ba', label: 'R', kind: 'road' },
+      { ref: SECOND_ROAD, color: '#3063ba', label: 'R', kind: 'road', faded: true },
     ])
   })
 })

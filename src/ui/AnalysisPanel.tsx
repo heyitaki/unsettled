@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Recommendation } from '../engine/analyze'
-import { draftIsComplete } from '../engine/draft'
-import { placeBuilding, setMe } from '../model/board'
+import { draftIsComplete, restoreDraftPick } from '../engine/draft'
+import { setMe } from '../model/board'
 import { awaitingFirstTurn } from '../model/turn'
 import type { Board, VertexId } from '../model/types'
 import { recommendationMarks } from './analysisMarks'
@@ -146,29 +146,30 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const likelyGone = shown.takenBeforeFirstPick
   // Numbered in draft order and tinted to each picker so selecting shows who goes
   // where, and playing them out advances the draft to the viewed pick.
-  const likelyGoneMarks: HighlightMark[] = likelyGone.map(({ vertexId, playerId }, index) => ({
-    ref: vertexId,
-    color: playerColor(playerId),
-    label: String(index + 1),
-  }))
+  const likelyGoneMarks: HighlightMark[] = likelyGone.flatMap(({ vertexId, playerId, road }, index) => [
+    { ref: vertexId, color: playerColor(playerId), label: String(index + 1) },
+    ...(road === null ? [] : [{ ref: road, color: playerColor(playerId), label: 'R', kind: 'road' as const }]),
+  ])
+  // The line's settlements with their setup roads, less a pick whose corner the selected row takes.
+  const playLine = (skip?: VertexId) => likelyGone.reduce((next, { vertexId, playerId, road }) =>
+    !playerId || vertexId === skip
+      ? next
+      : restoreDraftPick(next, { vertexId, playerId, roads: road === null ? [] : [road] }), board)
   const placeLikelyGone = () => {
-    let next = board
-    for (const { vertexId, playerId } of likelyGone) {
-      if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
-    }
+    const next = playLine()
     if (next !== board) dispatch({ type: 'commit', board: next })
     setSelectedLikelyGone(false)
     clearHighlight()
   }
   const placeRecommendation = (recommendation: Recommendation) => {
     if (playerId === null) return
-    let next = board
-    for (const { vertexId, playerId } of likelyGone) {
-      if (playerId) next = placeBuilding(next, vertexId, playerId, 'settlement')
-    }
+    const { firstPick, firstRoad } = recommendation
+    const line = playLine(firstPick)
+    // A row the line blocks reads its road off another rollout, where the edge can be a rival's.
+    const free = firstRoad !== null && !line.roads.some(({ edgeId }) => edgeId === firstRoad)
     dispatch({
       type: 'commit',
-      board: placeBuilding(next, recommendation.firstPick, playerId, 'settlement'),
+      board: restoreDraftPick(line, { vertexId: firstPick, playerId, roads: free ? [firstRoad] : [] }),
     })
     setSelectedPick(null)
     clearHighlight()

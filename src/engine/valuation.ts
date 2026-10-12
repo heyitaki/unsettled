@@ -164,7 +164,7 @@ const boardOccupancies = new WeakMap<Board, BoardPieces>()
  * building on, so a walk can tell a settlement apart from its neighbour.
  *
  * The pieces are memoized on board identity: boards are
- * immutable, every edit is a new object, and a rollout asks the same board for this once per
+ * immutable, every edit is a new object, and an analysis asks the same board for this once per
  * window. Only the seat wrapper around them is rebuilt per caller.
  */
 export function occupancyFromBoard(board: Board, seat: string | null = null): Occupancy {

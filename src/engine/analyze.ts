@@ -1,7 +1,7 @@
-import { placeBuilding, setMe } from '../model/board'
+import { setMe } from '../model/board'
 import { boardGrid } from '../model/layouts'
 import type { Board, EdgeId, LayoutId, VertexId } from '../model/types'
-import { draftIsComplete, inferDraftState, type DraftState, type DraftWarning } from './draft'
+import { draftIsComplete, inferDraftState, restoreDraftPick, type DraftState, type DraftWarning } from './draft'
 import { expansionTerm } from './expansion'
 import {
   blockedVertices,
@@ -41,17 +41,24 @@ export type AnalysisStatus =
 export interface TakenVertex {
   vertexId: VertexId
   playerId: string
+  road: EdgeId | null
   frequency: number
 }
 
 export interface Recommendation {
   firstPick: VertexId
+  /**
+   * The second settlements planned behind this pick: first the one from the rollout the row's
+   * road and the likely-gone line are read off, then the rest by how often they were planned.
+   */
   plannedSecond: VertexId[]
   /**
    * The setup road SP3's expansion walk would lay from `firstPick`, or null when the walk is off
    * (`expansionWeight` 0) or the pick opens nothing. See `expansion.ts::expansionTerm`.
    */
   firstRoad: EdgeId | null
+  /** The setup road for `plannedSecond[0]`, read off the same rollout. */
+  secondRoad: EdgeId | null
   survival: number
   score: number
   rankScore: number
@@ -81,6 +88,7 @@ export interface DraftAnalysis {
 export interface PreWindowResult {
   blocked: Set<VertexId>
   taken: readonly VertexId[]
+  roads: readonly (EdgeId | null)[]
   pickerIds: readonly string[]
   uniforms: readonly number[]
 }
@@ -89,11 +97,15 @@ interface WindowResult {
   holdings: Map<string, Holdings>
   pickerIds: string[]
   taken: VertexId[]
+  roads: (EdgeId | null)[]
 }
 
 interface CandidateAggregate {
   breakdown: ScoreBreakdown
   plannedSecond: Map<VertexId, number>
+  /** The second planned in the first window the candidate survived, null when it planned none. */
+  drawnSecond: VertexId | null
+  drawnSecondRoad: EdgeId | null
   survived: number
 }
 
@@ -171,10 +183,9 @@ const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holding
 }
 
 /**
- * A rollout's occupancy: the board's roads, since rollouts place none, beside the settlements
- * standing at score time, which are the board's buildings plus the vertices the rollout's windows
- * actually took. The set is held by reference, so a vertex settled mid-window is occupied for
- * every later scan in that window.
+ * A rollout's occupancy: the roads and settlements standing at score time, including each pick
+ * the rollout's windows took. The set and edge-owner map are held by reference, so a pick's
+ * settlement and setup road are occupied for every later scan in that window.
  *
  * It records the settlements themselves, never the wider set the distance rule bars building on.
  * Those two readings are not interchangeable: the walk in `expansion.ts` applies the distance rule
@@ -185,12 +196,12 @@ const holdingsFromBoard = (ctx: BoardContext, board: Board): Map<string, Holding
  * two of them disagree about what is standing. Inert while `expansionWeight` is 0.
  */
 const rolloutOccupancy = (
-  board: Board,
+  edgeOwner: ReadonlyMap<EdgeId, string>,
   occupied: ReadonlySet<VertexId>,
   seat: string | null,
 ): Occupancy => ({
   blocked: occupied,
-  edgeOwner: occupancyFromBoard(board).edgeOwner,
+  edgeOwner,
   seat,
 })
 
@@ -212,13 +223,12 @@ function bestLegalCandidate(
   board: Board,
   holdings: Holdings,
   blocked: ReadonlySet<VertexId>,
-  occupied: ReadonlySet<VertexId>,
+  occupancy: Occupancy,
   playerId: string,
   receivesGrant: boolean,
 ): VertexId | null {
   let best: VertexId | null = null
   let bestScore = -Infinity
-  const occupancy = rolloutOccupancy(board, occupied, playerId)
   const slot = draftSlotOf(board, playerId)
   for (const vertexId of boardGrid(board.layout).vertexIds) {
     if (blocked.has(vertexId)) continue
@@ -355,7 +365,7 @@ function opponentPick(
   playerId: string,
   holdings: Holdings,
   blocked: ReadonlySet<VertexId>,
-  occupied: ReadonlySet<VertexId>,
+  occupancy: Occupancy,
   uniform: number,
   receivesGrant: boolean,
   hasLaterPick: boolean,
@@ -363,7 +373,6 @@ function opponentPick(
   const topVertices: VertexId[] = []
   const topScores: number[] = []
   const topK = Math.max(1, ctx.weights.opponentTopK)
-  const occupancy = rolloutOccupancy(board, occupied, playerId)
   const slot = draftSlotOf(board, playerId)
   const partners = hasLaterPick && holdings.vertices.length === 0
     ? partnerTable(ctx, slot)
@@ -456,41 +465,48 @@ export function simulateWindowDetailed(
   initialHoldings: ReadonlyMap<string, Holdings>,
   blocked: Set<VertexId>,
   occupied: Set<VertexId>,
+  edgeOwner: Map<EdgeId, string>,
   nextUniform: () => number,
   pickOverride?: (
     taken: readonly VertexId[],
     pickerIds: readonly string[],
     playerId: string,
     uniform: number,
+    roads: readonly (EdgeId | null)[],
   ) => VertexId | undefined,
 ): WindowResult {
   const holdings = new Map(initialHoldings)
   const taken: VertexId[] = []
+  const roads: (EdgeId | null)[] = []
   const actualPickers: string[] = []
   const adjacency = vertexAdjacency(board.layout)
   for (const { playerId, receivesGrant, hasLaterPick } of turns) {
     const uniform = nextUniform()
     const held = holdings.get(playerId) ?? emptyHoldings()
-    const forced = pickOverride?.(taken, actualPickers, playerId, uniform)
+    const forced = pickOverride?.(taken, actualPickers, playerId, uniform, roads)
+    const occupancy = rolloutOccupancy(edgeOwner, occupied, playerId)
     const vertexId = forced !== undefined && !blocked.has(forced) ? forced : opponentPick(
       ctx,
       board,
       playerId,
       held,
       blocked,
-      occupied,
+      occupancy,
       uniform,
       receivesGrant,
       hasLaterPick,
     )
     if (vertexId === null) continue
+    const road = expansionTerm(ctx, held, occupancy, vertexId).road
     blockVertex(adjacency, blocked, vertexId)
     occupied.add(vertexId)
+    if (road !== null) edgeOwner.set(road, playerId)
     holdings.set(playerId, addToHoldings(ctx, held, vertexId))
     taken.push(vertexId)
+    roads.push(road)
     actualPickers.push(playerId)
   }
-  return { holdings, pickerIds: actualPickers, taken }
+  return { holdings, pickerIds: actualPickers, taken, roads }
 }
 
 const frequencyOrder = (
@@ -551,11 +567,12 @@ export function rankCandidates(
   // top recommendation on the board the earlier picks leave. Sampled pre-windows draw from those
   // same lists while they follow the modal line, then use the shortcut, as do nested analyses
   // and unavailable recommendations. The picks are mutually legal, ordered by draft turn, and
-  // each carries its picker and frequency across all rollouts.
+  // each carries its picker, setup road and frequency across all rollouts.
   const modal = preWindows[0]
   const takenBeforeFirstPick: TakenVertex[] = (modal?.taken ?? []).map((vertexId, index) => ({
     vertexId,
     playerId: modal.pickerIds[index],
+    road: modal.roads[index],
     frequency: (takenCounts.get(vertexId) ?? 0) / denominator,
   }))
   const pickOffset = targetPick === undefined ? 0 : Math.max(0, draft.myRemainingPickIndices.indexOf(targetPick))
@@ -582,9 +599,16 @@ export function rankCandidates(
   const settled = boardSettlements(board)
   const preWindowOccupied = preWindows.map((preWindow) =>
     new Set<VertexId>([...settled, ...preWindow.taken]))
+  const preWindowEdgeOwner = preWindows.map((preWindow) => {
+    const edgeOwner = new Map(occupancyFromBoard(board).edgeOwner)
+    for (const [index, road] of preWindow.roads.entries()) {
+      if (road !== null) edgeOwner.set(road, preWindow.pickerIds[index])
+    }
+    return edgeOwner
+  })
   // One occupancy per window, shared by every candidate scored against it.
-  const preWindowOccupancy = preWindowOccupied.map((occupied) =>
-    rolloutOccupancy(board, occupied, me))
+  const preWindowOccupancy = preWindowOccupied.map((occupied, index) =>
+    rolloutOccupancy(preWindowEdgeOwner[index], occupied, me))
   const preWindowHoldings = preWindows.map((preWindow) =>
     replayPreWindowHoldings(ctx, board, preWindow))
   const preWindowMyHoldings = preWindowHoldings.map((holdings) =>
@@ -594,6 +618,8 @@ export function rankCandidates(
     const aggregate: CandidateAggregate = {
       breakdown: emptyBreakdown(),
       plannedSecond: new Map(),
+      drawnSecond: null,
+      drawnSecondRoad: null,
       survived: 0,
     }
     const firstHand = handForCandidate(ctx, candidate, firstReceivesGrant)
@@ -616,9 +642,13 @@ export function rankCandidates(
 
       const blocked = new Set(preWindow.blocked)
       blockVertex(adjacency, blocked, candidate)
-      // Grows with the mid-window's picks below, so the second pick is scored against every
-      // settlement standing by then.
+      // Grows with the mid-window's picks below, so the second pick sees every settlement and
+      // setup road standing by then.
       const occupied = new Set(preWindowOccupied[windowIndex])
+      const edgeOwner = new Map(preWindowEdgeOwner[windowIndex])
+      const occupancy = rolloutOccupancy(edgeOwner, occupied, me)
+      const road = expansionTerm(ctx, preWindowMyHoldings[windowIndex], occupancy, candidate).road
+      if (road !== null) edgeOwner.set(road, me)
       occupied.add(candidate)
       const firstHoldings = addToHoldings(ctx, preWindowMyHoldings[windowIndex], candidate)
       const opponentHoldings = preWindowHoldings[windowIndex]
@@ -632,6 +662,7 @@ export function rankCandidates(
         opponentHoldings,
         blocked,
         occupied,
+        edgeOwner,
         nextUniform,
       )
       const second = bestLegalCandidate(
@@ -639,7 +670,7 @@ export function rankCandidates(
         board,
         firstHoldings,
         blocked,
-        occupied,
+        occupancy,
         me,
         receivesSecondSettlementGrant(draft, secondPickIndex),
       )
@@ -653,10 +684,14 @@ export function rankCandidates(
           second,
           receivesSecondSettlementGrant(draft, secondPickIndex),
         ),
-        rolloutOccupancy(board, occupied, me),
+        occupancy,
         mySlot,
       )
       addBreakdown(aggregate.breakdown, secondScore)
+      if (aggregate.survived === 1) {
+        aggregate.drawnSecond = second
+        aggregate.drawnSecondRoad = expansionTerm(ctx, firstHoldings, occupancy, second).road
+      }
       aggregate.plannedSecond.set(second, (aggregate.plannedSecond.get(second) ?? 0) + 1)
     }
     aggregates.set(candidate, aggregate)
@@ -678,15 +713,20 @@ export function rankCandidates(
     }
     const survival = aggregate.survived / preWindows.length
     const score = breakdownTotal(breakdown)
+    const byFrequency = frequencyOrder(aggregate.plannedSecond, aggregate.survived, gridIndex)
+      .map(({ vertexId }) => vertexId)
+    // The most common plan across every rollout can be a corner the drawn line gives a rival, so
+    // the plan from the rollout the row's marks are read off leads the list.
+    const { drawnSecond } = aggregate
+    const plannedSecond = (drawnSecond === null
+      ? byFrequency
+      : [drawnSecond, ...byFrequency.filter((vertexId) => vertexId !== drawnSecond)]).slice(0, 3)
     recommendations.push({
       firstPick: candidate,
       // Filled in below, once the list has been cut to the results the panel shows.
       firstRoad: null,
-      plannedSecond: frequencyOrder(
-        aggregate.plannedSecond,
-        aggregate.survived,
-        gridIndex,
-      ).slice(0, 3).map(({ vertexId }) => vertexId),
+      secondRoad: aggregate.drawnSecondRoad,
+      plannedSecond,
       survival,
       score,
       rankScore: survival * score,
@@ -697,8 +737,8 @@ export function rankCandidates(
     (gridIndex.get(a.firstPick) ?? 0) - (gridIndex.get(b.firstPick) ?? 0))
   // The road the expansion walk would lay from each first pick. The scoring above already ran the
   // walk, but the term reports only its value, so the direction is asked for separately. Asked
-  // after the cut, because the walk is the expensive half of the term and every candidate the
-  // panel will not show is a walk nobody reads. Read off the lowest-index window the candidate
+  // after the cut: a pick with no second to plan never asked for it above, and for the rest this
+  // repeats one walk per listed row. Read off the lowest-index window the candidate
   // survived, which for all but a blocked-in-the-modal-window candidate is the modal window
   // itself, the same rollout `takenBeforeFirstPick` draws its "likely gone" spots from, so the
   // drawn road and the drawn losses agree. A recommendation the modal window blocked has to read
@@ -717,6 +757,18 @@ export function rankCandidates(
     })),
     takenBeforeFirstPick,
   }
+}
+
+/**
+ * The setup road a settlement `playerId` places on this board now would come with: the road a
+ * ranking of that seat draws for the corner, for a corner placed without one. Null when the
+ * corner opens nothing worth walking to, which on a board with no number tokens is every corner.
+ */
+export function setupRoad(board: Board, playerId: string, vertexId: VertexId): EdgeId | null {
+  const ctx = computeBoardContext(board, weightsForSeats(board.players.length))
+  const holdings = holdingsFromBoard(ctx, board).get(playerId) ?? emptyHoldings()
+  const { value, road } = expansionTerm(ctx, holdings, occupancyFromBoard(board, playerId), vertexId)
+  return value > 0 ? road : null
 }
 
 /**
@@ -842,13 +894,17 @@ function analyzeBoardInternal(
         baseHoldings,
         blocked,
         new Set(baseOccupied),
+        new Map(boardOccupancy.edgeOwner),
         nextUniform,
         // Sampled pre-windows reuse the modal lists only while their earlier picks still match.
         // Nested windows keep the shortcut to bound recursion on snake-inconsistent boards.
-        rankModalPicks ? (taken, pickerIds, playerId, uniform) => {
+        rankModalPicks ? (taken, pickerIds, playerId, uniform, roads) => {
           if (rollout === 0) {
-            const scratch = taken.reduce((next, vertexId, index) =>
-              placeBuilding(next, vertexId, pickerIds[index], 'settlement'), board)
+            const scratch = taken.reduce((next, vertexId, index) => restoreDraftPick(next, {
+              vertexId,
+              playerId: pickerIds[index],
+              roads: roads[index] === null ? [] : [roads[index]],
+            }), board)
             const key = options.modalCache ? JSON.stringify({ ...scratch, mePlayerId: playerId }) : ''
             let analysis = options.modalCache?.get(key)
             const size = nestedCosts[nested++]
@@ -884,6 +940,7 @@ function analyzeBoardInternal(
       preWindows.push({
         blocked,
         taken: result.taken,
+        roads: result.roads,
         pickerIds: result.pickerIds,
         uniforms: rollout === 0
           ? Array.from({ length: draft.sequence.length }, () => 0)

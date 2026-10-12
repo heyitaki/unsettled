@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { createBoard, draftOrder, placeBuilding, placeRoad, setHexTile } from '../src/model/board'
+import { setupRoad } from '../src/engine/analyze'
 import { inferDraftState } from '../src/engine/draft'
 import { axialToPixel, edgeEndpointVertexIds, hexVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
-import type { Board } from '../src/model/types'
+import type { Board, VertexId } from '../src/model/types'
 import { LISTED_PICKS } from '../src/ui/restMarks'
 import { buildingSlots } from '../src/ui/placementSlots'
 import { seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
@@ -466,6 +467,12 @@ test.describe('desktop', () => {
   })
 
   test('draft taps place the viewed settlement and advance with Edit manually closed', async ({ page }) => {
+    // A tap lays the settlement with the setup road a ranking of that seat would draw for it.
+    const tapPlaced = (board: Board, vertexId: VertexId, playerId: string) => {
+      const road = setupRoad(board, playerId, vertexId)
+      const settled = placeBuilding(board, vertexId, playerId, 'settlement')
+      return road === null ? settled : placeRoad(settled, road, playerId)
+    }
     await page.goto('')
     let board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
     board = { ...board, players: UNCLAIMED_ROSTER, mePlayerId: UNCLAIMED_ROSTER[0].id }
@@ -503,7 +510,7 @@ test.describe('desktop', () => {
     }
     const first = corners.find((corner) => corner.x === marked[0].x && corner.y === marked[0].y)!
     await clickCorner(first)
-    board = placeBuilding(board, first.ref, player.id, 'settlement')
+    board = tapPlaced(board, first.ref, player.id)
     await expect(buildings).toHaveCount(1)
     await expect(buildings).toHaveAttribute('fill', player.color)
     await expect(buildings).toHaveAttribute('transform', `translate(${first.x} ${first.y}) scale(0.8)`)
@@ -520,7 +527,7 @@ test.describe('desktop', () => {
     expect(buildingSlots(board, nextPlayer.id, 'settlement', 'edit')).toContain(second.ref)
     await expect(svg.locator(`.vertex-highlight[cx="${second.x}"][cy="${second.y}"]`)).toHaveCount(0)
     await clickCorner(second)
-    board = placeBuilding(board, second.ref, nextPlayer.id, 'settlement')
+    board = tapPlaced(board, second.ref, nextPlayer.id)
     await expect(buildings).toHaveCount(2)
     await expect(buildings.nth(1)).toHaveAttribute('fill', nextPlayer.color)
     await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
@@ -530,7 +537,8 @@ test.describe('desktop', () => {
     await expect(buildings).toHaveCount(2)
     await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
     await expect(slots.nth(followingSlot)).toHaveClass(/\bviewing\b/)
-    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
+    expect(board.roads).toHaveLength(2)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(board.roads.length)
   })
 
   test('deselecting robber returns to placing pieces', async ({ page }) => {
@@ -757,10 +765,11 @@ test.describe('desktop', () => {
     await expect(marks).toHaveCount(LISTED_PICKS)
     await expect(cards.first()).not.toHaveClass(/\bcurrent\b/)
 
-    // Placing is the button's job alone, and it ends the selection with it.
+    // Placing is the button's job alone, and it ends the selection with it. The settlement
+    // lands with its setup road, so the count is two.
     await cards.first().locator('.analysis-row-select').click()
     await cards.first().getByRole('button', { name: 'Place settlement' }).click()
-    await expect(structures).toHaveText('1 piece')
+    await expect(structures).toHaveText('2 pieces')
     await expect(panel.locator('.analysis-row.current')).toHaveCount(0)
     await snap(page, 'desktop-placed')
   })

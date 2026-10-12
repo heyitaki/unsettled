@@ -16,7 +16,8 @@ import {
   parseEdgeId,
   parseVertexId,
 } from '../model/coords'
-import { draftIsComplete, inferDraftState } from '../engine/draft'
+import { setupRoad } from '../engine/analyze'
+import { draftIsComplete, inferDraftState, restoreDraftPick } from '../engine/draft'
 import { activePlayerId } from '../model/turn'
 import { boardGrid } from '../model/layouts'
 import {
@@ -408,7 +409,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       return
     }
     if (draftPlayer !== null) {
-      const nextBoard = placeBuilding(board, vertexId, draftPlayer, 'settlement')
+      // Chosen before the settlement lands, as a ranking of this seat would choose it.
+      const road = setupRoad(board, draftPlayer, vertexId)
+      const nextBoard = restoreDraftPick(board, { vertexId, playerId: draftPlayer, roads: road === null ? [] : [road] })
       commit(nextBoard)
       dispatch({ type: 'view-pick', slot: inferDraftState(nextBoard).remainingPickIndices[0] ?? null })
       return
@@ -802,7 +805,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }), [board.buildings, highlight, markedBuildings, ordinals, playerColor])
   const markLayer = useMemo(() => highlight
     .filter((mark) => (mark.kind === 'hex' ? grid.landKeys : mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
-    .map((mark) => {
+    .map((mark, index) => {
       if (mark.kind === 'hex') return <polygon key={`hl:${mark.ref}`} className="hex-highlight" points={hexPoints(parseAxialKey(mark.ref), SIZE - 6)} fill="none" stroke={mark.color ?? INK_COLOR} strokeWidth="3.5" strokeDasharray="7 4" pointerEvents="none" />
       // A road mark is a direction, not a place: the analysis panel's road recommendation.
       // Draw it as a stub of road along the edge, short enough to leave both endpoints clear of
@@ -813,7 +816,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         const from = { x: a.x + (b.x - a.x) * MARK_EDGE_INSET, y: a.y + (b.y - a.y) * MARK_EDGE_INSET }
         const to = { x: b.x - (b.x - a.x) * MARK_EDGE_INSET, y: b.y - (b.y - a.y) * MARK_EDGE_INSET }
         return (
-          <g key={`hl:${mark.ref}`} pointerEvents="none">
+          <g key={`hl:${mark.ref}:${index}`} pointerEvents="none" opacity={mark.faded ? 0.55 : undefined}>
             <line
               className="edge-highlight"
               x1={from.x}

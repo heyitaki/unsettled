@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, placeBuilding, setMe } from '../../model/board'
+import { addPlayer, createBoard, placeBuilding, placeRoad, setMe } from '../../model/board'
+import { edgeEndpointVertexIds } from '../../model/coords'
 import { setTile } from '../../model/__tests__/helpers'
 import { RESOURCES, type Board } from '../../model/types'
-import { analyzeBoard, type TakenVertex } from '../analyze'
+import { analyzeBoard, setupRoad, type TakenVertex } from '../analyze'
 import { blockedVertices } from '../legality'
 import { DEFAULT_WEIGHTS } from '../weights'
 
@@ -26,8 +27,12 @@ function fourSeatBoard(pattern: number): Board {
 const topPick = (board: Board, playerId: string) =>
   analyzeBoard(setMe(board, playerId), options).recommendations[0]?.firstPick
 
+// A pick is a settlement and the setup road that comes with it, so playing the line out lays both.
 const playOut = (board: Board, taken: readonly TakenVertex[]): Board =>
-  taken.reduce((next, { vertexId, playerId }) => placeBuilding(next, vertexId, playerId, 'settlement'), board)
+  taken.reduce((next, { vertexId, playerId, road }) => {
+    const settled = placeBuilding(next, vertexId, playerId, 'settlement')
+    return road === null ? settled : placeRoad(settled, road, playerId)
+  }, board)
 
 /**
  * "Likely gone before your turn" names the spot each rival ahead of me is expected to take. The
@@ -75,5 +80,82 @@ describe('the rollouts behind my picks draw a rival from that rival\'s own list'
     const mine = analyzeBoard(setMe(board, 'p2'), { ...sampled, maxResults: 54 }).recommendations
     const contested = mine.filter(({ survival }) => survival < 1).map(({ firstPick }) => firstPick)
     expect(contested.filter((vertexId) => !reach.has(vertexId))).toEqual([])
+  })
+})
+
+/**
+ * A pick is a settlement and its setup road, so the rollouts lay one with every pick they
+ * simulate, and the line reports it beside the settlement. A lone setup road runs into its
+ * owner's settlement, which already ends a walk, so it seldom moves a ranking: these tests pin
+ * where the roads go and that the views agree, not that a road reorders a list.
+ */
+describe('the rollouts lay each simulated pick\'s setup road', () => {
+  it.each(PATTERNS)('out of the picked corner, the road that picker\'s own list draws, board pattern %i', (pattern) => {
+    const board = fourSeatBoard(pattern)
+    const predicted = analyzeBoard(setMe(board, 'p4'), options).takenBeforeFirstPick
+    expect(predicted).toHaveLength(3)
+    for (const [index, { vertexId, playerId, road }] of predicted.entries()) {
+      // An open board always leaves a first settlement somewhere to expand to.
+      expect(road, `pick ${index + 1}`).not.toBeNull()
+      expect(edgeEndpointVertexIds(road!), `pick ${index + 1}`).toContain(vertexId)
+      const own = analyzeBoard(setMe(playOut(board, predicted.slice(0, index)), playerId), options).recommendations[0]
+      expect(road, `pick ${index + 1}`).toBe(own.firstRoad)
+    }
+  })
+
+  it.each(PATTERNS)('and the ranking behind the line is the ranking once the line and its roads stand, board pattern %i', (pattern) => {
+    // One rollout is the modal window alone, which is exactly the board the line leaves.
+    const single = { rollouts: 1 }
+    const board = setMe(fourSeatBoard(pattern), 'p3')
+    const ahead = analyzeBoard(board, single)
+    expect(ahead.takenBeforeFirstPick.map(({ playerId }) => playerId)).toEqual(['aki', 'p2'])
+    const played = analyzeBoard(playOut(board, ahead.takenBeforeFirstPick), single)
+    expect(ahead.recommendations).toEqual(played.recommendations)
+  })
+
+  it.each(PATTERNS)('and a seat picking twice in a row plans each second pick on the board its first pick and road leave, board pattern %i', (pattern) => {
+    // One rollout and no pick in between, so each plan is read off exactly that board.
+    const single = { rollouts: 1, maxResults: 54 }
+    const opening = analyzeBoard(setMe(fourSeatBoard(pattern), 'p4'), single).takenBeforeFirstPick
+    const board = setMe(playOut(fourSeatBoard(pattern), opening), 'p4')
+    const plans = analyzeBoard(board, single).recommendations
+    expect(plans.length).toBeGreaterThan(10)
+    for (const plan of plans) {
+      const first: TakenVertex = { vertexId: plan.firstPick, playerId: 'p4', road: plan.firstRoad, frequency: 1 }
+      const [second] = analyzeBoard(playOut(board, [first]), single).recommendations
+      expect(plan.plannedSecond[0], plan.firstPick).toBe(second.firstPick)
+      expect(plan.secondRoad, plan.firstPick).toBe(second.firstRoad)
+    }
+  })
+
+  it.each(PATTERNS)('and a corner placed by hand gets the road its row draws, board pattern %i', (pattern) => {
+    const board = fourSeatBoard(pattern)
+    const rows = analyzeBoard(setMe(board, 'aki'), options).recommendations
+    expect(rows.length).toBeGreaterThan(0)
+    for (const { firstPick, firstRoad } of rows) expect(setupRoad(board, 'aki', firstPick)).toBe(firstRoad)
+    // With no number tokens every site is worth nothing, and a road picked by tie-break is noise.
+    expect(setupRoad(createBoard('standard4'), 'aki', rows[0].firstPick)).toBeNull()
+  })
+
+  it.each(PATTERNS)('and my planned second settlement carries its own road, board pattern %i', (pattern) => {
+    const { recommendations } = analyzeBoard(setMe(fourSeatBoard(pattern), 'aki'), options)
+    expect(recommendations.length).toBeGreaterThan(0)
+    expect(recommendations.some(({ secondRoad }) => secondRoad !== null)).toBe(true)
+    for (const { plannedSecond, secondRoad } of recommendations) {
+      if (secondRoad !== null) expect(edgeEndpointVertexIds(secondRoad)).toContain(plannedSecond[0])
+    }
+  })
+
+  it.each(PATTERNS)('and the second pick a row draws is one the likely-gone line leaves standing, board pattern %i', (pattern) => {
+    // The row's marks and the line are drawn together, so they are read off the same rollout:
+    // the most common plan across all of them can be a corner the line gives a rival.
+    const { recommendations, takenBeforeFirstPick } = analyzeBoard(setMe(fourSeatBoard(pattern), 'p4'))
+    const gone = blockedVertices('standard4', takenBeforeFirstPick.map(({ vertexId }) => vertexId))
+    const lineRoads = takenBeforeFirstPick.map(({ road }) => road)
+    for (const { firstPick, plannedSecond, secondRoad } of recommendations) {
+      if (gone.has(firstPick)) continue
+      expect(gone.has(plannedSecond[0]), firstPick).toBe(false)
+      if (secondRoad !== null) expect(lineRoads, firstPick).not.toContain(secondRoad)
+    }
   })
 })

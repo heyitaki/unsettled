@@ -50,7 +50,7 @@ describe('viewing another player in Best picks', () => {
     const job = jobs.at(-1)!
     await act(async () => job.reply({
       status: 'ready', draft: inferDraftState(job.request.board), warnings: [], takenBeforeFirstPick,
-      recommendations: [{ firstPick: SPACED[6], firstRoad: null, plannedSecond: [], survival: 1, score: 1, rankScore: 1, breakdown: emptyBreakdown() }],
+      recommendations: [{ firstPick: SPACED[6], firstRoad: null, secondRoad: null, plannedSecond: [], survival: 1, score: 1, rankScore: 1, breakdown: emptyBreakdown() }],
     }))
   }
 
@@ -213,7 +213,7 @@ describe('viewing another player in Best picks', () => {
     const original = board()
     const pickers = ['aki', 'b', 'c', 'd', 'd', 'c']
     await click(button('Pick 7: Blue'))
-    await reply(pickers.map((playerId, index) => ({ playerId, vertexId: SPACED[index], frequency: 1 })))
+    await reply(pickers.map((playerId, index) => ({ playerId, vertexId: SPACED[index], road: null, frequency: 1 })))
     expect(container.querySelector('.analysis-likely-gone')?.textContent).toContain('2. Blue')
     await click(container.querySelector(action === 'Play these out' ? '.analysis-touch-select' : '.analysis-row-select'))
     await click(button(action))

@@ -40,6 +40,7 @@ function productiveBoard(): Board {
 const preWindows: PreWindowResult[] = [{
   blocked: new Set(),
   taken: [],
+  roads: [],
   pickerIds: [],
   uniforms: [0, 0, 0, 0],
 }]
