@@ -421,6 +421,12 @@ describe('Best moves recording', () => {
         await act(async () => svg.dispatchEvent(event))
       }
     }
+    await tap(-1000)
+    await tap(-900)
+    expect(svg.getAttribute('viewBox')).toBe(before)
+
+    // The app shows Best moves only after the draft, and a tap during the draft is a pick.
+    await act(async () => seen.dispatch({ type: 'commit', board: placeBuilding(game().board, boardGrid('standard4').vertexIds[0], 'aki', 'city') }))
     await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     await tap(100)

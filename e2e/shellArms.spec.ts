@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { createBoard, draftOrder, placeBuilding, placeRoad, setHexTile } from '../src/model/board'
+import { inferDraftState } from '../src/engine/draft'
 import { axialToPixel, edgeEndpointVertexIds, hexVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
 import type { Board } from '../src/model/types'
@@ -413,6 +414,74 @@ test.describe('desktop', () => {
     await expect(svg.locator('.placement-slot')).toHaveCount(0)
     await clickCorner(corners[3])
     await expect(buildings).toHaveCount(1)
+  })
+
+  test('draft taps place the viewed settlement and advance with Edit manually closed', async ({ page }) => {
+    await page.goto('')
+    let board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
+    board = { ...board, players: UNCLAIMED_ROSTER, mePlayerId: UNCLAIMED_ROSTER[0].id }
+    await seedBoard(page, board)
+    await expect(page.locator('.tools-panel .structure-grid')).toBeHidden()
+    const panel = page.locator('.analysis-panel')
+    const slots = panel.locator('.draft-ribbon-slot')
+    const viewedSlot = 1
+    const player = board.players.find((player) => player.id === inferDraftState(board).sequence[viewedSlot])!
+    await slots.nth(viewedSlot).click()
+    await expect(slots.nth(viewedSlot)).toHaveClass(/\bviewing\b/)
+    await page.mouse.move(0, 0)
+    await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
+    const svg = page.locator('.board-canvas')
+    const marks = svg.locator('.vertex-highlight')
+    const dots = svg.locator('.placement-slot')
+    const buildings = svg.locator('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g')
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    await expect(svg.locator('.vertex-highlight-label').first()).toHaveText('1')
+    await expect(dots.first()).toBeVisible()
+    const marked = await marks.evaluateAll((marks) => marks.map((mark) => ({ x: Number(mark.getAttribute('cx')), y: Number(mark.getAttribute('cy')) })))
+    const corners = boardGrid(board.layout).vertexIds.map((ref) => {
+      const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
+      return { ref, x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+    })
+    await expect(dots).toHaveCount(buildingSlots(board, player.id, 'settlement', 'edit').length - LISTED_PICKS)
+    expect(await dots.evaluateAll((dots) => [...new Set(dots.map((dot) => dot.getAttribute('fill')))])).toEqual([player.color])
+    for (const corner of marked) await expect(svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`)).toHaveCount(0)
+    const clickCorner = async (corner: typeof corners[number]) => {
+      const point = await svg.evaluate((element, corner) => {
+        const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+        return { x: point.x, y: point.y }
+      }, corner)
+      await page.mouse.click(point.x, point.y)
+    }
+    const first = corners.find((corner) => corner.x === marked[0].x && corner.y === marked[0].y)!
+    await clickCorner(first)
+    board = placeBuilding(board, first.ref, player.id, 'settlement')
+    await expect(buildings).toHaveCount(1)
+    await expect(buildings).toHaveAttribute('fill', player.color)
+    await expect(buildings).toHaveAttribute('transform', `translate(${first.x} ${first.y}) scale(0.8)`)
+    const nextSlot = inferDraftState(board).remainingPickIndices[0]
+    await expect(slots.nth(nextSlot)).toHaveClass(/\bviewing\b/)
+    await expect(panel.locator('.draft-ribbon-slot.viewing')).toHaveCount(1)
+    await page.mouse.move(0, 0)
+    await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
+    await expect(marks).toHaveCount(LISTED_PICKS)
+    const nextPlayer = board.players.find((player) => player.id === inferDraftState(board).sequence[nextSlot])!
+    await expect(dots.first()).toHaveAttribute('fill', nextPlayer.color)
+    const unmarked = await dots.first().evaluate((dot) => ({ x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
+    const second = corners.find((corner) => corner.x === unmarked.x && corner.y === unmarked.y)!
+    expect(buildingSlots(board, nextPlayer.id, 'settlement', 'edit')).toContain(second.ref)
+    await expect(svg.locator(`.vertex-highlight[cx="${second.x}"][cy="${second.y}"]`)).toHaveCount(0)
+    await clickCorner(second)
+    board = placeBuilding(board, second.ref, nextPlayer.id, 'settlement')
+    await expect(buildings).toHaveCount(2)
+    await expect(buildings.nth(1)).toHaveAttribute('fill', nextPlayer.color)
+    await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
+    const followingSlot = inferDraftState(board).remainingPickIndices[0]
+    await expect(slots.nth(followingSlot)).toHaveClass(/\bviewing\b/)
+    await clickCorner(second)
+    await expect(buildings).toHaveCount(2)
+    await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
+    await expect(slots.nth(followingSlot)).toHaveClass(/\bviewing\b/)
+    await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
   })
 
   test('deselecting robber returns to placing pieces', async ({ page }) => {

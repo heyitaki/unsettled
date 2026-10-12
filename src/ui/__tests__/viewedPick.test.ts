@@ -67,13 +67,13 @@ describe('the viewed pick', () => {
     expect(viewed(viewing(setMe(board, null), 5))).toBeNull()
   })
 
-  it('drops a rival\'s pick once it is placed', () => {
+  it('follows a rival\'s pick to the next open pick once it is placed', () => {
     const board = fourPlayers()
     const next = reducer(viewing(board, 0), {
       type: 'commit',
       board: placeBuilding(board, SPACED[0], 'aki', 'settlement'),
     })
-    expect(viewed(next)).toBeNull()
+    expect(viewed(next)).toBe(1)
   })
 
   it('clears on request', () => {

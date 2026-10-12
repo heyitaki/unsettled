@@ -296,12 +296,21 @@ function unusedBoardTitle(tabs: TabState[]): string {
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   const next = reduceAction(state, action)
-  if (next === state || next.viewedPick == null) return next
+  if (next === state) return next
   if (next.activeTabId !== state.activeTabId) return withViewedPick(next, null)
   const board = activeTab(next).game.board
   const previous = activeTab(state).game.board
+  if (board === previous) return next
   if (board.mePlayerId !== previous.mePlayerId) return withViewedPick(next, null)
-  return board === previous ? next : withViewedPick(next, next.viewedPick)
+  const before = inferDraftState(previous)
+  const after = inferDraftState(board)
+  const viewedSlot = state.viewedPick ?? before.myRemainingPickIndices[0]
+
+  // The view follows the draft while it is on the earliest open pick.
+  if (viewedSlot !== undefined && viewedSlot === before.remainingPickIndices[0]) {
+    return withViewedPick(next, after.remainingPickIndices[0] ?? null)
+  }
+  return next.viewedPick == null ? next : withViewedPick(next, next.viewedPick)
 }
 
 function withViewedPick(state: StoreState, slot: number | null): StoreState {

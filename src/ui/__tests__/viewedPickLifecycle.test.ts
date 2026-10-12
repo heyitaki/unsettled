@@ -37,6 +37,41 @@ describe('viewed pick lifecycle', () => {
     expect(reducer(next, { type: 'view-pick', slot: 2 })).toBe(next)
   })
 
+  it('follows the draft through a placement, undo and redo from the default view', () => {
+    const state = viewing()
+    let board = activeTab(state).game.board
+    board = addPlayer(board, { id: 'c', name: 'Orange', color: '#e58331' })
+    board = addPlayer(board, { id: 'd', name: 'White', color: '#ffffff' })
+    const start = reducer(reducer(state, { type: 'commit', board }), { type: 'view-pick', slot: null })
+    const committed = reducer(start, {
+      type: 'commit', board: placeBuilding(board, boardGrid('standard4').vertexIds[0], 'aki', 'settlement'),
+    })
+    expect(committed.viewedPick).toBe(1)
+    const undone = reducer(committed, { type: 'undo' })
+    expect(undone.viewedPick).toBeNull()
+    expect(reducer(undone, { type: 'redo' }).viewedPick).toBe(1)
+  })
+
+  it('returns to an earlier rival pick when undo starts from the default view', () => {
+    const state = viewing()
+    const board = setMe(activeTab(state).game.board, 'b')
+    const start = reducer(reducer(state, { type: 'commit', board }), { type: 'view-pick', slot: 0 })
+    const committed = reducer(start, {
+      type: 'commit', board: placeBuilding(board, boardGrid('standard4').vertexIds[0], 'aki', 'settlement'),
+    })
+    expect(committed.viewedPick).toBeNull()
+    expect(reducer(committed, { type: 'undo' }).viewedPick).toBe(0)
+  })
+
+  it('keeps a later pick viewed on purpose when another player places a settlement', () => {
+    const start = reducer(viewing(), { type: 'view-pick', slot: 2 })
+    const board = activeTab(start).game.board
+    const committed = reducer(start, {
+      type: 'commit', board: placeBuilding(board, boardGrid('standard4').vertexIds[0], 'aki', 'settlement'),
+    })
+    expect(committed.viewedPick).toBe(2)
+  })
+
   it('keeps no-op views and edits identical, with no history entry for a view', () => {
     const state = viewing()
     expect(reducer(state, { type: 'view-pick', slot: 3 })).toBe(state)

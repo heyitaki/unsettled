@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createBoard, draftOrder, placeBuilding, setHexTile } from '../src/model/board'
 import { axialToPixel, edgeEndpointVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
@@ -384,6 +385,29 @@ test.describe('build mode', () => {
     await page.waitForTimeout(400)
     await snap(page, 'build-player')
   })
+})
+
+test('a single tap outside build mode places a draft settlement on a board with tiles', async ({ page }) => {
+  await open(page)
+  const player = UNCLAIMED_ROSTER[0]
+  const board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
+  await seedBoard(page, { ...board, players: UNCLAIMED_ROSTER, mePlayerId: player.id })
+  await expect(page.getByRole('button', { name: 'Edit the board' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.phone-build')).toHaveCount(0)
+  const svg = page.locator('.board-canvas')
+  const dot = svg.locator('.placement-slot').first()
+  await expect(dot).toBeVisible()
+  await expect(dot).toHaveAttribute('fill', player.color)
+  const corner = await dot.evaluate((dot) => ({ x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
+  const point = await svg.evaluate((element, corner) => {
+    const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+    return { x: point.x, y: point.y }
+  }, corner)
+  await page.touchscreen.tap(point.x, point.y)
+  const buildings = svg.locator('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g')
+  await expect(buildings).toHaveCount(1)
+  await expect(buildings).toHaveAttribute('fill', player.color)
+  await expect(buildings).toHaveAttribute('transform', `translate(${corner.x} ${corner.y}) scale(0.8)`)
 })
 
 test('double tapping the board outside build mode still zooms', async ({ page }) => {

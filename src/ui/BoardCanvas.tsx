@@ -314,15 +314,21 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }, [state.activeTabId, board.layout, fitX, fitY, fitWidth, fitHeight])
   const renderedViewBox = transformedViewBox(viewBox, transform)
   const pick = state.pick
+  const draft = useMemo(() => inferDraftState(board), [board])
+  const draftComplete = draftIsComplete(board, draft)
+  const viewedSlot = state.viewedPick ?? draft.myRemainingPickIndices[0]
 
-  // A pick places for the turn player; a tool places for the editor's selected player.
-  const placementPlayer = pick ? activePlayerId(tab.game) : tab.activePlayerId
+  // With the tools closed, a draft tap places only the viewed player's settlement.
+  const draftPlayer = !pick && state.tool.kind === 'none' && !draftComplete &&
+    board.hexes.some((hex) => hex.tile !== null) && draft.remainingPickIndices.includes(viewedSlot)
+    ? draft.sequence[viewedSlot] : null
+  const placementPlayer = pick ? activePlayerId(tab.game) : draftPlayer ?? tab.activePlayerId
   const placeableVertices = useMemo<VertexId[]>(() => {
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
-    if (state.tool.kind !== 'piece') return []
+    if (state.tool.kind !== 'piece' && draftPlayer === null) return []
     const occupied = new Set(board.buildings.map((building) => building.vertexId))
     return buildingSlots(board, placementPlayer, 'settlement', 'edit').filter((vertexId) => !occupied.has(vertexId))
-  }, [state.tool, board, placementPlayer, pick])
+  }, [state.tool, board, placementPlayer, pick, draftPlayer])
   const placeableEdges = useMemo<EdgeId[]>(() => {
     if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece') return []
     return roadSlots(board, placementPlayer, pick?.want === 'edge' ? pick.edges : undefined)
@@ -346,7 +352,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     const ref = clickTarget(units, candidates, lastClick.current, { max: SIZE / 2, repeat: REPEAT_DISTANCE, direct: DIRECT_DISTANCE })
     return ref === null ? null : { ref, ...units }
   }, [candidates, viewBox])
-  const draftComplete = useMemo(() => draftIsComplete(board, inferDraftState(board)), [board])
   // Stable across renders that don't change the roster, so the piece layers
   // below can list it as a dependency without re-rendering on every render.
   const playerColor = useCallback(
@@ -402,6 +407,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       if (pick.want === 'vertex') dispatch({ type: 'picked', ref: vertexId })
       return
     }
+    if (draftPlayer !== null) {
+      const nextBoard = placeBuilding(board, vertexId, draftPlayer, 'settlement')
+      commit(nextBoard)
+      dispatch({ type: 'view-pick', slot: inferDraftState(nextBoard).remainingPickIndices[0] ?? null })
+      return
+    }
     if (state.tool.kind === 'piece') {
       const existing = board.buildings.find((building) => building.vertexId === vertexId)
       const tier = nextBuildingTier(existing?.tier, {
@@ -413,7 +424,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       else if (owner !== null) commit(placeBuilding(board, vertexId, owner, tier))
     } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
   }
-  const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece'
+  const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece' || draftPlayer !== null
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
   const placementActive = buildActive || roadActive
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
@@ -564,7 +575,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     // tool selected, taps place and pinch is the way to zoom. Clearing the
     // stored tap keeps one made under a tool from later pairing with a tap made
     // after the tool was dropped.
-    if (pick || state.tool.kind !== 'none') {
+    if (pick || state.tool.kind !== 'none' || draftPlayer !== null) {
       lastTap.current = null
       return
     }
@@ -956,7 +967,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {/* Placement affordances: legal dots, a piece preview at an empty target, or a ring. */}
           <g className="placement-layer">
             {buildActive && placeableVertices.map((vertexId) => {
-              if (vertexId === preview?.ref) return null
+              if (vertexId === preview?.ref || (draftPlayer !== null && highlightSet.has(vertexId))) return null
               const point = vertexPoint(vertexId)
               return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 4.7 : 3.6} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
             })}
