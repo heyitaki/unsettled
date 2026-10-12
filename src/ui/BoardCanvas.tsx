@@ -83,6 +83,7 @@ const ROAD_RADIUS = 2.5
 // Fraction of an edge trimmed from each end of a highlighted road direction, so the stub sits
 // between the vertex circles the same recommendation draws rather than running under them.
 const MARK_EDGE_INSET = 0.26
+const SETTLEMENT_PATH = 'M-15,13 V-3 L0,-15 L15,-3 V13 Z'
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 1, superCity: 1.18 }
@@ -130,6 +131,27 @@ function vertexPoint(vertexId: VertexId) {
     x: points.reduce((sum, point) => sum + point.x, 0) / 3,
     y: points.reduce((sum, point) => sum + point.y, 0) / 3,
   }
+}
+
+/** A road's drawn length, centre and angle; the hover preview shares it so the two cannot drift. */
+function roadGeometry(edgeId: EdgeId) {
+  const [vaId, vbId] = edgeEndpointVertexIds(edgeId)
+  const a = vertexPoint(vaId)
+  const b = vertexPoint(vbId)
+  const length = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
+  const dir = { x: (b.x - a.x) / length, y: (b.y - a.y) / length }
+  // Pull both ends toward the midpoint by the same gap, so every road is
+  // drawn the same length no matter what sits at its endpoints: roads
+  // meeting at a bare vertex don't pile up, and a road running into a
+  // building is simply hidden by it — buildings paint after roads, and
+  // the inset already tucks the road's tip inside the silhouette.
+  const inset = length * 0.07
+  const a2 = { x: a.x + dir.x * inset, y: a.y + dir.y * inset }
+  const b2 = { x: b.x - dir.x * inset, y: b.y - dir.y * inset }
+  const roadLength = Math.max(0, Math.hypot(b2.x - a2.x, b2.y - a2.y))
+  const mid = { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }
+  const angle = (Math.atan2(b2.y - a2.y, b2.x - a2.x) * 180) / Math.PI
+  return { roadLength, mid, angle }
 }
 
 function hexPoints(coord: AxialCoord, radius = SIZE): string {
@@ -395,11 +417,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
   const placementActive = buildActive || roadActive
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
+  const hoverBuilding = hover && board.buildings.find((building) => building.vertexId === hover.ref)
+  const hoverRoad = hover && board.roads.find((road) => road.edgeId === hover.ref)
   const hoverPlayer = hover && !hover.ref.startsWith('port:')
-    ? board.buildings.find((building) => building.vertexId === hover.ref)?.playerId
-      ?? board.roads.find((road) => road.edgeId === hover.ref)?.playerId
-      ?? placementPlayer
+    ? hoverBuilding?.playerId ?? hoverRoad?.playerId ?? placementPlayer
     : null
+  const preview = hover && !hover.ref.startsWith('port:') && !hoverBuilding && !hoverRoad ? hover : undefined
+  const previewRoad = preview?.ref.startsWith('e:') ? roadGeometry(preview.ref as EdgeId) : undefined
   useEffect(() => {
     lastClick.current = null
     finePointer.current = null
@@ -690,26 +714,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }), [ports, highlightSet, portActive, eraseActive, board, dispatch])
   const roadLayer = useMemo(() => board.roads.map((road) => {
-    const [vaId, vbId] = edgeEndpointVertexIds(road.edgeId)
-    const a = vertexPoint(vaId)
-    const b = vertexPoint(vbId)
-    const length = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))
-    const dir = { x: (b.x - a.x) / length, y: (b.y - a.y) / length }
-    // Pull both ends toward the midpoint by the same gap, so every road is
-    // drawn the same length no matter what sits at its endpoints: roads
-    // meeting at a bare vertex don't pile up, and a road running into a
-    // building is simply hidden by it — buildings paint after roads, and
-    // the inset already tucks the road's tip inside the silhouette.
-    const inset = length * 0.07
-    const a2 = { x: a.x + dir.x * inset, y: a.y + dir.y * inset }
-    const b2 = { x: b.x - dir.x * inset, y: b.y - dir.y * inset }
     // Draw the road as a slim rounded rectangle rather than a round-capped
     // stroke: squarer ends read as a plank, not a capsule. Rotate a
     // midpoint-centred rect to the edge's angle; the casing is the same
     // rect grown by PIECE_STROKE on every side.
-    const roadLength = Math.max(0, Math.hypot(b2.x - a2.x, b2.y - a2.y))
-    const mid = { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }
-    const angle = (Math.atan2(b2.y - a2.y, b2.x - a2.x) * 180) / Math.PI
+    const { roadLength, mid, angle } = roadGeometry(road.edgeId)
     return (
       <g key={`road:${road.edgeId}`} transform={`translate(${mid.x} ${mid.y}) rotate(${angle})`}>
         {/* Casing = colored core + PIECE_STROKE outline on each side, matching buildings. */}
@@ -758,7 +767,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
             {/* One closed silhouette per tier, matching the source app's pieces:
                 a house, a house with a rectangle annex, and a twin-gable keep.
                 strokeWidth is divided by scale so every piece renders the same border. */}
-            {building.tier === 'settlement' && <path d="M-15,13 V-3 L0,-15 L15,-3 V13 Z" />}
+            {building.tier === 'settlement' && <path d={SETTLEMENT_PATH} />}
             {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
             {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
           </g>
@@ -938,18 +947,45 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r={coarse ? 17 : 9} onClick={() => onVertex(vertexId)} />
             })}
           </g>
-          {/* Placement affordances: a dot at every rule-legal vertex or edge, and the hover ring. */}
+          {/* Placement affordances: legal dots, a piece preview at an empty target, or a ring. */}
           <g className="placement-layer">
             {buildActive && placeableVertices.map((vertexId) => {
+              if (vertexId === preview?.ref) return null
               const point = vertexPoint(vertexId)
-              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 11 : 8} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
+              return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 4.7 : 3.6} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
             })}
             {roadActive && placeableEdges.map((edgeId) => {
+              if (edgeId === preview?.ref) return null
               const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
               const point = midpoint([a, b])
-              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 10 : 7} fill="rgba(250,246,235,.5)" stroke={playerColor(placementPlayer)} strokeWidth={coarse ? 3 : 2.5} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
+              return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 3.6 : 2.8} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
             })}
-            {hover && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
+            {preview && !previewRoad && <path
+              className="placement-hover"
+              d={SETTLEMENT_PATH}
+              transform={`translate(${preview.x} ${preview.y}) scale(${TIER_SCALE.settlement})`}
+              fill={playerColor(hoverPlayer)}
+              fillOpacity={0.7}
+              stroke="#30271f"
+              strokeOpacity={0.75}
+              strokeWidth={PIECE_STROKE / TIER_SCALE.settlement}
+              strokeLinejoin="round"
+            />}
+            {previewRoad && <rect
+              className="placement-hover"
+              x={-previewRoad.roadLength / 2}
+              y={-ROAD_CORE / 2}
+              width={previewRoad.roadLength}
+              height={ROAD_CORE}
+              rx={ROAD_RADIUS}
+              transform={`translate(${previewRoad.mid.x} ${previewRoad.mid.y}) rotate(${previewRoad.angle})`}
+              fill={playerColor(hoverPlayer)}
+              fillOpacity={0.7}
+              stroke="#30271f"
+              strokeOpacity={0.75}
+              strokeWidth={PIECE_STROKE}
+            />}
+            {hover && !preview && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
           </g>
         </g>
       </svg>

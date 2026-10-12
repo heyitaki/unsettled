@@ -370,10 +370,10 @@ test.describe('build mode', () => {
     await expect(players).toHaveText(['Red', 'Blue', 'Orange', 'White'])
     await expect(tools.locator('.player-grid button[aria-pressed="true"]')).toHaveText('Red')
     const slots = page.locator('.placement-slot')
-    await expect(slots.first()).toHaveAttribute('stroke', '#c23f38')
+    await expect(slots.first()).toHaveAttribute('fill', '#c23f38')
     await players.filter({ hasText: 'Blue' }).click()
     await expect(tools.locator('.player-grid button[aria-pressed="true"]')).toHaveText('Blue')
-    await expect(slots.first()).toHaveAttribute('stroke', '#3063ba')
+    await expect(slots.first()).toHaveAttribute('fill', '#3063ba')
     // Reaching the Player row scrolled the board's top under the sticky header.
     await page.evaluate(() => window.scrollTo(0, 0))
     // The dots take no pointer events: the click lands on the board at the dot's centre.

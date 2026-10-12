@@ -453,6 +453,35 @@ test.describe('desktop', () => {
     await expect(popover).toHaveCount(0)
   })
 
+  test('a solid corner dot previews a settlement and becomes a ring after placing it', async ({ page }) => {
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    await page.locator('.tools-panel').getByText('Edit manually').click()
+    const svg = page.locator('.board-canvas')
+    const vertex = hexVertexIds({ q: 0, r: 0 })[0]
+    const points = parseVertexId(vertex).map((coord) => axialToPixel(coord, 58))
+    const corner = { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+    const color = UNCLAIMED_ROSTER[0].color
+    const slot = svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`)
+    await expect(slot).toHaveAttribute('fill', color)
+    await expect(slot).toHaveAttribute('r', '3.6')
+    const dot = (await slot.boundingBox())!
+    const x = dot.x + dot.width / 2
+    const y = dot.y + dot.height / 2
+    await page.mouse.move(x, y)
+    const preview = svg.locator('path.placement-hover')
+    await expect(preview).toHaveCount(1)
+    await expect(preview).toHaveAttribute('fill', color)
+    await expect(slot).toHaveCount(0)
+    await expect(svg.locator('circle.placement-hover')).toHaveCount(0)
+
+    await page.mouse.click(x, y)
+    const building = svg.locator(`g[fill="${color}"][transform^="translate(${corner.x} ${corner.y})"]`)
+    await expect(building).toHaveAttribute('transform', /scale\(0\.8\)/)
+    await expect(svg.locator('circle.placement-hover')).toHaveCount(1)
+    await expect(preview).toHaveCount(0)
+  })
+
   test('pieces keeps a repeat click on its corner when nearer road slots appear', async ({ page }) => {
     await page.goto('')
     const vertex = hexVertexIds({ q: 0, r: 0 })[0]
