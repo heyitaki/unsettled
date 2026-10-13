@@ -4077,3 +4077,23 @@ By first-round draft position, first picker first, 2,000,000 units each: +0.12pp
 **Reading.** This is the first held-out reading of the arm at 4 seats and it is not selected: the screening estimate of +0.64pp (M-111) regressed to +0.56pp, which is still above the bar by more than two half-widths. The gain is concentrated on the seats that pick second to fourth; the first picker gains +0.12pp. Read as rules on these units, `slot>=1` fires on 75% with a fired gain of +0.70pp and a total of +0.52pp, under the always-on total of +0.56pp, so draft position alone does not beat always-on here. The arm moves the hero's formula alone against three seats on the old vector; nothing here observes a table where every seat carries the new weights.
 
 **Ledger at this point.** `gate5` is spent at 4 seats and unspent at 2, 3, 5 and 6 (the 6-seat run, M-118, is in flight). `tuning5`, `tuning6`, `eval5` and `gate6` are unspent at every seat count.
+
+## M-118: 6 seats, stage 1, always-on `flat_reprice` on `gate5`
+
+**Preregistration.** [`2026-10-13-m118-seats6-stage1-gate.md`](../../../docs/plans/preregs/2026-10-13-m118-seats6-stage1-gate.md), committed in `495b518b` before the run. Ran on the box, 2026-10-13, run `20261013T202459Z-04e0c2ab`, one `BUILD_GENERAL1_2XLARGE` machine (Intel Xeon Platinum 8375C, 96 vCPU), binary built there from `4e953d47` by `rustc 1.99.0`, sha256 `115b18c77aab791f8f68644ec6fab80d0c7ebf5269355136f32a2eca954ddad0`, the same bytes M-117 ran. `extension6`, 6 seats, `gate5` at seed `18002440845045093778` as preregistered, 500,000 boards x 2 reps, 6,000,000 games an arm. The job's own `perf` readings before the first `gate5` game: 14.0 seconds and 478 MB at 2,000 boards, 139.7 seconds and 494 MB at 20,000. The run took 3,460 seconds (57.7 minutes) at a peak of 659 MB (674,504 KiB), against 97 minutes and 0.65 GB predicted; the prediction was read on a slower machine of the same compute type. `evaluation.json` sha256 `4f902046dcd080b13b92471f02464f76375f678b94f5e2b52f0313ad8438d648`; a copy of the run's outputs is in `simulator/runs/m118-seats6-stage1-gate/`.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.728pp | +0.701pp to +0.755pp | `better` | 345,810, 302,123 |
+
+By first-round draft position, first picker first, 1,000,000 units each: +0.41pp (+0.35 to +0.48), +0.76pp (+0.69 to +0.83), +0.89pp (+0.82 to +0.95), +0.85pp (+0.78 to +0.91), +0.80pp (+0.74 to +0.87), +0.66pp (+0.59 to +0.72).
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 998,729 of 6,000,000 with 0 draws, 0.166455 against a corner of 0.166667 with an allowance of 0.000501.
+
+**Decision.** `better`: the interval's lower end is +0.701pp, above the +0.5pp bar. By requirement 7, **6 seats adopts `contestWeight` 0.75 with `repriceFirstExpansion` 1**, under requirement 34 of the cut-off spec, in one commit with the 4-seat adoption. `gate5` is spent at 6 seats.
+
+**Prediction against the result.** I predicted a half-width of 0.026pp, an estimate between +0.50pp and +0.75pp centred near +0.62pp, and `better` at about 80%. The half-width was 0.027pp and the estimate +0.728pp, inside the range and above its centre.
+
+**Reading.** The held-out confirm on `eval4` (M-114) read +0.63pp with an interval that straddled the bar at 12,000 boards; at 500,000 boards the same arm reads +0.73pp with the whole interval above it, so M-114's `inconclusive` was a matter of size. As at 4 seats the first picker gains least, though here it still gains +0.41pp. Read as a rule on these units, `slot>=1` fires on five sixths with a fired gain of +0.79pp and a total of +0.66pp, under the always-on total of +0.73pp. The arm moves the hero's formula alone against five seats on the old vector; nothing here observes a table where every seat carries the new weights.
+
+**Ledger at this point.** `gate5` is spent at 4 and 6 seats and unspent at 2, 3 and 5. `tuning5`, `tuning6`, `eval5` and `gate6` are unspent at every seat count.
