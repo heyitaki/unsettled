@@ -1763,7 +1763,7 @@ mod tests {
         assert_eq!(found, expected, "one SC file per declared arm or combination");
     }
 
-    const CO_ARMS: [(&str, &[usize], &[(&str, f64)]); 7] = [
+    const CO_ARMS: [(&str, &[usize], &[(&str, f64)]); 8] = [
         ("flat_25", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.25)]),
         ("flat_50", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.5)]),
         ("flat_75", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.75)]),
@@ -1772,6 +1772,8 @@ mod tests {
         ("flat_reprice", &[3, 4], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
         ("flat_reprice", &[5], &[("/contestWeight", 0.5), ("/repriceFirstExpansion", 1.0)]),
         ("flat_reprice", &[6], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
+        // The anchor itself, for the seat counts whose shipped vector stage 1 moved off it (M-117, M-118).
+        ("off", &[4, 6], &[]),
     ];
 
     const CO_ANCHORS: [(usize, &[(&str, f64)]); 5] = [
@@ -1845,9 +1847,9 @@ mod tests {
     const SEAT_ADOPTIONS: [(usize, &[(&str, f64)]); 5] = [
         (2, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (3, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
-        (4, &[("/coverageExponent", 1.0)]),
+        (4, &[("/coverageExponent", 1.0), ("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
         (5, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
-        (6, &[("/coverageExponent", 1.0)]),
+        (6, &[("/coverageExponent", 1.0), ("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
     ];
 
     #[test]
@@ -2178,8 +2180,8 @@ mod tests {
         }
         assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
-            weights_arms, 101,
-            "the committed weights arms are 101 files; a change to the set is a decision"
+            weights_arms, 103,
+            "the committed weights arms are 103 files; a change to the set is a decision"
         );
     }
 

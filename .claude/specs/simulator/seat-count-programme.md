@@ -114,6 +114,8 @@ Filled in as each seat count closes. One row per seat count: the vector it ships
 | 5 | `extension6` | today's vector with `coverageExponent` 1.0 and `diversityWeight` 3.2 | Adopted on `gate3`. M-76 screened one axis as a survivor and the other on its retry and read them `better` together, M-77 confirmed the pair on `eval3`, M-78 read `better` at the gate. Held on `gate4`: M-85, `+1.694pp`. |
 | 6 | `extension6` | today's vector with `coverageExponent` 1.0 | Adopted on `gate3`. M-79 screened it as the one survivor, on its retry, M-80 confirmed it on `eval3`, M-81 read `better` at the gate with 0.03pp to spare. `diversity_hi` was retried and dropped unresolved at `+0.570pp`. Held on `gate4` at twice the power, with 0.20pp to spare: M-86, `+0.814pp`. |
 
+**Moved since, by a later programme.** The table is this programme's outcome and is not rewritten. On 2026-10-13 stage 1 of the [board-strategies programme](board-strategies-programme.md) added `contestWeight` 0.75 and `repriceFirstExpansion` 1 to the four-seat and six-seat vectors, each on one held-out `gate5` run: M-117, `+0.556pp` at four seats, and M-118, `+0.728pp` at six. Two, three and five seats ship the table's vectors with both keys at 0.
+
 **The programme is closed, 2026-10-10: every seat count adopted, and all five carry `coverageExponent` 1.0.** Two, three and five seats also carry `diversityWeight` 3.2. No other screened axis produced a survivor: no arm on `scarcityWeight`, `coverageScarcityWeight`, `portWeight` or `expansionWeight` read `better` at any seat count, the higher `portWeight` arm read `worse` at every one, and both `expansionWeight` arms read negative at every one.
 
 What the outcome does not say, for whoever reads the table next:
