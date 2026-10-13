@@ -3560,3 +3560,44 @@ Matched 200-game e2e runs give final/baseline changes of -5.52%, -13.39%, -8.06%
 **Scope.** `view.rs`, `policy/heuristic_v1.rs`, `policy/heuristic_v1_trader.rs`, their six adjacent tests, the rebuilt wasm/hash, and this entry. No placement code, fixture or scoring formula changes. All counters and deliberate faults are removed.
 
 **Quiet-window result, measured by the main session after the round.** The committed and candidate wasm alternated twice in Node at load 7: the 50-game recap takes 92.1 and 91.4 ms on the committed build and 76.5 and 77.1 ms on the candidate, 16% less and under the 78 ms target; a third pair after the last edit gave 89.9 and 75.4 ms. 1,000 games in one wasm thread fall from 1.9 s to 1.6 s. Native `e2e/` medians at the same load: 2.10 and 5.73 ms a game at four and six seats, against 2.12 and 5.92 before. The `advise/` and `placement/` rows did not move. One edit followed the round and changes no output: the offer memo's parameter key destructures `TradeParams` with no rest pattern, so a parameter added to the struct cannot be left out of the key.
+
+## M-93: reuse one-road geometry and bounds in the simulator draft
+
+2026-10-13, baseline is `engine-speed` after M-92. No seed domain: `bench` uses `PERF_SEED`. **Admissible: yes. Both full-draft minima improve by more than 10% in quiet five-repeat comparisons, with unchanged outputs.**
+
+**What changes.** Draft rows use the existing per-layout one-road reach table and `SingleRoadBounds`. Bound memo keys include the owned edge. The existing prepared-row cache already indexes held vertex, seat and grant and validates scorer and owned roads, so no additional base cache is needed. One-use hero prices stay uncached. The draft entry shares geometry and pricing with analysis while preserving analysis's existing entry points. Debug and test builds compare site masks with the walk and every skipped candidate with its exact score.
+
+**Counters.** First full draft in a fresh release process on each fixed bench board, including lookahead. Arrows are before to after. Temporary counters are removed.
+
+| Work per full draft | Four seats | Six seats |
+| --- | ---: | ---: |
+| Expansion requests | 5,133 → 2,995 | 18,868 → 10,275 |
+| Shared-table requests | 2,356 → 2,356 | 8,092 → 8,092 |
+| One-road table requests | 0 → 639 | 0 → 2,183 |
+| Walk requests / walk memo hits | 2,777 / 1,079 → 0 / 0 | 10,776 / 7,029 → 0 / 0 |
+| Actual row walks | 1,698 → 0 | 3,747 → 0 |
+| Expansion value memo hits | 2,577 → 1,631 | 12,577 → 6,624 |
+| Fresh nonempty expansion terms | 2,556 → 1,364 | 6,285 → 3,645 |
+| Bounds asked / candidates skipped | 31,925 / 27,122 → 31,925 / 29,260 | 159,460 / 141,335 → 159,460 / 149,928 |
+| Base scores asked / computed | 32,255 / 7,634 → 32,255 / 7,631 | 160,203 / 25,572 → 160,203 / 25,522 |
+| Setup-road choices | 816 → 816 | 2,682 → 2,682 |
+| Road sites by shared table / walk | 2,066 / 309 → 2,066 / 309 | 6,465 / 1,449 → 6,465 / 1,449 |
+
+Fresh terms after the change split into shared/one-road counts of 1,019/345 and 2,863/782. The six-seat draft also has six empty-site terms in both versions. Hero row counts stay 192/424. The second warm draft prices 677/2,197 terms, against 1,522/4,300 before. Road selection retains its per-first-edge walk because the combined one-road site masks do not distinguish first edges.
+
+**Timing.** Five repeats, minimum / median milliseconds per full draft. The quiet candidate and final native binary have identical SHA-256 hashes.
+
+| Order and layout | Before | After | Minimum change |
+| --- | ---: | ---: | ---: |
+| Before then after, standard4 | 0.842464 / 0.847546 | 0.704201 / 0.705363 | -16.41% |
+| Before then after, extension6 | 3.435266 / 3.487245 | 2.680839 / 2.742776 | -21.96% |
+| After then before, standard4 | 0.846204 / 0.847984 | 0.704342 / 0.710901 | -16.77% |
+| After then before, extension6 | 3.412516 / 3.430745 | 2.668036 / 2.685026 | -21.82% |
+
+Loads are `3.44 5.72 9.77` for both forward runs and `3.41 5.67 9.73` for both reverse runs. Quiet analysis medians improve by 0.8% to 2.4% across both orders. Final complete tables run at loads above 8, so all three filters also run back to back in both orders: placement loads span `21.17 23.36 16.33` to `19.21 22.87 16.24`, e2e `18.23 22.61 16.19` to `17.33 22.35 16.13`, and analysis stays `17.33 22.35 16.13`. All paired e2e medians improve, by 9.0% to 15.5%; analysis medians improve by 0.3% to 3.0%. All benchmark hashes match.
+
+**Identity and faults.** `cargo test`: 811 passed; `cargo test --release`: 783 passed; both have zero failures and 15 ignored, including passing allocation tests. Wasm build/check, typecheck and lint pass. Engine Vitest has 267 passed and one skipped. The separate sweep prints `384 states, 0 moved`; all six recap runs print `{"p1":442,"p2":36,"p3":66,"p4":456} same`. All 244 protected fixture, weight and topology files remain byte-identical.
+
+`single_road_rows_preserve_bits_without_caching_hero_prices` fails when the draft one-road dispatch is disabled. `single_road_row_bounds_follow_roads_holdings_and_scorers` fails when the general bound replaces the one-road bound. Both faults are restored before the final suites. Existing tests are unchanged.
+
+**Scope.** Only `draft.rs`, `expansion.rs`, their two new adjacent tests, rebuilt wasm/hash and this entry change. No temporary instrumentation remains. The retained work is exact site pricing, base scoring for one-use hero rows and per-first-edge setup-road selection; no approximation is needed to meet the target.
