@@ -30,11 +30,13 @@ export function useDraftRecap(enabled: boolean) {
     if (!enabled) return
     let current = true
     let recap = emptyRecap(game)
+    let batch = 0
     const run = async () => {
-      for (let batch = 0; batch < RECAP_GAMES / RECAP_BATCH; batch += 1) {
+      while (current && batch < RECAP_GAMES / RECAP_BATCH) {
+        const nextBatch = batch++
         try {
           const response = await client.request({ game, observer: game.board.players[0].id,
-            decision: { kind: 'recap', games: RECAP_BATCH, batch } })
+            decision: { kind: 'recap', games: RECAP_BATCH, batch: nextBatch } })
           if (!current) return
           if ('error' in response) {
             recap = { ...recap, error: response.error }
@@ -49,10 +51,10 @@ export function useDraftRecap(enabled: boolean) {
           recap = { ...recap, error: error instanceof Error ? error.message : 'Unable to simulate games' }
         }
         setCompleted({ game, tabId, attempt, recap })
-        if (recap.error !== null) return
+        if (recap.error !== null) current = false
       }
     }
-    void run()
+    for (let lane = 0; lane < client.recapWorkers; lane += 1) void run()
     return () => { current = false }
   }, [client, game, tabId, attempt, enabled])
 

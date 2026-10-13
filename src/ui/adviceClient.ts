@@ -11,14 +11,15 @@ export function decisionKey(decision: Decision): string {
 }
 
 export function createAdviceClient(factory: () => Worker) {
+  const recapWorkers = Math.min(4, Math.max(1, (navigator.hardwareConcurrency ?? 2) - 1))
   const cache = new WeakMap<Game, Map<string, AdviceResponse>>()
   const pending = new Map<number, { request: AdviceRequest; key: string; resolve: (response: AdviceResponse) => void }>()
-  let worker: Worker | null = null
+  const workers = new Map<number, Worker>()
   let sequence = 0
   const dispose = () => {
     pending.clear()
-    worker?.terminate()
-    worker = null
+    for (const worker of workers.values()) worker.terminate()
+    workers.clear()
   }
   const fail = (error: string) => {
     const waiting = [...pending.values()]
@@ -26,6 +27,7 @@ export function createAdviceClient(factory: () => Worker) {
     for (const request of waiting) request.resolve({ error })
   }
   return {
+    recapWorkers,
     request(request: AdviceRequest): Promise<AdviceResponse> {
       const key = JSON.stringify([request.observer, decisionKey(request.decision)])
       const cached = cache.get(request.game)?.get(key)
@@ -34,11 +36,15 @@ export function createAdviceClient(factory: () => Worker) {
         const id = ++sequence
         pending.set(id, { request, key, resolve })
         try {
-          if (worker === null) {
+          // With one recap worker the batches arrive one at a time, so a pool would be torn down and rebuilt between them.
+          const slot = request.decision.kind === 'recap' && recapWorkers > 1 ? request.decision.batch % recapWorkers : -1
+          let worker = workers.get(slot)
+          if (!worker) {
             worker = factory()
+            workers.set(slot, worker)
             const started = worker
             worker.onmessage = (event: MessageEvent<{ id: number; response: AdviceResponse }>) => {
-              if (worker !== started) return
+              if (workers.get(slot) !== started) return
               const job = pending.get(event.data.id)
               if (!job) return
               pending.delete(event.data.id)
@@ -51,15 +57,23 @@ export function createAdviceClient(factory: () => Worker) {
                 }
                 entries.set(job.key, response)
               }
+              if (job.request.decision.kind === 'recap'
+                && ![...pending.values()].some(({ request }) => request.decision.kind === 'recap')) {
+                for (const [slot, worker] of workers) {
+                  if (slot === -1) continue
+                  worker.terminate()
+                  workers.delete(slot)
+                }
+              }
               job.resolve(response)
             }
             worker.onerror = (event) => {
               event.preventDefault()
-              if (worker !== started) return
+              if (workers.get(slot) !== started) return
               fail(event.message || 'Advice stopped unexpectedly')
             }
             worker.onmessageerror = () => {
-              if (worker === started) fail('Unable to read advice')
+              if (workers.get(slot) === started) fail('Unable to read advice')
             }
           }
           worker.postMessage({ id, request })

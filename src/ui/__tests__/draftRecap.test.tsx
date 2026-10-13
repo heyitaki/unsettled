@@ -39,6 +39,7 @@ let requests: AdviceRequest[]
 let pending: ((response: AdviceResponse) => void)[]
 let hook: ReturnType<typeof useDraftRecap>
 const client = {
+  recapWorkers: 1,
   request: (request: AdviceRequest): Promise<AdviceResponse> => {
     requests.push(request)
     return new Promise((resolve) => pending.push(resolve))
@@ -95,6 +96,7 @@ beforeEach(() => {
   sessionStorage.clear()
   requests = []
   pending = []
+  client.recapWorkers = 1
   container = document.createElement('div')
   root = createRoot(container)
 })
@@ -300,4 +302,107 @@ it('requests nothing while disabled and stops an unmounted run', async () => {
   await act(async () => root.render(null))
   await act(async () => last(batch()))
   expect(requests).toHaveLength(3)
+})
+
+it('keeps four batches in flight and refills each answer until all 20 are requested', async () => {
+  client.recapWorkers = 4
+  await mount({ enabled: false })
+  await commit(finishedDraft(1))
+  await mount({ enabled: true })
+  expect(requests).toHaveLength(4)
+  expect(pending).toHaveLength(4)
+  for (let completed = 0; completed < RECAP_GAMES / RECAP_BATCH; completed += 1) {
+    await answer(batch())
+    expect(requests).toHaveLength(Math.min(20, completed + 5))
+    expect(pending).toHaveLength(Math.min(4, 19 - completed))
+    expect(hook.games).toBe((completed + 1) * RECAP_BATCH)
+  }
+  expect(requests.map(({ decision }) => decision)).toEqual(Array.from({ length: 20 }, (_, batch) =>
+    ({ kind: 'recap', games: RECAP_BATCH, batch })))
+  expect(hook.done).toBe(true)
+})
+
+it('adds out-of-order answers to the same totals as an ordered run', async () => {
+  client.recapWorkers = 4
+  await mount({ enabled: false })
+  await commit(finishedDraft(1))
+  await mount({ enabled: true })
+  const responses = Array.from({ length: 20 }, (_, index) => batch([index, 30 - index, 10, 8], 2))
+  const ordered = responses.map((_, index) => index)
+  const shuffled = [3, 4, 1, 6, 0, 8, 9, 2, 5, 12, 7, 14, 11, 16, 13, 18, 19, 15, 10, 17]
+  const finish = async (order: number[]) => {
+    const resolvers = new Map<number, (response: AdviceResponse) => void>()
+    for (const [completed, index] of order.entries()) {
+      const added = pending.splice(0)
+      for (const [offset, resolve] of added.entries()) resolvers.set(requests.length - added.length + offset, resolve)
+      const resolve = resolvers.get(index)
+      expect(resolve).toBeDefined()
+      await act(async () => resolve!(responses[index]))
+      expect(hook.games).toBe((completed + 1) * RECAP_BATCH)
+    }
+    return { games: hook.games, wins: hook.wins, draws: hook.draws, done: hook.done, error: hook.error }
+  }
+  const inOrder = await finish(ordered)
+  expect(inOrder).toEqual({ games: RECAP_GAMES, draws: 40, done: true, error: null,
+    wins: Object.fromEntries(game().board.players.map(({ id }, index) => [id, [190, 410, 200, 160][index]])) })
+  requests = []
+  await act(async () => hook.retry())
+  expect(await finish(shuffled)).toEqual(inOrder)
+})
+
+it.each(['game', 'tab', 'retry', 'disable', 'unmount'] as const)(
+  'stops a parallel run on %s and ignores all its late answers', async (change) => {
+    client.recapWorkers = 4
+    await mount({ enabled: false })
+    await commit(finishedDraft(1))
+    await mount({ enabled: true })
+    await answer(batch())
+    const stale = pending.splice(0)
+    expect(stale).toHaveLength(4)
+    if (change === 'game') await commit(finishedDraft(1))
+    if (change === 'tab') await act(async () => seen.dispatch({ type: 'tab-add', game: game() }))
+    if (change === 'retry') await act(async () => hook.retry())
+    if (change === 'disable') await mount({ enabled: false })
+    if (change === 'unmount') await act(async () => root.render(null))
+    const count = requests.length
+    const before = hook
+    for (const resolve of stale) await act(async () => resolve(batch([50, 0, 0, 0])))
+    expect(requests).toHaveLength(count)
+    expect(hook).toBe(before)
+    if (change !== 'unmount') expect(hook.games).toBe(0)
+    if (change === 'game' || change === 'tab' || change === 'retry') {
+      expect(requests.slice(-4).map(({ decision }) => decision)).toEqual(Array.from({ length: 4 }, (_, batch) =>
+        ({ kind: 'recap', games: RECAP_BATCH, batch })))
+      await answer(batch())
+      expect(hook.games).toBe(RECAP_BATCH)
+    }
+  },
+)
+
+it('stops every parallel lane on the first batch error and retries from batch zero', async () => {
+  client.recapWorkers = 4
+  await mount({ enabled: false })
+  await commit(finishedDraft(1))
+  await mount({ enabled: true })
+  await answer(batch())
+  await answer({ error: 'Simulation stopped' })
+  expect(hook.error).toBe('Simulation stopped')
+  expect(hook.games).toBe(RECAP_BATCH)
+  const stale = pending.splice(0)
+  expect(stale).toHaveLength(3)
+  await act(async () => stale[0](batch([50, 0, 0, 0])))
+  await act(async () => stale[1]({ error: 'Later failure' }))
+  expect(requests).toHaveLength(5)
+  expect(hook.error).toBe('Simulation stopped')
+  expect(hook.games).toBe(RECAP_BATCH)
+  await act(async () => hook.retry())
+  expect(requests.slice(5).map(({ decision }) => decision)).toEqual(Array.from({ length: 4 }, (_, batch) =>
+    ({ kind: 'recap', games: RECAP_BATCH, batch })))
+  expect(hook.games).toBe(0)
+  expect(hook.error).toBeNull()
+  await act(async () => stale[2](batch()))
+  expect(requests).toHaveLength(9)
+  expect(hook.games).toBe(0)
+  await answer(batch())
+  expect(hook.games).toBe(RECAP_BATCH)
 })
