@@ -3617,3 +3617,123 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 4 
 **Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 5,145 boards, so `B` is 5,500, where the predicted half-width is 0.00339 and the predicted wall time is 39 seconds, far under the 30 minute cap. Neither the cap nor the floor set it. Every later run at 4 seats uses it: the screen at 5,500 boards, a retry, the confirm and the gate at 22,000.
 
 **Ledger.** `tuning4` is spent at 4 seats.
+
+## M-96: 2 seats, the cut-off arms' picks reading and blind pilot
+
+**Preregistration.** [`2026-10-13-m96-seats2-picks-pilot.md`](../../../docs/plans/preregs/2026-10-13-m96-seats2-picks-pilot.md), committed in `2927d813` before either run. Both ran on that commit's release binary, 2026-10-13, load averages 5.15 5.97 6.75 on 18 cores.
+
+**Picks reading** (`evaluate --picks-only`, `standard4`, 2 seats, player trading off, `--allow-unofficial`, `tuning4` at seed `13887469506549625143`, 400 boards, 800 drafts, no game played).
+
+| Arm | Leaf | Drafts changed | Share |
+| --- | --- | ---: | ---: |
+| `flat_25` | `contestWeight` 0.25 | 170 | 0.212 |
+| `flat_50` | `contestWeight` 0.5 | 257 | 0.321 |
+| `flat_75` | `contestWeight` 0.75 | 280 | 0.350 |
+| `reprice_only` | `repriceFirstExpansion` 1 | 34 | 0.043 |
+
+Every share is at or above 0.02, so all four arms are piloted and screened at 2 seats.
+
+**Blind pilot** (the same command without the flag, 400 boards x 2 reps, 1,600 games an arm). Read from it, and nothing else: `elapsedSeconds` 0.55; `illegalActions` 0; `base` 817 wins of 1,600 with 0 draws.
+
+| Arm | Half-width | Discordant share |
+| --- | ---: | ---: |
+| `flat_25` | 0.01075 | 0.046 |
+| `flat_50` | 0.01335 | 0.073 |
+| `flat_75` | 0.01391 | 0.081 |
+| `reprice_only` | 0.00795 | 0.019 |
+
+**Stop conditions.** Neither fired. The symmetric corner is 0.5000 and `base` won 0.5106, a miss of 0.0106 against an allowance of 0.0411.
+
+**Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 6,322 boards, so `B` is 6,500, where the predicted half-width is 0.00345 and the predicted wall time is 9 seconds, far under the 30 minute cap. Neither the cap nor the floor set it. Every later run at 2 seats uses it: the screen at 6,500 boards, a retry, the confirm and the gate at 26,000.
+
+**Ledger.** `tuning4` is spent at 2 seats.
+
+## M-97: 3 seats, the cut-off arms' picks reading and blind pilot
+
+**Preregistration.** [`2026-10-13-m97-seats3-picks-pilot.md`](../../../docs/plans/preregs/2026-10-13-m97-seats3-picks-pilot.md), committed in `2927d813` before either run. Both ran on that commit's release binary, 2026-10-13, load averages 6.90 6.32 6.86 on 18 cores.
+
+**Picks reading** (`evaluate --picks-only`, `standard4`, 3 seats, player trading on, `tuning4` at seed `6052338987207494362`, 400 boards, 1,200 drafts, no game played).
+
+| Arm | Leaf | Drafts changed | Share |
+| --- | --- | ---: | ---: |
+| `flat_25` | `contestWeight` 0.25 | 292 | 0.243 |
+| `flat_50` | `contestWeight` 0.5 | 499 | 0.416 |
+| `flat_75` | `contestWeight` 0.75 | 561 | 0.468 |
+| `reprice_only` | `repriceFirstExpansion` 1 | 72 | 0.060 |
+
+Every share is at or above 0.02, so all four arms are piloted and screened at 3 seats.
+
+**Blind pilot** (the same command without the flag, 400 boards x 2 reps, 2,400 games an arm). Read from it, and nothing else: `elapsedSeconds` 1.57; `illegalActions` 0; `base` 776 wins of 2,400 with 0 draws.
+
+| Arm | Half-width | Discordant share |
+| --- | ---: | ---: |
+| `flat_25` | 0.01117 | 0.063 |
+| `flat_50` | 0.01404 | 0.110 |
+| `flat_75` | 0.01492 | 0.126 |
+| `reprice_only` | 0.00611 | 0.022 |
+
+**Stop conditions.** Neither fired. The symmetric corner is 0.3333 and `base` won 0.3233, a miss of 0.0100 against an allowance of 0.0317.
+
+**Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 7,265 boards, so `B` is 7,500, where the predicted half-width is 0.00344 and the predicted wall time is 29 seconds, far under the 30 minute cap. Neither the cap nor the floor set it. Every later run at 3 seats uses it: the screen at 7,500 boards, a retry, the confirm and the gate at 30,000.
+
+**Ledger.** `tuning4` is spent at 3 seats.
+
+## M-98: 5 seats, the cut-off arms' picks reading and blind pilot
+
+**Preregistration.** [`2026-10-13-m98-seats5-picks-pilot.md`](../../../docs/plans/preregs/2026-10-13-m98-seats5-picks-pilot.md), committed in `2927d813` before either run. Both ran on that commit's release binary, 2026-10-13, load averages 6.90 6.32 6.86 on 18 cores.
+
+**Picks reading** (`evaluate --picks-only`, `extension6`, 5 seats, player trading on, `tuning4` at seed `13485105647361630321`, 100 boards, 500 drafts, no game played).
+
+| Arm | Leaf | Drafts changed | Share |
+| --- | --- | ---: | ---: |
+| `flat_25` | `contestWeight` 0.25 | 123 | 0.246 |
+| `flat_50` | `contestWeight` 0.5 | 227 | 0.454 |
+| `flat_75` | `contestWeight` 0.75 | 254 | 0.508 |
+| `reprice_only` | `repriceFirstExpansion` 1 | 44 | 0.088 |
+
+Every share is at or above 0.02, so all four arms are piloted and screened at 5 seats.
+
+**Blind pilot** (the same command without the flag, 100 boards x 2 reps, 1,000 games an arm). Read from it, and nothing else: `elapsedSeconds` 2.01; `illegalActions` 0; `base` 209 wins of 1,000 with 0 draws.
+
+| Arm | Half-width | Discordant share |
+| --- | ---: | ---: |
+| `flat_25` | 0.01255 | 0.041 |
+| `flat_50` | 0.01728 | 0.077 |
+| `flat_75` | 0.01930 | 0.090 |
+| `reprice_only` | 0.00939 | 0.023 |
+
+**Stop conditions.** Neither fired. The symmetric corner is 0.2000 and `base` won 0.2090, a miss of 0.0090 against an allowance of 0.0416.
+
+**Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 3,040 boards, so `B` is 3,500, where the predicted half-width is 0.00326 and the predicted wall time is 70 seconds, far under the 120 minute cap. Neither the cap nor the floor set it. Every later run at 5 seats uses it: the screen at 3,500 boards, a retry, the confirm and the gate at 14,000.
+
+**Ledger.** `tuning4` is spent at 5 seats.
+
+## M-99: 6 seats, the cut-off arms' picks reading and blind pilot
+
+**Preregistration.** [`2026-10-13-m99-seats6-picks-pilot.md`](../../../docs/plans/preregs/2026-10-13-m99-seats6-picks-pilot.md), committed in `2927d813` before either run. Both ran on that commit's release binary, 2026-10-13, load averages 8.83 6.73 7.01 on 18 cores.
+
+**Picks reading** (`evaluate --picks-only`, `extension6`, 6 seats, player trading on, `tuning4` at seed `267929230571891344`, 100 boards, 600 drafts, no game played).
+
+| Arm | Leaf | Drafts changed | Share |
+| --- | --- | ---: | ---: |
+| `flat_25` | `contestWeight` 0.25 | 181 | 0.302 |
+| `flat_50` | `contestWeight` 0.5 | 284 | 0.473 |
+| `flat_75` | `contestWeight` 0.75 | 322 | 0.537 |
+| `reprice_only` | `repriceFirstExpansion` 1 | 49 | 0.082 |
+
+Every share is at or above 0.02, so all four arms are piloted and screened at 6 seats.
+
+**Blind pilot** (the same command without the flag, 100 boards x 2 reps, 1,200 games an arm). Read from it, and nothing else: `elapsedSeconds` 3.10; `illegalActions` 0; `base` 232 wins of 1,200 with 0 draws.
+
+| Arm | Half-width | Discordant share |
+| --- | ---: | ---: |
+| `flat_25` | 0.01469 | 0.068 |
+| `flat_50` | 0.01756 | 0.097 |
+| `flat_75` | 0.01873 | 0.110 |
+| `reprice_only` | 0.00783 | 0.019 |
+
+**Stop conditions.** Neither fired. The symmetric corner is 0.1667 and `base` won 0.1933, a miss of 0.0267 against an allowance of 0.0354.
+
+**Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 2,862 boards, so `B` is 3,000, where the predicted half-width is 0.00342 and the predicted wall time is 93 seconds, far under the 120 minute cap. Neither the cap nor the floor set it. Every later run at 6 seats uses it: the screen at 3,000 boards, a retry, the confirm and the gate at 12,000.
+
+**Ledger.** `tuning4` is spent at 6 seats.

@@ -1,6 +1,6 @@
 # Cut-off programme
 
-Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 67c19c18
+Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 3acfc330
 
 ## Summary
 
@@ -18,8 +18,8 @@ Every file, function and line number below was read at commit `a2b23ac4`. What w
 | --- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | 1   | Contest term in the scorer at 0: tier masks, discount, memo and bound handling, both keys in every weights file, inert proofs, wasm | done 2026-10-13, committed on branch `cut-off-programme` (worktree `cut-off`, base `a4067536`): reviewed and approved twice (the second review covers the restructuring the speed bar forced), both cargo profiles green, fixture and bench hashes unchanged, speed proof M-93 (highest instruction ratio 1.006 after a first shape failed at 1.025). Main has since gained `9a08c79a`, to merge before landing |
 | 2   | First-pick re-pricing switch in `rank_candidates` and `Lookahead`, off by default                                                   | done 2026-10-13, committed on the same branch: reviewed and approved, both cargo profiles green (831 and 803), fixture and bench hashes unchanged, speed proof M-94 (highest instruction ratio 1.001), both keys on rank the worst six-seat boards in 62 ms and 204 ms |
-| 3   | `gate5` minted, arms written and pinned, `--picks-only` added, preregistrations, picks reading and blind pilot                      | in progress 2026-10-13: Codex packet for the code half (arm files and pins, `gate5`, `--picks-only`) in worktree `cut-off`. Left after it: review, commit, then per seat count in the order 4, 2, 3, 5, 6 a preregistration committed before its picks reading and blind pilot, which the main session runs |
-| 4   | Screens on `tuning4`, seats two to six                                                                                              | not started |
+| 3   | `gate5` minted, arms written and pinned, `--picks-only` added, preregistrations, picks reading and blind pilot                      | done 2026-10-13, committed on the same branch (`871c7eac`, reviewed and approved): arms, `gate5`, `--picks-only`. Picks readings and blind pilots M-95 to M-99: every arm changes at least 4% of drafts at every seat count, so all four are screened everywhere; no stop condition fired; `B` is 5,500 boards at 4 seats, 6,500 at 2, 7,500 at 3, 3,500 at 5 and 3,000 at 6. `tuning4` is spent at all five seat counts |
+| 4   | Screens on `tuning4`, seats two to six                                                                                              | in progress 2026-10-13: screens preregistered as M-100 to M-104 in the order 4, 2, 3, 5, 6; the main session runs them, then any retry or second stage under its own preregistration |
 | 5   | Confirm on `eval4` and gate on `gate5` for each seat count's candidate                                                              | not started |
 | 6   | Adopt per seat count or delete, regenerate fixtures and wasm, close the record                                                      | not started |
 
