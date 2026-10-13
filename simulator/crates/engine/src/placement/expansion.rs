@@ -5,7 +5,7 @@
 //! the scorer is handed, so it is the one component that depends on where everybody else's pieces
 //! stand.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::app_formula::{AppFormulaScorer, Holdings, SitePricer, VERTEX_FANOUT, VertexLinks, js_max};
@@ -74,6 +74,8 @@ pub(super) struct ReachTable {
     /// With no own roads here, the free first edge leaves at most two paid edges, all in the table.
     near_edges: Vec<u128>,
     open: Vec<OpenReach>,
+    links: Vec<VertexLinks>,
+    single: OnceLock<Arc<SingleRoadTables>>,
 }
 
 impl ReachTable {
@@ -101,6 +103,7 @@ impl ReachTable {
     fn new(links: &[VertexLinks]) -> Self {
         let mut table = Self {
             id: NEXT_REACH_ID.fetch_add(1, Ordering::Relaxed),
+            links: links.to_vec(),
             ..Self::default()
         };
         for index in 0..links.len() {
@@ -157,32 +160,14 @@ impl ReachTable {
     }
 
     fn sites(&self, candidate: Vertex, occupancy: &Occupancy, memo: &mut [SitesEntry]) -> SiteMasks {
-        let open = &self.open[usize::from(candidate)];
-        let masked = [
-            occupancy.blocked & open.sites,
-            occupancy.rival_edges & open.edges,
-            occupancy.rival_vertices & open.through,
-        ];
-        if masked == [0; 3] {
-            return open.masks;
-        }
-        let mut hash = self.id ^ u64::from(candidate).rotate_left(32);
-        for (i, mask) in masked.iter().enumerate() {
-            hash ^= (*mask as u64).rotate_left((i * 11) as u32)
-                ^ ((*mask >> 64) as u64).rotate_left((i * 11 + 7) as u32);
-        }
-        let entry = &mut memo[mix64(hash) as usize & (SITES_MEMO_LEN - 1)];
-        if entry.table == self.id && entry.candidate == candidate && entry.masked == masked {
-            return entry.sites;
-        }
-        let sites = self.scan_sites(candidate, occupancy);
-        *entry = SitesEntry {
-            table: self.id,
-            candidate,
-            masked,
-            sites,
-        };
-        sites
+        cached_sites(self.id, candidate, &self.open[usize::from(candidate)], occupancy, memo,
+            || self.scan_sites(candidate, occupancy))
+    }
+
+    pub(super) fn single_road(&self, candidate: Vertex, edge: Edge) -> &SingleRoadReach {
+        let tables = self.single.get_or_init(|| SingleRoadTables::shared(&self.links));
+        tables.rows[usize::from(edge) * self.links.len() + usize::from(candidate)]
+            .get_or_init(|| SingleRoadReach::new(&self.links, candidate, edge))
     }
 
     fn scan_sites(&self, candidate: Vertex, occupancy: &Occupancy) -> SiteMasks {
@@ -211,6 +196,138 @@ impl ReachTable {
     }
 }
 
+fn cached_sites(
+    id: u64,
+    candidate: Vertex,
+    open: &OpenReach,
+    occupancy: &Occupancy,
+    memo: &mut [SitesEntry],
+    scan: impl FnOnce() -> SiteMasks,
+) -> SiteMasks {
+    let masked = [
+        occupancy.blocked & open.sites,
+        occupancy.rival_edges & open.edges,
+        occupancy.rival_vertices & open.through,
+    ];
+    if masked == [0; 3] {
+        return open.masks;
+    }
+    let mut hash = id ^ u64::from(candidate).rotate_left(32);
+    for (i, mask) in masked.iter().enumerate() {
+        hash ^= (*mask as u64).rotate_left((i * 11) as u32)
+            ^ ((*mask >> 64) as u64).rotate_left((i * 11 + 7) as u32);
+    }
+    let entry = &mut memo[mix64(hash) as usize & (SITES_MEMO_LEN - 1)];
+    if entry.table == id && entry.candidate == candidate && entry.masked == masked {
+        return entry.sites;
+    }
+    let sites = scan();
+    *entry = SitesEntry {
+        table: id,
+        candidate,
+        masked,
+        sites,
+    };
+    sites
+}
+
+#[derive(Debug)]
+struct SingleRoadTables {
+    rows: Vec<OnceLock<SingleRoadReach>>,
+}
+
+impl SingleRoadTables {
+    fn shared(links: &[VertexLinks]) -> Arc<Self> {
+        SINGLE_ROAD_TABLES.with(|held| {
+            if let Ok(held) = held.try_borrow()
+                && let Some((_, table)) = held.iter().find(|(key, _)| key == links)
+            {
+                return Arc::clone(table);
+            }
+            let table = Arc::new(Self {
+                rows: (0..links.len() * 128).map(|_| OnceLock::new()).collect(),
+            });
+            if let Ok(mut held) = held.try_borrow_mut() {
+                held.push((links.to_vec(), Arc::clone(&table)));
+            }
+            table
+        })
+    }
+}
+
+/// One owned edge is free, leaving at most three unowned edges on a simple path.
+#[derive(Debug)]
+pub(super) struct SingleRoadReach {
+    id: u64,
+    pub(super) edge: Edge,
+    entries: Vec<ReachEntry>,
+    open: OpenReach,
+}
+
+impl SingleRoadReach {
+    fn new(links: &[VertexLinks], candidate: Vertex, edge: Edge) -> Self {
+        let mut reach = Self {
+            id: NEXT_REACH_ID.fetch_add(1, Ordering::Relaxed),
+            edge,
+            entries: Vec::new(),
+            open: OpenReach::default(),
+        };
+        reach.extend(links, candidate, candidate, 0, 0, 0);
+        for entry in &reach.entries {
+            reach.open.edges |= entry.edges;
+            reach.open.through |= entry.through;
+            reach.open.sites |= 1 << entry.site;
+            reach.open.masks[entry.paid_builds] |= 1 << entry.site;
+        }
+        reach.open.masks[1] &= !reach.open.masks[0];
+        reach.open.masks[2] &= !(reach.open.masks[0] | reach.open.masks[1]);
+        reach
+    }
+
+    fn extend(
+        &mut self, links: &[VertexLinks], candidate: Vertex, from: Vertex,
+        unowned: usize, vertices: u128, edges: u128,
+    ) {
+        let visited = vertices | (1 << from);
+        for (edge, to) in links[usize::from(from)].steps() {
+            let cost = unowned + usize::from(edge != self.edge);
+            if cost > MAX_PAID_BUILDS + 1 || visited & (1 << to) != 0 {
+                continue;
+            }
+            let edges = edges | (1 << edge);
+            if !links[usize::from(candidate)].adjacent().contains(&to) {
+                self.entries.push(ReachEntry {
+                    site: to, paid_builds: cost.saturating_sub(1), edges,
+                    through: visited & !(1 << candidate),
+                });
+            }
+            self.extend(links, candidate, to, cost, visited, edges);
+        }
+    }
+
+    pub(super) fn open_masks(&self) -> SiteMasks {
+        self.open.masks
+    }
+
+    fn sites(&self, candidate: Vertex, occupancy: &Occupancy, memo: &mut [SitesEntry]) -> SiteMasks {
+        cached_sites(self.id, candidate, &self.open, occupancy, memo, || {
+            let mut sites = SiteMasks::default();
+            for entry in &self.entries {
+                if occupancy.blocked & (1 << entry.site) == 0
+                    && occupancy.rival_edges & entry.edges == 0
+                    && occupancy.rival_vertices & entry.through == 0
+                {
+                    sites[entry.paid_builds] |= 1 << entry.site;
+                }
+            }
+            sites[1] &= !sites[0];
+            sites[2] &= !(sites[0] | sites[1]);
+            sites
+        })
+    }
+}
+
+
 #[derive(Clone, Copy, Default)]
 struct SitesEntry {
     table: u64,
@@ -229,6 +346,10 @@ pub(super) struct Occupancy {
 }
 
 impl Occupancy {
+    pub(super) fn single_edge(&self) -> Option<Edge> {
+        (self.own_edges.count_ones() == 1).then(|| self.own_edges.trailing_zeros() as Edge)
+    }
+
     pub(super) fn new(
         scorer: &AppFormulaScorer,
         vertex_owner: &[u8],
@@ -655,6 +776,10 @@ pub(super) fn bound_key(serial: u32, candidate: Vertex, table_path: bool) -> u64
     price_key(serial, candidate, u8::from(table_path)) | (1 << 48)
 }
 
+pub(super) fn single_road_bound_key(serial: u32, candidate: Vertex, edge: Edge) -> u64 {
+    price_key(serial, candidate, edge + 2) | (1 << 48)
+}
+
 pub(super) fn base_tag(seat: u8, grant: bool) -> u8 {
     debug_assert!(seat < 64, "base keys reserve six bits for the seat");
     0x80 | (seat << 1) | u8::from(grant)
@@ -665,6 +790,8 @@ pub(super) fn price_key(serial: u32, candidate: Vertex, tag: u8) -> u64 {
 }
 
 thread_local! {
+    static SINGLE_ROAD_TABLES: std::cell::RefCell<Vec<(Vec<VertexLinks>, Arc<SingleRoadTables>)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
     static LAST_REACH: std::cell::RefCell<Option<(Vec<VertexLinks>, Arc<ReachTable>)>> =
         const { std::cell::RefCell::new(None) };
     pub(super) static PRICE_MEMO: std::cell::RefCell<PriceMemo> =
@@ -694,6 +821,36 @@ pub(super) fn row_value(
     } else {
         memo.walks.sites(scorer, occupancy, candidate)
     };
+    price_sites(scorer, holdings, candidate, memo, serial, sites)
+}
+
+pub(super) fn single_road_value(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    candidate: Vertex,
+    occupancy: &Occupancy,
+    memo: &mut PriceMemo,
+    serial: u32,
+    reach: &SingleRoadReach,
+) -> f64 {
+    if scorer.weights().expansion_weight == 0.0 {
+        return 0.0;
+    }
+    let sites = reach.sites(candidate, occupancy, &mut memo.sites);
+    #[cfg(any(test, debug_assertions))]
+    assert_eq!(sites, memo.walks.sites(scorer, occupancy, candidate));
+    price_sites(scorer, holdings, candidate, memo, Some(serial), sites)
+}
+
+#[inline(always)]
+fn price_sites(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    candidate: Vertex,
+    memo: &mut PriceMemo,
+    serial: Option<u32>,
+    sites: SiteMasks,
+) -> f64 {
     let mut rest = sites[0] | sites[1] | sites[2];
     if rest == 0 {
         return 0.0;
@@ -2383,4 +2540,140 @@ pub(super) mod speed_tests {
             }
         });
     }
+}
+
+#[cfg(test)]
+mod single_road_tests {
+    use super::*;
+
+    #[test]
+    fn single_road_masks_match_walks_with_obstacles() {
+        let mut memo = PriceMemo::default();
+        let mut checked = 0;
+        let mut free = 0;
+        for (topology, board) in tests::walk_fixtures() {
+            let weights = serde_json::from_str(include_str!(
+                "../../../../placement/default-weights.json"
+            )).unwrap();
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            for candidate in 0..topology.vertex_count() as Vertex {
+                for edge in 0..topology.edge_count() as Edge {
+                    let own = 1 << edge;
+                    let plain = Occupancy { own_edges: own, ..Occupancy::default() };
+                    if scorer.reach.table_path(candidate, &plain) {
+                        continue;
+                    }
+                    let reach = scorer.reach.single_road(candidate, plain.single_edge().unwrap());
+                    for bit in 0..128 {
+                        for occupancy in [
+                            plain,
+                            Occupancy { blocked: 1 << bit, ..plain },
+                            Occupancy { rival_vertices: 1 << bit, ..plain },
+                            Occupancy { rival_edges: (1 << bit) & !own, ..plain },
+                        ] {
+                            let mut sources = [0; 2];
+                            for (first, to) in scorer.steps(candidate) {
+                                if occupancy.rival_edges & (1 << first) == 0 {
+                                    sources[usize::from(first != edge)] |= 1 << to;
+                                }
+                            }
+                            let expected = mask_walk(&scorer, &occupancy, candidate, sources);
+                            let sites = reach.sites(candidate, &occupancy, &mut memo.sites);
+                            assert_eq!(sites, expected, "candidate {candidate}, edge {edge}, bit {bit}");
+                            free += sites[0].count_ones();
+                            checked += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert!(checked > 100_000 && free > 0);
+    }
+
+    #[test]
+    fn single_road_cache_uses_topology_and_falls_back_for_multiple_roads() {
+        let mut held = Vec::new();
+        for (topology, board) in (0..2).flat_map(|_| tests::walk_fixtures()) {
+            let weights = serde_json::from_str(include_str!(
+                "../../../../placement/default-weights.json"
+            )).unwrap();
+            let scorer = AppFormulaScorer::new(&board, &topology, weights);
+            let candidate = 0;
+            let (edge, _) = scorer.steps(candidate).next().unwrap();
+            let occupancy = Occupancy { own_edges: 1 << edge, ..Occupancy::default() };
+            let reach = scorer.reach.single_road(candidate, occupancy.single_edge().unwrap());
+            let id = reach.id;
+            for other in 0..topology.edge_count() as Edge {
+                if other != edge {
+                    let multiple = Occupancy { own_edges: (1 << edge) | (1 << other), ..occupancy };
+                    assert!(multiple.single_edge().is_none());
+                }
+            }
+            held.push((scorer, id));
+        }
+        assert_eq!(held[0].1, held[2].1);
+        assert_eq!(held[1].1, held[3].1);
+        assert_ne!(held[0].1, held[1].1);
+    }
+    #[test]
+    fn single_road_bounds_cover_obstacles_and_all_cost_bands() {
+        use crate::placement::app_formula::SingleRoadBounds;
+        let mut checked = 0;
+        let mut tighter = 0;
+        for (topology, board) in tests::walk_fixtures() {
+            for decay in [0.0, 0.58, 1.2] {
+                let mut weights: crate::placement::app_formula::EngineWeights = serde_json::from_str(
+                    include_str!("../../../../placement/default-weights.json")
+                ).unwrap();
+                weights.expansion_decay = decay;
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                let bounds = scorer.expansion_bounds(1.0).unwrap();
+                let mut memo = PriceMemo::default();
+                for edge in 0..topology.edge_count() as Edge {
+                    let mut vertices = vec![EMPTY; topology.vertex_count()];
+                    let mut edges = vec![EMPTY; topology.edge_count()];
+                    edges[usize::from(edge)] = 0;
+                    vertices[usize::from(topology.edge_endpoints(edge)[0])] = 0;
+                    let holdings = scorer.holdings_for_owner(&vertices, 0);
+                    for candidate in 0..topology.vertex_count() as Vertex {
+                        for rival in [None, Some((usize::from(candidate) + 7) % topology.vertex_count())] {
+                            let previous = rival.map(|vertex| vertices[vertex]);
+                            if let Some(rival) = rival { vertices[rival] = 1; }
+                            let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+                            if !scorer.reach.table_path(candidate, &occupancy) {
+                                let reach = scorer.reach.single_road(candidate, occupancy.single_edge().unwrap());
+                                let sites = SingleRoadBounds::new(&scorer, reach, occupancy.own_vertices);
+                                let upper = bounds.single_road_value(&scorer, &holdings, candidate, &sites);
+                                let exact = row_value(&scorer, &holdings, candidate, &occupancy, &mut memo, None);
+                                assert!(upper >= exact, "edge {edge}, vertex {candidate}, decay {decay}: {upper} < {exact}");
+                                tighter += usize::from(upper < bounds.value(&scorer, &holdings, candidate, false));
+                                checked += 1;
+                            }
+                            if let Some((rival, owner)) = rival.zip(previous) { vertices[rival] = owner; }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(checked > 1_000 && tighter > 1_000);
+    }
+
+    #[test]
+    fn single_road_bound_keys_separate_edges_and_other_prices() {
+        for serial in [1, u32::MAX] {
+            for candidate in 0..128 {
+                let mut keys = std::collections::HashSet::new();
+                for edge in 0..128 {
+                    let key = single_road_bound_key(serial, candidate, edge);
+                    assert!(keys.insert(key));
+                    assert_ne!(key, bound_key(serial, candidate, false));
+                    assert_ne!(key, bound_key(serial, candidate, true));
+                    for tag in 0..=u8::MAX {
+                        assert_ne!(key, price_key(serial, candidate, tag));
+                    }
+                }
+            }
+        }
+    }
+
 }

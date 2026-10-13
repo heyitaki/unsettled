@@ -3323,3 +3323,195 @@ analyze/extension6/behind_three                        1       5    55331042.0  
 **What is left.** A final full draft costs 0.869 ms at four seats and 3.496 ms at six, against whole games of 2.083 and 5.944 ms. The counters still identify thousands of exact expansion evaluations and one-use hero rows, whose bounds and site pricers cannot use the opponent row cache. A fresh sampled profile was attempted on the candidate with `sample <pid> 3 1`; the sandbox denied attachment, so no new self-time percentages are claimed. The profiling run is excluded from the timing tables. The whole-game targets remain unmet.
 
 **Scope.** Only `draft.rs`, `expansion.rs`, their new adjacent tests, the rebuilt wasm and its hash, and this entry changed. No placement, policy, analysis result, seed domain, fixture, weight or topology changed. No mechanism was approximated to reach a timing target.
+
+## M-91: reach tables and indexed rows recover the setup road cost
+
+2026-10-12, baseline is `engine-speed` before this round, candidate is the local result. No seed domain: `bench` uses `PERF_SEED`. **Admissible: yes for byte-identical fixtures, the raw wasm response sweep and reference assertions. Timings are sequential local five-repeat medians, not instruction counts.**
+
+The final analysis medians are **15.859, 16.684 and 59.538 ms**, below the requested **16.0, 18.3 and 63.8 ms** limits. They improve this round's baseline of 19.952, 21.062 and 74.874 ms by 20.5%, 20.8% and 20.5%.
+
+The retained records from the roads port give pre-road medians of 13.919, 15.886 and 55.475 ms, followed by 18.951, 20.581 and 74.862 ms after that port, costs of 36.2%, 29.6% and 34.9%. This round's final times are 13.9%, 5.0% and 7.3% above those pre-road numbers. Those historical timings and this round's fresh baseline are separate runs.
+
+**What changed, without moving an output bit.**
+
+- The shared geometry holds lazy tables for a candidate and one owned edge. Paths contain up to four edges and record zero, one or two paid builds. Rival edges, rival intermediate vertices and blocked sites filter the paths through masks. Tables are shared by adjacency content across layout switches and never evict. Positions that need the own-road path and have multiple owned edges retain the walk and its memo.
+- The one-road upper bound uses those reachable sites, excludes the picker's fixed settlement closure and permits obstacles to raise a site's paid cost. Each cost band uses the largest applicable later decay. A cached bound includes the owned edge. A skipped row is checked against its reference score in debug and test builds.
+- Analysis base rows are indexed by held vertices, seat and grant. Open-table bounds are indexed by held vertices. Each context has one immutable scorer. Every cached scalar is compared by bits with a fresh calculation in debug and test builds; each unskipped row and each bounded ranking retain their reference comparisons.
+- A cached bound can reject a candidate before its geometry table is read. Candidate entries for one owned edge occupy adjacent memory. The shared pricing helper is inlined so the simulator's existing row path does not gain a function call. The simulator does not use the new analysis row caches or owned-edge tables.
+
+**What the counters justified.** Temporary counters observe one `analyze/extension6/opening` call in a release CLI, excluding reference assertions. The first call is shown on both sides. Counters and deliberate faults are removed from the final sources.
+
+| Per-call count | Before | After |
+| --- | ---: | ---: |
+| Rows considered | 358,669 | 358,669 |
+| Rows skipped | 107,591 | 123,411 |
+| Rows priced | 251,078 | 235,258 |
+| Row value memo hits | 218,854 | 208,837 |
+| Own-road reach requests | 27,058 | 11,238 |
+| Own-road reach cache hits | 15,797 | 6,243 |
+| Own-road walks run | 11,261 | 0 |
+| All bound requests | 157,652 | 157,652 |
+| All bound cache hits | 134,247 | 150,512 |
+| Base score requests | 358,669 | 358,669 |
+| Base scores computed | 46,379 | 10,260 |
+
+The before reach cache is the 32-way walk memo; the after reach cache stores obstacle-filtered table masks. Before, 2,528 walks repeated after eviction. After, no own-road row walk runs. The table alone leaves the skip count at 107,591; the one-road bound raises it to 122,726, and excluding the picker's blocked sites raises it to 123,411. The pre-road record has 123,237 skips.
+
+After the reach and bound changes, counters identify 32,470 repeated base calculations. Indexing removes them. The remaining open-table bound lookups include 6,499 repeated calculations; their indexed rows remove those too. The final 121,423 open-bound requests compute 3,908 values and hit 117,515 cached values. Geometry reads fall from one per own-road candidate (38,672) to 12,478. The first call builds 1,036 geometry entries; subsequent calls build none.
+
+The final own-road table has 11,238 mask requests, 6,243 hits and 4,995 scans. Of those scans, 1,276 repeat after mask-cache eviction. Geometry construction and walks do not repeat. The existing bounded mask and value memos remain bounded; no cache sizes are increased.
+
+**Identity and deliberate faults.** The six new tests fail under these faults, then pass after restoration. No existing test body or expectation changes.
+
+| New test | Deliberate fault |
+| --- | --- |
+| `single_road_masks_match_walks_with_obstacles` | Charge the owned edge as an unowned edge. |
+| `single_road_cache_uses_topology_and_falls_back_for_multiple_roads` | Accept multiple owned edges into the one-edge table. |
+| `single_road_bounds_cover_obstacles_and_all_cost_bands` | Drop every reachable site from the upper bound. |
+| `single_road_bound_keys_separate_edges_and_other_prices` | Omit the owned edge from the bound memo key. |
+| `base_rows_keep_holdings_seat_and_grant_across_road_changes` | Omit seat and grant from the base row key. |
+| `open_bound_rows_keep_holdings_when_the_board_changes` | Omit held vertices from the open bound row key. |
+
+Validation: `cargo test`: 803 passed, 15 ignored. `cargo test --release`: 775 passed, 15 ignored. The allocation tests pass in both profiles. The wasm build and source-hash check succeed. The sweep prints `384 states, 0 moved`. Typecheck and lint pass. `npx vitest run src/engine`: 267 passed, with the golden sweep skipped only in that environment-free run and passed separately. The protected-path git diff is empty; fixture, golden and sweep-test SHA-256 digests match the initial snapshot.
+
+The required commands, run sequentially:
+
+```text
+cd simulator
+cargo test
+cargo test --release
+cargo build --release -p unsettled-sim
+uptime
+target/release/unsettled-sim bench --filter analyze/ --repeats 5
+uptime
+target/release/unsettled-sim bench --filter e2e/ --repeats 5
+uptime
+target/release/unsettled-sim bench --filter placement/ --repeats 5
+cd ..
+simulator/tools/build-wasm.sh
+simulator/tools/build-wasm.sh --check
+SWEEP_GOLDEN=/private/tmp/claude-501/-Users-aki-code-unsettled/0c0ebb95-697a-42b0-b2e0-39f41f0d5101/scratchpad/sweep-golden.txt npx vitest run src/engine/__tests__/sweepGolden.test.ts
+npm run typecheck
+npm run lint
+npx vitest run src/engine
+git diff --stat -- simulator/fixtures simulator/placement simulator/topology
+```
+
+Vitest's console interception suppresses the sweep's log in this environment. A second run with `--disableConsoleIntercept` prints `384 states, 0 moved`; the test and golden file are unchanged.
+
+**Before and after tables.** All repeats are five. The load averages are the 1, 5 and 15 minute values immediately before each group.
+
+analyze: before
+
+```text
+22:27  55 users, load averages: 6.97 7.32 6.81
+seed: 9e4f5eed20261010  policy: heuristic-v1-trader-aware-threat-devcards-denial  weights: placement/default-weights.json
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+analyze/standard4/opening                              1       5    19455750.0    19952416.0             
+analyze/extension6/opening                             1       5    20554833.0    21062125.0             
+analyze/extension6/behind_three                        1       5    74519917.0    74873917.0
+```
+
+analyze: after
+
+```text
+23:27  55 users, load averages: 8.62 11.34 10.87
+seed: 9e4f5eed20261010  policy: heuristic-v1-trader-aware-threat-devcards-denial  weights: placement/default-weights.json
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+analyze/standard4/opening                              2       5    15703917.0    15858833.0             
+analyze/extension6/opening                             2       5    16497000.0    16684020.5             
+analyze/extension6/behind_three                        1       5    57708875.0    59537542.0
+```
+
+e2e: before
+
+```text
+22:27  55 users, load averages: 6.73 7.26 6.79
+seed: 9e4f5eed20261010  policy: heuristic-v1-trader-aware-threat-devcards-denial  weights: placement/default-weights.json
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+e2e/standard4/single_core                             20       5     2095666.7     2126127.1       470.34
+e2e/standard4/all_cores                               20       5      271983.3      294729.2      3392.95
+e2e/extension6/single_core                            20       5     5839568.8     5856131.2       170.76
+e2e/extension6/all_cores                              20       5      626425.0      632356.2      1581.39
+```
+
+e2e: after
+
+```text
+23:27  55 users, load averages: 8.62 11.34 10.87
+seed: 9e4f5eed20261010  policy: heuristic-v1-trader-aware-threat-devcards-denial  weights: placement/default-weights.json
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+e2e/standard4/single_core                             20       5     2104414.5     2136729.1       468.01
+e2e/standard4/all_cores                               20       5      227652.0      251354.2      3978.45
+e2e/extension6/single_core                            20       5     5998770.8     6065604.2       164.86
+e2e/extension6/all_cores                              20       5      673672.9      703889.6      1420.68
+```
+
+placement: before
+
+```text
+22:27  55 users, load averages: 6.73 7.26 6.79
+seed: 9e4f5eed20261010  policy: heuristic-v1-trader-aware-threat-devcards-denial  weights: placement/default-weights.json
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+placement/standard4/prepare                         4096       5        5923.3        6193.3             
+placement/standard4/score_all                       1024       5       29354.9       29558.2             
+placement/standard4/greedy/first                    1024       5       29725.7       30006.6             
+placement/standard4/greedy/middle                   1024       5       22241.2       22399.9             
+placement/standard4/greedy/turn                     2048       5       17979.7       18073.2             
+placement/standard4/greedy/last                     2048       5       11273.5       11318.8             
+placement/standard4/draft/first                      128       5      275463.2      275916.0             
+placement/standard4/draft/middle                     256       5      152632.0      153413.4             
+placement/standard4/full_draft                        32       5      847580.7      855143.2             
+placement/extension6/prepare                        2048       5        7796.0        7872.3             
+placement/extension6/score_all                       512       5       45028.2       45425.2             
+placement/extension6/greedy/first                    512       5       44907.0       45280.9             
+placement/extension6/greedy/middle                  1024       5       34177.0       34495.6             
+placement/extension6/greedy/turn                    1024       5       29480.6       29665.1             
+placement/extension6/greedy/last                    2048       5       17349.8       19344.8             
+placement/extension6/draft/first                      32       5      778175.8      784649.7             
+placement/extension6/draft/middle                     64       5      426791.0      434326.2             
+placement/extension6/full_draft                        8       5     3467239.5     3540229.1
+```
+
+placement: after
+
+```text
+23:27  55 users, load averages: 8.62 11.34 10.87
+seed: 9e4f5eed20261010  policy: heuristic-v1-trader-aware-threat-devcards-denial  weights: placement/default-weights.json
+scenario                                           calls repeats   min ns/call median ns/call    games/sec
+placement/standard4/prepare                         4096       5        5635.7        5705.2             
+placement/standard4/score_all                       1024       5       29448.2       29738.1             
+placement/standard4/greedy/first                    1024       5       29630.1       30106.7             
+placement/standard4/greedy/middle                   1024       5       22306.6       22541.9             
+placement/standard4/greedy/turn                     2048       5       17977.9       18020.5             
+placement/standard4/greedy/last                     2048       5       11399.2       11552.2             
+placement/standard4/draft/first                      128       5      280063.2      284781.6             
+placement/standard4/draft/middle                     256       5      153103.8      153668.5             
+placement/standard4/full_draft                        32       5      855901.0      884290.4             
+placement/extension6/prepare                        2048       5        7813.6        7854.3             
+placement/extension6/score_all                       512       5       45606.0       45697.1             
+placement/extension6/greedy/first                    512       5       46155.3       46422.0             
+placement/extension6/greedy/middle                  1024       5       34343.0       34660.6             
+placement/extension6/greedy/turn                    1024       5       29610.4       29867.8             
+placement/extension6/greedy/last                    2048       5       17532.4       17561.3             
+placement/extension6/draft/first                      32       5      771878.9      783615.9             
+placement/extension6/draft/middle                     64       5      425472.7      435036.5             
+placement/extension6/full_draft                        8       5     3550755.2     3596020.9
+```
+
+**Noise checks.** The initial twenty-game tables and the larger comparisons vary with machine load. Two final 200-game comparisons run in opposite binary orders. All state and decision hashes match. Their final/baseline changes are:
+
+| e2e row | Before then final | Final then before |
+| --- | ---: | ---: |
+| `e2e/standard4/single_core` | -0.44% | +0.75% |
+| `e2e/standard4/all_cores` | -11.74% | +0.61% |
+| `e2e/extension6/single_core` | -1.92% | -0.95% |
+| `e2e/extension6/all_cores` | +2.90% | -7.61% |
+
+Loads for those four runs: `6.44 7.78 8.93`, `6.22 7.69 8.88`, `8.30 8.10 9.02`, `8.33 8.12 9.01`.
+
+The two final placement comparisons also reverse binary order. Full-draft changes are -4.60% / +1.66% at four seats and -9.29% / -0.29% at six. Individual greedy rows move in both directions, with no consistent slowdown beyond the observed noise. Their before/final loads are `13.71 10.97 10.23` / `13.17 10.90 10.21`, then final/before `13.24 11.05 10.28` / `12.66 10.97 10.25`. The earlier three paired comparisons of the same native paths agree with that conclusion. These checks justify treating the isolated e2e all-core increases as timing noise, not a simulator change.
+
+**What is left.** The four-seat analysis row has 0.141 ms of headroom under its cap, and loaded runs cross that cap. The six-seat rows have more room. The remaining work includes exact mask filtering and site pricing, plus the roads each rollout must choose and lay. The general walk remains available for multiple owned edges. No scoring approximation or output change is used to meet a timing target.
+
+**Scope.** Only `expansion.rs`, `app_formula.rs`, `analysis/window.rs`, their new adjacent tests, the rebuilt wasm and its source hash, and this entry change. Fixture, weight and topology bytes stay unchanged. The sweep test and golden file stay unchanged.

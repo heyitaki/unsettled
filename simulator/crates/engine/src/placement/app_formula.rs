@@ -527,17 +527,17 @@ impl<'a> SitePricer<'a> {
 }
 
 #[derive(Debug)]
-struct BoundSites {
-    bases: [[f64; 2]; 2],
+struct BoundSites<const N: usize = 2> {
+    bases: [[f64; 2]; N],
     adjusted: [f64; RESOURCE_COUNT],
     port_factors: [f64; RESOURCE_COUNT],
-    decay: [f64; 2],
+    decay: [f64; N],
 }
 
-impl BoundSites {
-    fn new(scorer: &AppFormulaScorer, masks: [u128; 2], decay: [f64; 2]) -> Self {
+impl<const N: usize> BoundSites<N> {
+    fn new(scorer: &AppFormulaScorer, masks: [u128; N], decay: [f64; N]) -> Self {
         let mut result = Self {
-            bases: [[f64::NEG_INFINITY; 2]; 2],
+            bases: [[f64::NEG_INFINITY; 2]; N],
             adjusted: [f64::NEG_INFINITY; RESOURCE_COUNT],
             port_factors: [0.0; RESOURCE_COUNT],
             decay,
@@ -561,6 +561,27 @@ impl BoundSites {
             }
         }
         result
+    }
+}
+
+/// Obstacles can raise a site's paid cost, so each band takes the largest later decay.
+pub(super) struct SingleRoadBounds(BoundSites<3>);
+
+impl SingleRoadBounds {
+    pub(super) fn new(
+        scorer: &AppFormulaScorer, reach: &expansion::SingleRoadReach, mut own: u128,
+    ) -> Self {
+        let mut blocked = own;
+        while own != 0 {
+            let vertex = own.trailing_zeros() as Vertex;
+            own &= own - 1;
+            for adjacent in scorer.vertex_adjacent(vertex) {
+                blocked |= 1 << adjacent;
+            }
+        }
+        let later = js_max(scorer.decay_pow[1], scorer.decay_pow[2]);
+        let decay = [js_max(scorer.decay_pow[0], later), later, scorer.decay_pow[2]];
+        Self(BoundSites::new(scorer, reach.open_masks().map(|sites| sites & !blocked), decay))
     }
 }
 
@@ -588,6 +609,19 @@ impl ExpansionBounds {
 
     fn with_pricer(&self, pricer: &SitePricer<'_>, candidate: Vertex, table_path: bool) -> f64 {
         let sites = if table_path { &self.table[usize::from(candidate)] } else { &self.general };
+        self.with_sites(pricer, sites)
+    }
+
+    pub(super) fn single_road_value(
+        &self, scorer: &AppFormulaScorer, holdings: &Holdings, candidate: Vertex,
+        sites: &SingleRoadBounds,
+    ) -> f64 {
+        let mut with_candidate = *holdings;
+        scorer.add_to_holdings(&mut with_candidate, candidate);
+        self.with_sites(&SitePricer::new(scorer, with_candidate), &sites.0)
+    }
+
+    fn with_sites<const N: usize>(&self, pricer: &SitePricer<'_>, sites: &BoundSites<N>) -> f64 {
         let weights = &pricer.scorer.weights;
         let diversity = self.diversity - pricer.total;
 

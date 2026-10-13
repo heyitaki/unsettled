@@ -14,7 +14,7 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::HashMap;
 
 use super::{Board, softmax_pick};
-use crate::placement::app_formula::{AppFormulaScorer, Holdings, js_max};
+use crate::placement::app_formula::{AppFormulaScorer, Holdings, SingleRoadBounds, js_max};
 use crate::placement::expansion;
 use crate::state::{EMPTY, MAX_SEATS};
 use crate::topology::{Edge, Topology, Vertex};
@@ -189,6 +189,9 @@ pub(super) struct Context<'a> {
     /// to `opponent_pick`. A scan made outside a window finds none and reads `vertex_owner`.
     standing: Cell<Option<Standing>>,
     roads: RefCell<HashMap<(Vertex, [u128; 5]), Option<Edge>>>,
+    base_rows: RefCell<HashMap<(u128, u8), Vec<Option<f64>>>>,
+    open_bounds: RefCell<HashMap<u128, Vec<Option<f64>>>>,
+    single_road_bounds: RefCell<HashMap<(Vertex, Edge, u128), SingleRoadBounds>>,
 }
 
 impl<'a> Context<'a> {
@@ -206,6 +209,9 @@ impl<'a> Context<'a> {
             partner_caps: vec![OnceCell::new(); seats],
             standing: Cell::new(None),
             roads: RefCell::new(HashMap::new()),
+            base_rows: RefCell::new(HashMap::new()),
+            open_bounds: RefCell::new(HashMap::new()),
+            single_road_bounds: RefCell::new(HashMap::new()),
         }
     }
 
@@ -301,10 +307,11 @@ impl<'a> Context<'a> {
     /// vertex's total is at or below the floor too. Weights the bound does not cover skip nothing.
     ///
     /// The numbers come off the scorer's fast paths and carry the reference's bits. The part
-    /// without expansion is read from the price memo. The expansion part is `row_value`, which
-    /// takes a candidate's sites from the shared reach table or a masked walk over the window's
-    /// pieces as bit masks, prices them through `SitePricer`, and remembers the result. Debug and
-    /// test builds price every vertex both ways and compare.
+    /// without expansion and the open-table bounds are indexed by the vertices the seat holds, plus
+    /// seat and grant for the former. The expansion part takes a candidate's sites from the shared
+    /// reach table, from the one-road table when exactly one of the seat's roads is near, or from
+    /// a masked walk over the window's pieces as bit masks, prices them through `SitePricer`, and
+    /// remembers the result. Debug and test builds price every vertex both ways and compare.
     ///
     /// The memo keys a seat's holdings by the set of vertices it holds, and here that set does
     /// name one holdings value per scorer although holdings fold in `board.buildings` order: a
@@ -361,9 +368,16 @@ impl<'a> Context<'a> {
             let serial = memo.serial(scorer.id, occupancy.own_vertices);
             let base_tag = expansion::base_tag(seat, receives_grant);
             let bounds = scorer.expansion_bounds(scale.expansion);
+            let single_edge = occupancy.single_edge();
             let mut holdings_total = None;
+            let mut open_bounds = self.open_bounds.borrow_mut();
+            let mut open_row = bounds.map(|_| open_bounds.entry(occupancy.own_vertices)
+                .or_insert_with(|| vec![None; self.topology.vertex_count()]));
+            let mut base_rows = self.base_rows.borrow_mut();
+            let base_row = base_rows.entry((occupancy.own_vertices, base_tag))
+                .or_insert_with(|| vec![None; self.topology.vertex_count()]);
             for vertex in legal {
-                let rest = memo.price(expansion::price_key(serial, vertex, base_tag), || {
+                let rest = *base_row[usize::from(vertex)].get_or_insert_with(|| {
                     let total = *holdings_total
                         .get_or_insert_with(|| scorer.holdings_diversity_total(holdings));
                     scorer.scaled_total_with_diversity(
@@ -374,22 +388,61 @@ impl<'a> Context<'a> {
                         total,
                     )
                 });
+                #[cfg(any(test, debug_assertions))]
+                {
+                    let total = scorer.holdings_diversity_total(holdings);
+                    let expected = scorer.scaled_total_with_diversity(
+                        *holdings, vertex, receives_grant, scale.diversity, total,
+                    );
+                    assert_eq!(rest.to_bits(), expected.to_bits(), "cached base at {vertex}");
+                }
+                let table_path = scorer.reach.table_path(vertex, &occupancy);
+                let single = single_edge.filter(|_| !table_path);
                 let floor = floor.get();
                 if let Some(bounds) = bounds
                     && !floor.is_nan()
                 {
-                    let table_path = scorer.reach.table_path(vertex, &occupancy);
-                    let key = expansion::bound_key(serial, vertex, table_path);
-                    let upper =
-                        memo.price(key, || bounds.value(scorer, holdings, vertex, table_path));
+                    let upper = if let Some(edge) = single {
+                        let key = expansion::single_road_bound_key(serial, vertex, edge);
+                        memo.price(key, || {
+                            let mut held = self.single_road_bounds.borrow_mut();
+                            let sites = held.entry((vertex, edge, occupancy.own_vertices))
+                                .or_insert_with(|| {
+                                    let reach = scorer.reach.single_road(vertex, edge);
+                                    SingleRoadBounds::new(scorer, reach, occupancy.own_vertices)
+                                });
+                            bounds.single_road_value(scorer, holdings, vertex, sites)
+                        })
+                    } else if table_path {
+                        let value = *open_row.as_mut().expect("bounds have a row")[usize::from(vertex)]
+                            .get_or_insert_with(|| bounds.value(scorer, holdings, vertex, true));
+                        #[cfg(any(test, debug_assertions))]
+                        assert_eq!(value.to_bits(), bounds.value(scorer, holdings, vertex, true).to_bits(),
+                            "cached open bound at {vertex}");
+                        value
+                    } else {
+                        let key = expansion::bound_key(serial, vertex, false);
+                        memo.price(key, || bounds.value(scorer, holdings, vertex, false))
+                    };
+                    #[cfg(any(test, debug_assertions))]
+                    if let Some(edge) = single {
+                        let fresh = SingleRoadBounds::new(scorer, scorer.reach.single_road(vertex, edge), occupancy.own_vertices);
+                        let fresh = bounds.single_road_value(scorer, holdings, vertex, &fresh);
+                        assert_eq!(upper.to_bits(), fresh.to_bits(), "cached single-road bound at {vertex}");
+                        assert!(scale.expansion * upper + rest >= reference(vertex).1, "single-road bound at {vertex}");
+                    }
                     if scale.expansion * upper + rest <= floor {
                         #[cfg(test)]
                         SKIPPED_VERTICES.with(|skipped| skipped.set(skipped.get() + 1));
                         continue;
                     }
                 }
-                let sites =
-                    expansion::row_value(scorer, holdings, vertex, &occupancy, memo, Some(serial));
+                let sites = if let Some(edge) = single {
+                    let reach = scorer.reach.single_road(vertex, edge);
+                    expansion::single_road_value(scorer, holdings, vertex, &occupancy, memo, serial, reach)
+                } else {
+                    expansion::row_value(scorer, holdings, vertex, &occupancy, memo, Some(serial))
+                };
                 let walk = scale.expansion * sites;
                 let total = walk + rest;
                 #[cfg(any(test, debug_assertions))]
@@ -1163,4 +1216,58 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn base_rows_keep_holdings_seat_and_grant_across_road_changes() {
+        let (board, mut weights) = corpus("empty-first-seat-standard4");
+        weights.hand_value_weight = 0.4;
+        let scorer = board.scorer(weights);
+        let context = Context::new(&board, &scorer);
+        for road_owner in [EMPTY, 1, 0, EMPTY] {
+            for seat in 0..2 {
+                for held in [None, Some(0), Some(7)] {
+                    for grant in [false, true] {
+                        let (mut vertices, mut edges) = board.owners();
+                        edges[0] = road_owner;
+                        let mut blocked = board.blocked();
+                        if let Some(vertex) = held {
+                            vertices[usize::from(vertex)] = seat;
+                            block_vertex(board.topology, &mut blocked, vertex);
+                        }
+                        let holdings = scorer.holdings_for_owner(&vertices, seat);
+                        context.scan(seat, &holdings, &blocked, &vertices, &edges, grant,
+                            &Cell::new(f64::NAN), &mut |vertex, expansion, total| {
+                                let expected = scorer.marginal_parts(
+                                    &holdings, &vertices, &edges, seat, vertex, grant,
+                                );
+                                assert_eq!((expansion.to_bits(), total.to_bits()),
+                                    (expected.0.to_bits(), expected.1.to_bits()));
+                            });
+                    }
+                }
+            }
+        }
+        assert_eq!(context.base_rows.borrow().len(), 12);
+    }
+
+    #[test]
+    fn open_bound_rows_keep_holdings_when_the_board_changes() {
+        let (board, weights) = corpus("empty-first-seat-standard4");
+        let scorer = board.scorer(weights);
+        let context = Context::new(&board, &scorer);
+        for _ in 0..2 {
+            for held in [None, Some(0), Some(7)] {
+                let (mut vertices, edges) = board.owners();
+                let mut blocked = board.blocked();
+                if let Some(vertex) = held {
+                    vertices[usize::from(vertex)] = 0;
+                    block_vertex(board.topology, &mut blocked, vertex);
+                }
+                let holdings = scorer.holdings_for_owner(&vertices, 0);
+                context.scan(0, &holdings, &blocked, &vertices, &edges, false,
+                    &Cell::new(f64::NEG_INFINITY), &mut |_, _, _| {});
+            }
+        }
+        assert_eq!(context.open_bounds.borrow().len(), 3);
+    }
+
 }
