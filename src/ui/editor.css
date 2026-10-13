@@ -296,6 +296,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .pick-ledger .analysis-follow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .pick-ledger .analysis-follow-spot { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .pick-ledger .analysis-follow-spot > span:first-child { color: var(--muted); font-size: 11px; }
+.analysis-contest { color: var(--muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.pick-ledger .analysis-contest { grid-column: 2 / -1; }
 .pick-ledger .analysis-factors { grid-column: 2 / -1; gap: 1px 10px; margin-top: 5px; line-height: 1.45; }
 .pick-ledger .analysis-factors > span { padding: 0; background: transparent; border-radius: 0; font-weight: 400; }
 .pick-ledger .analysis-factors b { color: var(--ink); font-weight: 600; }
@@ -311,7 +313,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .analysis-loading span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes analysis-loading-in { from { opacity: 0; } }
 .analysis-body .analysis-stale * { color: transparent !important; transition: color .2s .12s, background-color .2s .12s, border-color .2s .12s, opacity .2s .12s, fill .2s .12s, stroke .2s .12s; }
-.analysis-stale :is(.analysis-score, .analysis-availability, .analysis-touch-select), .analysis-stale .pick-ledger :is(.analysis-follow-spot > span:first-child, .analysis-factors > span) { border-radius: 4px; background-color: var(--tint); }
+.analysis-stale :is(.analysis-score, .analysis-availability, .analysis-contest, .analysis-touch-select), .analysis-stale .pick-ledger :is(.analysis-follow-spot > span:first-child, .analysis-factors > span) { border-radius: 4px; background-color: var(--tint); }
 .analysis-stale .spot-tiles :is(polygon, .spot-port > rect) { fill: var(--tint); stroke: transparent; }
 .analysis-stale .spot-tiles :is(circle, text), .analysis-stale .spot-tile > g { opacity: 0; }
 .analysis-stale .analysis-placeholder :is(p, p + span) { border-radius: 4px; background-color: var(--line); }

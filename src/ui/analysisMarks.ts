@@ -1,5 +1,18 @@
 import type { Recommendation } from '../engine/analysisProtocol'
+import type { RowContest } from '../engine/contest'
 import type { HighlightMark } from './store'
+
+export function contestMarks(
+  contested: RowContest['contested'],
+  colorOf: (playerId: string) => string,
+): HighlightMark[] {
+  const seen = new Set<string>()
+  return contested.filter(({ vertexId }) => {
+    if (seen.has(vertexId)) return false
+    seen.add(vertexId)
+    return true
+  }).map(({ vertexId, playerId }) => ({ ref: vertexId, color: colorOf(playerId), kind: 'ring' }))
+}
 
 /**
  * A recommendation drawn on the board: my first pick and its planned follow-up as numbered

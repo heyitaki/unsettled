@@ -18,7 +18,7 @@
 
 use std::ops::Range;
 
-use super::app_formula::{AppFormulaScorer, js_max};
+use super::app_formula::{AppFormulaScorer, SingleRoadBounds, js_max};
 use super::expansion;
 use crate::game::{can_place_settlement, setup_order};
 use crate::state::{EMPTY, MAX_SEATS};
@@ -156,7 +156,7 @@ impl ScoreRows {
                     } else {
                         base_total()
                     };
-                    base + scale.expansion * expansion::row_value(
+                    base + scale.expansion * expansion::row_value_with_single_road(
                         scorer, &holdings, vertex, &occupancy, memo, serial,
                     )
                 } else {
@@ -253,6 +253,16 @@ impl ScoreRows {
             taken
         };
         let holdings = scorer.holdings_for_owner(vertex_owner, seat);
+        let bound_value = |vertex| {
+            let table_path = scorer.reach.table_path(vertex, &occupancy);
+            if let Some(edge) = occupancy.single_edge().filter(|_| !table_path) {
+                let reach = scorer.reach.single_road(vertex, edge);
+                let sites = SingleRoadBounds::new(scorer, reach, occupancy.own_vertices);
+                bounds.single_road_value(scorer, &holdings, vertex, &sites)
+            } else {
+                bounds.value(scorer, &holdings, vertex, table_path)
+            }
+        };
         let mut holdings_total = None;
         let mut prepared = if memoize && occupancy.own_vertices.count_ones() <= 1 {
             let held = (occupancy.own_vertices != 0)
@@ -306,9 +316,7 @@ impl ScoreRows {
                         let expected = scorer.scaled_total_with_diversity(
                             holdings, vertex, grant, scale.diversity, total,
                         );
-                        let upper = expected + scale.expansion * bounds.value(
-                            scorer, &holdings, vertex, scorer.reach.table_path(vertex, &occupancy),
-                        );
+                        let upper = expected + scale.expansion * bound_value(vertex);
                         assert_eq!(base.to_bits(), expected.to_bits());
                         assert_eq!(bound.to_bits(), upper.to_bits());
                     }
@@ -326,11 +334,13 @@ impl ScoreRows {
                     };
                     let table_path = scorer.reach.table_path(vertex, &occupancy);
                     let expansion = if let Some(serial) = serial {
-                        memo.price(expansion::bound_key(serial, vertex, table_path), || {
-                            bounds.value(scorer, &holdings, vertex, table_path)
-                        })
+                        let key = occupancy.single_edge().filter(|_| !table_path).map_or_else(
+                            || expansion::bound_key(serial, vertex, table_path),
+                            |edge| expansion::single_road_bound_key(serial, vertex, edge),
+                        );
+                        memo.price(key, || bound_value(vertex))
                     } else {
-                        bounds.value(scorer, &holdings, vertex, table_path)
+                        bound_value(vertex)
                     };
                     let bound = base + scale.expansion * expansion;
                     (base, bound)
@@ -360,7 +370,7 @@ impl ScoreRows {
             let mut evaluated = 0_u128;
             let mut evaluate = |vertex: Vertex, best: &mut [Option<(Vertex, f64)>; 2]| {
                 let score = self.scratch[usize::from(vertex)] + scale.expansion
-                    * expansion::row_value(scorer, &holdings, vertex, &occupancy, memo, serial);
+                    * expansion::row_value_with_single_road(scorer, &holdings, vertex, &occupancy, memo, serial);
                 if score.is_nan() {
                     return false;
                 }
@@ -386,6 +396,9 @@ impl ScoreRows {
                 rest &= rest - 1;
                 let held = best[usize::from(taken & (1 << vertex) == 0)].unwrap().1;
                 if upper[usize::from(vertex)] < held {
+                    #[cfg(any(test, debug_assertions))]
+                    assert!(scorer.score_for_owner(vertex_owner, edge_owner, seat, vertex, grant) < held,
+                        "the bound skips only candidates below the retained score");
                     continue;
                 }
                 if !evaluate(vertex, &mut best) {
@@ -2359,5 +2372,62 @@ mod reprice_tests {
         }
         assert!(credits > 0);
         assert_eq!(choose(&scorers, &topology, 2, &vertices, &edges, 0, false).unwrap().0, best.unwrap().0);
+    }
+}
+
+#[cfg(test)]
+mod single_road_row_tests {
+    use super::*;
+
+    #[test]
+    fn single_road_row_bounds_follow_roads_holdings_and_scorers() {
+        for (topology, board) in expansion::tests::walk_fixtures() {
+            let weights: super::super::app_formula::EngineWeights = serde_json::from_str(
+                include_str!("../../../../placement/default-weights.json")
+            ).unwrap();
+            let first = AppFormulaScorer::new(&board, &topology, weights.clone());
+            let mut changed = weights;
+            changed.expansion_decay = 0.35;
+            changed.diversity_weight *= 1.7;
+            let second = AppFormulaScorer::new(&board, &topology, changed);
+            let mut rows = ScoreRows::new(2, topology.vertex_count(), topology.vertex_count(), false);
+            let mut checked = 0;
+            for held in (0..topology.vertex_count() as Vertex).step_by(11) {
+                let mut vertices = vec![EMPTY; topology.vertex_count()];
+                vertices[usize::from(held)] = 0;
+                let mut edges = vec![EMPTY; topology.edge_count()];
+                for edge in topology.vertex_edges(held) {
+                    edges.fill(EMPTY);
+                    edges[usize::from(*edge)] = 0;
+                    for scorer in [&first, &second, &first] {
+                        for grant in [false, true] {
+                            let occupancy = expansion::Occupancy::new(scorer, &vertices, &edges, 0);
+                            let holdings = scorer.holdings_for_owner(&vertices, 0);
+                            let scale = scorer.slot_scale(0);
+                            let bounds = scorer.expansion_bounds(scale.expansion).unwrap();
+                            let actual = rows.argmax_row(scorer, &topology, &vertices, &edges, 0, grant, None, true);
+                            let slot = slot_index(rows.owner_slots, 0, Some(held), grant);
+                            let row = &rows.prepared[rows.prepared_index[slot]];
+                            for vertex in 0..topology.vertex_count() as Vertex {
+                                if occupancy.blocked & (1 << vertex) != 0
+                                    || scorer.reach.table_path(vertex, &occupancy) { continue; }
+                                let reach = scorer.reach.single_road(vertex, *edge);
+                                let sites = SingleRoadBounds::new(scorer, reach, occupancy.own_vertices);
+                                let base = row.values[usize::from(vertex)].0;
+                                let bound = base + scale.expansion
+                                    * bounds.single_road_value(scorer, &holdings, vertex, &sites);
+                                assert_eq!(row.values[usize::from(vertex)].1.to_bits(), bound.to_bits());
+                                assert!(bound >= scorer.score_for_owner(&vertices, &edges, 0, vertex, grant));
+                                checked += 1;
+                            }
+                            let reference = rows.full_argmax(scorer, &topology, &vertices, &edges, 0, grant, None, false);
+                            let bits = |pick: Option<(Vertex, f64)>| pick.map(|(v, score)| (v, score.to_bits()));
+                            assert_eq!(bits(actual.taken), bits(reference.taken));
+                        }
+                    }
+                }
+            }
+            assert!(checked > 100);
+        }
     }
 }

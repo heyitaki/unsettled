@@ -68,7 +68,7 @@ export interface HighlightMark {
   color?: string
   label?: string
   faded?: boolean
-  kind?: 'road' | 'hex'
+  kind?: 'road' | 'hex' | 'ring'
 }
 
 export type PickTarget =

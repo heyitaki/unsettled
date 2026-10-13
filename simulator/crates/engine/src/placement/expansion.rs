@@ -888,6 +888,34 @@ pub(super) fn single_road_value(
     price_sites::<false>(scorer, holdings, candidate, memo, Some(serial), sites, [0; 2])
 }
 
+/// Draft rows can use one-road geometry without caching a one-use hero's prices.
+pub(super) fn row_value_with_single_road(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    candidate: Vertex,
+    occupancy: &Occupancy,
+    memo: &mut PriceMemo,
+    serial: Option<u32>,
+) -> f64 {
+    // A contested scorer takes `row_value`, whose contested path applies the tier discount.
+    let single = occupancy.single_edge()
+        .filter(|_| !scorer.contested && !scorer.reach.table_path(candidate, occupancy));
+    let Some(edge) = single else {
+        return row_value(scorer, holdings, candidate, occupancy, memo, serial);
+    };
+    if scorer.weights().expansion_weight == 0.0 {
+        return 0.0;
+    }
+    #[cfg(test)]
+    ROW_VALUE_CALLS.with(|calls| calls.set(calls.get() + 1));
+
+    let reach = scorer.reach.single_road(candidate, edge);
+    let sites = reach.sites(candidate, occupancy, &mut memo.sites);
+    #[cfg(any(test, debug_assertions))]
+    assert_eq!(sites, memo.walks.sites(scorer, occupancy, candidate));
+    price_sites::<false>(scorer, holdings, candidate, memo, serial, sites, [0; 2])
+}
+
 #[inline(always)]
 fn price_sites<const CONTESTED: bool>(
     scorer: &AppFormulaScorer,
@@ -2951,3 +2979,43 @@ mod single_road_tests {
 
 #[cfg(test)]
 mod contest_tests;
+
+#[cfg(test)]
+mod draft_reach_tests {
+    use super::*;
+
+    #[test]
+    fn single_road_rows_preserve_bits_without_caching_hero_prices() {
+        for (topology, board) in tests::walk_fixtures() {
+            let weights = serde_json::from_str(include_str!(
+                "../../../../placement/default-weights.json"
+            )).unwrap();
+            let mut scorer = AppFormulaScorer::new(&board, &topology, weights);
+            scorer.reach = Arc::new(ReachTable::new(&scorer.reach.links));
+            let mut vertices = vec![EMPTY; topology.vertex_count()];
+            let mut edges = vec![EMPTY; topology.edge_count()];
+            let mut memo = PriceMemo::default();
+            for edge in (0..topology.edge_count() as Edge).step_by(7) {
+                vertices.fill(EMPTY);
+                edges.fill(EMPTY);
+                let held = topology.edge_endpoints(edge)[0];
+                vertices[usize::from(held)] = 0;
+                edges[usize::from(edge)] = 0;
+                for obstacle in [None, Some((edge as usize + 5) % topology.vertex_count())] {
+                    if let Some(vertex) = obstacle { vertices[vertex] = 1; }
+                    let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+                    let holdings = scorer.holdings_for_owner(&vertices, 0);
+                    for candidate in 0..topology.vertex_count() as Vertex {
+                        if occupancy.blocked & (1 << candidate) != 0 { continue; }
+                        let value = row_value_with_single_road(&scorer, &holdings, candidate, &occupancy, &mut memo, None);
+                        let reference = term(&scorer, &holdings, &vertices, &edges, 0, candidate).value;
+                        assert_eq!(value.to_bits(), reference.to_bits());
+                    }
+                }
+            }
+            assert!(scorer.reach.single.get().is_some(), "one-road rows use their geometry table");
+            assert!(memo.values.iter().all(|value| value.key == 0));
+            assert!(memo.prices.iter().all(|entry| entry.0 == 0));
+        }
+    }
+}

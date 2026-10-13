@@ -55,6 +55,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     analysis: result && 'analysis' in result ? result.analysis : placeholder,
     pending: result === null,
     settled: completed && 'analysis' in completed.result ? completed.result.analysis : undefined,
+    settledBoard: completed && 'analysis' in completed.result ? completed.board : undefined,
     progress: progressed?.board === analysisBoard && progressed.targetPick === targetPick ? progressed.fraction : 0,
     error: result && 'error' in result ? result.error : null,
     retry: () => setAttempt((value) => value + 1),

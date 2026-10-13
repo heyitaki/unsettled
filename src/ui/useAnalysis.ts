@@ -1,11 +1,13 @@
 import { createContext, useContext } from 'react'
 import type { DraftAnalysis } from '../engine/analysisProtocol'
+import type { Board } from '../model/types'
 
 export interface AnalysisState {
   analysis: DraftAnalysis
   pending: boolean
   /** The last ranking to arrive, for any board: the pending state keeps its shape. */
   settled?: DraftAnalysis
+  settledBoard?: Board
   /** How much of the pending ranking is done, from 0 to 1. */
   progress?: number
   error: string | null

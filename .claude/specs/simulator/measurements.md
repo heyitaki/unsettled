@@ -3516,41 +3516,91 @@ The two final placement comparisons also reverse binary order. Full-draft change
 
 **Scope.** Only `expansion.rs`, `app_formula.rs`, `analysis/window.rs`, their new adjacent tests, the rebuilt wasm and its source hash, and this entry change. Fixture, weight and topology bytes stay unchanged. The sweep test and golden file stay unchanged.
 
-## M-93: the contest term at weight 0 costs under 1% of the placement rows' instructions
+## M-92: reuse turn-loop production, legality and trade offers
 
-**Question.** Cut-off programme item 1 adds a contest discount to the placement scorer behind `contestWeight`, shipped at 0. Requirement 11 of [`cut-off-programme.md`](cut-off-programme.md) asks that no bench scenario executes more than 1.01 times the instructions of the commit before it, with no output moved.
+2026-10-13, baseline is `engine-speed` after M-91, candidate is the local result. No seed domain: `bench` uses `PERF_SEED`. **Admissible: yes for unchanged fixtures, recap totals, raw wasm responses and reference assertions. Local wall times remain affected by host contention. The final artifact has not demonstrated the 78 ms recap cap.**
 
-**Runs** (2026-10-13). `box run simulator/box/bench --ref base=a4067536 --ref cand=<candidate> --node none`, twice, the candidate being the uncommitted item 1 tree as a commit object. Run `20261013T073636Z-9e972fbb` measured the first shape (candidate `63cd7d22`): the discount written inside `term`, the pricing loops and `row_road`, each behind a test of the weight. Run `20261013T081413Z-257de8e0` measured the final shape (candidate `90ecb26f`): a `contested` flag on the scorer, each hot function compiled in a plain and a contested instance from one source (`const CONTESTED: bool`), the contested calls out of line, and the tier cache in its own thread-local.
+**What changes without moving output bits.** Production pips reuse a content key of layout, tile/token arrays, building ownership and tiers, and robber. Per-seat legality masks reuse layout, ownership arrays and piece pools. Offer scores reuse exact proposer/recipient ETW inputs, observer and all trade parameters. The offer memo holds one result and releases its borrow before callbacks. Other memos use `try_borrow_mut` with reference fallbacks. Legal road and settlement scans visit set bits in their original ascending order. Membership tests select a 64-bit word before shifting. Each path compares with its reference in debug and test builds.
 
-| Scenario | Base Ir | First attempt Ir | Ratio | Final Ir | Ratio | Final wall ratio |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `placement/standard4/prepare` | 150,285 | 149,170 | 0.998 | 148,709 | 0.990 | 1.039 |
-| `placement/standard4/score_all` | 1,055,960 | 1,075,288 | 1.018 | 1,060,780 | 1.005 | 0.995 |
-| `placement/standard4/greedy/first` | 1,066,623 | 1,086,290 | 1.018 | 1,071,690 | 1.005 | 1.012 |
-| `placement/standard4/greedy/middle` | 783,355 | 796,725 | 1.017 | 787,060 | 1.005 | 1.026 |
-| `placement/standard4/greedy/turn` | 610,821 | 620,199 | 1.015 | 613,708 | 1.005 | 1.030 |
-| `placement/standard4/greedy/last` | 371,290 | 376,203 | 1.013 | 372,999 | 1.005 | 1.023 |
-| `placement/standard4/draft/first` | 12,568,626 | 12,856,383 | 1.023 | 12,624,908 | 1.004 | 0.985 |
-| `placement/standard4/draft/middle` | 7,613,478 | 7,728,866 | 1.015 | 7,628,410 | 1.002 | 0.999 |
-| `placement/standard4/full_draft` | 33,939,801 | 34,609,267 | 1.020 | 34,086,170 | 1.004 | 1.006 |
-| `analyze/standard4/opening` | 361,254,415 | 368,783,035 | 1.021 | 363,279,142 | 1.006 | 1.009 |
-| `placement/extension6/prepare` | 204,293 | 204,297 | 1.000 | 203,974 | 0.998 | 0.965 |
-| `placement/extension6/score_all` | 1,614,372 | 1,645,386 | 1.019 | 1,622,769 | 1.005 | 0.999 |
-| `placement/extension6/greedy/first` | 1,624,752 | 1,655,774 | 1.019 | 1,632,641 | 1.005 | 1.011 |
-| `placement/extension6/greedy/middle` | 1,198,142 | 1,219,350 | 1.018 | 1,203,932 | 1.005 | 1.027 |
-| `placement/extension6/greedy/turn` | 1,018,598 | 1,035,285 | 1.016 | 1,023,430 | 1.005 | 1.023 |
-| `placement/extension6/greedy/last` | 577,873 | 585,778 | 1.014 | 580,555 | 1.005 | 1.022 |
-| `placement/extension6/draft/first` | 29,483,347 | 30,083,034 | 1.020 | 29,602,787 | 1.004 | 0.984 |
-| `placement/extension6/draft/middle` | 18,126,179 | 18,417,901 | 1.016 | 18,193,061 | 1.004 | 0.990 |
-| `placement/extension6/full_draft` | 113,953,059 | 115,895,660 | 1.017 | 114,465,029 | 1.004 | 0.983 |
-| `analyze/extension6/opening` | 372,665,082 | 381,375,702 | 1.024 | 374,710,200 | 1.005 | 1.002 |
-| `analyze/extension6/behind_three` | 1,310,309,669 | 1,342,555,322 | 1.025 | 1,317,061,389 | 1.005 | 1.009 |
+**Counters.** Means per game over the same 50-game recap request, before/after, in a release native driver unless marked wasm. Distinct-input sets use content, never addresses; some helpers conservatively include the full public view. Temporary source and scratch-wasm counters are removed from the final tree.
 
-Every `decision/*` and `advise/*` row, which never reaches the expansion term, is between 0.998 and 1.001 in the final run. No row in either run carries `decisions differ` or `STATES DIFFER`.
+| Work per game | Before | After |
+| --- | ---: | ---: |
+| Production requests / fresh calculations | 8,374.52 / 3,354.62 | 8,374.52 / 157.96 |
+| Road-mask builds | 495.74 | 76.94 |
+| Settlement-mask builds | 500.74 | 77.40 |
+| Build-site calculations | 492.42 | 144.74 |
+| Offer requests / full pricing passes | 208.50 / 208.50 | 208.50 / 132.68 |
+| Legal-road calls | 34,577.56 | 148.60 |
+| Legal-settlement calls | 27,032.08 | 2,465.32 |
+| ETW hand estimates | 5,610.74 | 3,794.66 |
+| Trade benefits | 4,776.74 | 3,036.48 |
+| wasm `__ashlti3` / `__lshrti3` | 53,094.72 / 136,765.40 | 26,371.24 / 1,788.48 |
+| wasm `memcmp` | 1,822.62 | 12,270.50 |
 
-**Reading.** The first shape failed the bar on every placement and analysis row (1.013 to 1.025) although its source added one float comparison per site: the reference scorer gained about 350 instructions per candidate, so the cost was in how the larger functions compiled, not in the comparisons. The final shape passes on every row, highest 1.006. Wall ratios on the box are within its 5% noise and decide nothing. `engine.wasm` grows from 1,102,957 to 1,128,534 bytes, because each hot function now exists twice.
+The remaining 3,383.62 `expected_turns_to_win` calls contain 1,104.30 distinct inputs, and 1,911.64 repeat within a turn. A trial 64-slot whole-input memo increases recap time and is removed. The existing per-decision ETW preparation remains. Road scoring, vertex terms and longest-road network counts do not change. Cache-key comparisons increase, but replace board scans and complete offer-pricing passes.
 
-**Decision.** Item 1 meets requirement 11's speed proof. The final shape is the one kept.
+**Timing.** The supplied `time.mjs` runs unchanged against `base.wasm` and the candidate. Before any edit, its recap rows are 90.8 / 90.4 ms, load `5.62 5.83 7.34`. The first final-artifact run gives 106.5 / 91.1 ms, load `14.07 15.94 14.47`, with no `DIFFERS`. The last run gives 102.3 / 90.5 ms at load `17.27 15.58 14.95`. Final-artifact recap repeats range from 88.8 to 108.4 ms while the unchanged reference ranges from 102.3 to 134.5 ms. An earlier candidate measures 77.1 ms at load `7.13 7.02 8.85`; a subsequent reference-assertion fix requires a fresh final-artifact timing, so that earlier result does not establish acceptance.
+
+Five-repeat native benches run before edits and after the final source change. Initial/final e2e medians in ms are 2.121 / 3.320 (four seats, one core), 0.243 / 0.400 (four, all cores), 5.917 / 8.374 (six, one core), and 0.675 / 0.858 (six, all cores). Initial/final loads are `5.48 5.77 7.26` / `13.92 15.73 14.45`. Advise loads are `6.65 6.03 7.30` / `13.92 15.73 14.45`; placement loads are `6.21 5.97 7.24` / `13.92 15.70 14.44`. These unpaired times do not establish a regression or a gain.
+
+Matched 200-game e2e runs give final/baseline changes of -5.52%, -13.39%, -8.06% and -14.29% in the same row order. Reversing binary order gives +3.26%, +7.47%, +8.56% and +5.99%. Loads are `14.98 14.92 14.42` / `14.84 14.89 14.41` for the first pair and `15.88 15.63 14.79` / `15.97 15.66 14.81` for the reversed pair. Advice and unchanged placement timings also swing with run order. A quiet matched run remains necessary to establish the performance gates.
+
+**Identity and faults.** `cargo test` passes 809 tests and `cargo test --release` passes 781, each with 15 ignored. All zero-allocation tests pass. The wasm build and `--check`, typecheck and lint pass. Engine vitest passes 267 tests with one skipped; the separate golden run prints `384 states, 0 moved`. All six recap parallelism runs print `{"p1":442,"p2":36,"p3":66,"p4":456} same`. All 244 protected fixture, weight and topology files remain byte-identical. Existing tests are unchanged.
+
+| New test | Deliberate fault, assertion failure before restoration |
+| --- | --- |
+| `mask_membership_matches_u128_at_every_index` | Select the upper word from bit 32 instead of 64. |
+| `production_memo_follows_holdings_robber_and_board_content` | Keep values after the content key changes. |
+| `legality_memo_follows_owners_layout_and_piece_pools` | Omit edge ownership from the key. |
+| `offer_memo_tracks_hands_recipients_parameters_and_observer` | Ignore proposer and recipient inputs. |
+| `road_scan_uses_legal_edges_in_reference_order` | Skip the first legal edge. |
+| `settlement_scan_uses_legal_vertices_in_reference_order` | Skip the first legal vertex. |
+
+**Scope.** `view.rs`, `policy/heuristic_v1.rs`, `policy/heuristic_v1_trader.rs`, their six adjacent tests, the rebuilt wasm/hash, and this entry. No placement code, fixture or scoring formula changes. All counters and deliberate faults are removed.
+
+**Quiet-window result, measured by the main session after the round.** The committed and candidate wasm alternated twice in Node at load 7: the 50-game recap takes 92.1 and 91.4 ms on the committed build and 76.5 and 77.1 ms on the candidate, 16% less and under the 78 ms target; a third pair after the last edit gave 89.9 and 75.4 ms. 1,000 games in one wasm thread fall from 1.9 s to 1.6 s. Native `e2e/` medians at the same load: 2.10 and 5.73 ms a game at four and six seats, against 2.12 and 5.92 before. The `advise/` and `placement/` rows did not move. One edit followed the round and changes no output: the offer memo's parameter key destructures `TradeParams` with no rest pattern, so a parameter added to the struct cannot be left out of the key.
+
+## M-93: reuse one-road geometry and bounds in the simulator draft
+
+2026-10-13, baseline is `engine-speed` after M-92. No seed domain: `bench` uses `PERF_SEED`. **Admissible: yes. Both full-draft minima improve by more than 10% in quiet five-repeat comparisons, with unchanged outputs.**
+
+**What changes.** Draft rows use the existing per-layout one-road reach table and `SingleRoadBounds`. Bound memo keys include the owned edge. The existing prepared-row cache already indexes held vertex, seat and grant and validates scorer and owned roads, so no additional base cache is needed. One-use hero prices stay uncached. The draft entry shares geometry and pricing with analysis while preserving analysis's existing entry points. Debug and test builds compare site masks with the walk and every skipped candidate with its exact score.
+
+**Counters.** First full draft in a fresh release process on each fixed bench board, including lookahead. Arrows are before to after. Temporary counters are removed.
+
+| Work per full draft | Four seats | Six seats |
+| --- | ---: | ---: |
+| Expansion requests | 5,133 → 2,995 | 18,868 → 10,275 |
+| Shared-table requests | 2,356 → 2,356 | 8,092 → 8,092 |
+| One-road table requests | 0 → 639 | 0 → 2,183 |
+| Walk requests / walk memo hits | 2,777 / 1,079 → 0 / 0 | 10,776 / 7,029 → 0 / 0 |
+| Actual row walks | 1,698 → 0 | 3,747 → 0 |
+| Expansion value memo hits | 2,577 → 1,631 | 12,577 → 6,624 |
+| Fresh nonempty expansion terms | 2,556 → 1,364 | 6,285 → 3,645 |
+| Bounds asked / candidates skipped | 31,925 / 27,122 → 31,925 / 29,260 | 159,460 / 141,335 → 159,460 / 149,928 |
+| Base scores asked / computed | 32,255 / 7,634 → 32,255 / 7,631 | 160,203 / 25,572 → 160,203 / 25,522 |
+| Setup-road choices | 816 → 816 | 2,682 → 2,682 |
+| Road sites by shared table / walk | 2,066 / 309 → 2,066 / 309 | 6,465 / 1,449 → 6,465 / 1,449 |
+
+Fresh terms after the change split into shared/one-road counts of 1,019/345 and 2,863/782. The six-seat draft also has six empty-site terms in both versions. Hero row counts stay 192/424. The second warm draft prices 677/2,197 terms, against 1,522/4,300 before. Road selection retains its per-first-edge walk because the combined one-road site masks do not distinguish first edges.
+
+**Timing.** Five repeats, minimum / median milliseconds per full draft. The quiet candidate and final native binary have identical SHA-256 hashes.
+
+| Order and layout | Before | After | Minimum change |
+| --- | ---: | ---: | ---: |
+| Before then after, standard4 | 0.842464 / 0.847546 | 0.704201 / 0.705363 | -16.41% |
+| Before then after, extension6 | 3.435266 / 3.487245 | 2.680839 / 2.742776 | -21.96% |
+| After then before, standard4 | 0.846204 / 0.847984 | 0.704342 / 0.710901 | -16.77% |
+| After then before, extension6 | 3.412516 / 3.430745 | 2.668036 / 2.685026 | -21.82% |
+
+Loads are `3.44 5.72 9.77` for both forward runs and `3.41 5.67 9.73` for both reverse runs. Quiet analysis medians improve by 0.8% to 2.4% across both orders. Final complete tables run at loads above 8, so all three filters also run back to back in both orders: placement loads span `21.17 23.36 16.33` to `19.21 22.87 16.24`, e2e `18.23 22.61 16.19` to `17.33 22.35 16.13`, and analysis stays `17.33 22.35 16.13`. All paired e2e medians improve, by 9.0% to 15.5%; analysis medians improve by 0.3% to 3.0%. All benchmark hashes match.
+
+**Identity and faults.** `cargo test`: 811 passed; `cargo test --release`: 783 passed; both have zero failures and 15 ignored, including passing allocation tests. Wasm build/check, typecheck and lint pass. Engine Vitest has 267 passed and one skipped. The separate sweep prints `384 states, 0 moved`; all six recap runs print `{"p1":442,"p2":36,"p3":66,"p4":456} same`. All 244 protected fixture, weight and topology files remain byte-identical.
+
+`single_road_rows_preserve_bits_without_caching_hero_prices` fails when the draft one-road dispatch is disabled. `single_road_row_bounds_follow_roads_holdings_and_scorers` fails when the general bound replaces the one-road bound. Both faults are restored before the final suites. Existing tests are unchanged.
+
+**Scope.** Only `draft.rs`, `expansion.rs`, their two new adjacent tests, rebuilt wasm/hash and this entry change. No temporary instrumentation remains. The retained work is exact site pricing, base scoring for one-use hero rows and per-first-edge setup-road selection; no approximation is needed to meet the target.
 
 ## M-94: the first-pick re-pricing switch at 0 costs nothing measurable
 
@@ -3951,3 +4001,39 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 6 
 **Reading.** This is the programme's one held-out reading and it is not selected: the arm gains about 0.6pp at 6 seats, with an interval that excludes zero by more than five half-widths and that straddles the bar. The size was fixed for a half-width of 0.35pp at the screen, so 0.17pp here, which cannot separate an effect of 0.6pp from a bar of 0.5pp. The verdict the rule returns is that the gain is not shown to exceed the bar, not that it is absent. At 4 seats the same arm's only reading is the selected `tuning4` retry, +0.644pp. At 5 seats it reads +0.437pp, at 3 seats the flat arms read zero, and at 2 seats the heavier flat arms read about -0.35pp with intervals below zero.
 
 **Ledger at this point.** `tuning4` is spent at all five seat counts. `eval4` is spent at 6 seats and unspent at 2 to 5. `gate5` is unspent at every seat count.
+
+## M-115 (recorded as M-93 before the merge with main): the contest term at weight 0 costs under 1% of the placement rows' instructions
+
+**Question.** Cut-off programme item 1 adds a contest discount to the placement scorer behind `contestWeight`, shipped at 0. Requirement 11 of [`cut-off-programme.md`](cut-off-programme.md) asks that no bench scenario executes more than 1.01 times the instructions of the commit before it, with no output moved.
+
+**Runs** (2026-10-13). `box run simulator/box/bench --ref base=a4067536 --ref cand=<candidate> --node none`, twice, the candidate being the uncommitted item 1 tree as a commit object. Run `20261013T073636Z-9e972fbb` measured the first shape (candidate `63cd7d22`): the discount written inside `term`, the pricing loops and `row_road`, each behind a test of the weight. Run `20261013T081413Z-257de8e0` measured the final shape (candidate `90ecb26f`): a `contested` flag on the scorer, each hot function compiled in a plain and a contested instance from one source (`const CONTESTED: bool`), the contested calls out of line, and the tier cache in its own thread-local.
+
+| Scenario | Base Ir | First attempt Ir | Ratio | Final Ir | Ratio | Final wall ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `placement/standard4/prepare` | 150,285 | 149,170 | 0.998 | 148,709 | 0.990 | 1.039 |
+| `placement/standard4/score_all` | 1,055,960 | 1,075,288 | 1.018 | 1,060,780 | 1.005 | 0.995 |
+| `placement/standard4/greedy/first` | 1,066,623 | 1,086,290 | 1.018 | 1,071,690 | 1.005 | 1.012 |
+| `placement/standard4/greedy/middle` | 783,355 | 796,725 | 1.017 | 787,060 | 1.005 | 1.026 |
+| `placement/standard4/greedy/turn` | 610,821 | 620,199 | 1.015 | 613,708 | 1.005 | 1.030 |
+| `placement/standard4/greedy/last` | 371,290 | 376,203 | 1.013 | 372,999 | 1.005 | 1.023 |
+| `placement/standard4/draft/first` | 12,568,626 | 12,856,383 | 1.023 | 12,624,908 | 1.004 | 0.985 |
+| `placement/standard4/draft/middle` | 7,613,478 | 7,728,866 | 1.015 | 7,628,410 | 1.002 | 0.999 |
+| `placement/standard4/full_draft` | 33,939,801 | 34,609,267 | 1.020 | 34,086,170 | 1.004 | 1.006 |
+| `analyze/standard4/opening` | 361,254,415 | 368,783,035 | 1.021 | 363,279,142 | 1.006 | 1.009 |
+| `placement/extension6/prepare` | 204,293 | 204,297 | 1.000 | 203,974 | 0.998 | 0.965 |
+| `placement/extension6/score_all` | 1,614,372 | 1,645,386 | 1.019 | 1,622,769 | 1.005 | 0.999 |
+| `placement/extension6/greedy/first` | 1,624,752 | 1,655,774 | 1.019 | 1,632,641 | 1.005 | 1.011 |
+| `placement/extension6/greedy/middle` | 1,198,142 | 1,219,350 | 1.018 | 1,203,932 | 1.005 | 1.027 |
+| `placement/extension6/greedy/turn` | 1,018,598 | 1,035,285 | 1.016 | 1,023,430 | 1.005 | 1.023 |
+| `placement/extension6/greedy/last` | 577,873 | 585,778 | 1.014 | 580,555 | 1.005 | 1.022 |
+| `placement/extension6/draft/first` | 29,483,347 | 30,083,034 | 1.020 | 29,602,787 | 1.004 | 0.984 |
+| `placement/extension6/draft/middle` | 18,126,179 | 18,417,901 | 1.016 | 18,193,061 | 1.004 | 0.990 |
+| `placement/extension6/full_draft` | 113,953,059 | 115,895,660 | 1.017 | 114,465,029 | 1.004 | 0.983 |
+| `analyze/extension6/opening` | 372,665,082 | 381,375,702 | 1.024 | 374,710,200 | 1.005 | 1.002 |
+| `analyze/extension6/behind_three` | 1,310,309,669 | 1,342,555,322 | 1.025 | 1,317,061,389 | 1.005 | 1.009 |
+
+Every `decision/*` and `advise/*` row, which never reaches the expansion term, is between 0.998 and 1.001 in the final run. No row in either run carries `decisions differ` or `STATES DIFFER`.
+
+**Reading.** The first shape failed the bar on every placement and analysis row (1.013 to 1.025) although its source added one float comparison per site: the reference scorer gained about 350 instructions per candidate, so the cost was in how the larger functions compiled, not in the comparisons. The final shape passes on every row, highest 1.006. Wall ratios on the box are within its 5% noise and decide nothing. `engine.wasm` grows from 1,102,957 to 1,128,534 bytes, because each hot function now exists twice.
+
+**Decision.** Item 1 meets requirement 11's speed proof. The final shape is the one kept.

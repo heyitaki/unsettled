@@ -184,7 +184,28 @@ struct OneStepMemo {
     values: [Option<u128>; MAX_SEATS],
 }
 
+struct LegalityMemo {
+    layout: Layout,
+    vertex_owner: [u8; MAX_VERTICES],
+    edge_owner: [u8; MAX_EDGES],
+    pieces: [u8; 2],
+    values: [Option<u128>; 3],
+}
+
+struct ProductionMemo {
+    layout: Layout,
+    tiles: Vec<Option<Resource>>,
+    tokens: Vec<Option<u8>>,
+    vertex_owner: [u8; MAX_VERTICES],
+    vertex_tier: [u8; MAX_VERTICES],
+    robber: Hex,
+    values: [Option<[u16; RESOURCE_COUNT]>; MAX_SEATS],
+}
+
 std::thread_local! {
+    static LEGALITY_MEMOS: [RefCell<Option<LegalityMemo>>; MAX_SEATS] =
+        const { [const { RefCell::new(None) }; MAX_SEATS] };
+    static PRODUCTION_MEMO: RefCell<Option<ProductionMemo>> = const { RefCell::new(None) };
     static ONE_STEP_MEMO: RefCell<Option<OneStepMemo>> = const { RefCell::new(None) };
 }
 
@@ -494,7 +515,7 @@ impl<'a> DecisionView<'a> {
 
     /// Whether the observer's road network already reaches a vertex.
     pub fn road_reaches(&self, vertex: Vertex) -> bool {
-        self.own_roads().vertices & (1 << vertex) != 0
+        contains_bit(self.own_roads().vertices, vertex)
     }
 
     pub fn compute_one_step(&self, seat: usize) -> u128 {
@@ -764,16 +785,24 @@ impl<'a> DecisionView<'a> {
         best
     }
 
+    #[inline]
     pub fn legal_settlement(&self, vertex: Vertex) -> bool {
-        self.legal_settlements() & (1 << vertex) != 0
+        contains_bit(self.legal_settlements(), vertex)
     }
 
     /// Every vertex the observer may settle. Only vertices their roads already reach can qualify,
     /// so this walks that handful rather than the whole board.
+    #[inline]
     fn legal_settlements(&self) -> u128 {
         if let Some(cached) = self.cache.settlements.get() {
             return cached;
         }
+        let legal = self.cached_legality(0, Self::compute_legal_settlements);
+        self.cache.settlements.set(Some(legal));
+        legal
+    }
+
+    fn compute_legal_settlements(&self) -> u128 {
         let mut legal = 0_u128;
         if self.pieces(self.observer, Buildable::Settlement) > 0 {
             let mut rest = self.own_roads().vertices;
@@ -791,20 +820,35 @@ impl<'a> DecisionView<'a> {
                 }
             }
         }
-        self.cache.settlements.set(Some(legal));
         legal
     }
 
+    #[inline]
     pub fn legal_road(&self, edge: Edge) -> bool {
-        self.legal_roads() & (1 << edge) != 0
+        contains_bit(self.legal_roads(), edge)
+    }
+
+    pub(crate) fn legal_road_edges(&self) -> impl Iterator<Item = Edge> {
+        mask_indices(self.legal_roads())
+    }
+
+    pub(crate) fn legal_settlement_vertices(&self) -> impl Iterator<Item = Vertex> {
+        mask_indices(self.legal_settlements())
     }
 
     /// Every edge the observer may build on: unowned, and touching a vertex they hold or an empty
     /// vertex their network already reaches.
+    #[inline]
     fn legal_roads(&self) -> u128 {
         if let Some(cached) = self.cache.roads.get() {
             return cached;
         }
+        let legal = self.cached_legality(1, Self::compute_legal_roads);
+        self.cache.roads.set(Some(legal));
+        legal
+    }
+
+    fn compute_legal_roads(&self) -> u128 {
         let mut legal = 0_u128;
         if self.pieces(self.observer, Buildable::Road) > 0 {
             let sites = self.build_sites();
@@ -814,24 +858,54 @@ impl<'a> DecisionView<'a> {
                         .topology
                         .edge_endpoints(edge as Edge)
                         .iter()
-                        .any(|endpoint| sites & (1 << endpoint) != 0)
+                        .any(|endpoint| contains_bit(sites, *endpoint))
                 {
                     legal |= 1 << edge;
                 }
             }
         }
-        self.cache.roads.set(Some(legal));
         legal
     }
 
     /// Vertices the observer can extend a road from.
+    #[inline]
     fn build_sites(&self) -> u128 {
         if let Some(cached) = self.cache.sites.get() {
             return cached;
         }
-        let computed = self.compute_build_sites();
+        let computed = self.cached_legality(2, Self::compute_build_sites);
         self.cache.sites.set(Some(computed));
         computed
+    }
+
+    fn cached_legality(&self, slot: usize, compute: fn(&Self) -> u128) -> u128 {
+        let result = LEGALITY_MEMOS.with(|memos| {
+            let Ok(mut memo) = memos[self.observer].try_borrow_mut() else {
+                return compute(self);
+            };
+            let pieces = [
+                self.pieces(self.observer, Buildable::Road),
+                self.pieces(self.observer, Buildable::Settlement),
+            ];
+            if memo.as_ref().is_none_or(|cached| {
+                cached.layout != self.topology.layout()
+                    || cached.vertex_owner != self.state.vertex_owner
+                    || cached.edge_owner != self.state.edge_owner
+                    || cached.pieces != pieces
+            }) {
+                *memo = Some(LegalityMemo {
+                    layout: self.topology.layout(),
+                    vertex_owner: self.state.vertex_owner,
+                    edge_owner: self.state.edge_owner,
+                    pieces,
+                    values: [None; 3],
+                });
+            }
+            *memo.as_mut().unwrap().values[slot].get_or_insert_with(|| compute(self))
+        });
+        #[cfg(any(debug_assertions, test))]
+        assert_eq!(result, compute(self));
+        result
     }
 
     fn compute_build_sites(&self) -> u128 {
@@ -839,7 +913,7 @@ impl<'a> DecisionView<'a> {
         let mut sites = 0_u128;
         for vertex in 0..self.topology.vertex_count() {
             let owner = self.state.vertex_owner[vertex];
-            if owner == self.observer as u8 || (owner == EMPTY && reached & (1 << vertex) != 0) {
+            if owner == self.observer as u8 || (owner == EMPTY && contains_bit(reached, vertex as Vertex)) {
                 sites |= 1 << vertex;
             }
         }
@@ -861,7 +935,7 @@ impl<'a> DecisionView<'a> {
             .edge_endpoints(second)
             .iter()
             .any(|endpoint| {
-                sites & (1 << endpoint) != 0
+                contains_bit(sites, *endpoint)
                     || (self.vertex_owner(*endpoint).is_none() && laid.contains(endpoint))
             })
     }
@@ -969,13 +1043,51 @@ impl<'a> DecisionView<'a> {
         crate::etw::expected_turns_to_win(&self.etw_inputs(seat))
     }
 
+    #[inline]
     pub fn production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {
         if let Some(cached) = self.cache.production[seat].get() {
             return cached;
         }
-        let computed = self.compute_production_pips(seat);
+        let computed = self.cached_production_pips(seat);
+        #[cfg(any(debug_assertions, test))]
+        assert_eq!(computed, self.compute_production_pips(seat));
         self.cache.production[seat].set(Some(computed));
         computed
+    }
+
+    fn cached_production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {
+        PRODUCTION_MEMO.with(|memo| {
+            let Ok(mut memo) = memo.try_borrow_mut() else {
+                return self.compute_production_pips(seat);
+            };
+            let cached = memo.get_or_insert_with(|| ProductionMemo {
+                layout: self.topology.layout(),
+                tiles: self.board.tiles().to_vec(),
+                tokens: self.board.tokens().to_vec(),
+                vertex_owner: self.state.vertex_owner,
+                vertex_tier: self.state.vertex_tier,
+                robber: self.robber(),
+                values: [None; MAX_SEATS],
+            });
+            if cached.layout != self.topology.layout()
+                || cached.robber != self.robber()
+                || cached.vertex_owner != self.state.vertex_owner
+                || cached.vertex_tier != self.state.vertex_tier
+                || cached.tiles != self.board.tiles()
+                || cached.tokens != self.board.tokens()
+            {
+                cached.layout = self.topology.layout();
+                cached.robber = self.robber();
+                cached.vertex_owner = self.state.vertex_owner;
+                cached.vertex_tier = self.state.vertex_tier;
+                cached.tiles.clear();
+                cached.tiles.extend_from_slice(self.board.tiles());
+                cached.tokens.clear();
+                cached.tokens.extend_from_slice(self.board.tokens());
+                cached.values = [None; MAX_SEATS];
+            }
+            *cached.values[seat].get_or_insert_with(|| self.compute_production_pips(seat))
+        })
     }
 
     fn compute_production_pips(&self, seat: usize) -> [u16; RESOURCE_COUNT] {
@@ -1031,6 +1143,27 @@ impl<'a> DecisionView<'a> {
     }
 }
 
+fn mask_indices(mut remaining: u128) -> impl Iterator<Item = u8> {
+    std::iter::from_fn(move || {
+        if remaining == 0 {
+            return None;
+        }
+        let index = remaining.trailing_zeros() as u8;
+        remaining &= remaining - 1;
+        Some(index)
+    })
+}
+
+// A membership test needs one word, so wasm does not call its u128 shift helper.
+#[inline]
+fn contains_bit(mask: u128, index: u8) -> bool {
+    let word = if index < 64 { mask as u64 } else { (mask >> 64) as u64 };
+    let result = word & (1_u64 << (index & 63)) != 0;
+    #[cfg(any(debug_assertions, test))]
+    assert_eq!(result, mask & (1_u128 << index) != 0);
+    result
+}
+
 pub fn can_pay(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_COUNT]) -> bool {
     hand.iter()
         .zip(cost)
@@ -1039,6 +1172,110 @@ pub fn can_pay(hand: &[i16; RESOURCE_COUNT], cost: &[u8; RESOURCE_COUNT]) -> boo
 
 pub const fn pips(token: u8) -> u8 {
     6_u8.saturating_sub(7_u8.abs_diff(token))
+}
+
+#[cfg(test)]
+mod turn_cache_tests {
+    use super::*;
+    use crate::board::ConversionOptions;
+    use crate::rules::RuleConfig;
+    use crate::wire::{TileKind, WireBoard};
+
+    #[test]
+    fn mask_membership_matches_u128_at_every_index() {
+        for bit in 0..128 {
+            let singleton = 1_u128 << bit;
+            for mask in [0, u128::MAX, singleton, !singleton] {
+                for index in 0..128 {
+                    assert_eq!(contains_bit(mask, index), mask & (1_u128 << index) != 0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn legality_memo_follows_owners_layout_and_piece_pools() {
+        let (_, board, mut arena) = crate::etw::tests::fixture();
+        for layout in [Layout::Extension6, Layout::Standard4, Layout::Extension6] {
+            let topology = Topology::load(layout).unwrap();
+            for variant in 0..80 {
+                let owner = match variant % 3 { 0 => 0, 1 => 1, _ => EMPTY };
+                if variant % 2 == 0 {
+                    arena.state.vertex_owner[(variant / 2) % topology.vertex_count()] = owner;
+                } else {
+                    arena.state.edge_owner[(variant / 2) % topology.edge_count()] = owner;
+                }
+                for pieces in [2, 0, 1, 2] {
+                    for seat in 0..board.seats() {
+                        arena.state.players[seat].pieces[Buildable::Road.index()] = pieces;
+                        arena.state.players[seat].pieces[Buildable::Settlement.index()] = pieces;
+                        for _ in 0..2 {
+                            let view = arena.decision_view(&board, &topology, seat, DecisionPhase::Action);
+                            for edge in 0..topology.edge_count() as Edge {
+                                assert_eq!(view.legal_road(edge), can_build_road(
+                                    &topology, &arena.state.vertex_owner, &arena.state.edge_owner,
+                                    seat as u8, edge, pieces,
+                                ));
+                            }
+                            for vertex in 0..topology.vertex_count() as Vertex {
+                                let expected = pieces > 0
+                                    && crate::game::can_place_settlement(&topology, &arena.state.vertex_owner, vertex)
+                                    && topology.vertex_edges(vertex).iter().any(|edge| {
+                                        arena.state.edge_owner[usize::from(*edge)] == seat as u8
+                                    });
+                                assert_eq!(view.legal_settlement(vertex), expected);
+                            }
+                            assert_eq!(view.build_sites(), view.compute_build_sites());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn production_memo_follows_holdings_robber_and_board_content() {
+        let (topology, board, mut arena) = crate::etw::tests::fixture();
+        let mut wire = WireBoard::parse_str(include_str!(
+            "../../../../src/parser/__tests__/expected/board-draft-empty.json"
+        )).unwrap();
+        let hex = wire.hexes.iter_mut().find(|hex| hex.tile != Some(TileKind::Desert)).unwrap();
+        hex.tile = Some(TileKind::Ore);
+        hex.number_token = Some(6.0);
+        let changed = SimBoard::try_from_wire(
+            wire, &topology, &RuleConfig::base(topology.layout()), ConversionOptions::default(),
+        ).unwrap();
+        for variant in 0..100 {
+            let vertex = variant % topology.vertex_count();
+            match variant % 3 {
+                0 => arena.state.vertex_owner[vertex] = (variant % board.seats()) as u8,
+                1 => arena.state.vertex_tier[vertex] = (variant % 3 + 1) as u8,
+                _ => arena.state.robber = (variant % topology.hex_count()) as u8,
+            }
+            for board in [&board, &changed, &board] {
+                for observer in 0..board.seats() {
+                    let view = arena.decision_view(board, &topology, observer, DecisionPhase::Action);
+                    for _ in 0..2 {
+                        for seat in 0..MAX_SEATS {
+                            assert_eq!(view.production_pips(seat), view.compute_production_pips(seat));
+                        }
+                    }
+                }
+            }
+        }
+        for layout in [Layout::Standard4, Layout::Extension6, Layout::Standard4] {
+            let other_topology = Topology::load(layout).unwrap();
+            for seat in 0..board.seats() {
+                let view = arena.decision_view(&board, &other_topology, seat, DecisionPhase::Action);
+                assert_eq!(view.production_pips(seat), view.compute_production_pips(seat));
+            }
+        }
+        PRODUCTION_MEMO.with(|memo| {
+            let _borrowed = memo.borrow_mut();
+            let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
+            assert_eq!(view.production_pips(0), view.compute_production_pips(0));
+        });
+    }
 }
 
 #[cfg(test)]

@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::etw::EtwInputs;
 use crate::policy::PolicyScratch;
 use crate::policy::denial;
@@ -90,7 +92,96 @@ pub(crate) fn score_offers(
     if !can_score_offers(view) {
         return;
     }
-    view.with_etw_cache(|view| score_offers_inner(view, trading_params, collect));
+    view.with_etw_cache(|view| cached_score_offers(view, trading_params, collect));
+}
+
+struct OfferInputs {
+    own: EtwInputs,
+    recipients: [Option<EtwInputs>; MAX_SEATS],
+}
+
+impl OfferInputs {
+    fn new(view: &DecisionView<'_>) -> Self {
+        let mut recipients = [const { None }; MAX_SEATS];
+        for seat in 0..view.seats() {
+            if seat != view.observer() && !trade::embargoed(view, seat) {
+                recipients[seat] = Some(view.etw_inputs(seat));
+            }
+        }
+        Self { own: trading::own_inputs(view), recipients }
+    }
+
+    fn same(&self, other: &Self) -> bool {
+        let same = |a: &EtwInputs, b: &EtwInputs| {
+            a == b && a.belief_expected.map(f64::to_bits) == b.belief_expected.map(f64::to_bits)
+        };
+        same(&self.own, &other.own) && self.recipients.iter().zip(&other.recipients)
+            .all(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => same(a, b),
+                (None, None) => true,
+                _ => false,
+            })
+    }
+}
+
+struct OfferMemo {
+    inputs: OfferInputs,
+    parameters: [u64; 13],
+    observer: usize,
+    scores: [ScoredAction; 40],
+    len: usize,
+}
+
+std::thread_local! {
+    static OFFER_MEMO: RefCell<Option<OfferMemo>> = const { RefCell::new(None) };
+}
+
+fn cached_score_offers(
+    view: &DecisionView<'_>,
+    params: &trading::TradeParams,
+    mut collect: impl FnMut(ScoredAction),
+) {
+    let inputs = OfferInputs::new(view);
+    // Destructured with no rest pattern, so a parameter added to the struct cannot be left out of the key.
+    let trading::TradeParams {
+        etw_weight, etw_floor, gain_cap, tempo_weight, tempo_half, scarcity_floor, danger_floor,
+        danger_weight, benefit_weight, margin_scale, offer_gain_weight, offer_base, offer_span,
+    } = *params;
+    let parameters = [
+        etw_weight.to_bits(), etw_floor.to_bits(), gain_cap.to_bits(),
+        tempo_weight.to_bits(), tempo_half.to_bits(), scarcity_floor.to_bits(),
+        danger_floor.to_bits(), danger_weight.to_bits(), benefit_weight.to_bits(),
+        margin_scale.to_bits(), offer_gain_weight.to_bits(),
+        u64::from(offer_base.to_bits()), u64::from(offer_span.to_bits()),
+    ];
+    let mut memo = OFFER_MEMO.with(|cell| cell.borrow_mut().take());
+    if memo.as_ref().is_none_or(|cached| {
+        cached.observer != view.observer() || cached.parameters != parameters
+            || !cached.inputs.same(&inputs)
+    }) {
+        let mut scores = [ScoredAction { action: Action::Pass, score: 0.0 }; 40];
+        let mut len = 0;
+        score_offers_prepared(view, params, &inputs, |score| {
+            scores[len] = score;
+            len += 1;
+        });
+        memo = Some(OfferMemo { inputs, parameters, observer: view.observer(), scores, len });
+    }
+    let cached = memo.as_ref().unwrap();
+    #[cfg(any(debug_assertions, test))]
+    {
+        let mut index = 0;
+        score_offers_inner(view, params, |score| {
+            assert_eq!(cached.scores[index].action, score.action);
+            assert_eq!(cached.scores[index].score.to_bits(), score.score.to_bits());
+            index += 1;
+        });
+        assert_eq!(cached.len, index);
+    }
+    for score in &cached.scores[..cached.len] {
+        collect(*score);
+    }
+    OFFER_MEMO.with(|cell| *cell.borrow_mut() = memo);
 }
 
 fn can_score_offers(view: &DecisionView<'_>) -> bool {
@@ -102,22 +193,27 @@ fn can_score_offers(view: &DecisionView<'_>) -> bool {
         && view.own_hand().iter().any(|held| *held > 0)
 }
 
+#[cfg(any(debug_assertions, test))]
 fn score_offers_inner(
     view: &DecisionView<'_>,
     trading_params: &trading::TradeParams,
+    collect: impl FnMut(ScoredAction),
+) {
+    let inputs = OfferInputs::new(view);
+    score_offers_prepared(view, trading_params, &inputs, collect);
+}
+
+fn score_offers_prepared(
+    view: &DecisionView<'_>,
+    trading_params: &trading::TradeParams,
+    inputs: &OfferInputs,
     mut collect: impl FnMut(ScoredAction),
 ) {
-    let mut recipients: [Option<EtwInputs>; MAX_SEATS] = [const { None }; MAX_SEATS];
-    for seat in 0..view.seats() {
-        if seat == view.observer() || trade::embargoed(view, seat) {
-            continue;
-        }
-        recipients[seat] = Some(view.etw_inputs(seat));
-    }
-    let own = trading::own_inputs(view);
+    let own = &inputs.own;
+    let recipients = &inputs.recipients;
     let own_estimate = view.etw_estimate(view.observer());
     let own_base = own_estimate.with_hand(&own.belief_expected);
-    let own_value = trading::TradeValue::new(&own, trading_params, own_estimate, own_base);
+    let own_value = trading::TradeValue::new(own, trading_params, own_estimate, own_base);
     let mut values: [Option<trading::TradeValue<'_>>; MAX_SEATS] = [const { None }; MAX_SEATS];
     for give in Resource::ALL {
         for get in Resource::ALL {
@@ -373,5 +469,49 @@ mod cache_tests {
                 assert_eq!(actual, direct, "resource={resource:?} held={held}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod offer_memo_tests {
+    use super::*;
+
+    #[test]
+    fn offer_memo_tracks_hands_recipients_parameters_and_observer() {
+        let (topology, board, mut arena) = crate::etw::tests::fixture();
+        let mut params = trading::TradeParams::default();
+        let mut nonempty = 0;
+        for seat in 0..board.seats() {
+            arena.state.players[seat].vp_public = 2;
+            arena.state.players[seat].pieces[1] = 4;
+            arena.state.players[seat].pieces[2] = 4;
+            arena.state.players[seat].resources = [3; 5];
+            arena.state.belief.set_known_hand(seat, [2; 5], 3);
+        }
+        for variant in 0..48 {
+            let seat = variant % board.seats();
+            match variant % 4 {
+                0 => arena.state.players[seat].resources[variant % 5] = (variant % 7) as i16,
+                1 => arena.state.belief.gain(seat, variant % 5, 1),
+                2 => params.offer_span += 0.25,
+                _ => arena.state.players[seat].vp_public = (variant % 10) as u8,
+            }
+            for observer in [0, 1, 0] {
+                let view = arena.decision_view(&board, &topology, observer, DecisionPhase::Action);
+                for _ in 0..2 {
+                    let mut expected = Vec::new();
+                    score_offers_inner(&view, &params, |offer| {
+                        expected.push((offer.action, offer.score.to_bits()));
+                    });
+                    let mut actual = Vec::new();
+                    score_offers(&view, &params, |offer| {
+                        actual.push((offer.action, offer.score.to_bits()));
+                    });
+                    nonempty += usize::from(!actual.is_empty());
+                    assert_eq!(actual, expected);
+                }
+            }
+        }
+        assert!(nonempty > 0);
     }
 }

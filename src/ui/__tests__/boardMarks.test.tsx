@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { act, useEffect, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { addPlayer, createBoard, placeBuilding, setHexTile } from '../../model/board'
+import { axialToPixel, parseVertexId } from '../../model/coords'
+import { legalSettlementVertices } from '../../engine/legality'
 import { boardGrid, defaultPortEdges } from '../../model/layouts'
 import { BoardCanvas } from '../BoardCanvas'
 import { StoreProvider, useStore, type HighlightMark } from '../store'
@@ -37,6 +40,23 @@ const draw = (marks: readonly HighlightMark[]): void => {
   })
 }
 
+function DraftRings() {
+  const { dispatch } = useStore()
+  useEffect(() => {
+    let board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Blue', color: COLOR })
+    board = setHexTile(board, { q: 0, r: 0 }, 'wood')
+    board = placeBuilding(board, VERTEX, board.players[0].id, 'settlement')
+    const [ringOnly, shared] = legalSettlementVertices(board)
+    dispatch({ type: 'commit', board })
+    dispatch({ type: 'highlight', marks: [
+      { ref: shared, color: COLOR, faded: true },
+      { ref: ringOnly, color: COLOR, kind: 'ring' },
+      { ref: shared, color: COLOR, kind: 'ring' },
+    ] })
+  }, [dispatch])
+  return <BoardCanvas />
+}
+
 describe('board mark layer', () => {
   beforeEach(() => {
     actEnvironment(true)
@@ -59,6 +79,61 @@ describe('board mark layer', () => {
     expect(strokes).toHaveLength(1)
     expect(strokes[0].getAttribute('style')).toContain(COLOR_RGB)
     expect(container.querySelectorAll('.vertex-highlight')).toHaveLength(0)
+  })
+
+  it('draws a ring with a dark outer edge and no filled vertex mark', () => {
+    draw([{ ref: VERTEX, color: COLOR, kind: 'ring' }])
+    const ring = container.querySelector('.vertex-ring')!
+    const edge = container.querySelector('.vertex-ring-edge')!
+    expect(container.querySelectorAll('.vertex-ring')).toHaveLength(1)
+    expect(container.querySelectorAll('.vertex-ring-edge')).toHaveLength(1)
+    expect(container.querySelector('.vertex-highlight')).toBeNull()
+    expect(ring.getAttribute('stroke')).toBe(COLOR)
+    expect(ring.getAttribute('stroke-width')).toBe('3')
+    expect(edge.getAttribute('stroke')).toBe('#30271f')
+    expect(edge.getAttribute('stroke-width')).toBe('5')
+    expect([...ring.parentElement!.children]).toEqual([edge, ring])
+    expect(ring.parentElement!.getAttribute('pointer-events')).toBe('none')
+    expect(ring.parentElement!.querySelector('text')).toBeNull()
+    const points = parseVertexId(VERTEX).map((coord) => axialToPixel(coord, 58))
+    for (const circle of [edge, ring]) {
+      expect(circle.getAttribute('fill')).toBe('none')
+      expect(circle.getAttribute('r')).toBe('16')
+      expect(Number(circle.getAttribute('cx'))).toBeCloseTo(points.reduce((sum, p) => sum + p.x, 0) / 3)
+      expect(Number(circle.getAttribute('cy'))).toBeCloseTo(points.reduce((sum, p) => sum + p.y, 0) / 3)
+    }
+  })
+
+  it('draws a larger ring beside a vertex mark on the same corner without duplicate keys', () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      draw([
+        { ref: VERTEX, color: COLOR, faded: true },
+        { ref: VERTEX, color: COLOR, kind: 'ring' },
+      ])
+      expect(container.querySelectorAll('.vertex-highlight.faded')).toHaveLength(1)
+      expect(container.querySelectorAll('.vertex-ring')).toHaveLength(1)
+      expect(container.querySelectorAll('.vertex-ring-edge')).toHaveLength(1)
+      for (const circle of container.querySelectorAll('.vertex-ring, .vertex-ring-edge')) {
+        expect(circle.getAttribute('r')).toBe('19')
+      }
+      expect(errors).not.toHaveBeenCalled()
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  it('keeps the draft dot under a ring alone and hides it under a ring with a vertex mark', () => {
+    act(() => root.render(<StoreProvider><DraftRings /></StoreProvider>))
+    const rings = [...container.querySelectorAll('.vertex-ring')]
+    expect(rings).toHaveLength(2)
+    expect(container.querySelectorAll('.placement-slot').length).toBeGreaterThan(0)
+    rings.forEach((ring, index) => {
+      const at = `[cx="${ring.getAttribute('cx')}"][cy="${ring.getAttribute('cy')}"]`
+      expect(container.querySelectorAll(`.placement-slot${at}`)).toHaveLength(index === 0 ? 1 : 0)
+      expect(container.querySelectorAll(`.vertex-highlight${at}`)).toHaveLength(index === 0 ? 0 : 1)
+      expect(ring.getAttribute('r')).toBe(index === 0 ? '16' : '19')
+    })
   })
 
   it('draws a vertex mark as a circle and no edge stroke', () => {
