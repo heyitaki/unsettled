@@ -3855,3 +3855,41 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 6 
 **Decision.** Neither arm read `better`, so both are dropped; there is no second retry. Both intervals sit wholly above zero and reach the +0.5pp bar without clearing it. Last readings at 6 seats: `flat_25` +0.283pp (its screen), `flat_50` +0.420pp, `flat_75` +0.471pp, `reprice_only` +0.156pp, none `worse`. A flat arm and `reprice_only` are both positive, so requirement 30 creates `flat_reprice` at 6 seats on `flat_75`: `contestWeight` 0.75 with `repriceFirstExpansion` 1 (M-110).
 
 **Prediction against the three retries (M-105 to M-107).** I expected every estimate to shrink into the range 0 to +0.4pp and put `better` at about 10% an arm. No arm read `better`. The two 5-seat arms shrank as predicted, to about +0.2pp. The four arms at 4 and 6 seats barely moved, +0.42pp to +0.50pp, above my range: at those two seat counts a heavy flat discount is worth a little under half a point, measured twice, which is real and under the bar the owner set.
+
+## M-108: 4 seats, the second-stage screen of `flat_reprice` on `tuning4`
+
+**Preregistration.** [`2026-10-13-m108-seats4-second-stage.md`](../../../docs/plans/preregs/2026-10-13-m108-seats4-second-stage.md), committed in `f4ef98e5` with the arm file and its pin row before the run. Ran on that commit's release binary, 2026-10-13: `standard4`, 4 seats, `tuning4` at seed `8972835441189626876`, 5,500 boards x 2 reps, 44,000 games an arm, 17 seconds. Load averages 8.01 22.70 21.39 before and 13.68 23.25 21.61 after on 18 cores, from this programme's own back-to-back runs. The arm is `contestWeight` 0.75 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.598pp | +0.245pp to +0.950pp | `inconclusive` | 3,152, 2,889 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 11,111 of 44,000 with 0 draws, the same games as the screen's `base`, 0.2525 against a corner of 0.2500 with an allowance of 0.0068.
+
+**Decision.** `inconclusive` with an estimate at or above 0.0025, so `flat_reprice` buys its one retry at 22,000 boards (M-111).
+
+## M-109: 5 seats, the second-stage screen of `flat_reprice` on `tuning4`
+
+**Preregistration.** [`2026-10-13-m109-seats5-second-stage.md`](../../../docs/plans/preregs/2026-10-13-m109-seats5-second-stage.md), committed in `f4ef98e5` with the arm file and its pin row before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 5 seats, `tuning4` at seed `13485105647361630321`, 3,500 boards x 2 reps, 35,000 games an arm, 30 seconds. Load averages 13.68 23.25 21.61 before and 19.43 23.72 21.83 after on 18 cores, from this programme's own back-to-back runs. The arm is `contestWeight` 0.5 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.549pp | +0.205pp to +0.892pp | `inconclusive` | 1,908, 1,716 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 6,945 of 35,000 with 0 draws, the same games as the screen's `base`, 0.1984 against a corner of 0.2000 with an allowance of 0.0070.
+
+**Decision.** `inconclusive` with an estimate at or above 0.0025, so `flat_reprice` buys its one retry at 14,000 boards (M-112).
+
+## M-110: 6 seats, the second-stage screen of `flat_reprice` on `tuning4`
+
+**Preregistration.** [`2026-10-13-m110-seats6-second-stage.md`](../../../docs/plans/preregs/2026-10-13-m110-seats6-second-stage.md), committed in `f4ef98e5` with the arm file and its pin row before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 6 seats, `tuning4` at seed `267929230571891344`, 3,000 boards x 2 reps, 36,000 games an arm, 40 seconds. Load averages 19.43 23.72 21.83 before and 26.52 25.00 22.39 after on 18 cores, from this programme's own back-to-back runs. The arm is `contestWeight` 0.75 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.597pp | +0.249pp to +0.946pp | `inconclusive` | 2,050, 1,835 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 6,078 of 36,000 with 0 draws, the same games as the screen's `base`, 0.1688 against a corner of 0.1667 with an allowance of 0.0065.
+
+**Decision.** `inconclusive` with an estimate at or above 0.0025, so `flat_reprice` buys its one retry at 12,000 boards (M-113).
+
+**Prediction against the three second-stage screens (M-108 to M-110).** I expected an estimate between +0.1pp and +0.6pp, `inconclusive`, with a retry at about 60%: all three landed at +0.55pp to +0.60pp and all three bought the retry.
