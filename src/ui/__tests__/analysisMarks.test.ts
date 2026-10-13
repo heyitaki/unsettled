@@ -48,7 +48,7 @@ const recommendation = (firstRoad: EdgeId | null, secondRoad: EdgeId | null = nu
 describe('recommendationMarks', () => {
   it('marks the road beside the pair when the pick opens one', () => {
     expect(recommendationMarks(recommendation(ROAD), '#3063ba')).toEqual([
-      { ref: FIRST, color: '#3063ba', label: '1' },
+      { ref: FIRST, color: '#3063ba', label: '1', placeable: true },
       { ref: SECOND, color: '#3063ba', label: '2', faded: true },
       { ref: ROAD, color: '#3063ba', label: 'R', kind: 'road' },
     ])
@@ -56,20 +56,20 @@ describe('recommendationMarks', () => {
 
   it('marks only the pair when there is no road', () => {
     expect(recommendationMarks(recommendation(null), '#3063ba')).toEqual([
-      { ref: FIRST, color: '#3063ba', label: '1' },
+      { ref: FIRST, color: '#3063ba', label: '1', placeable: true },
       { ref: SECOND, color: '#3063ba', label: '2', faded: true },
     ])
   })
 
   it("numbers the mark as the player's second settlement when that is the pick ranked", () => {
     expect(recommendationMarks({ ...recommendation(null), plannedSecond: [] }, '#3063ba', 2)).toEqual([
-      { ref: FIRST, color: '#3063ba', label: '2' },
+      { ref: FIRST, color: '#3063ba', label: '2', placeable: true },
     ])
   })
 
   it('marks the planned second pick\'s road faded, after the first pick\'s', () => {
     expect(recommendationMarks(recommendation(ROAD, SECOND_ROAD), '#3063ba')).toEqual([
-      { ref: FIRST, color: '#3063ba', label: '1' },
+      { ref: FIRST, color: '#3063ba', label: '1', placeable: true },
       { ref: SECOND, color: '#3063ba', label: '2', faded: true },
       { ref: ROAD, color: '#3063ba', label: 'R', kind: 'road' },
       { ref: SECOND_ROAD, color: '#3063ba', label: 'R', kind: 'road', faded: true },

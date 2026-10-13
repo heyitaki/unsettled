@@ -43,7 +43,7 @@ async function randomize(page: Page) {
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 900 } })
 
-  test('lists every contest and previews rings without hiding the dots inside them', async ({ page }) => {
+  test('lists every contest and previews rings with no placement dots inside them', async ({ page }) => {
     const { board, contests, notes } = await contestFixture()
     await page.goto('')
     await seedBoard(page, board)
@@ -64,7 +64,7 @@ test.describe('desktop', () => {
         const at = `[cx="${cx}"][cy="${cy}"]`
         const shared = await page.locator(`.vertex-highlight${at}`).count() > 0
         sharedCorners.add(shared)
-        await expect(page.locator(`.placement-slot${at}`)).toHaveCount(shared ? 0 : 1)
+        await expect(page.locator(`.placement-slot${at}`)).toHaveCount(0)
         await expect(ring).toHaveAttribute('r', shared ? '19' : '16')
       }
     }
@@ -514,7 +514,7 @@ test.describe('desktop', () => {
     await expect(buildings).toHaveCount(1)
   })
 
-  test('draft taps place the viewed settlement and advance outside build mode', async ({ page }) => {
+  test('draft taps on a Best picks circle place the viewed settlement and advance outside build mode', async ({ page }) => {
     // A tap lays the settlement with the setup road a ranking of that seat would draw for it.
     const engine = await createEngine(readFileSync('src/engine/advice/engine.wasm'), () => {})
     const tapPlaced = (board: Board, vertexId: VertexId, playerId: string) => {
@@ -543,15 +543,12 @@ test.describe('desktop', () => {
     const buildings = svg.locator('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g')
     await expect(marks).toHaveCount(LISTED_PICKS)
     await expect(svg.locator('.vertex-highlight-label').first()).toHaveText('1')
-    await expect(dots.first()).toBeVisible()
+    await expect(dots).toHaveCount(0)
     const marked = await marks.evaluateAll((marks) => marks.map((mark) => ({ x: Number(mark.getAttribute('cx')), y: Number(mark.getAttribute('cy')) })))
     const corners = boardGrid(board.layout).vertexIds.map((ref) => {
       const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
       return { ref, x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
     })
-    await expect(dots).toHaveCount(buildingSlots(board, player.id, 'settlement', 'edit').length - LISTED_PICKS)
-    expect(await dots.evaluateAll((dots) => [...new Set(dots.map((dot) => dot.getAttribute('fill')))])).toEqual([player.color])
-    for (const corner of marked) await expect(svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`)).toHaveCount(0)
     const clickCorner = async (corner: typeof corners[number]) => {
       const point = await svg.evaluate((element, corner) => {
         const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
@@ -559,6 +556,10 @@ test.describe('desktop', () => {
       }, corner)
       await page.mouse.click(point.x, point.y)
     }
+    // A legal corner out of reach of every circle: nothing is placed there.
+    const legal = new Set<string>(buildingSlots(board, player.id, 'settlement', 'edit'))
+    await clickCorner(corners.find((corner) => legal.has(corner.ref) &&
+      marked.every((mark) => Math.hypot(mark.x - corner.x, mark.y - corner.y) > 58))!)
     const first = corners.find((corner) => corner.x === marked[0].x && corner.y === marked[0].y)!
     await clickCorner(first)
     board = tapPlaced(board, first.ref, player.id)
@@ -572,11 +573,9 @@ test.describe('desktop', () => {
     await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
     await expect(marks).toHaveCount(LISTED_PICKS)
     const nextPlayer = board.players.find((player) => player.id === inferDraftState(board).sequence[nextSlot])!
-    await expect(dots.first()).toHaveAttribute('fill', nextPlayer.color)
-    const unmarked = await dots.first().evaluate((dot) => ({ x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
-    const second = corners.find((corner) => corner.x === unmarked.x && corner.y === unmarked.y)!
-    expect(buildingSlots(board, nextPlayer.id, 'settlement', 'edit')).toContain(second.ref)
-    await expect(svg.locator(`.vertex-highlight[cx="${second.x}"][cy="${second.y}"]`)).toHaveCount(0)
+    await expect(dots).toHaveCount(0)
+    const nextMark = await marks.first().evaluate((mark) => ({ x: Number(mark.getAttribute('cx')), y: Number(mark.getAttribute('cy')) }))
+    const second = corners.find((corner) => corner.x === nextMark.x && corner.y === nextMark.y)!
     await clickCorner(second)
     board = tapPlaced(board, second.ref, nextPlayer.id)
     await expect(buildings).toHaveCount(2)
@@ -584,6 +583,8 @@ test.describe('desktop', () => {
     await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)
     const followingSlot = inferDraftState(board).remainingPickIndices[0]
     await expect(slots.nth(followingSlot)).toHaveClass(/\bviewing\b/)
+    // With the next ranking's circles back, the placed piece still takes no tap.
+    await expect(marks).toHaveCount(LISTED_PICKS, { timeout: 60_000 })
     await clickCorner(second)
     await expect(buildings).toHaveCount(2)
     await expect(buildings.nth(1)).toHaveAttribute('transform', `translate(${second.x} ${second.y}) scale(0.8)`)

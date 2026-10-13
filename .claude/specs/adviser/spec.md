@@ -148,7 +148,7 @@ Win chance is measured, not scored: the engine plays the game out from the draft
 
 ### Client
 
-`useDraftRecap` asks for `RECAP_GAMES` (1,000) in batches of `RECAP_BATCH` (50) through the advice client, one request at a time, and adds the counts up as they arrive, so the percentages settle on screen. `decisionKey` includes `games` and `batch`. The client's per-game cache makes a return to the recap (an undo of `Start game`) instant. A game change cancels the run the way it cancels advice.
+`useDraftRecap` asks for `RECAP_GAMES` (1,000) in batches of `RECAP_BATCH` (50) through the advice client, up to `recapWorkers` at a time (the core count less one, capped at four), and adds the counts up as they arrive, so the percentages settle on screen. More than one puts the batches on that many extra workers, picked by batch index and stopped when the last pending batch answers. `decisionKey` includes `games` and `batch`. The client's per-game cache makes a return to the recap (an undo of `Start game`) instant. A game change cancels the run the way it cancels advice.
 
 ### Surface
 

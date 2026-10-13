@@ -458,7 +458,7 @@ test.describe('build mode', () => {
   })
 })
 
-test('a single tap outside build mode places a draft settlement on a board with tiles', async ({ page }) => {
+test('outside build mode a draft tap places a settlement only on a Best picks circle', async ({ page }) => {
   await open(page)
   const player = UNCLAIMED_ROSTER[0]
   const board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
@@ -466,19 +466,34 @@ test('a single tap outside build mode places a draft settlement on a board with 
   await expect(page.getByRole('button', { name: 'Edit the board' })).toHaveAttribute('aria-pressed', 'false')
   await expect(page.locator('.phone-build')).toHaveCount(0)
   const svg = page.locator('.board-canvas')
-  const dot = svg.locator('.placement-slot').first()
-  await expect(dot).toBeVisible()
-  await expect(dot).toHaveAttribute('fill', player.color)
-  const corner = await dot.evaluate((dot) => ({ x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
-  const point = await svg.evaluate((element, corner) => {
-    const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
-    return { x: point.x, y: point.y }
-  }, corner)
-  await page.touchscreen.tap(point.x, point.y)
+  const marks = svg.locator('.vertex-highlight')
+  await expect(marks).toHaveCount(LISTED_PICKS, { timeout: 60_000 })
+  await expect(svg.locator('.placement-slot')).toHaveCount(0)
+  const marked = await marks.evaluateAll((marks) => marks.map((mark) => ({ x: Number(mark.getAttribute('cx')), y: Number(mark.getAttribute('cy')) })))
+  const tapCorner = async (corner: { x: number; y: number }) => {
+    const point = await svg.evaluate((element, corner) => {
+      const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+      return { x: point.x, y: point.y }
+    }, corner)
+    await page.touchscreen.tap(point.x, point.y)
+  }
   const buildings = svg.locator('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g')
+  // A legal corner out of reach of every circle: nothing is placed there.
+  const bare = buildingSlots(board, player.id, 'settlement', 'edit').map((ref) => {
+    const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
+    return { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+  }).find((corner) => marked.every((mark) => Math.hypot(mark.x - corner.x, mark.y - corner.y) > 58))!
+  await tapCorner(bare)
+  const corner = marked[0]
+  await tapCorner(corner)
   await expect(buildings).toHaveCount(1)
   await expect(buildings).toHaveAttribute('fill', player.color)
   await expect(buildings).toHaveAttribute('transform', `translate(${corner.x} ${corner.y}) scale(0.8)`)
+  // Away from the circles a double tap still zooms, and places nothing.
+  await tapCorner(bare)
+  await tapCorner(bare)
+  await expect(page.locator('.board-zoom')).toContainText('2.5×')
+  await expect(buildings).toHaveCount(1)
 })
 
 test('double tapping the board outside build mode still zooms', async ({ page }) => {
@@ -496,6 +511,36 @@ test('double tapping the board outside build mode still zooms', async ({ page })
   await expect(page.locator('.board-zoom')).toContainText('2.5×')
   await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
   await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
+})
+
+test('a pinch and a one-finger pan follow fingers that land on the hexes', async ({ page }) => {
+  await open(page)
+  const svg = page.locator('.board-canvas')
+  const box = (await svg.boundingBox())!
+  const cdp = await page.context().newCDPSession(page)
+  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: { x: number; y: number }[]) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((point, index) => ({ ...point, id: index + 1 })) })
+  const y = box.y + box.height / 2
+  const left = box.x + box.width * 0.4
+  const right = box.x + box.width * 0.6
+  // A real first finger moves before the second lands, which settles its implicit capture on the hex under it.
+  await touch('touchStart', [{ x: left, y }])
+  await touch('touchMove', [{ x: left - 2, y }])
+  await touch('touchStart', [{ x: left - 2, y }, { x: right, y }])
+  for (let step = 1; step <= 5; step += 1) await touch('touchMove', [{ x: left - 2 - step * 8, y }, { x: right + step * 8, y }])
+  await touch('touchEnd', [])
+  // The spread roughly doubles; a pinch that loses a finger stops at its first frame, near 1.1×.
+  await expect.poll(async () => parseFloat((await page.locator('.board-zoom').textContent())!)).toBeGreaterThan(1.5)
+  const zoomed = (await svg.getAttribute('viewBox'))!
+  await touch('touchStart', [{ x: right, y }])
+  await touch('touchMove', [{ x: right - 20, y }])
+  await expect(svg).not.toHaveAttribute('viewBox', zoomed)
+  // The pan has taken the pointer for the svg by now, and has to outlive that hand-over.
+  const started = (await svg.getAttribute('viewBox'))!
+  await touch('touchMove', [{ x: right - 40, y }])
+  await touch('touchMove', [{ x: right - 60, y }])
+  await touch('touchEnd', [])
+  await expect(svg).not.toHaveAttribute('viewBox', started)
 })
 
 test('pieces maps a coastal tap through the padded svg content box', async ({ page }) => {

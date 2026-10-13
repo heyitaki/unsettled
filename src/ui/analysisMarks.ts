@@ -31,7 +31,7 @@ export const recommendationMarks = (
   color: string,
   pickNumber = 1,
 ): HighlightMark[] => [
-  { ref: recommendation.firstPick, color, label: String(pickNumber) },
+  { ref: recommendation.firstPick, color, label: String(pickNumber), placeable: true },
   ...recommendation.plannedSecond.slice(0, 1).map((ref) => ({ ref, color, label: String(pickNumber + 1), faded: true })),
   ...(recommendation.firstRoad === null
     ? []
