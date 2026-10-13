@@ -2026,6 +2026,8 @@ mod tests {
             "robberDiscount": 0.35,
             "robberConcentrationWeight": 0,
             "setupDenialWeight": 0,
+            "contestWeight": 0,
+            "repriceFirstExpansion": 0,
             "opponentTopK": 3,
             "softmaxTemperature": 1.25,
             "rolloutBudget": 500000,

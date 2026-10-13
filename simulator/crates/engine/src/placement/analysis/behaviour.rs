@@ -2068,3 +2068,107 @@ fn a_rivals_rollout_road_extends_the_walk_for_its_later_pick() {
     }
     assert!(witnesses > 0, "no later pick can reach farther over a simulated rival road");
 }
+
+fn contest_fixture(seats: usize) -> Value {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "../../../src/parser/__tests__/expected/board-draft-empty.json",
+    );
+    let mut board: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    board["players"] = (0..seats).map(|seat| json!({
+        "id": format!("p{seat}"), "name": format!("P{seat}"), "color": "#333333",
+    })).collect();
+    board["mePlayerId"] = "p1".into();
+    board["buildings"] = json!([]);
+    board["roads"] = json!([]);
+    board
+}
+
+#[test]
+fn zero_contest_never_classifies_scores_drafts_or_analysis() {
+    use crate::placement::draft::{self, DraftScorers};
+    let mut json = contest_fixture(4);
+    let board = parse(&json);
+    for weight in [0.0, 0.5] {
+        let weights = default_weights_with(json!({ "contestWeight": weight }));
+        let scorer = board.scorer(engine_weights(&weights));
+        let mut vertices = vec![EMPTY; board.topology.vertex_count()];
+        let mut edges = vec![EMPTY; board.topology.edge_count()];
+        vertices[0] = 0;
+        edges[0] = 0;
+        let before = expansion::contest_calls();
+        for vertex in 0..vertices.len() as Vertex {
+            scorer.score_for_owner(&vertices, &edges, 1, vertex, false);
+            scorer.breakdown_for_owner(&vertices, &edges, 1, vertex, false);
+        }
+        assert_eq!(expansion::contest_calls() > before, weight != 0.0);
+        let before = expansion::contest_calls();
+        vertices.fill(EMPTY);
+        edges.fill(EMPTY);
+        let scorers = DraftScorers { hero: scorer.clone(), opponent: scorer };
+        for (position, seat) in crate::game::setup_order(4).into_iter().enumerate() {
+            let (vertex, edge) = draft::choose(
+                &scorers, board.topology, 4, &vertices, &edges, seat, position >= 4,
+            ).unwrap();
+            vertices[usize::from(vertex)] = seat;
+            edges[usize::from(edge)] = seat;
+        }
+        assert_eq!(expansion::contest_calls() > before, weight != 0.0);
+        json["buildings"] = json!([{ "vertexId": board.topology.vertex_id(0), "playerId": "p0", "tier": "settlement" }]);
+        json["roads"] = json!([{ "edgeId": board.topology.edge_id(0), "playerId": "p0" }]);
+        forget_nested_rankings();
+        let before = expansion::contest_calls();
+        let response = analysis(&json, None, json!({ "weights": weights, "rollouts": 1 }));
+        assert_eq!(response["status"], "ready");
+        assert_eq!(expansion::contest_calls() > before, weight != 0.0);
+    }
+}
+
+#[test]
+fn contest_analysis_changes_mid_draft_rankings_at_each_roster_size() {
+    let witness = default_weights_with(json!({ "contestWeight": 0.5 }));
+    for seats in [2, 4, 5, 6] {
+        let mut json = if seats < 5 { filled_board(seats, 0) } else { contest_fixture(seats) };
+        let parsed = parse(&json);
+        let rival = parsed.player_ids[0].clone();
+        json["mePlayerId"] = parsed.player_ids[1].clone().into();
+        json["buildings"] = json!([{ "vertexId": parsed.topology.vertex_id(0), "playerId": rival, "tier": "settlement" }]);
+        json["roads"] = json!([{ "edgeId": parsed.topology.edge_id(0), "playerId": rival }]);
+        let plain = analysis(&json, None, json!({ "weights": default_weights_with(json!({})), "rollouts": 1 }));
+        forget_nested_rankings();
+        let before = expansion::discounted_sites();
+        let discounted = analysis(&json, None, json!({ "weights": witness, "rollouts": 1 }));
+        assert_eq!(discounted["status"], "ready");
+        assert_ne!(discounted, plain, "seats {seats}");
+        assert!(expansion::discounted_sites() > before, "seats {seats}");
+    }
+}
+
+#[test]
+fn contest_context_roads_follow_rival_roads_with_identical_sites() {
+    let board = parse(&contest_fixture(4));
+    let weights = default_weights_with(json!({ "contestWeight": 0.5 }));
+    let scorer = board.scorer(engine_weights(&weights));
+    let plain = board.scorer(engine_weights(&default_weights_with(json!({}))));
+    let mut vertices = vec![EMPTY; board.topology.vertex_count()];
+    vertices[17] = 1;
+    let edges = [21, 23].map(|road| {
+        let mut edges = vec![EMPTY; board.topology.edge_count()];
+        edges[road] = 1;
+        edges
+    });
+    let occupancies = edges.each_ref().map(|edges| expansion::Occupancy::new(&scorer, &vertices, edges, 0));
+    let plain_keys = occupancies.map(|occupancy| occupancy.road_key(&plain, 0));
+    assert_eq!(plain_keys[0], plain_keys[1]);
+    assert_eq!([plain_keys[0][4], plain_keys[1][4]], [0; 2], "both roads are outside open.edges");
+    for order in [[0, 1], [1, 0]] {
+        let context = Context::new(&board, &scorer);
+        for index in order {
+            let before = expansion::discounted_sites();
+            let expected = expansion::term(&scorer, &Holdings::empty(), &vertices, &edges[index], 0, 0).road;
+            assert_eq!(expected, [Some(9), Some(0)][index]);
+            assert_eq!(context.setup_road(&Holdings::empty(), &vertices, &edges[index], 0, 0, None), expected);
+            assert!(expansion::discounted_sites() > before);
+        }
+    }
+    assert_ne!(occupancies[0].road_key(&scorer, 0), occupancies[1].road_key(&scorer, 0));
+}

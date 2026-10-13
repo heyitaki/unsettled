@@ -1,144 +1,343 @@
 # Cut-off programme
 
+Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 4197f6f2
+
 ## Summary
 
-During the draft a rival's setup road cannot wall a settlement in, but it can point at the spot that settlement planned to expand to, and the rival then settles it first. Today the expansion term prices a spot as if nobody else wanted it, so rollouts that lay rival roads (shipped 2026-10-12) almost never move a ranking: 19 of 24 analyses were identical with rival roads ignored, the rest moved by at most 0.14. This programme does three things: it labels contested expansion spots in Best picks now, with no score change; it builds a contest discount into both placement scorers at weight 0, with every variant the owner asked to compare; and it measures those variants on boards chosen so that contests are common, adopting per seat count whatever passes.
+Draft rollouts lay rival setup roads, but the expansion term still prices a site as if nobody else wanted it, so those roads almost never move a ranking: before the scorer moved to Rust, 19 of 24 analyses were identical with rival roads ignored and the rest moved by at most 0.14. This programme adds one contest discount to the placement scorer at weight 0, adds a switch that re-prices a first pick after later rivals have placed, and measures both by self-play on ordinary boards with the existing procedure and bar. A seat count adopts only what passes; what passes nowhere is deleted. The label that shows contested spots with no score change is its own spec, [`contest-label`](../contest-label/spec.md) (a path relative to `.claude/specs/simulator/`, where this file lands), is built in TypeScript from the analysis response, and does not depend on this one.
 
-Owner decisions this spec records (2026-10-12): capture both directions with one model; contested means a rival settlement within two edges, stronger when that rival's road ends next to the spot; test every discount shape and road rule and adopt the best; mint boards where cut-offs are common, both filtered and dense; a winner must win on fresh cut-off boards and not lose on fresh ordinary boards; all five seat counts, staged; re-price the first pick as its own measured stage; delete the variants that lose; dense boards are the best of 32 random deals, not a clustered deal; a cut-off board is the narrow race rule, widened only if the pilot finds it rare; strengths are 0.25 and 0.75.
+There is one scorer: `AppFormulaScorer` in `simulator/crates/engine/src/placement/`, compiled into `engine.wasm` for the app and used natively by the simulator. Two callers reach it during a draft and both are in scope: the app's Best picks analysis (`simulator/crates/engine/src/placement/analysis/`, `rank_candidates`) and the simulator's draft lookahead (`simulator/crates/engine/src/placement/draft.rs`, `Lookahead`), which is what `app_formula_draft` plays in self-play. The formula term acts in both through the scorer; the re-pricing switch is written once in each. No app code changes: `src/` gets the rebuilt `engine.wasm` and the two test cases of requirement 21. No TypeScript type lists the weight keys.
+
+Contests are common, not rare: with a greedy draft on 300 random boards per seat count (2026-10-12, before the move to Rust), 37%, 63%, 73%, 83% and 86% of boards at two to six seats held a spot two seats were each one road from, and about 28% of settlements pointed their road at a spot a rival was one road from. Ordinary boards therefore carry the measurement, and no special board source is built.
+
+Every file, function and line number below was read at commit `a2b23ac4`. What was executed against that commit, and what was only read, is in the Verification appendix.
 
 ## Queue
 
-| # | Item | State |
-| --- | --- | --- |
-| 1 | Contest classifier and Best picks label (app only, no score change) | not started |
-| 2 | Contest term and variants in both scorers at 0, parity classes, inert proofs, wasm, hashes | not started |
-| 3 | First-pick re-pricing switch in the Rust lookahead and `analyze.ts`, off by default | not started |
-| 4 | Board sources and generation five domains, `contest_score`, arms, preregistration, blind pilot | not started |
-| 5 | Stage 1 to 3 screens on dense boards, seats two to six | not started |
-| 6 | Confirm and both gates for each seat count's winner | not started |
-| 7 | Adopt per seat count, delete losers, regenerate fixtures, close the record | not started |
+| #   | Item                                                                                                                                | State       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 1   | Contest term in the scorer at 0: tier masks, discount, memo and bound handling, both keys in every weights file, inert proofs, wasm | not started |
+| 2   | First-pick re-pricing switch in `rank_candidates` and `Lookahead`, off by default                                                   | not started |
+| 3   | `gate5` minted, arms written and pinned, `--picks-only` added, preregistrations, picks reading and blind pilot                      | not started |
+| 4   | Screens on `tuning4`, seats two to six                                                                                              | not started |
+| 5   | Confirm on `eval4` and gate on `gate5` for each seat count's candidate                                                              | not started |
+| 6   | Adopt per seat count or delete, regenerate fixtures and wasm, close the record                                                      | not started |
 
 ## Requirements
 
-### Contest classifier (shared by the label and the term)
+### Terms
 
-1. Definitions over the pieces standing at scoring time, where `B(v)` is the owner of the building on vertex `v` and `E(e)` the owner of the road on edge `e`, either possibly none. A road end of seat `R` is a vertex with no building that has an incident edge owned by `R`.
-2. A vertex `s` is tier 1 for `R` when `s` is a road end of `R`, or `s` has a neighbour `v` across an edge owned by nobody or by `R` and `v` is a road end of `R`. `R` needs one paid road to reach it.
-3. A vertex `s` is tier 2 for `R` when it is not tier 1 for `R` and there is a path `s`, `m`, `a` with `B(m)` none, `B(a) = R`, and both edges owned by nobody or by `R`. `R` needs two paid roads. A rival settlement with no road of its own still counts as tier 2, not tier 1.
-4. The rival paid count `r_R(s)` is 1 for tier 1 and 2 for tier 2. A seat is never its own rival.
-5. TypeScript: `contestTiers(layout, vertexOwner, edgeOwner, seat, site)` in `src/engine/expansion.ts` returns, per rival with a tier, `{ playerId, roads: 1 | 2 }`. Rust: the same classification in `placement/expansion.rs` from `vertex_owner` and `edge_owner`. One definition serves the label, the term and the board predicate.
+- **Distance rule:** no settlement may stand next to another, so a vertex adjacent to any building is not a legal spot.
+- **Candidate, site, paid road:** the expansion term prices a candidate vertex by the legal empty vertices its owner could settle next, its sites. A site is reached from the candidate along edges no rival owns; an edge the seat already owns is free and any other edge is one paid road, and a site lies at most two paid roads away. `expansionDecay` discounts a site once per paid road.
+- **Walk:** the search that finds a candidate's sites and each one's cheapest paid count. The reference walk reads the owner arrays (`vertex_owner`, `edge_owner`, one seat number or `EMPTY` per vertex or edge); the fast paths read bit masks.
+- **Row:** one seat's scores for every legal vertex of one board, which is how the lookahead and the analysis scan for a pick.
+- **Pre-window, mid-window:** in the analysis, the simulated picks of the seats ahead of the analysed player's first open pick, and the simulated picks between that player's two picks. The lookahead calls the second group the intervening picks.
+- **Hero:** the seat whose pick is being chosen. In self-play the hero's scorer and the opponent scorer can carry different weights.
 
-### Label (item 1)
+### Classifier
 
-6. `Recommendation` gains `contested: { vertexId: VertexId; playerId: string; roads: 1 | 2 }[]`: for each of the pick's two best expansion spots, the closest rival tier (ties to the earlier roster seat). The spots are the two that `expansionTerm` sums, exposed by a new `expansionSites(ctx, holdings, occupancy, candidate)` that shares the walk and is called only after the cut, once per listed row. `expansionTerm`'s return shape and hot path do not change.
-7. The occupancy the label reads is the real board plus the likely-gone line's settlements and roads when the row's pick survives that line, and the real board alone otherwise, so every ring refers to a piece the board shows.
-8. `recommendationMarks` adds one mark per contested spot: `{ ref: vertexId, color: <rival colour>, kind: 'ring', faded: roads === 2 }`. `HighlightMark.kind` gains `'ring'`; `markLayer` draws it as a circle of radius 13 with no fill and a 3-unit stroke in `mark.color`, at 0.55 opacity when faded.
-9. Every listed row with a contest shows a note in `.analysis-row-body`, class `analysis-contest`, one clause per rival joined by `; `, rivals ordered by tier then roster order: `{Name} is also one road from {k} of {m} expansion spots` for tier 1 and `{Name} is two roads from {k} of {m} expansion spots` for tier 2, where `m` is the number of expansion spots the pick has (1 or 2) and `k` how many that rival contests at that tier. ASCII only, so the Inter cut is unchanged.
-10. Before building, mock the ring and the note against a real board screenshot at desktop and phone widths, per the mock-up notes in project memory. Update both UI specs and the `engine/` bullet in `CLAUDE.md` when it lands.
+1. The scorer's `Occupancy` (`simulator/crates/engine/src/placement/expansion.rs`, struct at 223) holds five masks for one scoring seat: `own_vertices` and `rival_vertices` (buildings), `own_edges` and `rival_edges` (roads), and `blocked` (every building and its neighbours). It merges every rival into one set of masks, so the classifier is defined over merged rivals. A building is any bit of `rival_vertices | own_vertices`. A rival road end is a vertex with no building that is an endpoint of a rival-owned edge (a bit of `rival_edges`). The classifier reads the first four masks and never `blocked`.
+   - The two tier masks are derived from an `Occupancy` and the scorer's adjacency (`AppFormulaScorer::steps`) when they are read. They are not fields of `Occupancy`. Reason: `draft.rs::Lookahead::place` (756) updates one occupancy per seat that the hero's scorer and the opponent scorer both read, `window.rs::Standing::occupancy` (98) builds one with no scorer in hand, and both callers assert in debug and test builds that a carried occupancy equals `Occupancy::new` field for field (`draft.rs` 415, `window.rs` 359). A tier field filled under one scorer's weight and compared under another's would fail that assertion.
+   - Each mask covers every vertex. Only the bits on a row's sites are ever read.
+2. A vertex is tier 1 when it is a rival road end, or is adjacent to one across an edge the scoring seat does not own. Some rival needs one paid road to reach it.
+3. A vertex is tier 2 when it is not tier 1 and lies two edges from a rival building through a middle vertex with no building, neither edge owned by the scoring seat. Some rival needs two paid roads. A rival settlement with no road of its own produces tier 2 sites only.
+   - Consequence, for the tests: at a tier 2 site both connecting edges are unowned. If the edge at the building were rival-owned the middle vertex would be a rival road end and the site tier 1; if the edge at the site were rival-owned the site would itself be a rival road end.
+   - Consequence, for the tests: when every road on the board is a setup road attached to its settlement, a rival road end is always adjacent to that rival's settlement, so the distance rule bars it and it is never a site. The first clause of tier 1 then never fires, and the tier 1 sites are at most the two far neighbours of each rival road end, those that are legal sites. That clause matters only on a board with a detached or extended road, which the app's analysis accepts.
+4. Two implementations of the one definition exist, and every fast path is held to the reference.
+   - Reference: `contest_tier(scorer, vertex_owner, edge_owner, seat, vertex)` in `expansion.rs`, returning 0, 1 or 2 from the owner arrays. `term` (1080) calls it per site.
+   - Mask path: `contest_tiers(scorer, &Occupancy, &mut PriceMemo)` in `expansion.rs`, returning `[tier 1 mask, tier 2 mask]`. `row_value` (675) and `row_road` (761) call it once per call and test site bits against it. Both have the memo in hand: `row_value` takes it as a parameter and `row_road` borrows the thread-local `PRICE_MEMO` (789).
+   - A new test in `expansion.rs`, in the style of `mask_walk_matches_the_folded_walk_on_scrambled_boards`, asserts on scrambled boards of both layouts, for every seat and every vertex, that the mask bits equal the reference's answer. Its boards must carry rival roads, own roads and at least one detached rival road.
+   - The assertions that already hold a fast path to the reference in debug and test builds cover the discounted values with no change: `window.rs::scan` (395 to 403, walk and total bits against `marginal_parts`, which calls `term`, for every scanned vertex), `expansion.rs::row_road` (864, against `AppFormulaScorer::expansion_road`, which returns `term(...).road`), `window.rs::Context::setup_road` (234, against `term(...).road`). `draft.rs::argmax_row` (187 to 197) holds a pruned scan to the full fast row, not to the reference.
+   - The lookahead's row values are held to the reference by tests only. Each of these lookahead and expansion tests, and the one analysis test at the end of the list, gains a second pass with `contestWeight` 0.5 on boards carrying rival settlements and roads, and among them at least one second-round position where the scoring seat owns a settlement and a road: `expansion.rs::row_roads_match_the_reference_on_scrambled_boards`, `expansion.rs::road_table_matches_each_first_edge_and_reference_road`, `draft.rs::an_uncached_row_matches_direct_scores_on_scrambled_boards`, `draft.rs::hero_marginal_rows_match_direct_lookahead_values`, `draft.rs::bounded_rows_match_full_rows_on_scrambled_boards`, `draft.rs::carried_replay_matches_rebuilt_rows_on_corpus_boards`, `analysis.rs::fast_scans_return_the_reference_scans_bits`.
+   - A test-only thread-local counter of discounted sites (in the manner of `WALK_CALLS`) lets each of those passes assert it discounted at least one site, so a pass cannot go green by never meeting a contest.
+5. The label spec classifies per rival in TypeScript and can differ from this merged rule only where a third seat's road lies on the connecting edge. That difference is accepted.
 
-### Contest term (item 2)
+### Contest term (item 1)
 
-11. Five new `EngineWeights` keys on both sides, all shipped at 0: `contestWeight` (w, in [0, 1]), `contestWantShare` (u, in [0, 1]), `contestStack` (0 or 1), `contestRaceShare` (g, in [0, 1]), `contestDenyBonus` (b, at least 0). `validate` enforces those ranges. Every weights-shaped file under `simulator/placement/` gains the keys through one script, never by hand; `sweep-bounds.json` gains their bounds.
-12. For the scoring seat `h`, a site `s` reached at its cheapest paid count `p`, with today's undecayed price `P_h(s)`, and each rival `R` with a tier:
-    - `k_R = expansionDecay ^ (r_R - 1)`.
-    - `q_R = clamp(P_R(s) / P_h(s), 0, 1)`, where `P_R(s)` is `marginalWithoutExpansion` of `s` for `R`'s holdings as they stand; `q_R = 0` when `P_h(s) <= 0`.
-    - `want_R = (1 - u) + u * q_R`.
-    - `race_R = 1 - g` when `p == r_R` and `h` is earlier than `R` in roster order, else 1. With no scoring seat it is 1.
-    - `d_R = w * k_R * want_R * race_R`.
-    - `D(s) = max over R of d_R` when `contestStack` is 0, and `1 - product over R of (1 - d_R)` when it is 1.
-    - `deny(s) = b * max over tier 1 rivals of max(0, P_R(s))` when `p <= 1`, else 0.
-    - The site's value is `expansionDecay ^ p * (P_h(s) * (1 - D(s)) + deny(s))`. A non-positive `P_h(s)` is not discounted.
-13. The top-two sum, the `expansionWeight` multiply and the road tie-break are unchanged and run over these values, so the road follows discounted values with no further rule, and a rival scored later in a rollout or replay sees the hero's road as a contest on its own spots.
-14. The term reads only board state, occupancy, the scoring seat and roster order, so it stays inside the shared deterministic formula. TypeScript `Occupancy` gains `vertexOwner: ReadonlyMap<VertexId, string>`; `blocked` stays. Rollouts maintain it where they maintain `occupied`. Rival holdings for `P_R` are rebuilt from `vertexOwner` behind a per-context cache keyed by the rival's vertex ids.
-15. Inert at 0: with `contestWeight` 0 and `contestDenyBonus` 0 neither side reaches the classifier. Proofs: a Rust test in the style of `a_zero_weight_never_reaches_the_walk_and_the_shipped_one_does`, an unchanged `bench-hashes.json`, every existing parity case bit-identical, cargo tests in both profiles, and the TypeScript perf tripwires with their bounds untouched and `analyzeBoard p4 fastest` within 2% of the figure taken before the change on a quiet machine.
-16. Rust memo and bound: site prices stay memoized undiscounted and the discount is applied outside `PriceMemo`. `ValueEntry` and the pruned argmax are bypassed whenever any contest key is non-zero (full row, reference walk), which is correct and slow; item 7 extends the key and the bound for the adopted shape only. The zero-allocation test must still pass with contest keys non-zero.
-17. Parity: new classes in `generate-placement-parity.ts` and `REQUIRED_CLASSES` with witness weights, one each for tier 1, tier 2, stacking, want share, race share and deny bonus (`W17` to `W22`). Regenerate and hand-verify `placement-parity.json`; rebuild `engine.wasm`; regenerate `advice-parity.json` only if advice output moves.
-18. Record in `gaps.md` as `SIM-GAP-43` that TypeScript rollouts lay no road for a pick that opens nothing while the Rust replay lays the far-endpoint fallback.
+6. Two new `EngineWeights` keys land together in item 1, because each addition rewrites every weights file: `contestWeight` (w), validated in [0, 1], which the formula reads, and `repriceFirstExpansion`, validated as exactly 0 or 1, which nothing reads until item 2. Both ship at 0. Both get a field after `setup_denial_weight`, an entry in the `scalars` list of `EngineWeights::validate` (`app_formula.rs` 169) and a bound there. `EngineWeights` keeps `deny_unknown_fields` with no defaults, so each key lands in every place that enumerates the vector. The Verification appendix holds the throwaway script that does the file edits, and the result of running it:
+   - all 86 flat weights files under `simulator/placement/` (4 at the top level, 77 in `arms/`, 5 in `seat-weights/`), both keys inserted after `setupDenialWeight`;
+   - the `placement` section of `sweep-bounds.json`, each key as `{ "min": 0, "max": 1 }`, which `the_sweep_bounds_file_is_complete_and_every_endpoint_admissible` requires for every leaf;
+   - the four requests in `simulator/fixtures/analysis-parity.json` that carry `options.weights` (`opponent-top-k-1`, `softmax-temperature-0`, `expansion-weight-0`, `mutual-mate`), in the sorted key order `serde_json` writes;
+   - by hand, the literal vector in `params_file.rs::the_sp6_pre_adoption_snapshot_is_the_literal_measured_vector` (`simulator/crates/engine/src/policy/params_file.rs`, about 1996), the only test that failed in the debug `cargo test` run after the script;
+   - by hand, the hard-bounds sentence in `.claude/specs/simulator/contracts.md` (133).
+   - The script is not committed.
+7. For a site `s` reached at its cheapest paid count `p` with today's undecayed price `P(s)`: `k = 1` when `s` is tier 1, `k = expansionDecay` when it is tier 2, `k = 0` otherwise. The site's value is `expansionDecay ^ p * P(s) * (1 - w * k)`. A non-positive `P(s)` is not discounted.
+   - Arithmetic, fixed so that every path returns the same bits: the value `v` is computed exactly as today (`price * decay_pow[cost]` on the fast paths, `score * expansion_decay.powf(paid_builds)` in `term`), and then, only when the site is tier 1 or tier 2 and `P(s) > 0.0` compares true, `v` is multiplied by one of two factors. The factors are `1.0 - w` for tier 1 and `1.0 - w * expansion_decay` for tier 2, computed once in `AppFormulaScorer::new` and stored beside `decay_pow` (`app_formula.rs` 343). A site in neither tier is not multiplied at all.
+   - One helper in `expansion.rs` applies the rule (`contest_discount(scorer, price, value, tier) -> f64`) and `term`, `row_value` and `row_road` all call it. A NaN price is not discounted, because `NaN > 0.0` is false.
+   - `validate` already holds `expansionDecay` in [0, 1], so both factors lie in [0, 1].
+   - No new component joins `ScoreBreakdown`: the discount lives inside the `expansion` component, and the analysis response keeps its shape.
+8. The top-two sum, the `expansionWeight` multiply and the road tie-break are unchanged and run over these values, in `term`, `row_value` and `row_road` alike. The setup road therefore follows discounted values. So does every other reader of the term, with no code of its own: `mod.rs::choose_app_formula` (314), the far-endpoint fallback in `draft.rs::setup_road` (598), and the `setup_road` wasm export (`analysis.rs` 617), which already returns no road when the term is not above 0.
+9. In the app's analysis one scorer prices every seat, so on adoption a rival simulated after the hero sees the hero's road as a contest on its own sites. In a self-play A/B the candidate arm changes the hero's scorer only, and the opponent scorer inside the hero's `Lookahead` stays on the field's weights, as `contracts.md` requires of every `app_formula_draft` arm.
+10. Memos and caches. The rule: nothing keyed without the rival road positions may hold a discounted value.
+    - `PriceMemo.prices` keeps undiscounted site prices and undiscounted bounds, keyed as today. The discount is applied after a price is read.
+    - `ValueEntry` (562) is neither read nor written by a scorer whose `contestWeight` is above 0. In `row_value` the `remembered` entry (701 to 704) is built only when `serial` is `Some` and `contest_weight == 0.0`; `serial` still keys the site-price memo (731 to 736) at any weight. This is a new branch: today one `serial` switches both memos together, and the existing test `value_memo_can_be_bypassed_without_reading_or_writing` shows only that a row computed with neither memo is correct. `ValueEntry` keeps its layout.
+    - Why the key is not widened instead: `value_memo_checks_full_keys_and_clears_on_wrap` pins the entry at 64 bytes and 64-byte alignment so a hit reads one cache line, and two more site masks would double it for every weight-0 row. In a self-play A/B the hero's second-settlement rows already run without the memo (`planned_second`, `draft.rs` 742 to 754), so the bypass costs an arm little. The cost in the app after an adoption is what requirements 21 and 36 measure.
+    - `Occupancy::road_key` (265) returns its full-mask form (`own_vertices`, `blocked`, `rival_vertices`, `own_edges`, `rival_edges`), the branch it takes today when the table path is off, whenever the scorer's `contestWeight` is above 0. Those five masks include the four the classifier reads, so `Context.roads` (`window.rs` 191) cannot return a road chosen under other rival roads. The key keeps its `[u128; 5]` type.
+    - `SitesEntry`, `WalkMemo` and `ReachTable` hold site reach only. `PreparedRow` (`draft.rs` 257 to 288) holds a base total and an undiscounted bound. None holds a discounted value and none changes.
+    - The nested-ranking cache in `analysis.rs` keys on the weights' `Debug` text, which carries the new fields.
+    - `contest_tiers` keeps one entry in `PriceMemo`: the last two masks it returned, with the full key they were computed from (the scorer's `id` and the four masks the classifier reads). A call with the same key returns them; any other call recomputes and overwrites. No other cache is added.
+    - Bounds: `ExpansionBounds` (`build_expansion_bounds`, `app_formula.rs` 811) is unchanged and stays valid. Each discounted value is at most the undiscounted one, because only a positive price is multiplied and the factor is in [0, 1]; the top-two sum, the multiply by a non-negative `expansionWeight` and by a non-negative slot scale, and the addition of the base are each monotone under rounding. All three readers only skip a candidate whose bound cannot beat a held score: `draft.rs::pruned_argmax` (388), `window.rs::scan` (385), and the pair cut in `window.rs::top_candidates_scan` (579 to 583), whose `reach` is the maximum of the scan's own discounted values.
+11. Inert at 0. Every new branch sits behind `contest_weight == 0.0`: `term`, `row_value`, `row_road` and `road_key` take today's path, and neither tier function is called. Proofs, all required before item 1 is done:
+    - A Rust test in the style of `a_zero_weight_never_reaches_the_walk_and_the_shipped_one_does`: a test-only counter incremented by `contest_tier` and `contest_tiers` stays at 0 across `score_for_owner` and `breakdown_for_owner` for every vertex, one `draft::choose` for each pick of a four-seat draft, and one `analyze` of a four-seat mid-draft position, all on `src/parser/__tests__/expected/board-draft-empty.json` with `default-weights.json` as every scorer's vector and as the request's `options.weights`; and is above 0 for the same calls with `contestWeight` 0.5 written over it. The test names `default-weights.json`, not a seat file, so an adoption does not break it.
+    - `simulator/fixtures/analysis-parity.json`: its diff is exactly the eight inserted key lines in four requests, and no response byte moves. `cargo test --release -p unsettled-engine --test analysis_parity regenerate -- --ignored` run afterwards leaves the file's sha256 unchanged.
+    - `simulator/fixtures/bench-hashes.json` is byte-identical and not regenerated: `bench_cli.rs::hashes_match_the_committed_fixture` is green in both profiles.
+    - `cargo test` from `simulator/` is green in both profiles, which includes `placement_parity.rs`, `analysis_parity.rs` and `crates/cli/tests/alloc.rs`. The tier functions and the discount work on `u128` and `f64` values and allocate nothing.
+    - `npm test` is green with the rebuilt wasm, including `wasmAnalysisParity.test.ts` and `analysisPerf.test.ts` with its two bounds untouched.
+    - Speed: `box run simulator/box/bench --ref base=<commit before item 1> --ref cand=<item 1 commit> --node none`. No scenario's instruction ratio is above 1.01 and no row carries the note `decisions differ` or `STATES DIFFER`. Instruction counts are used because local wall time moves by about 5% between identical runs. The table goes in `.claude/specs/simulator/measurements.md`.
+12. Behaviour at a non-zero weight is pinned by tests built from witness weights (`default-weights.json` with `contestWeight` 0.5, where `expansionDecay` 0.5 makes the factors 0.5 and 0.75). Every test below except the first is shown once to fail with `contestWeight` zeroed in its witness vector, and each of those carries an assertion that can only hold when a site was discounted.
+    - `contest_discount` directly, with the factors as inputs: tier 1, tier 2, no tier, a zero price, a negative price and a NaN price, each to the bit.
+    - `term` on hand-built owner arrays on `src/parser/__tests__/expected/board-draft-empty.json` (the board `expansion.rs`'s tests load): a candidate whose best site is tier 1, and one whose best site is tier 2, each asserting the value's bits against `expansionWeight` times the top-two of the hand-computed discounted values.
+    - The road turn: one position on that board, found by the implementer with a throwaway search over candidates and one rival settlement with its road, where `term(...).road` at `contestWeight` 0 and at 0.5 are different edges. The test pins both edges. The board in Edge cases is the motivating report and is not the test, because it cannot be reproduced.
+    - Memo staleness: one scorer at 0.5, one candidate, and two occupancies that give the candidate the same three site masks and differ only in which way a rival's road points, so that one site changes tier. The three site masks are the ones `row_value` reads: the candidate's sites at 0, 1 and 2 paid roads. `row_value` with a shared `PriceMemo` and serial, called in both orders, returns each occupancy's reference bits, and the two values differ; `Context::setup_road` called on both through one `Context` returns each occupancy's reference road.
+    - Two scorers in one lookahead: `draft::choose` for a first pick with the hero at `contestWeight` 0.5 and the opponent at 0, in a debug build, completes with the carried-occupancy assertions live, picks what `candidate_score` ranks highest, and moves the discounted-site counter.
+    - Through the analysis: one test in `analysis/behaviour.rs` sends `analyze` a mid-draft board with `options.weights` set to the witness vector (built with that file's existing helper `default_weights_with`), so every scan's fast-against-reference assertion runs at a non-zero weight across a whole ranking, on `standard4` at two and four seats and on `extension6` at five and six. It asserts the response differs from the weight-0 response and that the discounted-site counter moved.
+13. `engine.wasm` and its hash are rebuilt with `simulator/tools/build-wasm.sh`, because the engine sources and the embedded weights files change. `simulator/tools/build-wasm.sh --check` exits 0 afterwards.
+14. `.claude/specs/simulator/gaps.md` records as `SIM-GAP-43`, the next free number, that the analysis lays no road for a pick that opens nothing (`window.rs::Context::setup_road`, pinned by `setup_windows_lay_no_fallback_road_when_disabled_or_boxed_in`) while `draft.rs::setup_road` lays the far-endpoint fallback, so the two callers can classify the same drafted board differently.
 
-### First-pick re-pricing (item 3)
+### First-pick re-pricing (item 2)
 
-19. One more key, `repriceFirstExpansion` (0 or 1, shipped 0), read by the Rust `Lookahead` and by `rankCandidates`, not by the formula. When 1, the pair value replaces the first pick's expansion term with the same term evaluated after the intervening seats have picked and laid roads: same candidate, same holdings as at pick time, occupancy equal to the replayed board without the hero's own first settlement and road.
-20. Rust: in `value_with_marginal`, `marginal - expansion(before) + expansion(after replay)`. TypeScript: the same in `rankCandidates`, per candidate per surviving window, one extra walk. No parity class exists for lookahead terms; each side gets its own unit test that a rival road laid in the mid-window lowers the pair value at a non-zero `contestWeight` and that 0 leaves every existing expectation untouched.
-21. The app cost is measured before any adoption of this key: `perf.test.ts` figures before and after with the key on. The tripwire bounds move only with the owner's say.
+15. `repriceFirstExpansion` already exists from item 1 (requirement 6). Item 2 adds its two readers, `rank_candidates` and `Lookahead`. The formula never reads it.
+16. The switch applies when the key is 1, the expansion term is on (`expansionWeight` is not 0) and at least one seat picks between the hero's two picks. When it applies, the first pick's marginal is computed by the same function as today, with the same candidate, seat, grant flag and pick-time holdings, but against the owner arrays the intervening picks left, with two entries put back to their pick-time values for that one call: the candidate's vertex and the edge of the hero's first setup road. Pick-time values are read from the arrays the candidate was scored against before anything was placed, never assumed to be `EMPTY`. After the call both entries are set back to the hero. When the switch does not apply, the code path is today's.
+    - Only the expansion component can move. Every other component of the marginal is computed from the seat's own holdings, the candidate and the grant flag (`breakdown_with_holdings`, `scaled_total_with_holdings`). `score_for_owner` takes owner arrays, but reads them only to fold the seat's own buildings into holdings (`holdings_for_owner`) and to run the expansion term; with the candidate's vertex put back to its pick-time value, the replayed arrays give the pick-time holdings.
+    - Why the hero's own placement comes off: with its new road on the board the walk would travel that road for free and price every site beyond it one build cheaper, so the two terms would not be like for like. With the candidate in the vertex owners the holdings would count it twice, since the marginal adds the candidate itself.
+    - Why pick-time values and not `EMPTY`: the setup road can be an edge that already had an owner. The walk may choose an edge the seat already owns, on a hand-edited or imported board the analysis accepts, and the lookahead's fallback road takes whichever edge at the candidate scores best, whoever owns it. Emptying such an edge removes a road that was there at pick time and changes the price: on the `extension6` fixture, candidate 0 with a pre-existing own road on edge 0 and two real intervening picks, the marginal is 14.897019105196488 with the road kept and 14.272607269347732 with it emptied (critic's probe, Verification appendix item 5).
+    - A replayed board whose intervening pieces change none of the candidate's sites, their tiers or their paths gives the pick-time term's bits, so the whole value has the key-0 bits. This holds whether or not the setup road reused an existing edge.
+17. Analysis: in `rank_candidates` (`analysis/rank.rs` 67), per candidate per surviving pre-window. When the switch applies (here its third condition is that `mid_turns` is not empty), the first `marginal_breakdown` call (136 to 146) is not made before the window is copied. It is made right after `simulate_window` (166) returns, with `&my_holdings`, the `vertex_owner` and `edge_owner` buffers, `me`, the candidate and `first_receives_grant`, with `vertex_owner[candidate]` set to `window.vertex_owner[candidate]` and the candidate's road edge (when it laid one) set to `window.edge_owner[edge]` for the call, and both set back to `me` after it. Its result is added to `total` at once, before `best_legal_candidate`, so the first breakdown is still added before the second and still added when no second is found. When the switch does not apply the call stays where it is. `score` still equals `breakdown.total()` and the response shape is unchanged. Rivals' own picks (`opponent_pick`) are not re-priced.
+18. Lookahead: in `Lookahead::value_with_marginal` (`draft.rs` 722), so that `first_pick` and the observation entry `candidate_score` agree. When the switch applies (here its third condition is that `intervening` is not empty), the `marginal` argument is not used. After `replay` and before `planned_second`, the marginal is `self.hero_scorer.score_for_owner(&self.owners, &self.edges, self.hero, candidate, false)`, the call `Lookahead::value` makes today on the input board, with `self.owners[candidate]` set to the `vertex_owner[candidate]` argument and the hero's road in `self.edges` set to the `edge_owner[road]` argument for the call, and both set back to the hero after it. The value is then that marginal plus `second`, plus the denial credit where its weight is not 0, as today. `replay` returns the road it laid for the hero so the caller knows which edge to put back; this includes the far-endpoint fallback road. The occupancies `replay` carried are not touched. The key is read from the hero's scorer, as `denial_weight` is.
+19. Inert at 0: with the key at 0 both callers take today's path through one `if`. Item 2 repeats requirement 13 and every proof of requirement 11 except its counter test, which is about the other key: the fixture and `bench-hashes.json` are byte-identical to item 1's, `cargo test` is green in both profiles, `npm test` is green, and the box run with the commit before item 2 as `base` shows no scenario's instruction ratio above 1.01 and no `decisions differ` or `STATES DIFFER` note.
+20. With the key at 1, each caller has the tests below, in two groups.
+    - Tests of a changed value. Each asserts a difference from the key-0 value, so each is shown once to fail with the key zeroed:
+      - `blocked site`: a rival settlement placed in the mid-window on one of the first pick's two best sites lowers the candidate's value;
+      - `reprice only`: with `contestWeight` 0 and the key at 1, at least one first pick's value changes on a board where a mid-window rival blocks a site, which is what the `reprice_only` arm measures.
+    - Tests of an unchanged value. Each asserts the key-0 bits and so passes at either key; none is a zeroing target:
+      - `untouched`: a mid-window whose picks and roads touch none of the first pick's sites, their tiers or their paths leaves the value's bits unchanged;
+      - `reused road`: the same with a pre-existing own road at the candidate that the setup road reuses. This one is shown once to fail with the edge emptied instead of put back. In the analysis the board carries that road; in the lookahead the owner arrays are hand-built;
+      - `last seat`: the last seat of the first round, which picks twice in a row, gets the key-0 bits for every legal candidate;
+      - `fallback road`, lookahead only: a candidate that opens nothing, so its road is the fallback, completes and leaves `self.owners` and `self.edges` equal to what `replay` left.
+21. `src/engine/__tests__/analysisPerf.test.ts` gains two cases that rank the same two worst-case boards with `options.weights` set to `seats-6.json` read from disk with `contestWeight` 0.5 and `repriceFirstExpansion` 1 written over it, log their fastest of three, and hold the existing bounds (300 ms and 1200 ms). The `analyze` export already accepts `options.weights`, so no shipped file is edited and no export is added. A case over its bound stops the work and goes to the owner: at item 2 for the two new cases, and at an adoption for the two existing cases, which then measure the adopted seat file.
 
-### Boards and domains (item 4)
+### Arms, pilot, runs (items 3 to 5)
 
-22. A race site is an empty vertex with no occupied neighbour that is tier 1 for at least two seats. `contest_score(board, seats)` plays the draft with `app_formula_draft` on both paths from frozen copies of today's seat vectors (`simulator/placement/cutoff/filter-seats-<n>.json`, never regenerated), seeding its random ties from the board seed, and returns the number of race sites on the drafted board.
-23. `EvaluationDomain` gains a board source. Ordinary: as today. Filtered: board `i` is the first attempt `a` in `0..4096` whose board `mix64(domain_seed ^ i ^ mix64(a))` has `contest_score >= 1`; exhausting the attempts is an error. Dense: the attempt in `0..32` with the highest `contest_score`, ties to the lowest attempt. Each board still depends on its own index alone.
-24. Generation five, seat count folded into the seed as in generation four: `ctune5` (dense, screens and pilots), `ceval5` (filtered, confirm), `cgate5` (filtered, gate A), `gate5` (ordinary, gate B). Add the constants, the disjointness entries, `parse`/`name`/`seed`, the harness pins and the ledger rows in `programme.md`, `contracts.md` and `CLAUDE.md`.
-25. The dense source is best-of-32 from the real generator, not a clustered tile deal: it keeps every board legal under the generator's own rules (non-adjacent reds, port shuffle) and needs no second generator.
-26. Arms are per-seat perturbations of the live `seat-weights/seats-<n>.json`, written by a script as `placement/arms/co_<arm>_s<n>.json` and pinned in `params_file.rs` as `CO_ARMS`, each pin naming its anchor vector. Each arm sets `contestWeight` and at most one variant key, except where stated.
-27. Field statement: every seat on `heuristic-v1-trader-aware-threat-devcards-denial`, field placement `app_formula_draft:placement/seat-weights/seats-{seats}.json@placement/seat-weights/seats-{seats}.json`, reference arm `base` on the same spec, each candidate's opponent path pinned to the field's weights.
-28. Write the preregistration under `docs/plans/preregs/` from this spec before any run. Then a blind pilot per seat count on `ctune5`, 400 boards (100 on `extension6`), reading only wall time, illegal actions, half-widths, discordant share, the filtered keep share (boards kept per attempt), and for each arm how many contested picks change their corner or their road against `base`. None of these is a win rate, so the pilot stays blind. Size `B` as in `seat-count-programme.md`: the smallest multiple of 500 with predicted half-width at most 0.35pp, under 30 minutes (120 on `extension6`).
-29. A seat count whose filtered keep share is under 0.5% is recorded as not measurable and keeps every key at 0.
+22. Field statement: every seat on `heuristic-v1-trader-aware-threat-devcards-denial`, field placement `app_formula_draft:placement/seat-weights/seats-{seats}.json@placement/seat-weights/seats-{seats}.json`, reference arm `base` on the same spec, each candidate's opponent path pinned to the field's weights. Two, three and four seats play `standard4`; five and six play `extension6`. Player trading is on at three to six seats and off at two, and two-seat runs pass `--allow-unofficial`. Every run uses `--reps 2 --threshold 0.005 --alpha 0.05 --threads 0`. Items 3, 4 and 5 each go through the seat counts in the order 4, 2, 3, 5, 6, and nothing read at one seat count changes a command at another.
+23. Arms are perturbations of the seat vectors as they stand before this programme, one file per arm per seat count: `placement/arms/co_<arm>_s<n>.json`. The four first-stage arms change one leaf each and exist at all five seat counts, twenty files: `flat_25`, `flat_50`, `flat_75` (`contestWeight` 0.25, 0.5, 0.75) and `reprice_only` (`repriceFirstExpansion` 1). The second-stage arm of requirement 30 changes two leaves and exists only where that requirement creates it.
+    - One command serves every seat count, because `heuristics.rs::parse_heuristic` replaces `{seats}` across the whole spec before splitting it: `--arm flat_25=app_formula_draft:placement/arms/co_flat_25_s{seats}.json@placement/seat-weights/seats-{seats}.json`.
+    - Pins, in `params_file.rs` beside `SC_ARMS`: `CO_ARMS` as rows of (arm, seat counts, leaves), where leaves is a list of (key, value), and `CO_ANCHORS` as a frozen copy of today's five `SEAT_ADOPTIONS` rows. A first-stage row lists all five seat counts and one leaf. The test holds each `co_<arm>_s<n>.json` a row declares to `default-weights.json` with `CO_ANCHORS[n]`'s leaves and the row's leaves applied, checks each value is inside `sweep-bounds.json`, and holds the set of `co_*` files on disk to exactly the files the rows declare. Its comment says the family is anchored to the pre-programme seat vectors, and that it must be re-anchored to a snapshot file if `default-weights.json` ever moves.
+    - Why not anchor to the live seat files: requirement 34 edits a seat file on adoption, which would break every arm pinned to that file. `default-weights.json` does not move in this programme, so the frozen rows keep every arm's measured vector reconstructible.
+    - `every_committed_params_and_weights_file_loads_through_the_full_contract` pins the weights arm count at 77. It becomes 97, and rises by one for each second-stage file.
+24. Domains: picks readings, pilots and screens on `tuning4`, confirm on `eval4`, gate on a newly minted ordinary `gate5` with the seat count folded into its seed as in generation four. In `simulator/crates/cli/src/evaluate.rs`: `GATE5_SEED` (`0x6a75_5eed_2026_1012`), its entry in the compile-time disjointness array, the `Gate5` variant, and its arms in `parse`, `name` and `seed` (`mix64(GATE5_SEED ^ seats as u64)`). No `tuning5` or `eval5` is minted, which keeps the two tests that pin `tuning5` as an unknown domain. Also:
+    - tests: the import list and the generation-four loops in `crates/cli/tests/evaluate_harness.rs`, `policy_strength.rs` and `bench_contract.rs` gain `Gate5`; the spelling table in `every_evaluation_domain_parses_to_its_own_named_seed` gains it; the five `gate5` seeds are pinned in decimal as the `gate4` seeds are; the counts in comments and doc text move from twelve spellings to thirteen and from fifteen seat-derived seeds to twenty;
+    - a test that board `i` of `gate5` is reproducible from its index and seat count alone;
+    - docs: `simulator/README.md` (the `--domain` list), `.claude/specs/simulator/contracts.md` (the seed-domain paragraph), `.claude/specs/simulator/programme.md` (the ledger paragraph), and `CLAUDE.md` (the seed-domain convention).
+25. `evaluate` gains `--picks-only`, which produces the picks reading: the share of drafts an arm changes. With the flag the command takes the same field, arms, reference, domain, layout, seats and boards, plays no game, and writes `picks.json` in place of `evaluation.json`.
+    - For every board and hero seat (rep 0 only) and every arm it builds the unit's `GameConfig` exactly as `evaluate` does, calls `GameArena::prepare`, and then plays the draft one pick at a time: for each position `i` of `setup_order(seats)`, `GameArena::setup_pick_for_test` (`game.rs` 446) with that seat and `grant = i >= seats`. For the hero seat's two positions it records the pick as (settlement vertex, road edge), where the road edge is the one edge whose owner changed during that call; no changed edge, or more than one, fails the command with an error naming the board and seat.
+    - A unit's trace for an arm is the hero's two picks in draft order. A unit is changed for an arm when its trace differs from the reference arm's trace on that unit. Order counts: the same two settlement and road pairs taken in the other order is a change, because the second settlement pays the starting resources (`game.rs` 785). `picks.json` carries, per arm, `units`, `changed` and `changedPickShare` (`changed / units`), and the config block `evaluation.json` carries.
+    - It reads no game outcome, so it cannot inform the direction of any estimate. The draft kinds draw nothing from the game seed, so one rep is the whole reading.
+    - It lives in `simulator/crates/cli/src/evaluate.rs` and `main.rs`. `diagnose` is not used: it gives every seat one placement and plays whole games, so it has no hero and no draft-only path.
+26. Every invocation has a preregistration file under `docs/plans/preregs/`, named `<date>-m<NN>-<slug>.md` as that directory's README says, where `<NN>` is the number of its entry in `.claude/specs/simulator/measurements.md`. The file is committed before the invocation executes and carries the literal command, the decision rule from this section, and for `eval4` and `gate5` the expected decimal domain seed. One file covers a seat count's picks reading and pilot together, since the pilot's arm list is whatever requirement 27 keeps; it is committed before the picks reading. A screen's file is written after the pilot fixed `B`, a retry's or second stage's after the screen named its arms, the confirm's after the candidate is known, and the gate's after the confirm. Per seat count, first:
+    - Picks reading: `evaluate --picks-only` with `base` and the four first-stage arms on `tuning4`, at 400 boards on `standard4` and 100 on `extension6`.
+    - Blind pilot: the screen's own command with `base` and the arms that requirement 27 keeps, at the picks reading's board count. Only these are read from it, and only through these commands: `jq .elapsedSeconds meta.json`, and `jq '{illegalActions, arms: [.pairs[] | {arm, halfWidth: ((.interval[1] - .interval[0]) / 2), discordant: ((.b + .c) / .n)}]}' evaluation.json`. Estimates, interval endpoints, win rates and verdicts are not read, recorded or cited.
+27. An arm whose `changedPickShare` is under 0.02 at a seat count is not piloted or screened there and is recorded as inert at that seat count. If no arm remains, the seat count closes with both keys at 0 and no outcome on `tuning4` has been read there.
+28. Sizing. `B` is the smallest multiple of 500 at which the widest arm's predicted half-width, its pilot half-width times `sqrt(pilot boards / B)`, is at most 0.0035. `B` is at most the largest multiple of 500 whose predicted wall time, the pilot's `elapsedSeconds` scaled by boards, stays under 30 minutes on `standard4` and 120 on `extension6`. `B` is never below 500, even where the wall-time cap alone would put it lower. If the cap or the floor sets `B`, the screen's entry says what half-width that predicts. `B` is fixed here for every later run at that seat count.
+    - Stop conditions, at the pilot for the first and at every later run for both: `illegalActions` above 0, or a `base` arm that misses the symmetric corner. The corner is `c = (1 - draws / games) / seats` from `arms.base`; a miss is `abs(wins / games - c) > 3.29 * sqrt(c * (1 - c) / games)`. Either stops that seat count at that run, and its entry records why. A held-out domain a stopped run touched is spent at that seat count.
+29. Screen: `base` and the surviving first-stage arms on `tuning4` at `B` boards. `pair_verdict` reads each arm. `better` survives. `worse` or `equivalent` is dropped with that answer recorded. `inconclusive` with `estimate` at or above 0.0025 buys one retry; any other `inconclusive` arm is dropped unresolved.
+    - Retry: `base` and the retried arms at `4B` boards, once. On `extension6` at most two arms retry, the two with the largest screen estimates; a further arm that earned a retry is dropped unresolved. After a retry `better` survives and anything else is dropped.
+    - An arm's last reading is its retry if it had one and its screen otherwise.
+30. Second stage, at a seat count where some flat arm and `reprice_only` each have a positive estimate at their last reading and neither read `worse`: one arm `flat_reprice`, the seat vector with the `contestWeight` of the flat arm whose last-reading estimate is highest and `repriceFirstExpansion` 1. Its file `co_flat_reprice_s<n>.json` and its `CO_ARMS` row (that one seat count, two leaves) are committed with its preregistration. It is screened and retried by requirement 29's rules, in an invocation of `base` and that arm alone.
+31. The seat count's candidate is the arm with the highest last-reading estimate among those that read `better`. Every tie in requirements 29 to 31 goes to the arm listed first in the order `flat_25`, `flat_50`, `flat_75`, `reprice_only`, `flat_reprice`. A seat count with no `better` arm closes with both keys at 0, and `eval4` and `gate5` stay unspent there.
+32. Confirm: `base` and the candidate, one invocation on `eval4` at `4B` boards. `better` proceeds; anything else stops the seat count on today's vector and leaves `gate5` unspent there. Gate: the same design, one invocation on `gate5` at `4B`. `better` adopts; anything else leaves today's vector. Neither domain has a retry, both sizes were fixed by the pilot, and nothing read on a held-out domain changes any command run on it.
+33. Ledger after the programme, per domain and seat count, written into `programme.md`, `contracts.md` and `CLAUDE.md` when the programme closes:
 
-### Screens, confirm, gates (items 5 and 6)
+    | Domain    | At a seat count where             | State afterwards                |
+    | --------- | --------------------------------- | ------------------------------- |
+    | `tuning4` | only the picks reading ran        | unspent: no game was played     |
+    | `tuning4` | the pilot or any later run ran    | spent                           |
+    | `eval4`   | the confirm ran, whatever it read | spent                           |
+    | `eval4`   | no confirm ran                    | unspent                         |
+    | `gate5`   | the gate ran, whatever it read    | spent                           |
+    | `gate5`   | no gate ran                       | unspent                         |
+    | `gate4`   | every seat count                  | spent, as before this programme |
 
-30. All runs use `--threshold 0.005 --alpha 0.05`. Stop rules are those of `seat-count-programme.md`.
-31. Stage 1, discount shapes, on `ctune5` at `B` boards by 2 reps, six arms: `flat_lo`, `flat_hi` (w 0.25, 0.75), `stack_lo`, `stack_hi` (same w, `contestStack` 1), `want_lo`, `want_hi` (same w, `contestWantShare` 1).
-32. The carrier is the stage 1 arm with the highest point estimate, whatever its verdict. Stage 2, road rules, three arms on the carrier: `race` (`contestRaceShare` 1), `deny_lo`, `deny_hi` (`contestDenyBonus` 0.25, 0.5).
-33. Stage 3, re-pricing, two arms: `reprice` (the best arm so far by point estimate plus `repriceFirstExpansion` 1) and `reprice_only` (every contest key 0, `repriceFirstExpansion` 1).
-34. In any stage an arm reading `inconclusive` at +0.25pp or better buys one retry at `4B`, once. The seat count's candidate is the arm with the highest point estimate among those reading `better` across all three stages. No `better` arm closes the seat count at 0.
-35. Confirm: the candidate once on `ceval5` at `4B`; only `better` proceeds.
-36. Gate A: once on `cgate5` at `4B`; must read `better`. Gate B: once on `gate5` at `4B`; passes when `interval[0] > -0.0025`, read by hand off the output, since `evaluate` has no non-inferiority mode. Both must pass.
+### Adoption (item 6)
 
-### Adoption (item 7)
-
-37. A passing seat count gets its keys in `SEAT_WEIGHT_OVERRIDES[n]` and a `SEAT_ADOPTIONS` row; regenerate the seat files, the parity fixture, `bench-hashes.json` and `engine.wasm`. `DEFAULT_WEIGHTS` does not move.
-38. Delete every variant no seat count adopted: its key from both `EngineWeights`, every weights file, `sweep-bounds.json`, its parity class and its code path. `repriceFirstExpansion` is deleted the same way if unadopted. If nothing is adopted anywhere, `contestWeight` goes too and only the label and the classifier remain.
-39. For what survives, extend `ValueEntry`'s key and `build_expansion_bounds` so the row path and the pruned argmax serve it, then compare instruction counts on the box against the pre-programme figure.
-40. Record every reading in `measurements.md` from M-90, including the keep share per seat count and what lost by how much, and add an Outcome section here.
+34. A passing seat count gets its candidate's leaves by hand edit in `seat-weights/seats-<n>.json` (no generator writes these files; `CLAUDE.md` says to edit the JSON by hand), with those leaves appended to its `SEAT_ADOPTIONS` row in `params_file.rs` (each differs from the default's 0, which `the_seat_weights_files_record_the_adopted_per_seat_vectors` requires). Then, in the same change: `analysis-parity.json` is regenerated (`cargo test --release -p unsettled-engine --test analysis_parity regenerate -- --ignored`) and its diff re-verified by hand; `engine.wasm` is rebuilt; and `bench_cli.rs::hashes_match_the_committed_fixture` is run, with `bench-hashes.json` regenerated as the README's "Speed suite" says (delete, generate in debug, verify in release) only if it fails, which is expected only for four and six seats, whose seat files its three `analyze` rows read. `cargo test` in both profiles and `npm test` are green before the change is committed. `default-weights.json` does not move.
+35. A key no seat count adopts is deleted: its field and `validate` rule in `EngineWeights`, its line in all weights files, in `sweep-bounds.json`, in the four fixture requests, in the `sp6` literal and in `contracts.md`, and its code path. Every arm file with a leaf on that key is deleted with its `CO_ARMS` row, a `flat_reprice` file included: without the key it would equal its anchor or another arm. The arm count pin moves back accordingly. Then run `build-wasm.sh`, `cargo test` in both profiles and `npm test`, and regenerate `analysis-parity.json`, which must show no response change.
+    - With `contestWeight` deleted, `contest_tier`, `contest_tiers`, `contest_discount`, the two factors, the `road_key` and `ValueEntry` branches and their tests go with it, and so does the real-draft order test of Testing strategy, whose arm sets that key. The unit test of the trace comparison stays.
+    - With `repriceFirstExpansion` deleted, the branches of requirements 17 and 18 go.
+    - The two `analysisPerf.test.ts` cases of requirement 21 keep whichever of the two keys survives and are deleted when neither does.
+    - With both deleted and `CO_ARMS` empty, `CO_ARMS`, `CO_ANCHORS` and their test are deleted too. `gate5` and `--picks-only` stay.
+36. For an adopted key, instruction counts on the box are recorded for each adopting seat count, with no bar: `box run simulator/box/bench --ref base=<c> --ref cand=<c> --node none -- --weights placement/seat-weights/seats-<n>.json`, once with `<c>` the commit before the adoption and once with the adoption commit, and the entry gives each scenario's candidate instruction count in the second over the first. The only speed bar on an adoption is requirement 21's.
+37. Every reading goes in `.claude/specs/simulator/measurements.md`, whose entries are headed `M-<n>` and end today at M-90, so this programme's start at M-91. The picks readings and the speed tables of items 1 and 2 are entries too. This file gains an Outcome section.
 
 ## Design
 
-### Data model
+- Data model: two f64 `EngineWeights` keys (`simulator/crates/engine/src/placement/app_formula.rs`, struct at 121, `validate` at 169), one read by the formula and one by the two draft callers. Two discount factors on `AppFormulaScorer`, beside `decay_pow` (343).
+- Classifier and term: `simulator/crates/engine/src/placement/expansion.rs` (`ReachTable` 69, `Occupancy` 223 with `road_key` 265, `with_roads` 282 and `place` 286, `ValueEntry` 562, `PriceMemo` 590, `row_value` 675, `row_road` 761, `walk` 935, `term` 1080). New there: `contest_tier`, `contest_tiers`, `contest_discount`.
+- Re-pricing: `simulator/crates/engine/src/placement/analysis/rank.rs` (`rank_candidates` 67; first marginal 136 to 146, candidate road and settlement placed 156 to 162, mid-window 166, second 178 to 198) and `simulator/crates/engine/src/placement/draft.rs` (`Lookahead` 644, `value_with_marginal` 722, `replay` 773, the precomputed marginals from `legal_row` at 897 to 899).
+- Other readers of the term: `simulator/crates/engine/src/placement/analysis.rs` (the module root beside the `analysis/` directory: `AnalysisOptions` 39, `weights_for_seats` 258, `analyze` 572, the `setup_road` export 594), `simulator/crates/engine/src/placement/analysis/window.rs` (`Standing::occupancy` 98, `Context::setup_road` 213, `scan` 313, `opponent_pick` 620, `simulate_window` 687), `simulator/crates/engine/src/placement/mod.rs` (`choose_app_formula` 268).
+- Harness: `EvaluationDomain` in `simulator/crates/cli/src/evaluate.rs` (82, ends at `Gate4`), `evaluate` (309) for the picks reading, `pair_verdict` (562), `parse_heuristic` in `simulator/crates/cli/src/heuristics.rs` (9), flags in `simulator/crates/cli/src/main.rs`.
+- Pins: `simulator/crates/engine/src/policy/params_file.rs` (`SC_ARMS` 1659, `SEAT_ADOPTIONS` 1767, the arm count at about 2099).
 
-- `Recommendation.contested` and `HighlightMark.kind: 'ring'` (label).
-- `Occupancy.vertexOwner` in TypeScript (term).
-- Six `EngineWeights` keys, five in the formula and one in the lookahead, all f64 because arms can only change numbers.
-- `EvaluationDomain` board source: ordinary, filtered or dense.
+## Edge cases
 
-### Architecture
-
-- Classifier and term: `src/engine/expansion.ts` and `simulator/crates/engine/src/placement/expansion.rs`, priced where site prices are priced today (`expansionTerm` lines 356 to 365; `term` and `row_value` in Rust).
-- Re-pricing: `rankCandidates` in `src/engine/analyze.ts` and `Lookahead::value_with_marginal` in `placement/draft.rs`.
-- Boards: `simulator/crates/cli/src/boardgen.rs` stays the only generator; the source wrapper and `contest_score` live beside `EvaluationDomain` in `evaluate.rs`.
-- Label: `analyze.ts` after the cut, `src/ui/analysisMarks.ts`, `src/ui/AnalysisPanel.tsx`, `src/ui/BoardCanvas.tsx`, `src/ui/editor.css`.
-
-### Behavior
-
-A pick's expansion spots are priced as today, then each contested spot is discounted by how close the nearest rival is, optionally by how much that rival wants it, by how many rivals contest it, and by who moves first. The road goes toward the best spot after the discount. With re-pricing on, a first pick also pays for rivals who arrive after it. At the shipped zeros none of this runs.
-
-## Edge cases and error handling
-
-- A site that is a rival road end is tier 1 even though an own walk cannot cross the rival's edge to it by that route.
-- A rival edge whose far end carries another seat's building has no road end there.
-- Two rivals at the same tier: `max` under `contestStack` 0, the product under 1; the label names both.
-- `expansionWeight` 0: no sites, no label, no term.
-- A filtered board that exhausts 4096 attempts fails the run loudly instead of substituting an ordinary board.
-- `ctx` must carry roster order for `race_R`; a seat missing from the roster gets `race_R = 1`.
+- A site that is a rival road end is tier 1 although an own walk cannot cross the rival's edge to reach it that way. On a board of setup roads alone this never occurs (requirement 3).
+- A rival edge whose far end carries a building has no road end there.
+- A site that meets both definitions is tier 1.
+- `expansionWeight` 0: no sites, so no term, no tier masks and no re-pricing.
+- A setup road laid on an edge that already had an owner: re-pricing puts the edge's pick-time owner back for its one call (requirement 16), so a road that predates the pick is still priced.
+- The hero already owning a road (second pick): the walk's free-road rules are unchanged; only site values are discounted. The row takes the general walk rather than the table, and the discount is applied after the sites are known on either path.
+- A rival with two settlements and two roads, or several rivals: all merge into one set of masks. At two seats the one rival's two consecutive picks are two buildings and two roads of that merged set.
+- `contestWeight` 1: a tier 1 site is worth 0. A candidate whose every site is tier 1 has a term of 0 and the `setup_road` export returns no road for it, as it does today for any term not above 0.
+- A vertex owner array longer than the graph (`uncached_rows_ignore_rival_owners_past_the_graph`): the reference reads only real neighbours, so entries past the graph are never read.
+- The same drafted board can carry a fallback road in self-play and none in the analysis (`SIM-GAP-43`), so the two callers can put a site in different tiers.
+- Motivating report, not a test: `standard4`, two seats, the first seat's settlement on ore 9 / wheat 6 / sheep 10 with its road ending at ore 9 / wheat 6 / sheep 11. The second seat's top pick, brick 8 / sheep 11 / ore 9, lays its road toward wheat 6 / sheep 11 / wood 3 (9.74 after decay, next best 6.39). At `contestWeight` 0.25 the road stays; above 0.34 it turns to the wood 4 / sheep 11 / brick 8 side. Another session computed this on the deleted TypeScript engine with ports read by eye, no board file survives, and the numbers are not verified in Rust. Requirement 12's road-turn test is built on a committed fixture instead.
 
 ## Non-goals
 
-- The in-game turn policy's `contest_term` and its placeholders.
-- Porting `analyzeBoard` rollouts to the simulator, or closing `SIM-GAP-42`.
-- A clustered tile deal, true rival walk distance, or any change to `expansionWeight` or `expansionDecay`.
-- Moving the perf tripwire bounds.
+- Other discount shapes (per rival, by how much the rival wants the site) and road rules (race when moving first, bonus for denying, choosing the hero's road on the replayed board). They open as a follow-up spec only if some flat arm reads `better`, or `inconclusive` at +0.25pp or more, at any seat count.
+- Filtered, dense or constructed boards and any non-inferiority gate.
+- Rival identity in `Occupancy`, and true rival walk distance.
+- Re-pricing a rival's planned pair in `window.rs::opponent_pick`.
+- A measurement of the field an adoption creates, with every seat on the adopted vector. The gate moves the hero's formula alone, as every adoption so far has.
+- The in-game turn policy's `contest_term`, a placement kind that plays the analysis rollouts in self-play, and closing `SIM-GAP-42` (the lookahead models a rival's first pick as a single-vertex argmax, where the analysis prices a pair).
+- Any change to `expansionWeight`, `expansionDecay` or `setupDenialWeight`.
 
 ## Testing strategy
 
-- Classifier: unit tests on hand-built boards for tier 1 through a road end, tier 1 as the road end itself, tier 2, a roadless rival, a blocked connecting edge, and own pieces never counting.
-- Term: one TypeScript and one Rust test per variant key that bites when the key is zeroed, plus the parity classes.
-- Inert proofs as listed in requirement 15.
-- Label: `recommendationMarks` emits rings with the right colour and fade; the row note strings for one rival, two rivals and mixed tiers; one browser test that hovering a row draws a ring.
-- Board sources: board `i` is reproducible from its index alone; filtered boards all score at least 1; a dense board's score is the maximum of its 32 attempts.
-- A hand-built regression board from that session: `standard4`, two seats, the first seat's settlement on ore 9 / wheat 6 / sheep 10 with its road ending at ore 9 / wheat 6 / sheep 11. The second seat's top pick, brick 8 / sheep 11 / ore 9, lays its road toward the same wheat 6 / sheep 11 / wood 3 spot (9.74 after decay, next best 6.39); at an adopted flat strength above 0.34 that road must turn to the wood 4 / sheep 11 / brick 8 side. The ports were read by eye and need checking before it becomes a fixture.
-- Each mutation-style check is shown to fail once against the code it guards.
+- Tier masks: the mask-against-reference test of requirement 4, and hand-built boards for each clause: tier 1 through a road end, tier 1 as the road end itself (a detached rival road), tier 2, a roadless rival, a connecting edge the scoring seat owns, a rival edge ending on a building, own settlements and roads never creating a tier, a site meeting both definitions.
+- The tests of requirements 12 and 20. Which of them must be shown to fail with a key zeroed is stated in those two requirements and nowhere else.
+- The fast-against-reference passes at `contestWeight` 0.5 listed in requirement 4, each asserting it discounted at least one site.
+- Inert proofs as in requirements 11 and 19.
+- `gate5`: board `i` is reproducible from its index and seat count alone, and its seeds are disjoint from every earlier domain's.
+- No `--picks-only` test reads a live seat file, because requirement 34 can move one. Each takes its field and reference from `placement/default-weights.json`, which this programme does not move, or builds its vectors in the test.
+- `--picks-only`, command line, in `crates/cli/tests/evaluate_cli.rs` on `--domain tuning`, the long-spent first-generation domain that file's tests already use, field and `base` both `app_formula_draft:placement/default-weights.json@placement/default-weights.json`: `changedPickShare` is 0 for an arm with the field's own spec; it is above 0 for one `sc_*` arm from before this programme, which survives every adoption and deletion, at a board count fixed at build time (Decision points); two runs of the same command write the same `picks.json`; no `evaluation.json` is written.
+- `--picks-only`, comparison: a unit test of the trace comparison alone reads `[(a, x), (b, y)]` against `[(b, y), (a, x)]` as changed and against itself as unchanged.
+- `--picks-only`, order on a real draft: a unit where the arm takes the reference's two picks in the other order counts as changed. The critic's witness serves (Verification appendix item 5): `standard4`, two seats, `boardgen::generate_board(layout, 2, 39)`, hero seat 1. The test builds its vectors itself and registers them with `register_app_formula_draft`: the reference, the field and the arm's opponent path are `default-weights.json` with the two-seat anchor leaves written as literals (`coverageExponent` 1.0, `diversityWeight` 3.2) and both new keys 0, which is `seats-2.json` as it stood when the witness was found; the arm is that vector with `contestWeight` 0.5. An adoption at two seats therefore cannot turn the witness into a comparison of a vector with itself. That board comes from a plain integer seed and belongs to no evaluation domain.
+- `CO_ARMS` and `CO_ANCHORS` as in requirement 23.
 
 ## Decision points deferred to build time
 
-- **Race-site definition too rare.** Owner rule: if the four-seat pilot keeps under 5% of boards, widen a race site to tier 1 for one seat and tier 1 or 2 for another before any screen, at every seat count. The pilot reads no win rates, so this stays blind.
-- **A middle strength.** Input from another session on 2026-10-12, for the vet; the owner chose 0.25 and 0.75 before seeing it. The flat discount moves a road only once it passes `1 - next best site / contested site`, so on one real two-seat board 0.25 changes nothing and 0.75 turns the road (the step is at 0.34). A null at 0.25 beside a result at 0.75 cannot then be told from a dose response. Options: add 0.5 to each stage 1 shape (nine arms per seat count), or keep two strengths and let the pilot's changed-pick counts move them in the preregistration.
-- **Dense attempt count.** 32 is a guess. Raise it if dense boards average under two race sites; lower it if the pilot's wall time breaks the cap. Fix it in the preregistration.
-- **Variants that slow the screens.** If bypassing `ValueEntry` and the pruned argmax makes a stage miss its time cap, extend the key for the flat shape first and keep the bypass for the others.
-- **Clustered deal.** If dense boards from the real generator give too little signal, a constructed deal is the fallback and needs its own domain names and an owner decision on which generator rules it may break.
+- **The road-turn witness.** Which candidate and rival placement on `board-draft-empty.json` the test of requirement 12 pins. Any position where the road differs between `contestWeight` 0 and 0.5 serves.
+- **The `--picks-only` command-line witness.** Which `sc_*` arm file and which `--boards` value the test of Testing strategy uses: the first `sc_*` file in name order, at the smallest board count up to 20, whose `changedPickShare` against `default-weights.json` is above 0 on `--domain tuning`. Not checked for this plan.
+- **The replayed marginal's path.** Requirements 17 and 18 reach `expansion::term` through `marginal_breakdown` and `score_for_owner`. If requirement 21's figures come close to a bound, a `row_value` call on an occupancy built from the same restored arrays returns the same bits by the fast-path contract and may replace the term. Default: the reference path.
+
+## Verification appendix
+
+Executed in a worktree at `a2b23ac4` on 2026-10-12, then reverted so the tree is clean.
+
+1. **Adding the two keys everywhere.** The fields and their `validate` rules were added to `EngineWeights`, and the script below was run against `simulator/`.
+   - It reported 86 weights files and 4 fixture requests, and edited `sweep-bounds.json`: 89 files changed, of which `default-weights.json` gained 2 lines, `sweep-bounds.json` 2 and `analysis-parity.json` 8.
+   - `cargo test --no-fail-fast` in debug, the whole workspace: every target passed except one test, `params_file.rs::the_sp6_pre_adoption_snapshot_is_the_literal_measured_vector`, whose literal needs the two keys. `analysis_parity.rs` (8 passed), `bench_cli.rs` (8 passed, which includes `hashes_match_the_committed_fixture`), `bench_contract.rs`, `placement_parity.rs`, `alloc.rs`, `evaluate_harness.rs` and the other `params_file` tests all passed with the keys present and nothing reading them.
+   - `cargo test --release -p unsettled-engine --test analysis_parity regenerate -- --ignored` then left the fixture's sha256 unchanged, and its diff against `a2b23ac4` was exactly four `"contestWeight": 0,` lines and four `"repriceFirstExpansion": 0,` lines.
+   - `simulator/tools/build-wasm.sh --check` exited 1 (`engine.wasm is stale`) with the change in place and 0 on the clean tree.
+   - Not executed by the author: the release profile of the full suite, `npm test`, `build-wasm.sh` itself, and the box run.
+2. **The script.**
+
+   ```python
+   #!/usr/bin/env python3
+   """Throwaway: add contestWeight and repriceFirstExpansion at 0 to every weights-shaped file.
+
+   Usage: add-keys.py <simulator dir>. Text insertion only, so no number is re-printed.
+   """
+   import json, pathlib, re, sys
+
+   root = pathlib.Path(sys.argv[1])
+   KEYS = ["contestWeight", "repriceFirstExpansion"]
+   ANCHOR = re.compile(r'^(\s*)"setupDenialWeight": [^\n]*,\n', re.M)
+
+   def is_weights(path):
+       data = json.loads(path.read_text())
+       return isinstance(data, dict) and "setupDenialWeight" in data and "slotScales" in data
+
+   done = 0
+   for path in sorted((root / "placement").rglob("*.json")):
+       if not is_weights(path):
+           continue
+       text = path.read_text()
+       hits = ANCHOR.findall(text)
+       assert len(hits) == 1, (path, len(hits))
+       text = ANCHOR.sub(lambda m: m.group(0) + "".join(f'{m.group(1)}"{k}": 0,\n' for k in KEYS), text)
+       path.write_text(text)
+       assert all(json.loads(text)[k] == 0 for k in KEYS), path
+       done += 1
+   print("weights files:", done)
+
+   # sweep-bounds.json: a range per new leaf, after setupDenialWeight's.
+   bounds = root / "placement" / "sweep-bounds.json"
+   text = bounds.read_text()
+   section = text.index('"placement"')
+   m = re.compile(r'^(\s*)"setupDenialWeight": \{[^}]*\},\n', re.M).search(text, section)
+   assert m, "setupDenialWeight range not found"
+   indent = m.group(1)
+   line = lambda k: f'{indent}"{k}": {{ "min": 0, "max": 1 }},\n'
+   probe = m.group(0)
+   if "\n" in probe.strip():  # multi-line range objects: copy the shape of the neighbour
+       inner = re.search(r'\{\n(\s*)', probe).group(1)
+       line = lambda k: f'{indent}"{k}": {{\n{inner}"min": 0,\n{inner}"max": 1\n{indent}}},\n'
+   text = text[:m.end()] + "".join(line(k) for k in KEYS) + text[m.end():]
+   bounds.write_text(text)
+   assert all(json.loads(text)["placement"][k] == {"min": 0, "max": 1} for k in KEYS)
+
+   # analysis-parity.json: requests that carry options.weights, keys in serde_json's sorted order.
+   fixture = root / "fixtures" / "analysis-parity.json"
+   text = fixture.read_text()
+   out, pos, count = [], 0, 0
+   for m in re.finditer(r'^(\s*)"weights": \{\n', text, re.M):
+       block_end = text.index("\n" + m.group(1) + "}", m.end())
+       block = text[m.end():block_end]
+       inner = m.group(1) + "  "
+       first = f'{inner}"coverageExponent"'
+       second = f'{inner}"resourceValue"'
+       assert block.count(first) == 1 and block.count(second) == 1, m.start()
+       block = block.replace(first, f'{inner}"contestWeight": 0,\n{first}')
+       block = block.replace(second, f'{inner}"repriceFirstExpansion": 0,\n{second}')
+       out.append(text[pos:m.end()] + block)
+       pos = block_end
+       count += 1
+   fixture.write_text("".join(out) + text[pos:])
+   print("fixture requests with weights:", count)
+   ```
+
+3. **Read at `a2b23ac4`, with nothing run beyond what item 1 lists.**
+   - Every line number in Requirements and Design.
+   - `heuristics.rs::parse_heuristic` replaces `{seats}` in the whole spec string before any split (its test `the_seat_placeholder_resolves_both_draft_paths_before_loading` was part of the debug run in item 1).
+   - A search of `src/` and `e2e/` for `setupDenialWeight`, `expansionWeight` and `coverageExponent` finds one file, `src/engine/analysisProtocol.ts`, which names `expansionWeight` in a comment. `analysisPerf.test.ts` builds its request as a JSON string, so requirement 21 needs no type change.
+   - `seats-2.json`, `seats-3.json` and `seats-5.json` are byte-identical to each other, as are `seats-4.json` and `seats-6.json`; `SEAT_ADOPTIONS` holds `coverageExponent` 1.0 at every seat count and `diversityWeight` 3.2 at two, three and five.
+   - `AnalysisOptions.weights` (`analysis.rs` 39 to 53) is an optional full vector on the request, used in place of `weights_for_seats`.
+   - `evaluation.json` has no half-width or discordant-share field (requirement 26 computes both), `meta.json` holds `elapsedSeconds`, and `--boards N` always means boards 0 to N minus 1, so a pilot's boards are a prefix of the screen's.
+   - `GameArena::prepare` followed by `setup_for_test` runs the draft alone; `crates/engine/tests/setup_trace.rs` does exactly this.
+   - `draft::choose` takes no RNG.
+4. **Hostile fixtures from the brief, and where each is answered.** The author executed none of these, because the code they test does not exist yet; each names the test that must exist before its item is done. Item 5 lists the ones the critic executed against a scratch implementation.
+
+   | Fixture                                                                                       | Answer                                                                                                                                                                                 |
+   | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | Weight 0 bit-identity                                                                         | Requirement 11: counter test, fixture sha, hash test, box ratio                                                                                                                        |
+   | Memo staleness across rival road positions                                                    | Requirement 10 (value memo bypassed, full-mask road key), tested by requirement 12's staleness test                                                                                    |
+   | Fast path against reference at a non-zero weight                                              | Requirement 4: live assertions in the analysis scans, added passes for the lookahead rows                                                                                              |
+   | Road end as a site, edge ending on a building, own connecting edge, roadless rival            | Requirements 1 to 3, Testing strategy's clause tests                                                                                                                                   |
+   | Analysis lays no road where `draft.rs` lays a fallback                                        | Requirement 14 (`SIM-GAP-43`), requirement 18 and its fallback test in requirement 20                                                                                                  |
+   | Late-draft boards, hero owning a road                                                         | The passes of requirement 4, which must include a second-round position where the scoring seat owns a settlement and a road                                                            |
+   | `extension6` at five and six seats, two seats                                                 | Requirement 12's analysis test at two, four, five and six seats; the mask test on both layouts                                                                                         |
+   | `repriceFirstExpansion` 1 with `contestWeight` 0, a rival on a first-pick site, no mid-window | Requirements 16 and 20                                                                                                                                                                 |
+   | Hero and opponent scorers with different weights                                              | Requirement 1 (masks not stored), requirement 12's two-scorer test                                                                                                                     |
+   | An arm whose anchor moves through an adoption                                                 | Requirement 23 (`CO_ANCHORS`)                                                                                                                                                          |
+   | Changed-pick reading under ties                                                               | Requirement 25 compares ordered picks, never scores, so a tie that leaves the picks alone is unchanged and a reversed order is a change; Testing strategy's two `--picks-only` entries |
+   | A setup road on an edge that already had an owner                                             | Requirement 16 (pick-time values put back), requirement 20's pre-existing road test                                                                                                    |
+
+5. **Executed by the critic in round 1**, in the same worktree at `a2b23ac4`, with a scratch implementation of requirements 1 to 10 that was reverted afterwards. Its sources and logs are in the pairing's run directory under `critic-r1/` (`complete-scratch.patch`, `probes.rs`, `reprice-probe.rs`, `picks_probe.rs`).
+   - The key addition of item 1 reproduced: 86 weights files, four fixture requests, the one `sp6` literal failure, and analysis parity green.
+   - With the discount in place and both keys at 0 in every committed vector: `bench_cli.rs::hashes_match_the_committed_fixture` passed in release, and a release regeneration of `analysis-parity.json` kept its sha256 with all 45 responses unchanged.
+   - At `contestWeight` 0.5, copies of the named checks of requirement 4 passed in debug (nine tests) and in release (ten): the mask classifier against the owner-array reference, `row_road` against the reference road, the road table, uncached rows, hero marginal rows with the hero at 0.5 and the opponent at 0, bounded rows against full rows, carried replay against rebuilt rows, and the analysis fast scans. They covered both layouts and every seat index. Seven of them are the copied named checks, and each of those seven asserted that its discounted-site counter moved; the others are the classifier probe and the pre-existing road probes, which carry no counter assertion.
+   - Re-pricing as plan v1 specified it, emptying the hero's road edge, changed the marginal of a candidate whose setup road reused a pre-existing own road (the figures in requirement 16). This version puts the pick-time owner back instead.
+   - The picks reading as plan v1 specified it, comparing unordered piece sets, read a real change as unchanged: on the board named in Testing strategy the base takes (vertex 13, edge 18) then (vertex 40, edge 51) and the 0.5 arm takes them in the other order, with no score tie, and the hero's starting resources change from `[1,1,0,1,0]` to `[1,0,1,0,1]`. This version compares ordered picks.
+   - The run rules of requirements 22 to 33 were walked against a synthetic `evaluation.json` of the real shape: the `jq` filter of requirement 26 returned only half-widths and discordant shares, and the proposed `GATE5_SEED` and its five derived seeds were checked disjoint from every earlier constant, every generation-four seed and `PERF_SEED` by exact integer arithmetic. No command carrying a domain name was run.
+   - In round 2 the critic implemented this version's lookahead change of requirement 18 and ran it in release: the re-priced marginal of the pre-existing road case is 14.897019105196488, both replayed owner arrays are back to what `replay` left, and all 80 last-seat candidates on `extension6` have identical bits with the key at 0 and at 1. Its ordered-picks probe reads the reversal above as changed, and reads it as unchanged once the reference vector itself carries `contestWeight` 0.5, which is why the order test freezes its vectors.
+   - Executed by neither side: the full workspace suite in release (the author ran it in debug, item 1), `npm test`, a wasm rebuild, the box run, the analysis caller of requirement 17, and the full suite with the discount in place.
+
+## Vet
+
+- **Score:** 5/10 as an idea, 4/10 as first specified. **Verdict:** reduced build (owner, 2026-10-12): one flat discount and the re-pricing switch on ordinary boards; other variants only after a signal.
+- **Rung:** 7, minimal custom, reusing the evaluation harness, the generation four domains and the seat-count procedure. Rejected: 1 (rival roads are inert in the walk, so the outcome does not hold today); 2 (`expansionWeight` and `expansionDecay` arms measured `equivalent` or negative, and neither reads rival position); 3 (the turn policy's `contest_term` prices a road edge by a rival's expected time to win, near-uniform at setup; `setupDenialWeight` is the mirror term and measured negative at two values); 4 and 5 (nothing applies); 6 (see candidates).
+- **What the vet removed and why:** the filtered and dense board sources, three of four new domains and the two-gate bar, because contests occur on most ordinary boards (measurement in Summary); four of six keys and most arm files, because every key rewrites every weights file twice and no variant has evidence yet.
+- **Rewritten the same day** after Best picks moved to Rust (merge 2ce5dbe8): the TypeScript twin, its parity classes and its generator no longer exist, so those requirements were removed; verdict and scope unchanged.
+- **To reach 10:** a pilot in which a discount changes a meaningful share of picks, and a first screen above noise.
+- **Candidates rejected:** JSettlers2 `OpeningBuildStrategy.planInitRoad` and `SOCRobotDM` (GPL-3.0; drops a road target a rival settlement would make illegal, no road race, no win-rate evidence); Catanatron `value.py` (GPL-3.0; no contention term); Guhe and Lascarides, CIG 2014 (placement evidence, contention untested); Deng and Hu, WSDM 2015 (trigger-rate analysis: borrowed as the changed-pick reading, no code to adopt); fastchess `sprt.cpp` and Fishtest (sequential paired tests: the existing fixed-size procedure already carries the comparison); veridict (Holm correction over a candidate matrix: four arms confirmed on fresh seeds do not need it); confseq, Sequential Halving, Lee and Shen (methods for many arms or open-ended peeking, neither of which remains).

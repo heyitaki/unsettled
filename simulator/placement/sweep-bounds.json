@@ -32,6 +32,8 @@
     "robberDiscount": { "min": 0.0, "max": 1.0 },
     "robberConcentrationWeight": { "min": 0.0, "max": 16.0 },
     "setupDenialWeight": { "min": 0.0, "max": 4.0 },
+    "contestWeight": { "min": 0, "max": 1 },
+    "repriceFirstExpansion": { "min": 0, "max": 1 },
     "opponentTopK": { "min": 3.0, "max": 3.0 },
     "softmaxTemperature": { "min": 1.25, "max": 1.25 },
     "rolloutBudget": { "min": 500000.0, "max": 500000.0 },

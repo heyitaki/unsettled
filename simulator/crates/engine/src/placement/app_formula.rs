@@ -148,6 +148,9 @@ pub struct EngineWeights {
     /// worth. Read only by `placement::draft`, which knows the pick order; `AppFormula` never
     /// looks at it, the mirror image of the search-control fields below that only the app reads.
     pub setup_denial_weight: f64,
+    pub contest_weight: f64,
+    /// Unread by scoring until first-pick re-pricing lands.
+    pub reprice_first_expansion: f64,
     pub opponent_top_k: f64,
     pub softmax_temperature: f64,
     pub rollout_budget: f64,
@@ -204,6 +207,8 @@ impl EngineWeights {
                 self.robber_concentration_weight,
             ),
             ("setupDenialWeight", self.setup_denial_weight),
+            ("contestWeight", self.contest_weight),
+            ("repriceFirstExpansion", self.reprice_first_expansion),
             ("opponentTopK", self.opponent_top_k),
             ("softmaxTemperature", self.softmax_temperature),
             ("rolloutBudget", self.rollout_budget),
@@ -250,6 +255,12 @@ impl EngineWeights {
         // hero to hand rivals the sites they want most. `sweep-bounds.json` declares 0 to 4.
         if self.setup_denial_weight < 0.0 {
             return Err("weights violate: setupDenialWeight >= 0".into());
+        }
+        if !(0.0..=1.0).contains(&self.contest_weight) {
+            return Err("weights violate: contestWeight in [0, 1]".into());
+        }
+        if self.reprice_first_expansion != 0.0 && self.reprice_first_expansion != 1.0 {
+            return Err("weights violate: repriceFirstExpansion is 0 or 1".into());
         }
         self.validate_slot_scales()?;
         Ok(())
@@ -355,6 +366,9 @@ pub struct AppFormulaScorer {
     /// an array read rather than two keyed lookups. Empty when the board's seat count is outside
     /// the block's 3 to 6, which scores every seat unscaled.
     slot_scales: Vec<SlotScale>,
+    /// Multipliers for tiers 1 and 2: 1 - w and 1 - w * expansion_decay.
+    pub(super) contest_factors: [f64; 2],
+    pub(super) contested: bool,
 }
 
 /// What the scorer reads off a board, which is what `valuation.ts::computeBoardContext` reads.
@@ -820,6 +834,9 @@ impl AppFormulaScorer {
                     .collect()
             })
             .unwrap_or_default();
+        let contest_factors = [1.0 - weights.contest_weight,
+            1.0 - weights.contest_weight * weights.expansion_decay];
+        let contested = weights.contest_weight != 0.0;
         Self {
             id: NEXT_SCORER_ID.fetch_add(1, Ordering::Relaxed),
             reach: expansion::ReachTable::shared(&links),
@@ -832,6 +849,8 @@ impl AppFormulaScorer {
             links,
             hex_pips,
             slot_scales,
+            contest_factors,
+            contested,
         }
     }
 

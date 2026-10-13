@@ -159,9 +159,10 @@ impl ReachTable {
         table
     }
 
+    #[inline(always)]
     fn sites(&self, candidate: Vertex, occupancy: &Occupancy, memo: &mut [SitesEntry]) -> SiteMasks {
         cached_sites(self.id, candidate, &self.open[usize::from(candidate)], occupancy, memo,
-            || self.scan_sites(candidate, occupancy))
+            #[inline(always)] || self.scan_sites(candidate, occupancy))
     }
 
     pub(super) fn single_road(&self, candidate: Vertex, edge: Edge) -> &SingleRoadReach {
@@ -170,16 +171,19 @@ impl ReachTable {
             .get_or_init(|| SingleRoadReach::new(&self.links, candidate, edge))
     }
 
+    #[inline(always)]
     fn scan_sites(&self, candidate: Vertex, occupancy: &Occupancy) -> SiteMasks {
         self.scan_span(self.spans[usize::from(candidate)].clone(), occupancy)
     }
 
+    #[inline(always)]
     fn road_sites(&self, candidate: Vertex, edge: Edge, occupancy: &Occupancy) -> SiteMasks {
         let span = &self.first_spans[usize::from(candidate)].iter()
             .find(|(first, _)| *first == edge).expect("incident edge has a span").1;
         self.scan_span(span.clone(), occupancy)
     }
 
+    #[inline(always)]
     fn scan_span(&self, span: std::ops::Range<usize>, occupancy: &Occupancy) -> SiteMasks {
         let mut sites = SiteMasks::default();
         for entry in &self.entries[span] {
@@ -196,6 +200,7 @@ impl ReachTable {
     }
 }
 
+#[inline(always)]
 fn cached_sites(
     id: u64,
     candidate: Vertex,
@@ -384,7 +389,7 @@ impl Occupancy {
 
     /// Table paths read only local obstacles; own-road walks may reach beyond that table.
     pub(super) fn road_key(&self, scorer: &AppFormulaScorer, candidate: Vertex) -> [u128; 5] {
-        if scorer.reach.table_path(candidate, self) {
+        if !scorer.contested && scorer.reach.table_path(candidate, self) {
             let open = &scorer.reach.open[usize::from(candidate)];
             [self.own_vertices, self.blocked & open.sites,
                 self.rival_vertices & open.through, 0, self.rival_edges & open.edges]
@@ -457,6 +462,7 @@ fn occupied_owners(owners: &[u8]) -> impl Iterator<Item = (usize, u8)> + '_ {
 }
 
 /// A site's cheapest reach from any source is the minimum of the individual walks.
+#[inline(always)]
 fn mask_walk(
     scorer: &AppFormulaScorer,
     occupancy: &Occupancy,
@@ -473,6 +479,7 @@ struct WalkRead {
     edges: u128,
 }
 
+#[inline(always)]
 fn mask_walk_recorded<const RECORD: bool>(
     scorer: &AppFormulaScorer,
     occupancy: &Occupancy,
@@ -490,6 +497,7 @@ fn mask_walk_recorded<const RECORD: bool>(
     }
 }
 
+#[inline(always)]
 fn mask_walk_words<const WORDS: usize, const RECORD: bool>(
     scorer: &AppFormulaScorer,
     occupancy: &Occupancy,
@@ -629,6 +637,7 @@ impl Default for WalkMemo {
 }
 
 impl WalkMemo {
+    #[inline(always)]
     fn sites(
         &mut self,
         scorer: &AppFormulaScorer,
@@ -794,6 +803,9 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
     static LAST_REACH: std::cell::RefCell<Option<(Vec<VertexLinks>, Arc<ReachTable>)>> =
         const { std::cell::RefCell::new(None) };
+    // Tier caching must not enlarge or initialize the plain path's memo.
+    static CONTEST_MEMO: std::cell::Cell<Option<(u64, [u128; 4], [u128; 2])>> =
+        const { std::cell::Cell::new(None) };
     pub(super) static PRICE_MEMO: std::cell::RefCell<PriceMemo> =
         std::cell::RefCell::new(PriceMemo::default());
 }
@@ -807,8 +819,36 @@ pub(super) fn row_value(
     memo: &mut PriceMemo,
     serial: Option<u32>,
 ) -> f64 {
+    row_value_inner::<false>(scorer, holdings, candidate, occupancy, memo, serial)
+}
+
+#[cold]
+#[inline(never)]
+fn contested_row_value(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    candidate: Vertex,
+    occupancy: &Occupancy,
+    memo: &mut PriceMemo,
+    serial: Option<u32>,
+) -> f64 {
+    row_value_inner::<true>(scorer, holdings, candidate, occupancy, memo, serial)
+}
+
+#[inline(always)]
+fn row_value_inner<const CONTESTED: bool>(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    candidate: Vertex,
+    occupancy: &Occupancy,
+    memo: &mut PriceMemo,
+    serial: Option<u32>,
+) -> f64 {
     if scorer.weights().expansion_weight == 0.0 {
         return 0.0;
+    }
+    if !CONTESTED && scorer.contested {
+        return contested_row_value(scorer, holdings, candidate, occupancy, memo, serial);
     }
     #[cfg(test)]
     ROW_VALUE_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -821,7 +861,10 @@ pub(super) fn row_value(
     } else {
         memo.walks.sites(scorer, occupancy, candidate)
     };
-    price_sites(scorer, holdings, candidate, memo, serial, sites)
+    let tiers = if !CONTESTED { [0; 2] } else {
+        contest_tiers(scorer, occupancy, memo)
+    };
+    price_sites::<CONTESTED>(scorer, holdings, candidate, memo, serial, sites, tiers)
 }
 
 pub(super) fn single_road_value(
@@ -836,26 +879,30 @@ pub(super) fn single_road_value(
     if scorer.weights().expansion_weight == 0.0 {
         return 0.0;
     }
+    if scorer.contested {
+        return contested_row_value(scorer, holdings, candidate, occupancy, memo, Some(serial));
+    }
     let sites = reach.sites(candidate, occupancy, &mut memo.sites);
     #[cfg(any(test, debug_assertions))]
     assert_eq!(sites, memo.walks.sites(scorer, occupancy, candidate));
-    price_sites(scorer, holdings, candidate, memo, Some(serial), sites)
+    price_sites::<false>(scorer, holdings, candidate, memo, Some(serial), sites, [0; 2])
 }
 
 #[inline(always)]
-fn price_sites(
+fn price_sites<const CONTESTED: bool>(
     scorer: &AppFormulaScorer,
     holdings: &Holdings,
     candidate: Vertex,
     memo: &mut PriceMemo,
     serial: Option<u32>,
     sites: SiteMasks,
+    tiers: [u128; 2],
 ) -> f64 {
     let mut rest = sites[0] | sites[1] | sites[2];
     if rest == 0 {
         return 0.0;
     }
-    let remembered = serial.map(|serial| {
+    let remembered = if CONTESTED { None } else { serial }.map(|serial| {
         let entry = ValueEntry::new(serial, candidate, sites);
         (entry.index(), entry)
     });
@@ -892,6 +939,9 @@ fn price_sites(
             price_site()
         };
         let value = price * scorer.decay_pow[cost];
+        let value = if !CONTESTED { value } else {
+            contest_discount(scorer, price, value, tier_from_masks(tiers, bit))
+        };
         if value > first {
             second = first;
             first = value;
@@ -923,8 +973,36 @@ pub(super) fn row_road(
     candidate: Vertex,
     occupancy: Option<&Occupancy>,
 ) -> Option<Edge> {
+    row_road_inner::<false>(scorer, vertex_owner, edge_owner, seat, candidate, occupancy)
+}
+
+#[cold]
+#[inline(never)]
+fn contested_row_road(
+    scorer: &AppFormulaScorer,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+    occupancy: Option<&Occupancy>,
+) -> Option<Edge> {
+    row_road_inner::<true>(scorer, vertex_owner, edge_owner, seat, candidate, occupancy)
+}
+
+#[inline(always)]
+fn row_road_inner<const CONTESTED: bool>(
+    scorer: &AppFormulaScorer,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+    occupancy: Option<&Occupancy>,
+) -> Option<Edge> {
     if scorer.weights().expansion_weight == 0.0 {
         return None;
+    }
+    if !CONTESTED && scorer.contested {
+        return contested_row_road(scorer, vertex_owner, edge_owner, seat, candidate, occupancy);
     }
     let fresh;
     let occupancy = match occupancy {
@@ -946,6 +1024,9 @@ pub(super) fn row_road(
     let road = PRICE_MEMO.with(|memo| {
         let Ok(mut memo) = memo.try_borrow_mut() else {
             return scorer.expansion_road(vertex_owner, edge_owner, seat, candidate);
+        };
+        let tiers = if !CONTESTED { [0; 2] } else {
+            contest_tiers(scorer, occupancy, &mut memo)
         };
         let table_path = scorer.reach.table_path(candidate, occupancy);
         let serial = memo.serial(scorer.id, occupancy.own_vertices);
@@ -991,6 +1072,9 @@ pub(super) fn row_road(
                     }).price(site)
                 });
                 let value = price * scorer.decay_pow[cost];
+                let value = if !CONTESTED { value } else {
+                    contest_discount(scorer, price, value, tier_from_masks(tiers, bit))
+                };
                 best = js_max(best, value);
                 if value > first {
                     second = first;
@@ -1027,6 +1111,8 @@ pub(super) fn row_road(
 // Thread-local because tests run in parallel.
 #[cfg(test)]
 thread_local! {
+    static CONTEST_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static DISCOUNTED_SITES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static ROW_VALUE_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static WALK_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FAST_PATH_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -1040,6 +1126,114 @@ pub(super) fn walk_calls() -> usize {
 #[cfg(test)]
 pub(super) fn row_value_calls() -> usize {
     ROW_VALUE_CALLS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(super) fn contest_calls() -> usize {
+    CONTEST_CALLS.with(std::cell::Cell::get)
+}
+
+#[cfg(test)]
+pub(super) fn discounted_sites() -> usize {
+    DISCOUNTED_SITES.with(std::cell::Cell::get)
+}
+
+fn contest_discount(scorer: &AppFormulaScorer, price: f64, value: f64, tier: u8) -> f64 {
+    if price > 0.0 && tier != 0 {
+        #[cfg(test)]
+        DISCOUNTED_SITES.with(|sites| sites.set(sites.get() + 1));
+
+        value * scorer.contest_factors[usize::from(tier - 1)]
+    } else {
+        value
+    }
+}
+
+#[inline]
+fn tier_from_masks(tiers: [u128; 2], bit: u128) -> u8 {
+    if tiers[0] & bit != 0 { 1 } else if tiers[1] & bit != 0 { 2 } else { 0 }
+}
+
+/// Tier 1 reaches an empty rival road end in at most one non-own edge; tier 2 reaches a rival building in two, through an empty middle.
+fn contest_tier(
+    scorer: &AppFormulaScorer, vertex_owner: &[u8], edge_owner: &[u8], seat: u8,
+    vertex: Vertex,
+) -> u8 {
+    #[cfg(test)]
+    CONTEST_CALLS.with(|calls| calls.set(calls.get() + 1));
+
+    let road_end = |vertex: Vertex| {
+        vertex_owner[usize::from(vertex)] == EMPTY && scorer.steps(vertex).any(|(edge, _)| {
+            let owner = edge_owner[usize::from(edge)];
+            owner != EMPTY && owner != seat
+        })
+    };
+    if road_end(vertex) || scorer.steps(vertex).any(|(edge, to)| {
+        edge_owner[usize::from(edge)] != seat && road_end(to)
+    }) {
+        return 1;
+    }
+    for (edge, middle) in scorer.steps(vertex) {
+        if edge_owner[usize::from(edge)] == seat || vertex_owner[usize::from(middle)] != EMPTY {
+            continue;
+        }
+        if scorer.steps(middle).any(|(edge, to)| {
+            let owner = vertex_owner[usize::from(to)];
+            edge_owner[usize::from(edge)] != seat && owner != EMPTY && owner != seat
+        }) {
+            return 2;
+        }
+    }
+    0
+}
+
+/// Masks of the merged-rival tiers from `contest_tier`, with tier 1 taking precedence over tier 2.
+fn contest_tiers(scorer: &AppFormulaScorer, occupancy: &Occupancy, _memo: &mut PriceMemo) -> [u128; 2] {
+    CONTEST_MEMO.with(|memo| {
+        #[cfg(test)]
+        CONTEST_CALLS.with(|calls| calls.set(calls.get() + 1));
+
+        let key = [occupancy.own_vertices, occupancy.rival_vertices, occupancy.own_edges, occupancy.rival_edges];
+        if let Some((id, held, tiers)) = memo.get()
+            && id == scorer.id && held == key
+        {
+            return tiers;
+        }
+        let buildings = occupancy.own_vertices | occupancy.rival_vertices;
+        let mut ends = 0_u128;
+        for vertex in 0..scorer.reach.links.len() as Vertex {
+            if buildings & (1 << vertex) == 0 && scorer.steps(vertex)
+                .any(|(edge, _)| occupancy.rival_edges & (1 << edge) != 0)
+            {
+                ends |= 1 << vertex;
+            }
+        }
+        let mut first = ends;
+        while ends != 0 {
+            let end = ends.trailing_zeros() as Vertex;
+            ends &= ends - 1;
+            for (edge, to) in scorer.steps(end) {
+                if occupancy.own_edges & (1 << edge) == 0 { first |= 1 << to; }
+            }
+        }
+        let mut second = 0;
+        let mut rivals = occupancy.rival_vertices;
+        while rivals != 0 {
+            let rival = rivals.trailing_zeros() as Vertex;
+            rivals &= rivals - 1;
+            for (edge, middle) in scorer.steps(rival) {
+                if occupancy.own_edges & (1 << edge) != 0 || buildings & (1 << middle) != 0 {
+                    continue;
+                }
+                for (edge, to) in scorer.steps(middle) {
+                    if occupancy.own_edges & (1 << edge) == 0 { second |= 1 << to; }
+                }
+            }
+        }
+        let tiers = [first, second & !first];
+        memo.set(Some((scorer.id, key, tiers)));
+        tiers
+    })
 }
 
 /// One walk state: a vertex, and whether the free setup road has been spent getting there.
@@ -1089,6 +1283,7 @@ thread_local! {
 ///
 /// A site is a vertex at least two edges out that would be legal once the candidate is built:
 /// unoccupied, with no occupied neighbour, and not adjacent to the candidate.
+#[inline(always)]
 fn walk(
     scratch: &mut Scratch,
     scorer: &AppFormulaScorer,
@@ -1242,9 +1437,37 @@ pub(super) fn term(
     seat: u8,
     candidate: Vertex,
 ) -> ExpansionValue {
+    term_inner::<false>(scorer, holdings, vertex_owner, edge_owner, seat, candidate)
+}
+
+#[cold]
+#[inline(never)]
+fn contested_term(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+) -> ExpansionValue {
+    term_inner::<true>(scorer, holdings, vertex_owner, edge_owner, seat, candidate)
+}
+
+#[inline(always)]
+fn term_inner<const CONTESTED: bool>(
+    scorer: &AppFormulaScorer,
+    holdings: &Holdings,
+    vertex_owner: &[u8],
+    edge_owner: &[u8],
+    seat: u8,
+    candidate: Vertex,
+) -> ExpansionValue {
     let weights = scorer.weights();
     if weights.expansion_weight == 0.0 {
         return NO_EXPANSION;
+    }
+    if !CONTESTED && scorer.contested {
+        return contested_term(scorer, holdings, vertex_owner, edge_owner, seat, candidate);
     }
     let mut with_candidate = *holdings;
     scorer.add_to_holdings(&mut with_candidate, candidate);
@@ -1299,7 +1522,12 @@ pub(super) fn term(
                 };
                 // `powf`, not `powi`: JavaScript's `**` is `Math.pow`, and the two Rust intrinsics
                 // are free to round differently.
-                values.push(score * weights.expansion_decay.powf(f64::from(site.paid_builds)));
+                let value = score * weights.expansion_decay.powf(f64::from(site.paid_builds));
+                let value = if !CONTESTED { value } else {
+                    let tier = contest_tier(scorer, vertex_owner, edge_owner, seat, site.vertex);
+                    contest_discount(scorer, score, value, tier)
+                };
+                values.push(value);
             }
             let best = values
                 .iter()
@@ -1851,39 +2079,50 @@ pub(super) mod tests {
     /// Memo-backed roads preserve the reference's ties and NaN comparisons on every candidate.
     #[test]
     fn row_roads_match_the_reference_on_scrambled_boards() {
-        for (topology, board) in walk_fixtures() {
-            let mut far = default_weights();
-            far.expansion_decay = 0.35;
-            far.expansion_weight = 0.4;
-            let mut degenerate = default_weights();
-            degenerate.resource_value = ResourceValues {
-                wood: -1.0,
-                sheep: -0.5,
-                wheat: -2.0,
-                brick: -1.5,
-                ore: -3.0,
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let default_weights = || {
+                let mut weights = default_weights();
+                weights.contest_weight = contest_weight;
+                weights
             };
-            degenerate.expansion_decay = f64::NAN;
-            let mut negative = degenerate.clone();
-            negative.expansion_decay = 0.3;
-            let scorers = [
-                AppFormulaScorer::new(&board, &topology, default_weights()),
-                AppFormulaScorer::new(&board, &topology, far),
-                AppFormulaScorer::new(&board, &topology, degenerate),
-                AppFormulaScorer::new(&board, &topology, negative),
-            ];
-            for (board_index, (vertices, edges)) in scrambled_owners(&topology).iter().enumerate() {
-                for (scorer_index, scorer) in scorers.iter().enumerate() {
-                    for seat in 0..6 {
-                        for candidate in 0..topology.vertex_count() as Vertex {
-                            assert_eq!(
-                                row_road(scorer, vertices, edges, seat, candidate, None),
-                                scorer.expansion_road(vertices, edges, seat, candidate),
-                                "board {board_index} scorer {scorer_index} seat {seat} candidate {candidate}"
-                            );
+            for (topology, board) in walk_fixtures() {
+                let mut far = default_weights();
+                far.expansion_decay = 0.35;
+                far.expansion_weight = 0.4;
+                let mut degenerate = default_weights();
+                degenerate.resource_value = ResourceValues {
+                    wood: -1.0,
+                    sheep: -0.5,
+                    wheat: -2.0,
+                    brick: -1.5,
+                    ore: -3.0,
+                };
+                degenerate.expansion_decay = f64::NAN;
+                let mut negative = degenerate.clone();
+                negative.expansion_decay = 0.3;
+                let scorers = [
+                    AppFormulaScorer::new(&board, &topology, default_weights()),
+                    AppFormulaScorer::new(&board, &topology, far),
+                    AppFormulaScorer::new(&board, &topology, degenerate),
+                    AppFormulaScorer::new(&board, &topology, negative),
+                ];
+                for (board_index, (vertices, edges)) in scrambled_owners(&topology).iter().enumerate() {
+                    for (scorer_index, scorer) in scorers.iter().enumerate() {
+                        for seat in 0..6 {
+                            for candidate in 0..topology.vertex_count() as Vertex {
+                                assert_eq!(
+                                    row_road(scorer, vertices, edges, seat, candidate, None),
+                                    scorer.expansion_road(vertices, edges, seat, candidate),
+                                    "board {board_index} scorer {scorer_index} seat {seat} candidate {candidate}"
+                                );
+                            }
                         }
                     }
                 }
+            }
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
             }
         }
     }
@@ -2489,37 +2728,44 @@ pub(super) mod speed_tests {
 
     #[test]
     fn road_table_matches_each_first_edge_and_reference_road() {
-        let mut fast = 0;
-        let mut fallback = 0;
-        for (topology, board) in corpus_boards() {
-            let weights: EngineWeights = serde_json::from_str(include_str!(
-                "../../../../placement/default-weights.json"
-            )).unwrap();
-            let scorer = AppFormulaScorer::new(&board, &topology, weights);
-            for (vertices, edges) in tests::scrambled_owners(&topology).into_iter().take(12) {
-                for seat in 0..6 {
-                    let occupancy = Occupancy::new(&scorer, &vertices, &edges, seat);
-                    for candidate in 0..topology.vertex_count() as Vertex {
-                        if scorer.reach.table_path(candidate, &occupancy) {
-                            fast += 1;
-                            for (edge, to) in scorer.steps(candidate) {
-                                let expected = mask_walk(&scorer, &occupancy, candidate, [0, 1 << to]);
-                                if occupancy.rival_edges & (1 << edge) == 0 {
-                                    assert_eq!(scorer.reach.road_sites(candidate, edge, &occupancy), expected);
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let mut fast = 0;
+            let mut fallback = 0;
+            for (topology, board) in corpus_boards() {
+                let mut weights: EngineWeights = serde_json::from_str(include_str!(
+                    "../../../../placement/default-weights.json"
+                )).unwrap();
+                weights.contest_weight = contest_weight;
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                for (vertices, edges) in tests::scrambled_owners(&topology).into_iter().take(12) {
+                    for seat in 0..6 {
+                        let occupancy = Occupancy::new(&scorer, &vertices, &edges, seat);
+                        for candidate in 0..topology.vertex_count() as Vertex {
+                            if scorer.reach.table_path(candidate, &occupancy) {
+                                fast += 1;
+                                for (edge, to) in scorer.steps(candidate) {
+                                    let expected = mask_walk(&scorer, &occupancy, candidate, [0, 1 << to]);
+                                    if occupancy.rival_edges & (1 << edge) == 0 {
+                                        assert_eq!(scorer.reach.road_sites(candidate, edge, &occupancy), expected);
+                                    }
                                 }
+                            } else {
+                                fallback += 1;
                             }
-                        } else {
-                            fallback += 1;
+                            assert_eq!(
+                                row_road(&scorer, &vertices, &edges, seat, candidate, Some(&occupancy)),
+                                scorer.expansion_road(&vertices, &edges, seat, candidate),
+                            );
                         }
-                        assert_eq!(
-                            row_road(&scorer, &vertices, &edges, seat, candidate, Some(&occupancy)),
-                            scorer.expansion_road(&vertices, &edges, seat, candidate),
-                        );
                     }
                 }
             }
+            assert!(fast > 1_000 && fallback > 100, "fast={fast} fallback={fallback}");
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
-        assert!(fast > 1_000 && fallback > 100, "fast={fast} fallback={fallback}");
     }
 
     #[test]
@@ -2548,46 +2794,64 @@ mod single_road_tests {
 
     #[test]
     fn single_road_masks_match_walks_with_obstacles() {
-        let mut memo = PriceMemo::default();
-        let mut checked = 0;
-        let mut free = 0;
-        for (topology, board) in tests::walk_fixtures() {
-            let weights = serde_json::from_str(include_str!(
-                "../../../../placement/default-weights.json"
-            )).unwrap();
-            let scorer = AppFormulaScorer::new(&board, &topology, weights);
-            for candidate in 0..topology.vertex_count() as Vertex {
-                for edge in 0..topology.edge_count() as Edge {
-                    let own = 1 << edge;
-                    let plain = Occupancy { own_edges: own, ..Occupancy::default() };
-                    if scorer.reach.table_path(candidate, &plain) {
-                        continue;
-                    }
-                    let reach = scorer.reach.single_road(candidate, plain.single_edge().unwrap());
-                    for bit in 0..128 {
-                        for occupancy in [
-                            plain,
-                            Occupancy { blocked: 1 << bit, ..plain },
-                            Occupancy { rival_vertices: 1 << bit, ..plain },
-                            Occupancy { rival_edges: (1 << bit) & !own, ..plain },
-                        ] {
-                            let mut sources = [0; 2];
-                            for (first, to) in scorer.steps(candidate) {
-                                if occupancy.rival_edges & (1 << first) == 0 {
-                                    sources[usize::from(first != edge)] |= 1 << to;
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let mut memo = PriceMemo::default();
+            let mut checked = 0;
+            let mut free = 0;
+            for (topology, board) in tests::walk_fixtures() {
+                let mut weights: crate::placement::app_formula::EngineWeights = serde_json::from_str(include_str!(
+                    "../../../../placement/default-weights.json"
+                )).unwrap();
+                weights.contest_weight = contest_weight;
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                for candidate in 0..topology.vertex_count() as Vertex {
+                    for edge in 0..topology.edge_count() as Edge {
+                        let own = 1 << edge;
+                        let plain = Occupancy { own_edges: own, ..Occupancy::default() };
+                        if scorer.reach.table_path(candidate, &plain) {
+                            continue;
+                        }
+                        let reach = scorer.reach.single_road(candidate, plain.single_edge().unwrap());
+                        for bit in 0..128 {
+                            for occupancy in [
+                                plain,
+                                Occupancy { blocked: 1 << bit, ..plain },
+                                Occupancy { rival_vertices: 1 << bit, ..plain },
+                                Occupancy { rival_edges: (1 << bit) & !own, ..plain },
+                            ] {
+                                let mut sources = [0; 2];
+                                for (first, to) in scorer.steps(candidate) {
+                                    if occupancy.rival_edges & (1 << first) == 0 {
+                                        sources[usize::from(first != edge)] |= 1 << to;
+                                    }
                                 }
+                                let expected = mask_walk(&scorer, &occupancy, candidate, sources);
+                                let sites = reach.sites(candidate, &occupancy, &mut memo.sites);
+                                assert_eq!(sites, expected, "candidate {candidate}, edge {edge}, bit {bit}");
+                                if contest_weight != 0.0 && bit == 0 && occupancy.rival_edges != 0 {
+                                    let serial = memo.serial(scorer.id, 0);
+                                    let actual = single_road_value(&scorer, &Holdings::empty(), candidate, &occupancy, &mut memo, serial, reach);
+                                    let vertices = vec![EMPTY; topology.vertex_count()];
+                                    let mut edges = vec![EMPTY; topology.edge_count()];
+                                    edges[usize::from(edge)] = 0;
+                                    edges[bit] = 1;
+                                    assert_eq!(Occupancy::new(&scorer, &vertices, &edges, 0), occupancy);
+                                    let expected = term(&scorer, &Holdings::empty(), &vertices, &edges, 0, candidate).value;
+                                    assert_eq!(actual.to_bits(), expected.to_bits());
+                                }
+                                free += sites[0].count_ones();
+                                checked += 1;
                             }
-                            let expected = mask_walk(&scorer, &occupancy, candidate, sources);
-                            let sites = reach.sites(candidate, &occupancy, &mut memo.sites);
-                            assert_eq!(sites, expected, "candidate {candidate}, edge {edge}, bit {bit}");
-                            free += sites[0].count_ones();
-                            checked += 1;
                         }
                     }
                 }
             }
+            assert!(checked > 100_000 && free > 0);
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
-        assert!(checked > 100_000 && free > 0);
     }
 
     #[test]
@@ -2617,45 +2881,52 @@ mod single_road_tests {
     }
     #[test]
     fn single_road_bounds_cover_obstacles_and_all_cost_bands() {
-        use crate::placement::app_formula::SingleRoadBounds;
-        let mut checked = 0;
-        let mut tighter = 0;
-        for (topology, board) in tests::walk_fixtures() {
-            for decay in [0.0, 0.58, 1.2] {
-                let mut weights: crate::placement::app_formula::EngineWeights = serde_json::from_str(
-                    include_str!("../../../../placement/default-weights.json")
-                ).unwrap();
-                weights.expansion_decay = decay;
-                let scorer = AppFormulaScorer::new(&board, &topology, weights);
-                let bounds = scorer.expansion_bounds(1.0).unwrap();
-                let mut memo = PriceMemo::default();
-                for edge in 0..topology.edge_count() as Edge {
-                    let mut vertices = vec![EMPTY; topology.vertex_count()];
-                    let mut edges = vec![EMPTY; topology.edge_count()];
-                    edges[usize::from(edge)] = 0;
-                    vertices[usize::from(topology.edge_endpoints(edge)[0])] = 0;
-                    let holdings = scorer.holdings_for_owner(&vertices, 0);
-                    for candidate in 0..topology.vertex_count() as Vertex {
-                        for rival in [None, Some((usize::from(candidate) + 7) % topology.vertex_count())] {
-                            let previous = rival.map(|vertex| vertices[vertex]);
-                            if let Some(rival) = rival { vertices[rival] = 1; }
-                            let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
-                            if !scorer.reach.table_path(candidate, &occupancy) {
-                                let reach = scorer.reach.single_road(candidate, occupancy.single_edge().unwrap());
-                                let sites = SingleRoadBounds::new(&scorer, reach, occupancy.own_vertices);
-                                let upper = bounds.single_road_value(&scorer, &holdings, candidate, &sites);
-                                let exact = row_value(&scorer, &holdings, candidate, &occupancy, &mut memo, None);
-                                assert!(upper >= exact, "edge {edge}, vertex {candidate}, decay {decay}: {upper} < {exact}");
-                                tighter += usize::from(upper < bounds.value(&scorer, &holdings, candidate, false));
-                                checked += 1;
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            use crate::placement::app_formula::SingleRoadBounds;
+            let mut checked = 0;
+            let mut tighter = 0;
+            for (topology, board) in tests::walk_fixtures() {
+                for decay in [0.0, 0.58, 1.2] {
+                    let mut weights: crate::placement::app_formula::EngineWeights = serde_json::from_str(
+                        include_str!("../../../../placement/default-weights.json")
+                    ).unwrap();
+                    weights.contest_weight = contest_weight;
+                    weights.expansion_decay = decay;
+                    let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                    let bounds = scorer.expansion_bounds(1.0).unwrap();
+                    let mut memo = PriceMemo::default();
+                    for edge in 0..topology.edge_count() as Edge {
+                        let mut vertices = vec![EMPTY; topology.vertex_count()];
+                        let mut edges = vec![EMPTY; topology.edge_count()];
+                        edges[usize::from(edge)] = 0;
+                        vertices[usize::from(topology.edge_endpoints(edge)[0])] = 0;
+                        let holdings = scorer.holdings_for_owner(&vertices, 0);
+                        for candidate in 0..topology.vertex_count() as Vertex {
+                            for rival in [None, Some((usize::from(candidate) + 7) % topology.vertex_count())] {
+                                let previous = rival.map(|vertex| vertices[vertex]);
+                                if let Some(rival) = rival { vertices[rival] = 1; }
+                                let occupancy = Occupancy::new(&scorer, &vertices, &edges, 0);
+                                if !scorer.reach.table_path(candidate, &occupancy) {
+                                    let reach = scorer.reach.single_road(candidate, occupancy.single_edge().unwrap());
+                                    let sites = SingleRoadBounds::new(&scorer, reach, occupancy.own_vertices);
+                                    let upper = bounds.single_road_value(&scorer, &holdings, candidate, &sites);
+                                    let exact = row_value(&scorer, &holdings, candidate, &occupancy, &mut memo, None);
+                                    assert!(upper >= exact, "edge {edge}, vertex {candidate}, decay {decay}: {upper} < {exact}");
+                                    tighter += usize::from(upper < bounds.value(&scorer, &holdings, candidate, false));
+                                    checked += 1;
+                                }
+                                if let Some((rival, owner)) = rival.zip(previous) { vertices[rival] = owner; }
                             }
-                            if let Some((rival, owner)) = rival.zip(previous) { vertices[rival] = owner; }
                         }
                     }
                 }
             }
+            assert!(checked > 1_000 && tighter > 1_000);
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
-        assert!(checked > 1_000 && tighter > 1_000);
     }
 
     #[test]
@@ -2677,3 +2948,6 @@ mod single_road_tests {
     }
 
 }
+
+#[cfg(test)]
+mod contest_tests;

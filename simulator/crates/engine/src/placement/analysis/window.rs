@@ -1218,56 +1218,75 @@ mod tests {
     }
     #[test]
     fn base_rows_keep_holdings_seat_and_grant_across_road_changes() {
-        let (board, mut weights) = corpus("empty-first-seat-standard4");
-        weights.hand_value_weight = 0.4;
-        let scorer = board.scorer(weights);
-        let context = Context::new(&board, &scorer);
-        for road_owner in [EMPTY, 1, 0, EMPTY] {
-            for seat in 0..2 {
-                for held in [None, Some(0), Some(7)] {
-                    for grant in [false, true] {
-                        let (mut vertices, mut edges) = board.owners();
-                        edges[0] = road_owner;
-                        let mut blocked = board.blocked();
-                        if let Some(vertex) = held {
-                            vertices[usize::from(vertex)] = seat;
-                            block_vertex(board.topology, &mut blocked, vertex);
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let (board, mut weights) = corpus("empty-first-seat-standard4");
+            weights.contest_weight = contest_weight;
+            weights.hand_value_weight = 0.4;
+            let scorer = board.scorer(weights);
+            let context = Context::new(&board, &scorer);
+            for road_owner in [EMPTY, 1, 0, EMPTY] {
+                for seat in 0..2 {
+                    for held in [None, Some(0), Some(7)] {
+                        for grant in [false, true] {
+                            let (mut vertices, mut edges) = board.owners();
+                            edges[0] = road_owner;
+                            let mut blocked = board.blocked();
+                            if let Some(vertex) = held {
+                                vertices[usize::from(vertex)] = seat;
+                                block_vertex(board.topology, &mut blocked, vertex);
+                            }
+                            let holdings = scorer.holdings_for_owner(&vertices, seat);
+                            context.scan(seat, &holdings, &blocked, &vertices, &edges, grant,
+                                &Cell::new(f64::NAN), &mut |vertex, expansion, total| {
+                                    let expected = scorer.marginal_parts(
+                                        &holdings, &vertices, &edges, seat, vertex, grant,
+                                    );
+                                    assert_eq!((expansion.to_bits(), total.to_bits()),
+                                        (expected.0.to_bits(), expected.1.to_bits()));
+                                });
                         }
-                        let holdings = scorer.holdings_for_owner(&vertices, seat);
-                        context.scan(seat, &holdings, &blocked, &vertices, &edges, grant,
-                            &Cell::new(f64::NAN), &mut |vertex, expansion, total| {
-                                let expected = scorer.marginal_parts(
-                                    &holdings, &vertices, &edges, seat, vertex, grant,
-                                );
-                                assert_eq!((expansion.to_bits(), total.to_bits()),
-                                    (expected.0.to_bits(), expected.1.to_bits()));
-                            });
                     }
                 }
             }
+            assert_eq!(context.base_rows.borrow().len(), 12);
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
-        assert_eq!(context.base_rows.borrow().len(), 12);
     }
 
     #[test]
     fn open_bound_rows_keep_holdings_when_the_board_changes() {
-        let (board, weights) = corpus("empty-first-seat-standard4");
-        let scorer = board.scorer(weights);
-        let context = Context::new(&board, &scorer);
-        for _ in 0..2 {
-            for held in [None, Some(0), Some(7)] {
-                let (mut vertices, edges) = board.owners();
-                let mut blocked = board.blocked();
-                if let Some(vertex) = held {
-                    vertices[usize::from(vertex)] = 0;
-                    block_vertex(board.topology, &mut blocked, vertex);
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let (board, mut weights) = corpus("empty-first-seat-standard4");
+            weights.contest_weight = contest_weight;
+            let scorer = board.scorer(weights);
+            let context = Context::new(&board, &scorer);
+            for _ in 0..2 {
+                for held in [None, Some(0), Some(7)] {
+                    let (mut vertices, mut edges) = board.owners();
+                    let mut blocked = board.blocked();
+                    if let Some(vertex) = held {
+                        vertices[usize::from(vertex)] = 0;
+                        block_vertex(board.topology, &mut blocked, vertex);
+                    }
+                    if contest_weight != 0.0 {
+                        vertices[20] = 1;
+                        block_vertex(board.topology, &mut blocked, 20);
+                        edges[usize::from(board.topology.vertex_edges(20)[0])] = 1;
+                    }
+                    let holdings = scorer.holdings_for_owner(&vertices, 0);
+                    context.scan(0, &holdings, &blocked, &vertices, &edges, false,
+                        &Cell::new(f64::NEG_INFINITY), &mut |_, _, _| {});
                 }
-                let holdings = scorer.holdings_for_owner(&vertices, 0);
-                context.scan(0, &holdings, &blocked, &vertices, &edges, false,
-                    &Cell::new(f64::NEG_INFINITY), &mut |_, _, _| {});
+            }
+            assert_eq!(context.open_bounds.borrow().len(), 3);
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
             }
         }
-        assert_eq!(context.open_bounds.borrow().len(), 3);
     }
 
 }

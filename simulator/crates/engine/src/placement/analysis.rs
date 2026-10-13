@@ -1043,18 +1043,34 @@ mod tests {
 
     #[test]
     fn fast_scans_return_the_reference_scans_bits() {
-        // `Context::scan` prices every vertex it visits both ways in a test build and panics on
-        // one whose expansion or total differs in any bit. A scan that skips vertices by their
-        // bound is run again without the bound and panics unless both return the same vertices
-        // and the same score bits. So running the corpus is the comparison.
-        let before = window::checked_vertices();
-        let skipped = (window::skipped_vertices(), window::skipped_pairs());
-        for (_, request) in corpus_requests() {
-            run_without_cache(&request);
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            // `Context::scan` prices every vertex it visits both ways in a test build and panics on
+            // one whose expansion or total differs in any bit. A scan that skips vertices by their
+            // bound is run again without the bound and panics unless both return the same vertices
+            // and the same score bits. So running the corpus is the comparison.
+            let before = window::checked_vertices();
+            let skipped = (window::skipped_vertices(), window::skipped_pairs());
+            for (_, request) in corpus_requests() {
+                let request = if contest_weight == 0.0 { request } else {
+                    let mut request: serde_json::Value = serde_json::from_str(&request).unwrap();
+                    if request["options"]["weights"].is_null() {
+                        request["options"]["weights"] = serde_json::from_str(include_str!(
+                            "../../../../placement/default-weights.json"
+                        )).unwrap();
+                    }
+                    request["options"]["weights"]["contestWeight"] = contest_weight.into();
+                    request.to_string()
+                };
+                run_without_cache(&request);
+            }
+            assert!(window::checked_vertices() > before, "no corpus scan took the fast path");
+            assert!(window::skipped_vertices() > skipped.0, "no corpus scan skipped a vertex");
+            assert!(window::skipped_pairs() > skipped.1, "no corpus scan skipped a pair");
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
-        assert!(window::checked_vertices() > before, "no corpus scan took the fast path");
-        assert!(window::skipped_vertices() > skipped.0, "no corpus scan skipped a vertex");
-        assert!(window::skipped_pairs() > skipped.1, "no corpus scan skipped a pair");
     }
 
     #[test]

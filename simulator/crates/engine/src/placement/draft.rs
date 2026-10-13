@@ -1098,49 +1098,56 @@ mod tests {
     /// The bound dominates exact expansion and both nested argmaxes retain their score bits.
     #[test]
     fn bounded_rows_match_full_rows_on_scrambled_boards() {
-        for (topology, board) in expansion::tests::walk_fixtures() {
-            let boards = expansion::tests::scrambled_owners(&topology);
-            let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
-            for (weight_index, weights) in bound_weights().into_iter().enumerate() {
-                let scorer = AppFormulaScorer::new(&board, &topology, weights);
-                for (board_index, (vertices, edges)) in boards.iter().enumerate() {
-                    let vacancy = vertices.iter().position(|owner| *owner != EMPTY)
-                        .map(|vertex| vertex as Vertex).or(Some(0));
-                    for seat in 0..6 {
-                        let holdings = scorer.holdings_for_owner(vertices, seat);
-                        let occupancy = expansion::Occupancy::new(&scorer, vertices, edges, seat);
-                        let scale = scorer.slot_scale(seat).expansion;
-                        let bounds = scorer.expansion_bounds(scale).unwrap();
-                        expansion::PRICE_MEMO.with_borrow_mut(|memo| {
-                            let serial = memo.serial(scorer.id, occupancy.own_vertices);
-                            for vertex in 0..topology.vertex_count() as Vertex {
-                                if !legal_with_vacancy(&topology, vertices, vacancy, vertex) {
-                                    continue;
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            for (topology, board) in expansion::tests::walk_fixtures() {
+                let boards = expansion::tests::scrambled_owners(&topology);
+                let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+                for (weight_index, mut weights) in bound_weights().into_iter().enumerate() {
+                    weights.contest_weight = contest_weight;
+                    let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                    for (board_index, (vertices, edges)) in boards.iter().enumerate() {
+                        let vacancy = vertices.iter().position(|owner| *owner != EMPTY)
+                            .map(|vertex| vertex as Vertex).or(Some(0));
+                        for seat in 0..6 {
+                            let holdings = scorer.holdings_for_owner(vertices, seat);
+                            let occupancy = expansion::Occupancy::new(&scorer, vertices, edges, seat);
+                            let scale = scorer.slot_scale(seat).expansion;
+                            let bounds = scorer.expansion_bounds(scale).unwrap();
+                            expansion::PRICE_MEMO.with_borrow_mut(|memo| {
+                                let serial = memo.serial(scorer.id, occupancy.own_vertices);
+                                for vertex in 0..topology.vertex_count() as Vertex {
+                                    if !legal_with_vacancy(&topology, vertices, vacancy, vertex) {
+                                        continue;
+                                    }
+                                    let upper = bounds.value(&scorer, &holdings, vertex,
+                                        scorer.reach.table_path(vertex, &occupancy));
+                                    let exact = expansion::row_value(
+                                        &scorer, &holdings, vertex, &occupancy, memo, Some(serial),
+                                    );
+                                    assert!(scale * exact <= scale * upper,
+                                        "weight={weight_index} board={board_index} seat={seat} vertex={vertex} exact={exact:?} upper={upper:?}");
                                 }
-                                let upper = bounds.value(&scorer, &holdings, vertex,
-                                    scorer.reach.table_path(vertex, &occupancy));
-                                let exact = expansion::row_value(
-                                    &scorer, &holdings, vertex, &occupancy, memo, Some(serial),
-                                );
-                                assert!(scale * exact <= scale * upper,
-                                    "weight={weight_index} board={board_index} seat={seat} vertex={vertex} exact={exact:?} upper={upper:?}");
-                            }
-                        });
-                        for grant in [false, true] {
-                            for vacated in [None, vacancy] {
-                                let memoize = (board_index + usize::from(grant)) % 2 == 0;
-                                let actual = rows.pruned_argmax(&scorer, &topology, vertices, edges,
-                                    seat, grant, vacated, memoize).expect("the finite bound must be used");
-                                let expected = rows.full_argmax(&scorer, &topology, vertices, edges,
-                                    seat, grant, vacated, memoize);
-                                assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken),
-                                    "weight={weight_index} board={board_index} seat={seat} grant={grant} vacancy={vacated:?}");
-                                assert_eq!(answer_bits(actual.free), answer_bits(expected.free));
-                                assert_eq!(actual.occupancy, expected.occupancy);
+                            });
+                            for grant in [false, true] {
+                                for vacated in [None, vacancy] {
+                                    let memoize = (board_index + usize::from(grant)) % 2 == 0;
+                                    let actual = rows.pruned_argmax(&scorer, &topology, vertices, edges,
+                                        seat, grant, vacated, memoize).expect("the finite bound must be used");
+                                    let expected = rows.full_argmax(&scorer, &topology, vertices, edges,
+                                        seat, grant, vacated, memoize);
+                                    assert_eq!(answer_bits(actual.taken), answer_bits(expected.taken),
+                                        "weight={weight_index} board={board_index} seat={seat} grant={grant} vacancy={vacated:?}");
+                                    assert_eq!(answer_bits(actual.free), answer_bits(expected.free));
+                                    assert_eq!(actual.occupancy, expected.occupancy);
+                                }
                             }
                         }
                     }
                 }
+            }
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
             }
         }
     }
@@ -1340,37 +1347,48 @@ mod tests {
     /// A precomputed marginal row preserves the replay value and the first pick's argmax.
     #[test]
     fn hero_marginal_rows_match_direct_lookahead_values() {
-        let (topology, board) = fixture();
-        let scorers = scorers(&topology, &board);
-        let vertices = vec![EMPTY; topology.vertex_count()];
-        let edges = vec![EMPTY; topology.edge_count()];
-        for hero in [0, 5] {
-            let mut direct = Lookahead::new(
-                &scorers.hero, &scorers.opponent, &topology, 6, hero, &vertices, &edges,
-            ).unwrap();
-            let mut rows = Lookahead::new(
-                &scorers.hero, &scorers.opponent, &topology, 6, hero, &vertices, &edges,
-            ).unwrap();
-            let marginals = rows.rows.legal_row(
-                &scorers.hero, &topology, &vertices, &edges, hero, false, None,
-            ).to_vec();
-            let mut best: Option<(Vertex, f64)> = None;
-            for candidate in 0..topology.vertex_count() as Vertex {
-                let expected = direct.value(&vertices, &edges, candidate);
-                assert_eq!(
-                    rows.value_with_marginal(
-                        &vertices, &edges, candidate, marginals[usize::from(candidate)],
-                    ).to_bits(),
-                    expected.to_bits()
-                );
-                if best.is_none_or(|(_, held)| expected > held) {
-                    best = Some((candidate, expected));
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let (topology, board) = fixture();
+            let mut weights = default_weights();
+            weights.contest_weight = contest_weight;
+            let scorers = DraftScorers {
+                hero: AppFormulaScorer::new(&board, &topology, weights),
+                opponent: AppFormulaScorer::new(&board, &topology, default_weights()),
+            };
+            let vertices = vec![EMPTY; topology.vertex_count()];
+            let edges = vec![EMPTY; topology.edge_count()];
+            for hero in [0, 5] {
+                let mut direct = Lookahead::new(
+                    &scorers.hero, &scorers.opponent, &topology, 6, hero, &vertices, &edges,
+                ).unwrap();
+                let mut rows = Lookahead::new(
+                    &scorers.hero, &scorers.opponent, &topology, 6, hero, &vertices, &edges,
+                ).unwrap();
+                let marginals = rows.rows.legal_row(
+                    &scorers.hero, &topology, &vertices, &edges, hero, false, None,
+                ).to_vec();
+                let mut best: Option<(Vertex, f64)> = None;
+                for candidate in 0..topology.vertex_count() as Vertex {
+                    let expected = direct.value(&vertices, &edges, candidate);
+                    assert_eq!(
+                        rows.value_with_marginal(
+                            &vertices, &edges, candidate, marginals[usize::from(candidate)],
+                        ).to_bits(),
+                        expected.to_bits()
+                    );
+                    if best.is_none_or(|(_, held)| expected > held) {
+                        best = Some((candidate, expected));
+                    }
                 }
+                assert_eq!(
+                    first_pick(&scorers, &topology, 6, &vertices, &edges, hero),
+                    best.map(|(vertex, _)| vertex)
+                );
             }
-            assert_eq!(
-                first_pick(&scorers, &topology, 6, &vertices, &edges, hero),
-                best.map(|(vertex, _)| vertex)
-            );
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
     }
 
@@ -1685,106 +1703,117 @@ mod tests {
     /// remembers between calls has to be keyed by all of what it was computed from.
     #[test]
     fn an_uncached_row_matches_direct_scores_on_scrambled_boards() {
-        let (topology, board) = fixture();
-        let mut far = default_weights();
-        far.expansion_decay = 0.35;
-        far.expansion_weight = 0.4;
-        let mut scaled = default_weights();
-        scaled.expansion_decay = 0.3;
-        for row in scaled.slot_scales.values_mut() {
-            for (seat, scale) in row {
-                let seat = seat.parse::<f64>().unwrap();
-                scale.diversity = 0.5 + seat * 0.15;
-                scale.expansion = 0.2 + seat * 0.25;
-            }
-        }
-        let scorers = [
-            AppFormulaScorer::new(&board, &topology, default_weights()),
-            AppFormulaScorer::new(&board, &topology, far),
-            AppFormulaScorer::new(&board, &topology, scaled),
-        ];
-        assert_eq!(scorers[2].slot_scale(0).diversity, 0.5);
-        assert_ne!(scorers[2].slot_scale(0), scorers[2].slot_scale(1));
-        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
-        let mut draw = |bound: usize| {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            ((state >> 33) as usize) % bound
-        };
-        let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
-        let mut compared = 0_usize;
-        for board_index in 0..120 {
-            let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
-            let mut edge_owner = vec![EMPTY; topology.edge_count()];
-            for _ in 0..draw(11) {
-                let seat = draw(6) as u8;
-                let legal: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
-                    .filter(|vertex| can_place_settlement(&topology, &vertex_owner, *vertex))
-                    .collect();
-                if legal.is_empty() {
-                    break;
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            let default_weights = || {
+                let mut weights = default_weights();
+                weights.contest_weight = contest_weight;
+                weights
+            };
+            let (topology, board) = fixture();
+            let mut far = default_weights();
+            far.expansion_decay = 0.35;
+            far.expansion_weight = 0.4;
+            let mut scaled = default_weights();
+            scaled.expansion_decay = 0.3;
+            for row in scaled.slot_scales.values_mut() {
+                for (seat, scale) in row {
+                    let seat = seat.parse::<f64>().unwrap();
+                    scale.diversity = 0.5 + seat * 0.15;
+                    scale.expansion = 0.2 + seat * 0.25;
                 }
-                let vertex = legal[draw(legal.len())];
-                vertex_owner[usize::from(vertex)] = seat;
-                // A chain of up to three roads out of the settlement, so a seat's own roads reach
-                // well into the region another candidate's walk covers.
-                let mut end = vertex;
-                for _ in 0..draw(4) {
-                    let edges = topology.vertex_edges(end);
-                    let edge = edges[draw(edges.len())];
-                    if edge_owner[usize::from(edge)] != EMPTY {
+            }
+            let scorers = [
+                AppFormulaScorer::new(&board, &topology, default_weights()),
+                AppFormulaScorer::new(&board, &topology, far),
+                AppFormulaScorer::new(&board, &topology, scaled),
+            ];
+            assert_eq!(scorers[2].slot_scale(0).diversity, 0.5);
+            assert_ne!(scorers[2].slot_scale(0), scorers[2].slot_scale(1));
+            let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+            let mut draw = |bound: usize| {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                ((state >> 33) as usize) % bound
+            };
+            let mut rows = ScoreRows::new(6, topology.vertex_count(), topology.vertex_count(), false);
+            let mut compared = 0_usize;
+            for board_index in 0..120 {
+                let mut vertex_owner = vec![EMPTY; topology.vertex_count()];
+                let mut edge_owner = vec![EMPTY; topology.edge_count()];
+                for _ in 0..draw(11) {
+                    let seat = draw(6) as u8;
+                    let legal: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
+                        .filter(|vertex| can_place_settlement(&topology, &vertex_owner, *vertex))
+                        .collect();
+                    if legal.is_empty() {
                         break;
                     }
-                    edge_owner[usize::from(edge)] = seat;
-                    let endpoints = topology.edge_endpoints(edge);
-                    end = if endpoints[0] == end {
-                        endpoints[1]
-                    } else {
-                        endpoints[0]
-                    };
-                }
-            }
-            let occupied: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
-                .filter(|vertex| vertex_owner[usize::from(*vertex)] != EMPTY)
-                .collect();
-            let vacancies = [
-                None,
-                (!occupied.is_empty()).then(|| occupied[draw(occupied.len())]),
-            ];
-            for seat in 0..6_u8 {
-                let scorer = &scorers[(board_index + usize::from(seat)) % scorers.len()];
-                let grant = (board_index + usize::from(seat)) % 2 == 0;
-                for vacated in vacancies {
-                    let row = rows
-                        .legal_row(
-                            scorer,
-                            &topology,
-                            &vertex_owner,
-                            &edge_owner,
-                            seat,
-                            grant,
-                            vacated,
-                        )
-                        .to_vec();
-                    assert_eq!(row.len(), topology.vertex_count());
-                    for vertex in 0..topology.vertex_count() as Vertex {
-                        if !legal_with_vacancy(&topology, &vertex_owner, vacated, vertex) {
-                            continue;
+                    let vertex = legal[draw(legal.len())];
+                    vertex_owner[usize::from(vertex)] = seat;
+                    // A chain of up to three roads out of the settlement, so a seat's own roads reach
+                    // well into the region another candidate's walk covers.
+                    let mut end = vertex;
+                    for _ in 0..draw(4) {
+                        let edges = topology.vertex_edges(end);
+                        let edge = edges[draw(edges.len())];
+                        if edge_owner[usize::from(edge)] != EMPTY {
+                            break;
                         }
-                        let direct =
-                            scorer.score_for_owner(&vertex_owner, &edge_owner, seat, vertex, grant);
-                        assert_eq!(
-                            row[usize::from(vertex)].to_bits(),
-                            direct.to_bits(),
-                            "board {board_index} seat {seat} vertex {vertex} vacated {vacated:?}"
-                        );
-                        compared += 1;
+                        edge_owner[usize::from(edge)] = seat;
+                        let endpoints = topology.edge_endpoints(edge);
+                        end = if endpoints[0] == end {
+                            endpoints[1]
+                        } else {
+                            endpoints[0]
+                        };
+                    }
+                }
+                let occupied: Vec<Vertex> = (0..topology.vertex_count() as Vertex)
+                    .filter(|vertex| vertex_owner[usize::from(*vertex)] != EMPTY)
+                    .collect();
+                let vacancies = [
+                    None,
+                    (!occupied.is_empty()).then(|| occupied[draw(occupied.len())]),
+                ];
+                for seat in 0..6_u8 {
+                    let scorer = &scorers[(board_index + usize::from(seat)) % scorers.len()];
+                    let grant = (board_index + usize::from(seat)) % 2 == 0;
+                    for vacated in vacancies {
+                        let row = rows
+                            .legal_row(
+                                scorer,
+                                &topology,
+                                &vertex_owner,
+                                &edge_owner,
+                                seat,
+                                grant,
+                                vacated,
+                            )
+                            .to_vec();
+                        assert_eq!(row.len(), topology.vertex_count());
+                        for vertex in 0..topology.vertex_count() as Vertex {
+                            if !legal_with_vacancy(&topology, &vertex_owner, vacated, vertex) {
+                                continue;
+                            }
+                            let direct =
+                                scorer.score_for_owner(&vertex_owner, &edge_owner, seat, vertex, grant);
+                            assert_eq!(
+                                row[usize::from(vertex)].to_bits(),
+                                direct.to_bits(),
+                                "board {board_index} seat {seat} vertex {vertex} vacated {vacated:?}"
+                            );
+                            compared += 1;
+                        }
                     }
                 }
             }
+            assert!(compared > 20_000, "the boards must leave plenty to compare, got {compared}");
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
-        assert!(compared > 20_000, "the boards must leave plenty to compare, got {compared}");
     }
 
     /// Owner-array padding is outside the graph and cannot block any expansion site.
@@ -2027,59 +2056,97 @@ mod speed_tests {
 
     #[test]
     fn carried_replay_matches_rebuilt_rows_on_corpus_boards() {
-        for (topology, board) in expansion::speed_tests::corpus_boards() {
-            let seats = board.seats();
-            if !(2..=6).contains(&seats) {
-                continue;
-            }
-            let mut weights: super::super::app_formula::EngineWeights = serde_json::from_str(
-                include_str!("../../../../placement/default-weights.json")
-            ).unwrap();
-            weights.setup_denial_weight = 0.25;
-            let scorer = AppFormulaScorer::new(&board, &topology, weights);
-            for (vertices, edges) in expansion::tests::scrambled_owners(&topology).into_iter().take(3) {
-                for hero in 0..seats as u8 {
-                    let mut replay = Lookahead::new(
-                        &scorer, &scorer, &topology, seats, hero, &vertices, &edges,
-                    ).unwrap();
-                    for candidate in (0..topology.vertex_count() as Vertex)
-                        .filter(|v| can_place_settlement(&topology, &vertices, *v)).take(4)
-                    {
-                        replay.replay(&vertices, &edges, candidate, None);
-                        let mut owners = vertices.clone();
-                        let mut roads = edges.clone();
-                        let road = setup_road(&scorer, &topology, &owners, &roads, hero, candidate, None);
-                        owners[usize::from(candidate)] = hero;
-                        roads[usize::from(road)] = hero;
-                        let mut reference = ScoreRows::new(seats, topology.vertex_count(), owners.len(), false);
-                        let mut denial = 0.0;
-                        for position in replay.intervening.clone() {
-                            let seat = replay.order[position];
-                            let row = reference.full_argmax(
-                                &scorer, &topology, &owners, &roads, seat,
-                                position >= seats, Some(candidate), false,
-                            );
-                            denial += denial_gain(row.free, row.taken);
-                            if let Some((vertex, _)) = row.taken {
-                                let edge = setup_road(&scorer, &topology, &owners, &roads, seat, vertex, None);
-                                owners[usize::from(vertex)] = seat;
-                                roads[usize::from(edge)] = seat;
+        for contest_weight in [0.0, 0.5] {
+            let discounted = crate::placement::expansion::discounted_sites();
+            for (topology, board) in expansion::speed_tests::corpus_boards() {
+                let seats = board.seats();
+                if !(2..=6).contains(&seats) {
+                    continue;
+                }
+                let mut weights: super::super::app_formula::EngineWeights = serde_json::from_str(
+                    include_str!("../../../../placement/default-weights.json")
+                ).unwrap();
+                weights.contest_weight = contest_weight;
+                weights.setup_denial_weight = 0.25;
+                let scorer = AppFormulaScorer::new(&board, &topology, weights);
+                for (vertices, edges) in expansion::tests::scrambled_owners(&topology).into_iter().take(3) {
+                    for hero in 0..seats as u8 {
+                        let mut replay = Lookahead::new(
+                            &scorer, &scorer, &topology, seats, hero, &vertices, &edges,
+                        ).unwrap();
+                        for candidate in (0..topology.vertex_count() as Vertex)
+                            .filter(|v| can_place_settlement(&topology, &vertices, *v)).take(4)
+                        {
+                            replay.replay(&vertices, &edges, candidate, None);
+                            let mut owners = vertices.clone();
+                            let mut roads = edges.clone();
+                            let road = setup_road(&scorer, &topology, &owners, &roads, hero, candidate, None);
+                            owners[usize::from(candidate)] = hero;
+                            roads[usize::from(road)] = hero;
+                            let mut reference = ScoreRows::new(seats, topology.vertex_count(), owners.len(), false);
+                            let mut denial = 0.0;
+                            for position in replay.intervening.clone() {
+                                let seat = replay.order[position];
+                                let row = reference.full_argmax(
+                                    &scorer, &topology, &owners, &roads, seat,
+                                    position >= seats, Some(candidate), false,
+                                );
+                                denial += denial_gain(row.free, row.taken);
+                                if let Some((vertex, _)) = row.taken {
+                                    let edge = setup_road(&scorer, &topology, &owners, &roads, seat, vertex, None);
+                                    owners[usize::from(vertex)] = seat;
+                                    roads[usize::from(edge)] = seat;
+                                }
                             }
+                            assert_eq!(replay.owners, owners);
+                            assert_eq!(replay.edges, roads);
+                            assert_eq!(replay.denial.to_bits(), denial.to_bits());
+                            for seat in 0..seats as u8 {
+                                assert_eq!(replay.rows.occupancies.unwrap()[usize::from(seat)],
+                                    expansion::Occupancy::new(&scorer, &owners, &roads, seat));
+                            }
+                            let expected = reference.full_argmax(
+                                &scorer, &topology, &owners, &roads, hero, true, None, false,
+                            ).taken.map(|(vertex, score)| (vertex, score.to_bits()));
+                            assert_eq!(replay.planned_second().map(|(vertex, score)| (vertex, score.to_bits())), expected);
                         }
-                        assert_eq!(replay.owners, owners);
-                        assert_eq!(replay.edges, roads);
-                        assert_eq!(replay.denial.to_bits(), denial.to_bits());
-                        for seat in 0..seats as u8 {
-                            assert_eq!(replay.rows.occupancies.unwrap()[usize::from(seat)],
-                                expansion::Occupancy::new(&scorer, &owners, &roads, seat));
-                        }
-                        let expected = reference.full_argmax(
-                            &scorer, &topology, &owners, &roads, hero, true, None, false,
-                        ).taken.map(|(vertex, score)| (vertex, score.to_bits()));
-                        assert_eq!(replay.planned_second().map(|(vertex, score)| (vertex, score.to_bits())), expected);
                     }
                 }
             }
+            if contest_weight != 0.0 {
+                assert!(crate::placement::expansion::discounted_sites() > discounted);
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod contest_tests {
+    use super::*;
+    use crate::placement::app_formula::EngineWeights;
+
+    #[test]
+    fn contest_hero_and_plain_opponent_share_carried_occupancies() {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().nth(1).unwrap();
+        let weights: EngineWeights = serde_json::from_str(include_str!(
+            "../../../../placement/default-weights.json"
+        )).unwrap();
+        let mut witness = weights.clone();
+        witness.contest_weight = 0.5;
+        let scorers = DraftScorers {
+            hero: AppFormulaScorer::new(&board, &topology, witness),
+            opponent: AppFormulaScorer::new(&board, &topology, weights),
+        };
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        let before = expansion::discounted_sites();
+        let chosen = choose(&scorers, &topology, 4, &vertices, &edges, 0, false).unwrap();
+        let mut best = None;
+        for candidate in 0..topology.vertex_count() as Vertex {
+            let value = candidate_score(&scorers, &topology, 4, &vertices, &edges, 0, candidate, false);
+            keep_best(&mut best, candidate, value);
+        }
+        assert_eq!(chosen.0, best.unwrap().0);
+        assert!(expansion::discounted_sites() > before);
     }
 }
