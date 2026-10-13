@@ -4131,3 +4131,225 @@ The other 54 of 73 rows are unchanged or within 0.1% (12 `advise` rows move by u
 **Wall time on the same machines, fastest of three, native.** `analyze/standard4/opening` 34.6 ms to 64.1 ms; `analyze/extension6/opening` 36.4 ms to 69.4 ms; `analyze/extension6/behind_three` 126.6 ms to 250.5 ms. A whole self-play game costs 12% to 16% more (`e2e/standard4/single_core` 4.0 ms to 4.5 ms, `e2e/extension6/single_core` 11.2 ms to 12.9 ms).
 
 **Reading.** A Best picks ranking at four or six players costs about twice what it did, which is the contested expansion walk and the second pricing of the first pick switched on; M-94 and M-115 measured only that both cost nothing at 0. The one speed bar on an adoption, requirement 21, holds: all four cases of `analysisPerf.test.ts` passed in the adoption's `npm test`, the first two of them now on the adopted six-seat file (300 ms and 1,200 ms in the wasm). The doubling is recorded for the owner; nothing in the spec stops on it.
+
+## M-120: 4 seats, the diagnostic run of `off` on `tuning5`
+
+**Preregistration.** [`2026-10-13-m120-seats4-diagnostic.md`](../../../docs/plans/preregs/2026-10-13-m120-seats4-diagnostic.md), committed in `f8aaf365` before the run. Ran on the box, 2026-10-13, run `20261013T230505Z-b5c593e6`, one `BUILD_GENERAL1_2XLARGE` machine (Intel Xeon Platinum 8223CL, 72 vCPU), binary built there from `e99c847f` by `rustc 1.99.0`, sha256 `657103e535942d72b4a6769020ea7165601bc536b2aa9f0acb32bdb28f4d7e3e`, the bytes the `perf` launches built. `standard4`, 4 seats, `tuning5` at seed `10047352188316269934` as preregistered, 300,000 boards x 2 reps, 2,400,000 games an arm, with `--units`. The job's own `perf` readings before the first `tuning5` game: 7.0 seconds and 351 MB at 2,000 boards, 68.7 seconds and 366 MB at 20,000. The run took 1,024 seconds (17.1 minutes) at a peak of 483 MB (494,732 KiB). `evaluation.json` sha256 `98d9ca58c5fdf50cf4b7e660bc995ce83950b0801af70c61af84c9d2211faa6e`, `units.csv` sha256 `bf763fb7f31505aa3c92b6b63872a410e8ab0772d934c19caa274433ebb079cf` (2,400,001 lines), `slices.json` sha256 `fc91904c576268d100cb0a5c79ec01501e2a783e55e2f79afd85b894c1b94a3b`; the run's outputs are in `simulator/runs/m120-seats4-diagnostic/`.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `off` | -0.48pp | -0.53pp to -0.43pp | `inconclusive` | 158,309, 169,814 |
+
+**By first-round draft position**, first picker first, 600,000 units each.
+
+| Arm | Slot 0 | Slot 1 | Slot 2 | Slot 3 |
+| --- | --- | --- | --- | --- |
+| `off` | -0.04pp (-0.12 to +0.05) | -0.50pp (-0.59 to -0.40) | -0.72pp (-0.82 to -0.62) | -0.66pp (-0.76 to -0.57) |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 599,657 of 2,400,000 with 0 draws, 0.249857 against a corner of 0.250000 with an allowance of 0.000920.
+
+**Rule table.** `slice` kept 70 rows and dropped 49 (under the 20% floor, or the same fired set as an earlier rule). Cut points: `roadPips` 21 and 24; `roadPipsMin` 9 and 10; `spotFalloff` 0.769231 and 0.846154; `topCrowding` 9 and 12. Rows reading `better`: 0. The ten rows with the highest total gain, each arm:
+
+| Arm | Rule | Fired share | Fired gain | Verdict | Total gain |
+| --- | --- | ---: | --- | --- | ---: |
+| `off` | `slot<1` | 0.250 | -0.04pp (-0.12 to +0.05) | `equivalent` | -0.01pp |
+| `off` | `slot<1&spotFalloff>=0.7692307692307693` | 0.233 | -0.05pp (-0.14 to +0.05) | `equivalent` | -0.01pp |
+| `off` | `slot<2&roadPipsMin<10` | 0.262 | -0.23pp (-0.32 to -0.14) | `equivalent` | -0.06pp |
+| `off` | `slot<2&roadPipsMin>=10` | 0.238 | -0.31pp (-0.40 to -0.21) | `equivalent` | -0.07pp |
+| `off` | `slot<2&roadPips<24` | 0.315 | -0.24pp (-0.33 to -0.16) | `equivalent` | -0.08pp |
+| `off` | `slot<2&topCrowding<12` | 0.313 | -0.25pp (-0.34 to -0.17) | `equivalent` | -0.08pp |
+| `off` | `slot<2&roadPipsMin>=9` | 0.336 | -0.24pp (-0.32 to -0.16) | `equivalent` | -0.08pp |
+| `off` | `slot<2&spotFalloff<0.8461538461538461` | 0.328 | -0.25pp (-0.33 to -0.17) | `equivalent` | -0.08pp |
+| `off` | `slot<3&topCrowding<9` | 0.243 | -0.38pp (-0.47 to -0.28) | `equivalent` | -0.09pp |
+| `off` | `slot<2&roadPips>=21` | 0.382 | -0.24pp (-0.32 to -0.17) | `equivalent` | -0.09pp |
+
+**Race table**, whole. Each row is one arm at one draft position; a cell is the pair's first set against its second, each with its unit count, and `>` or `<` between them when the two intervals do not overlap.
+
+| Arm | Slot | `readyAhead>=1` against `<1` | `readyAheadTrade>=1` against `<1` | `heroReady>=2` against `<2` |
+| --- | ---: | --- | --- | --- |
+| `off` | 0 | not defined | not defined | -0.06pp (-0.26 to +0.14) [127,632] overlaps -0.03pp (-0.13 to +0.07) [472,368] |
+| `off` | 1 | -0.49pp (-0.69 to -0.28) [127,632] overlaps -0.50pp (-0.61 to -0.39) [472,368] | -0.51pp (-0.62 to -0.40) [463,016] overlaps -0.43pp (-0.64 to -0.23) [136,984] | -0.71pp (-0.94 to -0.47) [114,026] overlaps -0.45pp (-0.55 to -0.34) [485,974] |
+| `off` | 2 | -0.68pp (-0.84 to -0.52) [219,830] overlaps -0.75pp (-0.87 to -0.62) [380,170] | -0.72pp (-0.82 to -0.62) [569,906] overlaps -0.79pp (-1.24 to -0.34) [30,094] | -0.79pp (-1.03 to -0.55) [109,096] overlaps -0.71pp (-0.81 to -0.60) [490,904] |
+| `off` | 3 | -0.70pp (-0.84 to -0.57) [292,066] overlaps -0.63pp (-0.76 to -0.49) [307,934] | -0.67pp (-0.77 to -0.57) [594,238] overlaps -0.21pp (-1.27 to +0.85) [5,762] | -0.84pp (-1.07 to -0.62) [116,878] overlaps -0.62pp (-0.73 to -0.51) [483,122] |
+
+**Decision.** This run names no candidate. Requirement 17 is not met at this seat count: no pair of intervals is disjoint at any slot. `tuning5` is spent at 4 seats.
+
+**Prediction against the result.** I predicted `off` between -0.65pp and -0.45pp with a half-width near 0.05pp, the first picker near -0.1pp and the others between -0.9pp and -0.5pp, under 5% for any `better` row and about 30% for the race test. It read -0.48pp with a half-width of 0.05pp, the first picker at -0.04pp and the others at -0.50pp, -0.72pp and -0.66pp, no `better` row, and the race test not met.
+
+**Reading.** Switching the adopted setting off helps nowhere in the rule family at 4 seats: no kept row has a positive estimate, and the best are the first picker's rows at zero. The setting does nothing for the first picker (-0.04pp, interval across zero) and all of its gain comes from the other three seats, which is M-117's picture on new boards. No race pair separates at any position.
+
+## M-121: 3 seats, the diagnostic run of `flat_75` and `flat_reprice` on `tuning5`
+
+**Preregistration.** [`2026-10-13-m121-seats3-diagnostic.md`](../../../docs/plans/preregs/2026-10-13-m121-seats3-diagnostic.md), committed in `f8aaf365` before the run. Ran on the box, 2026-10-13, run `20261013T230505Z-06a1c515`, one `BUILD_GENERAL1_2XLARGE` machine (Intel Xeon Platinum 8223CL, 72 vCPU), binary built there from `e99c847f` by `rustc 1.99.0`, sha256 `657103e535942d72b4a6769020ea7165601bc536b2aa9f0acb32bdb28f4d7e3e`, the bytes the `perf` launches built. `standard4`, 3 seats, `tuning5` at seed `6585542083186182294` as preregistered, 300,000 boards x 2 reps, 1,800,000 games an arm, with `--units`. The job's own `perf` readings before the first `tuning5` game: 5.1 seconds and 406 MB at 2,000 boards, 49.3 seconds and 417 MB at 20,000. The run took 741 seconds (12.3 minutes) at a peak of 518 MB (530,256 KiB). `evaluation.json` sha256 `9c9847fd81589837753f8f5e1054372059adba984fbaca6a53e166d5358b632a`, `units.csv` sha256 `1c3ef0eda5c1dd60c6f133208ac6201a3c470c333027fcfd8d2d865dd912dcbc` (1,800,001 lines), `slices.json` sha256 `ecb21cc885d7da5975945f6fa8a4a2db7851218fa92bb532af6e0e7003e3f8d7`; the run's outputs are in `simulator/runs/m121-seats3-diagnostic/`.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_75` | +0.10pp | +0.05pp to +0.15pp | `equivalent` | 111,853, 110,043 |
+| `flat_reprice` | +0.20pp | +0.14pp to +0.25pp | `equivalent` | 126,609, 123,056 |
+
+**By first-round draft position**, first picker first, 600,000 units each.
+
+| Arm | Slot 0 | Slot 1 | Slot 2 |
+| --- | --- | --- | --- |
+| `flat_75` | -0.21pp (-0.29 to -0.13) | +0.16pp (+0.07 to +0.26) | +0.35pp (+0.25 to +0.45) |
+| `flat_reprice` | -0.04pp (-0.13 to +0.06) | +0.28pp (+0.18 to +0.38) | +0.35pp (+0.25 to +0.45) |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 600,360 of 1,800,000 with 0 draws, 0.333533 against a corner of 0.333333 with an allowance of 0.001156.
+
+**Rule table.** `slice` kept 118 rows and dropped 26 (under the 20% floor, or the same fired set as an earlier rule). Cut points: `roadPips` 21 and 24; `roadPipsMin` 9 and 10; `spotFalloff` 0.846154 and 0.909091; `topCrowding` 4 and 6. Rows reading `better`: 0. The ten rows with the highest total gain, each arm:
+
+| Arm | Rule | Fired share | Fired gain | Verdict | Total gain |
+| --- | --- | ---: | --- | --- | ---: |
+| `flat_75` | `slot>=1` | 0.667 | +0.26pp (+0.19 to +0.32) | `equivalent` | +0.17pp |
+| `flat_75` | `slot>=1&topCrowding>=4` | 0.511 | +0.29pp (+0.22 to +0.37) | `equivalent` | +0.15pp |
+| `flat_75` | `slot>=1&spotFalloff>=0.8461538461538461` | 0.467 | +0.27pp (+0.19 to +0.36) | `equivalent` | +0.13pp |
+| `flat_75` | `slot>=1&roadPips>=21` | 0.510 | +0.24pp (+0.17 to +0.32) | `equivalent` | +0.12pp |
+| `flat_75` | `slot>=1&spotFalloff<0.9090909090909091` | 0.431 | +0.28pp (+0.19 to +0.36) | `equivalent` | +0.12pp |
+| `flat_75` | `slot>=1&topCrowding>=6` | 0.327 | +0.36pp (+0.26 to +0.46) | `equivalent` | +0.12pp |
+| `flat_75` | `slot>=2` | 0.333 | +0.35pp (+0.25 to +0.45) | `equivalent` | +0.12pp |
+| `flat_75` | `slot>=1&roadPipsMin>=9` | 0.448 | +0.26pp (+0.18 to +0.34) | `equivalent` | +0.11pp |
+| `flat_75` | `always` | 1.000 | +0.10pp (+0.05 to +0.15) | `equivalent` | +0.10pp |
+| `flat_75` | `slot>=1&roadPips<24` | 0.419 | +0.23pp (+0.15 to +0.32) | `equivalent` | +0.10pp |
+| `flat_reprice` | `slot>=1` | 0.667 | +0.31pp (+0.25 to +0.38) | `equivalent` | +0.21pp |
+| `flat_reprice` | `always` | 1.000 | +0.20pp (+0.14 to +0.25) | `equivalent` | +0.20pp |
+| `flat_reprice` | `slot>=1&topCrowding>=4` | 0.511 | +0.35pp (+0.27 to +0.43) | `equivalent` | +0.18pp |
+| `flat_reprice` | `topCrowding>=4` | 0.766 | +0.21pp (+0.15 to +0.28) | `equivalent` | +0.16pp |
+| `flat_reprice` | `slot>=1&spotFalloff>=0.8461538461538461` | 0.467 | +0.33pp (+0.25 to +0.41) | `equivalent` | +0.15pp |
+| `flat_reprice` | `slot>=1&roadPips>=21` | 0.510 | +0.30pp (+0.22 to +0.38) | `equivalent` | +0.15pp |
+| `flat_reprice` | `slot>=1&roadPipsMin>=9` | 0.448 | +0.32pp (+0.24 to +0.41) | `equivalent` | +0.14pp |
+| `flat_reprice` | `spotFalloff>=0.8461538461538461` | 0.701 | +0.20pp (+0.14 to +0.27) | `equivalent` | +0.14pp |
+| `flat_reprice` | `slot>=1&spotFalloff<0.9090909090909091` | 0.431 | +0.33pp (+0.25 to +0.42) | `equivalent` | +0.14pp |
+| `flat_reprice` | `spotFalloff<0.9090909090909091` | 0.646 | +0.21pp (+0.14 to +0.28) | `equivalent` | +0.14pp |
+
+**Race table**, whole. Each row is one arm at one draft position; a cell is the pair's first set against its second, each with its unit count, and `>` or `<` between them when the two intervals do not overlap.
+
+| Arm | Slot | `readyAhead>=1` against `<1` | `readyAheadTrade>=1` against `<1` | `heroReady>=2` against `<2` |
+| --- | ---: | --- | --- | --- |
+| `flat_75` | 0 | not defined | not defined | -0.51pp (-0.69 to -0.33) [132,346] **<** -0.13pp (-0.22 to -0.04) [467,654] |
+| `flat_75` | 1 | +0.13pp (-0.07 to +0.32) [132,346] overlaps +0.18pp (+0.07 to +0.28) [467,654] | +0.21pp (+0.10 to +0.31) [480,744] overlaps -0.00pp (-0.21 to +0.20) [119,256] | -0.10pp (-0.30 to +0.11) [122,322] **<** +0.23pp (+0.13 to +0.33) [477,678] |
+| `flat_75` | 2 | +0.31pp (+0.15 to +0.46) [227,798] overlaps +0.38pp (+0.25 to +0.50) [372,202] | +0.35pp (+0.25 to +0.45) [573,868] overlaps +0.30pp (-0.16 to +0.76) [26,132] | +0.21pp (-0.02 to +0.43) [104,132] overlaps +0.38pp (+0.27 to +0.49) [495,868] |
+| `flat_reprice` | 0 | not defined | not defined | -0.36pp (-0.56 to -0.17) [132,346] **<** +0.06pp (-0.05 to +0.16) [467,654] |
+| `flat_reprice` | 1 | +0.28pp (+0.07 to +0.48) [132,346] overlaps +0.28pp (+0.17 to +0.39) [467,654] | +0.30pp (+0.19 to +0.41) [480,744] overlaps +0.20pp (-0.03 to +0.42) [119,256] | -0.01pp (-0.22 to +0.20) [122,322] **<** +0.35pp (+0.24 to +0.46) [477,678] |
+| `flat_reprice` | 2 | +0.31pp (+0.15 to +0.46) [227,798] overlaps +0.38pp (+0.25 to +0.50) [372,202] | +0.35pp (+0.25 to +0.45) [573,868] overlaps +0.30pp (-0.16 to +0.76) [26,132] | +0.21pp (-0.02 to +0.43) [104,132] overlaps +0.38pp (+0.27 to +0.49) [495,868] |
+
+**Decision.** This run names no candidate. **Requirement 17 is met at this seat count**: `flat_75`, the `heroReady>=2` pair, at slots 0 and 1 with the first set lower each time; `flat_reprice`, the `heroReady>=2` pair, at slots 0 and 1 with the first set lower each time. `tuning5` is spent at 3 seats.
+
+**Prediction against the result.** I predicted both arms between -0.15pp and +0.25pp with a half-width near 0.06pp, about 15% for any `better` row and about 15% for the race test. They read +0.10pp and +0.20pp with half-widths of 0.05pp, no `better` row, and the race test met.
+
+**Reading.** Both arms gain a little at 3 seats and neither reaches the bar on any rule: the best row is `flat_reprice` on `slot>=1`, +0.31pp on two thirds of units. The first picker loses with `flat_75` (-0.21pp) and is flat with `flat_reprice`. The race table separates on the hero's own readiness, not on the rivals': at the first two positions both arms do worse by 0.3pp to 0.4pp when the hero's second settlement pays brick and wood than when it does not, and the `readyAhead` and `readyAheadTrade` pairs overlap everywhere.
+
+## M-122: 5 seats, the diagnostic run of `flat_75` and `flat_reprice` on `tuning5`
+
+**Preregistration.** [`2026-10-13-m122-seats5-diagnostic.md`](../../../docs/plans/preregs/2026-10-13-m122-seats5-diagnostic.md), committed in `f8aaf365` before the run. Ran on the box, 2026-10-13, run `20261013T230505Z-0f44f7b1`, one `BUILD_GENERAL1_2XLARGE` machine (Intel Xeon Platinum 8124M, 72 vCPU), binary built there from `e99c847f` by `rustc 1.99.0`, sha256 `657103e535942d72b4a6769020ea7165601bc536b2aa9f0acb32bdb28f4d7e3e`, the bytes the `perf` launches built. `extension6`, 5 seats, `tuning5` at seed `10106711019344858928` as preregistered, 150,000 boards x 2 reps, 1,500,000 games an arm, with `--units`. The job's own `perf` readings before the first `tuning5` game: 24.4 seconds and 521 MB at 2,000 boards, 241.3 seconds and 546 MB at 20,000. The run took 1,810 seconds (30.2 minutes) at a peak of 624 MB (639,064 KiB). `evaluation.json` sha256 `6a1596c5b1ec69e003554dacb0263f43be50f4b6674b5f5ee2d9e9b6a78e1cb3`, `units.csv` sha256 `5c9c8460dd765775f40e9c1217311613e14ee73e8112045c39bc5ac7f2a25448` (1,500,001 lines), `slices.json` sha256 `b459ca03f53af2d00488873ff45b98cfc481d33e4b4d35c306e431a9c9a22344`; the run's outputs are in `simulator/runs/m122-seats5-diagnostic/`.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_75` | +0.28pp | +0.23pp to +0.34pp | `equivalent` | 79,497, 75,248 |
+| `flat_reprice` | +0.52pp | +0.47pp to +0.57pp | `inconclusive` | 81,783, 73,989 |
+
+**By first-round draft position**, first picker first, 300,000 units each.
+
+| Arm | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 |
+| --- | --- | --- | --- | --- | --- |
+| `flat_75` | -0.09pp (-0.20 to +0.01) | +0.24pp (+0.12 to +0.35) | +0.46pp (+0.34 to +0.58) | +0.39pp (+0.27 to +0.51) | +0.43pp (+0.31 to +0.55) |
+| `flat_reprice` | +0.36pp (+0.25 to +0.47) | +0.58pp (+0.46 to +0.70) | +0.72pp (+0.60 to +0.84) | +0.54pp (+0.42 to +0.66) | +0.39pp (+0.28 to +0.50) |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 300,327 of 1,500,000 with 0 draws, 0.200218 against a corner of 0.200000 with an allowance of 0.001075.
+
+**Rule table.** `slice` kept 194 rows and dropped 56 (under the 20% floor, or the same fired set as an earlier rule). Cut points: `roadPips` 33 and 36; `roadPipsMin` 14 and 16; `spotFalloff` 0.833333 and 0.846154; `topCrowding` 10 and 13. Rows reading `better`: 8. The ten rows with the highest total gain, each arm:
+
+| Arm | Rule | Fired share | Fired gain | Verdict | Total gain |
+| --- | --- | ---: | --- | --- | ---: |
+| `flat_75` | `slot>=1` | 0.800 | +0.38pp (+0.32 to +0.44) | `equivalent` | +0.30pp |
+| `flat_75` | `always` | 1.000 | +0.28pp (+0.23 to +0.34) | `equivalent` | +0.28pp |
+| `flat_75` | `slot>=2` | 0.600 | +0.42pp (+0.36 to +0.49) | `equivalent` | +0.25pp |
+| `flat_75` | `slot>=1&roadPipsMin>=14` | 0.599 | +0.39pp (+0.32 to +0.46) | `equivalent` | +0.23pp |
+| `flat_75` | `slot>=1&topCrowding>=10` | 0.550 | +0.41pp (+0.33 to +0.48) | `equivalent` | +0.22pp |
+| `flat_75` | `slot>=1&spotFalloff>=0.8333333333333334` | 0.560 | +0.39pp (+0.32 to +0.46) | `equivalent` | +0.22pp |
+| `flat_75` | `roadPipsMin>=14` | 0.748 | +0.29pp (+0.23 to +0.35) | `equivalent` | +0.22pp |
+| `flat_75` | `slot>=1&roadPips>=33` | 0.574 | +0.38pp (+0.31 to +0.45) | `equivalent` | +0.22pp |
+| `flat_75` | `topCrowding>=10` | 0.687 | +0.30pp (+0.24 to +0.36) | `equivalent` | +0.21pp |
+| `flat_75` | `roadPips>=33` | 0.717 | +0.29pp (+0.22 to +0.35) | `equivalent` | +0.21pp |
+| `flat_reprice` | `always` | 1.000 | +0.52pp (+0.47 to +0.57) | `inconclusive` | +0.52pp |
+| `flat_reprice` | `slot>=1` | 0.800 | +0.56pp (+0.50 to +0.62) | `better` | +0.45pp |
+| `flat_reprice` | `slot<4` | 0.800 | +0.55pp (+0.49 to +0.61) | `inconclusive` | +0.44pp |
+| `flat_reprice` | `roadPipsMin>=14` | 0.748 | +0.54pp (+0.48 to +0.60) | `inconclusive` | +0.41pp |
+| `flat_reprice` | `roadPips>=33` | 0.717 | +0.52pp (+0.46 to +0.59) | `inconclusive` | +0.38pp |
+| `flat_reprice` | `spotFalloff>=0.8333333333333334` | 0.701 | +0.53pp (+0.47 to +0.59) | `inconclusive` | +0.37pp |
+| `flat_reprice` | `topCrowding>=10` | 0.687 | +0.53pp (+0.46 to +0.59) | `inconclusive` | +0.36pp |
+| `flat_reprice` | `slot>=1&roadPipsMin>=14` | 0.599 | +0.58pp (+0.52 to +0.65) | `better` | +0.35pp |
+| `flat_reprice` | `slot<4&roadPipsMin>=14` | 0.599 | +0.57pp (+0.50 to +0.63) | `inconclusive` | +0.34pp |
+| `flat_reprice` | `slot<3` | 0.600 | +0.56pp (+0.49 to +0.62) | `inconclusive` | +0.33pp |
+
+**Race table**, whole. Each row is one arm at one draft position; a cell is the pair's first set against its second, each with its unit count, and `>` or `<` between them when the two intervals do not overlap.
+
+| Arm | Slot | `readyAhead>=1` against `<1` | `readyAheadTrade>=1` against `<1` | `heroReady>=2` against `<2` |
+| --- | ---: | --- | --- | --- |
+| `flat_75` | 0 | not defined | not defined | -0.48pp (-0.72 to -0.25) [67,860] **<** +0.02pp (-0.10 to +0.14) [232,140] |
+| `flat_75` | 1 | +0.12pp (-0.12 to +0.36) [67,860] overlaps +0.27pp (+0.14 to +0.40) [232,140] | +0.19pp (+0.06 to +0.32) [240,004] overlaps +0.42pp (+0.16 to +0.68) [59,996] | -0.01pp (-0.26 to +0.25) [62,878] overlaps +0.30pp (+0.17 to +0.43) [237,122] |
+| `flat_75` | 2 | +0.54pp (+0.35 to +0.72) [116,072] overlaps +0.41pp (+0.26 to +0.56) [183,928] | +0.45pp (+0.33 to +0.57) [287,032] overlaps +0.55pp (-0.02 to +1.11) [12,968] | +0.41pp (+0.14 to +0.68) [59,368] overlaps +0.47pp (+0.34 to +0.60) [240,632] |
+| `flat_75` | 3 | +0.39pp (+0.23 to +0.56) [152,414] overlaps +0.38pp (+0.21 to +0.55) [147,586] | +0.38pp (+0.26 to +0.50) [297,092] overlaps +1.03pp (-0.24 to +2.30) [2,908] | +0.27pp (-0.00 to +0.53) [59,742] overlaps +0.42pp (+0.28 to +0.55) [240,258] |
+| `flat_75` | 4 | +0.36pp (+0.20 to +0.51) [181,726] overlaps +0.54pp (+0.34 to +0.74) [118,274] | +0.43pp (+0.31 to +0.55) [299,292] overlaps +0.28pp (-2.35 to +2.91) [708] | +0.25pp (-0.04 to +0.54) [52,732] overlaps +0.47pp (+0.33 to +0.60) [247,268] |
+| `flat_reprice` | 0 | not defined | not defined | -0.02pp (-0.25 to +0.22) [67,860] **<** +0.47pp (+0.34 to +0.60) [232,140] |
+| `flat_reprice` | 1 | +0.70pp (+0.45 to +0.95) [67,860] overlaps +0.55pp (+0.41 to +0.68) [232,140] | +0.54pp (+0.41 to +0.68) [240,004] overlaps +0.73pp (+0.46 to +1.00) [59,996] | +0.21pp (-0.05 to +0.47) [62,878] **<** +0.68pp (+0.54 to +0.81) [237,122] |
+| `flat_reprice` | 2 | +0.71pp (+0.52 to +0.90) [116,072] overlaps +0.73pp (+0.58 to +0.88) [183,928] | +0.72pp (+0.60 to +0.84) [287,032] overlaps +0.83pp (+0.25 to +1.42) [12,968] | +0.53pp (+0.26 to +0.80) [59,368] overlaps +0.77pp (+0.64 to +0.90) [240,632] |
+| `flat_reprice` | 3 | +0.56pp (+0.40 to +0.73) [152,414] overlaps +0.52pp (+0.35 to +0.69) [147,586] | +0.54pp (+0.42 to +0.66) [297,092] overlaps +0.28pp (-0.97 to +1.52) [2,908] | +0.44pp (+0.18 to +0.71) [59,742] overlaps +0.57pp (+0.43 to +0.70) [240,258] |
+| `flat_reprice` | 4 | +0.35pp (+0.20 to +0.49) [181,726] overlaps +0.46pp (+0.28 to +0.64) [118,274] | +0.39pp (+0.28 to +0.51) [299,292] overlaps -0.56pp (-3.04 to +1.91) [708] | +0.16pp (-0.10 to +0.43) [52,732] overlaps +0.44pp (+0.31 to +0.56) [247,268] |
+
+**Decision.** This run names no candidate. **Requirement 17 is met at this seat count**: `flat_reprice`, the `heroReady>=2` pair, at slots 0 and 1 with the first set lower each time. `tuning5` is spent at 5 seats.
+
+**Prediction against the result.** I predicted `flat_reprice` between +0.25pp and +0.65pp with a half-width near 0.06pp and the first picker lowest, about 60% for some `better` row with `slot>=1` the likeliest, and about 30% for the race test. It read +0.52pp with a half-width of 0.05pp, the first picker lowest at +0.36pp, eight `better` rows led by `slot>=1`, and the race test met.
+
+**Reading.** `flat_reprice` (with `contestWeight` 0.5 at this seat count) reads +0.52pp always-on, above M-112's +0.44pp and with the bar inside its interval, and `slot>=1` reads `better` at +0.56pp on four fifths of units. `slices.json` names that row as its candidate; by requirement 16 this run names none, and the row's total (+0.45pp) is under the always-on total (+0.52pp), so leaving the first picker out loses more than it saves. As at 3 seats the race table separates on the hero's own readiness at the first two positions, with the arm doing worse by about 0.5pp when the hero's second settlement pays brick and wood, and not on the rivals' readiness.
+
+## M-123: 6 seats, the diagnostic run of `off` on `tuning5`
+
+**Preregistration.** [`2026-10-13-m123-seats6-diagnostic.md`](../../../docs/plans/preregs/2026-10-13-m123-seats6-diagnostic.md), committed in `f8aaf365` before the run. Ran on the box, 2026-10-13, run `20261013T230505Z-be4ce51e`, one `BUILD_GENERAL1_2XLARGE` machine (Intel Xeon Platinum 8223CL, 72 vCPU), binary built there from `e99c847f` by `rustc 1.99.0`, sha256 `657103e535942d72b4a6769020ea7165601bc536b2aa9f0acb32bdb28f4d7e3e`, the bytes the `perf` launches built. `extension6`, 6 seats, `tuning5` at seed `9141560125848139032` as preregistered, 150,000 boards x 2 reps, 1,800,000 games an arm, with `--units`. The job's own `perf` readings before the first `tuning5` game: 31.9 seconds and 435 MB at 2,000 boards, 317.7 seconds and 451 MB at 20,000. The run took 2,370 seconds (39.5 minutes) at a peak of 542 MB (554,916 KiB). `evaluation.json` sha256 `84b8befd74531cec33a5460c275d07954505a90aa05b28a443ad05424986fe9d`, `units.csv` sha256 `84e00ff8a6d8246cd1164f8c80d24717c8078d94ec2bce55ee1dd6fcf7edd2ad` (1,800,001 lines), `slices.json` sha256 `bcf797765f45ddd905599af5a56af42dd2938ce423aadce49c58d5841d9b583f`; the run's outputs are in `simulator/runs/m123-seats6-diagnostic/`.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `off` | -0.66pp | -0.71pp to -0.61pp | `worse` | 93,261, 105,214 |
+
+**By first-round draft position**, first picker first, 300,000 units each.
+
+| Arm | Slot 0 | Slot 1 | Slot 2 | Slot 3 | Slot 4 | Slot 5 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `off` | -0.38pp (-0.50 to -0.26) | -0.62pp (-0.74 to -0.50) | -0.81pp (-0.94 to -0.69) | -0.81pp (-0.93 to -0.69) | -0.75pp (-0.87 to -0.63) | -0.61pp (-0.73 to -0.49) |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 300,222 of 1,800,000 with 0 draws, 0.166790 against a corner of 0.166667 with an allowance of 0.000914.
+
+**Rule table.** `slice` kept 112 rows and dropped 75 (under the 20% floor, or the same fired set as an earlier rule). Cut points: `roadPips` 33 and 36; `roadPipsMin` 14 and 16; `spotFalloff` 0.769231 and 0.833333; `topCrowding` 15 and 19. Rows reading `better`: 0. The ten rows with the highest total gain, each arm:
+
+| Arm | Rule | Fired share | Fired gain | Verdict | Total gain |
+| --- | --- | ---: | --- | --- | ---: |
+| `off` | `slot<2&topCrowding<19` | 0.202 | -0.46pp (-0.57 to -0.35) | `inconclusive` | -0.09pp |
+| `off` | `slot<2&roadPips>=33` | 0.238 | -0.47pp (-0.57 to -0.37) | `inconclusive` | -0.11pp |
+| `off` | `slot<2&roadPips<36` | 0.201 | -0.57pp (-0.67 to -0.46) | `inconclusive` | -0.11pp |
+| `off` | `slot<4&topCrowding<15` | 0.212 | -0.55pp (-0.65 to -0.44) | `inconclusive` | -0.12pp |
+| `off` | `slot<2&topCrowding>=15` | 0.227 | -0.53pp (-0.64 to -0.43) | `inconclusive` | -0.12pp |
+| `off` | `slot<2&roadPipsMin>=14` | 0.249 | -0.51pp (-0.60 to -0.41) | `inconclusive` | -0.13pp |
+| `off` | `slot>=2&topCrowding<15` | 0.212 | -0.60pp (-0.71 to -0.49) | `inconclusive` | -0.13pp |
+| `off` | `slot<3&roadPipsMin>=16` | 0.220 | -0.58pp (-0.69 to -0.48) | `inconclusive` | -0.13pp |
+| `off` | `slot>=4&topCrowding<19` | 0.202 | -0.64pp (-0.75 to -0.53) | `worse` | -0.13pp |
+| `off` | `slot>=4&roadPips<36` | 0.201 | -0.71pp (-0.82 to -0.60) | `worse` | -0.14pp |
+
+**Race table**, whole. Each row is one arm at one draft position; a cell is the pair's first set against its second, each with its unit count, and `>` or `<` between them when the two intervals do not overlap.
+
+| Arm | Slot | `readyAhead>=1` against `<1` | `readyAheadTrade>=1` against `<1` | `heroReady>=2` against `<2` |
+| --- | ---: | --- | --- | --- |
+| `off` | 0 | not defined | not defined | -0.27pp (-0.53 to -0.02) [69,996] overlaps -0.41pp (-0.55 to -0.28) [230,004] |
+| `off` | 1 | -0.51pp (-0.76 to -0.26) [69,996] overlaps -0.66pp (-0.80 to -0.52) [230,004] | -0.66pp (-0.80 to -0.52) [237,950] overlaps -0.47pp (-0.75 to -0.20) [62,050] | -0.58pp (-0.85 to -0.30) [63,048] overlaps -0.63pp (-0.77 to -0.50) [236,952] |
+| `off` | 2 | -0.76pp (-0.95 to -0.57) [118,728] overlaps -0.85pp (-1.01 to -0.69) [181,272] | -0.81pp (-0.94 to -0.69) [286,382] overlaps -0.88pp (-1.47 to -0.29) [13,618] | -0.67pp (-0.96 to -0.37) [57,814] overlaps -0.85pp (-0.99 to -0.72) [242,186] |
+| `off` | 3 | -0.78pp (-0.95 to -0.61) [154,652] overlaps -0.84pp (-1.01 to -0.66) [145,348] | -0.82pp (-0.94 to -0.69) [297,234] overlaps +0.14pp (-1.16 to +1.45) [2,766] | -0.88pp (-1.18 to -0.58) [55,142] overlaps -0.79pp (-0.92 to -0.66) [244,858] |
+| `off` | 4 | -0.81pp (-0.96 to -0.66) [182,430] overlaps -0.66pp (-0.85 to -0.46) [117,570] | -0.75pp (-0.87 to -0.63) [299,450] overlaps -0.73pp (-3.76 to +2.30) [550] | -0.79pp (-1.08 to -0.50) [56,480] overlaps -0.74pp (-0.87 to -0.61) [243,520] |
+| `off` | 5 | -0.59pp (-0.73 to -0.45) [205,370] overlaps -0.65pp (-0.86 to -0.43) [94,630] | -0.61pp (-0.73 to -0.49) [299,896] overlaps -1.92pp (-7.92 to +4.07) [104] | -0.58pp (-0.85 to -0.31) [58,826] overlaps -0.62pp (-0.75 to -0.48) [241,174] |
+
+**Decision.** This run names no candidate. Requirement 17 is not met at this seat count: no pair of intervals is disjoint at any slot. `tuning5` is spent at 6 seats.
+
+**Prediction against the result.** I predicted `off` between -0.85pp and -0.60pp with a half-width near 0.05pp and every seat negative, under 3% for any `better` row and about 30% for the race test. It read -0.66pp with a half-width of 0.05pp, every seat negative, no `better` row, and the race test not met.
+
+**Reading.** Switching the adopted setting off helps nowhere at 6 seats: every kept row is negative and the whole run reads `worse`. The first picker loses least by switching off (-0.38pp), as in M-118. No race pair separates at any position.
+
+**Ledger after M-120 to M-123.** `tuning5` is spent at 3, 4, 5 and 6 seats and unspent at 2. `gate5` is spent at 4 and 6 seats and unspent at 2, 3 and 5. `tuning6`, `eval5` and `gate6` are unspent at every seat count.
+
+**What item 5 decides.** Requirement 17 is met at 3 seats (both arms) and at 5 seats (`flat_reprice`), so the race table calls for item 6, the race-aware discount. The pair that separates is the hero's own readiness, at the first two draft positions: the discount does worse when the hero's second settlement pays for a road than when it does not. No pair on the rivals' readiness separates at any seat count or position.
