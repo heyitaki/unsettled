@@ -3814,3 +3814,44 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 6 
 **Decision.** `reprice_only` is dropped as `equivalent`. All three flat arms are `inconclusive` with estimates at or above 0.0025. On `extension6` at most two retry, the two with the largest screen estimates: `flat_50` (0.003611) and `flat_75` (0.003583) retry at 12,000 boards (M-107), and `flat_25` (0.002833) is dropped unresolved. `reprice_only`'s last reading is positive and not `worse`, so a second-stage arm follows if a flat arm's last reading is positive too.
 
 **Prediction against the five screens (M-100 to M-104).** I predicted every estimate inside plus or minus 0.5pp: 19 of 20 are, and `flat_75` at 4 seats is at +0.570pp. I put some arm reading `better` at about 15% a seat count and none did. I put some flat arm reading `worse` at about 25% and none did, though both heavier flat arms at 2 seats have intervals wholly below zero. I put a retry at about 20% a seat count, and three of five bought one, so I underrated how often the heavier discounts would land between the retry line and the bar. Across seat counts the flat arms' estimates are negative at 2 seats, near zero at 3, and positive at 4, 5 and 6.
+
+## M-105: 4 seats, the cut-off arms' retry on `tuning4`
+
+**Preregistration.** [`2026-10-13-m105-seats4-retry.md`](../../../docs/plans/preregs/2026-10-13-m105-seats4-retry.md), committed in `c9f002d7` before the run. Ran on that commit's release binary, 2026-10-13: `standard4`, 4 seats, `tuning4` at seed `8972835441189626876`, 22,000 boards x 2 reps, 176,000 games an arm, 97 seconds. Load averages 14.35 20.09 14.06 before and 27.25 23.45 16.06 after on 18 cores, from this programme's own back-to-back runs.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_50` | +0.451pp | +0.299pp to +0.603pp | `inconclusive` | 9,504, 8,710 |
+| `flat_75` | +0.499pp | +0.334pp to +0.664pp | `inconclusive` | 11,171, 10,292 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 44,232 of 176,000 with 0 draws, 0.2513 against a corner of 0.2500, a miss of 0.0013 against an allowance of 0.0034.
+
+**Decision.** Neither arm read `better`, so both are dropped; there is no second retry. Both intervals sit wholly above zero and reach the +0.5pp bar without clearing it. Last readings at 4 seats: `flat_25` +0.080pp, `flat_50` +0.451pp, `flat_75` +0.499pp, `reprice_only` +0.057pp, none `worse`. A flat arm and `reprice_only` are both positive, so requirement 30 creates the second-stage arm `flat_reprice` at 4 seats on `flat_75`, the flat arm with the highest last-reading estimate: `contestWeight` 0.75 with `repriceFirstExpansion` 1 (M-108).
+
+## M-106: 5 seats, the cut-off arms' retry on `tuning4`
+
+**Preregistration.** [`2026-10-13-m106-seats5-retry.md`](../../../docs/plans/preregs/2026-10-13-m106-seats5-retry.md), committed in `c9f002d7` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 5 seats, `tuning4` at seed `13485105647361630321`, 14,000 boards x 2 reps, 140,000 games an arm, 182 seconds. Load averages 27.25 23.45 16.06 before and 44.66 33.23 21.53 after on 18 cores, from this programme's own back-to-back runs.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_25` | +0.171pp | +0.049pp to +0.293pp | `equivalent` | 3,839, 3,600 |
+| `flat_75` | +0.217pp | +0.047pp to +0.388pp | `equivalent` | 7,353, 7,049 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 28,013 of 140,000 with 0 draws, 0.2001 against a corner of 0.2000, a miss of 0.0001 against an allowance of 0.0035.
+
+**Decision.** Both arms read `equivalent` and are dropped. Last readings at 5 seats: `flat_25` +0.171pp (this retry), `flat_50` +0.300pp (its screen, since the two-retry cap dropped it unresolved), `flat_75` +0.217pp (this retry), `reprice_only` +0.071pp, none `worse`. A flat arm and `reprice_only` are both positive, so requirement 30 creates `flat_reprice` at 5 seats on the flat arm with the highest last-reading estimate. Read literally that is `flat_50`, whose last reading is a screen four times smaller than the other two's retries: `contestWeight` 0.5 with `repriceFirstExpansion` 1 (M-109).
+
+## M-107: 6 seats, the cut-off arms' retry on `tuning4`
+
+**Preregistration.** [`2026-10-13-m107-seats6-retry.md`](../../../docs/plans/preregs/2026-10-13-m107-seats6-retry.md), committed in `c9f002d7` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 6 seats, `tuning4` at seed `267929230571891344`, 12,000 boards x 2 reps, 144,000 games an arm, 233 seconds. Load averages 44.66 33.23 21.53 before and 38.36 34.07 24.55 after on 18 cores, from this programme's own back-to-back runs.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_50` | +0.420pp | +0.272pp to +0.568pp | `inconclusive` | 6,072, 5,467 |
+| `flat_75` | +0.471pp | +0.310pp to +0.632pp | `inconclusive` | 7,133, 6,455 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 24,068 of 144,000 with 0 draws, 0.1671 against a corner of 0.1667, a miss of 0.0005 against an allowance of 0.0032.
+
+**Decision.** Neither arm read `better`, so both are dropped; there is no second retry. Both intervals sit wholly above zero and reach the +0.5pp bar without clearing it. Last readings at 6 seats: `flat_25` +0.283pp (its screen), `flat_50` +0.420pp, `flat_75` +0.471pp, `reprice_only` +0.156pp, none `worse`. A flat arm and `reprice_only` are both positive, so requirement 30 creates `flat_reprice` at 6 seats on `flat_75`: `contestWeight` 0.75 with `repriceFirstExpansion` 1 (M-110).
+
+**Prediction against the three retries (M-105 to M-107).** I expected every estimate to shrink into the range 0 to +0.4pp and put `better` at about 10% an arm. No arm read `better`. The two 5-seat arms shrank as predicted, to about +0.2pp. The four arms at 4 and 6 seats barely moved, +0.42pp to +0.50pp, above my range: at those two seat counts a heavy flat discount is worth a little under half a point, measured twice, which is real and under the bar the owner set.

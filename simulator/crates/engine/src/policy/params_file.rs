@@ -1763,11 +1763,15 @@ mod tests {
         assert_eq!(found, expected, "one SC file per declared arm or combination");
     }
 
-    const CO_ARMS: [(&str, &[usize], &[(&str, f64)]); 4] = [
+    const CO_ARMS: [(&str, &[usize], &[(&str, f64)]); 7] = [
         ("flat_25", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.25)]),
         ("flat_50", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.5)]),
         ("flat_75", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.75)]),
         ("reprice_only", &[2, 3, 4, 5, 6], &[("/repriceFirstExpansion", 1.0)]),
+        // Second stage: each seat count's best flat arm at its last reading, with the re-pricing on.
+        ("flat_reprice", &[4], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
+        ("flat_reprice", &[5], &[("/contestWeight", 0.5), ("/repriceFirstExpansion", 1.0)]),
+        ("flat_reprice", &[6], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
     ];
 
     const CO_ANCHORS: [(usize, &[(&str, f64)]); 5] = [
@@ -2174,8 +2178,8 @@ mod tests {
         }
         assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
-            weights_arms, 97,
-            "the committed weights arms are 97 files; a change to the set is a decision"
+            weights_arms, 100,
+            "the committed weights arms are 100 files; a change to the set is a decision"
         );
     }
 
