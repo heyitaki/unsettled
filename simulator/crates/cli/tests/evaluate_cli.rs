@@ -38,7 +38,7 @@ fn valid_arguments(out: &Path) -> Vec<String> {
     ]
 }
 
-fn assert_named_error(arguments: &[String], expected: &str) {
+fn assert_named_error(arguments: &[String], expected: &str) -> String {
     let arguments = arguments.iter().map(String::as_str).collect::<Vec<_>>();
     let output = evaluate(&arguments);
     assert_eq!(output.status.code(), Some(2));
@@ -48,6 +48,7 @@ fn assert_named_error(arguments: &[String], expected: &str) {
         "expected {expected:?} in stderr:\n{stderr}"
     );
     assert!(!stderr.contains("panicked"));
+    stderr
 }
 
 #[test]
@@ -408,15 +409,20 @@ fn where_parser_reports_each_invalid_predicate_by_name() {
         ("heroReady>=1", "heroReady is a diagnostic"),
         ("readyAhead>=1", "readyAhead is a diagnostic"),
         ("readyAheadTrade>=1", "readyAheadTrade is a diagnostic"),
-        ("slot>1", "operator"), ("slot<=1", "operator"), ("slot=1", "operator"),
-        ("slot>=nope", "nope"), ("slot>=NaN", "NaN"), ("slot>=inf", "inf"),
+        ("slot>1", "invalid operator in slot>1: expected >= or <"),
+        ("slot<=1", "invalid operator in slot<=1: expected >= or <"),
+        ("slot=1", "invalid operator in slot=1: expected >= or <"),
+        ("slot>=nope", "invalid finite number \"nope\" in slot>=nope"),
+        ("slot>=NaN", "invalid finite number \"NaN\" in slot>=NaN"),
+        ("slot>=inf", "invalid finite number \"inf\" in slot>=inf"),
         ("", "empty predicate"), ("slot>=1&", "empty predicate"),
         ("slot>=1&roadPips<38&slot<3", "third predicate"),
         ("slot >=1", "spaces"),
     ] {
         let mut arguments = valid_arguments(&output_dir("where-invalid"));
         arguments.extend(["--where".into(), rule.into()]);
-        assert_named_error(&arguments, message);
+        let stderr = assert_named_error(&arguments, message);
+        assert!(!stderr.contains("fires on no unit"), "{rule}: {stderr}");
     }
 }
 
@@ -464,14 +470,15 @@ fn slice_command(out: &Path) {
 fn a_where_run_reports_the_pair_score_rule_computes_from_the_units_file() {
     let out = output_dir("where-restriction-units");
     let mut arguments = valid_arguments(&out);
-    let field = "app_formula_draft:placement/seat-weights/seats-{seats}.json@placement/seat-weights/seats-{seats}.json";
+    let field = "app_formula_draft:placement/arms/co_off_s4.json@placement/arms/co_off_s4.json";
     arguments[3] = field.into();
     arguments[5] = format!("base={field}");
-    arguments[7] = "6".into();
+    arguments[7] = "15".into();
     arguments[9] = "2".into();
+    arguments[11] = "0".into();
     arguments.extend(["--reference", "base", "--arm",
-        "flat_75=app_formula_draft:placement/arms/co_flat_75_s{seats}.json@placement/seat-weights/seats-{seats}.json",
-        "--policy", "heuristic-v1-trader-aware-threat-devcards-denial", "--player-trading",
+        "flat_reprice=app_formula_draft:placement/arms/co_flat_reprice_s4.json@placement/arms/co_off_s4.json",
+        "--policy", "random-legal",
         "--threshold", "0.005", "--units"].map(str::to_string));
     run_success(&arguments);
     slice_command(&out);
@@ -486,12 +493,17 @@ fn a_where_run_reports_the_pair_score_rule_computes_from_the_units_file() {
     };
     assert_pair(&slices["rules"][0], &full["pairs"][0]);
     let csv = fs::read_to_string(out.join("units.csv")).unwrap();
-    let mut road_pips = csv.lines().skip(1).step_by(8)
-        .map(|line| line.split(',').nth(3).unwrap().parse::<u16>().unwrap()).collect::<Vec<_>>();
+    let rows = csv.lines().skip(1).map(|line| line.split(',').collect::<Vec<_>>()).collect::<Vec<_>>();
+    let mut road_pips = rows.iter().step_by(8)
+        .map(|row| row[3].parse::<u16>().unwrap()).collect::<Vec<_>>();
     road_pips.sort_unstable();
     let cutoff = road_pips[3];
     assert!(road_pips.iter().any(|pips| *pips < cutoff));
     assert!(road_pips.iter().any(|pips| *pips >= cutoff));
+    let fired_boards = rows.iter().step_by(8).filter(|row| row[3].parse::<u16>().unwrap() >= cutoff)
+        .map(|row| row[0].parse::<usize>().unwrap()).collect::<Vec<_>>();
+    assert!(fired_boards.iter().enumerate().any(|(renumbered, original)| renumbered != *original),
+        "a dropped board must precede a fired board");
     arguments.pop();
     for (i, rule) in ["slot>=2".to_string(), format!("roadPips>={cutoff}"),
         format!("slot>=2&roadPips>={cutoff}")].iter().enumerate() {
@@ -501,7 +513,17 @@ fn a_where_run_reports_the_pair_score_rule_computes_from_the_units_file() {
         filtered_args.extend(["--where".into(), rule.clone()]);
         run_success(&filtered_args);
         let result = read_evaluation(&filtered);
-        let scored = unsettled_sim::slice::score_rule(&units, "flat_75", rule).unwrap();
+        let scored = unsettled_sim::slice::score_rule(&units, "flat_reprice", rule).unwrap();
+        if i > 0 {
+            assert!(scored.stats.b + scored.stats.c >= 3, "{rule}: {:?}", scored.stats);
+            assert_ne!(scored.stats.b, scored.stats.c, "{rule}");
+            assert!(fired_boards.iter().enumerate().any(|(renumbered, original)| {
+                renumbered != *original && rows.iter().any(|row| {
+                    row[0].parse::<usize>().unwrap() == *original && row[10] != row[11]
+                        && (i == 1 || row[1].parse::<usize>().unwrap() >= 2)
+                })
+            }), "{rule}: a discordant unit must belong to a renumbered board");
+        }
         let scored_text = serde_json::to_string_pretty(&scored).unwrap();
         let result_text = fs::read_to_string(filtered.join("evaluation.json")).unwrap();
         let field_text = |text: &str, field: &str| {

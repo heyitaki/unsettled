@@ -217,21 +217,40 @@ mod tests {
     #[test]
     fn top_crowding_counts_pairs_at_distance_two_and_three_only() {
         let (mut wire, topology) = fixture();
-        wire.hexes[29].number_token = Some(10.0);
+        wire.players.truncate(2);
+        for hex in &mut wire.hexes {
+            if hex.number_token.is_some() { hex.number_token = Some(2.0); }
+        }
+        wire.hexes[7].number_token = Some(6.0);
+        wire.hexes[14].number_token = Some(6.0);
         let board = board(wire, &topology);
-        assert_eq!(distances(&topology, 29)[14], 2);
-        assert_eq!(distances(&topology, 3)[15], 3);
-        assert_eq!(distances(&topology, 29)[3], 4);
-        assert_eq!(TerrainFeatures::read(&board, &topology).top_crowding, 9);
+
+        // Two five-pip hexes give vertices 0, 6, 7 and 14 seven pips each.
+        // Their six pair distances are 2, 1, 3, 1, 5 and 4.
+        let mut ranked = (0..topology.vertex_count()).map(|vertex| {
+            let total = topology.vertex_hexes(vertex as Vertex).iter()
+                .map(|hex| board.tokens()[*hex as usize].map_or(0, |token| pips(token) as u16)).sum::<u16>();
+            (vertex, total)
+        }).collect::<Vec<_>>();
+        ranked.sort_by_key(|(vertex, total)| (std::cmp::Reverse(*total), *vertex));
+        assert_eq!(&ranked[..4], &[(0, 7), (6, 7), (7, 7), (14, 7)]);
+        for (a, b, distance) in [(0, 6, 2), (0, 7, 1), (0, 14, 3),
+            (6, 7, 1), (6, 14, 5), (7, 14, 4)] {
+            assert_eq!(distances(&topology, a)[b], distance);
+        }
+        assert_eq!(TerrainFeatures::read(&board, &topology).top_crowding, 2);
     }
 
     #[test]
     fn road_readiness_follows_the_cards_a_second_settlement_is_paid() {
         let (wire, topology) = fixture();
         let original = board(wire.clone(), &topology);
-        for (vertex, expected) in [(3, 2), (1, 1), (8, 1), (5, 0), (27, 0)] {
+        for (vertex, expected) in [(3, 2), (1, 1), (8, 1), (5, 0), (27, 0), (0, 0)] {
             assert_eq!(road_readiness(&original, &topology, vertex), expected, "{vertex}");
         }
+        let resources = topology.vertex_hexes(0).iter()
+            .filter_map(|hex| original.tiles()[*hex as usize]).collect::<Vec<_>>();
+        assert_eq!(resources, [Resource::Sheep, Resource::Sheep, Resource::Ore]);
         let swap = |wire: &mut WireBoard, a: usize, b: usize| {
             let (tile, token) = (wire.hexes[a].tile, wire.hexes[a].number_token);
             wire.hexes[a].tile = wire.hexes[b].tile;

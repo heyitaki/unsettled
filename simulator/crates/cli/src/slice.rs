@@ -541,7 +541,9 @@ mod tests {
 
     #[test]
     fn race_table_keeps_slots_separate_and_empty_sets_have_null_statistics() {
-        let dir = fixture(3, 4, 2, &["base", "arm"], |_, _, _, _| false);
+        let dir = fixture(3, 4, 2, &["base", "arm"], |board, _, rep, arm| {
+            if arm == 0 { board == 1 } else { board == 0 || (board == 2 && rep == 0) }
+        });
         edit_csv(&dir, |rows| {
             for row in &mut rows[1..] {
                 let board = row[0].parse::<usize>().unwrap();
@@ -556,26 +558,26 @@ mod tests {
         let mut index = 0;
         for slot in 0..4 {
             let expected = if slot == 0 {
-                vec![("heroReady>=2", 2), ("heroReady<2", 4)]
+                vec![("heroReady>=2", 2, 1, 0), ("heroReady<2", 4, 2, 2)]
             } else {
-                vec![("readyAhead>=1", 2), ("readyAhead<1", 4),
-                    ("readyAheadTrade>=1", 4), ("readyAheadTrade<1", 2),
-                    ("heroReady>=2", if slot == 3 { 6 } else { 2 }),
-                    ("heroReady<2", if slot == 3 { 0 } else { 4 })]
+                vec![("readyAhead>=1", 2, 2, 0), ("readyAhead<1", 4, 1, 2),
+                    ("readyAheadTrade>=1", 4, 2, 2), ("readyAheadTrade<1", 2, 1, 0),
+                    if slot == 3 { ("heroReady>=2", 6, 3, 2) } else { ("heroReady>=2", 2, 1, 0) },
+                    if slot == 3 { ("heroReady<2", 0, 0, 0) } else { ("heroReady<2", 4, 2, 2) }]
             };
-            for (rule, count) in expected {
+            for (rule, count, b, c) in expected {
                 let row = &report.race_table[index];
                 assert_eq!(row.slot, slot);
                 assert_eq!(row.rule, rule);
                 assert_eq!(row.fired_units, count);
-                assert_eq!(row.total_gain, 0.0);
+                assert_eq!(row.total_gain, (b as f64 - c as f64) / 24.0);
                 if count == 0 {
                     assert!(serde_json::to_value(row).unwrap()["stats"].is_null());
                 } else {
                     let stats = row.stats.as_ref().unwrap();
                     assert_eq!(stats.n, count);
                     assert_eq!(stats.clusters, count / 2);
-                    assert_eq!((stats.b, stats.c), (0, 0));
+                    assert_eq!((stats.b, stats.c), (b, c));
                 }
                 index += 1;
             }

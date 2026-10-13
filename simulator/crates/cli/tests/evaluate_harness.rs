@@ -892,6 +892,40 @@ fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
     }
 }
 
+#[test]
+fn units_are_identical_across_chunk_sizes_and_thread_counts() {
+    let arms = [("base".into(), PlacementKind::MaxPips), ("other".into(), PlacementKind::PipDiversity)];
+    let specs = ["max_pips".into(), "pip_diversity".into()];
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("units-chunks.csv");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut expected = None;
+    for threads in [1, 3] {
+        for chunk in [1, 2, 5] {
+            let evaluation = evaluate_in_chunks(EvaluateRequest {
+                layout: Layout::Standard4, seats: 4, domain: EvaluationDomain::Tuning,
+                field_spec: "max_pips", field: PlacementKind::MaxPips, arms: &arms, arm_specs: &specs,
+                arm_policies: &[None, None], arm_policy_names: &[None, None], reference: Some("base"),
+                boards: 5, reps: 1, policy: PolicyKind::RandomLegal, policy_name: "random-legal",
+                player_trading: None, threshold: 0.005, alpha: 0.05, threads, allow_unofficial: false,
+                units: Some(&path), where_rule: None,
+            }, chunk).unwrap();
+            let csv = std::fs::read(&path).unwrap();
+            let text = std::str::from_utf8(&csv).unwrap();
+            let rows = text.lines().skip(1).map(|line| line.split(',').collect::<Vec<_>>()).collect::<Vec<_>>();
+            assert_eq!(rows.len(), 20);
+            assert!((0..4).any(|seat| (1..5).any(|board| rows[seat][7..10] != rows[4 * board + seat][7..10])),
+                "race readings must differ between boards at the same seat");
+            let actual = (csv, serde_json::to_vec_pretty(&evaluation).unwrap());
+            if let Some(expected) = &expected {
+                assert_eq!(&actual, expected, "chunk {chunk}, threads {threads}");
+            } else {
+                expected = Some(actual);
+            }
+        }
+    }
+    std::fs::remove_file(path).unwrap();
+}
+
 fn filtered_chunks(rule: &str, chunk: usize) -> Result<unsettled_sim::evaluate::Evaluation, String> {
     let weights: EngineWeights =
         serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
@@ -921,8 +955,14 @@ fn a_where_run_is_the_same_at_every_chunk_size() {
     values.sort_unstable();
     assert!(values.iter().any(|value| *value < values[3]));
     let rule = format!("roadPips>={}", values[3]);
-    assert_eq!(serde_json::to_vec_pretty(&filtered_chunks(&rule, 1).unwrap()).unwrap(),
-        serde_json::to_vec_pretty(&filtered_chunks(&rule, 6).unwrap()).unwrap());
+    let single = filtered_chunks(&rule, 1).unwrap();
+    let whole = filtered_chunks(&rule, 6).unwrap();
+    for evaluation in [&single, &whole] {
+        let fired = evaluation.config.fired_units.unwrap();
+        assert!(fired > 0 && fired < evaluation.config.units);
+    }
+    assert_eq!(serde_json::to_vec_pretty(&single).unwrap(),
+        serde_json::to_vec_pretty(&whole).unwrap());
 }
 
 #[test]
