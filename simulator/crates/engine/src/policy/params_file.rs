@@ -1769,7 +1769,7 @@ mod tests {
         ("flat_75", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.75)]),
         ("reprice_only", &[2, 3, 4, 5, 6], &[("/repriceFirstExpansion", 1.0)]),
         // Second stage: each seat count's best flat arm at its last reading, with the re-pricing on.
-        ("flat_reprice", &[4], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
+        ("flat_reprice", &[3, 4], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
         ("flat_reprice", &[5], &[("/contestWeight", 0.5), ("/repriceFirstExpansion", 1.0)]),
         ("flat_reprice", &[6], &[("/contestWeight", 0.75), ("/repriceFirstExpansion", 1.0)]),
     ];
@@ -2178,8 +2178,8 @@ mod tests {
         }
         assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
-            weights_arms, 100,
-            "the committed weights arms are 100 files; a change to the set is a decision"
+            weights_arms, 101,
+            "the committed weights arms are 101 files; a change to the set is a decision"
         );
     }
 

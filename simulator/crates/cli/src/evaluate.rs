@@ -54,6 +54,12 @@ pub const GATE4_SEED: u64 = 0x6a74_5eed_2026_1010;
 /// Cut-off adoption gate, with the seat count folded in as in generation four.
 pub const GATE5_SEED: u64 = 0x6a75_5eed_2026_1012;
 
+/// Board-strategy domains, with the seat count folded in as in generation four.
+pub const TUNING5_SEED: u64 = 0x7a15_5eed_2026_1013;
+pub const TUNING6_SEED: u64 = 0x7a16_5eed_2026_1013;
+pub const EVAL5_SEED: u64 = 0xe7a5_5eed_2026_1013;
+pub const GATE6_SEED: u64 = 0x6a76_5eed_2026_1013;
+
 /// Performance-only domain, disjoint from every evaluation generation. Reusable for
 /// timing and deterministic benchmark fixtures, never for screening or adoption evidence.
 pub const PERF_SEED: u64 = 0x9e4f_5eed_2026_1010;
@@ -73,6 +79,10 @@ const _: () = {
         EVAL4_SEED,
         GATE4_SEED,
         GATE5_SEED,
+        TUNING5_SEED,
+        TUNING6_SEED,
+        EVAL5_SEED,
+        GATE6_SEED,
         PERF_SEED,
     ];
     let mut left = 0;
@@ -101,6 +111,10 @@ pub enum EvaluationDomain {
     Eval4,
     Gate4,
     Gate5,
+    Tuning5,
+    Tuning6,
+    Eval5,
+    Gate6,
     /// Repeatable for timing and memory readings without spending a held-out domain; outcomes are never evidence.
     Perf,
 }
@@ -121,6 +135,10 @@ impl EvaluationDomain {
             "eval4" => Ok(Self::Eval4),
             "gate4" => Ok(Self::Gate4),
             "gate5" => Ok(Self::Gate5),
+            "tuning5" => Ok(Self::Tuning5),
+            "tuning6" => Ok(Self::Tuning6),
+            "eval5" => Ok(Self::Eval5),
+            "gate6" => Ok(Self::Gate6),
             "perf" => Ok(Self::Perf),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
@@ -141,6 +159,10 @@ impl EvaluationDomain {
             Self::Eval4 => "eval4",
             Self::Gate4 => "gate4",
             Self::Gate5 => "gate5",
+            Self::Tuning5 => "tuning5",
+            Self::Tuning6 => "tuning6",
+            Self::Eval5 => "eval5",
+            Self::Gate6 => "gate6",
             Self::Perf => "perf",
         }
     }
@@ -160,6 +182,10 @@ impl EvaluationDomain {
             Self::Eval4 => mix64(EVAL4_SEED ^ seats as u64),
             Self::Gate4 => mix64(GATE4_SEED ^ seats as u64),
             Self::Gate5 => mix64(GATE5_SEED ^ seats as u64),
+            Self::Tuning5 => mix64(TUNING5_SEED ^ seats as u64),
+            Self::Tuning6 => mix64(TUNING6_SEED ^ seats as u64),
+            Self::Eval5 => mix64(EVAL5_SEED ^ seats as u64),
+            Self::Gate6 => mix64(GATE6_SEED ^ seats as u64),
             Self::Perf => mix64(PERF_SEED ^ seats as u64),
         }
     }

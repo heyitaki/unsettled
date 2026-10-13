@@ -7,9 +7,9 @@ use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::topology::Layout;
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
-    EVAL2_SEED, EVAL3_SEED, EVAL4_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain,
-    GATE2_SEED, GATE3_SEED, GATE4_SEED, GATE5_SEED, GATE_SEED, PERF_SEED, TUNING2_SEED, TUNING3_SEED, TUNING4_SEED,
-    TUNING_SEED, evaluate, evaluate_in_chunks, evaluation_schedule,
+    EVAL2_SEED, EVAL3_SEED, EVAL4_SEED, EVAL5_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain,
+    GATE2_SEED, GATE3_SEED, GATE4_SEED, GATE5_SEED, GATE6_SEED, GATE_SEED, PERF_SEED, TUNING2_SEED, TUNING3_SEED, TUNING4_SEED,
+    TUNING5_SEED, TUNING6_SEED, TUNING_SEED, evaluate, evaluate_in_chunks, evaluation_schedule,
     summarize_arm,
 };
 
@@ -556,7 +556,7 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
             .collect::<Vec<_>>()
     };
 
-    // Compare the nine old domains and all twenty-five seat-derived seeds on both
+    // Compare the nine old domains and all 45 seat-derived seeds on both
     // layouts, including boards at different indices that a bare seat xor would overlap.
     let mut domains = [
         ("tuning", TUNING_SEED),
@@ -577,6 +577,10 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
         EvaluationDomain::Eval4,
         EvaluationDomain::Gate4,
         EvaluationDomain::Gate5,
+        EvaluationDomain::Tuning5,
+        EvaluationDomain::Tuning6,
+        EvaluationDomain::Eval5,
+        EvaluationDomain::Gate6,
         EvaluationDomain::Perf,
     ] {
         for seats in 2..=6 {
@@ -586,6 +590,10 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
     let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {
         for (right_name, right) in &domains[index + 1..] {
+            assert!(
+                (*left ^ *right) >= 1 << 21,
+                "{left_name} and {right_name} overlap within 2^21 board indices"
+            );
             assert!(
                 seeds(*left).is_disjoint(&seeds(*right)),
                 "{left_name} and {right_name} share evaluation seeds"
@@ -637,11 +645,11 @@ fn seat_count_changes_a_fourth_generation_domains_boards() {
     }
 }
 
-/// The fourteen spellings the CLI parses, and the one it must not.
+/// The eighteen spellings the CLI parses, and the one it must not.
 ///
 /// `EvaluationDomain::seed` is the only place a run's whole seed stream is chosen, so a
 /// domain that parses to the wrong constant would silently spend a held-out set. The
-/// unknown case is pinned too: a typo like `tuning5` has to fail rather than fall back.
+/// unknown case is pinned too: a typo like `tuning7` has to fail rather than fall back.
 #[test]
 fn every_evaluation_domain_parses_to_its_own_named_seed() {
     let expected = [
@@ -668,6 +676,10 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
         ("eval4", EvaluationDomain::Eval4, EVAL4_SEED),
         ("gate4", EvaluationDomain::Gate4, GATE4_SEED),
         ("gate5", EvaluationDomain::Gate5, GATE5_SEED),
+        ("tuning5", EvaluationDomain::Tuning5, TUNING5_SEED),
+        ("tuning6", EvaluationDomain::Tuning6, TUNING6_SEED),
+        ("eval5", EvaluationDomain::Eval5, EVAL5_SEED),
+        ("gate6", EvaluationDomain::Gate6, GATE6_SEED),
         ("perf", EvaluationDomain::Perf, PERF_SEED),
     ] {
         assert_eq!(EvaluationDomain::parse(spelling), Ok(domain));
@@ -693,8 +705,8 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
     }
 
     assert_eq!(
-        EvaluationDomain::parse("tuning5"),
-        Err("unknown evaluation domain tuning5".to_string())
+        EvaluationDomain::parse("tuning7"),
+        Err("unknown evaluation domain tuning7".to_string())
     );
 }
 
@@ -725,6 +737,61 @@ fn gate5_seeds_are_pinned_and_boards_depend_only_on_index_and_seats() {
             };
             assert_eq!(ports(&board), ports(&boards[index]));
             assert_eq!(board.seats(), seats);
+        }
+    }
+}
+
+#[test]
+fn the_fifth_and_sixth_generation_seeds_are_pinned_and_boards_depend_only_on_index_and_seats() {
+    for (domain, seeds) in [
+        (EvaluationDomain::Tuning5, [
+            9749611205506466981,
+            6585542083186182294,
+            10047352188316269934,
+            10106711019344858928,
+            9141560125848139032_u64,
+        ]),
+        (EvaluationDomain::Tuning6, [
+            6987785089044613290,
+            3891242770353448390,
+            10216551319237103558,
+            9901259806954877661,
+            2767015885771881090_u64,
+        ]),
+        (EvaluationDomain::Eval5, [
+            17534200639746944500,
+            11873229744119493496,
+            17487792558230500384,
+            3197586571723816237,
+            2123246737809549434_u64,
+        ]),
+        (EvaluationDomain::Gate6, [
+            1851724665474058977,
+            6375351681707477482,
+            9829167109056116078,
+            4024240259393574906,
+            3354919913705565985_u64,
+        ]),
+    ] {
+        for (seats, seed) in (2..=6).zip(seeds) {
+            assert_eq!(domain.seed(seats), seed);
+            let layout = if seats <= 4 { Layout::Standard4 } else { Layout::Extension6 };
+            let boards = (0..5).map(|index| {
+                generate_board(layout, seats, mix64(seed ^ index)).unwrap()
+            }).collect::<Vec<_>>();
+            for index in [4, 0, 2, 1, 3] {
+                let board = generate_board(
+                    layout, seats, mix64(domain.seed(seats) ^ index as u64),
+                ).unwrap();
+                assert_eq!(board.tiles(), boards[index].tiles());
+                assert_eq!(board.tokens(), boards[index].tokens());
+                let ports = |board: &unsettled_engine::board::SimBoard| {
+                    board.ports().iter().map(|port| (port.edge, port.resource, port.rate))
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(ports(&board), ports(&boards[index]));
+                assert_eq!(board.seats(), seats);
+            }
         }
     }
 }
