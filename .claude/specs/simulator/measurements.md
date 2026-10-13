@@ -3515,3 +3515,48 @@ The two final placement comparisons also reverse binary order. Full-draft change
 **What is left.** The four-seat analysis row has 0.141 ms of headroom under its cap, and loaded runs cross that cap. The six-seat rows have more room. The remaining work includes exact mask filtering and site pricing, plus the roads each rollout must choose and lay. The general walk remains available for multiple owned edges. No scoring approximation or output change is used to meet a timing target.
 
 **Scope.** Only `expansion.rs`, `app_formula.rs`, `analysis/window.rs`, their new adjacent tests, the rebuilt wasm and its source hash, and this entry change. Fixture, weight and topology bytes stay unchanged. The sweep test and golden file stay unchanged.
+
+## M-92: reuse turn-loop production, legality and trade offers
+
+2026-10-13, baseline is `engine-speed` after M-91, candidate is the local result. No seed domain: `bench` uses `PERF_SEED`. **Admissible: yes for unchanged fixtures, recap totals, raw wasm responses and reference assertions. Local wall times remain affected by host contention. The final artifact has not demonstrated the 78 ms recap cap.**
+
+**What changes without moving output bits.** Production pips reuse a content key of layout, tile/token arrays, building ownership and tiers, and robber. Per-seat legality masks reuse layout, ownership arrays and piece pools. Offer scores reuse exact proposer/recipient ETW inputs, observer and all trade parameters. The offer memo holds one result and releases its borrow before callbacks. Other memos use `try_borrow_mut` with reference fallbacks. Legal road and settlement scans visit set bits in their original ascending order. Membership tests select a 64-bit word before shifting. Each path compares with its reference in debug and test builds.
+
+**Counters.** Means per game over the same 50-game recap request, before/after, in a release native driver unless marked wasm. Distinct-input sets use content, never addresses; some helpers conservatively include the full public view. Temporary source and scratch-wasm counters are removed from the final tree.
+
+| Work per game | Before | After |
+| --- | ---: | ---: |
+| Production requests / fresh calculations | 8,374.52 / 3,354.62 | 8,374.52 / 157.96 |
+| Road-mask builds | 495.74 | 76.94 |
+| Settlement-mask builds | 500.74 | 77.40 |
+| Build-site calculations | 492.42 | 144.74 |
+| Offer requests / full pricing passes | 208.50 / 208.50 | 208.50 / 132.68 |
+| Legal-road calls | 34,577.56 | 148.60 |
+| Legal-settlement calls | 27,032.08 | 2,465.32 |
+| ETW hand estimates | 5,610.74 | 3,794.66 |
+| Trade benefits | 4,776.74 | 3,036.48 |
+| wasm `__ashlti3` / `__lshrti3` | 53,094.72 / 136,765.40 | 26,371.24 / 1,788.48 |
+| wasm `memcmp` | 1,822.62 | 12,270.50 |
+
+The remaining 3,383.62 `expected_turns_to_win` calls contain 1,104.30 distinct inputs, and 1,911.64 repeat within a turn. A trial 64-slot whole-input memo increases recap time and is removed. The existing per-decision ETW preparation remains. Road scoring, vertex terms and longest-road network counts do not change. Cache-key comparisons increase, but replace board scans and complete offer-pricing passes.
+
+**Timing.** The supplied `time.mjs` runs unchanged against `base.wasm` and the candidate. Before any edit, its recap rows are 90.8 / 90.4 ms, load `5.62 5.83 7.34`. The first final-artifact run gives 106.5 / 91.1 ms, load `14.07 15.94 14.47`, with no `DIFFERS`. The last run gives 102.3 / 90.5 ms at load `17.27 15.58 14.95`. Final-artifact recap repeats range from 88.8 to 108.4 ms while the unchanged reference ranges from 102.3 to 134.5 ms. An earlier candidate measures 77.1 ms at load `7.13 7.02 8.85`; a subsequent reference-assertion fix requires a fresh final-artifact timing, so that earlier result does not establish acceptance.
+
+Five-repeat native benches run before edits and after the final source change. Initial/final e2e medians in ms are 2.121 / 3.320 (four seats, one core), 0.243 / 0.400 (four, all cores), 5.917 / 8.374 (six, one core), and 0.675 / 0.858 (six, all cores). Initial/final loads are `5.48 5.77 7.26` / `13.92 15.73 14.45`. Advise loads are `6.65 6.03 7.30` / `13.92 15.73 14.45`; placement loads are `6.21 5.97 7.24` / `13.92 15.70 14.44`. These unpaired times do not establish a regression or a gain.
+
+Matched 200-game e2e runs give final/baseline changes of -5.52%, -13.39%, -8.06% and -14.29% in the same row order. Reversing binary order gives +3.26%, +7.47%, +8.56% and +5.99%. Loads are `14.98 14.92 14.42` / `14.84 14.89 14.41` for the first pair and `15.88 15.63 14.79` / `15.97 15.66 14.81` for the reversed pair. Advice and unchanged placement timings also swing with run order. A quiet matched run remains necessary to establish the performance gates.
+
+**Identity and faults.** `cargo test` passes 809 tests and `cargo test --release` passes 781, each with 15 ignored. All zero-allocation tests pass. The wasm build and `--check`, typecheck and lint pass. Engine vitest passes 267 tests with one skipped; the separate golden run prints `384 states, 0 moved`. All six recap parallelism runs print `{"p1":442,"p2":36,"p3":66,"p4":456} same`. All 244 protected fixture, weight and topology files remain byte-identical. Existing tests are unchanged.
+
+| New test | Deliberate fault, assertion failure before restoration |
+| --- | --- |
+| `mask_membership_matches_u128_at_every_index` | Select the upper word from bit 32 instead of 64. |
+| `production_memo_follows_holdings_robber_and_board_content` | Keep values after the content key changes. |
+| `legality_memo_follows_owners_layout_and_piece_pools` | Omit edge ownership from the key. |
+| `offer_memo_tracks_hands_recipients_parameters_and_observer` | Ignore proposer and recipient inputs. |
+| `road_scan_uses_legal_edges_in_reference_order` | Skip the first legal edge. |
+| `settlement_scan_uses_legal_vertices_in_reference_order` | Skip the first legal vertex. |
+
+**Scope.** `view.rs`, `policy/heuristic_v1.rs`, `policy/heuristic_v1_trader.rs`, their six adjacent tests, the rebuilt wasm/hash, and this entry. No placement code, fixture or scoring formula changes. All counters and deliberate faults are removed.
+
+**Quiet-window result, measured by the main session after the round.** The committed and candidate wasm alternated twice in Node at load 7: the 50-game recap takes 92.1 and 91.4 ms on the committed build and 76.5 and 77.1 ms on the candidate, 16% less and under the 78 ms target; a third pair after the last edit gave 89.9 and 75.4 ms. 1,000 games in one wasm thread fall from 1.9 s to 1.6 s. Native `e2e/` medians at the same load: 2.10 and 5.73 ms a game at four and six seats, against 2.12 and 5.92 before. The `advise/` and `placement/` rows did not move. One edit followed the round and changes no output: the offer memo's parameter key destructures `TradeParams` with no rest pattern, so a parameter added to the struct cannot be left out of the key.

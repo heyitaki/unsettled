@@ -917,15 +917,32 @@ fn best_scored_vertex(
     params: &HeuristicParams,
     kind: BuildKind,
 ) -> Option<(u8, f32)> {
+    let result = match kind {
+        BuildKind::Settlement => best_vertex_on_sites(view, params, kind, view.legal_settlement_vertices()),
+        BuildKind::City => best_vertex_on_sites(view, params, kind,
+            (0..view.topology().vertex_count() as u8).filter(|vertex| view.legal_city(*vertex))),
+    };
+    #[cfg(any(debug_assertions, test))]
+    {
+        let reference = best_vertex_on_sites(view, params, kind,
+            (0..view.topology().vertex_count() as u8).filter(|vertex| match kind {
+                BuildKind::Settlement => view.legal_settlement(*vertex),
+                BuildKind::City => view.legal_city(*vertex),
+            }));
+        let bits = |(vertex, score): (u8, f32)| (vertex, score.to_bits());
+        assert_eq!(result.map(bits), reference.map(bits));
+    }
+    result
+}
+
+fn best_vertex_on_sites(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    kind: BuildKind,
+    vertices: impl Iterator<Item = u8>,
+) -> Option<(u8, f32)> {
     let mut best = None;
-    for vertex in (0..view.topology().vertex_count()).map(|vertex| vertex as u8) {
-        let legal = match kind {
-            BuildKind::Settlement => view.legal_settlement(vertex),
-            BuildKind::City => view.legal_city(vertex),
-        };
-        if !legal {
-            continue;
-        }
+    for vertex in vertices {
         let score = vertex_score(view, vertex, params, kind);
         if score.is_finite() && best.is_none_or(|(_, current)| score > current) {
             best = Some((vertex, score));
@@ -943,18 +960,34 @@ fn best_road(
     params: &HeuristicParams,
     gated: Gated<'_>,
 ) -> Option<RoadGoal> {
+    // The trail search is the dominant cost of a decision, so the graph it walks is built once
+    // here and probed per candidate, and not at all when the card is out of reach.
+    let mut network = longest_road_reachable(view, 1, gated).then(|| view.road_network());
+    #[cfg(any(debug_assertions, test))]
+    let mut reference_network = network.clone();
+    let result = best_road_on_edges(view, params, gated, network.as_mut(), view.legal_road_edges());
+    #[cfg(any(debug_assertions, test))]
+    {
+        let reference = best_road_on_edges(view, params, gated, reference_network.as_mut(),
+            (0..view.topology().edge_count() as u8).filter(|edge| view.legal_road(*edge)));
+        let bits = |goal: RoadGoal| (goal.edge, goal.action_score.to_bits(), goal.goal_score.to_bits());
+        assert_eq!(result.map(bits), reference.map(bits));
+    }
+    result
+}
+
+fn best_road_on_edges(
+    view: &DecisionView<'_>,
+    params: &HeuristicParams,
+    gated: Gated<'_>,
+    mut network: Option<&mut crate::longest_road::RoadNetwork>,
+    edges: impl Iterator<Item = u8>,
+) -> Option<RoadGoal> {
     let mut best = None;
     let mut scores = [None; crate::state::MAX_VERTICES];
 
-    // The trail search is the dominant cost of a decision, so the graph it walks is built once
-    // here and probed per candidate -- and not at all when the card is out of reach.
-    let mut network = longest_road_reachable(view, 1, gated).then(|| view.road_network());
     let cap = road_length_cap(view, gated);
-    for edge in 0..view.topology().edge_count() {
-        let edge = edge as u8;
-        if !view.legal_road(edge) {
-            continue;
-        }
+    for edge in edges {
         let expansion_score = expansion_road_score_with(view, edge, |vertex| {
             *scores[usize::from(vertex)].get_or_insert_with(|| {
                 vertex_score(view, vertex, params, BuildKind::Settlement)
@@ -2332,5 +2365,49 @@ mod devcards_rate_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod road_scan_tests {
+    use super::*;
+
+    #[test]
+    fn settlement_scan_uses_legal_vertices_in_reference_order() {
+        let (topology, board, mut arena) = crate::etw::tests::fixture();
+        let params = HeuristicParams::default();
+        let mut ranked = 0;
+        for vertex in 0..topology.vertex_count() {
+            arena.state.vertex_owner[vertex] = crate::state::EMPTY;
+            for seat in 0..board.seats() {
+                arena.state.players[seat].pieces[Buildable::Settlement.index()] = 2;
+                let view = arena.decision_view(&board, &topology, seat, crate::view::DecisionPhase::Action);
+                let expected: Vec<_> = (0..topology.vertex_count() as u8)
+                    .filter(|vertex| view.legal_settlement(*vertex)).collect();
+                assert_eq!(view.legal_settlement_vertices().collect::<Vec<_>>(), expected);
+                ranked += usize::from(best_scored_vertex(&view, &params, BuildKind::Settlement).is_some());
+            }
+        }
+        assert!(ranked > 0);
+    }
+
+    #[test]
+    fn road_scan_uses_legal_edges_in_reference_order() {
+        let (topology, board, mut arena) = crate::etw::tests::fixture();
+        let params = HeuristicParams::default();
+        let mut ranked = 0;
+        for variant in 0..32 {
+            let edge = variant % topology.edge_count();
+            arena.state.edge_owner[edge] = if variant % 3 == 0 { 0 } else { crate::state::EMPTY };
+            for seat in 0..board.seats() {
+                arena.state.players[seat].pieces[Buildable::Road.index()] = 2;
+                let view = arena.decision_view(&board, &topology, seat, crate::view::DecisionPhase::Action);
+                let expected: Vec<_> = (0..topology.edge_count() as u8)
+                    .filter(|edge| view.legal_road(*edge)).collect();
+                assert_eq!(view.legal_road_edges().collect::<Vec<_>>(), expected);
+                ranked += usize::from(best_road(&view, &params, None).is_some());
+            }
+        }
+        assert!(ranked > 0);
     }
 }
