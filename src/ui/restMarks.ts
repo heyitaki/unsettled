@@ -18,5 +18,6 @@ export function restingMarks(board: Board, analysis: DraftAnalysis, playerId = b
     ref: recommendation.firstPick,
     color: player.color,
     label: String(index + 1),
+    placeable: true,
   }))
 }

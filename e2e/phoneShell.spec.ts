@@ -445,7 +445,7 @@ test.describe('build mode', () => {
   })
 })
 
-test('a single tap outside build mode places a draft settlement on a board with tiles', async ({ page }) => {
+test('outside build mode a draft tap places a settlement only on a Best picks circle', async ({ page }) => {
   await open(page)
   const player = UNCLAIMED_ROSTER[0]
   const board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
@@ -453,19 +453,34 @@ test('a single tap outside build mode places a draft settlement on a board with 
   await expect(page.getByRole('button', { name: 'Edit the board' })).toHaveAttribute('aria-pressed', 'false')
   await expect(page.locator('.phone-build')).toHaveCount(0)
   const svg = page.locator('.board-canvas')
-  const dot = svg.locator('.placement-slot').first()
-  await expect(dot).toBeVisible()
-  await expect(dot).toHaveAttribute('fill', player.color)
-  const corner = await dot.evaluate((dot) => ({ x: Number(dot.getAttribute('cx')), y: Number(dot.getAttribute('cy')) }))
-  const point = await svg.evaluate((element, corner) => {
-    const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
-    return { x: point.x, y: point.y }
-  }, corner)
-  await page.touchscreen.tap(point.x, point.y)
+  const marks = svg.locator('.vertex-highlight')
+  await expect(marks).toHaveCount(LISTED_PICKS, { timeout: 60_000 })
+  await expect(svg.locator('.placement-slot')).toHaveCount(0)
+  const marked = await marks.evaluateAll((marks) => marks.map((mark) => ({ x: Number(mark.getAttribute('cx')), y: Number(mark.getAttribute('cy')) })))
+  const tapCorner = async (corner: { x: number; y: number }) => {
+    const point = await svg.evaluate((element, corner) => {
+      const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+      return { x: point.x, y: point.y }
+    }, corner)
+    await page.touchscreen.tap(point.x, point.y)
+  }
   const buildings = svg.locator('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g')
+  // A legal corner out of reach of every circle: nothing is placed there.
+  const bare = buildingSlots(board, player.id, 'settlement', 'edit').map((ref) => {
+    const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
+    return { x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
+  }).find((corner) => marked.every((mark) => Math.hypot(mark.x - corner.x, mark.y - corner.y) > 58))!
+  await tapCorner(bare)
+  const corner = marked[0]
+  await tapCorner(corner)
   await expect(buildings).toHaveCount(1)
   await expect(buildings).toHaveAttribute('fill', player.color)
   await expect(buildings).toHaveAttribute('transform', `translate(${corner.x} ${corner.y}) scale(0.8)`)
+  // Away from the circles a double tap still zooms, and places nothing.
+  await tapCorner(bare)
+  await tapCorner(bare)
+  await expect(page.locator('.board-zoom')).toContainText('2.5×')
+  await expect(buildings).toHaveCount(1)
 })
 
 test('double tapping the board outside build mode still zooms', async ({ page }) => {

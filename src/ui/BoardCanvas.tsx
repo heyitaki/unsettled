@@ -305,7 +305,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const draftComplete = draftIsComplete(board, draft)
   const viewedSlot = state.viewedPick ?? draft.myRemainingPickIndices[0]
 
-  // With the tools closed, a draft tap places only the viewed player's settlement.
+  // With the tools closed, a draft tap places only the viewed player's settlement, and only on a Best picks circle.
   const draftPlayer = !pick && state.tool.kind === 'none' && !draftComplete &&
     board.hexes.some((hex) => hex.tile !== null) && draft.remainingPickIndices.includes(viewedSlot)
     ? draft.sequence[viewedSlot] : null
@@ -314,8 +314,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
     if (state.tool.kind !== 'piece' && draftPlayer === null) return []
     const occupied = new Set(board.buildings.map((building) => building.vertexId))
-    return buildingSlots(board, placementPlayer, 'settlement', 'edit').filter((vertexId) => !occupied.has(vertexId))
-  }, [state.tool, board, placementPlayer, pick, draftPlayer])
+    // Not a planned second pick, a contest ring or a likely-gone pick: only a mark that says so.
+    const circles = draftPlayer === null ? null
+      : new Set(highlight.filter((mark) => mark.placeable).map((mark) => mark.ref))
+    return buildingSlots(board, placementPlayer, 'settlement', 'edit')
+      .filter((vertexId) => !occupied.has(vertexId) && (circles === null || circles.has(vertexId)))
+  }, [state.tool, board, placementPlayer, pick, draftPlayer, highlight])
   const placeableEdges = useMemo<EdgeId[]>(() => {
     if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece') return []
     return roadSlots(board, placementPlayer, pick?.want === 'edge' ? pick.edges : undefined)
@@ -555,8 +559,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       onePointer.current = { ...remaining, panning: false }
     } else onePointer.current = null
     if (!wasSingleTap) return
-    // Double-tap-to-zoom only exists with the tool rows closed and no pick or
-    // draft placement live. The
+    // Double-tap-to-zoom only exists with the tool rows closed, no pick live
+    // and, in a draft, away from the Best picks circles. The
     // first tap of a pair is never suppressed — suppressing it would mean
     // holding every single placement for the full double-tap window — so with a
     // tool active a double tap would zoom *and* edit the board under the first
@@ -564,7 +568,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     // tool selected, taps place and pinch is the way to zoom. Clearing the
     // stored tap keeps one made under a tool from later pairing with a tap made
     // after the tool was dropped.
-    if (pick || state.tool.kind !== 'none' || draftPlayer !== null) {
+    if (pick || state.tool.kind !== 'none' || (draftPlayer !== null && targetAt(pointOf(event)) !== null)) {
       lastTap.current = null
       return
     }
@@ -966,7 +970,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {/* Placement affordances: legal dots, a piece preview at an empty target, or a ring. */}
           <g className="placement-layer">
             {buildActive && placeableVertices.map((vertexId) => {
-              if (vertexId === preview?.ref || (draftPlayer !== null && highlightSet.has(vertexId))) return null
+              if (vertexId === preview?.ref || draftPlayer !== null) return null
               const point = vertexPoint(vertexId)
               return <circle key={`slot:${vertexId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 4.7 : 3.6} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: vertexId, ...point })} />
             })}

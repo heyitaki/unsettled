@@ -57,6 +57,8 @@ export type Tool =
  * optionally tinted to a player's colour and stamped with a short label (a pick
  * number). Drives the coloured, numbered circles the AnalysisPanel draws. A
  * faded mark sits back from the others: a planned follow-up pick or its road.
+ * A `placeable` mark is a Best picks first pick, the one mark a draft tap
+ * places on while the tools are closed.
  *
  * `kind: 'road'` names a direction rather than a place, and it exists because a
  * road and a port are both keyed by the edge they sit on: without it the canvas
@@ -68,6 +70,7 @@ export interface HighlightMark {
   color?: string
   label?: string
   faded?: boolean
+  placeable?: boolean
   kind?: 'road' | 'hex' | 'ring'
 }
 
