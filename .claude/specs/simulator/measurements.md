@@ -3587,3 +3587,33 @@ Every `decision/*` and `advise/*` row is between 1.000 and 1.001. No row carries
 **Reading.** The highest ratio is 1.001. With both keys on, the two new cases in `analysisPerf.test.ts` (six seats, `contestWeight` 0.5, `repriceFirstExpansion` 1) rank in 62 ms and 204 ms on the build machine against the unchanged bounds of 300 ms and 1200 ms; the same boards at 0 take 33 ms and 108 ms.
 
 **Decision.** Item 2 meets requirement 19's speed proof.
+
+## M-95: 4 seats, the cut-off arms' picks reading and blind pilot
+
+**Preregistration.** [`2026-10-13-m95-seats4-picks-pilot.md`](../../../docs/plans/preregs/2026-10-13-m95-seats4-picks-pilot.md), committed as `2281c8f4` before either run. Both ran on that commit's release binary, 2026-10-13, `uptime` load 4.9 and 4.6 on 18 cores.
+
+**Picks reading** (`evaluate --picks-only`, `standard4`, 4 seats, `tuning4` at seed `8972835441189626876`, 400 boards, 1,600 drafts, no game played).
+
+| Arm | Leaf | Drafts changed | Share |
+| --- | --- | ---: | ---: |
+| `flat_25` | `contestWeight` 0.25 | 466 | 0.291 |
+| `flat_50` | `contestWeight` 0.5 | 733 | 0.458 |
+| `flat_75` | `contestWeight` 0.75 | 856 | 0.535 |
+| `reprice_only` | `repriceFirstExpansion` 1 | 102 | 0.064 |
+
+Every share is at or above 0.02, so all four arms are piloted and screened at 4 seats. The prediction put the flat arms between 5% and 30%; two of the three are above that.
+
+**Blind pilot** (the same command without the flag, 400 boards x 2 reps, 3,200 games an arm). Read from it, and nothing else: `elapsedSeconds` 2.82; `illegalActions` 0; `base` 774 wins of 3,200 with 0 draws.
+
+| Arm | Half-width | Discordant share |
+| --- | ---: | ---: |
+| `flat_25` | 0.00879 | 0.064 |
+| `flat_50` | 0.01131 | 0.107 |
+| `flat_75` | 0.01255 | 0.125 |
+| `reprice_only` | 0.00554 | 0.024 |
+
+**Stop conditions.** Neither fired. The symmetric corner is 0.25 and `base` won 0.2419, a miss of 0.0081 against an allowance of 0.0252.
+
+**Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 5,145 boards, so `B` is 5,500, where the predicted half-width is 0.00339 and the predicted wall time is 39 seconds, far under the 30 minute cap. Neither the cap nor the floor set it. Every later run at 4 seats uses it: the screen at 5,500 boards, a retry, the confirm and the gate at 22,000.
+
+**Ledger.** `tuning4` is spent at 4 seats.
