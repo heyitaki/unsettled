@@ -598,9 +598,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   // Capture is released implicitly just after pointerup/pointercancel, which
   // already pruned the id — so an id still here has lost its capture without any
   // end event (system gesture, backgrounded tab) and would otherwise be stuck in
-  // the map forever, jamming taps and clicks.
+  // the map forever, jamming taps and clicks. A touch is captured implicitly by
+  // the hex or piece it lands on, so the svg taking it over for a pinch or pan
+  // fires this from that child while the svg already holds the pointer: that
+  // is a hand-over, not a loss.
   const onLostCapture = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (!pointers.current.has(event.pointerId)) return
+    if (!pointers.current.has(event.pointerId) || event.currentTarget.hasPointerCapture(event.pointerId)) return
     cancelPointer(event)
   }
   useEffect(() => {

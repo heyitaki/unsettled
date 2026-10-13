@@ -500,6 +500,36 @@ test('double tapping the board outside build mode still zooms', async ({ page })
   await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
 })
 
+test('a pinch and a one-finger pan follow fingers that land on the hexes', async ({ page }) => {
+  await open(page)
+  const svg = page.locator('.board-canvas')
+  const box = (await svg.boundingBox())!
+  const cdp = await page.context().newCDPSession(page)
+  const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: { x: number; y: number }[]) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((point, index) => ({ ...point, id: index + 1 })) })
+  const y = box.y + box.height / 2
+  const left = box.x + box.width * 0.4
+  const right = box.x + box.width * 0.6
+  // A real first finger moves before the second lands, which settles its implicit capture on the hex under it.
+  await touch('touchStart', [{ x: left, y }])
+  await touch('touchMove', [{ x: left - 2, y }])
+  await touch('touchStart', [{ x: left - 2, y }, { x: right, y }])
+  for (let step = 1; step <= 5; step += 1) await touch('touchMove', [{ x: left - 2 - step * 8, y }, { x: right + step * 8, y }])
+  await touch('touchEnd', [])
+  // The spread roughly doubles; a pinch that loses a finger stops at its first frame, near 1.1×.
+  await expect.poll(async () => parseFloat((await page.locator('.board-zoom').textContent())!)).toBeGreaterThan(1.5)
+  const zoomed = (await svg.getAttribute('viewBox'))!
+  await touch('touchStart', [{ x: right, y }])
+  await touch('touchMove', [{ x: right - 20, y }])
+  await expect(svg).not.toHaveAttribute('viewBox', zoomed)
+  // The pan has taken the pointer for the svg by now, and has to outlive that hand-over.
+  const started = (await svg.getAttribute('viewBox'))!
+  await touch('touchMove', [{ x: right - 40, y }])
+  await touch('touchMove', [{ x: right - 60, y }])
+  await touch('touchEnd', [])
+  await expect(svg).not.toHaveAttribute('viewBox', started)
+})
+
 test('pieces maps a coastal tap through the padded svg content box', async ({ page }) => {
   await open(page)
   const vertex: VertexId = 'v:-3,1;-2,0;-2,1'
