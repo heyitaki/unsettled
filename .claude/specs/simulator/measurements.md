@@ -4057,3 +4057,23 @@ No row carries `decisions differ` or `STATES DIFFER`.
 **Reading.** 72 of 73 rows are at or under 1.006, the cost M-115 measured for the contest term at 0. One row misses: `placement/extension6/prepare` at 1.013, 2,613 instructions more per board prepared. The merge changed no source on that path: `app_formula.rs` and `placement/mod.rs` are the branch's, where the same row read 203,974 before the merge (M-115), and `main` reads 204,293 before and after its two speed commits. So the cost is in how the merged crate compiled, as M-115's first shape was, and not in work the merge added. The row runs once per board; a six-seat ranking executes 375 million instructions.
 
 **Decision.** Requirement 1's speed clause is not met on that one row and is not waived here. It does not block the evaluator work, which touches no engine file. It is the owner's call at landing: accept 1.013 on a once-per-board row, or find the compilation difference first.
+
+## M-117: 4 seats, stage 1, always-on `flat_reprice` on `gate5`
+
+**Preregistration.** [`2026-10-13-m117-seats4-stage1-gate.md`](../../../docs/plans/preregs/2026-10-13-m117-seats4-stage1-gate.md), committed in `57914133` before the run. Ran on the box, 2026-10-13, run `20261013T201636Z-c135cd70`, one `BUILD_GENERAL1_2XLARGE` machine (Intel Xeon Platinum 8275CL, 96 vCPU), binary built there from `4e953d47` by `rustc 1.99.0`, sha256 `115b18c77aab791f8f68644ec6fab80d0c7ebf5269355136f32a2eca954ddad0`, the same bytes the `perf` launch built. `standard4`, 4 seats, `gate5` at seed `1882428495990014522` as preregistered, 1,000,000 boards x 2 reps, 8,000,000 games an arm. The job's own `perf` readings before the first `gate5` game: 4.4 seconds and 395 MB at 2,000 boards, 42.7 seconds and 408 MB at 20,000. The run took 2,131 seconds (35.5 minutes) at a peak of 679 MB (694,872 KiB), against 46 minutes and 0.65 GB predicted. `evaluation.json` sha256 `d0bd7a2add5e46c24ab271911b6faa46ad9ddbaadd651450c3fb9a3cba698bff`; a copy of the run's outputs is in `simulator/runs/m117-seats4-stage1-gate/`.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.556pp | +0.530pp to +0.582pp | `better` | 554,694, 510,221 |
+
+By first-round draft position, first picker first, 2,000,000 units each: +0.12pp (+0.07 to +0.17), +0.61pp (+0.56 to +0.66), +0.80pp (+0.75 to +0.85), +0.69pp (+0.64 to +0.74).
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 2,000,600 of 8,000,000 with 0 draws, 0.250075 against a corner of 0.25 with an allowance of 0.000504.
+
+**Decision.** `better`: the interval's lower end is +0.530pp, above the +0.5pp bar. By requirement 7, **4 seats adopts `contestWeight` 0.75 with `repriceFirstExpansion` 1**, under requirement 34 of the cut-off spec. The adoption is its own commit. `gate5` is spent at 4 seats.
+
+**Prediction against the result.** I predicted a half-width of 0.026pp, an estimate between +0.40pp and +0.70pp centred near +0.55pp, and `better` at about 55%. The half-width was 0.026pp and the estimate +0.556pp.
+
+**Reading.** This is the first held-out reading of the arm at 4 seats and it is not selected: the screening estimate of +0.64pp (M-111) regressed to +0.56pp, which is still above the bar by more than two half-widths. The gain is concentrated on the seats that pick second to fourth; the first picker gains +0.12pp. Read as rules on these units, `slot>=1` fires on 75% with a fired gain of +0.70pp and a total of +0.52pp, under the always-on total of +0.56pp, so draft position alone does not beat always-on here. The arm moves the hero's formula alone against three seats on the old vector; nothing here observes a table where every seat carries the new weights.
+
+**Ledger at this point.** `gate5` is spent at 4 seats and unspent at 2, 3, 5 and 6 (the 6-seat run, M-118, is in flight). `tuning5`, `tuning6`, `eval5` and `gate6` are unspent at every seat count.
