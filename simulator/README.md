@@ -62,6 +62,12 @@ cargo run --release -p unsettled-sim -- evaluate \
 
 Each comparison in `evaluation.json` carries a `perHeroSeat` table beside its pooled numbers, indexed by seat. What it holds, and why it is record only, is in [`contracts.md`](../.claude/specs/simulator/contracts.md) under "Paired statistics".
 
+`evaluate --units` requires `--reference` and streams `units.csv` with each unit's terrain features, reference-draft race readings and arm win indicators in command-line order. It leaves `evaluation.json` unchanged.
+
+`evaluate --where 'slot>=1&roadPips<38'` plays only matching units. Predicates use `slot`, `roadPips`, `roadPipsMin`, `spotFalloff` or `topCrowding`, with `>=` or `<`; join up to two with `&`, without spaces. Race readings cannot appear in rules. Board counts and game seeds retain their original meaning. Results add `where`, `firedUnits`, `firedShare` and `floorMet` to `config`, with `null` for inactive seats in `perHeroSeat`. A rule firing nowhere fails without a result. Neither flag combines with `--picks-only`, and the two flags cannot combine.
+
+`unsettled-sim slice --run <dir>` reads a completed run's `evaluation.json` and `units.csv` and writes repeatable `slices.json`, without playing games. It reports the fixed rule family, dropped rules, a candidate and a separate race table. Candidates must pass the +0.5pp bar at alpha 0.05 and fire on at least 20% of units. Selection maximizes total gain, breaking ties by fewer predicates, earlier arm columns, then earlier rules.
+
 Observe one placement and policy playing every seat, and read setup-time diagnostics off the games:
 
 ```sh

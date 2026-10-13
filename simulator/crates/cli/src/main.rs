@@ -39,6 +39,8 @@ enum Command {
     Tournament(TournamentArgs),
     /// Evaluate labelled hero placement arms against a fixed field.
     Evaluate(EvaluateArgs),
+    /// Score situation rules from a completed units run.
+    Slice(SliceArgs),
     /// Observe one placement and policy playing every seat, and report setup-time diagnostics.
     Diagnose(DiagnoseArgs),
     /// Simulate games from an app-exported Board JSON file.
@@ -103,7 +105,17 @@ struct SimulateArgs {
 }
 
 #[derive(Args)]
+struct SliceArgs {
+    #[arg(long)]
+    run: PathBuf,
+}
+
+#[derive(Args)]
 struct EvaluateArgs {
+    #[arg(long)]
+    units: bool,
+    #[arg(long = "where")]
+    where_rule: Option<String>,
     /// Compare ordered setup picks at rep 0 without playing games.
     #[arg(long)]
     picks_only: bool,
@@ -274,6 +286,7 @@ fn execute(cli: Cli) -> Result<(), String> {
     match cli.command {
         Command::Tournament(args) => tournament(args),
         Command::Evaluate(args) => evaluate_command(args),
+        Command::Slice(args) => unsettled_sim::slice::slice_run(&args.run).map(|_| ()),
         Command::Diagnose(args) => diagnose_command(args),
         Command::Simulate(args) => simulate(args),
         Command::Bench(args) => bench(args),
@@ -398,6 +411,7 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
     }
     let policy = parse_policy(&args.policy)?;
     let started = Instant::now();
+    let units_path = args.out.join("units.csv");
     let request = EvaluateRequest {
         layout,
         seats,
@@ -409,6 +423,8 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         arm_policies: &arm_policies,
         arm_policy_names: &arm_policy_names,
         reference: args.reference.as_deref(),
+        units: args.units.then_some(units_path.as_path()),
+        where_rule: args.where_rule.as_deref(),
         boards: args.boards,
         reps: args.reps,
         policy,
@@ -432,7 +448,8 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
     let elapsed = started.elapsed().as_secs_f64();
     let games = evaluation
         .config
-        .units
+        .fired_units
+        .unwrap_or(evaluation.config.units)
         .checked_mul(evaluation.arms.len())
         .ok_or_else(|| "evaluation game count overflow".to_string())?;
     let meta = evaluation_meta(elapsed, games, args.threads);

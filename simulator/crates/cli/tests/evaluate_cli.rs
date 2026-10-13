@@ -325,3 +325,212 @@ fn picks_only_compares_arms_and_writes_only_repeatable_picks() {
         }
     }
 }
+
+fn run_success(arguments: &[String]) {
+    let output = evaluate(&arguments.iter().map(String::as_str).collect::<Vec<_>>());
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
+fn read_evaluation(out: &Path) -> serde_json::Value {
+    serde_json::from_slice(&fs::read(out.join("evaluation.json")).unwrap()).unwrap()
+}
+
+fn units_arguments(out: &Path) -> Vec<String> {
+    let mut arguments = valid_arguments(out);
+    arguments[7] = "3".into();
+    arguments[9] = "2".into();
+    arguments.extend(["--reference", "base", "--arm", "other=pip_diversity", "--units"]
+        .map(str::to_string));
+    arguments
+}
+
+#[test]
+fn units_writes_one_row_per_unit_in_schedule_order_and_repeats_exactly() {
+    let out = output_dir("units-order");
+    let mut arguments = units_arguments(&out);
+    run_success(&arguments);
+    let csv = fs::read_to_string(out.join("units.csv")).unwrap();
+    let evaluation = fs::read(out.join("evaluation.json")).unwrap();
+    let json = read_evaluation(&out);
+    let mut lines = csv.lines();
+    assert_eq!(lines.next().unwrap(),
+        "board,slot,rep,roadPips,roadPipsMin,spotFalloff,topCrowding,heroReady,readyAhead,readyAheadTrade,base,other");
+    let rows = lines.map(|line| line.split(',').collect::<Vec<_>>()).collect::<Vec<_>>();
+    assert_eq!(rows.len(), 24);
+    for (row, unit) in rows.iter().zip(unsettled_sim::evaluate::evaluation_schedule(3, 2, 4)) {
+        assert_eq!(row[0], unit.board.to_string());
+        assert_eq!(row[1], unit.hero_seat.to_string());
+        assert_eq!(row[2], unit.rep.to_string());
+    }
+    for (column, arm) in [(10, "base"), (11, "other")] {
+        let wins = rows.iter().map(|row| row[column].parse::<u64>().unwrap()).sum::<u64>();
+        assert_eq!(json["arms"][arm]["wins"], wins);
+    }
+    arguments[11] = "0".into();
+    run_success(&arguments);
+    assert_eq!(fs::read(out.join("units.csv")).unwrap(), csv.as_bytes());
+    assert_eq!(fs::read(out.join("evaluation.json")).unwrap(), evaluation);
+    arguments.pop();
+    run_success(&arguments);
+    assert_eq!(fs::read(out.join("evaluation.json")).unwrap(), evaluation);
+}
+
+#[test]
+fn units_rejects_a_label_that_breaks_the_csv() {
+    for label in ["bad,label", "bad\nlabel", "bad\rlabel", "board", "slot", "rep", "roadPips",
+        "roadPipsMin", "spotFalloff", "topCrowding", "heroReady", "readyAhead", "readyAheadTrade"] {
+        let mut arguments = valid_arguments(&output_dir("units-bad-label"));
+        arguments[5] = format!("{label}=max_pips");
+        arguments.extend(["--reference".into(), label.into(), "--units".into()]);
+        assert_named_error(&arguments, label);
+    }
+}
+
+#[test]
+fn units_and_where_reject_incompatible_flags_and_missing_reference() {
+    let out = output_dir("units-invalid-flags");
+    let mut arguments = valid_arguments(&out);
+    arguments.push("--units".into());
+    assert_named_error(&arguments, "--reference");
+    for extra in [vec!["--units", "--picks-only"], vec!["--where", "slot>=1", "--picks-only"],
+        vec!["--units", "--where", "slot>=1"]] {
+        let mut arguments = valid_arguments(&out);
+        arguments.extend(["--reference", "base"].map(str::to_string));
+        arguments.extend(extra.into_iter().map(str::to_string));
+        assert_named_error(&arguments, if arguments.contains(&"--where".into()) { "--where" } else { "--units" });
+    }
+}
+
+#[test]
+fn where_parser_reports_each_invalid_predicate_by_name() {
+    for (rule, message) in [
+        ("missing>=1", "unknown feature missing"),
+        ("heroReady>=1", "heroReady is a diagnostic"),
+        ("readyAhead>=1", "readyAhead is a diagnostic"),
+        ("readyAheadTrade>=1", "readyAheadTrade is a diagnostic"),
+        ("slot>1", "operator"), ("slot<=1", "operator"), ("slot=1", "operator"),
+        ("slot>=nope", "nope"), ("slot>=NaN", "NaN"), ("slot>=inf", "inf"),
+        ("", "empty predicate"), ("slot>=1&", "empty predicate"),
+        ("slot>=1&roadPips<38&slot<3", "third predicate"),
+        ("slot >=1", "spaces"),
+    ] {
+        let mut arguments = valid_arguments(&output_dir("where-invalid"));
+        arguments.extend(["--where".into(), rule.into()]);
+        assert_named_error(&arguments, message);
+    }
+}
+
+#[test]
+fn a_where_rule_that_fires_nowhere_fails_and_writes_no_result() {
+    let out = output_dir("where-nowhere");
+    let mut arguments = valid_arguments(&out);
+    arguments.extend(["--where", "roadPips<0"].map(str::to_string));
+    assert_named_error(&arguments, "roadPips<0");
+    assert!(!out.join("evaluation.json").exists());
+}
+
+#[test]
+fn floor_met_is_exact_at_one_fifth() {
+    for (seats, rule, expected) in [(5, "slot>=4", true), (6, "slot>=5", false)] {
+        let out = output_dir(&format!("where-floor-{seats}"));
+        let mut arguments = valid_arguments(&out);
+        arguments.extend(["--layout".into(), "extension6".into(), "--seats".into(), seats.to_string(),
+            "--where".into(), rule.into()]);
+        run_success(&arguments);
+        let json = read_evaluation(&out);
+        assert_eq!(json["config"]["floorMet"], expected);
+        assert_eq!(json["config"]["firedUnits"], 1);
+        assert_eq!(json["arms"]["base"]["games"], 1);
+    }
+}
+
+#[test]
+fn where_output_is_absent_without_the_flag() {
+    let out = output_dir("where-absent");
+    run_success(&valid_arguments(&out));
+    let json = read_evaluation(&out);
+    for key in ["where", "firedUnits", "firedShare", "floorMet"] {
+        assert!(json["config"].get(key).is_none(), "{key}");
+    }
+}
+
+fn slice_command(out: &Path) {
+    let output = Command::new(env!("CARGO_BIN_EXE_unsettled-sim"))
+        .args(["slice", "--run"]).arg(out).output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
+#[test]
+fn a_where_run_reports_the_pair_score_rule_computes_from_the_units_file() {
+    let out = output_dir("where-restriction-units");
+    let mut arguments = valid_arguments(&out);
+    let field = "app_formula_draft:placement/seat-weights/seats-{seats}.json@placement/seat-weights/seats-{seats}.json";
+    arguments[3] = field.into();
+    arguments[5] = format!("base={field}");
+    arguments[7] = "6".into();
+    arguments[9] = "2".into();
+    arguments.extend(["--reference", "base", "--arm",
+        "flat_75=app_formula_draft:placement/arms/co_flat_75_s{seats}.json@placement/seat-weights/seats-{seats}.json",
+        "--policy", "heuristic-v1-trader-aware-threat-devcards-denial", "--player-trading",
+        "--threshold", "0.005", "--units"].map(str::to_string));
+    run_success(&arguments);
+    slice_command(&out);
+    let units = unsettled_sim::slice::read_run(&out).unwrap();
+    let slices: serde_json::Value = serde_json::from_slice(&fs::read(out.join("slices.json")).unwrap()).unwrap();
+    let full = read_evaluation(&out);
+    let assert_pair = |a: &serde_json::Value, b: &serde_json::Value| {
+        for field in ["n", "b", "c", "estimate", "mcnemar", "clustered", "clusters",
+            "clusteredDegenerate", "intervalUsed", "interval"] {
+            assert_eq!(a[field], b[field], "{field}");
+        }
+    };
+    assert_pair(&slices["rules"][0], &full["pairs"][0]);
+    let csv = fs::read_to_string(out.join("units.csv")).unwrap();
+    let mut road_pips = csv.lines().skip(1).step_by(8)
+        .map(|line| line.split(',').nth(3).unwrap().parse::<u16>().unwrap()).collect::<Vec<_>>();
+    road_pips.sort_unstable();
+    let cutoff = road_pips[3];
+    assert!(road_pips.iter().any(|pips| *pips < cutoff));
+    assert!(road_pips.iter().any(|pips| *pips >= cutoff));
+    arguments.pop();
+    for (i, rule) in ["slot>=2".to_string(), format!("roadPips>={cutoff}"),
+        format!("slot>=2&roadPips>={cutoff}")].iter().enumerate() {
+        let filtered = output_dir(&format!("where-restriction-{i}"));
+        arguments[13] = filtered.display().to_string();
+        let mut filtered_args = arguments.clone();
+        filtered_args.extend(["--where".into(), rule.clone()]);
+        run_success(&filtered_args);
+        let result = read_evaluation(&filtered);
+        let scored = unsettled_sim::slice::score_rule(&units, "flat_75", rule).unwrap();
+        let scored_text = serde_json::to_string_pretty(&scored).unwrap();
+        let result_text = fs::read_to_string(filtered.join("evaluation.json")).unwrap();
+        let field_text = |text: &str, field: &str| {
+            let key = format!("\"{field}\": ");
+            let value = &text[text.find(&key).unwrap() + key.len()..];
+            let end = if value.starts_with('[') { value.find(']').unwrap() + 1 }
+                else { value.find('\n').unwrap() };
+            value[..end].chars().filter(|c| !c.is_whitespace()).collect::<String>()
+        };
+        for field in ["n", "b", "c", "estimate", "mcnemar", "clustered", "clusters",
+            "clusteredDegenerate", "intervalUsed", "interval"] {
+            assert_eq!(field_text(&result_text, field), field_text(&scored_text, field), "{field}");
+        }
+        let scored: serde_json::Value = serde_json::from_str(&scored_text).unwrap();
+        assert_pair(&result["pairs"][0], &scored);
+        assert_eq!(result["config"]["firedUnits"], scored["firedUnits"]);
+        if rule.contains("slot>=2") {
+            assert!(result["pairs"][0]["perHeroSeat"][0].is_null());
+            assert!(result["pairs"][0]["perHeroSeat"][1].is_null());
+        }
+    }
+}
+
+#[test]
+fn units_rejects_an_unwritable_output_before_writing_a_result() {
+    let out = output_dir("units-output-is-a-file");
+    fs::write(&out, "occupied").unwrap();
+    let arguments = units_arguments(&out);
+    assert_named_error(&arguments, "units.csv");
+    assert_eq!(fs::read_to_string(&out).unwrap(), "occupied");
+    fs::remove_file(out).unwrap();
+}

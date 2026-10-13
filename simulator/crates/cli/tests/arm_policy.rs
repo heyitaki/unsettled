@@ -269,6 +269,8 @@ fn evaluation_with_override(
         arm_policies: &arm_policies,
         arm_policy_names: &arm_policy_names,
         reference: None,
+        units: None,
+        where_rule: None,
         boards: 1,
         reps: 1,
         policy: PolicyKind::HeuristicV1,

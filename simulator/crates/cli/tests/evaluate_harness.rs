@@ -85,6 +85,8 @@ fn run(
         arm_policies: &arm_policies,
         arm_policy_names: &arm_policy_names,
         reference,
+        units: None,
+        where_rule: None,
         boards,
         reps,
         policy,
@@ -210,12 +212,13 @@ fn the_per_hero_seat_table_partitions_the_pooled_comparison() {
     let pair = &single.pairs[0];
     assert_eq!(pair.per_hero_seat.len(), seats);
     assert_eq!(
-        pair.per_hero_seat.iter().map(|seat| seat.n).sum::<usize>(),
+        pair.per_hero_seat.iter().map(|seat| seat.as_ref().unwrap()).map(|seat| seat.n).sum::<usize>(),
         pair.stats.n
     );
     assert_eq!(
         pair.per_hero_seat
             .iter()
+            .map(|seat| seat.as_ref().unwrap())
             .map(|seat| seat.b + seat.c)
             .sum::<u64>(),
         pair.stats.b + pair.stats.c
@@ -225,6 +228,7 @@ fn the_per_hero_seat_table_partitions_the_pooled_comparison() {
     assert!(
         pair.per_hero_seat
             .iter()
+            .map(|seat| seat.as_ref().unwrap())
             .all(|seat| seat.clusters == boards && seat.n == boards * reps)
     );
 
@@ -313,6 +317,8 @@ fn chunked_evaluation_matches_a_single_pass() {
             arm_policies: &arm_policies,
             arm_policy_names: &arm_policy_names,
             reference: Some("base"),
+            units: None,
+            where_rule: None,
             boards: 5,
             reps: 2,
             policy: PolicyKind::HeuristicV1,
@@ -883,5 +889,47 @@ fn the_expansion_term_and_the_draft_kind_play_legal_deterministic_games() {
     );
     for arm in ["expansion", "draft", "draft_expansion"] {
         assert!(single.arms[arm].games > 0, "{arm} played no games");
+    }
+}
+
+fn filtered_chunks(rule: &str, chunk: usize) -> Result<unsettled_sim::evaluate::Evaluation, String> {
+    let weights: EngineWeights =
+        serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
+    let base = register_app_formula_draft("where-base".into(), weights.clone(), weights.clone()).unwrap();
+    let mut changed = weights.clone();
+    changed.contest_weight = 0.75;
+    let other = register_app_formula_draft("where-other".into(), changed, weights).unwrap();
+    let arms = [("base".into(), base), ("other".into(), other)];
+    evaluate_in_chunks(EvaluateRequest {
+        layout: Layout::Standard4, seats: 4, domain: EvaluationDomain::Tuning,
+        field_spec: "where-base", field: base, arms: &arms,
+        arm_specs: &["where-base".into(), "where-other".into()],
+        arm_policies: &[None, None], arm_policy_names: &[None, None], reference: Some("base"),
+        boards: 6, reps: 2, policy: PolicyKind::HeuristicV1, policy_name: "heuristic-v1",
+        player_trading: None, threshold: 0.005, alpha: 0.05, threads: 1, allow_unofficial: false,
+        units: None, where_rule: Some(rule),
+    }, chunk)
+}
+
+#[test]
+fn a_where_run_is_the_same_at_every_chunk_size() {
+    let topology = unsettled_engine::topology::Topology::load(Layout::Standard4).unwrap();
+    let mut values = (0..6).map(|index| {
+        let board = generate_board(Layout::Standard4, 4, mix64(TUNING_SEED ^ index)).unwrap();
+        unsettled_sim::features::TerrainFeatures::read(&board, &topology).road_pips
+    }).collect::<Vec<_>>();
+    values.sort_unstable();
+    assert!(values.iter().any(|value| *value < values[3]));
+    let rule = format!("roadPips>={}", values[3]);
+    assert_eq!(serde_json::to_vec_pretty(&filtered_chunks(&rule, 1).unwrap()).unwrap(),
+        serde_json::to_vec_pretty(&filtered_chunks(&rule, 6).unwrap()).unwrap());
+}
+
+#[test]
+fn a_where_rule_that_fires_nowhere_is_an_error() {
+    for chunk in [1, 6] {
+        let error = filtered_chunks("roadPips<0", chunk).unwrap_err();
+        assert!(error.contains("roadPips<0"), "{error}");
+        assert!(error.contains("no unit"), "{error}");
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::{BufWriter, Write};
 use std::num::NonZero;
 use std::ops::Range;
 use std::path::Path;
@@ -8,7 +9,7 @@ use std::process::Command;
 use rayon::prelude::*;
 use serde::Serialize;
 use unsettled_engine::board::SimBoard;
-use unsettled_engine::game::{GameArena, GameConfig, setup_order};
+use unsettled_engine::game::{GameArena, GameConfig, SetupPick, setup_order};
 use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::{derive_evaluation_seed, mix64};
@@ -16,6 +17,7 @@ use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
 
 use crate::boardgen::generate_board;
+use crate::features::{RaceReadings, Rule, TerrainFeatures, UNIT_COLUMNS, road_readiness};
 use crate::output::Meta;
 use crate::stats::{alpha_z, wilson};
 
@@ -202,6 +204,8 @@ pub struct EvaluateRequest<'a> {
     pub arm_policies: &'a [Option<PolicyKind>],
     pub arm_policy_names: &'a [Option<String>],
     pub reference: Option<&'a str>,
+    pub units: Option<&'a Path>,
+    pub where_rule: Option<&'a str>,
     pub boards: usize,
     pub reps: usize,
     pub policy: PolicyKind,
@@ -236,6 +240,14 @@ pub struct EvaluationConfig {
     pub reps: usize,
     pub hero_seats: usize,
     pub units: usize,
+    #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
+    pub where_rule: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fired_units: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fired_share: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub floor_met: Option<bool>,
     pub field: String,
     pub field_heuristic: String,
     pub reference: Option<String>,
@@ -295,7 +307,7 @@ pub struct PairComparison {
     /// estimate by the slots it does not touch, so a term that moves one slot can
     /// read `equivalent` pooled. A pattern read here is a hypothesis for a later
     /// preregistered run, never a disposition on this one.
-    pub per_hero_seat: Vec<PairStats>,
+    pub per_hero_seat: Vec<Option<PairStats>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -335,6 +347,8 @@ type PickTrace = [(Vertex, Edge); 2];
 struct EvaluationJob {
     arm_index: usize,
     unit_index: usize,
+    board_index: usize,
+    chunk_unit: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -342,6 +356,7 @@ struct EvaluationOutcome {
     hero_won: bool,
     draw: bool,
     illegal_actions: u32,
+    race: Option<RaceReadings>,
 }
 
 pub fn parse_arm_spec(value: &str) -> Result<(String, String), String> {
@@ -405,38 +420,89 @@ fn prepare_evaluation(request: &EvaluateRequest<'_>) -> Result<PreparedEvaluatio
     Ok(PreparedEvaluation { topology, schedule, rules, pool, domain_seed })
 }
 
+struct EvaluationChunk {
+    boards: Vec<SimBoard>,
+    terrain: Vec<TerrainFeatures>,
+    units: Vec<usize>,
+    jobs: Vec<EvaluationJob>,
+}
+
 fn prepare_evaluation_chunk(
     request: &EvaluateRequest<'_>,
     topology: &Topology,
     domain_seed: u64,
     board_range: Range<usize>,
-) -> Result<(Vec<SimBoard>, Vec<EvaluationJob>), String> {
-    let units_per_board = request.reps * request.seats;
-    let unit_range = board_range.start * units_per_board..board_range.end * units_per_board;
-    let mut boards = board_range
-        .map(|board_index| {
-            generate_board(
-                request.layout,
-                request.seats,
-                mix64(domain_seed ^ board_index as u64),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    rule: Option<&Rule>,
+) -> Result<EvaluationChunk, String> {
+    let mut boards = Vec::new();
+    let mut terrain = Vec::new();
+    let mut units = Vec::new();
+    let mut board_indices = Vec::new();
+    for board_index in board_range {
+        let board = generate_board(request.layout, request.seats, mix64(domain_seed ^ board_index as u64))?;
+        let features = (request.units.is_some() || rule.is_some())
+            .then(|| TerrainFeatures::read(&board, topology));
+        let seats = (0..request.seats).filter(|seat| {
+            rule.is_none_or(|rule| rule.matches(features.unwrap(), *seat))
+        }).collect::<Vec<_>>();
+        if seats.is_empty() {
+            continue;
+        }
+        for rep in 0..request.reps {
+            for seat in &seats {
+                units.push((board_index * request.reps + rep) * request.seats + seat);
+                board_indices.push(boards.len());
+            }
+        }
+        boards.push(board);
+        if let Some(features) = features {
+            terrain.push(features);
+        }
+    }
     let mut placement_kinds = Vec::with_capacity(request.arms.len() + 1);
     placement_kinds.push(request.field);
     placement_kinds.extend(request.arms.iter().map(|(_, kind)| *kind));
     prepare_app_formula_boards(&mut boards, topology, &placement_kinds);
-
-    let mut jobs = Vec::with_capacity(request.arms.len() * unit_range.len());
+    let mut jobs = Vec::with_capacity(request.arms.len() * units.len());
     for arm_index in 0..request.arms.len() {
-        for unit_index in unit_range.clone() {
+        for (chunk_unit, unit_index) in units.iter().enumerate() {
             jobs.push(EvaluationJob {
-                arm_index,
-                unit_index,
+                arm_index, unit_index: *unit_index, board_index: board_indices[chunk_unit], chunk_unit,
             });
         }
     }
-    Ok((boards, jobs))
+    Ok(EvaluationChunk { boards, terrain, units, jobs })
+}
+
+fn units_writer(request: &EvaluateRequest<'_>) -> Result<Option<BufWriter<fs::File>>, String> {
+    let Some(path) = request.units else { return Ok(None) };
+    let write = || -> std::io::Result<_> {
+        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)?;
+        }
+        let mut writer = BufWriter::new(fs::File::create(path)?);
+        write!(writer, "{}", UNIT_COLUMNS.join(","))?;
+        for (label, _) in request.arms {
+            write!(writer, ",{label}")?;
+        }
+        writeln!(writer)?;
+        writer.flush()?;
+        Ok(writer)
+    };
+    write().map(Some).map_err(|error| format!("units.csv {}: {error}", path.display()))
+}
+
+pub(crate) fn renumber_boards(schedule: &mut [EvaluationUnit]) -> usize {
+    let mut previous = None;
+    let mut boards = 0;
+    for unit in schedule {
+        if previous != Some(unit.board) {
+            previous = Some(unit.board);
+            boards += 1;
+        }
+        unit.board = boards - 1;
+    }
+    boards
 }
 
 pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
@@ -453,6 +519,12 @@ pub fn evaluate_in_chunks(
     let PreparedEvaluation { topology, schedule, rules, pool, domain_seed } =
         prepare_evaluation(&request)?;
     let units = schedule.len();
+    let rule = request.where_rule.map(Rule::parse).transpose()?;
+    let mut writer = units_writer(&request)?;
+    let reference_index = request.reference.and_then(|reference| {
+        request.arms.iter().position(|(label, _)| label == reference)
+    });
+    let mut fired_schedule = Vec::new();
     let mut indicators = (0..request.arms.len())
         .map(|_| Vec::with_capacity(units))
         .collect::<Vec<_>>();
@@ -462,23 +534,38 @@ pub fn evaluate_in_chunks(
     let mut illegal_actions = 0_u64;
     for board_start in (0..request.boards).step_by(chunk_boards) {
         let board_end = board_start + chunk_boards.min(request.boards - board_start);
-        let unit_start = board_start * request.reps * request.seats;
-        let unit_end = board_end * request.reps * request.seats;
-        let chunk_units = unit_end - unit_start;
-        let (boards, jobs) = prepare_evaluation_chunk(
-            &request, &topology, domain_seed, board_start..board_end,
+        let EvaluationChunk { boards, terrain, units: chunk_indices, jobs } = prepare_evaluation_chunk(
+            &request, &topology, domain_seed, board_start..board_end, rule.as_ref(),
         )?;
+        let chunk_units = chunk_indices.len();
+        fired_schedule.extend(chunk_indices.iter().map(|index| schedule[*index]));
         let game_count = jobs.len();
         let outcomes: Vec<EvaluationOutcome> = pool.install(|| {
             jobs.par_iter()
-                .map_init(GameArena::default, |arena, job| {
+                .map_init(|| (GameArena::default(), Vec::<SetupPick>::new()), |(arena, trace), job| {
+                    trace.clear();
                     let unit = schedule[job.unit_index];
                     let config = evaluation_unit_config(&request, unit, job.arm_index, domain_seed);
-                    let result = arena.play(&boards[unit.board - board_start], &topology, &rules, &config);
+                    let board = &boards[job.board_index];
+                    let traced = request.units.is_some() && Some(job.arm_index) == reference_index;
+                    let result = if traced {
+                        arena.play_traced(board, &topology, &rules, &config, trace)
+                    } else {
+                        arena.play(board, &topology, &rules, &config)
+                    };
+                    let race = traced.then(|| {
+                        let levels = (0..request.seats).map(|seat| {
+                            let pick = trace.iter().find(|pick| usize::from(pick.seat) == seat && pick.pick == 1)
+                                .expect("completed reference setup");
+                            road_readiness(board, &topology, pick.vertex)
+                        }).collect::<Vec<_>>();
+                        RaceReadings::from_levels(&levels, unit.hero_seat)
+                    });
                     EvaluationOutcome {
                         hero_won: result.winner == Some(unit.hero_seat as u8),
                         draw: result.draw,
                         illegal_actions: result.illegal_actions,
+                        race,
                     }
                 })
                 .collect()
@@ -492,7 +579,7 @@ pub fn evaluate_in_chunks(
 
         let mut seen = vec![false; game_count];
         for (job, outcome) in jobs.iter().zip(&outcomes) {
-            let pair_index = job.arm_index * chunk_units + job.unit_index - unit_start;
+            let pair_index = job.arm_index * chunk_units + job.chunk_unit;
             if seen[pair_index] {
                 return Err(format!(
                     "evaluation schedule integrity error: arm {} unit {} was played more than once",
@@ -507,14 +594,38 @@ pub fn evaluate_in_chunks(
         if seen.iter().any(|played| !played)
             || indicators
                 .iter()
-                .any(|arm_indicators| arm_indicators.len() != unit_end)
+                .any(|arm_indicators| arm_indicators.len() != fired_schedule.len())
         {
             return Err(
                 "evaluation schedule integrity error: not every arm and unit pair was played exactly once"
                     .into(),
             );
         }
+        if let Some(writer) = &mut writer {
+            let reference = reference_index.expect("validated units reference");
+            let mut write_chunk = || -> std::io::Result<()> {
+                for (index, unit_index) in chunk_indices.iter().enumerate() {
+                    let unit = schedule[*unit_index];
+                    let features = terrain[jobs[index].board_index];
+                    let race = outcomes[reference * chunk_units + index].race.expect("reference trace");
+                    write!(writer, "{},{},{},{},{},{},{},{},{},{}", unit.board, unit.hero_seat,
+                        unit.rep, features.road_pips, features.road_pips_min, features.spot_falloff,
+                        features.top_crowding, race.hero_ready, race.ready_ahead, race.ready_ahead_trade)?;
+                    for arm in 0..request.arms.len() {
+                        write!(writer, ",{}", u8::from(outcomes[arm * chunk_units + index].hero_won))?;
+                    }
+                    writeln!(writer)?;
+                }
+                writer.flush()
+            };
+            write_chunk().map_err(|error| format!("units.csv: {error}"))?;
+        }
     }
+    if fired_schedule.is_empty() {
+        return Err(format!("--where {:?} fires on no unit", request.where_rule.unwrap_or("always")));
+    }
+    let fired_boards = renumber_boards(&mut fired_schedule);
+    let schedule = fired_schedule;
 
     let z = alpha_z(request.alpha)?;
     let arms = request
@@ -551,7 +662,7 @@ pub fn evaluate_in_chunks(
                 &indicators[arm_index],
                 &indicators[reference_index],
                 &board_of_unit,
-                request.boards,
+                fired_boards,
                 z,
             )?;
             let verdict = pair_verdict(stats.interval, request.threshold).to_string();
@@ -563,7 +674,7 @@ pub fn evaluate_in_chunks(
                     &indicators[arm_index],
                     &indicators[reference_index],
                     request.seats,
-                    request.boards,
+                    fired_boards,
                     z,
                 )?,
                 stats,
@@ -571,8 +682,14 @@ pub fn evaluate_in_chunks(
             });
         }
     }
+    let mut config = evaluation_config(&request, domain_seed, units, z);
+    if request.where_rule.is_some() {
+        config.fired_units = Some(schedule.len());
+        config.fired_share = Some(schedule.len() as f64 / units as f64);
+        config.floor_met = Some(5_u128 * schedule.len() as u128 >= units as u128);
+    }
     Ok(Evaluation {
-        config: evaluation_config(&request, domain_seed, units, z),
+        config,
         arms,
         pairs,
         illegal_actions,
@@ -580,6 +697,12 @@ pub fn evaluate_in_chunks(
 }
 
 pub fn evaluate_picks(mut request: EvaluateRequest<'_>) -> Result<Picks, String> {
+    if request.units.is_some() {
+        return Err("--units is incompatible with --picks-only".into());
+    }
+    if request.where_rule.is_some() {
+        return Err("--where is incompatible with --picks-only".into());
+    }
     if request.reference.is_none() || request.arms.len() < 2 {
         return Err("--picks-only requires --reference and at least two arms".into());
     }
@@ -589,8 +712,8 @@ pub fn evaluate_picks(mut request: EvaluateRequest<'_>) -> Result<Picks, String>
     request.reps = 1;
     let PreparedEvaluation { topology, schedule, rules, pool, domain_seed } =
         prepare_evaluation(&request)?;
-    let (boards, jobs) = prepare_evaluation_chunk(
-        &request, &topology, domain_seed, 0..request.boards,
+    let EvaluationChunk { boards, jobs, .. } = prepare_evaluation_chunk(
+        &request, &topology, domain_seed, 0..request.boards, None,
     )?;
     let units = schedule.len();
     let traces: Vec<Result<PickTrace, String>> = pool.install(|| {
@@ -719,6 +842,10 @@ fn evaluation_config(
         reps: request.reps,
         hero_seats: request.seats,
         units,
+        where_rule: request.where_rule.map(str::to_string),
+        fired_units: None,
+        fired_share: None,
+        floor_met: None,
         field: request.field_spec.to_string(),
         field_heuristic: request.field.name().to_string(),
         reference: request.reference.map(str::to_string),
@@ -782,8 +909,7 @@ pub fn pair_verdict(interval: [f64; 2], threshold: f64) -> &'static str {
     }
 }
 
-/// Slices a paired comparison by hero seat. Each slice keeps every board, so its
-/// cluster size is `reps` and the balanced-schedule requirement still holds.
+/// Each represented seat keeps every fired board, with `reps` units per cluster.
 fn per_hero_seat_stats(
     schedule: &[EvaluationUnit],
     arm: &[bool],
@@ -791,7 +917,7 @@ fn per_hero_seat_stats(
     seats: usize,
     boards: usize,
     z: f64,
-) -> Result<Vec<PairStats>, String> {
+) -> Result<Vec<Option<PairStats>>, String> {
     (0..seats)
         .map(|hero_seat| {
             let mut arm_units = Vec::new();
@@ -805,7 +931,11 @@ fn per_hero_seat_stats(
                 reference_units.push(reference[unit_index]);
                 board_of_unit.push(unit.board);
             }
-            try_paired_stats(&arm_units, &reference_units, &board_of_unit, boards, z)
+            if arm_units.is_empty() {
+                Ok(None)
+            } else {
+                try_paired_stats(&arm_units, &reference_units, &board_of_unit, boards, z).map(Some)
+            }
         })
         .collect()
 }
@@ -965,6 +1095,22 @@ fn rust_version() -> String {
 }
 
 fn validate_request(request: &EvaluateRequest<'_>) -> Result<(), String> {
+    if request.units.is_some() {
+        if request.where_rule.is_some() {
+            return Err("--units is incompatible with --where".into());
+        }
+        if request.reference.is_none() {
+            return Err("--units requires --reference".into());
+        }
+        for (label, _) in request.arms {
+            if label.contains([',', '\n', '\r']) || UNIT_COLUMNS.contains(&label.as_str()) {
+                return Err(format!("--units invalid arm label {label}"));
+            }
+        }
+    }
+    if let Some(rule) = request.where_rule {
+        Rule::parse(rule)?;
+    }
     if request.boards == 0 {
         return Err("boards must be positive".into());
     }
@@ -1078,4 +1224,61 @@ mod tests {
         assert_eq!(candidate, [reference[1], reference[0]]);
         assert!(trace_changed(&candidate, &reference));
     }
+
+    #[test]
+    fn race_readings_come_from_the_reference_arms_second_settlements() {
+        use crate::features::road_readiness;
+        let weights: EngineWeights =
+            serde_json::from_str(include_str!("../../../placement/seat-weights/seats-4.json")).unwrap();
+        let base = register_app_formula_draft("race-base".into(), weights.clone(), weights).unwrap();
+        let arms = [("base".into(), base), ("other".into(), PlacementKind::MaxPips)];
+        let path = std::env::temp_dir().join(format!("unsettled-race-{}.csv", std::process::id()));
+        let specs = ["race-base".into(), "max_pips".into()];
+        let request = || EvaluateRequest {
+            layout: Layout::Standard4, seats: 4, domain: EvaluationDomain::Tuning,
+            field_spec: "race-base", field: base, arms: &arms,
+            arm_specs: &specs,
+            arm_policies: &[None, None], arm_policy_names: &[None, None], reference: Some("base"),
+            boards: 3, reps: 2, policy: PolicyKind::HeuristicV1, policy_name: "heuristic-v1",
+            player_trading: None, threshold: 0.005, alpha: 0.05, threads: 1,
+            allow_unofficial: false, units: Some(path.as_path()), where_rule: None,
+        };
+        evaluate(request()).unwrap();
+        let csv = fs::read_to_string(&path).unwrap();
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let rules = RuleConfig::base(Layout::Standard4);
+        let mut arena = GameArena::default();
+        let mut first_differs = false;
+        let mut other_differs = false;
+        let mut readings = Vec::new();
+        for (unit, row) in evaluation_schedule(3, 2, 4).into_iter().zip(csv.lines().skip(1)) {
+            let mut board = generate_board(Layout::Standard4, 4, mix64(TUNING_SEED ^ unit.board as u64)).unwrap();
+            prepare_app_formula_boards(std::slice::from_mut(&mut board), &topology, &[base]);
+            let mut traces = [Vec::new(), Vec::new()];
+            for (arm, trace) in traces.iter_mut().enumerate() {
+                let config = evaluation_unit_config(&request(), unit, arm, TUNING_SEED);
+                arena.play_traced(&board, &topology, &rules, &config, trace);
+            }
+            let count = |trace: &[unsettled_engine::game::SetupPick], pick| {
+                let levels = (0..4).map(|seat| {
+                    let entry = trace.iter().find(|entry| entry.seat == seat && entry.pick == pick).unwrap();
+                    road_readiness(&board, &topology, entry.vertex)
+                }).collect::<Vec<_>>();
+                [levels[unit.hero_seat],
+                    levels[..unit.hero_seat].iter().filter(|level| **level == 2).count() as u8,
+                    levels[..unit.hero_seat].iter().filter(|level| **level >= 1).count() as u8]
+            };
+            let expected = count(&traces[0], 1);
+            let actual = row.split(',').skip(7).take(3).map(|cell| cell.parse::<u8>().unwrap()).collect::<Vec<_>>();
+            assert_eq!(actual, expected, "{unit:?}");
+            first_differs |= count(&traces[0], 0) != expected;
+            other_differs |= count(&traces[1], 1) != expected;
+            readings.push(expected);
+        }
+        assert!(first_differs);
+        assert!(other_differs);
+        assert!((0..4).any(|seat| readings[seat] != readings[8 + seat] || readings[seat] != readings[16 + seat]));
+        fs::remove_file(path).unwrap();
+    }
+
 }
