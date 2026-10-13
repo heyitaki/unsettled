@@ -173,7 +173,7 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
 }
 
 /**
- * The hero button that opens the dialog: first in the desktop's Board tools and
+ * The hero button that opens the dialog: in the desktop's header controls row and
  * on the phone's Maps screen. `onNavigate` runs when the dialog closes after a
  * parse has landed, however it closed, and never after a plain dismissal.
  */

@@ -70,32 +70,32 @@ test('wraps contest notes below the tiles and draws rings when a row is tapped',
 test('the header names the active board and nothing of the desktop chrome mounts', async ({ page }) => {
   await open(page)
   await expect(page.getByRole('button', { name: 'Board 1' })).toBeVisible()
-  await expect(page.locator('.phone-title')).toHaveText('Board 1')
+  await expect(page.locator('.head-title')).toHaveText('Board 1')
   for (const selector of ['.workspace', '.board-tabs', '.site-header', 'footer']) {
     await expect(page.locator(selector)).toHaveCount(0)
   }
   await snap(page, 'header')
 })
 
-test('the build heading holds history and randomize, with clear in the tools and export in Maps', async ({ page }) => {
+test('the build heading holds history, with board actions in the tools and export in Maps', async ({ page }) => {
   await open(page)
   await page.getByRole('button', { name: 'Edit the board' }).click()
   const tools = page.locator('.phone-build')
-  const heading = tools.locator('.phone-block-head')
+  const heading = tools.locator('.panel-heading')
   expect(await heading.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))))
-    .toEqual(['Randomize board', 'Undo', 'Redo'])
+    .toEqual(['Undo', 'Redo'])
   await expect(heading.getByRole('button', { name: 'Undo' })).toBeDisabled()
-  await expect(tools.getByRole('button', { name: 'clear all', exact: true })).toBeVisible()
+  await expect(tools.getByRole('button', { name: 'Clear board', exact: true })).toBeVisible()
   await snap(page, 'build-actions')
-  await heading.getByRole('button', { name: 'Randomize board' }).click()
+  await tools.getByRole('button', { name: 'Randomize', exact: true }).click()
   await tools.getByRole('button', { name: 'Done' }).click()
   // The board is still the one just dealt, so a re-roll from a new build session does not ask.
   await page.getByRole('button', { name: 'Edit the board' }).click()
-  await heading.getByRole('button', { name: 'Randomize board' }).click()
+  await tools.getByRole('button', { name: 'Randomize', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(tools.locator('.tool-count').first()).toHaveText('19/19')
   await tools.getByRole('button', { name: 'Done' }).click()
-  await page.locator('.phone-title').click()
+  await page.locator('.head-title').click()
   await page.getByRole('button', { name: 'Import and export files' }).click()
   await expect(page.getByRole('menuitem', { name: 'Export JSON' })).toBeVisible()
 })
@@ -104,7 +104,7 @@ test('randomizing a board that has something on it asks first, and can deal a ne
   await open(page)
   const randomize = async () => {
     await page.getByRole('button', { name: 'Edit the board' }).click()
-    await page.locator('.phone-build').getByRole('button', { name: 'Randomize board' }).click()
+    await page.locator('.phone-build').getByRole('button', { name: 'Randomize', exact: true }).click()
   }
   const dialog = page.getByRole('dialog', { name: 'Randomize this board?' })
   await randomize()
@@ -117,7 +117,7 @@ test('randomizing a board that has something on it asks first, and can deal a ne
   await page.screenshot({ path: 'test-results/phone/randomize-confirm.png' })
   await dialog.getByRole('button', { name: 'New board' }).click()
   await expect(dialog).toHaveCount(0)
-  await expect(page.locator('.phone-title')).toHaveText('Board 2')
+  await expect(page.locator('.head-title')).toHaveText('Board 2')
 })
 
 test('the window is the only scroller and nothing overflows sideways', async ({ page }) => {
@@ -144,7 +144,7 @@ test('the window is the only scroller and nothing overflows sideways', async ({ 
 test('the analysis block opens with a ribbon of every pick and the board sits in a square sea', async ({ page }) => {
   await open(page)
   await randomizePhoneBoard(page)
-  const players = await page.locator('.phone-dot').count()
+  const players = await page.locator('.head-dot').count()
   const slots = page.locator('.phone-analysis .draft-ribbon-slot')
   await expect(slots).toHaveCount(players * 2)
   await expect(slots.first()).toHaveClass(/\bviewing\b/)
@@ -212,7 +212,7 @@ test('the six-player layout gets a taller frame from an unmoved top with no capt
 /** The shared seed, plus the wait for the reloaded shell to show the new roster. */
 async function seedUnclaimedRoster(page: Page) {
   await seedRoster(page)
-  await expect(page.locator('.phone-dot')).toHaveCount(UNCLAIMED_ROSTER.length)
+  await expect(page.locator('.head-dot')).toHaveCount(UNCLAIMED_ROSTER.length)
 }
 
 test('an empty board offers the two ways to fill it', async ({ page }) => {
@@ -242,7 +242,7 @@ test('an import with parse issues keeps its dialog over the new board, and close
   // warning. The board fills, the empty state goes, and the dialog must
   // survive that to show the warning.
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
-  await expect(page.locator('.phone-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
+  await expect(page.locator('.head-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
   // The fixture is a game past its draft, so the block is the move adviser.
   await expect(block.locator('h2')).toHaveText('Best moves')
   await expect(dialog).toBeVisible()
@@ -252,7 +252,7 @@ test('an import with parse issues keeps its dialog over the new board, and close
   await expect(dialog).toHaveCount(0)
   // Emptying the board again must not bring the dialog back on its own.
   await page.getByRole('button', { name: 'Edit the board' }).click()
-  await page.locator('.phone-build').getByRole('button', { name: 'clear all', exact: true }).click()
+  await page.locator('.phone-build').getByRole('button', { name: 'Clear board', exact: true }).click()
   await page.getByRole('dialog', { name: 'Clear this board?' }).getByRole('button', { name: 'Clear board', exact: true }).click()
   await page.locator('.phone-build').getByRole('button', { name: 'Done' }).click()
   await expect(block.locator('h2')).toHaveText('This board is empty')
@@ -272,7 +272,7 @@ test('a filled board asks who you are, and a tapped swatch claims that seat', as
   await snap(page, 'claim-row')
   await swatches.first().click()
   await expect(block.locator('.analysis-context')).toHaveText('Red · Picking 1st and 8th', { useInnerText: true })
-  await expect(page.locator('.phone-dot').first()).toHaveClass(/\bme\b/)
+  await expect(page.locator('.head-dot').first()).toHaveClass(/\bme\b/)
   await expect(block.locator('.analysis-row').first()).toBeVisible()
   await snap(page, 'best-picks')
 })
@@ -294,7 +294,7 @@ test.describe('reveal on select', () => {
     const marks = page.locator('.vertex-highlight')
     await expect(marks).toHaveCount(5)
     await expect(page.locator('.vertex-highlight.faded')).toHaveCount(0)
-    const myColor = await page.locator('.phone-dot.me').evaluate((dot) => getComputedStyle(dot).backgroundColor)
+    const myColor = await page.locator('.head-dot.me').evaluate((dot) => getComputedStyle(dot).backgroundColor)
     await expect(marks.first()).toHaveCSS('fill', myColor)
     await snap(page, 'rest-marks')
 
@@ -327,7 +327,7 @@ test.describe('build mode', () => {
     await open(page)
     await page.getByRole('button', { name: 'Edit the board' }).click()
     const tools = page.locator('.phone-build')
-    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase', 'clear all'])
+    await expect(tools.locator('.structure-grid button')).toHaveText(['Randomize', 'Clear pieces', 'Clear board'])
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     await expect(tools.locator('.tool-hint')).toBeVisible()
     const svg = page.locator('.board-canvas')
@@ -349,14 +349,27 @@ test.describe('build mode', () => {
     await expect(tools).toBeVisible()
     await expect(analysis).toHaveCount(0)
     // The counts the board caption lost ride along on the labels (spec D3 tools).
-    await expect(tools.locator('.tool-label')).toHaveText(['Layout', 'Terrain0/19', 'Number token', 'Other tools0 pieces'])
+    await expect(tools.locator('.tool-label')).toHaveText(['Layout', 'Terrain0/19', 'Number token0/19', 'Board'])
     expect((await page.locator('.board-canvas').boundingBox())!.y).toBe(boardTop)
     const sideways = await page.locator('.phone-page').evaluate((root) =>
       Array.from(root.querySelectorAll<HTMLElement>('*'))
         .filter((el) => getComputedStyle(el).overflowX === 'auto' && el.scrollWidth > el.clientWidth)
         .map((el) => el.className))
-    // Other tools holds four tools, which fit the row without scrolling.
     expect(sideways).toEqual(['tool-grid terrain-grid', 'token-tools'])
+    const actions = tools.locator('.structure-grid')
+    const row = await actions.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }))
+    expect(row.scroll).toBeLessThanOrEqual(row.client)
+    const block = (await tools.locator('.block-inner').boundingBox())!
+    const buttons = await actions.locator('button').evaluateAll((elements) => elements.map((element) => {
+      const { left, right, top } = element.getBoundingClientRect()
+      return { left, right, top }
+    }))
+    expect(buttons).toHaveLength(3)
+    for (const button of buttons) {
+      expect(button.top).toBe(buttons[0].top)
+      expect(button.left).toBeGreaterThanOrEqual(block.x)
+      expect(button.right).toBeLessThanOrEqual(block.x + block.width)
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
     await snap(page, 'build-mode')
 
@@ -365,7 +378,7 @@ test.describe('build mode', () => {
     await expect(pencil).toHaveAttribute('aria-pressed', 'true')
     await expect(tools).toBeVisible()
     await expect(analysis).toHaveCount(0)
-    await tools.getByRole('button', { name: 'Randomize board' }).click()
+    await tools.getByRole('button', { name: 'Randomize', exact: true }).click()
     await expect(tools.getByRole('button', { name: 'Undo' })).toBeEnabled()
     await tools.getByRole('button', { name: 'Cancel' }).click()
     await expect(pencil).toHaveAttribute('aria-pressed', 'false')
@@ -406,7 +419,7 @@ test.describe('build mode', () => {
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     await tools.getByRole('button', { name: 'wood' }).click()
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveText('wood')
-    await tools.getByRole('button', { name: 'Randomize board' }).click()
+    await tools.getByRole('button', { name: 'Randomize', exact: true }).click()
     await tools.getByRole('button', { name: 'Done' }).click()
     await expect(pencil).toHaveAttribute('aria-pressed', 'false')
     const analysis = page.locator('.phone-analysis')
@@ -432,7 +445,7 @@ test.describe('build mode', () => {
     await expect(slots.first()).toHaveAttribute('fill', '#c23f38')
     await page.getByRole('button', { name: 'Place pieces for Blue', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Place pieces for Blue', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.locator('.phone-dots [aria-pressed="true"]')).toHaveCount(1)
+    await expect(page.locator('.head-dots [aria-pressed="true"]')).toHaveCount(1)
     await expect(slots.first()).toHaveAttribute('fill', '#3063ba')
     await page.evaluate(() => window.scrollTo(0, 0))
     // The dots take no pointer events: the click lands on the board at the dot's centre.
@@ -540,7 +553,7 @@ test('pieces maps a coastal tap through the padded svg content box', async ({ pa
 test.describe('maps screen', () => {
   test('the title opens Maps, where boards are added, selected, renamed, deleted, saved and sorted', async ({ page }) => {
     await open(page)
-    const title = page.locator('.phone-title')
+    const title = page.locator('.head-title')
     const screen = page.getByRole('dialog', { name: 'Maps' })
     const rows = screen.locator('.board-list .list-row')
     await title.click()
@@ -613,7 +626,7 @@ test.describe('maps screen', () => {
   test('Escape in a rename field reverts the name and leaves the screen up', async ({ page }) => {
     await open(page)
     const screen = page.getByRole('dialog', { name: 'Maps' })
-    await page.locator('.phone-title').click()
+    await page.locator('.head-title').click()
     await screen.getByRole('button', { name: 'Rename Board 1', exact: true }).click()
     const field = screen.getByRole('textbox', { name: 'Rename Board 1' })
     await field.fill('Discarded')
@@ -621,7 +634,7 @@ test.describe('maps screen', () => {
     await expect(field).toHaveCount(0)
     await expect(screen).toBeVisible()
     await expect(screen.locator('.board-list .list-row-name')).toHaveText('Board 1')
-    await expect(page.locator('.phone-title')).toHaveText('Board 1')
+    await expect(page.locator('.head-title')).toHaveText('Board 1')
   })
 
   test('renaming a saved map from its row retitles the board linked to it', async ({ page }) => {
@@ -629,7 +642,7 @@ test.describe('maps screen', () => {
     await randomizePhoneBoard(page)
     const screen = page.getByRole('dialog', { name: 'Maps' })
     const rows = screen.locator('.board-list .list-row')
-    await page.locator('.phone-title').click()
+    await page.locator('.head-title').click()
     // One board, one row, even now that it is saved.
     await expect(rows).toHaveCount(1)
     await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
@@ -639,7 +652,7 @@ test.describe('maps screen', () => {
     await field.press('Enter')
     await expect(field).toHaveCount(0)
     await expect(rows.locator('.list-row-name')).toHaveText(['Friday'])
-    await expect(page.locator('.phone-title')).toHaveText('Friday')
+    await expect(page.locator('.head-title')).toHaveText('Friday')
     await expect(screen).toBeVisible()
   })
 
@@ -647,7 +660,7 @@ test.describe('maps screen', () => {
     await open(page)
     const screen = page.getByRole('dialog', { name: 'Maps' })
     const importDialog = page.getByRole('dialog', { name: 'Import screenshot' })
-    await page.locator('.phone-title').click()
+    await page.locator('.head-title').click()
     // Dismissed with nothing imported: the screen stays.
     await screen.getByRole('button', { name: 'Import screenshot' }).click()
     await expect(importDialog).toBeVisible()
@@ -658,7 +671,7 @@ test.describe('maps screen', () => {
     // not an import either.
     await screen.getByRole('button', { name: 'New board' }).click()
     await expect(screen).toHaveCount(0)
-    await page.locator('.phone-title').click()
+    await page.locator('.head-title').click()
     await screen.getByRole('button', { name: 'Delete Board 2', exact: true }).click()
     await expect(screen.locator('.board-list .list-row')).toHaveCount(1)
     await expect(screen).toBeVisible()
@@ -673,7 +686,7 @@ test.describe('maps screen', () => {
     // A screenshot that parses becomes the active board and takes the screen with it.
     await screen.getByRole('button', { name: 'Import screenshot' }).click()
     await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/settled-3p-pick-cards.png'))
-    await expect(page.locator('.phone-title')).toHaveText('settled-3p-pick-cards', { timeout: 30_000 })
+    await expect(page.locator('.head-title')).toHaveText('settled-3p-pick-cards', { timeout: 30_000 })
     await expect(screen).toHaveCount(0)
     await expect(importDialog).toHaveCount(0)
   })
@@ -705,7 +718,7 @@ test.describe('players screen', () => {
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
     await expect(rows.nth(1).locator('.you-chip')).toBeVisible()
     await expect(rows.nth(0).locator('.you-chip')).toBeHidden()
-    await expect(page.locator('.phone-dot').nth(1)).toHaveClass(/\bme\b/)
+    await expect(page.locator('.head-dot').nth(1)).toHaveClass(/\bme\b/)
     await expect(context).toHaveText(/Picking 2nd and 7th/)
 
     await rows.nth(1).getByRole('button', { name: 'Rename Blue', exact: true }).click()
@@ -747,7 +760,7 @@ test.describe('players screen', () => {
     await screen.getByRole('button', { name: 'Add player' }).click()
     await expect(rows).toHaveCount(5)
     await expect(rows.last().locator('.list-row-name')).toHaveText('Player 5')
-    await expect(page.locator('.phone-dot')).toHaveCount(5)
+    await expect(page.locator('.head-dot')).toHaveCount(5)
     await screen.getByRole('button', { name: 'Back to the board' }).click()
     await expect(screen).toHaveCount(0)
   })
@@ -785,6 +798,6 @@ test.describe('players screen', () => {
     await page.mouse.up()
     await expect(rows).toHaveCount(3)
     await expect(rows.locator('.list-row-name')).toHaveText(['Red', 'Blue', 'Orange'])
-    await expect(page.locator('.phone-dot')).toHaveCount(3)
+    await expect(page.locator('.head-dot')).toHaveCount(3)
   })
 })

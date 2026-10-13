@@ -4,7 +4,7 @@ export async function randomizePhoneBoard(page: Page) {
   const pencil = page.getByRole('button', { name: 'Edit the board' })
   if (await pencil.getAttribute('aria-pressed') !== 'true') await pencil.click()
   const tools = page.locator('.phone-build')
-  await tools.getByRole('button', { name: 'Randomize board' }).click()
+  await tools.getByRole('button', { name: 'Randomize', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Randomize this board?' })
   // Every caller starts from a blank board, which deals without asking.
   await expect(dialog).toHaveCount(0)

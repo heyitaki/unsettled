@@ -19,7 +19,7 @@ import {
 import { setupRoad } from '../engine/setupRoad'
 import { draftIsComplete, inferDraftState, restoreDraftPick } from '../engine/draft'
 import { activePlayerId } from '../model/turn'
-import { boardGrid } from '../model/layouts'
+import { boardGrid, defaultPortEdges } from '../model/layouts'
 import {
   placeBuilding,
   placeRoad,
@@ -37,7 +37,7 @@ import { BLANK_TILE_COLOR, INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN
 import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
 import { overlayOpen } from './overlayPosition'
 import { PortPopover } from './PortPopover'
-import { buildingSlots, clickTarget, nextBuildingTier, roadSlots } from './placementSlots'
+import { buildingSlots, clickTarget, newPortEdges, nextBuildingTier, roadSlots } from './placementSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
 import {
   IDENTITY,
@@ -63,6 +63,8 @@ const PORT_TRIANGLE_SQUASH = 0.7
 const PORT_OFFSET = (SIZE * Math.sqrt(3)) / 2 * PORT_TRIANGLE_SQUASH
 const PORT_HALF_W = 25
 const PORT_HALF_H = 13
+const PORT_DOT_COARSE = 3.6
+const PORT_DOT_FINE = 2.8
 // Sea margin kept around the outermost drawn content on every side.
 const BOARD_MARGIN = 18
 // Rounding on the sea's corners, in unscaled board units. The clip frame that
@@ -121,6 +123,28 @@ function vertexPoint(vertexId: VertexId) {
     x: points.reduce((sum, point) => sum + point.x, 0) / 3,
     y: points.reduce((sum, point) => sum + point.y, 0) / 3,
   }
+}
+
+const PORT_REF_PREFIX = 'port:'
+const portRef = (edgeId: EdgeId): string => `${PORT_REF_PREFIX}${edgeId}`
+const parsePortRef = (ref: string): EdgeId | null => ref.startsWith(PORT_REF_PREFIX) ? ref.slice(PORT_REF_PREFIX.length) as EdgeId : null
+
+/** Pushes the badge away from its land hex so a building on the edge never covers it. */
+function portGeometry(edgeId: EdgeId, landKeys: ReadonlySet<string>) {
+  const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
+  const mid = midpoint([a, b])
+  const [c1, c2] = parseEdgeId(edgeId)
+  const landCenter = center(landKeys.has(axialKey(c1)) ? c1 : c2)
+  const outward = { x: mid.x - landCenter.x, y: mid.y - landCenter.y }
+  const length = Math.max(1, Math.hypot(outward.x, outward.y))
+
+  // The pill reaches further toward vertical edges, so add enough offset to keep the sea gap even.
+  const offset = PORT_OFFSET + (PORT_HALF_W - PORT_HALF_H) * (Math.abs(outward.x) / length - 0.5)
+  const point = {
+    x: mid.x + (outward.x / length) * offset,
+    y: mid.y + (outward.y / length) * offset,
+  }
+  return { a, b, point }
 }
 
 /** A road's drawn length, centre and angle; the hover preview shares it so the two cannot drift. */
@@ -222,29 +246,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     [highlight, board.buildings],
   )
   const ports = useMemo<PortLayout[]>(
-    () =>
-      board.ports.map((port) => {
-        const [a, b] = edgeEndpointVertexIds(port.edgeId).map(vertexPoint)
-        const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-        // Push the bubble straight out along the coastal edge's outward normal
-        // (away from its land hex), so it stays clear of both endpoint vertices
-        // — a building on either one won't occlude it.
-        const [c1, c2] = parseEdgeId(port.edgeId)
-        const landCenter = center(grid.landKeys.has(axialKey(c1)) ? c1 : c2)
-        const outward = { x: midpoint.x - landCenter.x, y: midpoint.y - landCenter.y }
-        const length = Math.max(1, Math.hypot(outward.x, outward.y))
-        // The pill is wider than tall, so it reaches further back toward a
-        // vertical edge (normal along x) than toward a slanted one (|nx| = 0.5).
-        // Add that extra reach, so the sea gap is the same on every edge.
-        const offset = PORT_OFFSET + (PORT_HALF_W - PORT_HALF_H) * (Math.abs(outward.x) / length - 0.5)
-        const point = {
-          x: midpoint.x + (outward.x / length) * offset,
-          y: midpoint.y + (outward.y / length) * offset,
-        }
-        return { port, a, b, point }
-      }),
+    () => board.ports.map((port) => ({ port, ...portGeometry(port.edgeId, grid.landKeys) })),
     [board.ports, grid],
   )
+  const portSlots = useMemo(() => newPortEdges(board).map((edgeId) => ({
+    edgeId, ref: portRef(edgeId), ...portGeometry(edgeId, grid.landKeys).point,
+  })), [board, grid])
   // Fit the viewBox to everything drawn (hexes + port bubbles + placed buildings)
   // plus an even margin, so the board is centered in the sea with room for the
   // port leaders and no edge piece gets clipped.
@@ -254,6 +261,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       minX = Math.min(minX, x); minY = Math.min(minY, y)
       maxX = Math.max(maxX, x); maxY = Math.max(maxY, y)
     }
+    const includeBox = (point: Point, halfW: number, halfH: number) => {
+      include(point.x - halfW, point.y - halfH)
+      include(point.x + halfW, point.y + halfH)
+    }
     for (const hex of board.hexes) {
       const point = center(hex.coord)
       for (let index = 0; index < 6; index += 1) {
@@ -261,22 +272,25 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         include(point.x + SIZE * Math.cos(angle), point.y + SIZE * Math.sin(angle))
       }
     }
-    for (const { point } of ports) {
-      include(point.x - PORT_HALF_W, point.y - PORT_HALF_H)
-      include(point.x + PORT_HALF_W, point.y + PORT_HALF_H)
+    for (const { point } of ports) includeBox(point, PORT_HALF_W, PORT_HALF_H)
+
+    // An empty default port spot reserves its badge, so deleting or restoring that
+    // port leaves the frame alone. Any other open spot reserves only its dot.
+    const defaultEdges = new Set(defaultPortEdges(board.layout))
+    for (const slot of portSlots) {
+      const badge = defaultEdges.has(slot.edgeId)
+      const halfWidth = badge ? PORT_HALF_W : PORT_DOT_COARSE
+      const halfHeight = badge ? PORT_HALF_H : PORT_DOT_COARSE
+      includeBox(slot, halfWidth, halfHeight)
     }
-    for (const building of board.buildings) {
-      const point = vertexPoint(building.vertexId)
-      include(point.x - PIECE_REACH, point.y - PIECE_REACH)
-      include(point.x + PIECE_REACH, point.y + PIECE_REACH)
-    }
+    for (const building of board.buildings) includeBox(vertexPoint(building.vertexId), PIECE_REACH, PIECE_REACH)
     return {
       x: minX - BOARD_MARGIN,
       y: minY - BOARD_MARGIN,
       width: maxX - minX + BOARD_MARGIN * 2,
       height: maxY - minY + BOARD_MARGIN * 2,
     }
-  }, [board.hexes, board.buildings, ports])
+  }, [board.layout, board.hexes, board.buildings, ports, portSlots])
   // A layout or tab switch is a different board, so a zoom held over from the
   // old one means nothing and resets. Every other fit change is the same board growing
   // its box — a coastal piece reaching past the hexes — where snapping back to
@@ -301,6 +315,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }, [state.activeTabId, board.layout, fitX, fitY, fitWidth, fitHeight])
   const renderedViewBox = transformedViewBox(viewBox, transform)
   const pick = state.pick
+  const pieceMode = !pick && state.tool.kind === 'piece'
   const draft = useMemo(() => inferDraftState(board), [board])
   const draftComplete = draftIsComplete(board, draft)
   const viewedSlot = state.viewedPick ?? draft.myRemainingPickIndices[0]
@@ -322,15 +337,20 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }, [state.tool, board, placementPlayer, pick])
   const candidates = useMemo(() => {
     const refs = new Set<string>([...placeableVertices, ...placeableEdges])
-    if (!pick && state.tool.kind === 'piece') {
+    if (pieceMode) {
       for (const building of board.buildings) refs.add(building.vertexId)
       for (const road of board.roads) refs.add(road.edgeId)
     }
     return [
       ...targetPositions.filter((target) => refs.has(target.ref)),
-      ...(!pick && state.tool.kind === 'piece' ? ports.map(({ port, point }) => ({ ref: `port:${port.edgeId}`, ...point })) : []),
+      ...(pieceMode ? [
+        ...ports.map(({ port, point }) => ({ ref: portRef(port.edgeId), ...point })),
+        ...portSlots,
+        ...board.hexes.filter((hex) => hex.tile !== null && (!board.robber || axialKey(hex.coord) !== axialKey(board.robber)))
+          .map((hex) => ({ ref: axialKey(hex.coord), ...center(hex.coord) })),
+      ] : []),
     ]
-  }, [targetPositions, placeableVertices, placeableEdges, board.buildings, board.roads, ports, pick, state.tool])
+  }, [targetPositions, placeableVertices, placeableEdges, board, ports, portSlots, pieceMode])
   const targetAt = useCallback((point: Point) => {
     const rect = svgRef.current && contentBox(svgRef.current)
     // An unmeasured board has no point to resolve; clientToUnits would answer with the view centre.
@@ -353,21 +373,17 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     }
     const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))
     if (!hex) return
-    if (state.tool.kind === 'tile') commit(setHexTile(board, coord, state.tool.tile))
-    else if (state.tool.kind === 'token') {
+    if (state.tool.kind === 'tile') {
+      const tile = hex.tile === state.tool.tile ? null : state.tool.tile
+      let nextBoard = setHexTile(board, coord, tile)
+      if (tile === null && board.robber && axialKey(board.robber) === axialKey(coord)) nextBoard = setRobber(nextBoard, null)
+      commit(nextBoard)
+    } else if (state.tool.kind === 'token') {
       if (hex.tile === 'desert') {
         dispatch({ type: 'notice', message: 'Desert hexes cannot have number tokens.' })
         return
       }
-      commit(setNumberToken(board, coord, state.tool.number))
-    }
-    else if (state.tool.kind === 'robber') commit(setRobber(board, coord))
-    else if (state.tool.kind === 'erase') {
-      let nextBoard = setHexTile(board, coord, null)
-      if (nextBoard.robber && axialKey(nextBoard.robber) === axialKey(coord)) {
-        nextBoard = setRobber(nextBoard, null)
-      }
-      commit(nextBoard)
+      commit(setNumberToken(board, coord, hex.numberToken === state.tool.number ? null : state.tool.number))
     }
   }
   const onEdge = (edgeId: EdgeId) => {
@@ -379,9 +395,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       const existing = board.roads.find((road) => road.edgeId === edgeId)
       if (existing) commit(removeRoad(board, edgeId))
       else if (tab.activePlayerId !== null) commit(placeRoad(board, edgeId, tab.activePlayerId))
-    } else if (state.tool.kind === 'erase') {
-      commit(removePort(removeRoad(board, edgeId), edgeId))
-    } else if (state.tool.kind === 'port' && grid.coastalEdgeIds.includes(edgeId)) setEditingPort(edgeId)
+    }
   }
   const onVertex = (vertexId: VertexId) => {
     if (pick) {
@@ -410,7 +424,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       const owner = existing?.playerId ?? tab.activePlayerId
       if (tier === null) commit(removeBuilding(board, vertexId))
       else if (owner !== null) commit(placeBuilding(board, vertexId, owner, tier))
-    } else if (state.tool.kind === 'erase') commit(removeBuilding(board, vertexId))
+    }
   }
   const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece' || draftPlayer !== null
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
@@ -418,10 +432,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
   const hoverBuilding = hover && board.buildings.find((building) => building.vertexId === hover.ref)
   const hoverRoad = hover && board.roads.find((road) => road.edgeId === hover.ref)
-  const hoverPlayer = hover && !hover.ref.startsWith('port:')
+  const hoverPort = hover ? parsePortRef(hover.ref) : null
+  const hoverPlayer = hover && hoverPort === null
     ? hoverBuilding?.playerId ?? hoverRoad?.playerId ?? placementPlayer
     : null
-  const preview = hover && !hover.ref.startsWith('port:') && !hoverBuilding && !hoverRoad ? hover : undefined
+  const preview = hover && hoverPort === null && !hoverBuilding && !hoverRoad ? hover : undefined
   const previewRoad = preview?.ref.startsWith('e:') ? roadGeometry(preview.ref as EdgeId) : undefined
   useEffect(() => {
     lastClick.current = null
@@ -429,15 +444,16 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     finePointerDown.current = null
   }, [placementActive, state.activeTabId, board.layout])
   useEffect(() => {
-    setHoveredTarget(!coarse && placementActive && finePointer.current
-      ? targetAt(finePointer.current)?.ref ?? null
-      : null)
-  }, [targetAt, coarse, placementActive, state.activeTabId, board.layout, transform])
+    const target = !coarse && placementActive && finePointer.current ? targetAt(finePointer.current) : null
+    setHoveredTarget(target && !grid.landKeys.has(target.ref) ? target.ref : null)
+  }, [targetAt, coarse, placementActive, state.activeTabId, board.layout, transform, grid])
   const actOnTarget = (target: { ref: string; x: number; y: number }) => {
     lastClick.current = target
-    if (target.ref.startsWith('port:')) setEditingPort(target.ref.slice(5) as EdgeId)
+    const port = parsePortRef(target.ref)
+    if (port !== null) setEditingPort(port)
     else if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
-    else onEdge(target.ref as EdgeId)
+    else if (target.ref.startsWith('e:')) onEdge(target.ref as EdgeId)
+    else commit(setRobber(board, parseAxialKey(target.ref)))
   }
   // The dots take no pointer events (editor.css), so a pointer always goes through the svg's
   // handler; only a click dispatched on a dot itself arrives here, and it names its target.
@@ -445,9 +461,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     event.stopPropagation()
     actOnTarget(slot)
   }
-  const eraseActive = !pick && state.tool.kind === 'erase'
-  const portActive = !pick && state.tool.kind === 'port'
-  const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token' || state.tool.kind === 'robber'
+  const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token'
   const gesturesBlocked = editingPort !== null
   const overlayBlocksGestures = () =>
     gesturesBlocked || overlayOpen()
@@ -490,7 +504,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     if (overlayBlocksGestures()) return
     if (!coarse) {
       finePointer.current = pointOf(event)
-      setHoveredTarget(targetAt(finePointer.current)?.ref ?? null)
+      const target = targetAt(finePointer.current)
+      setHoveredTarget(target && !grid.landKeys.has(target.ref) ? target.ref : null)
       return
     }
     if (!pointers.current.has(event.pointerId)) return
@@ -696,15 +711,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     const ink = port.resource ? readableInk(TILE_COLORS[port.resource]) : INK_COLOR
     return (
       <g
-        key={`port:${port.edgeId}`}
+        key={portRef(port.edgeId)}
         className={highlightSet.has(port.edgeId) ? 'highlighted' : ''}
-        onClick={
-          portActive ? () => setEditingPort(port.edgeId)
-            // The badge floats in the sea, clear of the edge hit line that erases its port.
-            : eraseActive ? () => dispatch({ type: 'commit', board: removePort(board, port.edgeId) })
-              : undefined
-        }
-        style={portActive ? { cursor: 'pointer' } : eraseActive ? { cursor: 'crosshair' } : undefined}
       >
         <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
         <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
@@ -712,7 +720,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
       </g>
     )
-  }), [ports, highlightSet, portActive, eraseActive, board, dispatch])
+  }), [ports, highlightSet])
   const roadLayer = useMemo(() => board.roads.map((road) => {
     // Draw the road as a slim rounded rectangle rather than a round-capped
     // stroke: squarer ends read as a plank, not a capsule. Rotate a
@@ -951,17 +959,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           </g>
           {markLayer}
           <g className="hit-layers">
-            {(hexActive || eraseActive) && board.hexes.map((hex) => (
+            {hexActive && board.hexes.map((hex) => (
               <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />
             ))}
-            {(eraseActive || portActive) && grid.edgeIds.map((edgeId) => {
-              const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
-              return <line key={`hit:${edgeId}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} onClick={() => onEdge(edgeId)} />
-            })}
-            {eraseActive && grid.vertexIds.map((vertexId) => {
-              const point = vertexPoint(vertexId)
-              return <circle key={`hit:${vertexId}`} cx={point.x} cy={point.y} r={coarse ? 17 : 9} onClick={() => onVertex(vertexId)} />
-            })}
           </g>
           {/* Placement affordances: legal dots, a piece preview at an empty target, or a ring. */}
           <g className="placement-layer">
@@ -976,6 +976,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               const point = midpoint([a, b])
               return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 3.6 : 2.8} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
             })}
+            {pieceMode && portSlots.map((slot) => (
+              <circle key={slot.ref} className="placement-slot" cx={slot.x} cy={slot.y} r={coarse ? PORT_DOT_COARSE : PORT_DOT_FINE} fill={TOKEN_COLOR} fillOpacity={0.85} onClick={(event) => onSlotClick(event, slot)} />
+            ))}
             {preview && !previewRoad && <path
               className="placement-hover"
               d={SETTLEMENT_PATH}

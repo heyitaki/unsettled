@@ -83,7 +83,7 @@ export async function seedBoard(page: Page, fields: Partial<Board>, stats: Game[
 
 /**
  * `count` saved maps, every one a copy of the stored board, so a test can put
- * more in the Library than the rail can show. Runs on the reloaded document
+ * more in the Library than the popover can show. Runs on the reloaded document
  * like `seedUnclaimedRoster`, after the store's own pagehide flush.
  */
 export async function seedSavedMaps(page: Page, count: number) {

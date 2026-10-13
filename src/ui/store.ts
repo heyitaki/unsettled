@@ -20,7 +20,6 @@ import { inferDraftState } from '../engine/draft'
 import type {
   Board,
   EdgeId,
-  Resource,
   TileKind,
 } from '../model/types'
 import {
@@ -46,10 +45,7 @@ export type Tool =
   | { kind: 'none' }
   | { kind: 'tile'; tile: TileKind }
   | { kind: 'token'; number: number }
-  | { kind: 'port'; resource: Resource | null; rate: number }
-  | { kind: 'robber' }
-  | { kind: 'erase' }
-  // The tool rows are open and no other tool is selected: a board click places pieces.
+  // The tool rows are open with no selected tool button: taps act on the nearest target.
   | { kind: 'piece' }
 
 /**
@@ -352,7 +348,7 @@ function reduceAction(state: StoreState, action: StoreAction): StoreState {
         }
       })
     case 'tool':
-      return { ...state, tool: action.tool }
+      return state.tool.kind === 'none' && action.tool.kind === 'none' ? state : { ...state, tool: action.tool }
     case 'active-player':
       // Reconciled like every other write to activePlayerId: a dangling id would
       // reach placeRoad/placeBuilding, which reject it by throwing.

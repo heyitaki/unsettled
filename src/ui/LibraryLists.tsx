@@ -63,7 +63,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
     setFades((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }))
   }, [])
   // The row count covers the rows the scroller holds; the observer covers its
-  // height, which moves with the rail around it.
+  // height, which moves with the popover around it.
   const rowCount = unlisted.length + maps.length
   useLayoutEffect(() => {
     syncFades()

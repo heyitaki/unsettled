@@ -370,7 +370,10 @@ describe('Best picks rows', () => {
   })
 
   it.each([false, true])('i: opens factors only for the selected row (phone: %s)', async (phone) => {
-    if (phone) await render(() => {})
+    if (phone) {
+      vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
+      await render(() => {})
+    }
     await reply([], [INLAND, MIRRORED])
     expect(container.querySelector('.analysis-factors')).toBeNull()
     const rows = container.querySelectorAll('.analysis-row-select')

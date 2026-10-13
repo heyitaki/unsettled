@@ -37,7 +37,7 @@ const UNITS: [number, string][] = [
   [60, 'm'],
 ]
 
-// Compact timestamps fit the narrow rail.
+// Compact timestamps fit the Maps popover.
 export function relativeTime(ts: number, now = Date.now()): string {
   const seconds = Math.round((now - ts) / 1000)
   if (seconds < 45) return 'just now'

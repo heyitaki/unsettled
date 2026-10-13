@@ -11,12 +11,14 @@ async function downloadedBackup(download: Download) {
 }
 
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  await page.getByRole('button', { name: 'Randomize', exact: true }).click()
+  await page.locator('.tools-panel').getByRole('button', { name: 'Done', exact: true }).click()
 }
 
 test('screenshot import contains keyboard focus and Escape restores the opener', async ({ page }) => {
   await page.goto('')
-  const opener = page.getByRole('button', { name: 'Import screenshot', exact: true })
+  const opener = page.locator('.site-header').getByRole('button', { name: 'Import screenshot', exact: true })
   await opener.click()
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   const input = dialog.locator('input[type=file]')
@@ -33,6 +35,7 @@ test('screenshot import contains keyboard focus and Escape restores the opener',
 test('a whole-library backup restores into another browser without losing its boards', async ({ page, browser, baseURL }) => {
   await page.goto('')
   await randomize(page)
+  await page.locator('.head-title').click()
   await page.getByRole('button', { name: 'Import and export files' }).click()
   const downloaded = page.waitForEvent('download')
   await page.getByRole('menuitem', { name: 'Back up library' }).click()
@@ -41,6 +44,7 @@ test('a whole-library backup restores into another browser without losing its bo
   try {
     const restored = await context.newPage()
     await restored.goto('')
+    await restored.locator('.head-title').click()
     await restored.getByRole('button', { name: 'Import and export files' }).click()
     const choosing = restored.waitForEvent('filechooser')
     await restored.getByRole('menuitem', { name: 'Restore library backup' }).click()
@@ -86,28 +90,36 @@ test('award corrections survive undo, redo and reload', async ({ page }) => {
     }
   }, { key: WORKSPACE_KEY, game })
   await page.goto('')
+  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
   await page.locator('.award-controls summary').click()
   const holder = page.getByRole('button', { name: /Largest army holder/ })
   await expect(holder).toContainText('Unknown')
   await holder.click()
   await page.getByRole('option', { name: 'Blue', exact: true }).click()
   await expect(holder).toContainText('Blue')
+  await page.getByRole('button', { name: 'Edit the board' }).click()
   await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
+  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
+  await page.locator('.award-controls summary').click()
   await expect(holder).toContainText('Unknown')
+  await page.keyboard.press('Escape')
   await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
+  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
+  await page.locator('.award-controls summary').click()
   await expect(holder).toContainText('Blue')
   await page.reload()
+  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
   await page.locator('.award-controls summary').click()
   await expect(holder).toContainText('Blue')
 })
 
-test('the erase tool removes a port from a click on its badge', async ({ page }) => {
+test('the port editor deletes a port after tapping its badge', async ({ page }) => {
   await page.goto('')
   const badges = page.locator('.board-canvas .port-text')
   await expect(badges.first()).toBeVisible()
   const count = await badges.count()
-  await page.getByText('Edit manually').click()
-  await page.locator('.structure-grid').getByRole('button', { name: 'erase' }).click()
+  await page.getByRole('button', { name: 'Edit the board' }).click()
   await badges.first().click()
+  await page.locator('.port-popover').getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(badges).toHaveCount(count - 1)
 })

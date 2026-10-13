@@ -23,11 +23,10 @@ export function buildingPoints(tier: BuildingTier): number {
 }
 
 // Every mutator below returns the board it was given when the edit would change
-// nothing, and composes: an edit built from several of them (erase hits a road
-// and a port) hands back the original reference when none of them bit. The
-// store keys its undo stack on board identity, so this is what keeps a stray
-// click — repainting a wheat hex wheat, erasing empty water — from becoming an
-// undo step that visibly does nothing.
+// nothing, and composes: an edit built from several of them (blanking a tile
+// and lifting its robber) hands back the original reference when none of them
+// bit. The store keys its undo stack on board identity, so this is what keeps
+// a tap that changes nothing from becoming an undo step.
 const sameCoord = (a: AxialCoord | null, b: AxialCoord | null): boolean =>
   a === b || (a !== null && b !== null && a.q === b.q && a.r === b.r)
 
@@ -368,6 +367,12 @@ export function terrainKey(board: Board): string {
 // because re-running it is exactly what does the clearing.
 export const clearBoard = (board: Board): Board =>
   isBlank(board) ? board : setLayout(board, board.layout)
+
+export const hasPieces = (board: Board): boolean => board.buildings.length > 0 || board.roads.length > 0
+
+/** Clears placed pieces while keeping the map and roster intact, preserving identity if already empty. */
+export const clearPieces = (board: Board): Board =>
+  hasPieces(board) ? { ...board, buildings: [], roads: [] } : board
 
 export function draftOrder(board: Board): string[] {
   const order = board.players.map((player) => player.id)

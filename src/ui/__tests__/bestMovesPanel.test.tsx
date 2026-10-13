@@ -438,6 +438,15 @@ describe('Best moves recording', () => {
     expect(svg.getAttribute('viewBox')).not.toBe(before)
   })
 
+  it('tapping a hex with the selected number under the token tool clears its number', async () => {
+    expect(game().board.hexes[0].numberToken).toBe(6)
+    await act(async () => seen.dispatch({ type: 'tool', tool: { kind: 'token', number: 6 } }))
+    await clickElement(container.querySelector('.hit-layers polygon'))
+    expect(game().board.hexes[0].numberToken).toBeNull()
+    expect(game().board.hexes[0].tile).toBe('wood')
+    expect(game().board.hexes[1].numberToken).toBe(6)
+  })
+
   it('renders sorted fake-worker advice and applies a selected move', async () => {
     const edge = boardGrid('standard4').edgeIds[0]
     const cards = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }

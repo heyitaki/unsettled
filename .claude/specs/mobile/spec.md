@@ -74,14 +74,14 @@ The analysis block sits straight on the page ground with no border or frame, Bes
 
 ### S6 · Build mode
 
-The pencil replaces the analysis block with the board tools in the same slot. Entering build mode arms piece placing and port editing by default, with no tool button selected; leaving build mode clears the tool. Outside build mode, board taps follow the draft placement rule in S5; otherwise they do nothing and double-tap zoom remains available. Everything above the block stays put, so nothing jumps.
+The pencil replaces the analysis block with the board tools in the same slot. The desktop does the same with the same block (desktop D3). Entering build mode arms piece placing and port editing by default, with no tool button selected; leaving build mode clears the tool. Outside build mode, board taps follow the draft placement rule in S5; otherwise they do nothing and double-tap zoom remains available. Everything above the block stays put, so nothing jumps.
 
-- Layout comes first, the same two buttons as desktop (D3), each taking half the row. Switching the layout there keeps build mode open, and Cancel restores the board the pencil opened on, its layout included. Then three rows: Terrain and Number token scroll sideways; `Other tools` fits without scrolling. The block has no Player row: the header's player dots pick the brush player for new pieces (S1). On desktop that brush is the roster row's swatch (D5, DB3); the phone roster (S8) shows a swatch but does not use it as a brush.
-- `Other tools` has `robber`, `port`, `erase` and `clear all`, the last as on desktop (D3). The default click behaviour, the dots and the help line are as on desktop (D3), except that a touch screen has no preview.
-- The block heading is `Board tools`, with no label above it. On its right sit three borderless icon buttons (`panel-dots`): `Randomize board` (`DiceGlyph`), then `Undo` and `Redo` as the straight arrows. Each is 36px wide and 44px tall with no gap between them, and the last glyph's right edge sits on the block's content edge, in line with the buttons below. `Done` and `Cancel` live inside the block, in a footer strip separated by a top hairline with no tinted ground.
-- Randomize and `Clear all` each ask before changing a board that is not blank, with the desktop's dialogs (D3).
+- Layout comes first, the same two buttons as desktop (D3), each taking half the row. Switching the layout there keeps build mode open, and Cancel restores the board the pencil opened on, its layout included. Then three rows: Terrain and Number token scroll sideways; `Board` fits without scrolling. The block has no Player row: the header's player dots pick the brush player for new pieces (S1). On desktop that brush is the roster row's swatch (D5, DB3); the phone roster (S8) shows a swatch but does not use it as a brush.
+- `Board` has `Randomize`, `Clear pieces` and `Clear board`, in three equal columns. The rows, their counts, the default taps, the dots, the help paragraph under the heading and the three confirm dialogs are the desktop's (D3), from the same component, except that a touch screen has no preview. There is no robber, port or erase tool.
+- The block heading is `Board tools`, with no label above it. On its right sit two borderless icon buttons (`panel-dots`), `Undo` and `Redo` as the straight arrows; randomize moved to the `Board` row. Each is 36px wide and 44px tall with no gap between them, and the last glyph's right edge sits on the block's content edge, in line with the buttons below. `Done` and `Cancel` live inside the block, in a footer strip separated by a top hairline with no tinted ground.
+- Randomize and both clears each ask before changing the board, with the desktop's dialogs (D3).
 
-**Cancel needs a snapshot (B1).** Board edits commit immediately today, with undo as the way back, so Cancel currently has nothing to restore. Entering build mode must snapshot the tab's game; Cancel restores it, Done keeps it. Both leave build mode.
+**Cancel needs a snapshot (B1).** Board edits commit immediately today, with undo as the way back, so Cancel currently has nothing to restore. Entering build mode must snapshot the tab's game; Cancel restores it, Done keeps it. Both leave build mode. The desktop's build mode uses the same snapshot.
 
 ### S7 · Maps screen
 
@@ -156,7 +156,7 @@ Do not rebuild these; move or restyle them.
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, under the `LibraryLists.tsx` body that `MapsPanel.tsx` and `phone/MapsScreen.tsx` both render |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx` and `phone/MapsScreen.tsx` |
 | Layout switch with a confirm when the board is not blank | `boardActions.tsx`, `chooseLayout` in `useBoardActions` |
-| Undo, redo, randomize, clear | Undo and redo in the `ToolPalette.tsx` heading, randomize beside `Edit manually`, clear beside `erase`; on the phone the `phone/PhoneBuild.tsx` heading holds randomize, undo and redo, with the tool rows shared as `ToolGroups` |
+| Undo, redo, randomize, clear | Undo and redo in the Board tools heading, randomize and both clears in its `Board` row; one `BoardTools` component for both trees |
 | Open, delete, select, rename boards | the board list in `LibraryLists.tsx` (rows are `ListRow.tsx`), `useLibrary.ts` and `store.ts` (`tab-*` actions) |
 | Board rename rule: `renameMap` when linked, tolerating a map deleted elsewhere, then `tab-rename` | `useRenameTab.ts`, called from `LibraryLists.tsx` |
 | Library autosave (B7): debounced per tab, links an unlinked tab on its first non-blank edit, never writes a game that arrived with its tab (adopted, opened, imported, duplicated) | `libraryAutosave.ts`, wired from `StoreProvider` in `store.ts` |
@@ -199,6 +199,7 @@ One row per work item. Keep the state column current; this file is the durable c
 | M16 | Library autosave in the store (B7) | | done |
 | M17 | Retire the explicit save UI on desktop: tab-menu Save, dirty dots, save-and-close prompt, `MapsPanel` save row (B7) | M16 | done |
 | M18 | Board tools rework on the phone (S1, S4, S5, S6); tracked as D14 to D20 in the desktop spec | | done 2026-10-12 |
+| M19 | Board tools without `Other tools`: `Board` row, counts, help paragraph, default taps, no dice in the heading (S6); tracked as D21 to D24 in the desktop spec | | done 2026-10-13 |
 
 ## Out of scope
 

@@ -1,60 +1,67 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { AnalysisProvider } from './AnalysisProvider'
 import { AdviceProvider } from './AdviceProvider'
-import { useAnalysis } from './useAnalysis'
 import { AnalysisPanel } from './AnalysisPanel'
 import { BoardCanvas } from './BoardCanvas'
-import { viewedPlayerId } from './draftSlots'
 import { Brand } from './Brand'
+import { BoardTools } from './BoardTools'
+import { useBoardActions } from './boardActions'
+import { HeaderControls, type HeaderPanel } from './HeaderControls'
+import { HeaderPopover } from './HeaderPopover'
+import { ImportButton } from './ImportDialog'
+import { useBuildMode } from './useBuildMode'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
 import { PhoneShell } from './phone/PhoneShell'
 import { PlayerPanel } from './PlayerPanel'
-import { restingMarks } from './restMarks'
 import { activeTab, StoreProvider, useStore } from './store'
-import { ToolPalette } from './ToolPalette'
 import { usePhone } from './useMediaQuery'
 import './editor.css'
 
 function Workspace() {
-  const { state } = useStore()
-  // What the board wears while nothing is selected (spec D4), the same ranked
-  // picks the phone rests on.
-  const { board } = activeTab(state).game
-  const { analysis } = useAnalysis()
-  const playerId = viewedPlayerId(board, state.viewedPick)
-  const restMarks = useMemo(() => restingMarks(board, analysis, playerId), [board, analysis, playerId])
+  const { state, dispatch } = useStore()
+  const actions = useBoardActions(activeTab(state), dispatch)
+  const { building, enter, done, cancel, toggle, restMarks } = useBuildMode()
+  const [open, setOpen] = useState<{ panel: HeaderPanel; trigger: HTMLButtonElement } | null>(null)
+  useEffect(() => setOpen((current) => current?.panel === 'players' ? null : current), [building])
+  const togglePanel = (panel: HeaderPanel, trigger: HTMLButtonElement) => {
+    setOpen((current) => current?.panel === panel ? null : { panel, trigger })
+  }
   return (
     <div className="app-shell">
       <header className="site-header">
         <Brand />
+        <div className="head-controls">
+          <HeaderControls building={building} onToggleMode={toggle} onOpen={togglePanel} openPanel={open?.panel ?? null} />
+          <ImportButton />
+        </div>
+        {open && (
+          <HeaderPopover key={open.panel} label={open.panel === 'maps' ? 'Maps' : 'Players'} className={open.panel === 'maps' ? 'head-maps' : 'head-players'} trigger={open.trigger} onClose={() => setOpen((current) => current === open ? null : current)}>
+            {open.panel === 'maps' ? <MapsPanel /> : <PlayerPanel />}
+          </HeaderPopover>
+        )}
       </header>
       <GlobalNotice />
       <main className="workspace">
-        <aside className="left-rail">
-          <ToolPalette />
-          <MapsPanel />
-        </aside>
         <div className="center-column">
           <BoardCanvas restMarks={restMarks} />
         </div>
         <aside className="right-rail">
-          <PlayerPanel />
-          <AnalysisPanel />
+          {building ? <BoardTools actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel onBuild={enter} />}
         </aside>
       </main>
+      {actions.confirm}
     </div>
   )
 }
 
 // Two React trees over one store (spec B8): a phone-width viewport gets the
-// shell built for it, everything wider keeps the workspace with its rails.
+// shell built for it, everything wider keeps the workspace.
 function Shell() {
   const { dispatch } = useStore()
   const phone = usePhone()
-  // A tool belongs to the tree that offered it, the phone's build block or the
-  // desktop's open tool rows, so a swap drops it: the other tree shows no tool
-  // and a board tap there must not paint.
+
+  // A tree swap drops its build session and tool together.
   useEffect(() => {
     dispatch({ type: 'tool', tool: { kind: 'none' } })
   }, [phone, dispatch])

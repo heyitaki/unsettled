@@ -19,6 +19,7 @@ import { ImportDialog } from './ImportDialog'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
 import { revealBoardIfScrolledPast } from './revealBoard'
+import { usePhone } from './useMediaQuery'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { vertexDescription } from './vertexParts'
 
@@ -73,16 +74,13 @@ const ordinal = (pick: number): string => `${pick}${['st', 'nd', 'rd'][pick - 1]
  * on the board and opens the actions under it, and a fine pointer previews a
  * row's marks on hover while nothing is pinned. Placing is never a side effect
  * of selecting.
- *
- * Only the phone shell passes `onBuild`, so that prop also tells the trees apart
- * where they still differ: the build handoff, the hint's verb, and the scroll
- * back to a board the one-document page has run past.
  */
 export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   className?: string
   onBuild?: () => void
 } = {}) {
   const { state, dispatch } = useStore()
+  const phone = usePhone()
   const game = activeTab(state).game
   const { board } = game
   const { analysis, pending, settled, settledBoard, progress = 0, error, retry } = useAnalysis()
@@ -201,9 +199,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     setSelectedPick(next)
     setSelectedLikelyGone(false)
     mark(next === null ? null : rowMarks(recommendation, index))
-    // A mark moved on a board scrolled out of view is a change nobody sees
-    // (spec B2), and only the phone's one document can scroll past the board.
-    if (onBuild && next !== null) revealBoardIfScrolledPast()
+
+    // A mark moved on a board scrolled out of view is a change nobody sees (spec B2).
+    if (next !== null) revealBoardIfScrolledPast()
   }
   const selectLikelyGone = () => {
     const next = !selectedLikelyGone
@@ -392,8 +390,6 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
           <p className="hint">
             Import a screenshot to read the tiles, numbers and players off it, or place them yourself.
           </p>
-          {/* The desktop's import button and `Edit manually` fold are already on screen
-              in the left rail, so only the phone needs the two ways in from here (spec D4). */}
           {onBuild && (
             <div className="empty-actions">
               <button type="button" className="primary" onClick={() => setImportOpen(true)}>
@@ -409,7 +405,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
         </div>
       ) : board.mePlayerId === null ? (
         <div className="claim">
-          <p className="hint">{onBuild ? 'Tap' : 'Pick'} your colour and the ranking starts.</p>
+          <p className="hint">{phone ? 'Tap' : 'Pick'} your colour and the ranking starts.</p>
           <div className="claim-row">
             {board.players.map((player) => (
               <button type="button" key={player.id} onClick={() => claim(player.id)}>

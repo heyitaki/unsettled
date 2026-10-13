@@ -16,19 +16,28 @@ import { contestFixture, seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIME
  * its orientation or pointer.
  */
 
-/**
- * A capture for the human review after the run, beside the phone shots.
- * `animations: 'disabled'` runs any open/fade to its end first, so a menu is
- * never caught half faded in. A full page unless the shot is of an open
- * `ContextMenu`: Chromium captures beyond the viewport by resizing it, and the
- * menu closes on resize.
- */
-const snap = (page: Page, name: string, fullPage = true) =>
+/** Viewport shots preserve local selections and open popovers across Chromium captures. */
+const snap = (page: Page, name: string, fullPage = false) =>
   page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
-/** On desktop, Randomize sits beside Edit manually. */
+const pencil = (page: Page) => page.locator('.site-header').getByRole('button', { name: 'Edit the board' })
+
+async function openBuild(page: Page) {
+  if (await pencil(page).getAttribute('aria-pressed') !== 'true') await pencil(page).click()
+}
+
+async function openMaps(page: Page) {
+  if (!await page.locator('.maps-panel').isVisible()) await page.locator('.site-header .head-title').click()
+}
+
+async function openPlayers(page: Page) {
+  if (!await page.locator('.player-panel').isVisible()) await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
+}
+
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Randomize board' }).click()
+  await openBuild(page)
+  await page.getByRole('button', { name: 'Randomize', exact: true }).click()
+  await page.locator('.tools-panel').getByRole('button', { name: 'Done', exact: true }).click()
 }
 
 test.describe('desktop', () => {
@@ -76,11 +85,12 @@ test.describe('desktop', () => {
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.mobile-nav')).toHaveCount(0)
 
+    await openMaps(page)
     const maps = page.locator('.maps-panel')
     const rows = maps.locator('.board-list .list-row')
     await expect(maps).toBeVisible()
-    // Import is the first action in Board tools, the panel above (spec D3).
-    await expect(page.locator('.tools-panel .panel-heading + .hero-import')).toHaveText('Import screenshot')
+    // Import stays in the header while Maps is open.
+    await expect(page.locator('.site-header .hero-import')).toHaveText('Import screenshot')
     await expect(maps.locator('.hero-import')).toHaveCount(0)
     await expect(maps.locator('.group-label')).toContainText('Boards (1)')
     await expect(rows).toHaveCount(1)
@@ -107,6 +117,7 @@ test.describe('desktop', () => {
     // An edit is all it takes to reach the library: there is no save button,
     // and the saved board is the same row, now stamped, not a second list.
     await randomize(page)
+    await openMaps(page)
     await expect(rows).toHaveCount(1)
     await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
 
@@ -139,11 +150,14 @@ test.describe('desktop', () => {
     await page.locator('.claim-row button').first().click()
 
     // Two picks per player, the first one up (spec D4).
-    const players = await page.locator('.player-list .roster-row').count()
+    const players = await page.locator('.head-dot').count()
     const ribbon = page.locator('.analysis-panel .draft-ribbon')
     const slots = ribbon.locator('.draft-ribbon-slot')
     await expect(ribbon).toHaveCount(1)
+    await openPlayers(page)
+    await expect(page.locator('.player-panel')).toBeVisible()
     await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await page.mouse.move(0, 0)
     await expect(slots).toHaveCount(players * 2)
     await expect(slots.first()).toHaveClass(/\bviewing\b/)
@@ -213,11 +227,14 @@ test.describe('desktop', () => {
     // The last view's cards stay in place while this one is ranked, so wait for the bar to go.
     await expect(panel.locator('.analysis-loading')).toHaveCount(0, { timeout: 60_000 })
     await expect(gone).toContainText('1. Red', { timeout: 60_000 })
+    await openPlayers(page)
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
     await expect(rows.locator('.you-chip')).toHaveCount(1)
     await expect(rows.nth(0).locator('.you-chip')).toBeVisible()
     // The marks on the board are in the viewed player's colour.
     await expect(page.locator('.vertex-highlight').first()).toHaveCSS('fill', 'rgb(48, 99, 186)')
+
+    await page.keyboard.press('Escape')
 
     // So does the rival's later pick, behind their own first.
     await slots.nth(6).click()
@@ -225,21 +242,28 @@ test.describe('desktop', () => {
     await expect(context).toHaveText('Blue · Picking 7th', { useInnerText: true })
     await expect(gone).toContainText('6. Orange', { timeout: 60_000 })
     await expect(gone).toContainText('2. Blue')
+    await openPlayers(page)
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
+
+    await page.keyboard.press('Escape')
 
     // The name menu switches the view the same way.
     await context.locator('.menu-trigger').click()
     await page.getByRole('option', { name: 'Orange' }).click()
     await expect(slots.nth(2)).toHaveClass(/\bviewing\b/)
     await expect(context).toHaveText('Orange · Picking 3rd and 6th', { useInnerText: true })
+    await openPlayers(page)
     await expect(rows.nth(0)).toHaveClass(/\bme\b/)
 
     // Claiming in Players moves YOU and brings the view back to it.
-    await rows.nth(3).click()
+    await openPlayers(page)
+    await rows.nth(3).getByRole('button', { name: 'Claim White', exact: true }).click()
     await expect(rows.nth(3).locator('.you-chip')).toBeVisible()
     await expect(rows.locator('.you-chip')).toHaveCount(1)
     await expect(slots.nth(3)).toHaveClass(/\bviewing\b/)
     await expect(context).toHaveText('White · Picking 4th and 5th', { useInnerText: true })
+
+    await page.keyboard.press('Escape')
 
     // Red is a rival now and still viewable; White's own circle returns to the default view.
     await slots.nth(0).click()
@@ -295,45 +319,36 @@ test.describe('desktop', () => {
     await expect(forward).toBeDisabled()
 
     await back.click()
-    // The claim moves in Players; a ribbon circle only changes the view, which is no edit to undo.
-    await page.locator('.player-list .roster-row').first().click()
-    await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
-    await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Blue')
-    await expect(forward).toBeDisabled()
-    await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
+    // Changing the claim keeps the step list while the piece arrays stay the same.
+    await openPlayers(page)
+    await page.locator('.player-list .roster-row').first().getByRole('button', { name: 'Claim Red', exact: true }).click()
+    await page.keyboard.press('Escape')
     await expect(panel.locator('.analysis-context .menu-trigger strong')).toHaveText('Red')
-    await expect(forward).toBeDisabled()
-
-    await back.click()
     await expect(forward).toBeEnabled()
+
+    await openMaps(page)
     await page.getByRole('button', { name: 'New board' }).click()
     await page.getByRole('button', { name: 'Switch to Board 1', exact: true }).click()
-    await expect(forward).toBeDisabled()
-    await back.click()
-    await expect(forward).toBeEnabled()
-    await randomize(page)
-    // The board has pieces on it, so randomize asks first.
-    await page.getByRole('dialog', { name: 'Randomize this board?' }).getByRole('button', { name: 'Replace' }).click()
-    await expect(back).toBeDisabled()
+    await page.keyboard.press('Escape')
     await expect(forward).toBeDisabled()
   })
 
   test('the tool heading holds undo and redo, and the tool labels carry the counts', async ({ page }) => {
     await page.goto('')
+    await openBuild(page)
     const heading = page.locator('.tools-panel .panel-heading')
     await expect(heading.getByRole('button')).toHaveCount(2)
     await expect(heading.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled()
     await expect(heading.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled()
-    await expect(page.locator('.tools-panel .structure-grid button').filter({ hasText: 'clear all' })).toHaveClass(/\bdanger\b/)
+    await expect(page.locator('.tools-panel .structure-grid button').filter({ hasText: 'Clear board' })).toHaveClass(/\bdanger\b/)
     await page.screenshot({ path: 'test-results/phone/desktop-tools-actions.png' })
-    // The underlined `randomize` beside `Edit manually` deals a board and leaves the fold shut.
-    await page.locator('.tools-manual').getByRole('button', { name: 'Randomize board' }).click()
-    await expect(page.locator('.tools-manual')).not.toHaveAttribute('open')
+    await page.locator('.tools-panel').getByRole('button', { name: 'Randomize', exact: true }).click()
 
     const labels = page.locator('.tools-panel .tool-label')
     const terrain = labels.filter({ hasText: 'Terrain' }).locator('.tool-count')
     await expect(terrain).toHaveText('19/19')
-    await expect(labels.filter({ hasText: 'Other tools' }).locator('.tool-count')).toHaveText('0 pieces')
+    await expect(labels.filter({ hasText: 'Number token' }).locator('.tool-count')).toHaveText('18/18')
+    await expect(labels.filter({ hasText: 'Board' }).locator('.tool-count')).toHaveCount(0)
     await snap(page, 'desktop-tools')
 
     await heading.getByRole('button', { name: 'Undo', exact: true }).click()
@@ -360,15 +375,17 @@ test.describe('desktop', () => {
 
     // Reopened, the same board is a saved one, so it asks.
     await page.reload()
-    await randomize(page)
+    await openBuild(page)
+    await page.getByRole('button', { name: 'Randomize', exact: true }).click()
     await expect(dialog).toBeVisible()
     await page.screenshot({ path: 'test-results/phone/desktop-randomize-confirm.png' })
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toHaveCount(0)
     expect(await tokens()).toEqual(second)
 
-    await randomize(page)
+    await page.getByRole('button', { name: 'Randomize', exact: true }).click()
     await dialog.getByRole('button', { name: 'New board' }).click()
+    await openMaps(page)
     await expect(boards).toContainText('Boards (2)')
     await expect(tokenText).toHaveCount(18)
     const third = await tokens()
@@ -377,11 +394,15 @@ test.describe('desktop', () => {
     await randomize(page)
     await expect(dialog).toHaveCount(0)
     await expect.poll(tokens).not.toEqual(third)
+    await openMaps(page)
     await page.getByRole('button', { name: 'Switch to Board 1', exact: true }).click()
     await expect.poll(tokens).toEqual(second)
 
-    await randomize(page)
+    await openBuild(page)
+    await page.getByRole('button', { name: 'Randomize', exact: true }).click()
     await dialog.getByRole('button', { name: 'Replace' }).click()
+    await page.locator('.tools-panel').getByRole('button', { name: 'Done', exact: true }).click()
+    await openMaps(page)
     await expect(dialog).toHaveCount(0)
     await expect.poll(tokens).not.toEqual(second)
     await expect(boards).toContainText('Boards (2)')
@@ -389,6 +410,7 @@ test.describe('desktop', () => {
 
   test('dropdowns are the phone sheet: a glyph trigger and a tick on the current option', async ({ page }) => {
     await page.goto('')
+    await openMaps(page)
     const trigger = page.getByRole('button', { name: /Sort boards/ })
     await expect(trigger.locator('svg')).toHaveCount(1)
     await expect(trigger).not.toContainText('▾')
@@ -400,6 +422,12 @@ test.describe('desktop', () => {
     await expect(active.locator('.menu-tick')).toBeVisible()
     // Laid out on every option so the labels line up, painted on the current one only.
     await expect(popup.getByRole('option')).toHaveCount(4)
+    const lastOption = popup.getByRole('option').last()
+    expect(await lastOption.evaluate((option) => {
+      const box = option.getBoundingClientRect()
+      return option.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))
+    })).toBe(true)
+    await expect(page.locator('.maps-panel')).toBeVisible()
     await expect(popup.locator('.menu-tick')).toHaveCount(4)
     const others = popup.locator('button:not(.active) .menu-tick')
     await expect(others).toHaveCount(3)
@@ -410,30 +438,32 @@ test.describe('desktop', () => {
     await page.getByRole('button', { name: 'Import and export files' }).click()
     const sheet = page.getByRole('menu', { name: 'Import and export files' })
     await expect(sheet).toHaveClass(/\bsheet-menu\b/)
+    await expect(page.locator('.maps-panel')).toBeVisible()
     await expect(sheet.getByRole('menuitem').first().locator('.menu-icon')).toBeVisible()
-    await snap(page, 'desktop-menus', false)
+    await snap(page, 'desktop-menus')
   })
 
-  test('the tool rows fold behind Edit manually, and a folded tool never paints', async ({ page }) => {
+  test('the pencil toggles the tools, and a tool outside build mode never paints', async ({ page }) => {
     await page.goto('')
     const tools = page.locator('.tools-panel')
     const terrain = tools.locator('.tool-label').filter({ hasText: 'Terrain' }).locator('.tool-count')
-    const toggle = tools.getByText('Edit manually')
+    const toggle = pencil(page)
     const box = (await page.locator('.board-canvas').boundingBox())!
     const clickBoard = () => page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
     await expect(tools.locator('.terrain-grid')).toBeHidden()
     // No tool is picked on boot, so a board click must not paint (spec D3).
     await clickBoard()
-    await expect(terrain).toHaveText('0/19')
+    await expect(page.locator('.analysis-panel h2')).toHaveText('This board is empty')
 
     await toggle.click()
+    await expect(terrain).toHaveText('0/19')
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     await tools.getByRole('button', { name: 'wood' }).click()
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(1)
     await clickBoard()
     await expect(terrain).toHaveText('1/19')
 
-    // Folding drops the tool, so opening again starts with none picked.
+    // Leaving build mode drops the tool, so opening again starts with none picked.
     await toggle.click()
     await toggle.click()
     await expect(tools.locator('.terrain-grid')).toBeVisible()
@@ -449,10 +479,10 @@ test.describe('desktop', () => {
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
   })
 
-  test('corners place pieces only while Edit manually is open', async ({ page }) => {
+  test('corners place pieces on an empty board only in build mode', async ({ page }) => {
     await page.goto('')
     const tools = page.locator('.tools-panel')
-    const toggle = tools.getByText('Edit manually')
+    const toggle = pencil(page)
     const svg = page.locator('.board-canvas')
     const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
     const corners = hexVertexIds({ q: 0, r: 0 })
@@ -470,9 +500,9 @@ test.describe('desktop', () => {
     await expect(buildings).toHaveCount(0)
 
     await toggle.click()
-    await expect(tools.locator('.structure-grid button')).toHaveText(['robber', 'port', 'erase', 'clear all'])
+    await expect(tools.locator('.structure-grid button')).toHaveText(['Randomize', 'Clear pieces', 'Clear board'])
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
-    await expect(tools.locator('.tool-hint')).toHaveText('With no tool selected, tap a corner on the board to cycle settlement, city, empty. Tap an edge to add or remove a road, or a port to edit it.')
+    await expect(tools.locator('.tool-hint')).toHaveText('Tap a corner to cycle settlement, city, empty. Tap an edge for a road, a tile to move the robber, or a port/empty coast to edit a port. Pick a terrain or number below, then tap a tile to set it. Tap again to clear it.')
     await expect(svg.locator('.placement-slot').first()).toBeVisible()
     await clickCorner(corners[0])
     await expect(buildings).toHaveCount(1)
@@ -484,7 +514,7 @@ test.describe('desktop', () => {
     await expect(buildings).toHaveCount(1)
   })
 
-  test('draft taps place the viewed settlement and advance with Edit manually closed', async ({ page }) => {
+  test('draft taps place the viewed settlement and advance outside build mode', async ({ page }) => {
     // A tap lays the settlement with the setup road a ranking of that seat would draw for it.
     const engine = await createEngine(readFileSync('src/engine/advice/engine.wasm'), () => {})
     const tapPlaced = (board: Board, vertexId: VertexId, playerId: string) => {
@@ -562,14 +592,14 @@ test.describe('desktop', () => {
     await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(board.roads.length)
   })
 
-  test('deselecting robber returns to placing pieces', async ({ page }) => {
+  test('deselecting a terrain tool returns to placing pieces', async ({ page }) => {
     await page.goto('')
     const tools = page.locator('.tools-panel')
-    await tools.getByText('Edit manually').click()
-    const robber = tools.getByRole('button', { name: 'robber', exact: true })
-    await robber.click()
-    await expect(robber).toHaveClass('selected')
-    await robber.click()
+    await openBuild(page)
+    const terrain = tools.getByRole('button', { name: 'wood', exact: true })
+    await terrain.click()
+    await expect(terrain).toHaveClass('selected')
+    await terrain.click()
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     const svg = page.locator('.board-canvas')
     await expect(svg.locator('.placement-slot').first()).toBeVisible()
@@ -583,7 +613,7 @@ test.describe('desktop', () => {
     await page.goto('')
     await seedUnclaimedRoster(page)
     const tools = page.locator('.tools-panel')
-    await tools.getByText('Edit manually').click()
+    await openBuild(page)
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     const svg = page.locator('.board-canvas')
     const badge = svg.locator('.port-text').first()
@@ -602,7 +632,7 @@ test.describe('desktop', () => {
   test('a solid corner dot previews a settlement and becomes a ring after placing it', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
-    await page.locator('.tools-panel').getByText('Edit manually').click()
+    await openBuild(page)
     const svg = page.locator('.board-canvas')
     const vertex = hexVertexIds({ q: 0, r: 0 })[0]
     const points = parseVertexId(vertex).map((coord) => axialToPixel(coord, 58))
@@ -638,8 +668,7 @@ test.describe('desktop', () => {
       board = placeBuilding(board, slot, player, 'settlement')
     }
     await seedBoard(page, board)
-    const tools = page.locator('.tools-panel')
-    await tools.getByText('Edit manually').click()
+    await openBuild(page)
     const svg = page.locator('.board-canvas')
     const other = edgeEndpointVertexIds(vertexIncidentEdgeIds(vertex)[0]).find((ref) => ref !== vertex)!
     const [corner, end] = [vertex, other].map((ref) => {
@@ -680,8 +709,7 @@ test.describe('desktop', () => {
   test('pieces removes a settlement on the second click during the draft', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
-    const tools = page.locator('.tools-panel')
-    await tools.getByText('Edit manually').click()
+    await openBuild(page)
     const svg = page.locator('.board-canvas')
     const slot = svg.locator('.placement-slot').first()
     await expect(slot).toBeVisible()
@@ -701,8 +729,7 @@ test.describe('desktop', () => {
 
   test('dragging to a legal corner does not place a piece', async ({ page }) => {
     await page.goto('')
-    const tools = page.locator('.tools-panel')
-    await tools.getByText('Edit manually').click()
+    await openBuild(page)
     const svg = page.locator('.board-canvas')
     const slots = svg.locator('.placement-slot')
     await expect(slots.first()).toBeVisible()
@@ -719,13 +746,15 @@ test.describe('desktop', () => {
     await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
   })
 
-  test('an empty board says so and offers nothing: the import and the way into the tools are already in the left rail', async ({ page }) => {
+  test('an empty board offers import and build mode', async ({ page }) => {
     await page.goto('')
     const panel = page.locator('.analysis-panel')
     await expect(panel.locator('h2')).toHaveText('This board is empty')
     await expect(panel.locator('.hint')).toBeVisible()
-    // Both ways in are on screen already, so the phone's two buttons stay on the phone (spec D4).
-    await expect(panel.getByRole('button')).toHaveCount(0)
+    await expect(panel.getByRole('button', { name: 'Import screenshot' })).toBeVisible()
+    await panel.getByRole('button', { name: 'Build it by hand' }).click()
+    await expect(page.locator('.tools-panel')).toBeVisible()
+    await expect(panel).toBeHidden()
     await snap(page, 'desktop-empty-picks')
   })
 
@@ -774,23 +803,24 @@ test.describe('desktop', () => {
     // Chromium briefly resizes to 1x1 during a full-page capture, mounting the
     // phone tree and losing local selection. A viewport shot keeps this tree.
     await page.mouse.move(0, 0)
-    await snap(page, 'desktop-selected-card', false)
+    await snap(page, 'desktop-selected-card')
     await expect(cards.first()).toHaveClass(/\bcurrent\b/)
 
     // Clearing drops back to the resting marks, and nothing was placed on the way.
-    const structures = page.locator('.tools-panel .tool-label')
-      .filter({ hasText: 'Other tools' }).locator('.tool-count')
-    await expect(structures).toHaveText('0 pieces')
+    const buildings = page.locator('.board-canvas g[transform*="scale("]')
+    const roads = page.locator('.board-canvas g[transform*="rotate("]')
+    await expect(buildings).toHaveCount(0)
+    await expect(roads).toHaveCount(0)
     await cards.first().getByRole('button', { name: 'Clear' }).click()
     await page.mouse.move(0, 0)
     await expect(marks).toHaveCount(LISTED_PICKS)
     await expect(cards.first()).not.toHaveClass(/\bcurrent\b/)
 
-    // Placing is the button's job alone, and it ends the selection with it. The settlement
-    // lands with its setup road, so the count is two.
+    // Place settlement ends the selection and lays one settlement with its setup road.
     await cards.first().locator('.analysis-row-select').click()
     await cards.first().getByRole('button', { name: 'Place settlement' }).click()
-    await expect(structures).toHaveText('2 pieces')
+    await expect(buildings).toHaveCount(1)
+    await expect(roads).toHaveCount(1)
     await expect(panel.locator('.analysis-row.current')).toHaveCount(0)
     await snap(page, 'desktop-placed')
   })
@@ -840,6 +870,8 @@ test.describe('desktop', () => {
   test('the roster claims on the row, brushes on the swatch and renames on the name', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
+    await randomize(page)
+    await openPlayers(page)
     const panel = page.locator('.player-panel')
     const rows = panel.locator('.roster-row')
     await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
@@ -847,7 +879,6 @@ test.describe('desktop', () => {
     // Add player is the heading's + (spec D5); no text row sits under the roster.
     await expect(panel.locator('.panel-heading').getByRole('button', { name: 'Add player' })).toBeVisible()
     await expect(panel.locator('.roster button', { hasText: 'Add player' })).toHaveCount(0)
-    await randomize(page)
 
     await rows.nth(1).click()
     await expect(rows.nth(1)).toHaveClass(/\bme\b/)
@@ -890,6 +921,7 @@ test.describe('desktop', () => {
   test('claims from the keyboard, and the controls over the claim button still answer', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
+    await openPlayers(page)
     const rows = page.locator('.player-panel .roster-row')
     await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
 
@@ -916,21 +948,6 @@ test.describe('desktop', () => {
     expect(own).toBe(true)
   })
 
-  /* The right rail is at its 372px ceiling well before the three-column arm's
-     widest layout, so no width may take pixels back off the name (spec D5). */
-  test('never narrows the roster name as the window widens', async ({ page }) => {
-    await page.goto('')
-    await expect(page.locator('.player-list .roster-row')).not.toHaveCount(0)
-    const cell = page.locator('.player-list .roster-row .list-row-main').first()
-    let narrowest = 0
-    for (const width of [1121, 1200, 1300, 1339, 1340, 1400, 1580]) {
-      await page.setViewportSize({ width, height: 900 })
-      const measured = await cell.evaluate((el) => el.getBoundingClientRect().width)
-      expect(measured, `at ${width}px`).toBeGreaterThanOrEqual(narrowest)
-      narrowest = measured
-    }
-  })
-
   test('the snake draft ribbon sits in Best picks, and a grip drag reseats it', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
@@ -944,11 +961,15 @@ test.describe('desktop', () => {
     // Nobody is claimed, so no pick is being viewed.
     await expect(ribbon.locator('.draft-ribbon-slot.viewing')).toHaveCount(0)
     await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
+    await openPlayers(page)
+    await expect(panel).toBeVisible()
     await expect(panel.locator('.draft-section')).toHaveCount(0)
     await expect(panel.locator('.draft-ribbon')).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await snap(page, 'desktop-draft-ribbon')
 
     // Seat order is draft order, so a reorder repaints the ribbon.
+    await openPlayers(page)
     const rows = panel.locator('.roster-row')
     await rows.first().locator('.roster-grip').dragTo(rows.nth(2))
     await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
@@ -974,6 +995,7 @@ test.describe('desktop', () => {
   test('a drag held still until the rows settle still lands where it was aimed', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
+    await openPlayers(page)
     const panel = page.locator('.player-panel')
     const rows = panel.locator('.roster-row')
     await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
@@ -998,10 +1020,10 @@ test.describe('desktop', () => {
     await expect(rows.locator('.list-row-name')).toHaveText(['Blue', 'Orange', 'Red', 'White'])
   })
 
-  test('a library of maps scrolls inside the rail instead of running it off the page', async ({ page }) => {
+  test('a library of maps scrolls inside the popover instead of running it off the page', async ({ page }) => {
     await page.goto('')
-    await expect(page.locator('.maps-panel')).toBeVisible()
     await seedSavedMaps(page, 25)
+    await openMaps(page)
     const saved = page.locator('.board-list')
     // The seeded maps, plus the blank board the document opened with.
     await expect(saved.locator('.list-row')).toHaveCount(26)
@@ -1012,21 +1034,17 @@ test.describe('desktop', () => {
     expect(list.scroll).toBeGreaterThan(list.client)
     await expect(saved).toHaveClass(/fade-bottom/)
 
-    // So the Maps panel, last in the rail, ends on screen however long the library grows.
+    // The Maps popover ends on screen however long the library grows.
     const viewport = page.viewportSize()!
     const mapsBottom = await page.locator('.maps-panel')
       .evaluate((el) => el.getBoundingClientRect().bottom)
     expect(mapsBottom).toBeLessThan(viewport.height)
   })
 
-  /* The narrowest three-column width, where every workspace track sits on its
-     floor and the roster row has the least to give. The name shares the row
-     with a grip, a swatch, the tally and the VP, and on the claimed row its own
-     cell with the YOU chip, so this is where it gets squeezed out. */
-  test.describe('at the narrowest three-column width', () => {
-    test.use({ viewport: { width: 1121, height: 900 } })
+  test.describe('in a compact two-column window', () => {
+    test.use({ viewport: { width: 1040, height: 900 } })
 
-    test('a six-player draft ribbon shrinks its circles to fit the rail', async ({ page }) => {
+    test('a six-player draft ribbon fits the analysis column', async ({ page }) => {
       const board: Board = JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8'))
       await page.goto('')
       await seedBoard(page, { ...board, players: [...board.players, { id: 'p6', name: 'Violet', color: '#7a4fa3' }], mePlayerId: 'p1' })
@@ -1040,22 +1058,23 @@ test.describe('desktop', () => {
       }))
       expect(boxes[0].left).toBeGreaterThanOrEqual(ribbon.x - 0.5)
       expect(boxes[11].right).toBeLessThanOrEqual(ribbon.x + ribbon.width + 0.5)
-      // Still circles, only smaller than the 30px they are when the row fits.
+      // All twelve circles shrink together to fit the analysis column.
       for (const box of boxes) expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(0.5)
       expect(boxes[0].width).toBeLessThan(30)
-      await snap(page, 'desktop-draft-ribbon-six', false)
+      await snap(page, 'desktop-draft-ribbon-six')
     })
 
     test('leaves the roster name room beside the YOU chip instead of running it under', async ({ page }) => {
       await page.goto('')
       await seedUnclaimedRoster(page)
+      await openPlayers(page)
       const rows = page.locator('.player-list .roster-row')
       await expect(rows).toHaveCount(UNCLAIMED_ROSTER.length)
       // One claimed row, so the chip is measured where it is actually drawn.
       await rows.first().click()
       await expect(rows.first()).toHaveClass(/\bme\b/)
 
-      // Both views, since the resources view carries a sixth tally column.
+      // Both tally views must leave room for the name and YOU chip.
       for (const view of ['Pieces', 'Resources']) {
         await page.locator('.tally-tabs').getByRole('button', { name: view }).click()
         const boxes = await rows.evaluateAll((elements) => elements.map((row) => ({
@@ -1090,12 +1109,16 @@ test.describe('landscape phone', () => {
     await expect(page.locator('.mobile-nav')).toHaveCount(0)
     await expect(page.locator('.phone-shell')).toHaveCount(0)
     await expect(page.locator('.board-tabs')).toHaveCount(0)
+    await openMaps(page)
     await expect(page.locator('.maps-panel')).toBeVisible()
     await seedBoard(page, setHexTile(createBoard('standard4'), { q: 0, r: 0 }, 'ore'))
 
     // The ribbon opens Best picks on every workspace width (spec DB6).
     await expect(page.locator('.center-column .draft-ribbon')).toHaveCount(0)
+    await openPlayers(page)
+    await expect(page.locator('.player-panel')).toBeVisible()
     await expect(page.locator('.player-panel .draft-ribbon')).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await expect(page.locator('.analysis-panel .draft-ribbon')).toHaveCount(1)
     await expect(page.locator('footer')).toHaveCount(0)
     await snap(page, 'landscape')
@@ -1114,13 +1137,10 @@ test.describe('landscape phone', () => {
   })
 })
 
-/* The two-column arm, where the right rail wraps under the board. The board
-   is sticky on the three-column arm, and Chromium bounds a sticky grid item by
-   the grid rather than its row, so a pinned board would slide over the rail. */
-test.describe('two-column desktop window', () => {
-  test.use({ viewport: { width: 1000, height: 700 } })
+test.describe('stacked desktop window', () => {
+  test.use({ viewport: { width: 900, height: 700 } })
 
-  test('scrolls the board away rather than over the players panel', async ({ page }) => {
+  test('scrolls the board away rather than over the analysis panel', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('.workspace')).toBeVisible()
     const board = page.locator('.center-column')
@@ -1132,7 +1152,7 @@ test.describe('two-column desktop window', () => {
     const scrolled = await board.evaluate((el) => el.getBoundingClientRect().bottom)
     const railScrolled = await rail.evaluate((el) => el.getBoundingClientRect().top)
     expect(scrolled).toBeLessThanOrEqual(railScrolled)
-    await snap(page, 'desktop-two-column')
+    await snap(page, 'desktop-stacked')
   })
 })
 

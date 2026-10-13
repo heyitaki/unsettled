@@ -2,6 +2,12 @@ import { edgeEndpointVertexIds, vertexAdjacentVertexIds } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import type { Board, BuildingTier, EdgeId } from '../model/types'
 
+export function newPortEdges(board: Board): EdgeId[] {
+  const occupied = new Set(board.ports.flatMap((port) => edgeEndpointVertexIds(port.edgeId)))
+  return boardGrid(board.layout).coastalEdgeIds.filter((edgeId) =>
+    edgeEndpointVertexIds(edgeId).every((vertexId) => !occupied.has(vertexId)))
+}
+
 export function nearestTarget(point: { x: number; y: number }, targets: readonly { ref: string; x: number; y: number }[], maxDistance: number): string | null {
   let nearest: string | null = null
   let distance = maxDistance

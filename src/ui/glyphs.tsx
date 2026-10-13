@@ -2,12 +2,7 @@ import { isRedToken, pips } from '../model/board'
 import type { Resource } from '../model/types'
 import { INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 
-// Shared inline icons, one flat family on a 20-unit grid (desktop spec D3,
-// option C): pieces are filled blocks of a player or tool colour with no
-// casing, counters and resources are filled silhouettes at the same weight, and
-// the line-art marks (anchor, trash) are drawn thick enough to sit beside them.
-// The board keeps its own piece shapes; only the robber's outline and the
-// number token's face are shared.
+// Shared inline icons on a 20-unit grid. The board keeps its own piece shapes.
 
 const PIECE_INK = '#30271f'
 /** The paper the cut-out detail of a flat glyph shows through. */
@@ -19,8 +14,8 @@ const PAPER = '#fbf8f1'
  */
 export const GLYPH_MUTED = '#8e867a'
 
-export type StructureShape =
-  | 'road' | 'settlement' | 'city' | 'superCity' | 'robber' | 'port' | 'erase'
+type StructureShape =
+  | 'road' | 'settlement' | 'city' | 'superCity'
 
 /**
  * The robber, in board units, drawn by BoardCanvas. Its base is an arc of the
@@ -34,16 +29,10 @@ export const ROBBER_BODY =
 /** Every flat glyph shares this box, so a row of them shares a baseline and a width. */
 const GRID = '0 0 20 20'
 
-/**
- * A piece or tool mark standing `size` px square. Pieces take `color` as their
- * fill; the robber, the anchor and the trash can inherit `currentColor`, so
- * they invert with the tile they sit on. Pass `currentColor` as the colour to
- * do the same for a piece (the selected tile).
- */
-export function StructureGlyph({ shape, color, size = 16 }: {
+export function StructureGlyph({ shape, color, size }: {
   shape: StructureShape
   color: string
-  size?: number
+  size: number
 }) {
   const style = { height: size, width: size }
   switch (shape) {
@@ -70,46 +59,6 @@ export function StructureGlyph({ shape, color, size = 16 }: {
       return (
         <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
           <path d="M2.2 17V9.6l3.8-5.3 2.7 3.7V3.8h2.6V8l2.7-3.7 3.8 5.3V17Z" fill={color} />
-        </svg>
-      )
-    case 'robber':
-      return (
-        <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
-          <circle cx="10" cy="5.4" r="3.2" />
-          <path d="M4.2 17.2c0-4.9 2.2-7.6 5.8-7.6s5.8 2.7 5.8 7.6Z" />
-        </svg>
-      )
-    case 'port': // an anchor, in line art the weight of the filled shapes
-      return (
-        <svg
-          className="tool-icon"
-          viewBox={GRID}
-          style={{ ...style, fill: 'none' }}
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-          aria-hidden="true"
-        >
-          <circle cx="10" cy="4.9" r="1.6" />
-          <path d="M10 6.5v10.3M6.8 9.6h6.4M4.4 12.2a5.6 5.6 0 0 0 11.2 0" />
-        </svg>
-      )
-    default: // erase — a trash can
-      return (
-        <svg
-          className="tool-icon"
-          viewBox={GRID}
-          style={{ ...style, fill: 'none' }}
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-          aria-hidden="true"
-        >
-          <path d="M3.4 5.8h13.2" />
-          <path d="M7.8 5.8V3.6h4.4v2.2" />
-          <path d="M5.4 5.8 6.2 17.2h7.6l.8-11.4" />
         </svg>
       )
   }
@@ -202,9 +151,8 @@ const TOKEN_STROKE = 2.5
 export const NUMBER_TOKEN_EXTENT = TOKEN_RADIUS + TOKEN_STROKE / 2
 
 /**
- * A number token in board units, centred on (x, y). The board and the tools
- * palette both draw this one face, so the palette's tokens keep the board's
- * proportions at any size.
+ * A number token in board units, centred on (x, y). The board and Board tools
+ * share this face so the tokens keep the same proportions at any size.
  */
 export function NumberTokenFace({ number, x = 0, y = 0, discOnly = false }: {
   number: number
@@ -408,8 +356,8 @@ export function ArrowRightGlyph() {
 /** A die face, for the randomize action. */
 export function DiceGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="7" cy="7" r="1.35" />
       <circle cx="13" cy="7" r="1.35" />
       <circle cx="10" cy="10" r="1.35" />
@@ -443,6 +391,16 @@ export function ClearBoardGlyph() {
     <svg {...LINE_ART} width="22" height="22" viewBox="0 0 20 20" strokeWidth="1.5">
       <path d="M10 2.6 16.4 6.3V13.7L10 17.4 3.6 13.7V6.3Z" />
       <path d="M6.3 13.4 13.7 6.4" />
+    </svg>
+  )
+}
+
+/** A struck settlement marks clearing pieces while keeping the map. */
+export function ClearPiecesGlyph() {
+  return (
+    <svg {...LINE_ART} width="22" height="22" viewBox="0 0 20 20" strokeWidth="1.5">
+      <path d="M4.4 16.6V9.3L10 4l5.6 5.3v7.3Z" />
+      <path d="M6.6 14.6 13.4 8.4" />
     </svg>
   )
 }
