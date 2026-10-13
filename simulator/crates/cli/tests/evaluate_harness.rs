@@ -9,7 +9,7 @@ use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
     EVAL2_SEED, EVAL3_SEED, EVAL4_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain,
     GATE2_SEED, GATE3_SEED, GATE4_SEED, GATE5_SEED, GATE_SEED, PERF_SEED, TUNING2_SEED, TUNING3_SEED, TUNING4_SEED,
-    TUNING_SEED, evaluate, evaluation_schedule,
+    TUNING_SEED, evaluate, evaluate_in_chunks, evaluation_schedule,
     summarize_arm,
 };
 
@@ -278,6 +278,61 @@ fn evaluation_json_is_byte_identical_at_one_and_all_threads() {
     );
     assert_eq!(one.illegal_actions, 0);
     assert_eq!(all.illegal_actions, 0);
+}
+
+#[test]
+fn chunked_evaluation_matches_a_single_pass() {
+    let weights: EngineWeights =
+        serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
+    let field_spec = "app_formula_draft:default-weights@default-weights";
+    let candidate_spec = "app_formula_draft:chunk-witness@default-weights";
+    let field = register_app_formula_draft(
+        field_spec.into(), weights.clone(), weights.clone(),
+    ).unwrap();
+    let base = register_app_formula_draft(
+        field_spec.into(), weights.clone(), weights.clone(),
+    ).unwrap();
+    let mut candidate_weights = weights.clone();
+    candidate_weights.expansion_weight = 0.3;
+    let candidate = register_app_formula_draft(
+        candidate_spec.into(), candidate_weights, weights,
+    ).unwrap();
+    let arms = vec![("base".to_string(), base), ("candidate".to_string(), candidate)];
+    let specs = vec![field_spec.to_string(), candidate_spec.to_string()];
+    let arm_policies = vec![None; arms.len()];
+    let arm_policy_names = vec![None; arms.len()];
+    let run_chunked = |chunk_boards| {
+        let evaluation = evaluate_in_chunks(EvaluateRequest {
+            layout: Layout::Standard4,
+            seats: 4,
+            domain: EvaluationDomain::Tuning,
+            field_spec,
+            field,
+            arms: &arms,
+            arm_specs: &specs,
+            arm_policies: &arm_policies,
+            arm_policy_names: &arm_policy_names,
+            reference: Some("base"),
+            boards: 5,
+            reps: 2,
+            policy: PolicyKind::HeuristicV1,
+            policy_name: policy_name(PolicyKind::HeuristicV1),
+            player_trading: None,
+            threshold: 0.01,
+            alpha: 0.05,
+            threads: 1,
+            allow_unofficial: false,
+        }, chunk_boards).unwrap();
+        assert_eq!(evaluation.config.units, 40);
+        assert_eq!(evaluation.arms["base"].games, 40);
+        assert_eq!(evaluation.arms["candidate"].games, 40);
+        assert_eq!(evaluation.illegal_actions, 0);
+        serde_json::to_vec_pretty(&evaluation).unwrap()
+    };
+
+    let single_pass = run_chunked(5);
+    assert_eq!(run_chunked(1), single_pass);
+    assert_eq!(run_chunked(2), single_pass);
 }
 
 #[test]

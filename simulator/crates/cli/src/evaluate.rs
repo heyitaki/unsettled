@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::num::NonZero;
+use std::ops::Range;
 use std::path::Path;
 use std::process::Command;
 
@@ -17,6 +18,8 @@ use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
 use crate::boardgen::generate_board;
 use crate::output::Meta;
 use crate::stats::{alpha_z, wilson};
+
+pub const EVALUATION_CHUNK_BOARDS: usize = 1_000;
 
 pub const TUNING_SEED: u64 = 0x7a11_1e5e_ed20_2607;
 pub const EVAL_SEED: u64 = 0xe7a1_5eed_2026_0724;
@@ -294,9 +297,7 @@ pub struct Picks {
 
 struct PreparedEvaluation {
     topology: Topology,
-    boards: Vec<SimBoard>,
     schedule: Vec<EvaluationUnit>,
-    jobs: Vec<EvaluationJob>,
     rules: RuleConfig,
     pool: rayon::ThreadPool,
     domain_seed: u64,
@@ -354,13 +355,39 @@ fn prepare_evaluation(request: &EvaluateRequest<'_>) -> Result<PreparedEvaluatio
         .checked_mul(request.reps)
         .and_then(|count| count.checked_mul(request.seats))
         .ok_or_else(|| "evaluation unit count overflow".to_string())?;
-    let game_count = request
+    request
         .arms
         .len()
         .checked_mul(units)
         .ok_or_else(|| "evaluation game count overflow".to_string())?;
     let domain_seed = request.domain.seed(request.seats);
-    let mut boards = (0..request.boards)
+
+    let schedule = evaluation_schedule(request.boards, request.reps, request.seats);
+    if schedule.len() != units {
+        return Err(format!(
+            "evaluation schedule integrity error: expected {units} units, collected {}",
+            schedule.len()
+        ));
+    }
+    let workers = evaluation_workers(request.threads);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(workers)
+        .build()
+        .map_err(|error| error.to_string())?;
+    let mut rules = RuleConfig::base(request.layout);
+    rules.player_trading = request.player_trading;
+    Ok(PreparedEvaluation { topology, schedule, rules, pool, domain_seed })
+}
+
+fn prepare_evaluation_chunk(
+    request: &EvaluateRequest<'_>,
+    topology: &Topology,
+    domain_seed: u64,
+    board_range: Range<usize>,
+) -> Result<(Vec<SimBoard>, Vec<EvaluationJob>), String> {
+    let units_per_board = request.reps * request.seats;
+    let unit_range = board_range.start * units_per_board..board_range.end * units_per_board;
+    let mut boards = board_range
         .map(|board_index| {
             generate_board(
                 request.layout,
@@ -372,90 +399,95 @@ fn prepare_evaluation(request: &EvaluateRequest<'_>) -> Result<PreparedEvaluatio
     let mut placement_kinds = Vec::with_capacity(request.arms.len() + 1);
     placement_kinds.push(request.field);
     placement_kinds.extend(request.arms.iter().map(|(_, kind)| *kind));
-    prepare_app_formula_boards(&mut boards, &topology, &placement_kinds);
+    prepare_app_formula_boards(&mut boards, topology, &placement_kinds);
 
-    let schedule = evaluation_schedule(request.boards, request.reps, request.seats);
-    if schedule.len() != units {
-        return Err(format!(
-            "evaluation schedule integrity error: expected {units} units, collected {}",
-            schedule.len()
-        ));
-    }
-    let mut jobs = Vec::with_capacity(game_count);
+    let mut jobs = Vec::with_capacity(request.arms.len() * unit_range.len());
     for arm_index in 0..request.arms.len() {
-        for unit_index in 0..units {
+        for unit_index in unit_range.clone() {
             jobs.push(EvaluationJob {
                 arm_index,
                 unit_index,
             });
         }
     }
-    let workers = evaluation_workers(request.threads);
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(workers)
-        .build()
-        .map_err(|error| error.to_string())?;
-    let mut rules = RuleConfig::base(request.layout);
-    rules.player_trading = request.player_trading;
-    Ok(PreparedEvaluation { topology, boards, schedule, jobs, rules, pool, domain_seed })
+    Ok((boards, jobs))
 }
 
 pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
-    let PreparedEvaluation { topology, boards, schedule, jobs, rules, pool, domain_seed } =
+    evaluate_in_chunks(request, EVALUATION_CHUNK_BOARDS)
+}
+
+pub fn evaluate_in_chunks(
+    request: EvaluateRequest<'_>,
+    chunk_boards: usize,
+) -> Result<Evaluation, String> {
+    if chunk_boards == 0 {
+        return Err("chunk boards must be positive".into());
+    }
+    let PreparedEvaluation { topology, schedule, rules, pool, domain_seed } =
         prepare_evaluation(&request)?;
     let units = schedule.len();
-    let game_count = jobs.len();
-    let outcomes: Vec<EvaluationOutcome> = pool.install(|| {
-        jobs.par_iter()
-            .map_init(GameArena::default, |arena, job| {
-                let unit = schedule[job.unit_index];
-                let config = evaluation_unit_config(&request, unit, job.arm_index, domain_seed);
-                let result = arena.play(&boards[unit.board], &topology, &rules, &config);
-                EvaluationOutcome {
-                    hero_won: result.winner == Some(unit.hero_seat as u8),
-                    draw: result.draw,
-                    illegal_actions: result.illegal_actions,
-                }
-            })
-            .collect()
-    });
-    if outcomes.len() != game_count {
-        return Err(format!(
-            "evaluation schedule integrity error: expected {game_count} games, collected {}",
-            outcomes.len()
-        ));
-    }
-
     let mut indicators = (0..request.arms.len())
         .map(|_| Vec::with_capacity(units))
         .collect::<Vec<_>>();
     let mut draw_indicators = (0..request.arms.len())
         .map(|_| Vec::with_capacity(units))
         .collect::<Vec<_>>();
-    let mut seen = vec![false; game_count];
     let mut illegal_actions = 0_u64;
-    for (job, outcome) in jobs.iter().zip(&outcomes) {
-        let pair_index = job.arm_index * units + job.unit_index;
-        if seen[pair_index] {
+    for board_start in (0..request.boards).step_by(chunk_boards) {
+        let board_end = board_start + chunk_boards.min(request.boards - board_start);
+        let unit_start = board_start * request.reps * request.seats;
+        let unit_end = board_end * request.reps * request.seats;
+        let chunk_units = unit_end - unit_start;
+        let (boards, jobs) = prepare_evaluation_chunk(
+            &request, &topology, domain_seed, board_start..board_end,
+        )?;
+        let game_count = jobs.len();
+        let outcomes: Vec<EvaluationOutcome> = pool.install(|| {
+            jobs.par_iter()
+                .map_init(GameArena::default, |arena, job| {
+                    let unit = schedule[job.unit_index];
+                    let config = evaluation_unit_config(&request, unit, job.arm_index, domain_seed);
+                    let result = arena.play(&boards[unit.board - board_start], &topology, &rules, &config);
+                    EvaluationOutcome {
+                        hero_won: result.winner == Some(unit.hero_seat as u8),
+                        draw: result.draw,
+                        illegal_actions: result.illegal_actions,
+                    }
+                })
+                .collect()
+        });
+        if outcomes.len() != game_count {
             return Err(format!(
-                "evaluation schedule integrity error: arm {} unit {} was played more than once",
-                job.arm_index, job.unit_index
+                "evaluation schedule integrity error: expected {game_count} games, collected {}",
+                outcomes.len()
             ));
         }
-        seen[pair_index] = true;
-        indicators[job.arm_index].push(outcome.hero_won);
-        draw_indicators[job.arm_index].push(outcome.draw);
-        illegal_actions += u64::from(outcome.illegal_actions);
-    }
-    if seen.iter().any(|played| !played)
-        || indicators
-            .iter()
-            .any(|arm_indicators| arm_indicators.len() != units)
-    {
-        return Err(
-            "evaluation schedule integrity error: not every arm and unit pair was played exactly once"
-                .into(),
-        );
+
+        let mut seen = vec![false; game_count];
+        for (job, outcome) in jobs.iter().zip(&outcomes) {
+            let pair_index = job.arm_index * chunk_units + job.unit_index - unit_start;
+            if seen[pair_index] {
+                return Err(format!(
+                    "evaluation schedule integrity error: arm {} unit {} was played more than once",
+                    job.arm_index, job.unit_index
+                ));
+            }
+            seen[pair_index] = true;
+            indicators[job.arm_index].push(outcome.hero_won);
+            draw_indicators[job.arm_index].push(outcome.draw);
+            illegal_actions += u64::from(outcome.illegal_actions);
+        }
+        if seen.iter().any(|played| !played)
+            || indicators
+                .iter()
+                .any(|arm_indicators| arm_indicators.len() != unit_end)
+        {
+            return Err(
+                "evaluation schedule integrity error: not every arm and unit pair was played exactly once"
+                    .into(),
+            );
+        }
     }
 
     let z = alpha_z(request.alpha)?;
@@ -529,8 +561,11 @@ pub fn evaluate_picks(mut request: EvaluateRequest<'_>) -> Result<Picks, String>
 
     // Draft kinds draw nothing from the game seed, so repetitions add no information.
     request.reps = 1;
-    let PreparedEvaluation { topology, boards, schedule, jobs, rules, pool, domain_seed } =
+    let PreparedEvaluation { topology, schedule, rules, pool, domain_seed } =
         prepare_evaluation(&request)?;
+    let (boards, jobs) = prepare_evaluation_chunk(
+        &request, &topology, domain_seed, 0..request.boards,
+    )?;
     let units = schedule.len();
     let traces: Vec<Result<PickTrace, String>> = pool.install(|| {
         jobs.par_iter()
