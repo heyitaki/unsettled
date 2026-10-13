@@ -3737,3 +3737,80 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 6 
 **Sizing.** The widest arm is `flat_75`. A half-width of 0.0035 needs 2,862 boards, so `B` is 3,000, where the predicted half-width is 0.00342 and the predicted wall time is 93 seconds, far under the 120 minute cap. Neither the cap nor the floor set it. Every later run at 6 seats uses it: the screen at 3,000 boards, a retry, the confirm and the gate at 12,000.
 
 **Ledger.** `tuning4` is spent at 6 seats.
+
+## M-100: 4 seats, the cut-off arms' screen on `tuning4`
+
+**Preregistration.** [`2026-10-13-m100-seats4-screen.md`](../../../docs/plans/preregs/2026-10-13-m100-seats4-screen.md), committed in `42ff166d` before the run. Ran on that commit's release binary, 2026-10-13: `standard4`, 4 seats, `tuning4` at seed `8972835441189626876`, 5,500 boards x 2 reps, 44,000 games an arm, 43 seconds. Load averages 4.61 5.91 6.67 before and 22.56 10.44 8.30 after on 18 cores; the screens ran back to back, so the later ones started under the earlier ones' load, which changes wall time and no outcome.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_25` | +0.080pp | -0.158pp to +0.317pp | `equivalent` | 1,414, 1,379 |
+| `flat_50` | +0.491pp | +0.182pp to +0.800pp | `inconclusive` | 2,439, 2,223 |
+| `flat_75` | +0.570pp | +0.238pp to +0.903pp | `inconclusive` | 2,860, 2,609 |
+| `reprice_only` | +0.057pp | -0.097pp to +0.211pp | `equivalent` | 559, 534 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 11,111 of 44,000 with 0 draws, 0.2525 against a corner of 0.2500, a miss of 0.0025 against an allowance of 0.0068.
+
+**Decision.** `flat_25` and `reprice_only` are dropped as `equivalent`. `flat_50` and `flat_75` are `inconclusive` with estimates at or above 0.0025, so each buys its one retry at 22,000 boards (M-105). `reprice_only`'s last reading is positive and not `worse`, so a second-stage arm follows if a flat arm's last reading is positive too.
+
+## M-101: 2 seats, the cut-off arms' screen on `tuning4`
+
+**Preregistration.** [`2026-10-13-m101-seats2-screen.md`](../../../docs/plans/preregs/2026-10-13-m101-seats2-screen.md), committed in `42ff166d` before the run. Ran on that commit's release binary, 2026-10-13: `standard4`, 2 seats, `tuning4` at seed `13887469506549625143`, 6,500 boards x 2 reps, 26,000 games an arm, 11 seconds. Load averages 22.56 10.44 8.30 before and 23.19 10.97 8.51 after on 18 cores; the screens ran back to back, so the later ones started under the earlier ones' load, which changes wall time and no outcome.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_25` | -0.200pp | -0.465pp to +0.065pp | `equivalent` | 594, 646 |
+| `flat_50` | -0.362pp | -0.687pp to -0.036pp | `inconclusive` | 884, 978 |
+| `flat_75` | -0.346pp | -0.692pp to -0.001pp | `inconclusive` | 1,006, 1,096 |
+| `reprice_only` | -0.058pp | -0.238pp to +0.122pp | `equivalent` | 258, 273 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 13,036 of 26,000 with 0 draws, 0.5014 against a corner of 0.5000, a miss of 0.0014 against an allowance of 0.0102.
+
+**Decision.** `flat_25` and `reprice_only` are dropped as `equivalent`. `flat_50` and `flat_75` are `inconclusive` with negative estimates, under the 0.0025 retry line, so both are dropped unresolved. `reprice_only`'s estimate is negative, so there is no second stage. No arm read `better`: **2 seats closes with both keys at 0**, and `eval4` and `gate5` stay unspent at 2 seats.
+
+## M-102: 3 seats, the cut-off arms' screen on `tuning4`
+
+**Preregistration.** [`2026-10-13-m102-seats3-screen.md`](../../../docs/plans/preregs/2026-10-13-m102-seats3-screen.md), committed in `42ff166d` before the run. Ran on that commit's release binary, 2026-10-13: `standard4`, 3 seats, `tuning4` at seed `6052338987207494362`, 7,500 boards x 2 reps, 45,000 games an arm, 36 seconds. Load averages 23.19 10.97 8.51 before and 34.48 15.13 10.12 after on 18 cores; the screens ran back to back, so the later ones started under the earlier ones' load, which changes wall time and no outcome.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_25` | +0.018pp | -0.220pp to +0.255pp | `equivalent` | 1,475, 1,467 |
+| `flat_50` | +0.080pp | -0.225pp to +0.385pp | `equivalent` | 2,458, 2,422 |
+| `flat_75` | -0.002pp | -0.330pp to +0.325pp | `equivalent` | 2,810, 2,811 |
+| `reprice_only` | -0.004pp | -0.156pp to +0.147pp | `equivalent` | 577, 579 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 15,033 of 45,000 with 0 draws, 0.3341 against a corner of 0.3333, a miss of 0.0007 against an allowance of 0.0073.
+
+**Decision.** All four arms are dropped as `equivalent`. `reprice_only`'s estimate is negative, so there is no second stage. No arm read `better`: **3 seats closes with both keys at 0**, and `eval4` and `gate5` stay unspent at 3 seats.
+
+## M-103: 5 seats, the cut-off arms' screen on `tuning4`
+
+**Preregistration.** [`2026-10-13-m103-seats5-screen.md`](../../../docs/plans/preregs/2026-10-13-m103-seats5-screen.md), committed in `42ff166d` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 5 seats, `tuning4` at seed `13485105647361630321`, 3,500 boards x 2 reps, 35,000 games an arm, 85 seconds. Load averages 34.48 15.13 10.12 before and 34.09 20.09 12.51 after on 18 cores; the screens ran back to back, so the later ones started under the earlier ones' load, which changes wall time and no outcome.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_25` | +0.317pp | +0.074pp to +0.560pp | `inconclusive` | 986, 875 |
+| `flat_50` | +0.300pp | -0.011pp to +0.611pp | `inconclusive` | 1,569, 1,464 |
+| `flat_75` | +0.406pp | +0.065pp to +0.746pp | `inconclusive` | 1,855, 1,713 |
+| `reprice_only` | +0.071pp | -0.110pp to +0.253pp | `equivalent` | 479, 454 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 6,945 of 35,000 with 0 draws, 0.1984 against a corner of 0.2000, a miss of 0.0016 against an allowance of 0.0070.
+
+**Decision.** `reprice_only` is dropped as `equivalent`. All three flat arms are `inconclusive` with estimates at or above 0.0025. On `extension6` at most two retry, the two with the largest screen estimates: `flat_75` (0.004057) and `flat_25` (0.003171) retry at 14,000 boards (M-106), and `flat_50` (0.003000) is dropped unresolved. `reprice_only`'s last reading is positive and not `worse`, so a second-stage arm follows if a flat arm's last reading is positive too.
+
+## M-104: 6 seats, the cut-off arms' screen on `tuning4`
+
+**Preregistration.** [`2026-10-13-m104-seats6-screen.md`](../../../docs/plans/preregs/2026-10-13-m104-seats6-screen.md), committed in `42ff166d` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 6 seats, `tuning4` at seed `267929230571891344`, 3,000 boards x 2 reps, 36,000 games an arm, 109 seconds. Load averages 34.09 20.09 12.51 before and 30.15 23.35 14.73 after on 18 cores; the screens ran back to back, so the later ones started under the earlier ones' load, which changes wall time and no outcome.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_25` | +0.283pp | +0.046pp to +0.521pp | `inconclusive` | 929, 827 |
+| `flat_50` | +0.361pp | +0.063pp to +0.659pp | `inconclusive` | 1,516, 1,386 |
+| `flat_75` | +0.358pp | +0.025pp to +0.692pp | `inconclusive` | 1,792, 1,663 |
+| `reprice_only` | +0.156pp | -0.013pp to +0.324pp | `equivalent` | 471, 415 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 6,078 of 36,000 with 0 draws, 0.1688 against a corner of 0.1667, a miss of 0.0022 against an allowance of 0.0065.
+
+**Decision.** `reprice_only` is dropped as `equivalent`. All three flat arms are `inconclusive` with estimates at or above 0.0025. On `extension6` at most two retry, the two with the largest screen estimates: `flat_50` (0.003611) and `flat_75` (0.003583) retry at 12,000 boards (M-107), and `flat_25` (0.002833) is dropped unresolved. `reprice_only`'s last reading is positive and not `worse`, so a second-stage arm follows if a flat arm's last reading is positive too.
+
+**Prediction against the five screens (M-100 to M-104).** I predicted every estimate inside plus or minus 0.5pp: 19 of 20 are, and `flat_75` at 4 seats is at +0.570pp. I put some arm reading `better` at about 15% a seat count and none did. I put some flat arm reading `worse` at about 25% and none did, though both heavier flat arms at 2 seats have intervals wholly below zero. I put a retry at about 20% a seat count, and three of five bought one, so I underrated how often the heavier discounts would land between the retry line and the bar. Across seat counts the flat arms' estimates are negative at 2 seats, near zero at 3, and positive at 4, 5 and 6.
