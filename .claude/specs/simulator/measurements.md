@@ -3893,3 +3893,43 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 6 
 **Decision.** `inconclusive` with an estimate at or above 0.0025, so `flat_reprice` buys its one retry at 12,000 boards (M-113).
 
 **Prediction against the three second-stage screens (M-108 to M-110).** I expected an estimate between +0.1pp and +0.6pp, `inconclusive`, with a retry at about 60%: all three landed at +0.55pp to +0.60pp and all three bought the retry.
+
+## M-111: 4 seats, the retry of `flat_reprice` on `tuning4`
+
+**Preregistration.** [`2026-10-13-m111-seats4-second-stage-retry.md`](../../../docs/plans/preregs/2026-10-13-m111-seats4-second-stage-retry.md), committed in `f7f9e454` before the run. Ran on that commit's release binary, 2026-10-13: `standard4`, 4 seats, `tuning4` at seed `8972835441189626876`, 22,000 boards x 2 reps, 176,000 games an arm, 64 seconds. Load averages 18.48 23.17 21.81 before and 27.88 25.12 22.65 after on 18 cores, from this programme's own back-to-back runs. The arm is `contestWeight` 0.75 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.644pp | +0.470pp to +0.818pp | `inconclusive` | 12,371, 11,237 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 44,232 of 176,000 with 0 draws, 0.2513 against a corner of 0.2500 with an allowance of 0.0034.
+
+**Decision.** Not `better`: the interval's lower end is +0.470pp, under the +0.5pp bar by 0.03pp. There is no second retry, so `flat_reprice` is dropped and **4 seats closes with both keys at 0**; `eval4` and `gate5` stay unspent at 4 seats. The estimate is the programme's second highest and the interval excludes zero by a wide margin, so this is a real gain of about 0.6pp that the bar, as set, does not admit.
+
+## M-112: 5 seats, the retry of `flat_reprice` on `tuning4`
+
+**Preregistration.** [`2026-10-13-m112-seats5-second-stage-retry.md`](../../../docs/plans/preregs/2026-10-13-m112-seats5-second-stage-retry.md), committed in `f7f9e454` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 5 seats, `tuning4` at seed `13485105647361630321`, 14,000 boards x 2 reps, 140,000 games an arm, 113 seconds. Load averages 27.88 25.12 22.65 before and 26.80 26.16 23.41 after on 18 cores, from this programme's own back-to-back runs. The arm is `contestWeight` 0.5 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.437pp | +0.265pp to +0.609pp | `inconclusive` | 7,664, 7,052 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 28,013 of 140,000 with 0 draws, 0.2001 against a corner of 0.2000 with an allowance of 0.0035.
+
+**Decision.** Not `better`: the interval runs from +0.265pp to +0.609pp. `flat_reprice` is dropped and **5 seats closes with both keys at 0**; `eval4` and `gate5` stay unspent at 5 seats.
+
+## M-113: 6 seats, the retry of `flat_reprice` on `tuning4`
+
+**Preregistration.** [`2026-10-13-m113-seats6-second-stage-retry.md`](../../../docs/plans/preregs/2026-10-13-m113-seats6-second-stage-retry.md), committed in `f7f9e454` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 6 seats, `tuning4` at seed `267929230571891344`, 12,000 boards x 2 reps, 144,000 games an arm, 147 seconds. Load averages 26.80 26.16 23.41 before and 26.67 26.14 23.81 after on 18 cores, from this programme's own back-to-back runs. The arm is `contestWeight` 0.75 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.805pp | +0.634pp to +0.975pp | `better` | 8,238, 7,079 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 24,068 of 144,000 with 0 draws, 0.1671 against a corner of 0.1667 with an allowance of 0.0032.
+
+**Decision.** `better`: the whole interval is above +0.5pp. No other arm read `better` at 6 seats, so **`flat_reprice` (`contestWeight` 0.75 with `repriceFirstExpansion` 1) is the 6-seat candidate** and goes to the confirm on `eval4` at 12,000 boards (M-114).
+
+**Prediction against the three second-stage retries (M-111 to M-113).** I expected each estimate between +0.2pp and +0.6pp and put `better` at about 10% an arm. Five seats landed inside the range. Four seats landed just above it at +0.644pp and missed the bar by 0.03pp at the interval's lower end. Six seats landed at +0.805pp and read `better`, which I had as the unlikely outcome. I also expected the combined arm to read about what its flat part read; at 4 and 6 seats it reads 0.15pp and 0.33pp above the flat arm's retry on the same boards, so the re-pricing adds something once a discount is on, which `reprice_only` alone did not show.
+
+**Where item 4 leaves each seat count.** Two, three, four and five seats close with both keys at 0 and their `eval4` and `gate5` unspent. Six seats has a candidate.
