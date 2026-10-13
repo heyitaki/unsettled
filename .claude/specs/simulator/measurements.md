@@ -4097,3 +4097,37 @@ By first-round draft position, first picker first, 1,000,000 units each: +0.41pp
 **Reading.** The held-out confirm on `eval4` (M-114) read +0.63pp with an interval that straddled the bar at 12,000 boards; at 500,000 boards the same arm reads +0.73pp with the whole interval above it, so M-114's `inconclusive` was a matter of size. As at 4 seats the first picker gains least, though here it still gains +0.41pp. Read as a rule on these units, `slot>=1` fires on five sixths with a fired gain of +0.79pp and a total of +0.66pp, under the always-on total of +0.73pp. The arm moves the hero's formula alone against five seats on the old vector; nothing here observes a table where every seat carries the new weights.
 
 **Ledger at this point.** `gate5` is spent at 4 and 6 seats and unspent at 2, 3 and 5. `tuning5`, `tuning6`, `eval5` and `gate6` are unspent at every seat count.
+
+## M-119: instruction counts of the 4-seat and 6-seat adoption
+
+**Question.** Requirement 36 of [`cut-off-programme.md`](cut-off-programme.md): what the vectors adopted in `1263e4b2` cost, with no bar. Not a reading on a domain and nothing is spent.
+
+**Runs.** The box, 2026-10-13, `box run simulator/box/bench --ref base=<c> --ref cand=<c> --node none -- --weights placement/seat-weights/seats-<n>.json`, once with `<c>` the commit before the adoption (`8d414661`) and once with the adoption commit (`1263e4b2`), for `<n>` 4 and 6: runs `20261013T215638Z-b27ff74d` and `-c0360776` at 4 seats, `-47800977` and `-5b7757b7` at 6. The two seat files hold the same bytes before the adoption and the same bytes after it, so the two seat counts are one measurement taken twice, and they agree to the fourth digit on every row. Figures are the candidate side's instruction count after over before.
+
+| Scenario | Before | After | Ratio |
+| --- | ---: | ---: | ---: |
+| `analyze/extension6/behind_three` | 1,320,323,824 | 2,648,725,658 | 2.006 |
+| `analyze/extension6/opening` | 374,677,189 | 745,292,996 | 1.989 |
+| `analyze/standard4/opening` | 364,110,323 | 674,505,031 | 1.852 |
+| `placement/extension6/greedy/first` | 1,633,216 | 2,096,134 | 1.283 |
+| `placement/extension6/score_all` | 1,622,014 | 2,076,998 | 1.281 |
+| `placement/standard4/greedy/first` | 1,072,271 | 1,360,825 | 1.269 |
+| `placement/standard4/score_all` | 1,060,344 | 1,342,664 | 1.266 |
+| `placement/extension6/greedy/middle` | 1,204,510 | 1,486,553 | 1.234 |
+| `placement/standard4/greedy/middle` | 793,683 | 969,879 | 1.222 |
+| `placement/extension6/greedy/turn` | 1,024,002 | 1,241,242 | 1.212 |
+| `placement/standard4/full_draft` | 33,005,513 | 39,847,465 | 1.207 |
+| `placement/standard4/greedy/turn` | 614,273 | 732,863 | 1.193 |
+| `placement/standard4/draft/middle` | 9,124,515 | 10,753,961 | 1.179 |
+| `placement/extension6/full_draft` | 106,871,567 | 123,599,432 | 1.157 |
+| `placement/extension6/greedy/last` | 581,127 | 664,349 | 1.143 |
+| `placement/standard4/greedy/last` | 373,565 | 423,868 | 1.135 |
+| `placement/extension6/draft/middle` | 19,507,906 | 22,129,131 | 1.134 |
+| `placement/standard4/draft/first` | 13,091,849 | 14,797,515 | 1.130 |
+| `placement/extension6/draft/first` | 29,383,277 | 32,400,124 | 1.103 |
+
+The other 54 of 73 rows are unchanged or within 0.1% (12 `advise` rows move by under 0.06%, the allocator noise those rows always show; 42 rows are identical).
+
+**Wall time on the same machines, fastest of three, native.** `analyze/standard4/opening` 34.6 ms to 64.1 ms; `analyze/extension6/opening` 36.4 ms to 69.4 ms; `analyze/extension6/behind_three` 126.6 ms to 250.5 ms. A whole self-play game costs 12% to 16% more (`e2e/standard4/single_core` 4.0 ms to 4.5 ms, `e2e/extension6/single_core` 11.2 ms to 12.9 ms).
+
+**Reading.** A Best picks ranking at four or six players costs about twice what it did, which is the contested expansion walk and the second pricing of the first pick switched on; M-94 and M-115 measured only that both cost nothing at 0. The one speed bar on an adoption, requirement 21, holds: all four cases of `analysisPerf.test.ts` passed in the adoption's `npm test`, the first two of them now on the adopted six-seat file (300 ms and 1,200 ms in the wasm). The doubling is recorded for the owner; nothing in the spec stops on it.
