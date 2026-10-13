@@ -1,6 +1,6 @@
 # Cut-off programme
 
-Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 4197f6f2
+Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 67c19c18
 
 ## Summary
 
@@ -16,9 +16,9 @@ Every file, function and line number below was read at commit `a2b23ac4`. What w
 
 | #   | Item                                                                                                                                | State       |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 1   | Contest term in the scorer at 0: tier masks, discount, memo and bound handling, both keys in every weights file, inert proofs, wasm | not started |
-| 2   | First-pick re-pricing switch in `rank_candidates` and `Lookahead`, off by default                                                   | not started |
-| 3   | `gate5` minted, arms written and pinned, `--picks-only` added, preregistrations, picks reading and blind pilot                      | not started |
+| 1   | Contest term in the scorer at 0: tier masks, discount, memo and bound handling, both keys in every weights file, inert proofs, wasm | done 2026-10-13, committed on branch `cut-off-programme` (worktree `cut-off`, base `a4067536`): reviewed and approved twice (the second review covers the restructuring the speed bar forced), both cargo profiles green, fixture and bench hashes unchanged, speed proof M-93 (highest instruction ratio 1.006 after a first shape failed at 1.025). Main has since gained `9a08c79a`, to merge before landing |
+| 2   | First-pick re-pricing switch in `rank_candidates` and `Lookahead`, off by default                                                   | done 2026-10-13, committed on the same branch: reviewed and approved, both cargo profiles green (831 and 803), fixture and bench hashes unchanged, speed proof M-94 (highest instruction ratio 1.001), both keys on rank the worst six-seat boards in 62 ms and 204 ms |
+| 3   | `gate5` minted, arms written and pinned, `--picks-only` added, preregistrations, picks reading and blind pilot                      | in progress 2026-10-13: Codex packet for the code half (arm files and pins, `gate5`, `--picks-only`) in worktree `cut-off`. Left after it: review, commit, then per seat count in the order 4, 2, 3, 5, 6 a preregistration committed before its picks reading and blind pilot, which the main session runs |
 | 4   | Screens on `tuning4`, seats two to six                                                                                              | not started |
 | 5   | Confirm on `eval4` and gate on `gate5` for each seat count's candidate                                                              | not started |
 | 6   | Adopt per seat count or delete, regenerate fixtures and wasm, close the record                                                      | not started |
@@ -166,7 +166,7 @@ Every file, function and line number below was read at commit `a2b23ac4`. What w
     - The two `analysisPerf.test.ts` cases of requirement 21 keep whichever of the two keys survives and are deleted when neither does.
     - With both deleted and `CO_ARMS` empty, `CO_ARMS`, `CO_ANCHORS` and their test are deleted too. `gate5` and `--picks-only` stay.
 36. For an adopted key, instruction counts on the box are recorded for each adopting seat count, with no bar: `box run simulator/box/bench --ref base=<c> --ref cand=<c> --node none -- --weights placement/seat-weights/seats-<n>.json`, once with `<c>` the commit before the adoption and once with the adoption commit, and the entry gives each scenario's candidate instruction count in the second over the first. The only speed bar on an adoption is requirement 21's.
-37. Every reading goes in `.claude/specs/simulator/measurements.md`, whose entries are headed `M-<n>` and end today at M-90, so this programme's start at M-91. The picks readings and the speed tables of items 1 and 2 are entries too. This file gains an Outcome section.
+37. Every reading goes in `.claude/specs/simulator/measurements.md`, whose entries are headed `M-<n>` and ended at M-92 when item 1 was measured (other sessions added M-91 and M-92 after this spec was written), so this programme's start at M-93. The picks readings and the speed tables of items 1 and 2 are entries too. This file gains an Outcome section.
 
 ## Design
 

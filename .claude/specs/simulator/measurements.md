@@ -3515,3 +3515,75 @@ The two final placement comparisons also reverse binary order. Full-draft change
 **What is left.** The four-seat analysis row has 0.141 ms of headroom under its cap, and loaded runs cross that cap. The six-seat rows have more room. The remaining work includes exact mask filtering and site pricing, plus the roads each rollout must choose and lay. The general walk remains available for multiple owned edges. No scoring approximation or output change is used to meet a timing target.
 
 **Scope.** Only `expansion.rs`, `app_formula.rs`, `analysis/window.rs`, their new adjacent tests, the rebuilt wasm and its source hash, and this entry change. Fixture, weight and topology bytes stay unchanged. The sweep test and golden file stay unchanged.
+
+## M-93: the contest term at weight 0 costs under 1% of the placement rows' instructions
+
+**Question.** Cut-off programme item 1 adds a contest discount to the placement scorer behind `contestWeight`, shipped at 0. Requirement 11 of [`cut-off-programme.md`](cut-off-programme.md) asks that no bench scenario executes more than 1.01 times the instructions of the commit before it, with no output moved.
+
+**Runs** (2026-10-13). `box run simulator/box/bench --ref base=a4067536 --ref cand=<candidate> --node none`, twice, the candidate being the uncommitted item 1 tree as a commit object. Run `20261013T073636Z-9e972fbb` measured the first shape (candidate `63cd7d22`): the discount written inside `term`, the pricing loops and `row_road`, each behind a test of the weight. Run `20261013T081413Z-257de8e0` measured the final shape (candidate `90ecb26f`): a `contested` flag on the scorer, each hot function compiled in a plain and a contested instance from one source (`const CONTESTED: bool`), the contested calls out of line, and the tier cache in its own thread-local.
+
+| Scenario | Base Ir | First attempt Ir | Ratio | Final Ir | Ratio | Final wall ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `placement/standard4/prepare` | 150,285 | 149,170 | 0.998 | 148,709 | 0.990 | 1.039 |
+| `placement/standard4/score_all` | 1,055,960 | 1,075,288 | 1.018 | 1,060,780 | 1.005 | 0.995 |
+| `placement/standard4/greedy/first` | 1,066,623 | 1,086,290 | 1.018 | 1,071,690 | 1.005 | 1.012 |
+| `placement/standard4/greedy/middle` | 783,355 | 796,725 | 1.017 | 787,060 | 1.005 | 1.026 |
+| `placement/standard4/greedy/turn` | 610,821 | 620,199 | 1.015 | 613,708 | 1.005 | 1.030 |
+| `placement/standard4/greedy/last` | 371,290 | 376,203 | 1.013 | 372,999 | 1.005 | 1.023 |
+| `placement/standard4/draft/first` | 12,568,626 | 12,856,383 | 1.023 | 12,624,908 | 1.004 | 0.985 |
+| `placement/standard4/draft/middle` | 7,613,478 | 7,728,866 | 1.015 | 7,628,410 | 1.002 | 0.999 |
+| `placement/standard4/full_draft` | 33,939,801 | 34,609,267 | 1.020 | 34,086,170 | 1.004 | 1.006 |
+| `analyze/standard4/opening` | 361,254,415 | 368,783,035 | 1.021 | 363,279,142 | 1.006 | 1.009 |
+| `placement/extension6/prepare` | 204,293 | 204,297 | 1.000 | 203,974 | 0.998 | 0.965 |
+| `placement/extension6/score_all` | 1,614,372 | 1,645,386 | 1.019 | 1,622,769 | 1.005 | 0.999 |
+| `placement/extension6/greedy/first` | 1,624,752 | 1,655,774 | 1.019 | 1,632,641 | 1.005 | 1.011 |
+| `placement/extension6/greedy/middle` | 1,198,142 | 1,219,350 | 1.018 | 1,203,932 | 1.005 | 1.027 |
+| `placement/extension6/greedy/turn` | 1,018,598 | 1,035,285 | 1.016 | 1,023,430 | 1.005 | 1.023 |
+| `placement/extension6/greedy/last` | 577,873 | 585,778 | 1.014 | 580,555 | 1.005 | 1.022 |
+| `placement/extension6/draft/first` | 29,483,347 | 30,083,034 | 1.020 | 29,602,787 | 1.004 | 0.984 |
+| `placement/extension6/draft/middle` | 18,126,179 | 18,417,901 | 1.016 | 18,193,061 | 1.004 | 0.990 |
+| `placement/extension6/full_draft` | 113,953,059 | 115,895,660 | 1.017 | 114,465,029 | 1.004 | 0.983 |
+| `analyze/extension6/opening` | 372,665,082 | 381,375,702 | 1.024 | 374,710,200 | 1.005 | 1.002 |
+| `analyze/extension6/behind_three` | 1,310,309,669 | 1,342,555,322 | 1.025 | 1,317,061,389 | 1.005 | 1.009 |
+
+Every `decision/*` and `advise/*` row, which never reaches the expansion term, is between 0.998 and 1.001 in the final run. No row in either run carries `decisions differ` or `STATES DIFFER`.
+
+**Reading.** The first shape failed the bar on every placement and analysis row (1.013 to 1.025) although its source added one float comparison per site: the reference scorer gained about 350 instructions per candidate, so the cost was in how the larger functions compiled, not in the comparisons. The final shape passes on every row, highest 1.006. Wall ratios on the box are within its 5% noise and decide nothing. `engine.wasm` grows from 1,102,957 to 1,128,534 bytes, because each hot function now exists twice.
+
+**Decision.** Item 1 meets requirement 11's speed proof. The final shape is the one kept.
+
+## M-94: the first-pick re-pricing switch at 0 costs nothing measurable
+
+**Question.** Cut-off programme item 2 gives `repriceFirstExpansion` its two readers, `rank_candidates` and `Lookahead::value_with_marginal`, shipped at 0. Requirement 19 of [`cut-off-programme.md`](cut-off-programme.md) asks that no bench scenario executes more than 1.01 times the instructions of the commit before item 2, with no output moved.
+
+**Run** (2026-10-13). `box run simulator/box/bench --ref base=90ecb26f --ref cand=cdf17c6e --node none`, run `20261013T090736Z-473464b0`. The base is item 1's final shape (M-93) and the candidate adds item 2, both uncommitted trees as commit objects.
+
+| Scenario | Base Ir | Candidate Ir | Ratio | Wall ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `placement/standard4/prepare` | 148,709 | 148,709 | 1.000 | 0.999 |
+| `placement/standard4/score_all` | 1,060,823 | 1,060,911 | 1.000 | 0.985 |
+| `placement/standard4/greedy/first` | 1,071,690 | 1,071,689 | 1.000 | 0.988 |
+| `placement/standard4/greedy/middle` | 787,060 | 787,059 | 1.000 | 0.985 |
+| `placement/standard4/greedy/turn` | 613,708 | 613,707 | 1.000 | 0.984 |
+| `placement/standard4/greedy/last` | 372,999 | 372,998 | 1.000 | 0.978 |
+| `placement/standard4/draft/first` | 12,624,999 | 12,625,677 | 1.000 | 1.018 |
+| `placement/standard4/draft/middle` | 7,628,387 | 7,629,032 | 1.000 | 1.024 |
+| `placement/standard4/full_draft` | 34,091,672 | 34,095,910 | 1.000 | 1.025 |
+| `analyze/standard4/opening` | 363,785,438 | 363,473,593 | 0.999 | 1.009 |
+| `placement/extension6/prepare` | 203,974 | 203,974 | 1.000 | 0.997 |
+| `placement/extension6/score_all` | 1,622,769 | 1,622,257 | 1.000 | 0.982 |
+| `placement/extension6/greedy/first` | 1,632,641 | 1,632,640 | 1.000 | 0.968 |
+| `placement/extension6/greedy/middle` | 1,203,932 | 1,203,931 | 1.000 | 0.966 |
+| `placement/extension6/greedy/turn` | 1,023,430 | 1,023,429 | 1.000 | 0.969 |
+| `placement/extension6/greedy/last` | 580,555 | 580,554 | 1.000 | 0.962 |
+| `placement/extension6/draft/first` | 29,602,799 | 29,603,920 | 1.000 | 1.018 |
+| `placement/extension6/draft/middle` | 18,193,073 | 18,194,026 | 1.000 | 1.010 |
+| `placement/extension6/full_draft` | 114,483,791 | 114,492,701 | 1.000 | 1.014 |
+| `analyze/extension6/opening` | 374,454,960 | 374,783,797 | 1.001 | 1.002 |
+| `analyze/extension6/behind_three` | 1,318,442,047 | 1,318,904,208 | 1.000 | 1.002 |
+
+Every `decision/*` and `advise/*` row is between 1.000 and 1.001. No row carries `decisions differ` or `STATES DIFFER`.
+
+**Reading.** The highest ratio is 1.001. With both keys on, the two new cases in `analysisPerf.test.ts` (six seats, `contestWeight` 0.5, `repriceFirstExpansion` 1) rank in 62 ms and 204 ms on the build machine against the unchanged bounds of 300 ms and 1200 ms; the same boards at 0 take 33 ms and 108 ms.
+
+**Decision.** Item 2 meets requirement 19's speed proof.

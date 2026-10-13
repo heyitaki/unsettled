@@ -113,6 +113,8 @@ pub(super) fn rank_candidates(
     let first_receives_grant = receives_second_settlement_grant(draft, first_pick_index);
     let second_receives_grant =
         second_pick_index.is_some_and(|second| receives_second_settlement_grant(draft, second));
+    let reprice = scorer.weights().reprice_first_expansion == 1.0
+        && scorer.weights().expansion_weight != 0.0 && !mid_turns.is_empty();
 
     // A mid-window's pieces and distance closure, copied into reusable buffers.
     let mut blocked = Vec::new();
@@ -133,48 +135,74 @@ pub(super) fn rank_candidates(
             // Scored per window rather than once against the bare board: by the time the player
             // picks, the seats ahead have taken the vertices this window records.
             let my_holdings = window.holdings[usize::from(me)];
-            add_breakdown(
-                &mut total,
-                scorer.marginal_breakdown(
-                    &my_holdings,
-                    &window.vertex_owner,
-                    &window.edge_owner,
-                    me,
-                    *candidate,
-                    first_receives_grant,
-                ),
-            );
-            if second_pick_index.is_none() {
-                continue;
-            }
 
-            blocked.clone_from(&window.blocked);
-            block_vertex(topology, &mut blocked, *candidate);
-            // The second pick sees the candidate's road and every intervening pick's pieces.
-            vertex_owner.clone_from(&window.vertex_owner);
-            edge_owner.clone_from(&window.edge_owner);
-            let road = context.setup_road(
-                &my_holdings, &vertex_owner, &edge_owner, me, *candidate, None,
-            );
-            if let Some(edge) = road {
-                edge_owner[usize::from(edge)] = me;
-            }
-            vertex_owner[usize::from(*candidate)] = me;
-            let mut first_holdings = my_holdings;
-            scorer.add_to_holdings(&mut first_holdings, *candidate);
-            let mut drawn = 0;
-            context.simulate_window(
-                &mid_turns,
-                &window.holdings,
-                &mut blocked,
-                &mut vertex_owner,
-                &mut edge_owner,
-                &mut || {
-                    drawn += 1;
-                    window.uniforms[mid_indices[drawn - 1]]
-                },
-                None,
-            );
+            // The first marginal moves across this replay only when re-pricing is enabled.
+            let play_mid_window = |blocked: &mut Vec<bool>, vertex_owner: &mut Vec<u8>, edge_owner: &mut Vec<u8>| {
+                blocked.clone_from(&window.blocked);
+                block_vertex(topology, blocked, *candidate);
+                // The second pick sees the candidate's road and every intervening pick's pieces.
+                vertex_owner.clone_from(&window.vertex_owner);
+                edge_owner.clone_from(&window.edge_owner);
+                let road = context.setup_road(
+                    &my_holdings, vertex_owner, edge_owner, me, *candidate, None,
+                );
+                if let Some(edge) = road {
+                    edge_owner[usize::from(edge)] = me;
+                }
+                vertex_owner[usize::from(*candidate)] = me;
+                let mut first_holdings = my_holdings;
+                scorer.add_to_holdings(&mut first_holdings, *candidate);
+                let mut drawn = 0;
+                context.simulate_window(
+                    &mid_turns,
+                    &window.holdings,
+                    blocked,
+                    vertex_owner,
+                    edge_owner,
+                    &mut || {
+                        drawn += 1;
+                        window.uniforms[mid_indices[drawn - 1]]
+                    },
+                    None,
+                );
+                (road, first_holdings)
+            };
+            let first_holdings = if reprice {
+                let (road, first_holdings) = play_mid_window(&mut blocked, &mut vertex_owner, &mut edge_owner);
+
+                // The vertex reset before scoring and road reset afterward mirror
+                // `Lookahead::value_with_marginal` and cut-off requirement 16, though inert here.
+
+                // A reused setup edge must retain the road that was already priced at pick time.
+                vertex_owner[usize::from(*candidate)] = window.vertex_owner[usize::from(*candidate)];
+                if let Some(edge) = road {
+                    edge_owner[usize::from(edge)] = window.edge_owner[usize::from(edge)];
+                }
+                add_breakdown(&mut total, scorer.marginal_breakdown(
+                    &my_holdings, &vertex_owner, &edge_owner, me, *candidate, first_receives_grant,
+                ));
+                vertex_owner[usize::from(*candidate)] = me;
+                if let Some(edge) = road {
+                    edge_owner[usize::from(edge)] = me;
+                }
+                first_holdings
+            } else {
+                add_breakdown(
+                    &mut total,
+                    scorer.marginal_breakdown(
+                        &my_holdings,
+                        &window.vertex_owner,
+                        &window.edge_owner,
+                        me,
+                        *candidate,
+                        first_receives_grant,
+                    ),
+                );
+                if second_pick_index.is_none() {
+                    continue;
+                }
+                play_mid_window(&mut blocked, &mut vertex_owner, &mut edge_owner).1
+            };
             let Some(second) = context.best_legal_candidate(
                 me,
                 &first_holdings,

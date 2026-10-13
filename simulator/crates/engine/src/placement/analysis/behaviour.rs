@@ -2172,3 +2172,206 @@ fn contest_context_roads_follow_rival_roads_with_identical_sites() {
     }
     assert_ne!(occupancies[0].road_key(&scorer, 0), occupancies[1].road_key(&scorer, 0));
 }
+
+#[cfg(test)]
+mod reprice_tests {
+    use super::*;
+
+    fn board(reused: bool) -> Board {
+        let mut json = contest_fixture(2);
+        json["mePlayerId"] = "p0".into();
+        if reused {
+            let topology = parse(&json).topology;
+            json["roads"] = json!([{ "edgeId": topology.edge_id(19), "playerId": "p0" }]);
+        }
+        parse(&json)
+    }
+
+    fn scorer(board: &Board, contest: f64, reprice: f64) -> AppFormulaScorer {
+        board.scorer(engine_weights(&default_weights_with(json!({
+            "contestWeight": contest, "repriceFirstExpansion": reprice,
+        }))))
+    }
+
+    fn rank(board: &Board, scorer: &AppFormulaScorer, window: &PreWindow, candidates: &[Vertex]) -> Vec<Recommendation> {
+        rank_candidates(&Context::new(board, scorer), board, &infer_draft_state(board), candidates,
+            std::slice::from_ref(window), candidates.len() as f64, 0, &mut |_| {}).0
+    }
+
+    fn candidate_values(candidate: Vertex, contest: f64, reused: bool, no_second: bool) -> (f64, f64) {
+        let board = board(reused);
+        let scorer = scorer(&board, contest, 1.0);
+        let plain = self::scorer(&board, contest, 0.0);
+        let context = Context::new(&board, &scorer);
+        let mut window = pre_window(&board, &scorer, board.blocked(), &[]);
+        if no_second {
+            window.blocked.iter_mut().enumerate().for_each(|(index, blocked)| {
+                *blocked = index != usize::from(candidate) && index != 47;
+            });
+        }
+        let holdings = window.holdings[0];
+        let mut owners = window.vertex_owner.clone();
+        let mut edges = window.edge_owner.clone();
+        let mut blocked = window.blocked.clone();
+        let road = context.setup_road(&holdings, &owners, &edges, 0, candidate, None).unwrap();
+        if reused { assert_eq!(road, 19); }
+        let before = scorer.marginal_breakdown(&holdings, &owners, &edges, 0, candidate, false);
+        owners[usize::from(candidate)] = 0;
+        edges[usize::from(road)] = 0;
+        window::block_vertex(board.topology, &mut blocked, candidate);
+        let (turns, _) = remaining_turns(&board, &infer_draft_state(&board), 1, 3, Some(0));
+        let replay = context.simulate_window(&turns, &window.holdings, &mut blocked, &mut owners,
+            &mut edges, &mut || 0.0, None);
+        assert_eq!(replay.taken, if no_second { vec![47] } else { vec![29, 47] });
+        owners[usize::from(candidate)] = window.vertex_owner[usize::from(candidate)];
+        edges[usize::from(road)] = window.edge_owner[usize::from(road)];
+        let after = scorer.marginal_breakdown(&holdings, &owners, &edges, 0, candidate, false);
+        let sites = expansion::sites_by_edge(&scorer, &window.vertex_owner, &window.edge_owner, 0, candidate);
+        if candidate == 6 {
+            let mut held = holdings;
+            scorer.add_to_holdings(&mut held, candidate);
+            let total = scorer.holdings_diversity_total(&held);
+            let mut prices = BTreeMap::<Vertex, f64>::new();
+            for (_, sites) in sites {
+                for site in sites {
+                    let price = scorer.site_total_with_holdings(held, site.vertex, total)
+                        * scorer.weights().expansion_decay.powf(f64::from(site.paid_builds));
+                    prices.entry(site.vertex).and_modify(|old| *old = old.max(price)).or_insert(price);
+                }
+            }
+            assert_eq!(prices.iter().max_by(|a, b| a.1.total_cmp(b.1)).unwrap().0, &47);
+            assert!(after.expansion < before.expansion);
+        } else {
+            for (_, sites) in &sites {
+                for site in sites {
+                    for rival in &replay.taken {
+                        assert_ne!(site.vertex, *rival);
+                        assert!(!board.topology.vertex_adjacent(site.vertex).contains(rival));
+                        assert!(board.topology.vertex_adjacent(site.vertex).iter().all(|middle| {
+                            !board.topology.vertex_adjacent(*middle).contains(rival)
+                        }));
+                    }
+                }
+            }
+            assert_eq!(sites, expansion::sites_by_edge(&scorer, &owners, &edges, 0, candidate));
+            assert_eq!(before.total().to_bits(), after.total().to_bits());
+        }
+        if reused {
+            edges[usize::from(road)] = EMPTY;
+            assert_ne!(after.expansion.to_bits(), scorer.marginal_breakdown(
+                &holdings, &owners, &edges, 0, candidate, false,
+            ).expansion.to_bits());
+        }
+        owners[usize::from(candidate)] = 0;
+        edges[usize::from(road)] = 0;
+        let mut first_holdings = holdings;
+        scorer.add_to_holdings(&mut first_holdings, candidate);
+        let second = context.best_legal_candidate(0, &first_holdings, &blocked, &owners, &edges, true);
+        assert_eq!(second.is_none(), no_second);
+        let mut expected = after;
+        if let Some(second) = second {
+            let second = scorer.marginal_breakdown(&first_holdings, &owners, &edges, 0, second, true);
+            expected = ScoreBreakdown {
+                production: after.production + second.production,
+                scarcity: after.scarcity + second.scarcity,
+                robber: after.robber + second.robber,
+                diversity: after.diversity + second.diversity,
+                port: after.port + second.port,
+                hand_value: after.hand_value + second.hand_value,
+                expansion: after.expansion + second.expansion,
+            };
+        }
+        let actual = rank(&board, &scorer, &window, &[candidate]).remove(0);
+        let baseline = rank(&board, &plain, &window, &[candidate]).remove(0);
+        assert_eq!(actual.first_road, baseline.first_road);
+        assert_eq!(actual.second_road, baseline.second_road);
+        assert_eq!(actual.planned_second, baseline.planned_second);
+        assert_eq!(actual.score.to_bits(), expected.total().to_bits());
+        assert_eq!(actual.breakdown.expansion.to_bits(), expected.expansion.to_bits());
+        for (actual, baseline) in [
+            (actual.breakdown.production, baseline.breakdown.production),
+            (actual.breakdown.scarcity, baseline.breakdown.scarcity),
+            (actual.breakdown.robber, baseline.breakdown.robber),
+            (actual.breakdown.diversity, baseline.breakdown.diversity),
+            (actual.breakdown.port, baseline.breakdown.port),
+            (actual.breakdown.hand_value, baseline.breakdown.hand_value),
+        ] {
+            assert_eq!(actual.to_bits(), baseline.to_bits());
+        }
+        let breakdown = ScoreBreakdown {
+            production: actual.breakdown.production, scarcity: actual.breakdown.scarcity,
+            robber: actual.breakdown.robber, diversity: actual.breakdown.diversity,
+            port: actual.breakdown.port, hand_value: actual.breakdown.hand_value,
+            expansion: actual.breakdown.expansion,
+        };
+        assert_eq!(actual.score.to_bits(), breakdown.total().to_bits());
+        (baseline.score, actual.score)
+    }
+
+    #[test]
+    fn reprice_blocked_site() {
+        let (before, after) = candidate_values(6, 0.5, false, false);
+        assert!(after < before);
+    }
+
+    #[test]
+    fn reprice_only() {
+        let (before, after) = candidate_values(6, 0.0, false, false);
+        assert!(after < before);
+    }
+
+    #[test]
+    fn reprice_untouched() {
+        let (before, after) = candidate_values(5, 0.5, false, false);
+        assert_eq!(before.to_bits(), after.to_bits());
+    }
+
+    #[test]
+    fn reprice_reused_road() {
+        let (before, after) = candidate_values(12, 0.5, true, false);
+        assert_eq!(before.to_bits(), after.to_bits());
+    }
+
+    #[test]
+    fn reprice_last_seat() {
+        let mut board = board(false);
+        board.me = Some(1);
+        let plain = scorer(&board, 0.5, 0.0);
+        let repriced = scorer(&board, 0.5, 1.0);
+        let window = pre_window(&board, &plain, board.blocked(), &[]);
+        let legal = board.legal_vertices();
+        let before = rank(&board, &plain, &window, &legal);
+        let after = rank(&board, &repriced, &window, &legal);
+        assert_eq!(before.len(), legal.len());
+        assert_eq!(after.len(), legal.len());
+        for (before, after) in before.iter().zip(&after) {
+            assert_eq!(before.first_pick, after.first_pick);
+            assert_eq!(before.score.to_bits(), after.score.to_bits());
+        }
+        assert_eq!(serde_json::to_value(before).unwrap(), serde_json::to_value(after).unwrap());
+    }
+
+    #[test]
+    fn reprice_without_a_legal_second_keeps_the_first_marginal() {
+        let (before, after) = candidate_values(6, 0.5, false, true);
+        assert!(after < before);
+    }
+
+    #[test]
+    fn reprice_disabled_expansion_and_second_picks_keep_their_bits() {
+        for second_pick in [false, true] {
+            let mut json = contest_fixture(2);
+            json["mePlayerId"] = "p0".into();
+            if second_pick {
+                let first = parse(&json).topology.vertex_id(0);
+                json = with_settlement(json, first, "p0");
+            }
+            let changes = json!({ "contestWeight": 0.5, "expansionWeight": if second_pick { 0.1 } else { 0.0 } });
+            let plain = default_weights_with(changes);
+            let mut repriced = plain.clone();
+            repriced["repriceFirstExpansion"] = 1.into();
+            assert_eq!(analysis(&json, None, json!({ "rollouts": 1, "weights": plain })),
+                analysis(&json, None, json!({ "rollouts": 1, "weights": repriced })));
+        }
+    }
+}

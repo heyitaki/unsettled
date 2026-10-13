@@ -55,7 +55,6 @@ fn contest_masks_match_reference_on_scrambled_boards() {
     let mut rival = 0;
     for (topology, board) in tests::walk_fixtures() {
         let scorer = AppFormulaScorer::new(&board, &topology, witness_weights());
-        let mut memo = PriceMemo::default();
         for (vertices, mut edges) in tests::scrambled_owners(&topology) {
             let edge = (0..topology.edge_count() as Edge).find(|edge| {
                 topology.edge_endpoints(*edge).iter().all(|v| vertices[usize::from(*v)] == EMPTY)
@@ -66,9 +65,9 @@ fn contest_masks_match_reference_on_scrambled_boards() {
                 let occupancy = Occupancy::new(&scorer, &vertices, &edges, seat);
                 own += occupancy.own_edges.count_ones();
                 rival += occupancy.rival_edges.count_ones();
-                let tiers = contest_tiers(&scorer, &occupancy, &mut memo);
+                let tiers = contest_tiers(&scorer, &occupancy);
                 assert_eq!(tiers[0] & tiers[1], 0);
-                assert_eq!(contest_tiers(&scorer, &Occupancy { blocked: !occupancy.blocked, ..occupancy }, &mut memo), tiers);
+                assert_eq!(contest_tiers(&scorer, &Occupancy { blocked: !occupancy.blocked, ..occupancy }), tiers);
                 for vertex in 0..topology.vertex_count() as Vertex {
                     let tier = if tiers[0] & (1 << vertex) != 0 { 1 }
                         else if tiers[1] & (1 << vertex) != 0 { 2 } else { 0 };
@@ -92,7 +91,7 @@ fn contest_classifier_clauses() {
         let check = |vertices: &[u8], edges: &[u8], vertex, expected| {
             assert_eq!(contest_tier(&scorer, vertices, edges, 0, vertex), expected);
             let occupancy = Occupancy::new(&scorer, vertices, edges, 0);
-            let tiers = contest_tiers(&scorer, &occupancy, &mut PriceMemo::default());
+            let tiers = contest_tiers(&scorer, &occupancy);
             assert_eq!(tiers[0] & (1 << vertex) != 0, expected == 1);
             assert_eq!(tiers[1] & (1 << vertex) != 0, expected == 2);
         };
@@ -206,7 +205,7 @@ fn contest_row_memo_follows_rival_roads_with_identical_sites() {
             let sites = scorer.reach.sites(0, &occupancy, &mut memo.sites);
             if let Some(previous) = previous { assert_eq!(sites, previous); }
             previous = Some(sites);
-            let current_tiers = contest_tiers(&scorer, &occupancy, &mut memo);
+            let current_tiers = contest_tiers(&scorer, &occupancy);
             if let Some(tiers) = tiers { assert_ne!(current_tiers, tiers); }
             tiers = Some(current_tiers);
             let mut poison = ValueEntry::new(serial, 0, sites);

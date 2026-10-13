@@ -862,7 +862,7 @@ fn row_value_inner<const CONTESTED: bool>(
         memo.walks.sites(scorer, occupancy, candidate)
     };
     let tiers = if !CONTESTED { [0; 2] } else {
-        contest_tiers(scorer, occupancy, memo)
+        contest_tiers(scorer, occupancy)
     };
     price_sites::<CONTESTED>(scorer, holdings, candidate, memo, serial, sites, tiers)
 }
@@ -1026,7 +1026,7 @@ fn row_road_inner<const CONTESTED: bool>(
             return scorer.expansion_road(vertex_owner, edge_owner, seat, candidate);
         };
         let tiers = if !CONTESTED { [0; 2] } else {
-            contest_tiers(scorer, occupancy, &mut memo)
+            contest_tiers(scorer, occupancy)
         };
         let table_path = scorer.reach.table_path(candidate, occupancy);
         let serial = memo.serial(scorer.id, occupancy.own_vertices);
@@ -1188,7 +1188,7 @@ fn contest_tier(
 }
 
 /// Masks of the merged-rival tiers from `contest_tier`, with tier 1 taking precedence over tier 2.
-fn contest_tiers(scorer: &AppFormulaScorer, occupancy: &Occupancy, _memo: &mut PriceMemo) -> [u128; 2] {
+fn contest_tiers(scorer: &AppFormulaScorer, occupancy: &Occupancy) -> [u128; 2] {
     CONTEST_MEMO.with(|memo| {
         #[cfg(test)]
         CONTEST_CALLS.with(|calls| calls.set(calls.get() + 1));

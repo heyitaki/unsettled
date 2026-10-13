@@ -15,8 +15,8 @@ const worstCase = cases.find(({ name }) => name === 'worst-case-default-rollouts
  * Each run gets its own instance: the engine keeps the rival rankings of its last calls, and a
  * second call on one instance would time the lookup instead of the ranking.
  */
-async function fastest(board: Board): Promise<number> {
-  const request = JSON.stringify({ board })
+async function fastest(board: Board, weights?: Record<string, unknown>): Promise<number> {
+  const request = JSON.stringify({ board, options: weights ? { weights } : undefined })
   let best = Infinity
   for (let run = 0; run < 3; run += 1) {
     const { analyze } = await createEngine(wasm, () => {})
@@ -41,5 +41,23 @@ it('ranks the worst-case six-player opening in under 300 ms', async () => {
 it('ranks it with three rival rankings ahead in under 1200 ms', async () => {
   const time = await fastest({ ...worstCase, mePlayerId: 'p4' })
   console.info(`analyze worst-case as p4: fastest ${time.toFixed(0)} ms of 3`)
+  expect(time).toBeLessThan(1200)
+}, 90_000)
+
+const contestWeights: Record<string, unknown> = {
+  ...JSON.parse(readFileSync(new URL('../../../simulator/placement/seat-weights/seats-6.json', import.meta.url), 'utf8')),
+  contestWeight: 0.5,
+  repriceFirstExpansion: 1,
+}
+
+it('ranks the worst-case opening with contests and re-pricing in under 300 ms', async () => {
+  const time = await fastest(worstCase, contestWeights)
+  console.info(`analyze contested opening: fastest ${time.toFixed(0)} ms of 3`)
+  expect(time).toBeLessThan(300)
+}, 45_000)
+
+it('ranks it as p4 with contests and re-pricing in under 1200 ms', async () => {
+  const time = await fastest({ ...worstCase, mePlayerId: 'p4' }, contestWeights)
+  console.info(`analyze contested as p4: fastest ${time.toFixed(0)} ms of 3`)
   expect(time).toBeLessThan(1200)
 }, 90_000)

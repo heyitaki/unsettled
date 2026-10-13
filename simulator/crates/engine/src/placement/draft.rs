@@ -726,7 +726,22 @@ impl<'a> Lookahead<'a> {
         candidate: Vertex,
         marginal: f64,
     ) -> f64 {
-        self.replay(vertex_owner, edge_owner, candidate, None);
+        let road = self.replay(vertex_owner, edge_owner, candidate, None);
+        let marginal = if self.hero_scorer.weights().reprice_first_expansion == 1.0
+            && self.hero_scorer.weights().expansion_weight != 0.0 && !self.intervening.is_empty()
+        {
+            // Put back pick-time owners so the candidate and its road are not counted twice.
+            self.owners[usize::from(candidate)] = vertex_owner[usize::from(candidate)];
+            self.edges[usize::from(road)] = edge_owner[usize::from(road)];
+            let marginal = self.hero_scorer.score_for_owner(
+                &self.owners, &self.edges, self.hero, candidate, false,
+            );
+            self.owners[usize::from(candidate)] = self.hero;
+            self.edges[usize::from(road)] = self.hero;
+            marginal
+        } else {
+            marginal
+        };
         let second = self.planned_second().map_or(0.0, |(_, score)| score);
         // At the shipped weight the credit is not merely zero but never formed: `replay` skips
         // its second scan and the value is exactly the one the kind carried before SP5's denial
@@ -762,7 +777,8 @@ impl<'a> Lookahead<'a> {
     }
 
     /// Places the candidate for the hero and lets every intervening seat take its argmax, in
-    /// `setup_order` order, leaving the replayed state in `owners` and `edges`.
+    /// `setup_order` order, leaving the replayed state in `owners` and `edges`, returning the
+    /// hero's setup road, including the fallback.
     ///
     /// Each rival's argmax score here is its best with the hero's candidate taken. The same row
     /// scanned with `Some(candidate)` vacated is its best had the candidate still been free, and
@@ -776,7 +792,7 @@ impl<'a> Lookahead<'a> {
         edge_owner: &[u8],
         candidate: Vertex,
         mut picks: Option<&mut Vec<(u8, Vertex)>>,
-    ) {
+    ) -> Edge {
         self.owners.copy_from_slice(vertex_owner);
         self.edges.copy_from_slice(edge_owner);
         self.denial = 0.0;
@@ -834,6 +850,7 @@ impl<'a> Lookahead<'a> {
                 picks.push((seat, pick));
             }
         }
+        road
     }
 }
 
@@ -2148,5 +2165,199 @@ mod contest_tests {
         }
         assert_eq!(chosen.0, best.unwrap().0);
         assert!(expansion::discounted_sites() > before);
+    }
+}
+
+#[cfg(test)]
+mod reprice_tests {
+    use super::*;
+    use crate::board::SimBoard;
+    use crate::placement::app_formula::{EngineWeights, Holdings};
+
+    fn scorers(board: &SimBoard, topology: &Topology, contest: f64, reprice: f64) -> DraftScorers {
+        let weights: EngineWeights = serde_json::from_str(include_str!(
+            "../../../../placement/default-weights.json"
+        )).unwrap();
+        let mut hero = weights.clone();
+        hero.contest_weight = contest;
+        hero.reprice_first_expansion = reprice;
+        DraftScorers {
+            hero: AppFormulaScorer::new(board, topology, hero),
+            opponent: AppFormulaScorer::new(board, topology, weights),
+        }
+    }
+
+    fn candidate_values(candidate: Vertex, contest: f64, reused: bool) -> (f64, f64) {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().nth(1).unwrap();
+        let plain = scorers(&board, &topology, contest, 0.0);
+        let repriced = scorers(&board, &topology, contest, 1.0);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let mut edges = vec![EMPTY; topology.edge_count()];
+        if reused { edges[19] = 0; }
+        let mut look = Lookahead::new(
+            &repriced.hero, &repriced.opponent, &topology, 2, 0, &vertices, &edges,
+        ).unwrap();
+        let road = setup_road(&repriced.hero, &topology, &vertices, &edges, 0, candidate, None);
+        if reused { assert_eq!(road, 19); }
+        let mut picks = Vec::new();
+        look.replay(&vertices, &edges, candidate, Some(&mut picks));
+        assert_eq!(picks, [(1, 29), (1, 47)]);
+        let replayed = (look.owners.clone(), look.edges.clone(), look.rows.occupancies);
+        let mut restored_vertices = look.owners.clone();
+        let mut restored_edges = look.edges.clone();
+        restored_vertices[usize::from(candidate)] = vertices[usize::from(candidate)];
+        restored_edges[usize::from(road)] = edges[usize::from(road)];
+        let before = repriced.hero.score_for_owner(&vertices, &edges, 0, candidate, false);
+        let after = repriced.hero.score_for_owner(&restored_vertices, &restored_edges, 0, candidate, false);
+        let sites = expansion::sites_by_edge(&repriced.hero, &vertices, &edges, 0, candidate);
+        if candidate == 6 {
+            let mut held = Holdings::empty();
+            repriced.hero.add_to_holdings(&mut held, candidate);
+            let total = repriced.hero.holdings_diversity_total(&held);
+            let mut prices = std::collections::BTreeMap::<Vertex, f64>::new();
+            for (_, sites) in sites {
+                for site in sites {
+                    let price = repriced.hero.site_total_with_holdings(held, site.vertex, total)
+                        * repriced.hero.weights().expansion_decay.powf(f64::from(site.paid_builds));
+                    prices.entry(site.vertex).and_modify(|old| *old = old.max(price)).or_insert(price);
+                }
+            }
+            assert_eq!(prices.iter().max_by(|a, b| a.1.total_cmp(b.1)).unwrap().0, &47);
+            assert!(after < before);
+        } else {
+            for (_, sites) in &sites {
+                for site in sites {
+                    for (_, rival) in &picks {
+                        assert_ne!(site.vertex, *rival);
+                        assert!(!topology.vertex_adjacent(site.vertex).contains(rival));
+                        assert!(topology.vertex_adjacent(site.vertex).iter().all(|middle| {
+                            !topology.vertex_adjacent(*middle).contains(rival)
+                        }));
+                    }
+                }
+            }
+            assert_eq!(sites, expansion::sites_by_edge(
+                &repriced.hero, &restored_vertices, &restored_edges, 0, candidate,
+            ));
+            assert_eq!(before.to_bits(), after.to_bits());
+        }
+        if reused {
+            restored_edges[usize::from(road)] = EMPTY;
+            assert_ne!(after.to_bits(), repriced.hero.score_for_owner(
+                &restored_vertices, &restored_edges, 0, candidate, false,
+            ).to_bits());
+        }
+        let second = look.planned_second().unwrap().1;
+        let actual = look.value(&vertices, &edges, candidate);
+        let baseline = candidate_score(&plain, &topology, 2, &vertices, &edges, 0, candidate, false);
+        assert_eq!(baseline.to_bits(), (before + second).to_bits());
+        assert_eq!(actual.to_bits(), (after + second).to_bits());
+        assert_eq!((look.owners.clone(), look.edges.clone(), look.rows.occupancies), replayed);
+        assert_eq!(actual.to_bits(), candidate_score(
+            &repriced, &topology, 2, &vertices, &edges, 0, candidate, false,
+        ).to_bits());
+        (baseline, actual)
+    }
+
+    #[test]
+    fn reprice_blocked_site() {
+        let (before, after) = candidate_values(6, 0.5, false);
+        assert!(after < before);
+    }
+
+    #[test]
+    fn reprice_only() {
+        let (before, after) = candidate_values(6, 0.0, false);
+        assert!(after < before);
+    }
+
+    #[test]
+    fn reprice_untouched() {
+        let (before, after) = candidate_values(5, 0.5, false);
+        assert_eq!(before.to_bits(), after.to_bits());
+    }
+
+    #[test]
+    fn reprice_reused_road() {
+        let (before, after) = candidate_values(12, 0.5, true);
+        assert_eq!(before.to_bits(), after.to_bits());
+    }
+
+    #[test]
+    fn reprice_last_seat() {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().nth(1).unwrap();
+        let plain = scorers(&board, &topology, 0.5, 0.0);
+        let repriced = scorers(&board, &topology, 0.5, 1.0);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        for candidate in 0..topology.vertex_count() as Vertex {
+            assert_eq!(candidate_score(&plain, &topology, 2, &vertices, &edges, 1, candidate, false).to_bits(),
+                candidate_score(&repriced, &topology, 2, &vertices, &edges, 1, candidate, false).to_bits());
+        }
+    }
+
+    #[test]
+    fn reprice_fallback_road() {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().nth(1).unwrap();
+        let scorers = scorers(&board, &topology, 0.5, 1.0);
+        let mut vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        for (_, sites) in expansion::sites_by_edge(&scorers.hero, &vertices, &edges, 0, 0) {
+            for site in sites { vertices[usize::from(site.vertex)] = 1; }
+        }
+        assert!(can_place_settlement(&topology, &vertices, 0));
+        assert!(expansion::sites_by_edge(&scorers.hero, &vertices, &edges, 0, 0).is_empty());
+        assert_eq!(scorers.hero.expansion_road(&vertices, &edges, 0, 0), None);
+        let mut look = Lookahead::new(&scorers.hero, &scorers.opponent, &topology, 2, 0, &vertices, &edges).unwrap();
+        let road = look.replay(&vertices, &edges, 0, None);
+        assert_eq!(road, setup_road(&scorers.hero, &topology, &vertices, &edges, 0, 0, None));
+        let replayed = (look.owners.clone(), look.edges.clone(), look.rows.occupancies);
+        assert!(look.value(&vertices, &edges, 0).is_finite());
+        assert_eq!((look.owners, look.edges, look.rows.occupancies), replayed);
+    }
+
+    #[test]
+    fn reprice_disabled_expansion_and_second_picks_keep_their_bits() {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().nth(1).unwrap();
+        let original = scorers(&board, &topology, 0.5, 0.0);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        for grant in [false, true] {
+            let mut weights = original.hero.weights().clone();
+            if !grant { weights.expansion_weight = 0.0; }
+            let plain = DraftScorers {
+                hero: AppFormulaScorer::new(&board, &topology, weights.clone()),
+                opponent: original.opponent.clone(),
+            };
+            weights.reprice_first_expansion = 1.0;
+            let repriced = DraftScorers {
+                hero: AppFormulaScorer::new(&board, &topology, weights),
+                opponent: original.opponent.clone(),
+            };
+            assert_eq!(candidate_score(&plain, &topology, 2, &vertices, &edges, 0, 6, grant).to_bits(),
+                candidate_score(&repriced, &topology, 2, &vertices, &edges, 0, 6, grant).to_bits());
+        }
+    }
+
+    #[test]
+    fn reprice_choose_matches_observation_with_hero_weights_and_denial() {
+        let (topology, board) = expansion::tests::walk_fixtures().into_iter().nth(1).unwrap();
+        let mut scorers = scorers(&board, &topology, 0.5, 1.0);
+        let mut weights = scorers.hero.weights().clone();
+        weights.setup_denial_weight = 0.4;
+        scorers.hero = AppFormulaScorer::new(&board, &topology, weights);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        let mut look = Lookahead::new(&scorers.hero, &scorers.opponent, &topology, 2, 0, &vertices, &edges).unwrap();
+        let mut best = None;
+        let mut credits = 0;
+        for candidate in 0..topology.vertex_count() as Vertex {
+            let score = candidate_score(&scorers, &topology, 2, &vertices, &edges, 0, candidate, false);
+            assert_eq!(score.to_bits(), look.value_with_marginal(&vertices, &edges, candidate, f64::NAN).to_bits());
+            if look.denial > 0.0 { credits += 1; }
+            keep_best(&mut best, candidate, score);
+        }
+        assert!(credits > 0);
+        assert_eq!(choose(&scorers, &topology, 2, &vertices, &edges, 0, false).unwrap().0, best.unwrap().0);
     }
 }
