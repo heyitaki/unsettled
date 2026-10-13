@@ -84,11 +84,12 @@ fn performance_domain_extends_the_pairwise_seed_and_board_disjointness_guard() {
         GATE3_SEED,
         PERF_SEED,
     ];
-    // The fourth generation folds the seat count into its seed, so each seat count is a domain.
+    // Generation four and gate5 fold in the seat count, giving twenty seat-derived seeds.
     for domain in [
         EvaluationDomain::Tuning4,
         EvaluationDomain::Eval4,
         EvaluationDomain::Gate4,
+        EvaluationDomain::Gate5,
     ] {
         domains.extend((2..=6).map(|seats| domain.seed(seats)));
     }

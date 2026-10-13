@@ -8,7 +8,7 @@ use unsettled_engine::topology::Layout;
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::evaluate::{
     EVAL2_SEED, EVAL3_SEED, EVAL4_SEED, EVAL_SEED, EvaluateRequest, EvaluationDomain,
-    GATE2_SEED, GATE3_SEED, GATE4_SEED, GATE_SEED, TUNING2_SEED, TUNING3_SEED, TUNING4_SEED,
+    GATE2_SEED, GATE3_SEED, GATE4_SEED, GATE5_SEED, GATE_SEED, TUNING2_SEED, TUNING3_SEED, TUNING4_SEED,
     TUNING_SEED, evaluate, evaluation_schedule,
     summarize_arm,
 };
@@ -501,7 +501,7 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
             .collect::<Vec<_>>()
     };
 
-    // Compare the nine old domains and all fifteen fourth-generation seat seeds on both
+    // Compare the nine old domains and all twenty seat-derived seeds on both
     // layouts, including boards at different indices that a bare seat xor would overlap.
     let mut domains = [
         ("tuning", TUNING_SEED),
@@ -517,7 +517,12 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
     .into_iter()
     .map(|(name, seed)| (name.to_string(), seed))
     .collect::<Vec<_>>();
-    for domain in [EvaluationDomain::Tuning4, EvaluationDomain::Eval4, EvaluationDomain::Gate4] {
+    for domain in [
+        EvaluationDomain::Tuning4,
+        EvaluationDomain::Eval4,
+        EvaluationDomain::Gate4,
+        EvaluationDomain::Gate5,
+    ] {
         for seats in 2..=6 {
             domains.push((format!("{}-{seats}", domain.name()), domain.seed(seats)));
         }
@@ -576,7 +581,7 @@ fn seat_count_changes_a_fourth_generation_domains_boards() {
     }
 }
 
-/// The twelve spellings the CLI parses, and the one it must not.
+/// The thirteen spellings the CLI parses, and the one it must not.
 ///
 /// `EvaluationDomain::seed` is the only place a run's whole seed stream is chosen, so a
 /// domain that parses to the wrong constant would silently spend a held-out set. The
@@ -606,6 +611,7 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
         ("tuning4", EvaluationDomain::Tuning4, TUNING4_SEED),
         ("eval4", EvaluationDomain::Eval4, EVAL4_SEED),
         ("gate4", EvaluationDomain::Gate4, GATE4_SEED),
+        ("gate5", EvaluationDomain::Gate5, GATE5_SEED),
     ] {
         assert_eq!(EvaluationDomain::parse(spelling), Ok(domain));
         assert_eq!(domain.name(), spelling);
@@ -633,6 +639,37 @@ fn every_evaluation_domain_parses_to_its_own_named_seed() {
         EvaluationDomain::parse("tuning5"),
         Err("unknown evaluation domain tuning5".to_string())
     );
+}
+
+#[test]
+fn gate5_seeds_are_pinned_and_boards_depend_only_on_index_and_seats() {
+    let seeds = [
+        5927599046091062298,
+        17878949590863306731,
+        1882428495990014522,
+        1303817596113500737,
+        18002440845045093778_u64,
+    ];
+    for (seats, seed) in (2..=6).zip(seeds) {
+        assert_eq!(EvaluationDomain::Gate5.seed(seats), seed);
+        let layout = if seats <= 4 { Layout::Standard4 } else { Layout::Extension6 };
+        let boards = (0..5).map(|index| {
+            generate_board(layout, seats, mix64(seed ^ index)).unwrap()
+        }).collect::<Vec<_>>();
+        for index in [4, 0, 2, 1, 3] {
+            let board = generate_board(
+                layout, seats, mix64(EvaluationDomain::Gate5.seed(seats) ^ index as u64),
+            ).unwrap();
+            assert_eq!(board.tiles(), boards[index].tiles());
+            assert_eq!(board.tokens(), boards[index].tokens());
+            let ports = |board: &unsettled_engine::board::SimBoard| {
+                board.ports().iter().map(|port| (port.edge, port.resource, port.rate))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(ports(&board), ports(&boards[index]));
+            assert_eq!(board.seats(), seats);
+        }
+    }
 }
 
 /// SP3's expansion term and SP5's draft kind, played rather than scored.

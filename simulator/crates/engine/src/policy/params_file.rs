@@ -1763,6 +1763,80 @@ mod tests {
         assert_eq!(found, expected, "one SC file per declared arm or combination");
     }
 
+    const CO_ARMS: [(&str, &[usize], &[(&str, f64)]); 4] = [
+        ("flat_25", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.25)]),
+        ("flat_50", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.5)]),
+        ("flat_75", &[2, 3, 4, 5, 6], &[("/contestWeight", 0.75)]),
+        ("reprice_only", &[2, 3, 4, 5, 6], &[("/repriceFirstExpansion", 1.0)]),
+    ];
+
+    const CO_ANCHORS: [(usize, &[(&str, f64)]); 5] = [
+        (2, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
+        (3, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
+        (4, &[("/coverageExponent", 1.0)]),
+        (5, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
+        (6, &[("/coverageExponent", 1.0)]),
+    ];
+
+    /// Anchored to the pre-programme seat vectors, independent of later seat adoptions.
+    /// Re-anchor this family to a snapshot file if `default-weights.json` ever moves.
+    #[test]
+    fn the_co_arm_files_are_the_committed_cut_off_perturbations() {
+        let arms_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../placement/arms");
+        let bounds: Value = serde_json::from_str(
+            &std::fs::read_to_string(SWEEP_BOUNDS_PATH).expect("committed bounds"),
+        )
+        .expect("valid JSON");
+        let base: Value = serde_json::from_str(
+            &std::fs::read_to_string(DEFAULT_WEIGHTS_PATH).expect("committed weights"),
+        )
+        .expect("valid JSON");
+
+        let mut expected = Vec::new();
+        for (arm, seat_counts, leaves) in CO_ARMS {
+            for seats in seat_counts {
+                let name = format!("co_{arm}_s{seats}.json");
+                let source = std::fs::read_to_string(format!("{arms_dir}/{name}"))
+                    .unwrap_or_else(|_| panic!("{name} must be committed"));
+                let weights: EngineWeights = serde_json::from_str(&source)
+                    .unwrap_or_else(|error| panic!("{name} must load as weights: {error}"));
+                weights.validate().unwrap_or_else(|error| panic!("{name} must validate: {error}"));
+                let file: Value = serde_json::from_str(&source).expect("valid JSON");
+                let (_, anchor) = CO_ANCHORS.iter().find(|(seat, _)| seat == seats)
+                    .expect("frozen seat anchor");
+                let mut perturbed = base.clone();
+                for (key, value) in anchor.iter().chain(leaves) {
+                    let leaf = file.pointer(key).expect("arm leaf");
+                    assert_eq!(leaf.as_f64(), Some(*value), "{name}: {key}");
+                    *perturbed.pointer_mut(key).expect("default leaf") = leaf.clone();
+                }
+                let mut paths = Vec::new();
+                collect_leaf_paths(&file, "", &mut paths);
+                for key in paths {
+                    let value = file.pointer(&key).expect("arm leaf").as_f64().expect("number");
+                    let range = bounds["placement"].pointer(&key).expect("bounded leaf");
+                    assert!(
+                        value >= range["min"].as_f64().expect("min")
+                            && value <= range["max"].as_f64().expect("max"),
+                        "{name}: {key} at {value} must sit inside its committed sweep-bounds range"
+                    );
+                }
+                assert_eq!(
+                    file, perturbed,
+                    "{name} must be the frozen seat anchor with {leaves:?} and nothing else moved"
+                );
+                expected.push(name);
+            }
+        }
+        let mut found = std::fs::read_dir(arms_dir).expect("arms dir")
+            .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("co_") && name.ends_with(".json"))
+            .collect::<Vec<_>>();
+        found.sort();
+        expected.sort();
+        assert_eq!(found, expected, "one CO file per declared arm and seat count");
+    }
+
     /// Adopted leaves as JSON pointers and values, relative to the live defaults.
     const SEAT_ADOPTIONS: [(usize, &[(&str, f64)]); 5] = [
         (2, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
@@ -2100,8 +2174,8 @@ mod tests {
         }
         assert_eq!(params_arms, 147, "every committed params arm must load");
         assert_eq!(
-            weights_arms, 77,
-            "the committed weights arms are 77 files; a change to the set is a decision"
+            weights_arms, 97,
+            "the committed weights arms are 97 files; a change to the set is a decision"
         );
     }
 

@@ -260,3 +260,68 @@ fn tournament_plural_heuristic_collisions_still_fail() {
             .contains("heuristic name collision: max_pips is used by multiple arms")
     );
 }
+
+#[test]
+fn picks_only_requires_a_reference_and_at_least_two_arms_without_writing_picks() {
+    for (name, extra) in [
+        ("single-no-reference", vec![]),
+        ("single-with-reference", vec!["--reference", "base"]),
+        ("multiple-no-reference", vec!["--arm", "candidate=max_pips"]),
+    ] {
+        let out = output_dir(&format!("evaluate-cli-picks-{name}"));
+        if out.exists() {
+            fs::remove_dir_all(&out).unwrap();
+        }
+        let mut arguments = valid_arguments(&out);
+        arguments.push("--picks-only".into());
+        arguments.extend(extra.into_iter().map(str::to_string));
+        assert_named_error(&arguments, "--picks-only requires --reference and at least two arms");
+        assert!(!out.join("picks.json").exists());
+    }
+}
+
+#[test]
+fn picks_only_compares_arms_and_writes_only_repeatable_picks() {
+    let out = output_dir("evaluate-cli-identical-picks");
+    if out.exists() {
+        fs::remove_dir_all(&out).unwrap();
+    }
+    let base = "app_formula_draft:placement/default-weights.json@placement/default-weights.json";
+    let mut arguments = valid_arguments(&out);
+    arguments[3] = base.into();
+    arguments[5] =
+        "candidate=app_formula_draft:placement/arms/sc_coverage_hi.json@placement/default-weights.json".into();
+    arguments[9] = "3".into();
+    arguments.extend([
+        "--picks-only".into(), "--arm".into(), format!("same={base}"),
+        "--reference".into(), "base".into(),
+        "--arm".into(), format!("base={base}"),
+    ]);
+    let mut first = None;
+    for _ in 0..2 {
+        let args = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+        let output = evaluate(&args);
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let bytes = fs::read(out.join("picks.json")).unwrap();
+        let artifact: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(artifact["config"]["domain"], "tuning");
+        assert_eq!(artifact["config"]["field"], base);
+        assert_eq!(artifact["config"]["reference"], "base");
+        assert_eq!(artifact["config"]["reps"], 1);
+        assert_eq!(artifact["config"]["units"], 4);
+        for arm in ["base", "same"] {
+            assert_eq!(artifact["arms"][arm]["units"], 4);
+            assert_eq!(artifact["arms"][arm]["changed"], 0);
+            assert_eq!(artifact["arms"][arm]["changedPickShare"], 0.0);
+        }
+        assert_eq!(artifact["arms"]["candidate"]["units"], 4);
+        assert_eq!(artifact["arms"]["candidate"]["changed"], 1);
+        assert_eq!(artifact["arms"]["candidate"]["changedPickShare"], 0.25);
+        assert!(!out.join("evaluation.json").exists());
+        if let Some(first) = &first {
+            assert_eq!(&bytes, first);
+        } else {
+            first = Some(bytes);
+        }
+    }
+}

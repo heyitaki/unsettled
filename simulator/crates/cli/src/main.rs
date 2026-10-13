@@ -15,8 +15,8 @@ use unsettled_sim::bench::{BenchRequest, DEFAULT_WEIGHTS, benchmark, reference_p
 use unsettled_sim::boardgen::generate_board;
 use unsettled_sim::diagnose::{DiagnoseRequest, diagnose, write_diagnostic_outputs};
 use unsettled_sim::evaluate::{
-    EvaluateRequest, EvaluationDomain, evaluate, evaluation_meta, parse_arm_spec,
-    write_evaluation_outputs,
+    EvaluateRequest, EvaluationDomain, evaluate, evaluate_picks, evaluation_meta, parse_arm_spec,
+    write_evaluation_outputs, write_picks_output,
 };
 use unsettled_sim::heuristics::parse_heuristic;
 use unsettled_sim::runner::{RunRequest, run};
@@ -104,6 +104,9 @@ struct SimulateArgs {
 
 #[derive(Args)]
 struct EvaluateArgs {
+    /// Compare ordered setup picks at rep 0 without playing games.
+    #[arg(long)]
+    picks_only: bool,
     #[arg(long, default_value = "standard4")]
     layout: String,
     #[arg(long)]
@@ -395,7 +398,7 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
     }
     let policy = parse_policy(&args.policy)?;
     let started = Instant::now();
-    let evaluation = evaluate(EvaluateRequest {
+    let request = EvaluateRequest {
         layout,
         seats,
         domain,
@@ -415,7 +418,17 @@ fn evaluate_command(args: EvaluateArgs) -> Result<(), String> {
         alpha: args.alpha,
         threads: args.threads,
         allow_unofficial: args.allow_unofficial,
-    })?;
+    };
+    if args.picks_only {
+        let picks = evaluate_picks(request)?;
+        write_picks_output(&args.out, &picks)?;
+        println!(
+            "completed picks domain {} ({}) with {} arms, {} units",
+            picks.config.domain, picks.config.domain_seed, picks.arms.len(), picks.config.units,
+        );
+        return Ok(());
+    }
+    let evaluation = evaluate(request)?;
     let elapsed = started.elapsed().as_secs_f64();
     let games = evaluation
         .config

@@ -61,7 +61,7 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
             .collect::<Vec<(Vec<Option<Resource>>, Vec<Option<u8>>, u8)>>()
     };
 
-    // Compare the nine old domains and all fifteen fourth-generation seat seeds on both
+    // Compare the nine old domains and all twenty seat-derived seeds on both
     // layouts, including boards at different indices that a bare seat xor would overlap.
     let mut domains = [
         ("tuning", TUNING_SEED),
@@ -77,7 +77,12 @@ fn tuning_and_evaluation_seed_domains_are_disjoint() {
     .into_iter()
     .map(|(name, seed)| (name.to_string(), seed))
     .collect::<Vec<_>>();
-    for domain in [EvaluationDomain::Tuning4, EvaluationDomain::Eval4, EvaluationDomain::Gate4] {
+    for domain in [
+        EvaluationDomain::Tuning4,
+        EvaluationDomain::Eval4,
+        EvaluationDomain::Gate4,
+        EvaluationDomain::Gate5,
+    ] {
         for seats in 2..=6 {
             domains.push((format!("{}-{seats}", domain.name()), domain.seed(seats)));
         }

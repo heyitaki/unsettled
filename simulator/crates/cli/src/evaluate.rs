@@ -6,12 +6,13 @@ use std::process::Command;
 
 use rayon::prelude::*;
 use serde::Serialize;
-use unsettled_engine::game::{GameArena, GameConfig};
+use unsettled_engine::board::SimBoard;
+use unsettled_engine::game::{GameArena, GameConfig, setup_order};
 use unsettled_engine::placement::{PlacementKind, prepare_app_formula_boards};
 use unsettled_engine::policy::PolicyKind;
 use unsettled_engine::rng::{derive_evaluation_seed, mix64};
 use unsettled_engine::rules::{RuleConfig, TradeConfig};
-use unsettled_engine::topology::{Layout, Topology};
+use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
 
 use crate::boardgen::generate_board;
 use crate::output::Meta;
@@ -47,6 +48,9 @@ pub const TUNING4_SEED: u64 = 0x7a14_5eed_2026_1010;
 pub const EVAL4_SEED: u64 = 0xe7a4_5eed_2026_1010;
 pub const GATE4_SEED: u64 = 0x6a74_5eed_2026_1010;
 
+/// Cut-off adoption gate, with the seat count folded in as in generation four.
+pub const GATE5_SEED: u64 = 0x6a75_5eed_2026_1012;
+
 /// Performance-only domain, disjoint from every evaluation generation. Reusable for
 /// timing and deterministic benchmark fixtures, never for screening or adoption evidence.
 pub const PERF_SEED: u64 = 0x9e4f_5eed_2026_1010;
@@ -65,6 +69,7 @@ const _: () = {
         TUNING4_SEED,
         EVAL4_SEED,
         GATE4_SEED,
+        GATE5_SEED,
         PERF_SEED,
     ];
     let mut left = 0;
@@ -92,6 +97,7 @@ pub enum EvaluationDomain {
     Tuning4,
     Eval4,
     Gate4,
+    Gate5,
 }
 
 impl EvaluationDomain {
@@ -109,6 +115,7 @@ impl EvaluationDomain {
             "tuning4" => Ok(Self::Tuning4),
             "eval4" => Ok(Self::Eval4),
             "gate4" => Ok(Self::Gate4),
+            "gate5" => Ok(Self::Gate5),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
     }
@@ -127,6 +134,7 @@ impl EvaluationDomain {
             Self::Tuning4 => "tuning4",
             Self::Eval4 => "eval4",
             Self::Gate4 => "gate4",
+            Self::Gate5 => "gate5",
         }
     }
 
@@ -144,6 +152,7 @@ impl EvaluationDomain {
             Self::Tuning4 => mix64(TUNING4_SEED ^ seats as u64),
             Self::Eval4 => mix64(EVAL4_SEED ^ seats as u64),
             Self::Gate4 => mix64(GATE4_SEED ^ seats as u64),
+            Self::Gate5 => mix64(GATE5_SEED ^ seats as u64),
         }
     }
 }
@@ -264,6 +273,32 @@ pub struct Evaluation {
     pub illegal_actions: u64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickStats {
+    pub units: usize,
+    pub changed: usize,
+    pub changed_pick_share: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Picks {
+    pub config: EvaluationConfig,
+    pub arms: BTreeMap<String, PickStats>,
+}
+
+struct PreparedEvaluation {
+    topology: Topology,
+    boards: Vec<SimBoard>,
+    schedule: Vec<EvaluationUnit>,
+    jobs: Vec<EvaluationJob>,
+    rules: RuleConfig,
+    pool: rayon::ThreadPool,
+    domain_seed: u64,
+}
+
+type PickTrace = [(Vertex, Edge); 2];
+
 #[derive(Clone, Copy)]
 struct EvaluationJob {
     arm_index: usize,
@@ -306,8 +341,8 @@ pub fn evaluation_schedule(boards: usize, reps: usize, seats: usize) -> Vec<Eval
     schedule
 }
 
-pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
-    validate_request(&request)?;
+fn prepare_evaluation(request: &EvaluateRequest<'_>) -> Result<PreparedEvaluation, String> {
+    validate_request(request)?;
     let topology = Topology::load(request.layout)?;
     let units = request
         .boards
@@ -357,25 +392,19 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
         .map_err(|error| error.to_string())?;
     let mut rules = RuleConfig::base(request.layout);
     rules.player_trading = request.player_trading;
+    Ok(PreparedEvaluation { topology, boards, schedule, jobs, rules, pool, domain_seed })
+}
+
+pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
+    let PreparedEvaluation { topology, boards, schedule, jobs, rules, pool, domain_seed } =
+        prepare_evaluation(&request)?;
+    let units = schedule.len();
+    let game_count = jobs.len();
     let outcomes: Vec<EvaluationOutcome> = pool.install(|| {
         jobs.par_iter()
             .map_init(GameArena::default, |arena, job| {
                 let unit = schedule[job.unit_index];
-                let mut config = GameConfig::default();
-                for seat in 0..request.seats {
-                    config.placements[seat] = request.field;
-                    config.policies[seat] = request.policy;
-                }
-                config.placements[unit.hero_seat] = request.arms[job.arm_index].1;
-                if let Some(policy) = request.arm_policies[job.arm_index] {
-                    config.policies[unit.hero_seat] = policy;
-                }
-                config.seed = derive_evaluation_seed(
-                    domain_seed,
-                    unit.board as u64,
-                    unit.rep as u64,
-                    unit.hero_seat as u64,
-                );
+                let config = evaluation_unit_config(&request, unit, job.arm_index, domain_seed);
                 let result = arena.play(&boards[unit.board], &topology, &rules, &config);
                 EvaluationOutcome {
                     hero_won: result.winner == Some(unit.hero_seat as u8),
@@ -480,42 +509,158 @@ pub fn evaluate(request: EvaluateRequest<'_>) -> Result<Evaluation, String> {
         }
     }
     Ok(Evaluation {
-        config: EvaluationConfig {
-            domain: request.domain.name().to_string(),
-            domain_seed,
-            layout: request.layout.as_str().to_string(),
-            seats: request.seats,
-            policy: request.policy_name.to_string(),
-            arm_policies: {
-                let values = request
-                    .arms
-                    .iter()
-                    .zip(request.arm_policy_names)
-                    .filter_map(|((label, _), policy)| {
-                        policy
-                            .as_ref()
-                            .map(|policy| (label.clone(), policy.clone()))
-                    })
-                    .collect::<BTreeMap<_, _>>();
-                (!values.is_empty()).then_some(values)
-            },
-            player_trading: request.player_trading,
-            boards: request.boards,
-            reps: request.reps,
-            hero_seats: request.seats,
-            units,
-            field: request.field_spec.to_string(),
-            field_heuristic: request.field.name().to_string(),
-            reference: request.reference.map(str::to_string),
-            threshold: request.threshold,
-            alpha: request.alpha,
-            z,
-            allow_unofficial: request.allow_unofficial,
-        },
+        config: evaluation_config(&request, domain_seed, units, z),
         arms,
         pairs,
         illegal_actions,
     })
+}
+
+pub fn evaluate_picks(mut request: EvaluateRequest<'_>) -> Result<Picks, String> {
+    if request.reference.is_none() || request.arms.len() < 2 {
+        return Err("--picks-only requires --reference and at least two arms".into());
+    }
+    validate_request(&request)?;
+
+    // Draft kinds draw nothing from the game seed, so repetitions add no information.
+    request.reps = 1;
+    let PreparedEvaluation { topology, boards, schedule, jobs, rules, pool, domain_seed } =
+        prepare_evaluation(&request)?;
+    let units = schedule.len();
+    let traces: Vec<Result<PickTrace, String>> = pool.install(|| {
+        jobs.par_iter()
+            .map_init(GameArena::default, |arena, job| {
+                let unit = schedule[job.unit_index];
+                let config = evaluation_unit_config(&request, unit, job.arm_index, domain_seed);
+                draft_trace(arena, &boards[unit.board], &topology, &rules, &config, unit)
+            })
+            .collect()
+    });
+    let traces = traces.into_iter().collect::<Result<Vec<_>, _>>()?;
+    let reference_label = request.reference.expect("validated picks reference");
+    let reference = request.arms.iter().position(|(name, _)| name == reference_label)
+        .expect("validated evaluation reference");
+    let arms = request.arms.iter().enumerate()
+        .map(|(index, (label, _))| {
+            let changed = (0..units).filter(|unit| {
+                trace_changed(&traces[index * units + unit], &traces[reference * units + unit])
+            }).count();
+            (label.clone(), PickStats {
+                units,
+                changed,
+                changed_pick_share: changed as f64 / units as f64,
+            })
+        })
+        .collect();
+    Ok(Picks {
+        config: evaluation_config(&request, domain_seed, units, alpha_z(request.alpha)?),
+        arms,
+    })
+}
+
+fn changed_edge(before: &[u8], after: &[u8], unit: EvaluationUnit) -> Result<Edge, String> {
+    let mut changed = before.iter().zip(after).enumerate()
+        .filter(|(_, (before, after))| before != after)
+        .map(|(edge, _)| edge as Edge);
+    match (changed.next(), changed.next()) {
+        (Some(edge), None) => Ok(edge),
+        _ => Err(format!(
+            "picks-only board {} seat {}: expected exactly one changed edge per hero pick",
+            unit.board, unit.hero_seat,
+        )),
+    }
+}
+
+fn draft_trace(
+    arena: &mut GameArena,
+    board: &SimBoard,
+    topology: &Topology,
+    rules: &RuleConfig,
+    config: &GameConfig,
+    unit: EvaluationUnit,
+) -> Result<PickTrace, String> {
+    arena.prepare(board, topology, rules, config);
+    let seats = board.seats();
+    let mut trace = [(0, 0); 2];
+    for (i, seat) in setup_order(seats).into_iter().enumerate() {
+        let seat = usize::from(seat);
+        let before = (seat == unit.hero_seat).then_some(arena.state.edge_owner);
+        let vertex = arena.setup_pick_for_test(board, topology, rules, config, seat, i >= seats)
+            .ok_or_else(|| format!("picks-only board {} seat {seat}: no setup settlement", unit.board))?;
+        if let Some(before) = before {
+            let edge = changed_edge(&before, &arena.state.edge_owner, unit)?;
+            trace[usize::from(i >= seats)] = (vertex, edge);
+        }
+    }
+    Ok(trace)
+}
+
+fn trace_changed(arm: &PickTrace, reference: &PickTrace) -> bool {
+    arm != reference
+}
+
+fn evaluation_unit_config(
+    request: &EvaluateRequest<'_>,
+    unit: EvaluationUnit,
+    arm_index: usize,
+    domain_seed: u64,
+) -> GameConfig {
+    let mut config = GameConfig::default();
+    for seat in 0..request.seats {
+        config.placements[seat] = request.field;
+        config.policies[seat] = request.policy;
+    }
+    config.placements[unit.hero_seat] = request.arms[arm_index].1;
+    if let Some(policy) = request.arm_policies[arm_index] {
+        config.policies[unit.hero_seat] = policy;
+    }
+    config.seed = derive_evaluation_seed(
+        domain_seed,
+        unit.board as u64,
+        unit.rep as u64,
+        unit.hero_seat as u64,
+    );
+    config
+}
+
+fn evaluation_config(
+    request: &EvaluateRequest<'_>,
+    domain_seed: u64,
+    units: usize,
+    z: f64,
+) -> EvaluationConfig {
+    EvaluationConfig {
+        domain: request.domain.name().to_string(),
+        domain_seed,
+        layout: request.layout.as_str().to_string(),
+        seats: request.seats,
+        policy: request.policy_name.to_string(),
+        arm_policies: {
+            let values = request
+                .arms
+                .iter()
+                .zip(request.arm_policy_names)
+                .filter_map(|((label, _), policy)| {
+                    policy
+                        .as_ref()
+                        .map(|policy| (label.clone(), policy.clone()))
+                })
+                .collect::<BTreeMap<_, _>>();
+            (!values.is_empty()).then_some(values)
+        },
+        player_trading: request.player_trading,
+        boards: request.boards,
+        reps: request.reps,
+        hero_seats: request.seats,
+        units,
+        field: request.field_spec.to_string(),
+        field_heuristic: request.field.name().to_string(),
+        reference: request.reference.map(str::to_string),
+        threshold: request.threshold,
+        alpha: request.alpha,
+        z,
+        allow_unofficial: request.allow_unofficial,
+    }
 }
 
 pub fn summarize_arm(
@@ -731,6 +876,13 @@ pub fn write_evaluation_outputs(
     .map_err(|error| error.to_string())
 }
 
+pub fn write_picks_output(directory: &Path, picks: &Picks) -> Result<(), String> {
+    fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    let json = serde_json::to_vec_pretty(picks).map_err(|error| error.to_string())?;
+    fs::write(directory.join("picks.json"), [json.as_slice(), b"\n"].concat())
+        .map_err(|error| error.to_string())
+}
+
 fn bounded_interval(estimate: f64, margin: f64) -> [f64; 2] {
     [(estimate - margin).max(-1.0), (estimate + margin).min(1.0)]
 }
@@ -802,4 +954,62 @@ fn validate_request(request: &EvaluateRequest<'_>) -> Result<(), String> {
     }
     alpha_z(request.alpha)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use unsettled_engine::placement::app_formula::EngineWeights;
+    use unsettled_engine::placement::register_app_formula_draft;
+
+    #[test]
+    fn trace_comparison_counts_order_and_each_pick_component() {
+        let reference = [(1, 2), (3, 4)];
+        assert!(!trace_changed(&reference, &reference));
+        assert!(trace_changed(&[(3, 4), (1, 2)], &reference));
+        assert!(trace_changed(&[(1, 5), (3, 4)], &reference));
+        assert!(trace_changed(&[(5, 2), (3, 4)], &reference));
+    }
+
+    #[test]
+    fn a_hero_pick_requires_exactly_one_changed_edge() {
+        let unit = EvaluationUnit { board: 7, rep: 0, hero_seat: 1 };
+        assert_eq!(changed_edge(&[0, 0], &[0, 1], unit).unwrap(), 1);
+        for after in [[0, 0], [1, 1]] {
+            let error = changed_edge(&[0, 0], &after, unit).unwrap_err();
+            assert!(error.contains("board 7"), "{error}");
+            assert!(error.contains("seat 1"), "{error}");
+            assert!(error.contains("exactly one changed edge"), "{error}");
+        }
+    }
+
+    #[test]
+    fn picks_only_counts_a_real_draft_taking_the_same_pair_in_reverse_order() {
+        let mut anchor: EngineWeights =
+            serde_json::from_str(include_str!("../../../placement/default-weights.json")).unwrap();
+        anchor.coverage_exponent = 1.0;
+        anchor.diversity_weight = 3.2;
+        anchor.contest_weight = 0.0;
+        anchor.reprice_first_expansion = 0.0;
+        let mut weights = anchor.clone();
+        weights.contest_weight = 0.5;
+        let base = register_app_formula_draft(
+            "picks-order-base".into(), anchor.clone(), anchor.clone(),
+        ).unwrap();
+        let arm = register_app_formula_draft("picks-order-arm".into(), weights, anchor).unwrap();
+        let topology = Topology::load(Layout::Standard4).unwrap();
+        let rules = RuleConfig::base(Layout::Standard4);
+        let mut board = generate_board(Layout::Standard4, 2, 39).unwrap();
+        prepare_app_formula_boards(std::slice::from_mut(&mut board), &topology, &[base, arm]);
+        let unit = EvaluationUnit { board: 0, rep: 0, hero_seat: 1 };
+        let mut arena = GameArena::default();
+        let mut config = GameConfig::default();
+        config.placements = [base; 6];
+        let reference = draft_trace(&mut arena, &board, &topology, &rules, &config, unit).unwrap();
+        config.placements[unit.hero_seat] = arm;
+        let candidate = draft_trace(&mut arena, &board, &topology, &rules, &config, unit).unwrap();
+        assert_ne!(reference[0], reference[1]);
+        assert_eq!(candidate, [reference[1], reference[0]]);
+        assert!(trace_changed(&candidate, &reference));
+    }
 }
