@@ -98,6 +98,8 @@ pub enum EvaluationDomain {
     Eval4,
     Gate4,
     Gate5,
+    /// Repeatable for timing and memory readings without spending a held-out domain; outcomes are never evidence.
+    Perf,
 }
 
 impl EvaluationDomain {
@@ -116,6 +118,7 @@ impl EvaluationDomain {
             "eval4" => Ok(Self::Eval4),
             "gate4" => Ok(Self::Gate4),
             "gate5" => Ok(Self::Gate5),
+            "perf" => Ok(Self::Perf),
             _ => Err(format!("unknown evaluation domain {value}")),
         }
     }
@@ -135,6 +138,7 @@ impl EvaluationDomain {
             Self::Eval4 => "eval4",
             Self::Gate4 => "gate4",
             Self::Gate5 => "gate5",
+            Self::Perf => "perf",
         }
     }
 
@@ -153,6 +157,7 @@ impl EvaluationDomain {
             Self::Eval4 => mix64(EVAL4_SEED ^ seats as u64),
             Self::Gate4 => mix64(GATE4_SEED ^ seats as u64),
             Self::Gate5 => mix64(GATE5_SEED ^ seats as u64),
+            Self::Perf => mix64(PERF_SEED ^ seats as u64),
         }
     }
 }

@@ -106,7 +106,7 @@ fn domain_is_required_by_the_command_line_parser() {
 /// rejects would be discovered only by a failed measurement run.
 #[test]
 fn the_second_generation_domains_are_accepted_and_a_typo_is_not() {
-    for domain in ["tuning2", "eval2", "gate2"] {
+    for domain in ["tuning2", "eval2", "gate2", "perf"] {
         let out = output_dir(&format!("evaluate-cli-domain-{domain}"));
         let mut arguments = valid_arguments(&out);
         arguments[1] = domain.into();
