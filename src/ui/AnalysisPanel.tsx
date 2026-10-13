@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Recommendation } from '../engine/analysisProtocol'
+import { rowContest, type RowContest } from '../engine/contest'
 import { draftIsComplete, restoreDraftPick } from '../engine/draft'
 import { setMe } from '../model/board'
 import { awaitingFirstTurn } from '../model/turn'
 import type { Board, VertexId } from '../model/types'
-import { recommendationMarks } from './analysisMarks'
+import { contestMarks, recommendationMarks } from './analysisMarks'
 import { useAnalysis } from './useAnalysis'
 import { useDraftSteps } from './useDraftSteps'
 import { readableInk } from './colors'
@@ -49,6 +50,18 @@ function displayedFactors(recommendation: Recommendation): readonly [string, num
     .map(([label, value]) => [label, value / 10])
 }
 
+function contestNote(board: Board, { spots, contested }: RowContest): string | null {
+  const groups = new Map<number, string[]>()
+  for (const player of board.players) {
+    const count = contested.filter((entry) => entry.playerId === player.id).length
+    if (count > 0) groups.set(count, [...(groups.get(count) ?? []), player.name])
+  }
+  const list = (names: string[]) => names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+  const clauses = [...groups].map(([count, names]) =>
+    `${list(names)} can reach ${spots.length === 1 ? 'the only spot' : `${count} of ${spots.length} spots`}`)
+  return clauses.length === 0 ? null : clauses.join('; ')
+}
+
 /** No hex carries a tile (spec B5): there is nothing to rank, only ways to fill the board. */
 const boardIsEmpty = (board: Board): boolean => board.hexes.every((hex) => hex.tile === null)
 
@@ -72,7 +85,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const { state, dispatch } = useStore()
   const game = activeTab(state).game
   const { board } = game
-  const { analysis, pending, settled, progress = 0, error, retry } = useAnalysis()
+  const { analysis, pending, settled, settledBoard, progress = 0, error, retry } = useAnalysis()
   const { canStepBack, canStepForward, stepBack, stepForward } = useDraftSteps()
   // While a ranking is pending the last one stays in place, inert and drawn as
   // placeholders, so the panel keeps its height (spec D4). The draft facts
@@ -112,6 +125,11 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   }
 
   const playerId = viewedPlayerId(board, state.viewedPick)
+  const contestBoard = stale ? settledBoard : board
+  const contestPlayerId = stale ? settledBoard?.mePlayerId ?? null : playerId
+  const contests = useMemo(() => contestBoard && contestPlayerId !== null
+    ? shown.recommendations.slice(0, LISTED_PICKS).map((row) => rowContest(contestBoard, contestPlayerId, row))
+    : [], [shown, contestBoard, contestPlayerId])
   const viewedPlayer = board.players.find((player) => player.id === playerId)
   const viewedColor = viewedPlayer?.color ?? '#8a7a63'
   // Which of the viewed player's two settlements the rows rank, stamped on their marks.
@@ -136,6 +154,10 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
 
   const playerColor = (id: string) =>
     board.players.find((player) => player.id === id)?.color ?? '#8a7a63'
+  const rowMarks = (recommendation: Recommendation, index: number): HighlightMark[] => [
+    ...recommendationMarks(recommendation, viewedColor, pickNumber),
+    ...contestMarks(contests[index]?.contested ?? [], playerColor),
+  ]
   const clearHighlight = () => mark(null)
 
   const pickText = state.viewedPick == null || state.viewedPick === analysis.draft.myRemainingPickIndices[0]
@@ -174,11 +196,11 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     setSelectedPick(null)
     clearHighlight()
   }
-  const selectRecommendation = (recommendation: Recommendation) => {
+  const selectRecommendation = (recommendation: Recommendation, index: number) => {
     const next = selectedPick === recommendation.firstPick ? null : recommendation.firstPick
     setSelectedPick(next)
     setSelectedLikelyGone(false)
-    mark(next === null ? null : recommendationMarks(recommendation, viewedColor, pickNumber))
+    mark(next === null ? null : rowMarks(recommendation, index))
     // A mark moved on a board scrolled out of view is a change nobody sees
     // (spec B2), and only the phone's one document can scroll past the board.
     if (onBuild && next !== null) revealBoardIfScrolledPast()
@@ -270,6 +292,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
       <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
         {recommendations.map((recommendation, index) => {
           const factors = displayedFactors(recommendation)
+          const contest = contests[index]
+          const note = contest && contestBoard ? contestNote(contestBoard, contest) : null
           const current = selectedPick === recommendation.firstPick
           return (
             <div
@@ -280,8 +304,8 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                 type="button"
                 className="analysis-row-select"
                 title={vertexDescription(board, recommendation.firstPick)}
-                onClick={() => selectRecommendation(recommendation)}
-                onMouseEnter={() => preview(recommendationMarks(recommendation, viewedColor, pickNumber))}
+                onClick={() => selectRecommendation(recommendation, index)}
+                onMouseEnter={() => preview(rowMarks(recommendation, index))}
               >
                 <span
                   className="analysis-rank"
@@ -308,6 +332,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
                   )}
                 </span>
                 <span className="analysis-score">{recommendation.score.toFixed(1)}</span>
+                {note && <span className="analysis-contest">{note}</span>}
 
                 {/* Both trees show factors only for the selected row. */}
                 {current && (

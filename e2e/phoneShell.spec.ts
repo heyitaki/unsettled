@@ -2,12 +2,13 @@ import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createBoard, draftOrder, placeBuilding, setHexTile } from '../src/model/board'
+import { LISTED_PICKS } from '../src/ui/restMarks'
 import { axialToPixel, edgeEndpointVertexIds, parseVertexId, vertexAdjacentVertexIds, vertexIncidentEdgeIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
 import type { Board, VertexId } from '../src/model/types'
 import { clientToUnits, IDENTITY } from '../src/ui/boardViewport'
 import { buildingSlots } from '../src/ui/placementSlots'
-import { seedBoard, seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
+import { contestFixture, seedBoard, seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
 import { randomizePhoneBoard } from './phoneBoardTools'
 
 /**
@@ -25,6 +26,46 @@ async function open(page: Page) {
   await page.goto('')
   await expect(page.locator('.phone-shell')).toBeVisible()
 }
+
+test('wraps contest notes below the tiles and draws rings when a row is tapped', async ({ page }) => {
+  const name = 'Blue'.repeat(15)
+  expect(name).toHaveLength(60)
+  const { board, contests, notes } = await contestFixture(name)
+  await open(page)
+  await seedBoard(page, board)
+  const rows = page.locator('.analysis-row-select')
+  await expect(rows).toHaveCount(LISTED_PICKS)
+  await expect(rows.locator('.analysis-contest')).toHaveText(notes)
+  const boxes = await rows.evaluateAll((buttons) => buttons.map((button) => {
+    const row = button.getBoundingClientRect()
+    const note = button.querySelector('.analysis-contest')!.getBoundingClientRect()
+    const tiles = button.querySelector(':scope > .spot-tiles')!.getBoundingClientRect()
+    const body = button.querySelector('.analysis-row-body')!.getBoundingClientRect()
+    return {
+      inside: note.left >= row.left && note.right <= row.right && note.top >= row.top && note.bottom <= row.bottom,
+      below: note.top >= tiles.bottom && note.top >= body.bottom,
+      noteHeight: note.height,
+      scrollWidth: button.scrollWidth, clientWidth: button.clientWidth,
+    }
+  }))
+  for (const box of boxes) {
+    expect(box.inside).toBe(true)
+    expect(box.below).toBe(true)
+    expect(box.noteHeight).toBeGreaterThan(11 * 1.35)
+    expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth)
+  }
+  await rows.first().tap()
+  await expect(page.locator('.vertex-ring')).toHaveCount(contests[0].spots.length)
+  for (const ring of await page.locator('.vertex-ring').all()) {
+    await expect(ring).toHaveAttribute('stroke', board.players[1].color)
+  }
+  await expect(rows.first().locator('.analysis-factors')).toBeVisible()
+  expect(await rows.first().evaluate((row) => {
+    const note = row.querySelector('.analysis-contest')!.getBoundingClientRect()
+    const factors = row.querySelector('.analysis-factors')!.getBoundingClientRect()
+    return note.bottom <= factors.top
+  })).toBe(true)
+})
 
 test('the header names the active board and nothing of the desktop chrome mounts', async ({ page }) => {
   await open(page)

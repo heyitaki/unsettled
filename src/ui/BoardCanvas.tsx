@@ -815,6 +815,16 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         )
       }
       const point = vertexPoint(mark.ref as VertexId)
+      if (mark.kind === 'ring') {
+        const radius = highlight.some((other) => other.kind === undefined && other.ref === mark.ref) ? 19 : 16
+        return (
+          <g key={`hl:ring:${mark.ref}`} pointerEvents="none">
+            <circle className="vertex-ring-edge" cx={point.x} cy={point.y} r={radius} fill="none" stroke="#30271f" strokeWidth="5" />
+            <circle className="vertex-ring" cx={point.x} cy={point.y} r={radius} fill="none" stroke={mark.color} strokeWidth="3" />
+          </g>
+        )
+      }
+
       // A player-tinted circle names who takes the spot; a plain circle
       // (default accent) is the generic "look here". A label stamps the
       // pick number, in ink or paper for contrast against the fill.
