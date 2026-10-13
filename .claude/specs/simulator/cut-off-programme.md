@@ -1,6 +1,6 @@
 # Cut-off programme
 
-Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 57d5c4c6
+Vet: 5/10 reduced-build 2026-10-12 pair: .claude/pairs/cut-off-programme sha: 81418009
 
 ## Summary
 
@@ -20,8 +20,8 @@ Every file, function and line number below was read at commit `a2b23ac4`. What w
 | 2   | First-pick re-pricing switch in `rank_candidates` and `Lookahead`, off by default                                                   | done 2026-10-13, committed on the same branch: reviewed and approved, both cargo profiles green (831 and 803), fixture and bench hashes unchanged, speed proof M-94 (highest instruction ratio 1.001), both keys on rank the worst six-seat boards in 62 ms and 204 ms |
 | 3   | `gate5` minted, arms written and pinned, `--picks-only` added, preregistrations, picks reading and blind pilot                      | done 2026-10-13, committed on the same branch (`871c7eac`, reviewed and approved): arms, `gate5`, `--picks-only`. Picks readings and blind pilots M-95 to M-99: every arm changes at least 4% of drafts at every seat count, so all four are screened everywhere; no stop condition fired; `B` is 5,500 boards at 4 seats, 6,500 at 2, 7,500 at 3, 3,500 at 5 and 3,000 at 6. `tuning4` is spent at all five seat counts |
 | 4   | Screens on `tuning4`, seats two to six                                                                                              | done 2026-10-13 (M-100 to M-113, each preregistered and committed before its run): no first-stage arm read `better` on its screen or retry; 2 and 3 seats closed at the screen; the combined arm `flat_reprice` read `better` on its retry at 6 seats only (+0.805pp) and missed at 4 seats by 0.03pp at the lower end (+0.644pp) and at 5 seats (+0.437pp). Two, three, four and five seats close with both keys at 0. The 6-seat candidate is `contestWeight` 0.75 with `repriceFirstExpansion` 1 |
-| 5   | Confirm on `eval4` and gate on `gate5` for each seat count's candidate                                                              | in progress 2026-10-13, 6 seats only: confirm preregistered as M-114 at 12,000 boards on `eval4`; the gate on `gate5` follows only on `better` |
-| 6   | Adopt per seat count or delete, regenerate fixtures and wasm, close the record                                                      | not started |
+| 5   | Confirm on `eval4` and gate on `gate5` for each seat count's candidate                                                              | done 2026-10-13 (M-114): the 6-seat confirm read `inconclusive` at +0.635pp, interval +0.464pp to +0.806pp, so 6 seats stops on today's vector and no gate ran. `eval4` is spent at 6 seats; `gate5` is unspent everywhere |
+| 6   | Adopt per seat count or delete, regenerate fixtures and wasm, close the record                                                      | blocked on the owner 2026-10-13: no seat count adopts, so requirement 35 deletes both keys, their code and every `co_*` arm. Not started, because the one held-out reading shows a gain of about 0.6pp at 6 seats that the run was too small to separate from the 0.5pp bar, and the owner may prefer a larger follow-up gate on unspent domains over deletion. Asked; nothing deleted and no further run made |
 
 ## Requirements
 

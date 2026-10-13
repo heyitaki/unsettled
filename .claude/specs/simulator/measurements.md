@@ -3933,3 +3933,21 @@ Every share is at or above 0.02, so all four arms are piloted and screened at 6 
 **Prediction against the three second-stage retries (M-111 to M-113).** I expected each estimate between +0.2pp and +0.6pp and put `better` at about 10% an arm. Five seats landed inside the range. Four seats landed just above it at +0.644pp and missed the bar by 0.03pp at the interval's lower end. Six seats landed at +0.805pp and read `better`, which I had as the unlikely outcome. I also expected the combined arm to read about what its flat part read; at 4 and 6 seats it reads 0.15pp and 0.33pp above the flat arm's retry on the same boards, so the re-pricing adds something once a discount is on, which `reprice_only` alone did not show.
 
 **Where item 4 leaves each seat count.** Two, three, four and five seats close with both keys at 0 and their `eval4` and `gate5` unspent. Six seats has a candidate.
+
+## M-114: 6 seats, the confirm of `flat_reprice` on `eval4`
+
+**Preregistration.** [`2026-10-13-m114-seats6-confirm.md`](../../../docs/plans/preregs/2026-10-13-m114-seats6-confirm.md), committed in `e43bd150` before the run. Ran on that commit's release binary, 2026-10-13: `extension6`, 6 seats, `eval4` at seed `4610476946749721033` as preregistered, 12,000 boards x 2 reps, 144,000 games an arm, 140 seconds. Load averages 11.21 21.66 22.30 before and 26.84 23.69 22.98 after on 18 cores. The arm is `contestWeight` 0.75 with `repriceFirstExpansion` 1.
+
+| Arm | Estimate | Interval | Verdict | Discordant wins, losses |
+| --- | ---: | --- | --- | ---: |
+| `flat_reprice` | +0.635pp | +0.464pp to +0.806pp | `inconclusive` | 8,202, 7,288 |
+
+**Stop conditions.** Neither fired: `illegalActions` 0; `base` won 24,139 of 144,000 with 0 draws, 0.1676 against a corner of 0.1667 with an allowance of 0.0032.
+
+**Decision.** Not `better`: the interval's lower end is +0.464pp, under the +0.5pp bar by 0.04pp. By requirement 32 **6 seats stops on today's vector with both keys at 0**, with no retry, and `gate5` stays unspent at 6 seats. `eval4` is spent at 6 seats.
+
+**Prediction against the result.** I predicted an estimate between +0.45pp and +0.85pp centred near +0.65pp, `better` at about 45% and `inconclusive` at about 55%. It landed at +0.635pp and `inconclusive`.
+
+**Reading.** This is the programme's one held-out reading and it is not selected: the arm gains about 0.6pp at 6 seats, with an interval that excludes zero by more than five half-widths and that straddles the bar. The size was fixed for a half-width of 0.35pp at the screen, so 0.17pp here, which cannot separate an effect of 0.6pp from a bar of 0.5pp. The verdict the rule returns is that the gain is not shown to exceed the bar, not that it is absent. At 4 seats the same arm's only reading is the selected `tuning4` retry, +0.644pp. At 5 seats it reads +0.437pp, at 3 seats the flat arms read zero, and at 2 seats the heavier flat arms read about -0.35pp with intervals below zero.
+
+**Ledger at this point.** `tuning4` is spent at all five seat counts. `eval4` is spent at 6 seats and unspent at 2 to 5. `gate5` is unspent at every seat count.
