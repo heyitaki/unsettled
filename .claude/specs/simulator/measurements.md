@@ -4037,3 +4037,23 @@ Every `decision/*` and `advise/*` row, which never reaches the expansion term, i
 **Reading.** The first shape failed the bar on every placement and analysis row (1.013 to 1.025) although its source added one float comparison per site: the reference scorer gained about 350 instructions per candidate, so the cost was in how the larger functions compiled, not in the comparisons. The final shape passes on every row, highest 1.006. Wall ratios on the box are within its 5% noise and decide nothing. `engine.wasm` grows from 1,102,957 to 1,128,534 bytes, because each hot function now exists twice.
 
 **Decision.** Item 1 meets requirement 11's speed proof. The final shape is the one kept.
+
+## M-116: the merge of `main` into `cut-off-programme` holds every bench row but one inside 1.01
+
+**Question.** Requirement 1 of [`board-strategies-programme.md`](board-strategies-programme.md) asks that the merge of `main` (`1e4da71d`) into the branch executes no bench scenario at more than 1.01 times `main`'s instructions. The difference between the two is the whole cut-off branch: both weights at 0, plus the one merge fix (`row_value_with_single_road` falls through to `row_value` for a contested scorer).
+
+**Run** (2026-10-13). `box run simulator/box/bench --ref base=1e4da71d --ref cand=d0ea87b9 --node none`, run `20261013T190455Z-489085d8`, 73 scenarios.
+
+| Scenario | Base Ir | Merge Ir | Ratio |
+| --- | ---: | ---: | ---: |
+| `placement/extension6/prepare` | 204,293 | 206,906 | 1.013 |
+| `analyze/extension6/opening` | 372,909,611 | 375,104,440 | 1.006 |
+| `analyze/extension6/behind_three` | 1,311,513,225 | 1,318,825,570 | 1.006 |
+| `placement/standard4/score_all` | 1,055,934 | 1,060,738 | 1.005 |
+| `placement/standard4/prepare` | 150,285 | 148,588 | 0.989 |
+
+No row carries `decisions differ` or `STATES DIFFER`.
+
+**Reading.** 72 of 73 rows are at or under 1.006, the cost M-115 measured for the contest term at 0. One row misses: `placement/extension6/prepare` at 1.013, 2,613 instructions more per board prepared. The merge changed no source on that path: `app_formula.rs` and `placement/mod.rs` are the branch's, where the same row read 203,974 before the merge (M-115), and `main` reads 204,293 before and after its two speed commits. So the cost is in how the merged crate compiled, as M-115's first shape was, and not in work the merge added. The row runs once per board; a six-seat ranking executes 375 million instructions.
+
+**Decision.** Requirement 1's speed clause is not met on that one row and is not waived here. It does not block the evaluator work, which touches no engine file. It is the owner's call at landing: accept 1.013 on a once-per-board row, or find the compilation difference first.
