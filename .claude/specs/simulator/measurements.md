@@ -4611,3 +4611,13 @@ The other 54 of 73 rows are unchanged or within 0.1% (12 `advise` rows move by u
 **Prediction against the result.** I predicted an estimate between +0.50pp and +0.65pp centred near +0.57pp and `better` at about 85%. It read +0.58pp.
 
 **Reading.** Three held-out readings of the rule agree: +0.57pp on `tuning6` (where it was chosen), +0.57pp on `eval5` and +0.58pp on `gate6`. Over all 5-seat units the rule's gain is its fired gain times its share, about +0.32pp; the always-on setting read +0.48pp over all units on `tuning6` (M-126) and +0.52pp on `tuning5` (M-122), both `inconclusive` against the +0.5pp bar, so the setting also helps, by about +0.38pp, on the units where the rule does not fire.
+
+## M-130: what the five-seat selection costs
+
+**Question.** A8 of the five-seat amendment in [`board-strategies-programme.md`](board-strategies-programme.md): the speed suite before and after `d970e382`, with no bar. Not a reading on a domain and nothing is spent.
+
+**Run.** The box, 2026-10-14, `box run simulator/box/bench --ref base=958138fc --ref cand=d970e382 --node none -- --weights placement/seat-weights/seats-5.json`, run `20261014T220813Z-54e74d0d`.
+
+**Result.** Of 39 rows, the largest instruction-count ratio is 1.008 (`placement/standard4/draft/first`, 13,078,382 to 13,181,047), from reading a seat's scorers through its slot; `placement/extension6/prepare` reads 1.004, which is the terrain read per board, and no other row moves by more than 0.1%. The three `analyze` rows read 1.000, 1.000 and 1.000 (`analyze/extension6/behind_three` 2,649,150,106 to 2,649,141,926), because the suite sends explicit weights, which turn selection off. The `decisions differ` notes on placement rows appear identically in M-119's same-commit runs and are not a change; `bench-hashes.json` did not move.
+
+**The cost the suite does not see.** A five-seat ranking where the rule fires pays for the strategy's vector as four and six seats pay for theirs (M-119, about twice the instructions of the plain vector), and builds a second scorer and context when seats on both sides of the rule are ranked. The new `analysisPerf.test.ts` case, seat 3's first pick on a crowded five-seat board with nested rankings under both vectors, measured 153 ms (fastest of three, laptop, under load) against its 1,200 ms bound. `engine.wasm` grew from 1,141,228 to 1,225,155 bytes (+7.4%) with the embedded rule parser, features and strategy loading.

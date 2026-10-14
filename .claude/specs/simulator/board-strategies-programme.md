@@ -1,6 +1,6 @@
 # Board-specific strategies programme
 
-Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 5ac14be5
+Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 67176051
 
 ## Summary
 
@@ -42,6 +42,20 @@ The owner's race requirement (2026-10-13): a spot is conceded only to a rival wh
 
 Everything here builds on branch `cut-off-programme` (worktree `.claude/worktrees/cut-off`), which holds both weights, the `co_*` arms, `gate5` and `evaluate --picks-only`. Paths, names and line numbers below were read at its commit `85839164`, which is `723e2f65` plus two commits that touch only this file. (The `sha` on line 3 is the vet's own marker and names no commit read here.) The merge of `main`, `d0ea87b9`, changed one file this spec cites by line: `pips` is at `view.rs` 1173 there, and 1040 before it. A two-arm run of 22,000 boards at four seats took 64 seconds there, 14,000 at five took 113, and 12,000 at six took 147. The Verification appendix lists what was checked and where.
 
+## Outcome
+
+Closed 2026-10-14 on branch `cut-off-programme`, not yet on `main`.
+
+- **Four seats** ship `contestWeight` 0.75 and `repriceFirstExpansion` 1 always on (stage 1, M-117: +0.556pp over 1,000,000 boards on `gate5`, `1263e4b2`). Switching it off helped on no rule in the diagnostic or the exploration (M-120, M-124).
+- **Six seats** ship the same always on (stage 1, M-118: +0.728pp over 500,000 boards on `gate5`). Same finding on rules (M-123, M-127).
+- **Five seats** ship a per-board strategy, the first: `contestWeight` 0.5 and `repriceFirstExpansion` 1 when the player is not the first picker and the board's `topCrowding` is 10 or more, else the seat vector (`placement/seat-strategies/seats-5.json`, `d970e382`). It fires on 55% of units and read +0.57pp, +0.57pp and +0.58pp where it fires on `tuning6`, `eval5` and `gate6` (M-126, M-128, M-129), about +0.32pp over all five-seat units. The always-on setting read +0.48pp and +0.52pp over all units (M-126, M-122), both `inconclusive` against the bar, so it was not adopted; the owner chose the rule knowing its total is smaller.
+- **Three seats** keep their shipped vector: no row reached the bar (M-121, M-125). **Two seats** were not in scope.
+- **The race-aware discount** (item 6) was dropped by the owner after the diagnostic: the race table separated only on the hero's own road readiness, worth at most 0.03pp.
+- **Terrain features** mattered once: `topCrowding` enters the five-seat rule. Brick and wood supply (`roadPips`, `roadPipsMin`) and `spotFalloff` changed no gain anywhere.
+- **Cost.** Four- and six-seat rankings take about twice the instructions they did (M-119). The five-seat selection adds no measurable cost where it does not fire (M-130); where it fires a ranking pays as four and six seats do. `engine.wasm` grew 7.4%.
+- **Engine.** `contestWeight` and `repriceFirstExpansion` stay. The board features (`placement/features.rs`) now live in the engine and the simulator's `app_formula_shipped` plays what the app ships; the box evaluate job uses it as field and base.
+- **Ledger.** `gate5` spent at four and six seats; `tuning5` and `tuning6` at three to six; `eval5` and `gate6` at five. Everything else stands as the cut-off programme left it.
+
 ## Queue
 
 Proposed; becomes the working queue when the owner approves the spec.
@@ -57,7 +71,7 @@ Proposed; becomes the working queue when the owner approves the spec.
 | 7   | Explore every arm together on `tuning6`, slice, name each seat count's candidate strategy                                       | done 2026-10-14, M-124 to M-127. Three, four and six seats: `null` candidate, closed on their shipped vectors. Five seats: `flat_reprice` on `slot>=1&topCrowding>=10`, fired on 55% of units, +0.57pp (+0.50pp to +0.64pp)                                                                                                                                                                                                                                                                                                     |
 | 8   | Confirm each candidate on `eval5`                                                                                               | done 2026-10-14, M-128: five seats passed, +0.57pp (+0.55pp to +0.60pp) on 55% of units, `better`, `floorMet` true                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 9   | Gate each confirmed candidate on `gate6`                                                                                        | done 2026-10-14, M-129: five seats passed on `gate6`, +0.58pp (+0.55pp to +0.61pp), `better`, `floorMet` true. Adoption needs requirement 28's amendment, approved by the owner                                                                                                                                                                                                                                                                                                                                                 |
-| 10  | Adopt passing rules in the engine and the app, or close with none; ledger and Outcome section                                   | three, four and six seats closed by M-124, M-125, M-127. Five seats: amendment A1 to A8 approved 2026-10-14, build delegated                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 10  | Adopt passing rules in the engine and the app, or close with none; ledger and Outcome section                                   | done 2026-10-14: five seats adopted in `d970e382` (A1 to A8), cost in M-130; three, four and six closed; Outcome written                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## Requirements
 
