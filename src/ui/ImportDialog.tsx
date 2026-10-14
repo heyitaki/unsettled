@@ -139,7 +139,7 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
             }}
           />
           <strong>{busy ? 'Analyzing board…' : coarse ? 'Tap to choose a screenshot' : 'Drop screenshot here'}</strong>
-          <span>{coarse ? 'From your photo library, or a PNG file' : 'PNG from Settled app, or click to choose'}</span>
+          <span>{coarse ? 'From your photo library, or a PNG file' : 'PNG from Settled or Colonist, or click to choose'}</span>
         </label>
       )}
       {issues.length > 0 && (

@@ -146,7 +146,7 @@ describe('mergeScreenshot', () => {
   const blue = { name: 'Blue', color: PLAYER_PALETTE.blue }
   const white = { name: 'White', color: PLAYER_PALETTE.white }
   // Pills for everyone, every hand size read.
-  const pills = (hands = ['p1', 'p2', 'p3']) => ({ roster: true, hands })
+  const pills = (hands = ['p1', 'p2', 'p3']) => ({ roster: true, order: true, picks: true, hands })
   const empty = (): Board => ({ ...createBoard('standard4'), players: [], mePlayerId: null })
 
   // Saved: aki (red, claimed) and a renamed blue player, with hand-entered stats.
@@ -271,11 +271,39 @@ describe('mergeScreenshot', () => {
     board = addPlayer(board, { id: 's-blue', ...blue })
     board = placeBuilding(board, vertexA, 's-blue', 'settlement')
     board = placeBuilding(board, vertexB, 's-white', 'settlement')
-    const merged = mergeScreenshot(before, newGame(board), { roster: false, hands: [] })
+    const merged = mergeScreenshot(before, newGame(board), { roster: false, order: false, picks: false, hands: [] })
     expect(merged.board.players).toEqual([...before.board.players, { id: 's-white', ...white }])
     expect(merged.board.buildings.map((building) => building.playerId)).toEqual(['b', 's-white'])
     expect(merged.board.mePlayerId).toBe('aki')
     expect(merged.stats).toEqual({ ...before.stats, 's-white': emptyStats() })
     expect(merged.turn).toBe(before.turn)
+  })
+
+  it('keeps the saved seat order when the screenshot showed the players but not who goes first', () => {
+    const merged = mergeScreenshot(saved(), shot(), { ...pills(), order: false })
+    expect(merged.board.players.map((player) => player.id)).toEqual(['aki', 'b', 'p3'])
+    // A player the screenshot no longer shows still leaves.
+    const gone = mergeScreenshot(saved(), newGame(setMe(addPlayer(empty(), { id: 'p1', ...blue }), 'p1')), { ...pills(), order: false })
+    expect(gone.board.players.map((player) => player.id)).toEqual(['b'])
+  })
+
+  it('keeps the saved order of buildings when the screenshot could not tell which came first', () => {
+    const [first, second] = [boardGrid('standard4').vertexIds[20], boardGrid('standard4').vertexIds[40]]
+    const before = newGame(placeBuilding(placeBuilding(createBoard('standard4'), first, 'aki', 'settlement'), second, 'aki', 'settlement'))
+    // The screenshot lists red's settlements the other way round, one now a city, beside a newcomer's.
+    let board = addPlayer(empty(), { id: 'p1', name: 'Red', color: PLAYER_PALETTE.red })
+    board = addPlayer(board, { id: 'p2', ...blue })
+    board = placeBuilding(board, second, 'p1', 'settlement')
+    board = placeBuilding(board, vertexB, 'p2', 'settlement')
+    board = placeBuilding(board, first, 'p1', 'city')
+    const merged = mergeScreenshot(before, newGame(board), { ...pills(['p1', 'p2']), picks: false })
+    expect(merged.board.buildings).toEqual([
+      { vertexId: first, playerId: 'aki', tier: 'city' },
+      { vertexId: second, playerId: 'aki', tier: 'settlement' },
+      { vertexId: vertexB, playerId: 'p2', tier: 'settlement' },
+    ])
+    // A screenshot that shows the order wins.
+    expect(mergeScreenshot(before, newGame(board), pills(['p1', 'p2'])).board.buildings.map((building) => building.vertexId))
+      .toEqual([second, vertexB, first])
   })
 })

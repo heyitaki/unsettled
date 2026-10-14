@@ -90,7 +90,7 @@ describe('a screenshot of a board the library already holds', () => {
   const button = (label: string) =>
     [...container.querySelectorAll('button')].find((candidate) => candidate.textContent === label)
   const choose = async (game: Game) => {
-    parsed.result = { ok: true, game, issues: [], read: { roster: true, hands: ['p1'] } }
+    parsed.result = { ok: true, game, issues: [], read: { roster: true, order: true, picks: true, hands: ['p1'] } }
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
     Object.defineProperty(input, 'files', { configurable: true, value: [new File([], 'later.png')] })
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })

@@ -130,10 +130,14 @@ function replaceBoard(game: Game, board: Board, stats: Record<string, PlayerStat
   return next
 }
 
-/** What a screenshot's player pills supplied, which the parsed Game cannot say for itself. */
+/** What a screenshot supplied, which the parsed Game cannot say for itself. */
 export interface ScreenshotRead {
-  /** False when there were no pills: the players are then only the colours with pieces on the board. */
+  /** False when no roster was read: only piece colours identify players. */
   roster: boolean
+  /** Whether the screenshot showed turn order. Implies `roster`. */
+  order: boolean
+  /** Whether the screenshot showed which settlement each player placed first. */
+  picks: boolean
   /** Parsed ids of the players whose hand size was read. A zero hand is otherwise the same as an unread one. */
   hands: readonly string[]
 }
@@ -141,13 +145,15 @@ export interface ScreenshotRead {
 /**
  * Fold a later screenshot of a saved game into it. The screenshot wins on what
  * it shows: the roster and its order, the pieces, the robber and each hand's
- * size. The saved game keeps what a screenshot cannot show: names, the claim,
- * dev cards, knights, VP cards, awards and the recorded turn. It also keeps
- * what this screenshot failed to read: a hand missing from `read.hands`, and a
- * robber nobody found.
+ * size. The saved game keeps names, the claim, dev cards, knights, VP cards,
+ * awards and the recorded turn. It also keeps what this screenshot failed to
+ * read: a hand missing from `read.hands`, and a robber nobody found. Without
+ * turn order, surviving saved players keep their order and newcomers follow in
+ * screenshot order. Without pick order, buildings at saved vertices with the
+ * same owner come first in saved order, taking the screenshot's tiers; other
+ * buildings follow in screenshot order.
  *
- * Parsed ids follow pill order and parsed names are colour names, so players
- * are matched by colour and a match keeps its saved id and name.
+ * Players are matched by colour and a match keeps its saved id and name.
  */
 export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): Game {
   const byColor = new Map<string, Player>()
@@ -181,11 +187,25 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
     }
     return merged
   })
-  // With no roster read, a saved player missing from the screenshot only has
-  // no piece on the board yet, so nobody is dropped and the saved order stands.
-  const players = read.roster ? shotPlayers : [...saved.board.players, ...newcomers]
+
+  // Without turn order, saved seats stay in order; without a roster, nobody leaves.
+  const players = read.order ? shotPlayers : [
+    ...saved.board.players.filter((player) => !read.roster || shotPlayers.some((shot) => shot.id === player.id)),
+    ...newcomers,
+  ]
   const remapOwner = <T extends { playerId: string }>(piece: T): T =>
     ({ ...piece, playerId: ids.get(piece.playerId) ?? piece.playerId })
+  let buildings = shot.board.buildings.map(remapOwner)
+  if (!read.picks) {
+    const remaining = new Map(buildings.map((building) => [building.vertexId, building]))
+    const retained = saved.board.buildings.flatMap((building) => {
+      const match = remaining.get(building.vertexId)
+      if (!match || match.playerId !== building.playerId) return []
+      remaining.delete(building.vertexId)
+      return [match]
+    })
+    buildings = [...retained, ...remaining.values()]
+  }
   const savedClaim = saved.board.mePlayerId
   const claim = savedClaim !== null && players.some((player) => player.id === savedClaim)
     ? savedClaim
@@ -196,7 +216,7 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
     robber: shot.board.robber ?? saved.board.robber,
     players,
     roads: shot.board.roads.map(remapOwner),
-    buildings: shot.board.buildings.map(remapOwner),
+    buildings,
     mePlayerId: claim,
   }, Object.fromEntries(players.map((player) => [player.id, stats.get(player.id) ?? saved.stats[player.id]])))
 }

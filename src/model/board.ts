@@ -74,14 +74,14 @@ export function createBoard(layout: LayoutId): Board {
 
 // The tiles each layout ships with. Counts (and NUMBER_TOKEN_COUNTS) mirror a
 // physical Catan box, so a randomized board is a legal starting map.
-const RESOURCE_COUNTS: Record<LayoutId, Record<TileKind, number>> = {
+export const RESOURCE_COUNTS: Record<LayoutId, Record<TileKind, number>> = {
   standard4: { wood: 4, sheep: 4, wheat: 4, brick: 3, ore: 3, desert: 1 },
   extension6: { wood: 6, sheep: 6, wheat: 6, brick: 5, ore: 5, desert: 2 },
 }
 
 // The harbours on each frame: one 2:1 per resource (the six-player frame adds a
 // second sheep), the rest 3:1. Dealt across the layout's port edges.
-const PORT_POOLS: Record<LayoutId, readonly (Resource | null)[]> = {
+export const PORT_POOLS: Record<LayoutId, readonly (Resource | null)[]> = {
   standard4: ['wood', 'sheep', 'wheat', 'brick', 'ore', null, null, null, null],
   extension6: ['wood', 'sheep', 'sheep', 'wheat', 'brick', 'ore', null, null, null, null, null],
 }

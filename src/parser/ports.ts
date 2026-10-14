@@ -1,9 +1,9 @@
-import { parseEdgeId } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import type { Port, Resource } from '../model/types'
 import { labelComponents } from './components'
 import { nearColor, pixel, type RgbaImage } from './image'
 import { classifyTile, type ParserPalette } from './palette'
+import { edgePoint } from './pieces'
 import type { Registration } from './registration'
 
 export interface DetectedPort extends Port {
@@ -52,12 +52,6 @@ export function detectPorts(
     }
   }
   const grid = boardGrid(registration.layout)
-  const midpoint = (edgeId: Port['edgeId']): [number, number] => {
-    const [a, b] = parseEdgeId(edgeId)
-    const ap = registration.center(a)
-    const bp = registration.center(b)
-    return [(ap[0] + bp[0]) / 2, (ap[1] + bp[1]) / 2]
-  }
   const detected = pills.flatMap((pill): DetectedPort[] => {
     const votes = new Map<Resource | 'desert', number>()
     const dotRegionRight = pill.minX + 0.4 * (pill.maxX - pill.minX)
@@ -70,7 +64,7 @@ export function detectPorts(
     const dot = [...votes].sort((a, b) => b[1] - a[1])[0]
     const resource = dot && dot[0] !== 'desert' && dot[1] > 0.006 * registration.size ** 2 ? dot[0] : null
     const ranked = grid.coastalEdgeIds.map((edgeId) => {
-      const [x, y] = midpoint(edgeId)
+      const [x, y] = edgePoint(registration, edgeId)
       return { edgeId, distance: Math.hypot(x - pill.centerX, y - pill.centerY) }
     }).sort((a, b) => a.distance - b.distance)
     if (ranked[0].distance > 1.1 * registration.size) return []

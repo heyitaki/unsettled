@@ -25,6 +25,12 @@ describe('component traversal', () => {
     ])
   })
 
+  it('finds nothing in a window that lies wholly off one side of the image', () => {
+    // A crop can leave a reader's window with minX past maxX.
+    expect([...labelComponents({ minX: 12, maxX: 9, minY: 0, maxY: 4 }, () => true)]).toEqual([])
+    expect([...labelComponents({ minX: 0, maxX: 4, minY: 7, maxY: 3 }, () => true)]).toEqual([])
+  })
+
   it('keeps Set seed order and depth-first pixel order without joining diagonals', () => {
     const pixels = new Set(['9,9', '1,1', '2,1', '1,2', '2,2', '3,3'])
     const components = labelPixelSet(pixels)
