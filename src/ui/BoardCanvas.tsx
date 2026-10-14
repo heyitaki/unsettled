@@ -574,7 +574,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       onePointer.current = { ...remaining, panning: false }
     } else onePointer.current = null
     if (!wasSingleTap) return
-    // Double-tap-to-zoom only exists with the tool rows closed, no pick live
+    // Double-tap-to-zoom only exists outside build mode, with no pick live
     // and, in a draft, away from the Best picks circles. The
     // first tap of a pair is never suppressed — suppressing it would mean
     // holding every single placement for the full double-tap window — so with a

@@ -145,8 +145,6 @@ describe('no-op edits keep the board identity', () => {
 
   it('erases an edge and a vertex that hold nothing', () => {
     const board = createBoard('standard4')
-    // The eraser hits both in one commit, so both must preserve identity for a
-    // sweep across open water to stay off the undo stack.
     expect(removePort(removeRoad(board, coastal), coastal)).toBe(board)
     expect(removeBuilding(board, vertex)).toBe(board)
   })

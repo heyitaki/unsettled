@@ -45,7 +45,7 @@ export type Tool =
   | { kind: 'none' }
   | { kind: 'tile'; tile: TileKind }
   | { kind: 'token'; number: number }
-  // The tool rows are open with no selected tool button: taps act on the nearest target.
+  // Build mode with no tool button selected: taps act on the nearest target.
   | { kind: 'piece' }
 
 /**
