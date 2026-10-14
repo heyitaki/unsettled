@@ -6,7 +6,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::evaluate::{EvaluationUnit, PairStats, pair_verdict, renumber_boards, try_paired_stats};
-use crate::features::{RaceReadings, Rule, TERRAIN_NAMES, TerrainFeatures, UNIT_COLUMNS};
+use unsettled_engine::placement::features::{RaceReadings, Rule, TERRAIN_NAMES, TerrainFeatures, UNIT_COLUMNS};
 use crate::stats::alpha_z;
 
 pub const THRESHOLD: f64 = 0.005;

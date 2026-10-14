@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 
-use unsettled_engine::board::SimBoard;
-use unsettled_engine::rules::Resource;
-use unsettled_engine::topology::{Topology, Vertex};
-use unsettled_engine::view::pips;
+use crate::board::SimBoard;
+use crate::rules::Resource;
+use crate::topology::{Topology, Vertex};
+use crate::view::pips;
 
 pub const TERRAIN_NAMES: [&str; 4] = ["roadPips", "roadPipsMin", "spotFalloff", "topCrowding"];
 pub const UNIT_COLUMNS: [&str; 10] = [
@@ -20,10 +20,10 @@ pub struct TerrainFeatures {
 }
 
 impl TerrainFeatures {
-    pub fn read(board: &SimBoard, topology: &Topology) -> Self {
+    pub fn read(topology: &Topology, tiles: &[Option<Resource>], tokens: &[Option<u8>], seats: usize) -> Self {
         let mut brick = 0_u16;
         let mut wood = 0_u16;
-        for (tile, token) in board.tiles().iter().zip(board.tokens()) {
+        for (tile, token) in tiles.iter().zip(tokens) {
             let value = token.map_or(0, |token| u16::from(pips(token)));
             match tile {
                 Some(Resource::Brick) => brick += value,
@@ -33,12 +33,12 @@ impl TerrainFeatures {
         }
         let mut vertices = (0..topology.vertex_count()).map(|vertex| {
             let value = topology.vertex_hexes(vertex as Vertex).iter().map(|hex| {
-                board.tokens()[usize::from(*hex)].map_or(0, |token| u16::from(pips(token)))
+                tokens[usize::from(*hex)].map_or(0, |token| u16::from(pips(token)))
             }).sum::<u16>();
             (vertex as Vertex, value)
         }).collect::<Vec<_>>();
         vertices.sort_by(|(a, x), (b, y)| y.cmp(x).then_with(|| a.cmp(b)));
-        let top = &vertices[..2 * board.seats()];
+        let top = &vertices[..2 * seats];
         let mut top_crowding = 0;
         for (index, (vertex, _)) in top.iter().enumerate() {
             let distances = distances(topology, *vertex);
@@ -183,14 +183,14 @@ impl Rule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unsettled_engine::board::ConversionOptions;
-    use unsettled_engine::rules::RuleConfig;
-    use unsettled_engine::topology::Layout;
-    use unsettled_engine::wire::WireBoard;
+    use crate::board::ConversionOptions;
+    use crate::rules::RuleConfig;
+    use crate::topology::Layout;
+    use crate::wire::WireBoard;
 
     fn fixture() -> (WireBoard, Topology) {
         let mut wire = WireBoard::parse_str(include_str!(
-            "../../../../src/parser/__tests__/expected/board-draft-empty.json"
+            "../../../../../src/parser/__tests__/expected/board-draft-empty.json"
         )).unwrap();
         wire.players.truncate(4);
         (wire, Topology::load(Layout::Extension6).unwrap())
@@ -209,7 +209,8 @@ mod tests {
         // Top vertices: 29(13), 3/14/15/47(12), 1/9/21(11).
         // Distance-2 pairs: 29:14, 3:14, 3:1, 14:1. Distance-3:
         // 3:15, 15:1, 47:1, 47:9, 9:21. Thus falloff=11/13, crowding=9.
-        assert_eq!(TerrainFeatures::read(&board(wire, &topology), &topology), TerrainFeatures {
+        let board = board(wire, &topology);
+        assert_eq!(TerrainFeatures::read(&topology, board.tiles(), board.tokens(), board.seats()), TerrainFeatures {
             road_pips: 35, road_pips_min: 13, spot_falloff: 11.0 / 13.0, top_crowding: 9,
         });
     }
@@ -238,7 +239,7 @@ mod tests {
             (6, 7, 1), (6, 14, 5), (7, 14, 4)] {
             assert_eq!(distances(&topology, a)[b], distance);
         }
-        assert_eq!(TerrainFeatures::read(&board, &topology).top_crowding, 2);
+        assert_eq!(TerrainFeatures::read(&topology, board.tiles(), board.tokens(), board.seats()).top_crowding, 2);
     }
 
     #[test]

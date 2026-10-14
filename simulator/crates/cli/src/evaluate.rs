@@ -17,7 +17,7 @@ use unsettled_engine::rules::{RuleConfig, TradeConfig};
 use unsettled_engine::topology::{Edge, Layout, Topology, Vertex};
 
 use crate::boardgen::generate_board;
-use crate::features::{RaceReadings, Rule, TerrainFeatures, UNIT_COLUMNS, road_readiness};
+use unsettled_engine::placement::features::{RaceReadings, Rule, TerrainFeatures, UNIT_COLUMNS, road_readiness};
 use crate::output::Meta;
 use crate::stats::{alpha_z, wilson};
 
@@ -441,7 +441,7 @@ fn prepare_evaluation_chunk(
     for board_index in board_range {
         let board = generate_board(request.layout, request.seats, mix64(domain_seed ^ board_index as u64))?;
         let features = (request.units.is_some() || rule.is_some())
-            .then(|| TerrainFeatures::read(&board, topology));
+            .then(|| TerrainFeatures::read(topology, board.tiles(), board.tokens(), board.seats()));
         let seats = (0..request.seats).filter(|seat| {
             rule.is_none_or(|rule| rule.matches(features.unwrap(), *seat))
         }).collect::<Vec<_>>();
@@ -1227,7 +1227,7 @@ mod tests {
 
     #[test]
     fn race_readings_come_from_the_reference_arms_second_settlements() {
-        use crate::features::road_readiness;
+        use unsettled_engine::placement::features::road_readiness;
         let weights: EngineWeights =
             serde_json::from_str(include_str!("../../../placement/seat-weights/seats-4.json")).unwrap();
         let base = register_app_formula_draft("race-base".into(), weights.clone(), weights).unwrap();

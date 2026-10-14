@@ -950,7 +950,7 @@ fn a_where_run_is_the_same_at_every_chunk_size() {
     let topology = unsettled_engine::topology::Topology::load(Layout::Standard4).unwrap();
     let mut values = (0..6).map(|index| {
         let board = generate_board(Layout::Standard4, 4, mix64(TUNING_SEED ^ index)).unwrap();
-        unsettled_sim::features::TerrainFeatures::read(&board, &topology).road_pips
+        unsettled_engine::placement::features::TerrainFeatures::read(&topology, board.tiles(), board.tokens(), board.seats()).road_pips
     }).collect::<Vec<_>>();
     values.sort_unstable();
     assert!(values.iter().any(|value| *value < values[3]));
@@ -972,4 +972,39 @@ fn a_where_rule_that_fires_nowhere_is_an_error() {
         assert!(error.contains("roadPips<0"), "{error}");
         assert!(error.contains("no unit"), "{error}");
     }
+}
+
+#[test]
+fn shipped_selection_is_the_seat_vector_where_no_strategy_fires() {
+    use std::process::Command;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temporary = std::env::temp_dir().join(format!("unsettled-shipped-selection-{}", std::process::id()));
+    for seats in [2, 3, 4, 6] {
+        let explicit = "app_formula_draft:placement/seat-weights/seats-{seats}.json@placement/seat-weights/seats-{seats}.json";
+        let mut expected = None;
+        for spec in ["app_formula_shipped", explicit] {
+            let out = temporary.join(format!("{seats}-{}", if spec == explicit { "explicit" } else { "shipped" }));
+            let output = Command::new(env!("CARGO_BIN_EXE_unsettled-sim"))
+                .current_dir(&root)
+                .args(["evaluate", "--layout", if seats == 6 { "extension6" } else { "standard4" }, "--seats", &seats.to_string(), "--domain", "perf",
+                    "--field", spec, "--arm", &format!("base={spec}"), "--reference", "base", "--boards", "6", "--reps", "1",
+                    "--policy", "heuristic-v1-trader-aware-threat-devcards-denial", "--threads", "1", "--allow-unofficial", "--out"])
+                .arg(&out).output().unwrap();
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            let mut json: serde_json::Value = serde_json::from_slice(&std::fs::read(out.join("evaluation.json")).unwrap()).unwrap();
+            let heuristic = if spec == explicit { format!("app_formula_draft:seats-{seats}@seats-{seats}") } else { spec.into() };
+            for (pointer, spelling) in [("/config/field", spec), ("/config/fieldHeuristic", heuristic.as_str()),
+                ("/arms/base/spec", spec), ("/arms/base/heuristic", heuristic.as_str())] {
+                let field = json.pointer_mut(pointer).unwrap();
+                assert_eq!(field.as_str(), Some(spelling), "{seats} {pointer}");
+                *field = "same spelling".into();
+            }
+            if let Some(expected) = &expected {
+                assert_eq!(&json, expected, "{seats} seats");
+            } else {
+                expected = Some(json);
+            }
+        }
+    }
+    std::fs::remove_dir_all(temporary).unwrap();
 }

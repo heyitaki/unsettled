@@ -61,3 +61,13 @@ it('ranks it as p4 with contests and re-pricing in under 1200 ms', async () => {
   console.info(`analyze contested as p4: fastest ${time.toFixed(0)} ms of 3`)
   expect(time).toBeLessThan(1200)
 }, 90_000)
+
+it('ranks a crowded five-player opening as seat 3 in under 1200 ms', async () => {
+  // The engine's shipped-selection test pins this board's topCrowding at 12.
+  const board: Board = JSON.parse(readFileSync(new URL('../../parser/__tests__/expected/board-draft-empty.json', import.meta.url), 'utf8'))
+  expect(board.players).toHaveLength(5)
+  expect(board.buildings).toHaveLength(0)
+  const time = await fastest({ ...board, mePlayerId: board.players[3].id })
+  console.info(`analyze crowded five-seat as seat 3: fastest ${time.toFixed(0)} ms of 3`)
+  expect(time).toBeLessThan(1200)
+}, 90_000)

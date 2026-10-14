@@ -2375,3 +2375,70 @@ mod reprice_tests {
         }
     }
 }
+
+pub(super) fn five_seat_strategy_board() -> Value {
+    let mut board = contest_fixture(5);
+    let mut random = mulberry32(6);
+    let hexes = board["hexes"].as_array_mut().unwrap();
+    for i in (1..hexes.len()).rev() {
+        let j = (random.next_f64() * (i + 1) as f64) as usize;
+        let a = (hexes[i]["tile"].clone(), hexes[i]["numberToken"].clone());
+        hexes[i]["tile"] = hexes[j]["tile"].clone();
+        hexes[i]["numberToken"] = hexes[j]["numberToken"].clone();
+        hexes[j]["tile"] = a.0;
+        hexes[j]["numberToken"] = a.1;
+    }
+    let parsed = parse(&board);
+    assert_eq!(TerrainFeatures::read(parsed.topology, &parsed.tiles, &parsed.tokens, 5).top_crowding, 17);
+    board
+}
+
+#[test]
+fn nested_rankings_choose_by_their_own_picker() {
+    let board = five_seat_strategy_board();
+    forget_nested_rankings();
+    let response = analysis(&with_me(board.clone(), "p3"), None, json!({ "rollouts": 1 }));
+    let predicted = taken(&response);
+    assert_eq!(predicted.iter().map(|entry| text(&entry["playerId"])).collect::<Vec<_>>(), ["p0", "p1", "p2"]);
+    let mut differs = false;
+    for (index, entry) in predicted.iter().enumerate() {
+        let scratch = with_me(play_out(&board, &predicted[..index]), text(&entry["playerId"]));
+        let top_k = weights_for_seats(5).opponent_top_k.max(1.0);
+        let request = json!({ "board": scratch, "options": { "rollouts": 1, "maxResults": top_k } });
+        let own = analyze_request(&request.to_string(), &mut |_| {}).unwrap();
+        assert_eq!(entry["vertexId"], own.recommendations[0].first_pick, "picker {index}");
+
+        // Sampled windows draw from the whole nested list, including its scores.
+        let parsed = parse(&scratch);
+        let suffix = format!("{:?}", (parsed.me, &parsed.buildings, &parsed.roads, top_k));
+        let cached = NESTED_RANKINGS.with(|cache| {
+            let cache = cache.borrow();
+            let lists = cache.iter().filter(|(key, _)| key.ends_with(&suffix)).collect::<Vec<_>>();
+            assert_eq!(lists.len(), 1, "one nested ranking for picker {index}");
+            lists[0].1.clone().unwrap()
+        });
+        let expected = own.recommendations.iter().map(|pick| {
+            (parsed.topology.vertex_by_id(&pick.first_pick).unwrap(), pick.rank_score)
+        }).unzip::<_, _, Vec<_>, Vec<_>>();
+        assert_eq!(cached, expected, "picker {index}'s sampled list");
+        if index < 2 {
+            let other = if index == 0 { "arms/co_flat_reprice_s5" } else { "seat-weights/seats-5" };
+            let reversed = analysis(&scratch, None, json!({ "rollouts": 1, "weights": weights_file(other) }));
+            differs |= own.recommendations[0].first_pick != text(&recommendations(&reversed)[0]["firstPick"]);
+        }
+    }
+    assert!(differs, "one of the first two pickers must change its top pick under the other vector");
+}
+
+#[test]
+fn the_first_picker_ranks_with_the_seat_vector() {
+    let board = five_seat_strategy_board();
+    for (player, file) in [("p0", "seat-weights/seats-5"), ("p1", "arms/co_flat_reprice_s5")] {
+        let board = with_me(board.clone(), player);
+        assert_eq!(
+            analysis(&board, None, json!({ "rollouts": 1 })),
+            analysis(&board, None, json!({ "rollouts": 1, "weights": weights_file(file) })),
+            "{player}",
+        );
+    }
+}

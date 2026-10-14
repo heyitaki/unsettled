@@ -6,6 +6,7 @@ pub mod analysis;
 pub mod app_formula;
 pub(crate) mod draft;
 mod expansion;
+pub mod features;
 
 pub use draft::LookaheadPlan;
 
@@ -40,6 +41,7 @@ struct DraftDefinition {
     name: &'static str,
     hero: app_formula::EngineWeights,
     opponent: app_formula::EngineWeights,
+    strategy: Option<&'static analysis::SeatStrategy>,
 }
 
 static APP_FORMULAS: Mutex<Vec<&'static AppFormulaDefinition>> = Mutex::new(Vec::new());
@@ -104,6 +106,20 @@ pub fn register_app_formula_draft(
     hero: app_formula::EngineWeights,
     opponent: app_formula::EngineWeights,
 ) -> Result<PlacementKind, String> {
+    register_draft(name, hero, opponent, None)
+}
+
+pub fn register_app_formula_shipped(seats: usize) -> Result<PlacementKind, String> {
+    let weights = analysis::weights_for_seats(seats);
+    register_draft("app_formula_shipped".into(), weights.clone(), weights.clone(), analysis::strategy_for_seats(seats))
+}
+
+fn register_draft(
+    name: String,
+    hero: app_formula::EngineWeights,
+    opponent: app_formula::EngineWeights,
+    strategy: Option<&'static analysis::SeatStrategy>,
+) -> Result<PlacementKind, String> {
     let mut formulas = DRAFT_FORMULAS
         .lock()
         .map_err(|_| "draft formula registry is poisoned".to_string())?;
@@ -114,6 +130,7 @@ pub fn register_app_formula_draft(
         name,
         hero,
         opponent,
+        strategy,
     }));
     formulas.push(definition);
     Ok(PlacementKind::AppFormulaDraft(index))
@@ -124,26 +141,35 @@ pub fn prepare_app_formula_boards(
     topology: &Topology,
     kinds: &[PlacementKind],
 ) {
-    for kind in kinds {
-        match *kind {
-            PlacementKind::AppFormula(index) => {
-                let definition = app_formula_definition(index);
-                for board in &mut *boards {
+    let has_strategy = kinds.iter().any(|kind| match *kind {
+        PlacementKind::AppFormulaDraft(index) => draft_definition(index).strategy.is_some(),
+        _ => false,
+    });
+    for board in boards {
+        let terrain = has_strategy.then(|| features::TerrainFeatures::read(topology, board.tiles(), board.tokens(), board.seats()));
+        for kind in kinds {
+            match *kind {
+                PlacementKind::AppFormula(index) => {
+                    let definition = app_formula_definition(index);
                     board.prepare_app_formula(index, topology, definition.weights.clone());
                 }
-            }
-            PlacementKind::AppFormulaDraft(index) => {
-                let definition = draft_definition(index);
-                for board in &mut *boards {
+                PlacementKind::AppFormulaDraft(index) => {
+                    let definition = draft_definition(index);
+                    let strategy = definition.strategy.and_then(|strategy| {
+                        let seats = (0..board.seats()).filter(|slot| strategy.rule.matches(terrain.unwrap(), *slot))
+                            .fold(0_u8, |mask, slot| mask | (1 << slot));
+                        (seats != 0).then_some((&strategy.weights, seats))
+                    });
                     board.prepare_app_formula_draft(
                         index,
                         topology,
                         definition.hero.clone(),
                         definition.opponent.clone(),
+                        strategy,
                     );
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 }
@@ -166,9 +192,9 @@ fn draft_definition(index: u8) -> &'static DraftDefinition {
         .unwrap_or_else(|| panic!("draft formula index {index} is not registered"))
 }
 
-fn draft_scorers(board: &SimBoard, index: u8) -> &draft::DraftScorers {
+fn draft_scorers(board: &SimBoard, index: u8, seat: u8) -> &draft::DraftScorers {
     let name = draft_definition(index).name;
-    board.draft_scorer(index).unwrap_or_else(|| {
+    board.draft_scorer(index, seat).unwrap_or_else(|| {
         panic!("draft formula arm {name} has no prepared context for this board")
     })
 }
@@ -199,7 +225,7 @@ pub fn choose(
     if let PlacementKind::AppFormulaDraft(index) = kind {
         // The lookahead is deterministic, so it draws nothing from the policy stream.
         return draft::choose(
-            draft_scorers(board, index),
+            draft_scorers(board, index, seat),
             topology,
             board.seats(),
             vertex_owner,
@@ -361,7 +387,7 @@ pub fn setup_lookahead_plan(
 ) -> Option<LookaheadPlan> {
     let (hero, opponent) = match kind {
         PlacementKind::AppFormulaDraft(index) => {
-            let scorers = draft_scorers(board, index);
+            let scorers = draft_scorers(board, index, seat);
             (&scorers.hero, &scorers.opponent)
         }
         PlacementKind::AppFormula(index) => {
@@ -453,7 +479,7 @@ pub fn setup_candidate_score(
     }
     if let PlacementKind::AppFormulaDraft(index) = kind {
         return draft::candidate_score(
-            draft_scorers(board, index),
+            draft_scorers(board, index, seat),
             topology,
             board.seats(),
             vertex_owner,
@@ -538,5 +564,46 @@ pub fn vertex_score(
         PlacementKind::AppFormulaDraft(_) => {
             unreachable!("app formula draft uses its f64 scorers")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::board::ConversionOptions;
+    use crate::rules::RuleConfig;
+    use crate::topology::Layout;
+    use crate::wire::WireBoard;
+
+    #[test]
+    fn shipped_selection_plays_the_strategy_by_seat() {
+        let topology = Topology::shared(Layout::Extension6).unwrap();
+        let wire = WireBoard::parse_str(include_str!(
+            "../../../../../src/parser/__tests__/expected/board-draft-empty.json"
+        )).unwrap();
+        let mut board = SimBoard::try_from_wire(wire, topology, &RuleConfig::base(Layout::Extension6), ConversionOptions::default()).unwrap();
+        let terrain = features::TerrainFeatures::read(topology, board.tiles(), board.tokens(), board.seats());
+        assert_eq!(terrain.top_crowding, 12);
+        let base = analysis::weights_for_seats(5).clone();
+        let strategy: app_formula::EngineWeights = serde_json::from_str(include_str!("../../../../placement/arms/co_flat_reprice_s5.json")).unwrap();
+        let plain = register_app_formula_draft("seat-strategy-base".into(), base.clone(), base).unwrap();
+        let changed = register_app_formula_draft("seat-strategy-arm".into(), strategy.clone(), strategy).unwrap();
+        let shipped = register_app_formula_shipped(5).unwrap();
+        prepare_app_formula_boards(std::slice::from_mut(&mut board), topology, &[plain, changed, shipped]);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let mut edges = vec![EMPTY; topology.edge_count()];
+        let mut witness = false;
+        for edge in 0..topology.edge_count() {
+            edges.fill(EMPTY);
+            edges[edge] = 4;
+            let pick = |kind, seat| choose(kind, &board, topology, &vertices, &edges, seat, &[0; 5], false, &mut Xoshiro256StarStar::from_seed(7));
+            if pick(plain, 2) != pick(changed, 2) {
+                assert_eq!(pick(shipped, 0), pick(plain, 0));
+                assert_eq!(pick(shipped, 2), pick(changed, 2));
+                witness = true;
+                break;
+            }
+        }
+        assert!(witness, "the draft arms must choose different pieces for slot 2");
     }
 }

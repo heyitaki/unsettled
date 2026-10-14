@@ -1776,6 +1776,25 @@ mod tests {
         ("off", &[4, 6], &[]),
     ];
 
+    #[test]
+    fn seat_strategy_file_is_the_flat_reprice_arm() {
+        use crate::placement::analysis::strategy_for_seats;
+        let source = include_str!("../../../../placement/seat-strategies/seats-5.json");
+        let file: Value = serde_json::from_str(source).unwrap();
+        assert_eq!(file["rule"], "slot>=1&topCrowding>=10");
+        let (_, _, leaves) = CO_ARMS.iter().find(|(name, seats, _)| *name == "flat_reprice" && seats.contains(&5)).unwrap();
+        assert_eq!(file["leaves"].as_object().unwrap().len(), leaves.len());
+        for (key, value) in *leaves {
+            assert_eq!(file["leaves"][key].as_f64(), Some(*value), "{key}");
+        }
+        let arm: EngineWeights = serde_json::from_str(include_str!("../../../../placement/arms/co_flat_reprice_s5.json")).unwrap();
+        let strategy = strategy_for_seats(5).unwrap();
+        assert_eq!(format!("{:?}", strategy.weights), format!("{arm:?}"));
+        for seats in [0, 1, 2, 3, 4, 6, 7] {
+            assert!(strategy_for_seats(seats).is_none(), "{seats}");
+        }
+    }
+
     const CO_ANCHORS: [(usize, &[(&str, f64)]); 5] = [
         (2, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),
         (3, &[("/coverageExponent", 1.0), ("/diversityWeight", 3.2)]),

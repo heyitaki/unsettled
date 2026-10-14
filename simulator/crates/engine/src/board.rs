@@ -64,9 +64,15 @@ pub struct SimBoard {
     /// asks "is this port on one of my edges" for every port at every vertex it weighs.
     port_vertices: Vec<u128>,
     app_formula_scorers: Vec<(u8, AppFormulaScorer)>,
-    /// One hero-and-opponent pair per registered draft arm, kept apart from the single-formula
-    /// scorers above because the two registries index independently.
-    draft_scorers: Vec<(u8, DraftScorers)>,
+    /// Draft arms and their optional seat-selected pair use a separate registry.
+    draft_scorers: Vec<(u8, PreparedDraftScorers)>,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedDraftScorers {
+    base: DraftScorers,
+    strategy: Option<DraftScorers>,
+    strategy_seats: u8,
 }
 
 impl SimBoard {
@@ -270,10 +276,14 @@ impl SimBoard {
         }
     }
 
-    pub(crate) fn draft_scorer(&self, index: u8) -> Option<&DraftScorers> {
-        self.draft_scorers
-            .iter()
-            .find_map(|(candidate, scorers)| (*candidate == index).then_some(scorers))
+    pub(crate) fn draft_scorer(&self, index: u8, seat: u8) -> Option<&DraftScorers> {
+        self.draft_scorers.iter().find(|(candidate, _)| *candidate == index).map(|(_, scorers)| {
+            if scorers.strategy_seats & (1 << seat) != 0 {
+                scorers.strategy.as_ref().expect("selected strategy was prepared")
+            } else {
+                &scorers.base
+            }
+        })
     }
 
     pub(crate) fn prepare_app_formula_draft(
@@ -282,13 +292,21 @@ impl SimBoard {
         topology: &Topology,
         hero: crate::placement::app_formula::EngineWeights,
         opponent: crate::placement::app_formula::EngineWeights,
+        strategy: Option<(&crate::placement::app_formula::EngineWeights, u8)>,
     ) {
-        if self.draft_scorer(index).is_none() {
+        if self.draft_scorer(index, 0).is_none() {
             self.draft_scorers.push((
                 index,
-                DraftScorers {
-                    hero: AppFormulaScorer::new(self, topology, hero),
-                    opponent: AppFormulaScorer::new(self, topology, opponent),
+                PreparedDraftScorers {
+                    base: DraftScorers {
+                        hero: AppFormulaScorer::new(self, topology, hero),
+                        opponent: AppFormulaScorer::new(self, topology, opponent),
+                    },
+                    strategy: strategy.map(|(weights, _)| DraftScorers {
+                        hero: AppFormulaScorer::new(self, topology, weights.clone()),
+                        opponent: AppFormulaScorer::new(self, topology, weights.clone()),
+                    }),
+                    strategy_seats: strategy.map_or(0, |(_, seats)| seats),
                 },
             ));
         }

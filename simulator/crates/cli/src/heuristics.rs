@@ -3,11 +3,14 @@ use std::path::Path;
 
 use unsettled_engine::placement::app_formula::EngineWeights;
 use unsettled_engine::placement::{
-    PlacementKind, register_app_formula, register_app_formula_draft,
+    PlacementKind, register_app_formula, register_app_formula_draft, register_app_formula_shipped,
 };
 
 pub fn parse_heuristic(name: &str, seats: usize) -> Result<PlacementKind, String> {
     let name = name.replace("{seats}", &seats.to_string());
+    if name == "app_formula_shipped" {
+        return register_app_formula_shipped(seats);
+    }
     if let Some(spec) = name.strip_prefix("app_formula_draft:") {
         // Two paths, hero first: the arm sweeps the hero formula and pins the opponent model the
         // lookahead replays the rest of the field with.

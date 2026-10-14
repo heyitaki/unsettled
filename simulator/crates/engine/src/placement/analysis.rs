@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use super::app_formula::{
     AppFormulaScorer, EngineWeights, Holdings, ScoreBreakdown, ScorerBoard, js_max, js_min,
 };
+use super::features::{Rule, TerrainFeatures};
 use crate::board::{InitialBuilding, InitialRoad, SimPort};
 use crate::rules::Resource;
 use crate::state::EMPTY;
@@ -48,7 +49,7 @@ pub struct AnalysisOptions {
     /// Defaults to the weights' `maxResults`.
     #[serde(default)]
     pub max_results: Option<f64>,
-    /// Defaults to `weights_for_seats` of the roster size.
+    /// Overrides selection for every ranking in the request.
     #[serde(default)]
     pub weights: Option<EngineWeights>,
 }
@@ -272,6 +273,46 @@ pub fn weights_for_seats(seats: usize) -> &'static EngineWeights {
         2..=6 => &weights[seats - 1],
         _ => &weights[0],
     }
+}
+
+#[derive(Debug)]
+pub struct SeatStrategy {
+    pub rule: Rule,
+    pub weights: EngineWeights,
+}
+
+pub fn strategy_for_seats(seats: usize) -> Option<&'static SeatStrategy> {
+    if seats != 5 {
+        return None;
+    }
+    static STRATEGY: OnceLock<SeatStrategy> = OnceLock::new();
+    Some(STRATEGY.get_or_init(|| {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct File {
+            rule: String,
+            leaves: std::collections::BTreeMap<String, serde_json::Value>,
+        }
+        let file: File = serde_json::from_str(include_str!("../../../../placement/seat-strategies/seats-5.json"))
+            .expect("embedded seat strategy parses");
+        let rule = Rule::parse(&file.rule).expect("embedded seat strategy rule parses");
+        let mut weights: serde_json::Value = serde_json::from_str(include_str!("../../../../placement/seat-weights/seats-5.json"))
+            .expect("embedded seat weights parse");
+        for (path, value) in file.leaves {
+            let leaf = weights.pointer_mut(&path).expect("strategy leaf names a weight");
+            assert!(leaf.is_number(), "strategy leaf must name a numeric weight: {path}");
+            *leaf = value;
+        }
+        let weights: EngineWeights = serde_json::from_value(weights).expect("strategy weights parse");
+        weights.validate().expect("strategy weights validate");
+        SeatStrategy { rule, weights }
+    }))
+}
+
+fn selected_weights(seats: usize, slot: usize, terrain: TerrainFeatures) -> &'static EngineWeights {
+    strategy_for_seats(seats)
+        .filter(|strategy| strategy.rule.matches(terrain, slot))
+        .map_or_else(|| weights_for_seats(seats), |strategy| &strategy.weights)
 }
 
 /// The app's board as the analysis reads it. `SimBoard::try_from_wire` refuses boards the app only
@@ -590,7 +631,7 @@ struct SetupRoadRequest {
     vertex_id: String,
 }
 
-/// The setup road for a legal empty corner, using this roster's weights and the player's holdings.
+/// The setup road for a legal empty corner, using the placing player's weights and holdings.
 pub fn setup_road(request_json: &str) -> String {
     match setup_road_request(request_json) {
         Ok(road) => serde_json::json!({ "road": road }).to_string(),
@@ -611,7 +652,10 @@ fn setup_road_request(request_json: &str) -> Result<Option<String>, String> {
     }
     // An unknown player owns no pieces, including no empty edge tagged with EMPTY.
     let seat = board.player_ids.iter().position(|id| *id == request.player_id);
-    let scorer = board.scorer(weights_for_seats(board.player_ids.len()).clone());
+    let seats = board.player_ids.len();
+    let terrain = TerrainFeatures::read(board.topology, &board.tiles, &board.tokens, seats);
+    let weights = seat.map_or_else(|| weights_for_seats(seats), |slot| selected_weights(seats, slot, terrain));
+    let scorer = board.scorer(weights.clone());
     let holdings = seat.map(|seat| board.holdings(&scorer)[seat]).unwrap_or_else(Holdings::empty);
     let (vertices, edges) = board.owners();
     let term = super::expansion::term(
@@ -629,16 +673,27 @@ fn analyze_request(
     let wire = WireBoard::parse_value(request.board).map_err(|error| error.to_string())?;
     let board = Board::from_wire(&wire)?;
     let options = request.options;
-    let weights =
-        options.weights.unwrap_or_else(|| weights_for_seats(board.player_ids.len()).clone());
-    let scorer = board.scorer(weights);
+    let seats = board.player_ids.len();
+    let terrain = TerrainFeatures::read(board.topology, &board.tiles, &board.tokens, seats);
+    let mut variants: Vec<&EngineWeights> = Vec::new();
+    let seat_variants = (0..seats).map(|slot| {
+        let weights = options.weights.as_ref().unwrap_or_else(|| selected_weights(seats, slot, terrain));
+        if let Some(index) = variants.iter().position(|variant| std::ptr::eq(*variant, weights)) {
+            index
+        } else {
+            variants.push(weights);
+            variants.len() - 1
+        }
+    }).collect();
+    let scorers = variants.into_iter().map(|weights| board.scorer(weights.clone())).collect::<Vec<_>>();
     let seed = options.seed.unwrap_or(7);
     let ranking = Ranking {
-        context: window::Context::new(&board, &scorer),
+        contexts: scorers.iter().map(|scorer| window::Context::new(&board, scorer)).collect(),
+        seat_variants,
         seed,
         rollouts: options.rollouts,
         // Debug text prints every float exactly, and none of these types has `Hash`.
-        cache_scope: format!(
+        cache_scopes: scorers.iter().map(|scorer| format!(
             "{:?}",
             (
                 wire.layout,
@@ -651,29 +706,34 @@ fn analyze_request(
                 seed,
                 options.rollouts,
             )
-        ),
+        )).collect(),
     };
-    let max_results = options.max_results.unwrap_or(scorer.weights().max_results);
+    let max_results = options.max_results.unwrap_or(scorers[ranking.variant(&board)].weights().max_results);
     Ok(ranking.analyze(&board, request.target_pick, max_results, true, progress))
 }
 
 /// The scorer, partner tables, seed and rollout override shared by nested rankings.
 struct Ranking<'a> {
-    context: window::Context<'a>,
+    contexts: Vec<window::Context<'a>>,
+    seat_variants: Vec<usize>,
     seed: u32,
     rollouts: Option<f64>,
     /// The part of a nested ranking's cache key that no scratch board changes: the layout, the
     /// roster, the tiles, tokens, robber and ports, the weights, the seed and the
     /// rollout override.
-    cache_scope: String,
+    cache_scopes: Vec<String>,
 }
 
 impl Ranking<'_> {
+    fn variant(&self, board: &Board) -> usize {
+        board.me.map_or(0, |seat| self.seat_variants[usize::from(seat)])
+    }
+
     /// Everything that determines the ranking of `scratch` for the seat claiming it: the request's
     /// share, then the pieces in `board.buildings` order, the seat and the length of the list.
     /// The request's own claimed player is left out, because a nested ranking never reads it.
     fn cache_key(&self, scratch: &Board, max_results: f64) -> String {
-        format!("{}{:?}", self.cache_scope, (scratch.me, &scratch.buildings, &scratch.roads, max_results))
+        format!("{}{:?}", self.cache_scopes[self.variant(scratch)], (scratch.me, &scratch.buildings, &scratch.roads, max_results))
     }
 
     /// Twin of `analyzeBoardInternal`. `board` is the request's, or a scratch board holding the
@@ -687,7 +747,7 @@ impl Ranking<'_> {
         rank_modal_picks: bool,
         progress: &mut dyn FnMut(f64),
     ) -> DraftAnalysis {
-        let context = &self.context;
+        let context = &self.contexts[self.variant(board)];
         let scorer = context.scorer;
         let weights = scorer.weights();
         let draft = infer_draft_state(board);
@@ -929,6 +989,67 @@ mod behaviour;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_weights_follow_slot_and_crowding() {
+        let crowded = behaviour::five_seat_strategy_board();
+        let mut uncrowded: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../../src/parser/__tests__/expected/board-draft-empty.json"
+        )).unwrap();
+        let hexes = uncrowded["hexes"].as_array_mut().unwrap();
+        let a = hexes.iter().position(|hex| hex["coord"] == serde_json::json!({ "q": -1, "r": -2 })).unwrap();
+        let b = hexes.iter().position(|hex| hex["coord"] == serde_json::json!({ "q": 1, "r": -3 })).unwrap();
+        let token = hexes[a]["numberToken"].clone();
+        hexes[a]["numberToken"] = hexes[b]["numberToken"].clone();
+        hexes[b]["numberToken"] = token;
+        for (json, expected_crowding) in [(crowded, 17), (uncrowded, 9)] {
+            let board = Board::from_wire(&WireBoard::parse_value(json).unwrap()).unwrap();
+            let terrain = TerrainFeatures::read(board.topology, &board.tiles, &board.tokens, 5);
+            assert_eq!(terrain.top_crowding, expected_crowding);
+            for seats in 2..=6 {
+                for slot in 0..seats {
+                    let expected = if seats == 5 && slot >= 1 && terrain.top_crowding >= 10 {
+                        &strategy_for_seats(5).unwrap().weights
+                    } else {
+                        weights_for_seats(seats)
+                    };
+                    assert!(std::ptr::eq(selected_weights(seats, slot, terrain), expected), "seats {seats} slot {slot} crowding {expected_crowding}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn setup_road_uses_the_placing_players_weights() {
+        let mut json = behaviour::five_seat_strategy_board();
+        let topology = Topology::shared(crate::topology::Layout::Extension6).unwrap();
+        let mut witness = None;
+        'roads: for road in 0..topology.edge_count() {
+            json["roads"] = serde_json::json!([{ "edgeId": topology.edge_id(road as Edge), "playerId": "p4" }]);
+            let board = Board::from_wire(&WireBoard::parse_value(json.clone()).unwrap()).unwrap();
+            let base = board.scorer(weights_for_seats(5).clone());
+            let strategy = board.scorer(strategy_for_seats(5).unwrap().weights.clone());
+            let (vertices, edges) = board.owners();
+            for vertex in board.legal_vertices() {
+                let road_for = |scorer: &AppFormulaScorer, seat| {
+                    let term = super::super::expansion::term(scorer, &Holdings::empty(), &vertices, &edges, seat, vertex);
+                    term.road.filter(|_| term.value > 0.0).map(|edge| topology.edge_id(edge).to_owned())
+                };
+                let plain = road_for(&base, 0);
+                let selected = road_for(&strategy, 1);
+                if plain != selected {
+                    witness = Some((vertex, plain, selected));
+                    break 'roads;
+                }
+            }
+        }
+        let (vertex, plain, selected) = witness.expect("the two vectors lay different roads");
+        assert_ne!(plain, selected);
+        for (player, expected) in [("p0", plain.clone()), ("p1", selected), ("unknown", plain)] {
+            let request = serde_json::json!({ "board": json, "playerId": player, "vertexId": topology.vertex_id(vertex) });
+            assert_eq!(setup_road_request(&request.to_string()).unwrap(), expected, "{player}");
+        }
+    }
 
     /// Every corpus case's name and request JSON.
     fn corpus_requests() -> Vec<(String, String)> {

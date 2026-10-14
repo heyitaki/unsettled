@@ -1,0 +1,1 @@
+{"rule": "slot>=1&topCrowding>=10", "leaves": {"/contestWeight": 0.5, "/repriceFirstExpansion": 1}}

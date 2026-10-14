@@ -4,7 +4,6 @@ pub mod coastal;
 pub mod diagnose;
 pub mod evaluate;
 pub mod expansion;
-pub mod features;
 pub mod heuristics;
 pub mod lookahead;
 pub mod output;

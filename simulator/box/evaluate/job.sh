@@ -22,7 +22,7 @@ layout=standard4
 [ "$seats" -le 4 ] || layout=extension6
 shipped='placement/seat-weights/seats-{seats}.json'
 head=(--layout "$layout" --seats "$seats")
-middle=(--field "app_formula_draft:$shipped@$shipped" --arm "base=app_formula_draft:$shipped@$shipped")
+middle=(--field app_formula_shipped --arm base=app_formula_shipped)
 IFS=, read -r -a labels <<< "$arms"
 for label in "${labels[@]}"; do
   middle+=(--arm "$label=app_formula_draft:placement/arms/co_${label}_s{seats}.json@$shipped")
