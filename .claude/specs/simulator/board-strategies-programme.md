@@ -1,6 +1,6 @@
 # Board-specific strategies programme
 
-Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: bad191ef
+Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 85e18839
 
 ## Summary
 
@@ -57,7 +57,7 @@ Proposed; becomes the working queue when the owner approves the spec.
 | 7   | Explore every arm together on `tuning6`, slice, name each seat count's candidate strategy                                       | done 2026-10-14, M-124 to M-127. Three, four and six seats: `null` candidate, closed on their shipped vectors. Five seats: `flat_reprice` on `slot>=1&topCrowding>=10`, fired on 55% of units, +0.57pp (+0.50pp to +0.64pp)                                                                                                                                                                                                                                                                                                     |
 | 8   | Confirm each candidate on `eval5`                                                                                               | done 2026-10-14, M-128: five seats passed, +0.57pp (+0.55pp to +0.60pp) on 55% of units, `better`, `floorMet` true                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 9   | Gate each confirmed candidate on `gate6`                                                                                        | done 2026-10-14, M-129: five seats passed on `gate6`, +0.58pp (+0.55pp to +0.61pp), `better`, `floorMet` true. Adoption needs requirement 28's amendment, approved by the owner                                                                                                                                                                                                                                                                                                                                                 |
-| 10  | Adopt passing rules in the engine and the app, or close with none; ledger and Outcome section                                   | three, four and six seats closed by M-124, M-125, M-127. Five seats: amendment A1 to A8 drafted 2026-10-14, waiting on the owner's approval                                                                                                                                                                                                                                                                                                                                                                                     |
+| 10  | Adopt passing rules in the engine and the app, or close with none; ledger and Outcome section                                   | three, four and six seats closed by M-124, M-125, M-127. Five seats: amendment A1 to A8 approved 2026-10-14, build delegated                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## Requirements
 
@@ -250,7 +250,7 @@ Dropped by the owner on 2026-10-14 (Decisions). Requirements 18 to 22 stay as th
 
 ### Five-seat adoption: requirement 28's amendment
 
-Drafted 2026-10-14 after M-129 passed. Not built until the owner approves it. Item 10 at five seats is this amendment; three, four and six seats close as M-124, M-125 and M-127 left them.
+Drafted 2026-10-14 after M-129 passed. Approved by the owner on 2026-10-14 as written, including A5's choice that a ranking's rollouts use that ranking's one vector. Item 10 at five seats is this amendment; three, four and six seats close as M-124, M-125 and M-127 left them.
 
 A1. **Strategy file.** New `simulator/placement/seat-strategies/seats-5.json`, the one strategy file, holding `{"rule": "slot>=1&topCrowding>=10", "leaves": {"/contestWeight": 0.5, "/repriceFirstExpansion": 1}}`. A new `strategy_for_seats(seats) -> Option<&'static SeatStrategy>` in `placement/analysis.rs`, beside `weights_for_seats`, embeds it with `include_str!` and returns `None` for every other seat count. `SeatStrategy` holds the parsed `Rule` and the full vector (`weights_for_seats(5)` with the leaves applied), built once in a `OnceLock`. A rule that fails to parse, or a leaf that names no weight, panics on first use; the pin test below runs it.
 
