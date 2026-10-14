@@ -4595,3 +4595,19 @@ The other 54 of 73 rows are unchanged or within 0.1% (12 `advise` rows move by u
 **Decision.** The confirm passes (`better` and `floorMet` true). The same command goes to the gate on `gate6`. `eval5` is spent at 5 seats.
 
 **Prediction against the result.** I predicted an estimate between +0.42pp and +0.62pp centred near +0.52pp, `firedShare` between 0.54 and 0.56, and `better` at about 35%. The estimate came in at the top of that range, and the regression I expected from selecting the best of 194 rows did not show: the exploration read +0.57pp and this run +0.57pp.
+
+## M-129: 5 seats, the gate of `flat_reprice` on `slot>=1&topCrowding>=10` on `gate6`
+
+**Preregistration.** [`2026-10-14-m129-seats5-gate.md`](../../../docs/plans/preregs/2026-10-14-m129-seats5-gate.md), committed in `af3109ae` before the run. Ran on the box, 2026-10-14, run `20261014T131806Z-a770e661`, one `BUILD_GENERAL1_2XLARGE` machine (Xeon Platinum 8223CL, 72 vCPU), binary built there from `e99c847f`, sha256 `657103e535942d72b4a6769020ea7165601bc536b2aa9f0acb32bdb28f4d7e3e`, the bytes M-120 to M-128 ran. `extension6`, 5 seats, `gate6` at seed `4024240259393574906` as preregistered, 870,000 boards x 2 reps, 8,700,000 units scheduled, `--where 'slot>=1&topCrowding>=10'`. The job's own `perf` readings: 9.4 seconds at 2,000 boards, 89.7 seconds at 20,000. The run took 3,886 seconds (64.8 minutes) at a peak of 701 MB. `evaluation.json` sha256 `3c36ffc6f9e7183fd8b916d55ca17c9af28b7189b4dce4594b4470581f50fe8d`; outputs in `simulator/runs/m129-seats5-gate/`.
+
+**Result.** The rule fired on 4,776,032 units (0.5490), `floorMet` true. `flat_reprice` fired gain +0.58pp (+0.55 to +0.61), `better`, 269,552 and 241,827 discordant.
+
+**By first-round draft position**, first picker first: not played | +0.61pp (+0.55 to +0.67) | +0.65pp (+0.59 to +0.72) | +0.61pp (+0.55 to +0.67) | +0.45pp (+0.39 to +0.50).
+
+**Stop conditions.** `illegalActions` 0.
+
+**Decision.** The gate passes (`better` and `floorMet` true): `flat_reprice` on `slot>=1&topCrowding>=10` is 5 seats' strategy, and it adopts through requirement 28, whose line-level amendment the owner approves before any engine or app code is written. `gate6` is spent at 5 seats.
+
+**Prediction against the result.** I predicted an estimate between +0.50pp and +0.65pp centred near +0.57pp and `better` at about 85%. It read +0.58pp.
+
+**Reading.** Three held-out readings of the rule agree: +0.57pp on `tuning6` (where it was chosen), +0.57pp on `eval5` and +0.58pp on `gate6`. Over all 5-seat units the rule's gain is its fired gain times its share, about +0.32pp; the always-on setting read +0.48pp over all units on `tuning6` (M-126) and +0.52pp on `tuning5` (M-122), both `inconclusive` against the +0.5pp bar, so the setting also helps, by about +0.38pp, on the units where the rule does not fire.
