@@ -62,7 +62,10 @@ export function readPanel(image: RgbaImage, registration: ColonistRegistration, 
   // Row spacing measures the UI scale even when one avatar is hidden.
   const steps = gaps.map((gap) => Math.round(gap / (2.45 * rows[0].width)))
   const issues: ParseIssue[] = []
-  if (steps.includes(2) || rows.length < 4) issues.push({
+  // Three evenly spaced rows are a three-player game. ponytail: a hidden top
+  // rival in a four-player game looks the same; telling them apart needs the
+  // panel's empty row frame measured.
+  if (steps.includes(2) || rows.length < 3) issues.push({
     stage: 'roster',
     severity: 'unreadable',
     message: 'A player row is missing or unreadable',

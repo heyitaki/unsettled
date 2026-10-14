@@ -51,6 +51,11 @@ const BOARDS = {
     tiles: 'wood12 sheep11 sheep4 / desert brick6 sheep3 sheep8 / ore9 ore5 ore11 wheat10 wheat5 / wood10 wood4 wood9 brick2 / brick8 wheat3 wheat6',
     ports: 'ore sheep any brick wheat wood any any any',
   },
+  // A three-player game, which Colonist plays on the same board.
+  e: {
+    tiles: 'sheep5 wood2 sheep6 / sheep8 brick10 wood9 sheep3 / brick4 wheat3 wood11 wheat4 wheat8 / desert wood6 ore5 brick10 / wheat11 ore12 ore9',
+    ports: 'wood sheep any ore any wheat any brick any',
+  },
 }
 
 function terrain(board: keyof typeof BOARDS): { hexes: Hex[]; ports: Port[] } {
@@ -134,6 +139,16 @@ const PIECES: Record<string, Record<string, string>> = {
   },
   'd-10-two-green-cities-two-red': D_MIDGAME,
   'd-11-midgame-cities-1440': D_MIDGAME,
+  'e-02-three-player-last-pick': {
+    blue: 's -1,-1:NE s 1,-1:NE r -1,-1:E r 2,-2:SE',
+    orange: 's 0,1:SE s 1,0:SE r 0,1:E r 1,0:E',
+    red: 's 0,0:SE r 0,1:NE',
+  },
+  'e-04-three-player-draft-complete': {
+    blue: 's -1,-1:NE s 1,-1:NE r -1,-1:E r 2,-2:SE',
+    orange: 's 0,1:SE s 1,0:SE r 0,1:E r 1,0:E',
+    red: 's 0,0:SE s -1,1:S r 0,1:NE r -1,1:SE',
+  },
 }
 
 function expectedPieces(name: string) {
@@ -185,6 +200,10 @@ const PANELS: Record<string, { first: string | null; rows: string }> = {
   'd-06-knight-played-robber-by-city': { first: null, rows: 'blue 7 0 0 / orange 6 1 0 / green 5 0 1 / red 4 0 0' },
   'd-10-two-green-cities-two-red': D_PANEL,
   'd-11-midgame-cities-1440': D_PANEL,
+  // Three rows, not a four-player panel with one hidden.
+  'e-01-three-player-draft-start': { first: 'red', rows: 'blue 0 0 0 / orange 0 0 0 / red 0 0 0' },
+  'e-02-three-player-last-pick': { first: 'red', rows: 'blue 3 0 0 / orange 3 0 0 / red 0 0 0' },
+  'e-04-three-player-draft-complete': { first: null, rows: 'blue 4 0 0 / orange 5 0 0 / red 3 0 0' },
 }
 
 function expectPanel(name: string, result: Extract<ReturnType<typeof parseScreenshot>, { ok: true }>) {
@@ -254,6 +273,9 @@ const CLEAR: [string, keyof typeof BOARDS, string][] = [
   ['d-09-two-red-cities-one-green', 'd', '0,1'],
   ['d-10-two-green-cities-two-red', 'd', '-2,2'],
   ['d-11-midgame-cities-1440', 'd', '-2,2'],
+  ['e-01-three-player-draft-start', 'e', '-2,1'],
+  ['e-02-three-player-last-pick', 'e', '-2,1'],
+  ['e-04-three-player-draft-complete', 'e', '-2,1'],
 ]
 
 describe.skipIf(!existsSync(dir))('Colonist screenshots', () => {

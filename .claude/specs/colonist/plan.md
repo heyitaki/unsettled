@@ -27,7 +27,7 @@ The screenshots are not in the repo: Colonist's terms require credit on publishe
 
 Known limits, kept on purpose until someone needs more:
 
-- Four-player boards only. No 5 to 6 player screenshot exists to test against. A three-player game on the four-player board would always be flagged as missing a panel row and never get its first player worked out; no such screenshot exists either.
+- Three and four players on the standard board (board E is a three-player game against two bots in a private room). No 5 to 6 player screenshot exists to test against. A four-player panel whose top rival row is fully hidden reads as a three-player game.
 - The nine harbours are taken to sit on fixed edges, as they did on all four boards captured.
 - No screenshot has a blue or orange city, or a viewer in a colour other than red.
 - Only the four free seat colours are known. A piece in a paid member's colour (white, purple and others) would be missed without a warning until a screenshot of one exists.
