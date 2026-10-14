@@ -4581,3 +4581,17 @@ The other 54 of 73 rows are unchanged or within 0.1% (12 `advise` rows move by u
 **Reading.** As in the diagnostic, switching the adopted setting off helps on no rule at 6 seats.
 
 **Ledger after M-124 to M-127.** `tuning6` is spent at 3, 4, 5 and 6 seats and unspent at 2. `tuning5` likewise. `gate5` is spent at 4 and 6 seats. `eval5` and `gate6` are unspent at every seat count. Three, four and six seats close here: four and six on the always-on setting stage 1 adopted, three on its pre-programme vector.
+
+## M-128: 5 seats, the confirm of `flat_reprice` on `slot>=1&topCrowding>=10` on `eval5`
+
+**Preregistration.** [`2026-10-14-m128-seats5-confirm.md`](../../../docs/plans/preregs/2026-10-14-m128-seats5-confirm.md), committed in `4a7c73a4` before the run. Ran on the box, 2026-10-14, run `20261014T120621Z-8703801d`, one `BUILD_GENERAL1_2XLARGE` machine (Xeon Platinum 8223CL, 72 vCPU), binary built there from `e99c847f`, sha256 `657103e535942d72b4a6769020ea7165601bc536b2aa9f0acb32bdb28f4d7e3e`, the bytes M-120 to M-127 ran. `extension6`, 5 seats, `eval5` at seed `3197586571723816237` as preregistered, 870,000 boards x 2 reps, 8,700,000 units scheduled, `--where 'slot>=1&topCrowding>=10'`. The job's own `perf` readings: 9.4 seconds at 2,000 boards, 89.8 seconds at 20,000. The run took 3,890 seconds (64.8 minutes, against 3,916 predicted) at a peak of 690 MB. `evaluation.json` sha256 `319df270141b87d195318300c8348de616af4bf509ebc724a786081baa6fb99b`; outputs in `simulator/runs/m128-seats5-confirm/`.
+
+**Result.** The rule fired on 4,778,600 units (0.5493), `floorMet` true. `flat_reprice` fired gain +0.57pp (+0.55 to +0.60), `better`, 268,339 and 240,866 discordant. Half-width 0.030pp, against 0.030pp predicted.
+
+**By first-round draft position**, first picker first: not played | +0.63pp (+0.57 to +0.69) | +0.69pp (+0.63 to +0.75) | +0.53pp (+0.47 to +0.59) | +0.45pp (+0.39 to +0.51).
+
+**Stop conditions.** `illegalActions` 0.
+
+**Decision.** The confirm passes (`better` and `floorMet` true). The same command goes to the gate on `gate6`. `eval5` is spent at 5 seats.
+
+**Prediction against the result.** I predicted an estimate between +0.42pp and +0.62pp centred near +0.52pp, `firedShare` between 0.54 and 0.56, and `better` at about 35%. The estimate came in at the top of that range, and the regression I expected from selecting the best of 194 rows did not show: the exploration read +0.57pp and this run +0.57pp.
