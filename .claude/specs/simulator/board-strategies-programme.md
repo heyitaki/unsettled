@@ -1,6 +1,6 @@
 # Board-specific strategies programme
 
-Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 85e18839
+Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 5ac14be5
 
 ## Summary
 
@@ -277,7 +277,7 @@ A7. **Tests.** Each is shown to fail with its mutation before it counts.
 - `nested_rankings_choose_by_their_own_picker` (engine, `analysis/behaviour.rs`): a five-seat crowded board with seat 3 to pick its first settlement, so seats 0, 1 and 2 pick ahead. Each `takenBeforeFirstPick` vertex equals the top recommendation of the analysis of the scratch board claimed by that picker with no weights sent. The board is chosen, and the test asserts, so that seat 0's top pick under the strategy's vector differs from its top pick under the seat vector, or seat 1's does under the reverse. Mutation: every ranking uses the analysed player's variant.
 - `the_first_picker_ranks_with_the_seat_vector` (engine, `behaviour.rs`): on the same board, seat 0's first-pick analysis with no weights equals the one sent `weights_for_seats(5)`; seat 1's equals the one sent the strategy's vector (seat 0 is its only picker ahead and has no nested ranking of its own to differ). Mutation: selection ignores `slot`.
 - `setup_road_uses_the_placing_players_weights` (engine, `analysis.rs` tests): on the crowded board, a vertex where the two vectors lay different roads (asserted); the road for a slot 1 player is the strategy's and for slot 0 the seat vector's.
-- `shipped_selection_is_the_seat_vector_where_no_strategy_fires` (cli, `evaluate_harness.rs`): at 2, 3, 4 and 6 seats on `perf`, 6 boards, `evaluate` with field and `base` `app_formula_shipped` writes the same `evaluation.json` bytes as with `app_formula_draft:seats-{seats}.json@seats-{seats}.json`.
+- `shipped_selection_is_the_seat_vector_where_no_strategy_fires` (cli, `evaluate_harness.rs`): at 2, 3, 4 and 6 seats on `perf`, 6 boards, `evaluate` with field and `base` `app_formula_shipped` writes the same `evaluation.json` as with `app_formula_draft:seats-{seats}.json@seats-{seats}.json`, compared as whole JSON after the four fields that echo the spelling (`config.field`, `config.fieldHeuristic`, `arms.base.spec`, `arms.base.heuristic`) are each asserted to hold its own run's spelling and then set equal. Everything else, every count and every float, must match exactly.
 - `shipped_selection_plays_the_strategy_by_seat` (engine, `placement/mod.rs` tests): on a crowded five-seat board, `choose` for `app_formula_shipped` at slot 0 returns what the seat-vector draft arm returns and at slot 2 what `co_flat_reprice_s5@co_flat_reprice_s5` returns, on a board state where the two differ (asserted).
 - The moved features tests pass unchanged apart from the `read` call. By hand on `perf`: the M-126 command at 2,000 boards writes the same `units.csv` bytes from the binary before and after the move.
 - `analysisPerf.test.ts` gains one five-seat ranking on a crowded board for seat 3's first pick (two variants live, nested rankings in both) under the existing six-seat bound, and both existing cases keep their bounds.
