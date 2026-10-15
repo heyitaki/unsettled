@@ -1,12 +1,12 @@
 # Colonist.io screenshot source
 
-A second screenshot source beside Settled, approved 2026-10-13. Work happens on branch `colonist-parser`.
+A second screenshot source beside Settled, approved 2026-10-13, on main since 2f4ecdcf and 44b8a5f0.
 
-The screenshots are not in the repo: Colonist's terms require credit on published screenshots and the repo is public, so they live in the ignored `fixtures/colonist.local/` and `src/parser/__tests__/colonist.test.ts` skips when that folder is absent. Its expected boards were read by eye from the screenshots, so a changed expectation is re-read by eye, never regenerated from parser output.
+The screenshots are not in the repo: Colonist's terms require credit on published screenshots and the repo is public, so they live in the ignored `fixtures/colonist.local/` and `src/parser/__tests__/colonist.test.ts` and `colonistDamage.test.ts` skip when that folder is absent. Its expected boards were read by eye from the screenshots, so a changed expectation is re-read by eye, never regenerated from parser output.
 
 | # | Item | State |
 | --- | --- | --- |
-| 1 | Pick the source in `parseScreenshot`: Settled first, Colonist whenever the Settled path yields no board (Settled's palette check accepts some Colonist screens, so it cannot be the switch), Settled's error when both fail | done |
+| 1 | Pick the source in `parseScreenshot`: Settled first, Colonist whenever the Settled path yields no board (Settled's palette check accepts some Colonist screens, so it cannot be the switch), Settled's error when both fail | done, and row 14 put Colonist first |
 | 2 | Colonist terrain: tiles, number tokens, robber, harbours, at four window sizes, in both Display P3 and sRGB, and at half resolution (a 2x2 average standing in for a 1x display) | done |
 | 3 | Colonist pieces: roads, settlements and cities in red, blue, orange and green, players synthesized from the colours found, buildings in snake shape with a warning that Colonist does not show which of a player's two settlements came first | done; the test holds nine screenshots' pieces read by eye |
 | 4 | Colonist player panel: players and colours from the rows, the viewer claimed, hand sizes, development cards and knights into the stats, victory points cross-checked against buildings. The panel is rotated to put the viewer last, so the first player is worked out only mid-draft (from settlement counts, or the lit row when they are level) and otherwise panel order is kept with a warning | done; the test holds nine screenshots' panels read by eye |
@@ -28,7 +28,7 @@ The screenshots are not in the repo: Colonist's terms require credit on publishe
 Known limits, kept on purpose until someone needs more:
 
 - Three and four players on the standard board (board E is a three-player game against two bots in a private room). No 5 to 6 player screenshot exists to test against. A four-player panel whose top rival row is fully hidden reads as a three-player game.
-- The nine harbours are taken to sit on fixed edges, as they did on all four boards captured.
+- The nine harbours are taken to sit on fixed edges, as they did on all five boards captured.
 - No screenshot has a blue or orange city, or a viewer in a colour other than red.
 - Only the four free seat colours are known. A piece in a paid member's colour (white, purple and others) would be missed without a warning until a screenshot of one exists.
 - A screenshot update of a saved game (`mergeScreenshot`) still keeps the saved development card and knight counts, as it must for Settled, although Colonist shows them.

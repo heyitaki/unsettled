@@ -9,7 +9,7 @@ import { RESOURCES, type Board, type Issue, type Player, type Resource } from '.
 
 export interface PlayerStats {
   hand: Record<Resource, number>
-  /** Cards known to be held but not to be of a known resource. Settled exposes only the total. */
+  /** Cards known to be held but not to be of a known resource. A screenshot import reads only the total. */
   handUnknown: number
   devCards: number
   knights: number
