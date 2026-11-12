@@ -32,12 +32,8 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .app-shell { --shell-max: max(950px, calc(100vh + 334px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
 .site-header { max-width: var(--shell-max); margin: 0 auto 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 11px; }
 .site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 26px/1 Georgia, serif; letter-spacing: -.04em; }
-.brand-mark { --mark: .52; position: relative; width: calc(50px * var(--mark)); height: calc(48px * var(--mark)); }
-.site-header .brand-mark { --mark: .62; }
-.brand-mark span { position: absolute; width: calc(28px * var(--mark)); height: calc(32px * var(--mark)); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
-.brand-mark span:nth-child(1) { left: 0; top: 0; background: #3d7cb7; }
-.brand-mark span:nth-child(2) { left: calc(22px * var(--mark)); top: 0; background: #c55a3c; }
-.brand-mark span:nth-child(3) { left: calc(11px * var(--mark)); top: calc(16px * var(--mark)); background: #d2a13d; }
+.brand-mark { flex: none; width: 25px; height: 25px; }
+.site-header .brand-mark { width: 30px; height: 30px; }
 
 .workspace { max-width: var(--shell-max); margin: auto; display: grid; grid-template-columns: minmax(494px, 1fr) 440px; gap: 16px; align-items: start; }
 .right-rail { min-width: 0; }
