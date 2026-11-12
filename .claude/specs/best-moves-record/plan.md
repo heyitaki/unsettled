@@ -43,7 +43,7 @@ Approved 2026-11-12. Mock-up: https://claude.ai/artifact/FXTAEV92eXLhZYSo7qsRSs 
   - Buy dev card: the player could afford one (the known shortfall is no more than their unseen cards) and the deck is not known to be empty.
   - Build structure: some piece is both affordable and has a legal spot, and its tray lists only those pieces.
 - After the roll, with nothing possible, Actions folds to done as `No actions possible`.
-- `Change roll` works all turn (owner, 2026-11-12): it recommits the pre-roll snapshot, striking the roll and later actions from the log; Undo restores them. Production sits on its own line under `Rolled N`. Action tiles use a fixed four-column grid so one or two keep their size.
+- `Change roll` works all turn (owner, 2026-11-12): it recommits the pre-roll snapshot, striking the roll and later actions from the log; Undo restores them. Production sits on its own line under `Rolled N`. Action tiles are chips in one row (`Trade`, `Buy card`, `Play card`, `Build`; owner chose option C of https://claude.ai/artifact/NeMSVUQoK7sLpMsBe2Ysnw), switching to option B's equal icon-over-label tiles only where the chips would wrap.
 - Undo of a robber move must bring the robber flow back. Its pending state is `turn.robberMoved === false` in the turn record (set by a seven's roll, cleared by the robber move), so it survives a reload and the history cap.
 - Discards come first: the robber hex pick arms only once every discard line is recorded or skipped. No action tile shows while a seven's robber is pending.
 - A dev card bought this turn cannot be played (`turn.devBought`). Both new turn fields are left out of the advice request.

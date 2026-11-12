@@ -20,9 +20,9 @@ const actionLog = new WeakMap<Game, string>()
 const recordedRolls = new WeakMap<Game, RecordedRoll>()
 const ACTION_TILES = [
   { kind: 'trade', label: 'Trade', Glyph: TradeGlyph },
-  { kind: 'buy', label: 'Buy dev card', Glyph: BuyDevGlyph },
-  { kind: 'play', label: 'Play dev card', Glyph: PlayDevGlyph },
-  { kind: 'build', label: 'Build structure', Glyph: BuildGlyph },
+  { kind: 'buy', label: 'Buy card', Glyph: BuyDevGlyph },
+  { kind: 'play', label: 'Play card', Glyph: PlayDevGlyph },
+  { kind: 'build', label: 'Build', Glyph: BuildGlyph },
 ] as const
 const RESOURCE_WORDS = new RegExp(`\\b(${RESOURCES.join('|')})\\b`, 'g')
 

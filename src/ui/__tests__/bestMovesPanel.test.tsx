@@ -175,7 +175,7 @@ describe('Best moves recording', () => {
   it('keeps the log and production through remount, tab switches and undoing End turn', async () => {
     respond = () => ({ kind: 'produce', gains: { aki: { ...emptyStats().hand, wood: 2 } } })
     await click('8')
-    await click('Buy dev card')
+    await click('Buy card')
     await click('VP', tray())
     await remount()
     expect(rollStep().querySelector('.move-prod-cards')?.getAttribute('aria-label')).toBe('2 wood')
@@ -219,7 +219,7 @@ describe('Best moves recording', () => {
 
   it('caps Monopoly at each rival known resource plus unknown cards', async () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(game(), 'b', 'handUnknown', 2) }))
-    await click('Play dev card')
+    await click('Play card')
     await click('Monopoly', tray())
     await click('Names ore')
     expect(button('More Bee').disabled).toBe(false)
@@ -238,7 +238,7 @@ describe('Best moves recording', () => {
     await click('Undo')
     expect(tray()).toBeNull()
     await click('Redo')
-    await click('Play dev card')
+    await click('Play card')
     await click('Knight', tray())
     expect(seen.state.pick?.want).toBe('hex')
     await click('Undo')
@@ -256,7 +256,7 @@ describe('Best moves recording', () => {
     expect(container.querySelectorAll('.move-tile')).toHaveLength(0)
     expect(container.textContent).not.toContain('No actions possible')
     await click('Undo')
-    await click('Play dev card')
+    await click('Play card')
     await click('Knight', tray())
     await act(async () => seen.dispatch({ type: 'commit-game', game: emptyHand() }))
     expect(container.querySelectorAll('.move-tile')).toHaveLength(0)
@@ -264,7 +264,7 @@ describe('Best moves recording', () => {
   })
 
   it('clears the first Year of plenty resource and still takes two of one resource', async () => {
-    await click('Play dev card')
+    await click('Play card')
     await click('Year of plenty', tray())
     const before = game()
     await click('Takes wood')
@@ -282,14 +282,14 @@ describe('Best moves recording', () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 0, unknownOwnCards: 0 } })
     await click('Retry advice')
-    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy dev card')).toBe(false)
+    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy card')).toBe(false)
     respond = () => ({ error: 'Unavailable' })
     act(() => seen.dispatch({ type: 'commit-game', game: adjustHand(game(), 'aki', 'wood', 1) }))
     expect(container.textContent).toContain('Getting advice')
-    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy dev card')).toBe(false)
+    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy card')).toBe(false)
     await act(async () => {})
     await act(async () => seen.dispatch({ type: 'tab-add', game: seed() }))
-    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy dev card')).toBe(true)
+    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy card')).toBe(true)
   })
 
   it('renders separate record and advice sections with the approved headings and notes', async () => {
@@ -309,28 +309,28 @@ describe('Best moves recording', () => {
 
   it('shows playable dev cards only, and hides the tile after playing', async () => {
     await click('Turn 2: Bee')
-    expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play dev card')).toBe(false)
-    await click('Buy dev card')
-    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Play dev card')).toBe(false)
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
+    await click('Buy card')
+    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Play card')).toBe(false)
     await click('Undo')
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(game(), 'b', 'devCards', 1) }))
-    await click('Buy dev card')
-    await click('Play dev card')
+    await click('Buy card')
+    await click('Play card')
     expect(tray().querySelectorAll('[aria-label="Card"] button')).toHaveLength(4)
     await click('Year of plenty', tray())
     await click('Takes wood')
     await click('Takes ore')
-    expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play dev card')).toBe(false)
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
     await click('Turn 1: aki')
     let current = game()
     for (const kind of ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly'] as const) current = adjustDevHand(current, 'playable', kind, -1)
     current = adjustDevHand(current, 'bought', 'knight', 1)
     await act(async () => seen.dispatch({ type: 'commit-game', game: current }))
-    expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play dev card')).toBe(false)
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
   })
 
   it('drops an undone action from the log and restores it on redo', async () => {
-    await click('Buy dev card')
+    await click('Buy card')
     await click('VP', tray())
     expect(container.querySelector('.move-log')?.textContent).toBe('Bought a dev card')
     await click('Undo')
@@ -389,7 +389,7 @@ describe('Best moves recording', () => {
 
   it('keeps a logged Knight when the store awards Largest Army', async () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(game(), 'aki', 'knights', 2) }))
-    await click('Play dev card')
+    await click('Play card')
     await click('Knight', tray())
     await pickHex()
     expect(game().awards?.largestArmy).toBe('aki')
@@ -454,13 +454,13 @@ describe('Best moves recording', () => {
   })
 
   it('records Road building with zero or one road and resets a reopened tray', async () => {
-    await click('Play dev card')
+    await click('Play card')
     await click('Road building', tray())
     await click('Record 0 roads')
     expect(game().board.roads).toHaveLength(0)
     expect(game().turn?.devPlayed).toBe(true)
     await click('Undo')
-    await click('Play dev card')
+    await click('Play card')
     await click('Road building', tray())
     await clickElement(container.querySelector('.placement-slot'))
     await click('Record 1 road')
@@ -543,9 +543,9 @@ describe('Best moves recording', () => {
   })
 
   it('shows only affordable legal build pieces and marks an empty Actions step done after the roll', async () => {
-    await click('Build structure')
+    await click('Build')
     expect([...tray().querySelectorAll('[aria-label="Piece"] button')].map((button) => button.textContent?.split(' ')[0])).toEqual(['Road', 'City'])
-    await click('Build structure')
+    await click('Build')
     const current = { ...game(), stats: { ...game().stats, aki: emptyStats() }, devHand: undefined }
     await act(async () => seen.dispatch({ type: 'commit-game', game: current }))
     expect(container.querySelectorAll('.move-tile')).toHaveLength(0)
@@ -563,7 +563,7 @@ describe('Best moves recording', () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 0, unknownOwnCards: 0 } })
     await click('Retry advice')
-    expect([...container.querySelectorAll('.move-tile')].map((tile) => tile.textContent)).toEqual(['Trade', 'Play dev card', 'Build structure'])
+    expect([...container.querySelectorAll('.move-tile')].map((tile) => tile.textContent)).toEqual(['Trade', 'Play card', 'Build'])
   })
 
   it('blocks all advice on unfinished boards while keeping every recording tray usable', async () => {
@@ -575,10 +575,10 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.move-table')).not.toBeNull()
     await click('Trade')
     await click('Bee', tray())
-    await click('Play dev card')
+    await click('Play card')
     await click('Knight', tray())
     expect(seen.state.pick?.want).toBe('hex')
-    await click('Play dev card')
+    await click('Play card')
     await click('8')
     expect(game().turn?.rolled).toBe(8)
     expect(game().stats).toBe(incomplete.stats)
@@ -640,7 +640,7 @@ describe('Best moves recording', () => {
     expect(game()).toBe(before)
     expect(rollStep().className).toContain('now')
     await click('8')
-    await click('Buy dev card')
+    await click('Buy card')
     await click('Knight', tray())
     const acted = game()
     expect(container.querySelector('.move-log')?.textContent).toBe('Bought a dev card')
@@ -725,7 +725,7 @@ describe('Best moves recording', () => {
     await click('Bee', tray())
     expect(game().stats.aki.hand).toMatchObject({ wood: 3, sheep: 4, brick: 6 })
     expect(game().stats.b.hand).toMatchObject({ wood: 7, sheep: 6, brick: 4 })
-    await click('Buy dev card')
+    await click('Buy card')
     expect(tray().textContent).toContain('You drew')
     await click('Knight', tray())
     expect(game().devHand?.bought.knight).toBe(1)
@@ -733,14 +733,14 @@ describe('Best moves recording', () => {
     await click('End turn')
     expect(game().turn?.playerId).toBe('b')
     expect(game().devHand?.playable.knight).toBe(2)
-    await click('Buy dev card')
+    await click('Buy card')
     expect(game().stats.b.devCards).toBe(1)
     expect(tray()).toBeNull()
   })
 
   it('records a build through the canvas and undoes its piece and cost together', async () => {
     const before = game()
-    await click('Build structure')
+    await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     expect(seen.state.pick?.want).toBe('edge')
     await clickElement(container.querySelector('.placement-slot'))
@@ -753,7 +753,7 @@ describe('Best moves recording', () => {
 
   it('records all four dev plays without advice, with one undo per play', async () => {
     const before = game()
-    await click('Play dev card')
+    await click('Play card')
     await click('Road building', tray())
     await clickElement(container.querySelector('.placement-slot'))
     expect(seen.state.pick?.want).toBe('edge')
@@ -763,7 +763,7 @@ describe('Best moves recording', () => {
     expect(game().stats.aki.hand.wood).toBe(5)
     await click('Undo')
     expect(game()).toBe(before)
-    await click('Play dev card')
+    await click('Play card')
     await click('Year of plenty', tray())
     await click('Takes wood')
     expect(game()).toBe(before)
@@ -771,7 +771,7 @@ describe('Best moves recording', () => {
     await click('Takes ore')
     expect(game().stats.aki.hand).toMatchObject({ wood: 6, ore: 6 })
     await click('Undo')
-    await click('Play dev card')
+    await click('Play card')
     await click('Monopoly', tray())
     await click('Names ore')
     expect(tray().textContent).toContain('Bee 5')
@@ -781,7 +781,7 @@ describe('Best moves recording', () => {
     expect(game().stats.aki.hand.ore).toBe(8)
     expect(game().stats.b.hand.ore).toBe(2)
     await click('Undo')
-    await click('Play dev card')
+    await click('Play card')
     await click('Knight', tray())
     expect(tray()).toBeNull()
     expect(seen.state.pick?.want).toBe('hex')
@@ -845,7 +845,7 @@ describe('Best moves recording', () => {
   it('preserves the table view and row editor across turn and tab changes while closing the tray', async () => {
     await click('Points')
     await click('Correct aki by hand')
-    await click('Build structure')
+    await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     await click('Turn 2: Bee')
     expect(button('Points').getAttribute('aria-pressed')).toBe('true')
@@ -865,7 +865,7 @@ describe('Best moves recording', () => {
     await act(async () => seen.dispatch({ type: 'commit', board: placeRoad(game().board, edge, 'aki') }))
     const before = game()
     const past = activeTab(seen.state).past
-    await click('Build structure')
+    await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Settlement')) ?? null)
     expect(seen.state.pick).toEqual({ want: 'vertex', piece: 'settlement' })
     await act(async () => seen.dispatch({ type: 'pick-clear' }))
@@ -941,12 +941,12 @@ describe('Best moves recording', () => {
     }
     // The app shows Best moves only after the draft.
     await act(async () => seen.dispatch({ type: 'commit', board: placeBuilding(game().board, boardGrid('standard4').vertexIds[0], 'aki', 'city') }))
-    await click('Build structure')
+    await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     await tap(100)
     await tap(200)
     expect(svg.getAttribute('viewBox')).toBe(before)
-    await click('Build structure')
+    await click('Build')
     await tap(500)
     await tap(600)
     expect(svg.getAttribute('viewBox')).not.toBe(before)
@@ -1000,12 +1000,12 @@ describe('Best moves recording', () => {
   })
 
   it('clears a pick on turn changes and records for the turn player rather than the brush player', async () => {
-    await click('Build structure')
+    await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     await click('Turn 2: Bee')
     expect(seen.state.pick).toBeNull()
     expect(container.querySelector('.move-tray')).toBeNull()
-    await click('Build structure')
+    await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     await clickElement(container.querySelector('.placement-slot'))
     expect(game().board.roads[0].playerId).toBe('b')
