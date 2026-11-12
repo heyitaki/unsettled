@@ -439,7 +439,7 @@ export function PlayDevGlyph() {
   return (
     <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
       <rect x="4.5" y="2.5" width="11" height="15" rx="1.8" />
-      <path d="M8.4 7.1v5.8L13 10Z" />
+      <path d="M7.7 7v6l4.8-3Z" />
     </svg>
   )
 }
