@@ -30,7 +30,7 @@ export function placeBelow(
 
 /** Whether a modal or dropdown is up, including native top-layer overlays. */
 export const overlayOpen = (): boolean =>
-  document.querySelector('dialog[open], [popover]:popover-open, .popover-backdrop, .menu-backdrop') !== null
+  document.querySelector('dialog[open], [popover]:popover-open, .menu-backdrop') !== null
 
 /**
  * Is the keystroke going into a field? Global key handling stays out of the

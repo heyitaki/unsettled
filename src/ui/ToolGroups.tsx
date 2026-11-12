@@ -43,7 +43,7 @@ export function ToolGroups({ onLayout, onRandomize, onClearPieces, onClear }: {
   const tokenTotal = board.hexes.filter((hex) => hex.tile !== 'desert').length
   return (
     <>
-      <p className="tool-hint">Tap a corner to cycle settlement, city, empty. Tap an edge for a road, a tile to move the robber, or a port/empty coast to edit a port. Pick a terrain or number below, then tap a tile to set it. Tap again to clear it.</p>
+      <p className="tool-hint">Tap the board to edit pieces, the robber and ports. Pick a terrain or number, then tap a tile. A picked terrain turns a tapped port 2:1.</p>
       <div className="tool-group">
         <span className="tool-label">Layout</span>
         <div className="tool-grid layout-grid">

@@ -36,7 +36,6 @@ import type { AxialCoord, Board, BuildingTier, EdgeId, Port, VertexId } from '..
 import { BLANK_TILE_COLOR, INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
 import { overlayOpen } from './overlayPosition'
-import { PortPopover } from './PortPopover'
 import { buildingSlots, clickTarget, newPortEdges, nextBuildingTier, roadSlots } from './placementSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
 import {
@@ -196,7 +195,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const coarse = useCoarsePointer()
   const tab = activeTab(state)
   const { board } = tab.game
-  const [editingPort, setEditingPort] = useState<EdgeId | null>(null)
   const [transform, setTransformState] = useState<ViewTransform>(IDENTITY)
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null)
   const transformRef = useRef<ViewTransform>(IDENTITY)
@@ -214,11 +212,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     transformRef.current = next
     setTransformState(next)
   }
-  // The popover edge belongs to the tab it was opened on; keeping it across a
-  // tab switch would edit (or crash on) a different board's coastline.
-  useEffect(() => {
-    setEditingPort(null)
-  }, [state.activeTabId])
   const grid = useMemo(() => boardGrid(board.layout), [board.layout])
   // Positions depend on the layout alone; the candidates below filter them per board.
   const targetPositions = useMemo(() => [
@@ -316,6 +309,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const renderedViewBox = transformedViewBox(viewBox, transform)
   const pick = state.pick
   const pieceMode = !pick && state.tool.kind === 'piece'
+  const portTerrain = !pick && state.tool.kind === 'tile' && state.tool.tile !== 'desert' ? state.tool.tile : null
+  const portsTappable = pieceMode || portTerrain !== null
   const draft = useMemo(() => inferDraftState(board), [board])
   const draftComplete = draftIsComplete(board, draft)
   const viewedSlot = state.viewedPick ?? draft.myRemainingPickIndices[0]
@@ -347,14 +342,14 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     }
     return [
       ...targetPositions.filter((target) => refs.has(target.ref)),
-      ...(pieceMode ? [
+      ...(portsTappable ? [
         ...ports.map(({ port, point }) => ({ ref: portRef(port.edgeId), ...point })),
         ...portSlots,
-        ...board.hexes.filter((hex) => hex.tile !== null && (!board.robber || axialKey(hex.coord) !== axialKey(board.robber)))
-          .map((hex) => ({ ref: axialKey(hex.coord), ...center(hex.coord) })),
       ] : []),
+      ...(pieceMode ? board.hexes.filter((hex) => hex.tile !== null && (!board.robber || axialKey(hex.coord) !== axialKey(board.robber)))
+        .map((hex) => ({ ref: axialKey(hex.coord), ...center(hex.coord) })) : []),
     ]
-  }, [targetPositions, placeableVertices, placeableEdges, board, ports, portSlots, pieceMode])
+  }, [targetPositions, placeableVertices, placeableEdges, board, ports, portSlots, pieceMode, portsTappable])
   const targetAt = useCallback((point: Point) => {
     const rect = svgRef.current && contentBox(svgRef.current)
     // An unmeasured board has no point to resolve; clientToUnits would answer with the view centre.
@@ -432,7 +427,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }
   const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece' || draftPlayer !== null
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
-  const placementActive = buildActive || roadActive
+  const placementActive = buildActive || roadActive || portTerrain !== null
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
   const hoverBuilding = hover && board.buildings.find((building) => building.vertexId === hover.ref)
   const hoverRoad = hover && board.roads.find((road) => road.edgeId === hover.ref)
@@ -446,7 +441,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     lastClick.current = null
     finePointer.current = null
     finePointerDown.current = null
-  }, [placementActive, state.activeTabId, board.layout])
+  }, [placementActive, portTerrain, state.activeTabId, board.layout])
   useEffect(() => {
     const target = !coarse && placementActive && finePointer.current ? targetAt(finePointer.current) : null
     setHoveredTarget(target && !grid.landKeys.has(target.ref) ? target.ref : null)
@@ -454,8 +449,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const actOnTarget = (target: { ref: string; x: number; y: number }) => {
     lastClick.current = target
     const port = parsePortRef(target.ref)
-    if (port !== null) setEditingPort(port)
-    else if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
+    if (port !== null) {
+      const existing = board.ports.find((candidate) => candidate.edgeId === port)
+      if (portTerrain !== null) {
+        const generic = existing?.resource === portTerrain && existing.rate === 2
+        commit(upsertPort(board, port, generic ? null : portTerrain, generic ? 3 : 2))
+      } else commit(existing ? removePort(board, port) : upsertPort(board, port, null, 3))
+    } else if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
     else if (target.ref.startsWith('e:')) onEdge(target.ref as EdgeId)
     else commit(setRobber(board, parseAxialKey(target.ref)))
   }
@@ -466,11 +466,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     actOnTarget(slot)
   }
   const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token'
-  const gesturesBlocked = editingPort !== null
-  const overlayBlocksGestures = () =>
-    gesturesBlocked || overlayOpen()
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (overlayBlocksGestures()) return
+    if (overlayOpen()) return
     const point = pointOf(event)
     if (!coarse) {
       finePointerDown.current = point
@@ -505,7 +502,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!coarse && !placementActive) return
-    if (overlayBlocksGestures()) return
+    if (overlayOpen()) return
     if (!coarse) {
       finePointer.current = pointOf(event)
       const target = targetAt(finePointer.current)
@@ -625,11 +622,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     const svg = svgRef.current
     if (!svg) return
     const onWheel = (event: WheelEvent) => {
-      if (
-        !event.ctrlKey ||
-        gesturesBlocked ||
-        overlayOpen()
-      ) return
+      if (!event.ctrlKey || overlayOpen()) return
       event.preventDefault()
       const anchor = clientToUnits(
         { x: event.clientX, y: event.clientY },
@@ -646,7 +639,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     }
     svg.addEventListener('wheel', onWheel, { passive: false })
     return () => svg.removeEventListener('wheel', onWheel)
-  }, [gesturesBlocked, viewBox])
+  }, [viewBox])
   // Panning and pinching change nothing but the <svg>'s viewBox, yet a plain
   // render rebuilds and diffs every one of the ~300 presentation elements on
   // each pointermove. Memoizing the layers that don't read the transform makes
@@ -910,7 +903,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         onClickCapture={(event) => {
           const start = finePointerDown.current
           finePointerDown.current = null
-          const dragged = !coarse && placementActive && start !== null &&
+          // Only piece placement treats a moved click as a drag; a terrain click that drifts still paints its hex.
+          const dragged = !coarse && (buildActive || roadActive) && start !== null &&
             Math.hypot(event.clientX - start.x, event.clientY - start.y) > PAN_THRESHOLD
           if (!suppressClick.current && !dragged) return
           event.preventDefault()
@@ -967,7 +961,10 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {markLayer}
           <g className="hit-layers">
             {hexActive && board.hexes.map((hex) => (
-              <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={() => onHex(hex.coord)} />
+              <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={(event) => {
+                event.stopPropagation()
+                onHex(hex.coord)
+              }} />
             ))}
           </g>
           {/* Placement affordances: legal dots, a piece preview at an empty target, or a ring. */}
@@ -983,7 +980,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               const point = midpoint([a, b])
               return <circle key={`slot:${edgeId}`} className="placement-slot" cx={point.x} cy={point.y} r={coarse ? 3.6 : 2.8} fill={playerColor(placementPlayer)} fillOpacity={0.85} stroke={readableInk(playerColor(placementPlayer))} strokeWidth={1.2} strokeOpacity={0.9} onClick={(event) => onSlotClick(event, { ref: edgeId, ...point })} />
             })}
-            {pieceMode && portSlots.map((slot) => (
+            {portsTappable && portSlots.map((slot) => (
               <circle key={slot.ref} className="placement-slot" cx={slot.x} cy={slot.y} r={coarse ? PORT_DOT_COARSE : PORT_DOT_FINE} fill={TOKEN_COLOR} fillOpacity={0.85} onClick={(event) => onSlotClick(event, slot)} />
             ))}
             {preview && !previewRoad && <path
@@ -1015,21 +1012,6 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           </g>
         </g>
       </svg>
-      {editingPort && (
-        <PortPopover
-          edgeId={editingPort}
-          port={board.ports.find((port) => port.edgeId === editingPort)}
-          onCancel={() => setEditingPort(null)}
-          onDelete={() => {
-            commit(removePort(board, editingPort))
-            setEditingPort(null)
-          }}
-          onSave={(resource, rate) => {
-            commit(upsertPort(board, editingPort, resource, rate))
-            setEditingPort(null)
-          }}
-        />
-      )}
       {transform.scale > 1 && (
         <div className="board-status">
           <span className="board-zoom">

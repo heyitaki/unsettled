@@ -113,13 +113,12 @@ test('award corrections survive undo, redo and reload', async ({ page }) => {
   await expect(holder).toContainText('Blue')
 })
 
-test('the port editor deletes a port after tapping its badge', async ({ page }) => {
+test('tapping a port badge in build mode deletes the port', async ({ page }) => {
   await page.goto('')
   const badges = page.locator('.board-canvas .port-text')
   await expect(badges.first()).toBeVisible()
   const count = await badges.count()
   await page.getByRole('button', { name: 'Edit the board' }).click()
   await badges.first().click()
-  await page.locator('.port-popover').getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(badges).toHaveCount(count - 1)
 })

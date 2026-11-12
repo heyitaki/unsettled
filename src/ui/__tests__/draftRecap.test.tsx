@@ -168,7 +168,7 @@ it('orders plain rows by wins with ties in roster order and keeps settlements in
   expect(container.querySelector<HTMLElement>('.recap-bar > span')!.style.width).toBe('40%')
 })
 
-it('shows each known hand between the spots and bar and omits empty hands', async () => {
+it('shows each known hand after the spots and omits empty hands', async () => {
   await mount()
   let seed = finishedDraft(1)
   const [first, second, third, fourth] = seed.board.players
@@ -182,18 +182,76 @@ it('shows each known hand between the spots and bar and omits empty hands', asyn
   for (const row of rows()) {
     const spots = row.querySelector('.recap-spots')!
     const cards = row.querySelector('.hex-label')?.parentElement
-    expect(spots.nextElementSibling).toBe(cards ?? row.querySelector('.recap-bar'))
-    if (cards) expect(cards.nextElementSibling).toBe(row.querySelector('.recap-bar'))
+    expect(spots.nextElementSibling).toBe(cards ?? null)
   }
 })
 
-it('sets bar widths to each player share, including zero wins', async () => {
+it('splits one share bar across the players in card order and leaves out players with no wins', async () => {
   await mount()
   await commit(finishedDraft(1))
+  expect(container.querySelector('.recap-bar')).toBeNull()
   await answer(batch([30, 20, 0, 0]))
-  expect(rows().map((row) => row.querySelector<HTMLElement>('.recap-bar > span')!.style.width))
-    .toEqual(['60%', '40%', '0%', '0%'])
+  const players = game().board.players
+  const segments = [...container.querySelectorAll<HTMLElement>('.recap-bar > span')]
+  expect(segments.map((segment) => segment.style.width)).toEqual(['60%', '40%'])
+  expect(segments.map((segment) => segment.style.background)).toEqual([players[0].color, players[1].color]
+    .map((color) => { const probe = document.createElement('span'); probe.style.background = color; return probe.style.background }))
   expect(percentages()).toEqual(['60%', '40%', '0%', '0%'])
+})
+
+it('heads the recap with the claimed player and their lead or deficit, and marks their card', async () => {
+  await mount()
+  await commit(finishedDraft(1))
+  const players = game().board.players
+  const header = () => container.querySelector('.recap-header')!.textContent
+  expect(header()).toBe(`${players[1].name}'s win chance…`)
+  await answer(batch())
+  expect(header()).toBe(`${players[1].name}'s win chance40%Leads ${players[0].name} by 20 points`)
+  const claimed = rows().filter((row) => row.classList.contains('claimed'))
+  expect(claimed).toHaveLength(1)
+  expect(claimed[0].getAttribute('aria-label')).toBe(`${players[1].name}: 40% win chance`)
+  expect(claimed[0].textContent).toContain('YOU')
+  expect(rows().filter((row) => row.textContent!.includes('YOU'))).toHaveLength(1)
+  expect(container.querySelectorAll('.analysis-score')).toHaveLength(4)
+})
+
+it('says when the claimed player trails the leader', async () => {
+  await mount()
+  await commit(finishedDraft(0))
+  const players = game().board.players
+  const header = () => container.querySelector('.recap-header')!.textContent
+  await answer(batch())
+  expect(header()).toBe(`${players[0].name}'s win chance20%Trails ${players[1].name} by 20 points`)
+})
+
+it('says when the claimed player is level with the closest rival', async () => {
+  await mount()
+  await commit(finishedDraft(1))
+  const players = game().board.players
+  await answer(batch([20, 20, 5, 5]))
+  expect(container.querySelector('.recap-header')!.textContent)
+    .toBe(`${players[1].name}'s win chance40%Level with ${players[0].name}`)
+})
+
+it('says point, not points, for a one-point gap', async () => {
+  await mount()
+  await commit(finishedDraft(1))
+  const players = game().board.players
+  await answer(batch([12, 13, 13, 12]))
+  await answer(batch([12, 13, 12, 13]))
+  expect(container.querySelector('.recap-header')!.textContent)
+    .toBe(`${players[1].name}'s win chance26%Leads ${players[2].name} by 1 point`)
+})
+
+it('heads the recap with the leader when nobody is claimed', async () => {
+  await mount()
+  const seed = finishedDraft(1)
+  await commit({ ...seed, board: { ...seed.board, mePlayerId: null } })
+  const players = game().board.players
+  await answer(batch())
+  expect(container.querySelector('.recap-header')!.textContent)
+    .toBe(`${players[1].name}'s win chance40%Leads ${players[0].name} by 20 points`)
+  expect(rows().some((row) => row.classList.contains('claimed') || row.textContent!.includes('YOU'))).toBe(false)
 })
 
 it('keeps counted rows on error and retries from batch zero', async () => {

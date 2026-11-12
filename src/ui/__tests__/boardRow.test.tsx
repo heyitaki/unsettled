@@ -11,7 +11,7 @@ import { BoardTools } from '../BoardTools'
 import { useBoardActions } from '../boardActions'
 import { activeTab, StoreProvider, useStore } from '../store'
 
-const HELP = 'Tap a corner to cycle settlement, city, empty. Tap an edge for a road, a tile to move the robber, or a port/empty coast to edit a port. Pick a terrain or number below, then tap a tile to set it. Tap again to clear it.'
+const HELP = 'Tap the board to edit pieces, the robber and ports. Pick a terrain or number, then tap a tile. A picked terrain turns a tapped port 2:1.'
 const RESET = 'The game goes back to before the draft: recorded turns, hands, development cards and awards are reset.'
 const PIECES = `This removes every settlement, city and road. ${RESET} The tiles, numbers, ports and robber stay, and so do your players. Undo brings everything back.`
 const BOARD = `This removes every tile and number, every settlement, city and road, and the robber, and puts the ports back where a new board has them. ${RESET} Your players stay. Undo brings everything back.`

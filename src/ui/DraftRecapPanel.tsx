@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { setActivePlayer } from '../model/turn'
 import { adviceBlockers } from './bestMoves'
 import { CardAmounts } from './BestMovesTable'
-import { readableInk } from './colors'
+import { INK_COLOR, readableInk } from './colors'
 import { SpotTiles } from './SpotTiles'
 import { activeTab, useStore } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
@@ -15,6 +15,11 @@ export function DraftRecapPanel({ className = 'panel analysis-panel' }: { classN
   const blockers = useMemo(() => adviceBlockers(board), [board])
   const { games, wins, draws, done, error, retry } = useDraftRecap(blockers.length === 0)
   const players = [...board.players].sort((a, b) => wins[b.id] - wins[a.id])
+  const headerPlayer = players.find((player) => player.id === board.mePlayerId) ?? players[0]
+  const leads = headerPlayer === players[0]
+  const rival = players[leads ? 1 : 0]
+  const headerShare = games === 0 ? 0 : Math.round(wins[headerPlayer.id] / games * 100)
+  const delta = games === 0 || !rival ? 0 : headerShare - Math.round(wins[rival.id] / games * 100)
 
   return (
     <section className={`${className} draft-recap-panel`}>
@@ -40,27 +45,41 @@ export function DraftRecapPanel({ className = 'panel analysis-panel' }: { classN
               <div style={{ width: `${Math.max(3, games / RECAP_GAMES * 100)}%` }} />
             </div>
           )}
-          <div className="analysis-list" role="list">
+          <div className="recap-header">
+            <div className="recap-label">{headerPlayer.name}'s win chance</div>
+            <div className="recap-percentage">{games === 0 ? '…' : `${headerShare}%`}</div>
+            {games > 0 && rival && <div className="recap-delta">
+              {delta === 0 ? `Level with ${rival.name}` : `${leads ? 'Leads' : 'Trails'} ${rival.name} by ${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'point' : 'points'}`}
+            </div>}
+          </div>
+          {games > 0 && <div className="recap-bar" aria-hidden="true">
+            {players.filter((player) => wins[player.id] > 0).map((player) => (
+              <span key={player.id} style={{ width: `${wins[player.id] / games * 100}%`, background: player.color,
+                boxShadow: readableInk(player.color) === INK_COLOR ? 'inset 0 0 0 1px var(--ink)' : undefined }} />
+            ))}
+          </div>}
+          <div className="recap-cards" role="list">
             {players.map((player, index) => {
               const share = games === 0 ? 0 : wins[player.id] / games * 100
               const percentage = games === 0 ? '…' : `${Math.round(share)}%`
               const { hand } = game.stats[player.id]
+              const claimed = player.id === board.mePlayerId
               return (
-                <div key={player.id} className="recap-row" role="listitem"
+                <div key={player.id} className={`recap-card${claimed ? ' claimed' : ''}`} role="listitem"
                   aria-label={`${player.name}: ${percentage} win chance`}>
-                  <span className="analysis-rank" style={{ background: player.color, color: readableInk(player.color) }}>
-                    {index + 1}
-                  </span>
-                  <div className="analysis-row-body">
+                  <div className="recap-card-heading">
+                    <span className="analysis-rank" style={{ background: player.color, color: readableInk(player.color) }}>
+                      {index + 1}
+                    </span>
                     <strong>{player.name}</strong>
-                    <div className="recap-spots">
-                      {board.buildings.filter((building) => building.playerId === player.id).map(({ vertexId }) =>
-                        <SpotTiles key={vertexId} board={board} vertexId={vertexId} small />)}
-                    </div>
-                    {Object.values(hand).some((count) => count > 0) && <div className="recap-hand"><CardAmounts cards={hand} /></div>}
-                    <div className="recap-bar"><span style={{ width: `${share}%`, background: player.color }} /></div>
+                    {claimed && <span className="recap-you">YOU</span>}
                   </div>
                   <span className="analysis-score">{percentage}</span>
+                  <div className="recap-spots">
+                    {board.buildings.filter((building) => building.playerId === player.id).map(({ vertexId }) =>
+                      <SpotTiles key={vertexId} board={board} vertexId={vertexId} small />)}
+                  </div>
+                  {Object.values(hand).some((count) => count > 0) && <div className="recap-hand"><CardAmounts cards={hand} /></div>}
                 </div>
               )
             })}

@@ -276,15 +276,26 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .spot-tiles { display: block; flex: none; }
 .spot-port text { font-family: Inter, sans-serif; font-weight: 700; }
 .analysis-list { display: grid; gap: 6px; }
-.analysis-row, .recap-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--r-row); background: var(--surface); overflow: hidden; text-align: left; }
+.analysis-row { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); border: 1px solid var(--line); border-radius: var(--r-row); background: var(--surface); overflow: hidden; text-align: left; }
 .analysis-rank { display: grid; place-items: center; align-self: start; width: 26px; height: 26px; border: 1.5px solid var(--ink); border-radius: 50%; font: 800 13px Inter, sans-serif; }
 .analysis-row-body { min-width: 0; display: grid; }
-.recap-row { grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; }
-.recap-row .analysis-row-body { gap: 6px; overflow-wrap: anywhere; }
+.recap-header { margin-bottom: 14px; }
+.recap-label { color: var(--muted); font-size: 13px; font-weight: 600; }
+.recap-percentage { font-size: 46px; font-weight: 800; line-height: 52px; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.recap-delta { color: var(--accent-dark); font-size: 14px; font-weight: 700; }
+.recap-bar { display: flex; gap: 2px; height: 8px; margin-bottom: 16px; }
+.recap-bar > span { border-radius: 4px; }
+.recap-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.recap-card { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow-wrap: anywhere; }
+.recap-card.claimed { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.recap-card-heading { display: flex; align-items: center; gap: 8px; }
+.recap-card-heading strong { min-width: 0; font-size: 16px; font-weight: 700; }
+.recap-card .analysis-rank { flex: none; align-self: center; width: 22px; height: 22px; font-size: 12px; }
+.recap-you { flex: none; color: var(--accent-dark); font-size: 11px; font-weight: 800; }
+.recap-card .analysis-score { display: block; margin: 8px 0; font-size: 26px; line-height: 30px; }
 .recap-spots, .recap-hand { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.recap-bar { height: 6px; overflow: hidden; border-radius: var(--r-control); background: var(--tint); }
-.recap-bar > span { display: block; height: 100%; border-radius: inherit; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent); }
-.recap-start { width: 100%; min-height: 44px; margin-top: 6px; }
+.recap-hand { margin-top: 6px; }
+.recap-start { width: 100%; min-height: 44px; margin-top: 16px; }
 .analysis-pick-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .analysis-pick-line strong { min-width: 0; font: 700 13px/1.25 Inter, sans-serif; }
 .hex-label { display: inline-flex; align-items: center; gap: 2px; vertical-align: -2px; white-space: nowrap; }
@@ -351,14 +362,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .issue-list button span { margin-right: 6px; color: var(--danger); font-weight: 800; }
 .issue-list .unreadable, .issue-list .unreadable:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
 
-.popover-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: color-mix(in srgb, var(--ink) 34%, transparent); }
 .modal-dialog { max-width: none; max-height: calc(100% - 30px); margin: auto; padding: 0; border: 0; border-radius: var(--r-panel); color: var(--ink); background: transparent; overflow: auto; box-shadow: var(--shadow-float); }
 .modal-dialog::backdrop { background: color-mix(in srgb, var(--ink) 34%, transparent); }
-.port-popover { width: min(360px, calc(100vw - 30px)); padding: 22px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); box-shadow: var(--shadow-float); }
-.port-popover h3 { margin: 0 0 6px; font: 700 24px Georgia, serif; }
-.port-popover code { display: block; margin-bottom: 15px; color: var(--muted); font-size: 11px; }
-.port-popover label { display: grid; gap: 5px; margin: 9px 0; font-size: 11px; font-weight: 700; }
-.popover-actions { display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px; margin-top: 17px; }
 .confirm-dialog { width: min(430px, calc(100vw - 30px)); padding: 22px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface); }
 .confirm-dialog h3 { margin: 0 0 8px; font: 700 24px Georgia, serif; }
 .confirm-dialog p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }

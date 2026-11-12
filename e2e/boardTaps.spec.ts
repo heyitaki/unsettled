@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { createBoard, setHexTile, setRobber } from '../src/model/board'
 import { axialToPixel } from '../src/model/coords'
-import { BLANK_TILE_COLOR } from '../src/ui/colors'
+import { BLANK_TILE_COLOR, TILE_COLORS } from '../src/ui/colors'
 import { seedBoard } from './seed'
 
 test.use({ viewport: { width: 1280, height: 900 } })
@@ -63,27 +63,108 @@ test('a tap on a tile with its own terrain selected blanks it and removes its ro
   await expect(svg.locator('circle[fill="#1c1c1c"]')).toHaveCount(0)
 })
 
-test('deleting a port and tapping its empty spot opens Edit port again', async ({ page }) => {
-  await page.goto('')
-  await page.getByRole('button', { name: 'Edit the board' }).click()
-  const badges = page.locator('.board-canvas .port-text')
-  const count = await badges.count()
-  const point = await badges.first().evaluate((badge) => ({
+async function portPoint(page: Page, index: number) {
+  return page.locator('.board-canvas .port-text').nth(index).evaluate((badge) => ({
     x: Number(badge.getAttribute('x')),
     y: Number(badge.getAttribute('y')) - 4,
   }))
+}
+
+test('with no tool a port tap removes the port and a tap on its empty spot adds a 3:1 port', async ({ page }) => {
+  await page.goto('')
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  const svg = page.locator('.board-canvas')
+  const badges = svg.locator('.port-text')
+  const generic = svg.locator('.port-text', { hasText: '3:1' })
+  const count = await badges.count()
+  const genericCount = await generic.count()
+  const wasGeneric = (await badges.first().textContent()) === '3:1'
+  const point = await portPoint(page, 0)
   await clickPoint(page, point)
-  const editor = page.locator('.port-popover')
-  await expect(editor.getByRole('heading', { name: 'Edit port' })).toBeVisible()
-  const edge = await editor.locator('code').textContent()
-  await editor.getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.locator('dialog[open]')).toHaveCount(0)
   await expect(badges).toHaveCount(count - 1)
   await clickPoint(page, point)
-  await expect(editor.getByRole('heading', { name: 'Edit port' })).toBeVisible()
-  await expect(editor.locator('code')).toHaveText(edge!)
-  await expect(editor.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
-  await editor.getByRole('button', { name: 'Save port', exact: true }).click()
   await expect(badges).toHaveCount(count)
+  await expect(generic).toHaveCount(wasGeneric ? genericCount : genericCount + 1)
+})
+
+test('a picked terrain turns a tapped port 2:1 for it and a second tap makes it 3:1 again', async ({ page }) => {
+  await page.goto('')
+  const board = createBoard('standard4')
+  await seedBoard(page, { ports: board.ports.map((port) => ({ ...port, resource: null, rate: 3 })) })
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  const svg = page.locator('.board-canvas')
+  const badge = (index: number) => svg.locator('g:has(> .port-text)').nth(index)
+  const point = await portPoint(page, 0)
+  const tools = page.locator('.tools-panel')
+  await tools.getByRole('button', { name: 'wheat', exact: true }).click()
+  await clickPoint(page, point)
+  await expect(badge(0).locator('.port-text')).toHaveText('2:1')
+  await expect(badge(0).locator('rect')).toHaveAttribute('fill', TILE_COLORS.wheat)
+  await expect(svg.locator('.port-text', { hasText: '2:1' })).toHaveCount(1)
+  await clickPoint(page, point)
+  await expect(badge(0).locator('.port-text')).toHaveText('3:1')
+  await expect(svg.locator('.port-text', { hasText: '2:1' })).toHaveCount(0)
+  await clickPoint(page, point)
+  await expect(badge(0).locator('rect')).toHaveAttribute('fill', TILE_COLORS.wheat)
+  await tools.getByRole('button', { name: 'ore', exact: true }).click()
+  await clickPoint(page, point)
+  await expect(badge(0).locator('.port-text')).toHaveText('2:1')
+  await expect(badge(0).locator('rect')).toHaveAttribute('fill', TILE_COLORS.ore)
+  await expect(svg.locator('.port-text')).toHaveCount(board.ports.length)
+})
+
+test('a picked terrain puts a 2:1 port on an empty coastal spot and still sets tiles', async ({ page }) => {
+  await page.goto('')
+  const board = createBoard('standard4')
+  await seedBoard(page, { ports: board.ports.slice(1) })
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  const svg = page.locator('.board-canvas')
+  await page.locator('.tools-panel').getByRole('button', { name: 'brick', exact: true }).click()
+  const slots = svg.locator('.placement-slot')
+  await expect(slots.first()).toBeVisible()
+  await slots.first().click({ force: true })
+  await expect(svg.locator('.port-text')).toHaveCount(board.ports.length)
+  await expect(svg.locator(`g:has(> .port-text) rect[fill="${TILE_COLORS.brick}"]`)).toHaveCount(
+    board.ports.slice(1).filter((port) => port.resource === 'brick').length + 1)
+  const tiles = svg.locator(`polygon[fill="${TILE_COLORS.brick}"]`)
+  const tileCount = await tiles.count()
+  const coord = { q: 0, r: 0 }
+  await clickPoint(page, axialToPixel(coord, 58))
+  await expect(tiles).toHaveCount(tileCount + 1)
+})
+
+test('a terrain click that drifts inside a hex still paints it', async ({ page }) => {
+  await page.goto('')
+  await seedBoard(page, createBoard('standard4'))
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  const svg = page.locator('.board-canvas')
+  await page.locator('.tools-panel').getByRole('button', { name: 'wheat', exact: true }).click()
+  const tiles = svg.locator(`polygon[fill="${TILE_COLORS.wheat}"]`)
+  await expect(tiles).toHaveCount(0)
+  const centre = await screenPoint(page, axialToPixel({ q: 0, r: 0 }, 58))
+  await page.mouse.move(centre.x, centre.y)
+  await page.mouse.down()
+  await page.mouse.move(centre.x + 14, centre.y, { steps: 4 })
+  await page.mouse.up()
+  await expect(tiles).toHaveCount(1)
+})
+
+test('desert and number tools leave ports alone', async ({ page }) => {
+  await page.goto('')
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  const svg = page.locator('.board-canvas')
+  const count = await svg.locator('.port-text').count()
+  const point = await portPoint(page, 0)
+  const before = await svg.locator('g:has(> .port-text)').first().innerHTML()
+  const tools = page.locator('.tools-panel')
+  await tools.getByRole('button', { name: 'desert', exact: true }).click()
+  await expect(svg.locator('.placement-slot')).toHaveCount(0)
+  await clickPoint(page, point)
+  await tools.getByRole('button', { name: '6', exact: true }).click()
+  await clickPoint(page, point)
+  await expect(svg.locator('.port-text')).toHaveCount(count)
+  expect(await svg.locator('g:has(> .port-text)').first().innerHTML()).toBe(before)
 })
 
 test('deleting a default port keeps the board viewBox unchanged', async ({ page }) => {
@@ -103,9 +184,6 @@ test('deleting a default port keeps the board viewBox unchanged', async ({ page 
       y: Number(badge.getAttribute('y')) - 4,
     }))
     await clickPoint(page, point)
-    const editor = page.locator('.port-popover')
-    await expect(editor.locator('code')).toHaveText(edgeId)
-    await editor.getByRole('button', { name: 'Delete', exact: true }).click()
     await expect(svg.locator('.port-text')).toHaveCount(board.ports.length - 1)
     await expect(svg).toHaveAttribute('viewBox', before!)
   }
