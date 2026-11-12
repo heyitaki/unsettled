@@ -47,7 +47,8 @@ export function currentTurnHistory(history: readonly Game[]): readonly Game[] {
     if (turnState(entry)?.rolled == null && turn.length > 0 && turnState(turn[turn.length - 1])?.rolled != null) {
       turn.length = turn.findIndex((game) => turnState(game)?.rolled != null)
     }
-    turn.push(entry)
+    // Change roll recommits the pre-roll game itself, which is already the last entry.
+    if (turn[turn.length - 1] !== entry) turn.push(entry)
   }
   return turn
 }

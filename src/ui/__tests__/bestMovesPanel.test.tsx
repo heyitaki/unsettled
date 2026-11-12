@@ -654,6 +654,19 @@ describe('Best moves recording', () => {
     expect(rollStep().textContent).toContain('Rolled 8')
   })
 
+  it('keeps a dev card played before the roll in the log once after Change roll', async () => {
+    await click('Play card')
+    await click('Year of plenty', tray())
+    await click('Takes ore')
+    await click('Takes ore')
+    await click('8')
+    await click('Change roll')
+    expect([...container.querySelectorAll('.move-log li')].map((item) => item.textContent)).toEqual(['Played Year of plenty · ore and ore'])
+    await click('6')
+    await click('Change roll')
+    expect([...container.querySelectorAll('.move-log li')].map((item) => item.textContent)).toEqual(['Played Year of plenty · ore and ore'])
+  })
+
   it('keeps completed discards folded while the other player discards', async () => {
     await click('7')
     await click('Record', rollStep().querySelector('[aria-label="Bee\'s discard"]')!)

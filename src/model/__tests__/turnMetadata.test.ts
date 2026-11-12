@@ -46,7 +46,7 @@ describe('turn recording metadata', () => {
     const rolled = recordRoll(knight, 8, {})
     const bought = recordBuyDev(rolled, null)
     expect(currentTurnHistory([initial, knight, rolled, bought])).toEqual([initial, knight, rolled, bought])
-    expect(currentTurnHistory([initial, knight, rolled, bought, knight])).toEqual([initial, knight, knight])
+    expect(currentTurnHistory([initial, knight, rolled, bought, knight])).toEqual([initial, knight])
     const ended = endTurn(bought)
     expect(currentTurnHistory([initial, rolled, bought, ended])).toEqual([ended])
   })
