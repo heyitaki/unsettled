@@ -87,7 +87,7 @@ describe('turn tracking', () => {
     expect(next.stats.b.hand).toEqual({ wood: 0, sheep: 0, wheat: 3, brick: 0, ore: 1 })
     expect(next.stats.c).toBe(game.stats.c)
     const played = { ...next, turn: { ...next.turn!, devPlayed: true, progressPlayed: { roadBuilding: 1, yearOfPlenty: 0, monopoly: 1 } } }
-    expect(recordRoll(played, 7, {}).turn).toEqual({ ...played.turn, rolled: 7 })
+    expect(recordRoll(played, 7, {}).turn).toEqual({ ...played.turn, rolled: 7, robberMoved: false })
     expect(recordRoll(game, 2, {}).turn?.rolled).toBe(2)
     expect(recordRoll(game, 12, {}).turn?.rolled).toBe(12)
   })

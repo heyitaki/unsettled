@@ -1,9 +1,10 @@
 import type { AdviceAction, Cards, Decision, PreRollPlay, ScoredAdvice } from '../engine/advice/protocol'
 import { validateBoard } from '../model/board'
-import { axialKey, parseEdgeId, parseVertexId } from '../model/coords'
-import { emptyStats, type Game, type PlayerStats } from '../model/game'
-import { activePlayerId, endTurn, handTotal, recordBankTrade, recordBuild, recordBuyDev, recordPlayDev } from '../model/turn'
-import type { AxialCoord, Board, Resource } from '../model/types'
+import { axialKey, hexVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
+import { DEV_KINDS, emptyStats, type Game, type PlayerStats } from '../model/game'
+import { activePlayerId, CARD_COSTS, endTurn, handTotal, recordBankTrade, recordBuild, recordBuyDev, recordPlayDev, turnState } from '../model/turn'
+import { RESOURCES, type AxialCoord, type Board, type Resource } from '../model/types'
+import { buildingSlots, roadSlots } from './placementSlots'
 import type { HighlightMark } from './store'
 
 export const DEV_LABELS = { knight: 'Knight', roadBuilding: 'Road building', yearOfPlenty: 'Year of plenty', monopoly: 'Monopoly' } as const
@@ -47,6 +48,55 @@ export function statsFor(game: Game, playerId: string): PlayerStats {
   return Object.hasOwn(game.stats, playerId) ? game.stats[playerId] : emptyStats()
 }
 
+/** The claimed player's dev cards by type, or null for anyone whose types are not known. */
+export function typedDevHand(game: Game, playerId: string) {
+  return playerId === game.board.mePlayerId && game.devHand?.playerId === playerId ? game.devHand : null
+}
+
+export function couldAfford(stats: PlayerStats, cost: Partial<Cards>): boolean {
+  return RESOURCES.reduce((missing, resource) => missing + Math.max(0, (cost[resource] ?? 0) - stats.hand[resource]), 0) <= stats.handUnknown
+}
+
+export function buildablePieces(game: Game, playerId: string) {
+  const { board } = game
+  const stats = statsFor(game, playerId)
+
+  // Match the base per-player supplies in simulator/crates/engine/src/rules.rs.
+  const limits = { road: 15, settlement: 5, city: 4 }
+  return (['road', 'settlement', 'city'] as const).filter((piece) => {
+    if (!couldAfford(stats, CARD_COSTS[piece])) return false
+    const placed = piece === 'road' ? board.roads.filter((road) => road.playerId === playerId).length
+      : board.buildings.filter((building) => building.playerId === playerId && building.tier === piece).length
+    return placed < limits[piece] && (piece === 'road'
+      ? roadSlots(board, playerId).length > 0
+      : buildingSlots(board, playerId, piece, 'build').length > 0)
+  })
+}
+
+export function availableActions(game: Game, playerId: string, devDeckRemaining?: number) {
+  const stats = statsFor(game, playerId)
+  const typed = typedDevHand(game, playerId)
+  const turn = turnState(game)
+  return {
+    trade: handTotal(stats) > 0,
+    buy: couldAfford(stats, CARD_COSTS.devCard) && devDeckRemaining !== 0,
+    play: !turn?.devPlayed && (typed ? DEV_KINDS.some((kind) => typed.playable[kind] > 0)
+      : stats.devCards - (turn?.devBought ?? 0) > 0),
+    build: buildablePieces(game, playerId).length > 0,
+  }
+}
+
+export function robberPending(game: Game): boolean {
+  return game.turn?.rolled === 7 && game.turn.robberMoved === false
+}
+
+export function robberCandidates(game: Game, hex: AxialCoord, moverId: string): string[] {
+  const corners = new Set(hexVertexIds(hex))
+  return game.board.players.filter(({ id }) => id !== moverId && handTotal(statsFor(game, id)) > 0 &&
+    game.board.buildings.some((building) => building.playerId === id && corners.has(building.vertexId)))
+    .map(({ id }) => id)
+}
+
 export function cardRange(stats: PlayerStats, resource: Resource, exact: boolean) {
   return { lo: stats.hand[resource], hi: stats.hand[resource] + (exact ? 0 : stats.handUnknown) }
 }
@@ -77,6 +127,25 @@ export function actionLabel(action: AdviceAction, board: Board): string {
     case 'tradeBank': return `Trade ${action.rate * action.count} ${action.give} for ${action.count} ${action.get} with the bank`
     case 'offerTrade': return `Offer ${action.count} ${action.give} for 1 ${action.get}`
     case 'pass': return 'Pass'
+  }
+}
+
+export function recordedMoveLabel(move: Move): string {
+  switch (move.type) {
+    case 'buildRoad': return 'Built a road'
+    case 'buildSettlement': return 'Built a settlement'
+    case 'upgradeCity': return 'Built a city'
+    case 'buyDev': return 'Bought a dev card'
+    case 'tradeBank': return `Traded ${move.rate * move.count} ${move.give} for ${move.count} ${move.get} with ${move.rate < 4 ? `a ${move.rate}:1 port` : 'the bank'}`
+    case 'roadBuilding': {
+      const count = [move.first, move.second].filter((edge) => edge !== null).length
+      return `Played Road building · ${count} ${count === 1 ? 'road' : 'roads'}`
+    }
+    case 'yearOfPlenty': return `Played Year of plenty · ${move.first} and ${move.second}`
+    case 'pass': return 'Ended turn'
+    case 'playKnight': return 'Played Knight'
+    case 'monopoly': return `Played Monopoly on ${move.resource}`
+    case 'offerTrade': return `Offered ${move.count} ${move.give} for 1 ${move.get}`
   }
 }
 

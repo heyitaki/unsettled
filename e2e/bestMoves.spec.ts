@@ -63,7 +63,6 @@ function suite() {
 
   test('a selected move pins its mark, Apply builds and pays, and one undo restores both', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }) })
-    await panel(page).getByRole('button', { name: 'Roll', exact: true }).click()
     // No token on this board carries a 2 next to a red settlement, so the hand stays at one road's worth.
     await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
     const before = await redRow(page).allInnerTexts()
@@ -89,24 +88,23 @@ function suite() {
 
   test('a seven shows what to discard and where to move the robber', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 4, brick: 4 }) })
-    await panel(page).getByRole('button', { name: 'Roll', exact: true }).click()
     await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '7', exact: true }).click()
     const discard = panel(page).getByRole('group', { name: "P1's discard" })
     await expect(discard).toContainText(/Keeps|toward/)
-    await expect(panel(page).locator('.move-pick', { hasText: 'Robber' })).toContainText(/to .+, (rob nobody|steal from P\d)/)
-    await panel(page).getByRole('button', { name: 'Show', exact: true }).click()
-    await expect(page.locator('.board-canvas .hex-highlight')).toHaveCount(1)
+    // Discards come first: the robber prompt waits for them.
+    await expect(panel(page).locator('.move-robber')).toHaveCount(0)
     await discard.getByRole('button', { name: 'Record', exact: true }).click()
     await expect.poll(async () => (await redRow(page).allInnerTexts())[5]).toBe('4')
+    await expect(panel(page).locator('.move-robber')).toContainText(/Suggested: .+, (rob nobody|steal from P\d)/)
+    await expect(page.locator('.board-canvas .hex-highlight')).toHaveCount(1)
   })
 
   test('an offer entered on a rival turn is answered with accept or decline', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 2, sheep: 1 }), p2: hand({ brick: 2 }) })
     await panel(page).getByRole('button', { name: 'Turn 2: P2' }).click()
     await panel(page).getByRole('button', { name: 'Trade', exact: true }).click()
-    await panel(page).getByRole('group', { name: 'With' }).getByRole('button', { name: 'P1', exact: true }).click()
-    await panel(page).getByRole('button', { name: 'P2 gives: brick', exact: true }).click()
-    await panel(page).getByRole('button', { name: 'and gets: wood', exact: true }).click()
+    await panel(page).getByRole('button', { name: 'Gives brick', exact: true }).click()
+    await panel(page).getByRole('button', { name: 'Gets wood', exact: true }).click()
     await expect(panel(page).locator('.move-verdict')).toContainText(/Advice for you: (Accept|Decline) \(/)
   })
 }

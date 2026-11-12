@@ -1,22 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Cards } from '../engine/advice/protocol'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { Cards, KnightPlay } from '../engine/advice/protocol'
 import { devHandTotal, type Game } from '../model/game'
-import { activePlayerId, endTurn, setActivePlayer, turnState } from '../model/turn'
+import { activePlayerId, currentTurnHistory, endTurn, recordBuyDev, setActivePlayer, turnState } from '../model/turn'
 import { RESOURCES, type Resource } from '../model/types'
 import { adviceResponse, useAdvice } from './useAdvice'
 import {
-  actionLabel, adviceBlockers, adviceMarks, applyAdvice, limitTradeOffers, playLabel, statsFor, type Move,
+  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, typedDevHand, type Move,
 } from './bestMoves'
 import { BestMovesTable, CardAmounts } from './BestMovesTable'
-import { AdviceFeedback, BestMovesTray, type Discards, type MoveTray, type TrayKind } from './BestMovesTrays'
+import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { readableInk } from './colors'
-import { ResourceGlyph } from './glyphs'
+import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
 import { useCoarsePointer } from './useMediaQuery'
 
-const EMPTY_DISCARDS: Discards = []
+const actionLog = new WeakMap<Game, string>()
+const recordedRolls = new WeakMap<Game, RecordedRoll>()
+const ACTION_TILES = [
+  { kind: 'trade', label: 'Trade', Glyph: TradeGlyph },
+  { kind: 'buy', label: 'Buy dev card', Glyph: BuyDevGlyph },
+  { kind: 'play', label: 'Play dev card', Glyph: PlayDevGlyph },
+  { kind: 'build', label: 'Build structure', Glyph: BuildGlyph },
+] as const
 const RESOURCE_WORDS = new RegExp(`\\b(${RESOURCES.join('|')})\\b`, 'g')
 
 interface MoveCard {
@@ -54,11 +61,14 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const coarse = useCoarsePointer()
   const [tray, setTray] = useState<(MoveTray & { id: number }) | null>(null)
   const traySequence = useRef(0)
-  const [rollSummary, setRollSummary] = useState<{ game: Game; text: string } | null>(null)
-  const [discards, setDiscards] = useState<Discards>(EMPTY_DISCARDS)
   const [selected, setSelected] = useState<{ game: Game; id: string } | null>(null)
   const own = useRef<readonly HighlightMark[] | null>(null)
-  const seven = turn?.rolled === 7 && tray?.kind === 'roll'
+  const [, refreshRecords] = useState(0)
+  const pendingRecord = useRef<{ previous: Game; text?: string; roll?: RecordedRoll } | null>(null)
+  const [knight, setKnight] = useState<{ game: Game; initial?: KnightPlay } | null>(null)
+  const inHistory = (entry: Game) => entry === game || tab.past.includes(entry)
+  const seven = robberPending(game)
+  const playingKnight = knight !== null && inHistory(knight.game)
   const before = turn?.rolled === null
   const blockers = useMemo(() => adviceBlockers(board), [board])
   const adviceEnabled = blockers.length === 0
@@ -73,6 +83,15 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const ranked = adviceResponse(moves.response, 'turn')
   const preRoll = adviceResponse(pre.response, 'preRoll')
   const derived = ranked?.derived ?? preRoll?.derived
+  const [deck, setDeck] = useState<{ tabId: string; remaining?: number }>({ tabId: tab.id })
+  const knownDeck = derived?.devDeckRemaining
+  // Keep the tab's last reported deck count while a newer advice request is pending.
+  if (deck.tabId !== tab.id || knownDeck !== undefined && deck.remaining !== knownDeck) setDeck({ tabId: tab.id, remaining: knownDeck })
+  const deckRemaining = knownDeck ?? (deck.tabId === tab.id ? deck.remaining : undefined)
+
+  // Build availability enumerates board slots; hover highlights re-render the panel without changing the game.
+  const available = useMemo(() => activeId === null ? null : availableActions(game, activeId, deckRemaining),
+    [game, activeId, deckRemaining])
   const mark = useCallback((marks: HighlightMark[] | null) => {
     own.current = marks
     dispatch({ type: 'highlight', marks })
@@ -84,25 +103,45 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const commit = useCallback((next: Game) => dispatch({ type: 'commit-game', game: next }), [dispatch])
   const close = useCallback(() => {
     setTray(null)
+    setKnight(null)
     dispatch({ type: 'pick-clear' })
     mark(null)
   }, [dispatch, mark])
-  useEffect(() => {
+  const previousTab = useRef(tab)
+  useLayoutEffect(() => {
+    const previous = previousTab.current
+    previousTab.current = tab
+    if (previous.id !== tab.id || activePlayerId(previous.game) !== activeId ||
+      previous.game !== game && (game === previous.past.at(-1) || game === previous.future[0])) close()
+  }, [tab, game, activeId, close])
+  const record = useCallback((next: Game, text: string) => {
+    if (next === game) return
+    pendingRecord.current = { previous: game, text }
+    commit(next)
+  }, [game, commit])
+  useLayoutEffect(() => {
+    const pending = pendingRecord.current
+    if (!pending || game === pending.previous) return
+    pendingRecord.current = null
+    if (tab.past.at(-1) !== pending.previous) return
+
+    // Award changes can replace the submitted game, so retain the store's committed snapshot.
+    if (pending.text) actionLog.set(game, pending.text)
+    if (pending.roll) recordedRolls.set(game, pending.roll)
+    refreshRecords((value) => value + 1)
+  }, [game, tab.past])
+  const rolled = useCallback((gains: Record<string, Cards> | null, discards: Discards) => {
+    pendingRecord.current = { previous: game, roll: { gains, discards, skipped: new Set() } }
     close()
-    setDiscards(EMPTY_DISCARDS)
-  }, [tab.id, activeId, close])
-  const rolled = useCallback((next: Game, text: string, discards: Discards) => {
-    setRollSummary({ game: next, text })
-    setDiscards(discards)
-  }, [])
+  }, [game, close])
   useEffect(() => {
-    mark(null)
-    return () => dispatch({ type: 'highlight', marks: null })
-  }, [game, mark, dispatch])
+    if (!seven && !playingKnight) mark(null)
+  }, [game, seven, playingKnight, mark])
+  useEffect(() => () => dispatch({ type: 'highlight', marks: null }), [dispatch])
   useEffect(() => {
     if (state.highlight !== own.current) setSelected(null)
   }, [state.highlight])
-  const pinned = (selected?.game === game) || (state.highlight !== null && state.highlight !== own.current)
+  const pinned = seven || playingKnight || (selected?.game === game) || (state.highlight !== null && state.highlight !== own.current)
   const preview = (marks: HighlightMark[] | null) => { if (!coarse && !pinned) mark(marks) }
   const select = (card: MoveCard) => {
     const next = selected?.game === game && selected.id === card.id ? null : { game, id: card.id }
@@ -113,25 +152,22 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const apply = (move: Move) => {
     const result = applyAdvice(game, move)
     clear()
-    if ('open' in result) setTray({ kind: result.open, fill: result, id: ++traySequence.current })
-    else {
-      commit(result)
-      close()
-    }
+    close()
+    if (!('open' in result)) record(result, recordedMoveLabel(move))
+    else if (result.open === 'play' && result.fill.type === 'playKnight') setKnight({ game, initial: result.fill })
+    else setTray({ kind: result.open, fill: result, id: ++traySequence.current })
   }
   const toggleTray = (kind: TrayKind) => {
+    const open = tray?.kind !== kind && !(kind === 'play' && playingKnight)
     clear()
-    if (tray?.kind === kind) close()
+    close()
+    if (!open) return
+    if (kind === 'buy' && !mine) record(recordBuyDev(game, null), recordedMoveLabel({ type: 'buyDev' }))
     else setTray({ kind, id: ++traySequence.current })
   }
   const finishTurn = () => {
     commit(endTurn(game))
     close()
-  }
-  const markTray = (marks: HighlightMark[] | null) => {
-    setSelected(marks ? { game, id: 'robber' } : null)
-    mark(marks)
-    if (marks) revealBoardIfScrolledPast()
   }
   const selectPlayer = (id: string) => {
     if (activeId !== id) commit(setActivePlayer(game, id))
@@ -190,142 +226,153 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     </section>
   )
   const devCards = statsFor(game, activeId).devCards
-  const devHand = game.devHand?.playerId === activeId ? game.devHand : undefined
+  const devHand = typedDevHand(game, activeId)
   const typedDevCards = devHand ? devHandTotal(devHand) : 0
-  const bar: [TrayKind, string][] = [
-    ['roll', turn?.rolled == null ? 'Roll' : `Rolled ${turn.rolled}`],
-    ['trade', 'Trade'],
-    ['build', 'Build'],
-    ['buy', 'Buy dev card'],
-    ['play', 'Play dev card'],
-  ]
+  const tiles = ACTION_TILES.filter(({ kind }) => !seven && available?.[kind])
+  const noActions = !before && !seven && tray === null && !playingKnight && tiles.length === 0
+  const previous = tab.past.at(-1)
+  const turnGames = currentTurnHistory([...tab.past, game])
+  const actions = turnGames.flatMap((entry) => actionLog.has(entry) ? [actionLog.get(entry)!] : [])
+  const rollGame = turnGames.find((entry) => turnState(entry)?.rolled != null)
+  let roll = rollGame && recordedRolls.get(rollGame)
+  if (rollGame && !roll) {
+    roll = { discards: sevenDiscards(rollGame), skipped: new Set() }
+    recordedRolls.set(rollGame, roll)
+  }
   return (
-    <section className={`${className} best-moves-panel`}>
-      <div className="panel-heading">
-        <h2>Best moves</h2>
-        <UndoRedoButtons />
-      </div>
-      {order}
-      <p className="analysis-context move-context">
-        <strong>{active.name}</strong>
-        {' · '}
-        {rollSummary?.game === game
-          ? rollSummary.text
-          : turn?.rolled == null ? 'not rolled yet' : `Rolled ${turn.rolled}`}
-      </p>
-      <BestMovesTable game={game} activeId={activeId} commit={commit} />
-      <div className="move-label">
-        <span>{mine ? 'Record your turn' : `Record ${active.name}'s turn`}</span>
-      </div>
-      <div className="move-bar">
-        {bar.map(([kind, label]) => (
-          <button type="button" key={kind} aria-pressed={tray?.kind === kind} onClick={() => toggleTray(kind)}>
-            {label}
-          </button>
-        ))}
-        <button type="button" onClick={finishTurn}>End turn</button>
-      </div>
-      {/* Each opening needs fresh inputs, including when Apply opens the same tray with a different move. */}
-      {tray && (
-        <BestMovesTray
-          key={tray.id}
-          game={game}
-          active={active}
-          tray={tray}
-          adviceEnabled={adviceEnabled}
-          discards={discards}
-          commit={commit}
-          close={close}
-          rolled={rolled}
-          mark={markTray}
-        />
-      )}
-      <div className="move-label">
-        <span>{mine ? 'Your best moves' : `Best moves for ${active.name}`}</span>
-      </div>
-      {!adviceEnabled ? (
-        <div className="hint">
-          <p>Finish the board to get advice:</p>
-          <ul>{blockers.map((message) => <li key={message}>{message}</li>)}</ul>
+    <>
+      <section className={`${className} best-moves-panel`}>
+        <div className="panel-heading">
+          <h2>{mine ? 'Record your turn' : `Record ${active.name}'s turn`}</h2>
+          <UndoRedoButtons />
         </div>
-      ) : seven ? (
-        <p className="hint">Record the discards and the robber above. The ranked moves follow.</p>
-      ) : (
-        <>
-          <AdviceFeedback advice={before ? pre : moves} />
-          {!before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
-            <AdviceFeedback advice={pre} />
-          )}
-          <div className="analysis-list" onMouseLeave={() => preview(null)}>
-            {cards.map((card) => {
-              const current = selected?.game === game && selected.id === card.id
-              const applyCard = () => { if (card.move) apply(card.move) }
-              const previewCard = () => preview(card.move ? adviceMarks(card.move, color) : null)
-              return (
-                <div
-                  key={card.id}
-                  className={`analysis-row${card.title ? ' move-dashed' : ''}${current ? ' current' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="analysis-row-select"
-                    aria-pressed={current}
-                    onClick={() => select(card)}
-                    onMouseEnter={previewCard}
+        {order}
+        <p className="analysis-context move-context">
+          <strong>{active.name}</strong>
+          {' · '}
+          {turn?.rolled == null ? 'not rolled yet' : `Rolled ${turn.rolled}`}
+        </p>
+        <BestMovesTable game={game} activeId={activeId} commit={commit} />
+        <ol className="move-steps">
+          <li className={`move-step ${before ? 'now' : 'done'}`}>
+            <span className="move-step-dot" aria-hidden="true">{before ? '1' : <StepDoneGlyph />}</span>
+            <div className="move-step-body">
+              <RollStep key={`${tab.id}:${activeId}`} game={game} active={active} adviceEnabled={adviceEnabled} commit={commit}
+                rolled={rolled} recordedRoll={roll} record={record} mark={mark} finish={close}
+                canChange={previous !== undefined && turnState(previous)?.rolled == null} />
+            </div>
+          </li>
+          <li className={`move-step ${noActions ? 'done' : before || seven ? 'later' : 'now'}`}>
+            <span className="move-step-dot" aria-hidden="true">{noActions ? <StepDoneGlyph /> : '2'}</span>
+            <div className="move-step-body">
+              <div className="move-step-title">{noActions ? 'No actions possible' : 'Actions'}</div>
+              {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}><TickGlyph /><span>{text}</span></li>)}</ul>}
+              {tiles.length > 0 && <div className="move-tiles" style={{ gridTemplateColumns: `repeat(${Math.max(tiles.length, 2)}, minmax(0, 1fr))` }}>
+                {tiles.map(({ kind, label, Glyph }) => (
+                  <button type="button" className="move-tile" key={kind} aria-pressed={tray?.kind === kind} onClick={() => toggleTray(kind)}>
+                    <Glyph /><span>{label}</span>
+                  </button>
+                ))}
+              </div>}
+              {tray && <BestMovesTray key={tray.id} game={game} active={active} tray={tray} adviceEnabled={adviceEnabled}
+                commit={record} close={close} knight={() => { close(); setKnight({ game }) }} />}
+              {playingKnight && <RobberFlow game={game} active={active} adviceEnabled={adviceEnabled} mark={mark}
+                commit={record} finish={close} knight initial={knight.initial} />}
+            </div>
+          </li>
+          <li className={`move-step ${before ? 'later' : 'now'}`}>
+            <span className="move-step-dot" aria-hidden="true">3</span>
+            <div className="move-step-body"><button type="button" className="primary move-end-turn" onClick={finishTurn}>End turn</button></div>
+          </li>
+        </ol>
+      </section>
+      <section className={`${className} best-moves-panel`}>
+        <div className="panel-heading"><h2>Best moves</h2></div>
+        <div className="move-label">
+          <span>{mine ? 'Your best moves' : `Best moves for ${active.name}`}</span>
+        </div>
+        {!adviceEnabled ? (
+          <div className="hint">
+            <p>Finish the board to get advice:</p>
+            <ul>{blockers.map((message) => <li key={message}>{message}</li>)}</ul>
+          </div>
+        ) : seven ? (
+          <p className="hint">Record the discards and the robber above. The ranked moves follow.</p>
+        ) : (
+          <>
+            <AdviceFeedback advice={before ? pre : moves} />
+            {!before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
+              <AdviceFeedback advice={pre} />
+            )}
+            <div className="analysis-list" onMouseLeave={() => preview(null)}>
+              {cards.map((card) => {
+                const current = selected?.game === game && selected.id === card.id
+                const applyCard = () => { if (card.move) apply(card.move) }
+                const previewCard = () => preview(card.move ? adviceMarks(card.move, color) : null)
+                return (
+                  <div
+                    key={card.id}
+                    className={`analysis-row${card.title ? ' move-dashed' : ''}${current ? ' current' : ''}`}
                   >
-                    {!card.title && (
-                      <span className="analysis-rank" style={{ background: color, color: readableInk(color) }}>
-                        {card.rank}
-                      </span>
-                    )}
-                    <span className="analysis-row-body">
-                      {card.title && <span className="analysis-likely-gone-title">{card.title}</span>}
-                      <span className="analysis-pick-line">
-                        <strong><MoveText text={card.label} /></strong>
-                        {card.score !== undefined && (
-                          <span className="analysis-score">
-                            {card.score.toLocaleString('en-US', {
-                              minimumFractionDigits: 1,
-                              maximumFractionDigits: 1,
-                            })}
+                    <button
+                      type="button"
+                      className="analysis-row-select"
+                      aria-pressed={current}
+                      onClick={() => select(card)}
+                      onMouseEnter={previewCard}
+                    >
+                      {!card.title && (
+                        <span className="analysis-rank" style={{ background: color, color: readableInk(color) }}>
+                          {card.rank}
+                        </span>
+                      )}
+                      <span className="analysis-row-body">
+                        {card.title && <span className="analysis-likely-gone-title">{card.title}</span>}
+                        <span className="analysis-pick-line">
+                          <strong><MoveText text={card.label} /></strong>
+                          {card.score !== undefined && (
+                            <span className="analysis-score">
+                              {card.score.toLocaleString('en-US', {
+                                minimumFractionDigits: 1,
+                                maximumFractionDigits: 1,
+                              })}
+                            </span>
+                          )}
+                        </span>
+                        {card.reason && <span className="move-reason">{card.reason}</span>}
+                        {card.handDelta && RESOURCES.some((resource) => card.handDelta?.[resource] !== 0) && (
+                          <span className={`analysis-factors move-costs${current ? ' expanded' : ''}`}>
+                            <CardAmounts cards={card.handDelta} signed />
                           </span>
                         )}
                       </span>
-                      {card.reason && <span className="move-reason">{card.reason}</span>}
-                      {card.handDelta && RESOURCES.some((resource) => card.handDelta?.[resource] !== 0) && (
-                        <span className={`analysis-factors move-costs${current ? ' expanded' : ''}`}>
-                          <CardAmounts cards={card.handDelta} signed />
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  {current && card.move && (
-                    <div className="analysis-touch-actions">
-                      <button type="button" className="primary" onClick={applyCard}>
-                        {card.move.type === 'pass'
-                          ? 'End turn'
-                          : card.move.type === 'offerTrade' ? 'Apply: who accepted?' : 'Apply'}
-                      </button>
-                      <button type="button" onClick={clear}>Clear</button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-      <ul className="move-notes">
-        {claimNote}
-        {derived && <li>Dev deck: {derived.devDeckRemaining} left</li>}
-        {unknown > 0 && <li>Bank estimated: {unknown} cards of unknown type</li>}
-        {derived && derived.unknownOwnCards > 0 && (
-          <li>{derived.unknownOwnCards} of {active.name}'s cards are of unknown type and ignored</li>
+                    </button>
+                    {current && card.move && (
+                      <div className="analysis-touch-actions">
+                        <button type="button" className="primary" onClick={applyCard}>
+                          {card.move.type === 'pass'
+                            ? 'End turn'
+                            : card.move.type === 'offerTrade' ? 'Apply: who accepted?' : 'Apply'}
+                        </button>
+                        <button type="button" onClick={clear}>Clear</button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
-        {!mine && devCards > 0 && <li>{active.name}'s {devCards} dev cards are treated as unplayed knights</li>}
-        {mine && devCards > typedDevCards && <li>Set your dev cards by type in the table</li>}
-        <li>Super cities count for production and points but are never suggested</li>
-      </ul>
-    </section>
+        <ul className="move-notes">
+          {claimNote}
+          {unknown > 0 && <li>Bank estimated: {unknown} cards of unknown type</li>}
+          {derived && derived.unknownOwnCards > 0 && (
+            <li>{derived.unknownOwnCards} of {active.name}'s cards are of unknown type and ignored</li>
+          )}
+          {!mine && devCards > 0 && <li>{active.name}'s {devCards} dev cards are treated as unplayed knights</li>}
+          {mine && devCards > typedDevCards && <li>Set your dev cards by type in the table</li>}
+        </ul>
+      </section>
+    </>
   )
 }

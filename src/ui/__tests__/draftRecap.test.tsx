@@ -297,18 +297,18 @@ it('starts the first player without changing hands and undo returns to the recap
   expect(game().turn).toEqual({ playerId: game().board.players[0].id, rolled: null, devPlayed: false,
     progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } })
   expect(game().stats).toBe(stats)
-  expect(container.querySelector('h2')?.textContent).toBe('Best moves')
+  expect([...container.querySelectorAll('h2')].at(-1)?.textContent).toBe('Best moves')
   await click('Undo')
   expect(container.querySelector('h2')?.textContent).toBe('Draft recap')
   await click('Redo')
-  expect(container.querySelector('h2')?.textContent).toBe('Best moves')
+  expect([...container.querySelectorAll('h2')].at(-1)?.textContent).toBe('Best moves')
 })
 
 it('shows Best moves for a finished draft with a recorded turn', async () => {
   await mount({ full: true })
   const seed = finishedDraft(1)
   await commit(setActivePlayer(seed, seed.board.players[1].id))
-  expect(container.querySelector('h2')?.textContent).toBe('Best moves')
+  expect([...container.querySelectorAll('h2')].at(-1)?.textContent).toBe('Best moves')
   expect(container.querySelector('.draft-recap-panel')).toBeNull()
   expect(requests.every(({ decision }) => decision.kind !== 'recap')).toBe(true)
 })

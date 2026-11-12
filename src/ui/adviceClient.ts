@@ -76,7 +76,13 @@ export function createAdviceClient(factory: () => Worker) {
               if (workers.get(slot) === started) fail('Unable to read advice')
             }
           }
-          worker.postMessage({ id, request })
+          // The engine rejects unknown turn fields, and robberMoved and devBought only drive the panel.
+          let outgoing = request
+          if (request.game.turn) {
+            const { playerId, rolled, devPlayed, progressPlayed } = request.game.turn
+            outgoing = { ...request, game: { ...request.game, turn: { playerId, rolled, devPlayed, progressPlayed } } }
+          }
+          worker.postMessage({ id, request: outgoing })
         } catch (error) {
           fail(error instanceof Error ? error.message : 'Unable to start advice')
         }

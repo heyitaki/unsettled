@@ -120,12 +120,12 @@ Save failures stay visible until resolved, with `Retry saving` and `Export backu
 
 ### S10 · Best moves
 
-Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (heading, turn order, context line, table, action bar, recommendations, notes), on the main page so the table is in view while choosing a move. The Players screen stays for the roster.
+Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (the `Record your turn` section with its turn order, context line, table and step rail, then the `Best moves` section), on the main page so the table is in view while choosing a move. The Players screen stays for the roster.
 
 What differs on the phone:
 
 - `Undo` and `Redo` in the heading follow the heading button size in S5, and every turn-order circle has a 44px touch target.
-- The dice are two rows of six rather than one row of eleven, each 44px tall, and the action bar buttons are 44px tall.
+- The dice are two rows of six rather than one row of eleven, each 44px tall; the action tiles and the robber popover's buttons are at least 44px tall.
 - A card's cost chips show without selecting it, since there is no hover.
 - The table's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
 - A build or a robber move that needs a spot scrolls the board into view, as selecting a row does (S5).

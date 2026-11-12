@@ -26,26 +26,25 @@ export function MoveStepper({ label, value, onChange, max = Infinity, children }
   )
 }
 
-export function ResourcePicker({ label, value, onChange, children }: {
-  label: string
-  value: Resource | null
+export function ResourcePicker({ label, value, cards, onChange }: {
+  label?: string
+  value?: Resource | null
+  cards?: Partial<Record<Resource, number>>
   onChange(value: Resource): void
-  children?: ReactNode
 }) {
   return (
-    <div className="move-pick" role="group" aria-label={label}>
-      <span>{label}</span>
-      {children}
+    <div className="move-res-row" role="group" aria-label={label}>
       {RESOURCES.map((resource) => (
         <button
           type="button"
           key={resource}
           title={resource}
-          aria-label={`${label}: ${resource}`}
-          aria-pressed={value === resource}
+          aria-label={label ? `${label} ${resource}` : resource}
+          aria-pressed={value === undefined ? undefined : value === resource}
           onClick={() => onChange(resource)}
         >
           <ResourceGlyph resource={resource} />
+          {!!cards?.[resource] && <span className="count">{cards[resource]}</span>}
         </button>
       ))}
     </div>

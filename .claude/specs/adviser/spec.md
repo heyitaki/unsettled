@@ -27,12 +27,14 @@ One notion, stored in the game: `turn.playerId` is whose turn it is, whose advic
 turn?: {
   playerId: string
   rolled: number | null   // this turn's dice total, null before the roll
+  robberMoved?: boolean   // false after a seven until its robber move is recorded; absent otherwise
+  devBought?: number      // dev cards bought this turn (a rival cannot play them yet)
   devPlayed: boolean      // a dev card was played this turn
   progressPlayed: Record<Exclude<DevKind, 'knight'>, number>  // progress cards recorded as played all game, by kind: they have left the deck
 }
 ```
 
-Optional, following `awards?`. Absent means the claimed player's turn, not yet rolled.
+Optional, following `awards?`. Absent means the claimed player's turn, not yet rolled. `robberMoved` and `devBought` are app-only: `adviceClient` drops them before a request reaches the engine, whose `Turn` rejects unknown keys.
 
 ### State the policy reads that `Game` lacks
 
@@ -102,7 +104,7 @@ Heading, turn-order row, standings table, action bar, the open action's own cont
 - Trade response: `accept` is `acceptance_margin > 0`, the deterministic centre of the policy's random draw. The margin is the reported score. This also keeps `exp()` off every parity path.
 - Reasons: `advice.rs` builds each one-line reason from the terms the scorer already computes. `vertex_score` is split into named terms summed in the original order. No score expression changes.
 - Any action that reaches the winning VP says `Wins the game` in its reason.
-- Super cities: counted for production and VP by the base rules already; `legal_city` only upgrades settlements, so none is ever recommended. The panel says so.
+- Super cities: counted for production and VP by the base rules already; `legal_city` only upgrades settlements, so none is ever recommended. The panel no longer says so (removed 2026-11-12 at the owner's request).
 
 ### Build and staleness
 

@@ -162,10 +162,12 @@ export function parseGame(data: unknown): ParseGameResult {
   }
   let turn: TurnState | undefined
   if (Object.hasOwn(value, 'turn')) {
-    if (!isRecord(value.turn) || !exactKeys(value.turn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed'])) {
+    const savedTurn = value.turn
+    if (!isRecord(savedTurn) || !exactKeys(savedTurn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed',
+      ...['robberMoved', 'devBought'].filter((key) => Object.hasOwn(savedTurn, key))])) {
       return { ok: false, errors: ['Invalid turn state'] }
     }
-    const { playerId, rolled, devPlayed, progressPlayed } = value.turn
+    const { playerId, rolled, devPlayed, progressPlayed } = savedTurn
     if (!inRoster(playerId) ||
       !(rolled === null || isCount(rolled) && rolled >= 2 && rolled <= 12) ||
       typeof devPlayed !== 'boolean' || !isRecord(progressPlayed) ||
@@ -176,6 +178,14 @@ export function parseGame(data: unknown): ParseGameResult {
     turn = { playerId, rolled, devPlayed, progressPlayed: {
       roadBuilding: progressPlayed.roadBuilding, yearOfPlenty: progressPlayed.yearOfPlenty, monopoly: progressPlayed.monopoly,
     } }
+    if (Object.hasOwn(savedTurn, 'robberMoved')) {
+      if (typeof savedTurn.robberMoved !== 'boolean') return { ok: false, errors: ['Invalid turn state'] }
+      turn.robberMoved = savedTurn.robberMoved
+    }
+    if (Object.hasOwn(savedTurn, 'devBought')) {
+      if (!isCount(savedTurn.devBought)) return { ok: false, errors: ['Invalid turn state'] }
+      turn.devBought = savedTurn.devBought
+    }
   }
   let devHand: DevHand | undefined
   if (Object.hasOwn(value, 'devHand')) {

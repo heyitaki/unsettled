@@ -38,6 +38,15 @@ export function turnState(game: Game): TurnState | null {
   }
 }
 
+/** The entries of an undo history (oldest first, current game last) recorded since the current turn began. */
+export function currentTurnHistory(history: readonly Game[]): readonly Game[] {
+  const current = history[history.length - 1]
+  const playerId = activePlayerId(current)
+  const start = history.findLastIndex((entry, index) => activePlayerId(entry) !== playerId ||
+    turnState(entry)?.rolled != null && turnState(history[index + 1] ?? current)?.rolled == null)
+  return history.slice(start + 1)
+}
+
 export function setActivePlayer(game: Game, playerId: string): Game {
   ensureStats(game, playerId)
   if (game.turn?.playerId === playerId) return game
@@ -53,12 +62,15 @@ export function endTurn(game: Game): Game {
   const index = game.board.players.findIndex((player) => player.id === turn.playerId)
   if (index < 0) throw new RangeError(`Unknown player ${turn.playerId}`)
   const playerId = game.board.players[(index + 1) % game.board.players.length].id
-  return { ...promoteBought(game), turn: { ...turn, playerId, rolled: null, devPlayed: false } }
+  return { ...promoteBought(game), turn: { playerId, rolled: null, devPlayed: false, progressPlayed: turn.progressPlayed } }
 }
 
 export function recordRoll(game: Game, total: number, gains: Record<string, Record<Resource, number>>): Game {
   if (!Number.isInteger(total) || total < 2 || total > 12) throw new RangeError('Roll must be an integer from 2 to 12')
-  let next: Game = { ...game, turn: { ...requireTurn(game), rolled: total } }
+  const turn = { ...requireTurn(game), rolled: total }
+  if (total === 7) turn.robberMoved = false
+  else delete turn.robberMoved
+  let next: Game = { ...game, turn }
   for (const [playerId, cards] of Object.entries(gains)) next = gain(next, playerId, cards)
   return next
 }
@@ -69,6 +81,7 @@ export function recordDiscard(game: Game, playerId: string, cards: Cards | numbe
 
 export function recordRobber(game: Game, hex: AxialCoord, victimId: string | null, stolen: Resource | null): Game {
   let next = withBoard(game, setRobber(game.board, hex))
+  if (next.turn?.robberMoved === false) next = { ...next, turn: { ...next.turn, robberMoved: true } }
   if (victimId === null) return next
   const { playerId } = requireTurn(game)
   if (handTotal(ensureStats(game, victimId)) === 0) return next
@@ -111,8 +124,10 @@ export function recordBuild(game: Game, piece: 'road' | 'settlement' | 'city', i
 }
 
 export function recordBuyDev(game: Game, drawn: DevKind | 'vp' | null): Game {
-  const { playerId } = requireTurn(game)
+  const turn = requireTurn(game)
+  const { playerId } = turn
   let next = spend(game, playerId, CARD_COSTS.devCard)
+  next = { ...next, turn: { ...turn, devBought: (turn.devBought ?? 0) + 1 } }
   if (drawn === 'vp') return adjustCounter(next, playerId, 'vpCards', 1)
   next = adjustCounter(next, playerId, 'devCards', 1)
   if (playerId === game.board.mePlayerId && drawn !== null) {
@@ -160,7 +175,7 @@ export function recordPlayDev(game: Game, play: DevPlay): Game {
   const progressPlayed = play.kind === 'knight'
     ? turn.progressPlayed
     : { ...turn.progressPlayed, [play.kind]: turn.progressPlayed[play.kind] + 1 }
-  return { ...next, turn: { ...turn, devPlayed: true, progressPlayed } }
+  return { ...next, turn: { ...requireTurn(next), devPlayed: true, progressPlayed } }
 }
 
 export function adjustDevHand(game: Game, list: 'playable' | 'bought', kind: DevKind, delta: number): Game {

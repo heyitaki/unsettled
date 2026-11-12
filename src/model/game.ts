@@ -24,6 +24,10 @@ export interface TurnState {
   playerId: string
   /** This turn's dice total, null before the roll. */
   rolled: number | null
+  /** After a 7: false until the robber is placed. Absent on any other roll. */
+  robberMoved?: boolean
+  /** Dev cards bought this turn, which cannot be played until the next one. */
+  devBought?: number
   devPlayed: boolean
   /** Progress cards (not knights) recorded as played over the whole game: they have left the dev deck. */
   progressPlayed: Record<Exclude<DevKind, 'knight'>, number>

@@ -367,7 +367,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
   const onHex = (coord: AxialCoord) => {
     if (pick) {
-      if (pick.want === 'hex') dispatch({ type: 'picked', ref: axialKey(coord) })
+      if (pick.want === 'hex' && (!board.robber || axialKey(coord) !== axialKey(board.robber))) dispatch({ type: 'picked', ref: axialKey(coord) })
       return
     }
     const hex = board.hexes.find((candidate) => axialKey(candidate.coord) === axialKey(coord))
@@ -650,6 +650,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const hexLayer = useMemo(() => board.hexes.map((hex) => (
     <polygon
       key={axialKey(hex.coord)}
+      data-hex={axialKey(hex.coord)}
       points={hexPoints(hex.coord)}
       fill={hex.tile ? TILE_COLORS[hex.tile] : BLANK_TILE_COLOR}
       stroke={TOKEN_COLOR}
@@ -664,11 +665,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     // re-drawn in white above the robber below so they stay readable.
     const underRobber = board.robber !== null && axialKey(hex.coord) === axialKey(board.robber)
     return (
-      <g key={`token:${axialKey(hex.coord)}`}>
+      <g key={`token:${axialKey(hex.coord)}`} className={pick?.want === 'hex' && !underRobber ? 'blink' : undefined}>
         <NumberTokenFace number={hex.numberToken} x={point.x} y={point.y} discOnly={underRobber} />
       </g>
     )
-  }), [board.hexes, board.robber])
+  }), [board.hexes, board.robber, pick?.want])
   const robberLayer = useMemo(() => {
     if (!board.robber) return null
     const point = center(board.robber)
@@ -962,7 +963,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {markLayer}
           <g className="hit-layers">
             {hexActive && board.hexes.map((hex) => (
-              <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={(event) => {
+              <polygon key={`hit:${axialKey(hex.coord)}`} data-hex={axialKey(hex.coord)} points={hexPoints(hex.coord)} onClick={(event) => {
                 // With a terrain picked the svg click edits ports; a hex tap must not also hit the nearest one.
                 event.stopPropagation()
                 onHex(hex.coord)

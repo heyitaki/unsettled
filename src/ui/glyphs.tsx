@@ -317,6 +317,15 @@ export function GripGlyph() {
 }
 
 /** The check beside a dropdown's current option. */
+/** The solid white tick inside a finished Best moves step's green disc. */
+export function StepDoneGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 10.4 8.3 14.2 15.5 6.3" />
+    </svg>
+  )
+}
+
 export function TickGlyph({ className }: { className?: string }) {
   return (
     <svg {...LINE_ART} className={className} viewBox="0 0 14 14" strokeWidth="2.2">
@@ -401,6 +410,46 @@ export function ClearPiecesGlyph() {
     <svg {...LINE_ART} width="22" height="22" viewBox="0 0 20 20" strokeWidth="1.5">
       <path d="M4.4 16.6V9.3L10 4l5.6 5.3v7.3Z" />
       <path d="M6.6 14.6 13.4 8.4" />
+    </svg>
+  )
+}
+
+export function TradeGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M3.5 7h13" />
+      <path d="M13.5 4l3 3-3 3" />
+      <path d="M16.5 13h-13" />
+      <path d="M6.5 10l-3 3 3 3" />
+    </svg>
+  )
+}
+
+export function BuyDevGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M6.6 2.6h7.6a1.8 1.8 0 0 1 1.8 1.8v9.6" />
+      <rect x="4" y="4.6" width="10" height="12.8" rx="1.8" />
+      <path d="M9 8.6v6M6 11.6h6" />
+    </svg>
+  )
+}
+
+export function PlayDevGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <rect x="4.5" y="2.5" width="11" height="15" rx="1.8" />
+      <path d="M8.4 7.1v5.8L13 10Z" />
+    </svg>
+  )
+}
+
+export function BuildGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M3 16.4h14" />
+      <path d="M5 16.4V8.9l5-4.6 5 4.6v7.5" />
+      <path d="M8.5 16.4v-3.6h3v3.6" />
     </svg>
   )
 }
