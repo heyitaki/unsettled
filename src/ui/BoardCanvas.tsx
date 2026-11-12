@@ -84,10 +84,10 @@ const MARK_EDGE_INSET = 0.26
 const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
-const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 1, superCity: 1.18 }
+const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 0.92, superCity: 1.08 }
 const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, superCity: 11.3 }
 // Conservative half-extent a placed building reaches from its vertex, across all
-// tiers/scales (city annex ≈ 20 + outline). Used to keep edge pieces in-frame.
+// tiers/scales (city annex and super city ≈ 16 + outline). Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
 
 type Point = { x: number; y: number }
@@ -778,7 +778,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
                 a house, a house with a rectangle annex, and a twin-gable keep.
                 strokeWidth is divided by scale so every piece renders the same border. */}
             {building.tier === 'settlement' && <path d={SETTLEMENT_PATH} />}
-            {building.tier === 'city' && <path d="M-13,12.2 V-2.8 L0,-14.1 L13,-2.8 H20 V12.2 Z" />}
+            {building.tier === 'city' && <path d="M-11.75,12.2 V-2.8 L0,-14.1 L11.75,-2.8 H17.6 V12.2 Z" />}
             {building.tier === 'superCity' && <path d="M-15,11.3 V-2.6 L-9,-11.3 L-4,-3.5 V-11.3 H4 V-3.5 L9,-11.3 L15,-2.6 V11.3 Z" />}
           </g>
         </g>
