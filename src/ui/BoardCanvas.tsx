@@ -427,7 +427,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   }
   const buildActive = pick ? pick.want === 'vertex' : state.tool.kind === 'piece' || draftPlayer !== null
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
-  const placementActive = buildActive || roadActive || portTerrain !== null
+  const pieceActive = buildActive || roadActive
+  const placementActive = pieceActive || portTerrain !== null
   const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
   const hoverBuilding = hover && board.buildings.find((building) => building.vertexId === hover.ref)
   const hoverRoad = hover && board.roads.find((road) => road.edgeId === hover.ref)
@@ -452,8 +453,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     if (port !== null) {
       const existing = board.ports.find((candidate) => candidate.edgeId === port)
       if (portTerrain !== null) {
-        const generic = existing?.resource === portTerrain && existing.rate === 2
-        commit(upsertPort(board, port, generic ? null : portTerrain, generic ? 3 : 2))
+        const alreadyThis = existing?.resource === portTerrain && existing.rate === 2
+        commit(upsertPort(board, port, alreadyThis ? null : portTerrain, alreadyThis ? 3 : 2))
       } else commit(existing ? removePort(board, port) : upsertPort(board, port, null, 3))
     } else if (target.ref.startsWith('v:')) onVertex(target.ref as VertexId)
     else if (target.ref.startsWith('e:')) onEdge(target.ref as EdgeId)
@@ -904,7 +905,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           const start = finePointerDown.current
           finePointerDown.current = null
           // Only piece placement treats a moved click as a drag; a terrain click that drifts still paints its hex.
-          const dragged = !coarse && (buildActive || roadActive) && start !== null &&
+          const dragged = !coarse && pieceActive && start !== null &&
             Math.hypot(event.clientX - start.x, event.clientY - start.y) > PAN_THRESHOLD
           if (!suppressClick.current && !dragged) return
           event.preventDefault()
@@ -962,6 +963,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           <g className="hit-layers">
             {hexActive && board.hexes.map((hex) => (
               <polygon key={`hit:${axialKey(hex.coord)}`} points={hexPoints(hex.coord)} onClick={(event) => {
+                // With a terrain picked the svg click edits ports; a hex tap must not also hit the nearest one.
                 event.stopPropagation()
                 onHex(hex.coord)
               }} />

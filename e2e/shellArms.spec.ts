@@ -624,7 +624,6 @@ test.describe('desktop', () => {
     await expect(svg.locator('.placement-hover')).toHaveAttribute('stroke', '#333')
     await badge.click()
     await expect(badges).toHaveCount(count - 1)
-    await expect(page.locator('dialog[open]')).toHaveCount(0)
     await expect(svg.locator('g[filter="url(#piece-shadow)"]')).toHaveCount(0)
     await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
   })

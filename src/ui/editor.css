@@ -286,7 +286,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--r-control); 
 .recap-bar { display: flex; gap: 2px; height: 8px; margin-bottom: 16px; }
 .recap-bar > span { border-radius: 4px; }
 .recap-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.recap-card { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow-wrap: anywhere; }
+.recap-card { padding: 12px; border: 1px solid var(--line); border-radius: var(--r-row); background: var(--surface); overflow-wrap: anywhere; }
 .recap-card.claimed { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
 .recap-card-heading { display: flex; align-items: center; gap: 8px; }
 .recap-card-heading strong { min-width: 0; font-size: 16px; font-weight: 700; }
