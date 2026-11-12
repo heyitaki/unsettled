@@ -21,7 +21,7 @@ When the draft is complete, Best picks becomes Best moves. The panel tracks the 
 
 ### The active player
 
-One notion, stored in the game: `turn.playerId` is whose turn it is, whose advice is shown, and who the action bar acts for. `End turn` moves it to the next seat. Tapping a circle in the turn-order row sets it directly. The claimed player (`mePlayerId`) stays who you are: your cards are exact, and yours are the dev cards known by type.
+One notion, stored in the game: `turn.playerId` is whose turn it is, whose advice is shown, and who the recorded actions are for. `End turn` moves it to the next seat. Tapping a circle in the turn-order row sets it directly. The claimed player (`mePlayerId`) stays who you are: your cards are exact, and yours are the dev cards known by type.
 
 ```ts
 turn?: {
@@ -43,7 +43,7 @@ Optional, following `awards?`. Absent means the claimed player's turn, not yet r
 | Whose turn, who decides | `turn.playerId`, sent to the bridge as `observer`. | the turn-order row |
 | Round, current seat | Defaulted to 0; no policy reads them. | no |
 | Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | `Bank estimated: N cards of unknown type` when any `handUnknown` > 0 |
-| Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded through the action bar; earlier ones are not known. | `Dev deck: N left` |
+| Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded in the panel; earlier ones are not known. | no (it hides `Buy card` at zero) |
 | My dev cards by type, bought this turn | `Game.devHand` (below). Absent: no playable cards. | the table's dev cell |
 | Dev card already played this turn | `turn.devPlayed`. | no |
 | The deciding player's hand | Exact for the claimed player. For a rival, the known cards only. | `N of Red's cards are of unknown type and ignored` |
@@ -79,11 +79,11 @@ ponytail: the upper bound is always lower plus unknown. Storing an upper bound p
 
 ### Panel structure
 
-Heading, turn-order row, standings table, action bar, the open action's own controls, recommendations, notes. The same component renders in both trees.
+Two sections: `Record your turn` (heading, turn-order row, context line, standings table, then the step rail with the open action's own controls), then `Best moves` (recommendations, notes). The same component renders in both trees.
 
 - **Turn order** replaces the draft ribbon once the draft is complete: one circle per player in seat order, the active player ringed. Nothing marks the claimed player there; the draft ribbon lost its dot too.
 - **Standings table**: one row per player. A `Cards` view shows each resource (a number, or a range), the hand total and dev cards. A `Points` view shows settlements, cities, road length, knights, VP cards and the total, with the award holders marked. Tapping a row opens that player's stepper chips for corrections. Under it, the claimed player's dev cards by type as chips in three states (playable, none held, bought this turn as a faded grey outline with no label). It sits on the main page in both trees, and its row editor is the only place a player's card and knight counts are edited.
-- **Action bar**: Roll, Trade, Build, Buy dev card, Play dev card, End turn. Each acts for the active player; selecting one opens its controls.
+- **Step rail**: Roll, then the actions (`Trade`, `Buy card`, `Play card`, `Build`, each shown only when it can happen), then End turn. Each acts for the active player, and selecting an action opens its controls.
   - Roll: eleven totals. Any total but seven asks the bridge for production and credits every player's `hand`. A seven lists every player holding more than seven cards with a discard to record (advised for each, typed for the claimed player, untyped by default for rivals), then the robber move.
   - Trade: the other party (bank or port at the active player's rate, or a player), what is given and what is received. When the claimed player is the one answering and the shape is one the policy models, the verdict is shown before recording.
   - Build: road, settlement or city, then the spot on the board; the cost is deducted.
@@ -94,7 +94,7 @@ Heading, turn-order row, standings table, action bar, the open action's own cont
 - Each recorded action is one `commit-game`, so one undo takes it back.
 - Selecting a recommendation pins its mark with the Best picks rules. A robber destination is a ring on a hex, which is a new mark kind.
 - Scores are shown as the policy's raw numbers.
-- The heading holds the store's Undo and Redo, drawn as straight arrows (the user's pick). Never the Unicode curved arrows.
+- The `Record your turn` heading holds the store's Undo and Redo, drawn as straight arrows (the user's pick). Never the Unicode curved arrows.
 - The surface is specified in desktop D8 and mobile S10.
 
 ### Advice surface
@@ -156,7 +156,7 @@ Win chance is measured, not scored: the engine plays the game out from the draft
 
 One component in both trees, in place of Best moves:
 
-- Heading `Draft recap`, with the same `Undo` and `Redo` buttons as Best moves.
+- Heading `Draft recap`, with the same `Undo` and `Redo` buttons as `Record your turn`.
 - Approved mock-up (2026-11-12): the `Draft recap · proposed` artboard on the `Recap and ports` page of https://claude.ai/artifact/GpfbeCAGbda2AegvcEvLKb.
 - Under the heading, a header for one player: the claimed player, or the highest win chance when nobody is claimed. A muted 13px line `{name}'s win chance`, then the whole percentage at 46px weight 800, then one 14px weight 700 line in `--accent-dark`: `Leads {second} by {n} points` when that player has the highest win chance, `Trails {leader} by {n} points` when not, and `Level with {name}` when the rounded percentages are equal. Before the first batch the percentage reads `…` and the line is absent.
 - Under the header, an 8px share bar split across the players in card order, each segment as wide as that player's win count, in the player's colour with 2px gaps and 4px radii; a white player's segment takes a 1px ink inset ring. Absent before the first batch.
