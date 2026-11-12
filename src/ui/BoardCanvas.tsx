@@ -81,7 +81,7 @@ const ROAD_RADIUS = 2.5
 // Fraction of an edge trimmed from each end of a highlighted road direction, so the stub sits
 // between the vertex circles the same recommendation draws rather than running under them.
 const MARK_EDGE_INSET = 0.26
-const SETTLEMENT_PATH = 'M-15,13 V-3 L0,-15 L15,-3 V13 Z'
+const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 1, superCity: 1.18 }

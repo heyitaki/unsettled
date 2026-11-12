@@ -46,7 +46,7 @@ export function StructureGlyph({ shape, color, size }: {
     case 'settlement':
       return (
         <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
-          <path d="M4.1 17V9.6L10 4.4l5.9 5.2V17Z" fill={color} />
+          <path d="M4.6 17V9.6L10 4.4l5.4 5.2V17Z" fill={color} />
         </svg>
       )
     case 'city':
