@@ -26,8 +26,8 @@ button, input, select { font: inherit; }
 button { color: inherit; }
 button, input, select, label.drop-zone { touch-action: manipulation; }
 
-/* 950 = 494 + 16 + 440 for the grid, and 312 = 440 + 16 - 144 for the column and gap less the board height allowance. */
-.app-shell { --shell-max: max(950px, calc(100vh + 312px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
+/* 950 = 494 + 16 + 440 for the grid, and 456 = 440 + 16 for the column and gap, so the board is 75% of the window height wide. */
+.app-shell { --shell-max: max(950px, calc(75vh + 456px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
 .site-header { max-width: var(--shell-max); margin: 12px auto 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 13px; }
 .site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 31px/1 Georgia, serif; letter-spacing: -.04em; }
 .site-header h1 { font-size: 38px; }
@@ -136,7 +136,7 @@ button.danger { color: var(--danger); }
 .sheet-menu > button:hover, .sheet-menu > button:focus-visible { color: var(--ink); background: var(--tint); }
 .sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--glyph); }
 .sheet-menu-narrow { width: 186px; }
-.board-canvas { width: 100%; display: block; max-height: calc(100vh - 144px); border-radius: 14px; background: #3c7fbf; }
+.board-canvas { width: 100%; display: block; max-height: calc(100vh - 144px); padding: 28px; border-radius: 14px; background: #3c7fbf; }
 /* The sea is the SVG's own box, so the frame keeps its radius at any zoom; the rect inside would only repaint it. */
 .board-sea { display: none; }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay

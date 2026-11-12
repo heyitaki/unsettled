@@ -26,10 +26,10 @@ test.describe('desktop layout', () => {
     for (const box of boxes.slice(1)) expect(Math.abs(box.y + box.height / 2 - (boxes[0].y + boxes[0].height / 2))).toBeLessThan(2)
     for (let index = 1; index < boxes.length; index += 1) expect(boxes[index].x).toBeGreaterThan(boxes[index - 1].x)
 
-    // The board takes the window's height and the column sits against it.
+    // The board is 75% of the window height wide and the column sits against it.
     const board = (await page.locator('.board-canvas').boundingBox())!
     const column = (await page.locator('.analysis-panel').boundingBox())!
-    expect(board.height).toBeGreaterThan(700)
+    expect(Math.abs(board.width - 0.75 * 900)).toBeLessThan(2)
     expect(board.y + board.height).toBeLessThanOrEqual(900)
     expect(column.x).toBeGreaterThan(board.x + board.width)
     expect(column.x - (board.x + board.width)).toBeLessThan(24)

@@ -695,7 +695,7 @@ test.describe('desktop', () => {
     await expect(buildings).toHaveAttribute('transform', /scale\(0\.8\)/)
     await page.mouse.click(x, y)
     await expect(buildings).toHaveCount(1)
-    await expect(buildings).toHaveAttribute('transform', /scale\(1\)/)
+    await expect(buildings).toHaveAttribute('transform', /scale\(0\.92\)/)
     await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
     await expect(hover).toHaveAttribute('cx', String(corner.x))
     await expect(hover).toHaveAttribute('cy', String(corner.y))

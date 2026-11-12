@@ -591,7 +591,7 @@ test('pieces maps a coastal tap through the padded svg content box', async ({ pa
   expect(Math.hypot(wrong.x - (corner.x + end.x) / 2, wrong.y - (corner.y + end.y) / 2))
     .toBeLessThan(Math.hypot(wrong.x - corner.x, wrong.y - corner.y))
   await page.touchscreen.tap(tap.x, tap.y)
-  await expect(building).toHaveAttribute('transform', /scale\(1\)/)
+  await expect(building).toHaveAttribute('transform', /scale\(0\.92\)/)
   await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
 })
 
