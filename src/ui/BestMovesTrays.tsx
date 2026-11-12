@@ -58,7 +58,7 @@ export function BestMovesTray(props: TrayProps) {
   }
 }
 
-export function RollStep({ game, active, adviceEnabled, commit, rolled, recordedRoll, canChange, record, mark, finish }: {
+export function RollStep({ game, active, adviceEnabled, commit, rolled, recordedRoll, changeRoll, record, mark, finish }: {
   game: Game
   active: Player
   adviceEnabled: boolean
@@ -67,7 +67,7 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
   recordedRoll?: RecordedRoll
   mark(marks: HighlightMark[] | null): void
   finish(): void
-  canChange: boolean
+  changeRoll?: () => void
   record(game: Game, text: string): void
 }) {
   const client = useAdviceClient()
@@ -114,7 +114,9 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
     <>
       <div className="move-step-title">
         <span>{total == null ? 'Roll' : `Rolled ${total}`}</span>
-        {total != null && gains !== undefined && <span className="move-prod">
+        {total != null && changeRoll && <button type="button" className="icon-btn" aria-label="Change roll" title="Change roll" onClick={changeRoll}><PencilGlyph /></button>}
+      </div>
+      {total != null && gains !== undefined && <div className="move-prod">
           {gains === null ? 'Production not added: enter the cards by hand' : produced.length ? produced.map(({ player, cards }) => (
             <span className="move-prod-player" key={player.id}>
               <span className="swatch" style={{ background: player.color }} />
@@ -124,9 +126,7 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
               </span>
             </span>
           )) : 'Nobody produces'}
-        </span>}
-        {total != null && canChange && <button type="button" className="icon-btn" aria-label="Change roll" title="Change roll" onClick={() => dispatch({ type: 'undo' })}><PencilGlyph /></button>}
-      </div>
+        </div>}
       {total == null && (
         <div className="move-dice" role="group" aria-label="Dice total">
           {Array.from({ length: 11 }, (_, index) => index + 2).map((total) => (

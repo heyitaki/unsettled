@@ -230,10 +230,12 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const typedDevCards = devHand ? devHandTotal(devHand) : 0
   const tiles = ACTION_TILES.filter(({ kind }) => !seven && available?.[kind])
   const noActions = !before && !seven && tray === null && !playingKnight && tiles.length === 0
-  const previous = tab.past.at(-1)
   const turnGames = currentTurnHistory([...tab.past, game])
   const actions = turnGames.flatMap((entry) => actionLog.has(entry) ? [actionLog.get(entry)!] : [])
-  const rollGame = turnGames.find((entry) => turnState(entry)?.rolled != null)
+  const rollIndex = turnGames.findIndex((entry) => turnState(entry)?.rolled != null)
+  const rollGame = turnGames[rollIndex]
+  // Change roll recommits the pre-roll snapshot as a new step, so Undo brings the roll and its actions back.
+  const beforeRoll = rollIndex > 0 ? turnGames[rollIndex - 1] : undefined
   let roll = rollGame && recordedRolls.get(rollGame)
   if (rollGame && !roll) {
     roll = { discards: sevenDiscards(rollGame), skipped: new Set() }
@@ -259,7 +261,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <div className="move-step-body">
               <RollStep key={`${tab.id}:${activeId}`} game={game} active={active} adviceEnabled={adviceEnabled} commit={commit}
                 rolled={rolled} recordedRoll={roll} record={record} mark={mark} finish={close}
-                canChange={previous !== undefined && turnState(previous)?.rolled == null} />
+                changeRoll={beforeRoll && (() => { close(); commit(beforeRoll) })} />
             </div>
           </li>
           <li className={`move-step ${noActions ? 'done' : before || seven ? 'later' : 'now'}`}>
@@ -267,7 +269,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <div className="move-step-body">
               <div className="move-step-title">{noActions ? 'No actions possible' : 'Actions'}</div>
               {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}><TickGlyph /><span>{text}</span></li>)}</ul>}
-              {tiles.length > 0 && <div className="move-tiles" style={{ gridTemplateColumns: `repeat(${Math.max(tiles.length, 2)}, minmax(0, 1fr))` }}>
+              {tiles.length > 0 && <div className="move-tiles">
                 {tiles.map(({ kind, label, Glyph }) => (
                   <button type="button" className="move-tile" key={kind} aria-pressed={tray?.kind === kind} onClick={() => toggleTray(kind)}>
                     <Glyph /><span>{label}</span>

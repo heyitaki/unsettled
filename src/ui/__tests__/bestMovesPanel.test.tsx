@@ -618,7 +618,7 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.move-log')?.textContent).toContain('Traded 4 wood for 2 ore with a 2:1 port')
   })
 
-  it('folds a recorded roll, changes it through undo, and hides Change after a later action', async () => {
+  it('folds a recorded roll, shows production under it, and changes it after later actions', async () => {
     respond = () => ({ kind: 'produce', gains: { aki: { ...emptyStats().hand, wood: 2 } } })
     expect(container.querySelectorAll('.move-dice button')).toHaveLength(11)
     expect(button('7').querySelector('.dice-pips')?.children).toHaveLength(0)
@@ -635,13 +635,23 @@ describe('Best moves recording', () => {
     expect(button('Change roll').title).toBe('Change roll')
     expect(button('Change roll').textContent).toBe('')
     expect(container.querySelector('.move-dice')).toBeNull()
+    expect(rollStep().querySelector('.move-step-title .move-prod')).toBeNull()
     await click('Change roll')
     expect(game()).toBe(before)
     expect(rollStep().className).toContain('now')
     await click('8')
     await click('Buy dev card')
     await click('Knight', tray())
-    expect(container.querySelector('[aria-label="Change roll"]')).toBeNull()
+    const acted = game()
+    expect(container.querySelector('.move-log')?.textContent).toBe('Bought a dev card')
+    await click('Change roll')
+    expect(game()).toBe(before)
+    expect(container.querySelector('.move-dice')).not.toBeNull()
+    expect(container.querySelector('.move-log')).toBeNull()
+    await click('Undo')
+    expect(game()).toBe(acted)
+    expect(container.querySelector('.move-log')?.textContent).toBe('Bought a dev card')
+    expect(rollStep().textContent).toContain('Rolled 8')
   })
 
   it('keeps completed discards folded while the other player discards', async () => {

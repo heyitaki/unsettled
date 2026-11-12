@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../board'
 import { newGame } from '../game'
 import { parseGame } from '../serialization'
-import { endTurn, recordBuyDev, recordPlayDev, recordRobber, recordRoll, setActivePlayer } from '../turn'
+import { currentTurnHistory, endTurn, recordBuyDev, recordPlayDev, recordRobber, recordRoll, setActivePlayer } from '../turn'
 
 const initial = newGame(addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' }))
 
@@ -39,5 +39,15 @@ describe('turn recording metadata', () => {
   ])('rejects invalid optional turn fields: %j', (fields) => {
     const game = recordRoll(initial, 7, {})
     expect(parseGame({ ...game, turn: { ...game.turn, ...fields } }).ok).toBe(false)
+  })
+
+  it('strikes a changed roll and the actions after it from the turn history', () => {
+    const knight = recordPlayDev(initial, { kind: 'knight', hex: { q: 0, r: 1 }, victimId: null, stolen: null })
+    const rolled = recordRoll(knight, 8, {})
+    const bought = recordBuyDev(rolled, null)
+    expect(currentTurnHistory([initial, knight, rolled, bought])).toEqual([initial, knight, rolled, bought])
+    expect(currentTurnHistory([initial, knight, rolled, bought, knight])).toEqual([initial, knight, knight])
+    const ended = endTurn(bought)
+    expect(currentTurnHistory([initial, rolled, bought, ended])).toEqual([ended])
   })
 })

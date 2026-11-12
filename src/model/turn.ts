@@ -40,11 +40,16 @@ export function turnState(game: Game): TurnState | null {
 
 /** The entries of an undo history (oldest first, current game last) recorded since the current turn began. */
 export function currentTurnHistory(history: readonly Game[]): readonly Game[] {
-  const current = history[history.length - 1]
-  const playerId = activePlayerId(current)
-  const start = history.findLastIndex((entry, index) => activePlayerId(entry) !== playerId ||
-    turnState(entry)?.rolled != null && turnState(history[index + 1] ?? current)?.rolled == null)
-  return history.slice(start + 1)
+  const playerId = activePlayerId(history[history.length - 1])
+  const turn: Game[] = []
+  for (const entry of history.slice(history.findLastIndex((entry) => activePlayerId(entry) !== playerId) + 1)) {
+    // Back to unrolled within one turn is Change roll: the roll and every action after it are struck.
+    if (turnState(entry)?.rolled == null && turn.length > 0 && turnState(turn[turn.length - 1])?.rolled != null) {
+      turn.length = turn.findIndex((game) => turnState(game)?.rolled != null)
+    }
+    turn.push(entry)
+  }
+  return turn
 }
 
 export function setActivePlayer(game: Game, playerId: string): Game {
