@@ -26,12 +26,13 @@ button, input, select { font: inherit; }
 button { color: inherit; }
 button, input, select, label.drop-zone { touch-action: manipulation; }
 
-/* 950 = 494 + 16 + 440 for the grid, and 334 = 440 + 16 - 122 for the column and gap less the board height allowance. */
-.app-shell { --shell-max: max(950px, calc(100vh + 334px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
-.site-header { max-width: var(--shell-max); margin: 0 auto 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 11px; }
+/* 950 = 494 + 16 + 440 for the grid, and 312 = 440 + 16 - 144 for the column and gap less the board height allowance. */
+.app-shell { --shell-max: max(950px, calc(100vh + 312px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
+.site-header { max-width: var(--shell-max); margin: 12px auto 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 13px; }
 .site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 31px/1 Georgia, serif; letter-spacing: -.04em; }
+.site-header h1 { font-size: 38px; }
 .brand-mark { flex: none; width: 30px; height: 30px; }
-.site-header .brand-mark { width: 36px; height: 36px; }
+.site-header .brand-mark { width: 44px; height: 44px; }
 
 .workspace { max-width: var(--shell-max); margin: auto; display: grid; grid-template-columns: minmax(494px, 1fr) 440px; gap: 16px; align-items: start; }
 .right-rail { min-width: 0; }
@@ -65,7 +66,7 @@ button.danger { color: var(--danger); }
 .icon-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
 .head-controls .hero-import { flex: none; height: 34px; width: auto; font-size: 13px; padding: 0 14px; }
-.head-popover { display: flex; flex-direction: column; position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + 8px); margin: 0; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); max-height: calc(100dvh - 116px); overflow-y: auto; overscroll-behavior: contain; }
+.head-popover { display: flex; flex-direction: column; position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + 8px); margin: 0; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); max-height: calc(100dvh - 138px); overflow-y: auto; overscroll-behavior: contain; }
 .head-popover .menu-wrap > .menu-popup { position: fixed; }
 .head-maps { left: anchor(left); width: 320px; }
 .head-players { right: anchor(right); width: 372px; }
@@ -135,7 +136,7 @@ button.danger { color: var(--danger); }
 .sheet-menu > button:hover, .sheet-menu > button:focus-visible { color: var(--ink); background: var(--tint); }
 .sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--glyph); }
 .sheet-menu-narrow { width: 186px; }
-.board-canvas { width: 100%; display: block; max-height: calc(100vh - 122px); border-radius: 14px; background: #3c7fbf; }
+.board-canvas { width: 100%; display: block; max-height: calc(100vh - 144px); border-radius: 14px; background: #3c7fbf; }
 /* The sea is the SVG's own box, so the frame keeps its radius at any zoom; the rect inside would only repaint it. */
 .board-sea { display: none; }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay
@@ -556,7 +557,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .app-shell { --shell-gutter: clamp(16px, 3vw, 44px); }
   .workspace { grid-template-columns: minmax(0, 1fr); }
   .center-column { position: static; }
-  .board-canvas { max-height: max(320px, calc(100dvh - 130px)); }
+  .board-canvas { max-height: max(320px, calc(100dvh - 152px)); }
 }
 
 /* The phone arm: App mounts PhoneShell here, so nothing of the Workspace tree is styled. */
