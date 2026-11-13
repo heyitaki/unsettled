@@ -556,6 +556,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .best-moves-panel .move-costs { grid-column: auto; gap: 10px; margin-top: 4px; }
 .best-moves-panel .move-costs > span { color: var(--ink); font-size: 12px; font-weight: 700; }
 .move-notes { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.move-notes:empty { display: none; }
 .move-advice-error { font-size: 12px; }
 .best-moves-panel .stat-icon { width: 13px; height: 13px; vertical-align: -2px; }
 
