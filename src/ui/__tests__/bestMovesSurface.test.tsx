@@ -45,6 +45,18 @@ it('renders the Ledger hands, dev pills and awards, with one inline row editor',
   expect(container.querySelector('.ledger-header')?.getAttribute('aria-hidden')).toBe('true')
   const rows = container.querySelectorAll('.ledger-row')
   expect(rows).toHaveLength(3)
+  for (const row of rows) {
+    const toggle = row.querySelector('.ledger-toggle')!
+    const ids = toggle.getAttribute('aria-describedby')?.split(/\s+/) ?? []
+    expect(ids).toHaveLength(4)
+    const descriptions = ids.map((id) => document.getElementById(id))
+    for (const description of descriptions) {
+      expect(description).not.toBeNull()
+      expect(toggle.contains(description)).toBe(true)
+    }
+    expect(descriptions).toEqual(['.ledger-player', '.ledger-hand', '.ledger-cards', '.ledger-vp']
+      .map((selector) => toggle.querySelector(selector)))
+  }
   const [mine, rival, empty] = rows
   expect(rival.classList.contains('active')).toBe(true)
   expect(mine.querySelector('.you-chip')?.textContent).toBe('YOU')

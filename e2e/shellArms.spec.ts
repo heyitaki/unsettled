@@ -933,18 +933,11 @@ test.describe('desktop', () => {
     await expect(rows.nth(0).getByRole('button', { name: `Claim ${UNCLAIMED_ROSTER[0].name}` }))
       .toHaveAttribute('aria-pressed', 'false')
 
-    // That button covers the whole row, so everything drawn over it has to keep
-    // its own hit area: the swatch and the VP click, the tally shows its title.
+    // The swatch keeps its own hit area above the row-wide claim button.
     const swatch = rows.nth(3).locator('.swatch')
     await swatch.click()
     await expect(swatch).toHaveAttribute('aria-pressed', 'true')
     await expect(rows.nth(2)).toHaveClass(/\bme\b/)
-    const own = await rows.nth(2).evaluate((row) => [...row.querySelectorAll('.player-tally > span, .roster-vp')]
-      .every((el) => {
-        const box = el.getBoundingClientRect()
-        return el.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))
-      }))
-    expect(own).toBe(true)
   })
 
   test('the snake draft ribbon sits in Best picks, and a grip drag reseats it', async ({ page }) => {
@@ -1073,26 +1066,22 @@ test.describe('desktop', () => {
       await rows.first().click()
       await expect(rows.first()).toHaveClass(/\bme\b/)
 
-      // Both tally views must leave room for the name and YOU chip.
-      for (const view of ['Pieces', 'Resources']) {
-        await page.locator('.tally-tabs').getByRole('button', { name: view }).click()
-        const boxes = await rows.evaluateAll((elements) => elements.map((row) => ({
-          cell: row.querySelector('.list-row-main')!.getBoundingClientRect().width,
-          nameRight: row.querySelector('.list-row-name')!.getBoundingClientRect().right,
-          nameWidth: row.querySelector('.list-row-name')!.getBoundingClientRect().width,
-          cellRight: row.querySelector('.list-row-main')!.getBoundingClientRect().right,
-          // Only the claimed row draws the chip, inside the name's cell.
-          chip: row.querySelector('.you-chip')?.getBoundingClientRect() ?? null,
-        })))
-        expect(boxes.length).toBeGreaterThan(1)
-        expect(boxes.filter((box) => box.chip).length).toBe(1)
-        for (const box of boxes) {
-          expect(box.cell).toBeGreaterThan(0)
-          expect(box.nameWidth).toBeGreaterThan(0)
-          if (!box.chip) continue
-          expect(box.nameRight).toBeLessThanOrEqual(box.chip.left)
-          expect(box.chip.right).toBeLessThanOrEqual(box.cellRight + 0.5)
-        }
+      const boxes = await rows.evaluateAll((elements) => elements.map((row) => ({
+        cell: row.querySelector('.list-row-main')!.getBoundingClientRect().width,
+        nameRight: row.querySelector('.list-row-name')!.getBoundingClientRect().right,
+        nameWidth: row.querySelector('.list-row-name')!.getBoundingClientRect().width,
+        cellRight: row.querySelector('.list-row-main')!.getBoundingClientRect().right,
+        // Only the claimed row draws the chip, inside the name's cell.
+        chip: row.querySelector('.you-chip')?.getBoundingClientRect() ?? null,
+      })))
+      expect(boxes.length).toBeGreaterThan(1)
+      expect(boxes.filter((box) => box.chip).length).toBe(1)
+      for (const box of boxes) {
+        expect(box.cell).toBeGreaterThan(0)
+        expect(box.nameWidth).toBeGreaterThan(0)
+        if (!box.chip) continue
+        expect(box.nameRight).toBeLessThanOrEqual(box.chip.left)
+        expect(box.chip.right).toBeLessThanOrEqual(box.cellRight + 0.5)
       }
       await snap(page, 'desktop-narrow')
     })

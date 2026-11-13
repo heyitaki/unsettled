@@ -1,4 +1,3 @@
-import { computeStandings } from '../../engine/stats'
 import { addPlayer } from '../../model/board'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { DraftGrid } from '../DraftGrid'
@@ -20,7 +19,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const { game } = activeTab(state)
   const { board } = game
   const commit = (next: Board) => dispatch({ type: 'commit', board: next })
-  const standings = computeStandings(game)
   const roster = useRoster(board, commit)
   const { reorder } = roster
   const add = () => {
@@ -54,11 +52,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           {...reorder.listProps}
         >
           {board.players.map((player, index) => (
-            <RosterRow key={player.id} player={player} index={index} roster={roster}>
-              <span className="roster-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
-                {standings[index].victoryPoints}
-              </span>
-            </RosterRow>
+            <RosterRow key={player.id} player={player} index={index} roster={roster} />
           ))}
           <RosterTrash roster={roster} playerCount={board.players.length} />
         </div>

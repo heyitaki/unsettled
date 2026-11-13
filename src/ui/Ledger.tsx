@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { computeStandings } from '../engine/stats'
 import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type DevKind, type Game, type StatCounter } from '../model/game'
 import { adjustDevHand, handTotal } from '../model/turn'
@@ -8,6 +8,7 @@ import { CounterGlyph, DevCardGlyph, ResourceGlyph, StructureGlyph } from './gly
 import { MoveStepper } from './MoveInputs'
 
 export function Ledger({ game, activeId, commit }: { game: Game; activeId: string; commit(game: Game): void }) {
+  const id = useId()
   const [editing, setEditing] = useState<string | null>(null)
   const standings = computeStandings(game)
   const { board } = game
@@ -36,11 +37,13 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
         const typedTotal = mine && devHand ? devHandTotal(devHand) : 0
         const untyped = stats.devCards - typedTotal
         const cities = standing.cities + standing.superCities
+        const rowId = `${id}-${index}`
         return (
           <div key={player.id} className={`ledger-row${player.id === activeId ? ' active' : ''}${editing === player.id ? ' open' : ''}`}>
             <button type="button" className="ledger-toggle" aria-label={`Correct ${player.name}`}
+              aria-describedby={`${rowId}-player ${rowId}-hand ${rowId}-cards ${rowId}-vp`}
               aria-expanded={editing === player.id} onClick={() => toggle(player.id)}>
-              <span className="ledger-player">
+              <span className="ledger-player" id={`${rowId}-player`}>
                 <span className="swatch" style={{ background: player.color }} />
                 <span className="ledger-name" title={player.name}>{player.name}</span>
                 {mine && <span className="you-chip">YOU</span>}
@@ -55,7 +58,7 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
                   </span>
                 )}
               </span>
-              <span className="ledger-hand">
+              <span className="ledger-hand" id={`${rowId}-hand`}>
                 {RESOURCES.map((resource) => stats.hand[resource] > 0 && (
                   <span className="ledger-hand-chip" key={resource} role="img" title={`${stats.hand[resource]} ${resource}`} aria-label={`${stats.hand[resource]} ${resource}`}>
                     <ResourceGlyph resource={resource} />{stats.hand[resource]}
@@ -74,8 +77,8 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
                 </>}
                 {handTotal(stats) === 0 && untyped <= 0 && <span className="ledger-empty">No cards</span>}
               </span>
-              <span className="ledger-cards" aria-label={`${handTotal(stats)} cards`}>{handTotal(stats)}</span>
-              <span className="ledger-vp" aria-label={`${standing.victoryPoints} VP`}>{standing.victoryPoints}</span>
+              <span className="ledger-cards" id={`${rowId}-cards`} aria-label={`${handTotal(stats)} cards`}>{handTotal(stats)}</span>
+              <span className="ledger-vp" id={`${rowId}-vp`} aria-label={`${standing.victoryPoints} VP`}>{standing.victoryPoints}</span>
             </button>
             {mine && (typedTotal > 0 || stats.vpCards > 0) && (
               <div className="ledger-dev">
