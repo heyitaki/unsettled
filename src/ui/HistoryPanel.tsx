@@ -7,7 +7,7 @@ import { readableInk } from './colors'
 import { ArrowLeftGlyph, ArrowRightGlyph, BoardHexGlyph, CloseGlyph, RobberGlyph, TickGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore } from './store'
-import { useScrollEdges } from './useScrollEdges'
+import { revealInScroller, useScrollEdges } from './useScrollEdges'
 
 export function HistoryPanel({ className = 'panel analysis-panel' }: { className?: string }) {
   const { state, dispatch } = useStore()
@@ -22,10 +22,7 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
   useLayoutEffect(() => {
     const row = list?.querySelector<HTMLElement>('.history-row.current')
     if (!list || !row) return
-    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop
-    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) {
-      list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight
-    }
+    revealInScroller(list, row)
     sync()
   }, [selected, list, sync])
   const select = (index: number) => {

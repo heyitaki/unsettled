@@ -3,15 +3,18 @@ import { axialToPixel } from '../model/coords'
 import type { Board, VertexId } from '../model/types'
 import { BLANK_TILE_COLOR, INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 import { DesertGlyph, ResourceMarks } from './glyphs'
-import { vertexDescription, vertexParts } from './vertexParts'
+import { vertexDescription, vertexParts, type VertexPart } from './vertexParts'
 
 const PICK_TILE_SIDE = 14
 const SMALL_TILE_SIDE = 11.5
 
-export function SpotTiles({ board, vertexId, small = false }: { board: Board; vertexId: VertexId; small?: boolean }) {
+type SpotTilesProps = { board: Board; small?: boolean } & ({ vertexId: VertexId } | { parts: VertexPart[]; label: string })
+
+export function SpotTiles(props: SpotTilesProps) {
+  const { board, small = false } = props
   const side = small ? SMALL_TILE_SIDE : PICK_TILE_SIDE
   const k = side / PICK_TILE_SIDE
-  const parts = vertexParts(board, vertexId)
+  const { parts, label } = 'parts' in props ? props : { parts: vertexParts(board, props.vertexId), label: vertexDescription(board, props.vertexId) }
   // A ranking held from another board can name a corner this board lacks.
   if (parts.length === 0) return null
   const centres = parts.map((part) => axialToPixel(part.coord, side))
@@ -28,7 +31,7 @@ export function SpotTiles({ board, vertexId, small = false }: { board: Board; ve
     <svg
       className={`spot-tiles${small ? ' spot-tiles-small' : ''}`}
       role="img"
-      aria-label={vertexDescription(board, vertexId)}
+      aria-label={label}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}

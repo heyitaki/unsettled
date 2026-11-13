@@ -10,7 +10,7 @@ import {
 import { RESOURCES, type AxialCoord, type EdgeId, type Player, type Resource, type VertexId } from '../model/types'
 import { adviceResponse, useAdvice, useAdviceClient, type AdviceState } from './useAdvice'
 import {
-  adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
+  adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, knightTheft, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
 import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
 import { CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
@@ -267,8 +267,7 @@ export function RobberFlow({ game, active, adviceEnabled, initial, mark, commit,
     <div className="move-robber">
       {adviceEnabled && active.id === me && initial === undefined && <AdviceFeedback advice={advice} />}
       {showSuggestion && suggestion && (
-        <p>Suggested: {hexLabel(suggestion.hex, game.board)}, {suggestion.victim === null ? 'rob nobody'
-          : `steal from ${game.board.players.find((player) => player.id === suggestion.victim)?.name}`}
+        <p>Suggested: {hexLabel(suggestion.hex, game.board)}, {knightTheft(suggestion, game.board)}
           {response?.reason && `. ${response.reason}`}
         </p>
       )}

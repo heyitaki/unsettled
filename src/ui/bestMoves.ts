@@ -1,4 +1,4 @@
-import type { AdviceAction, Cards, Decision, PreRollPlay, ScoredAdvice } from '../engine/advice/protocol'
+import type { AdviceAction, Cards, Decision, KnightPlay, PreRollPlay, ScoredAdvice } from '../engine/advice/protocol'
 import { validateBoard } from '../model/board'
 import { axialKey, hexVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
 import { DEV_KINDS, emptyStats, type Game, type PlayerStats } from '../model/game'
@@ -6,6 +6,7 @@ import { activePlayerId, CARD_COSTS, endTurn, handTotal, recordBankTrade, record
 import { RESOURCES, type AxialCoord, type Board, type Resource } from '../model/types'
 import { buildingSlots, roadSlots } from './placementSlots'
 import type { HighlightMark } from './store'
+import { hexParts, partsDescription, vertexParts, type VertexPart } from './vertexParts'
 
 export const DEV_LABELS = { knight: 'Knight', roadBuilding: 'Road building', yearOfPlenty: 'Year of plenty', monopoly: 'Monopoly' } as const
 export type Move = AdviceAction | PreRollPlay
@@ -152,12 +153,14 @@ export function recordedMoveLabel(move: Move): string {
   }
 }
 
+export function knightTheft(play: Pick<KnightPlay, 'victim'>, board: Board): string {
+  if (play.victim === null) return 'rob nobody'
+  return `steal from ${board.players.find((player) => player.id === play.victim)?.name ?? play.victim}`
+}
+
 export function playLabel(play: PreRollPlay, board: Board): string {
   switch (play.type) {
-    case 'playKnight': {
-      const victim = board.players.find((player) => player.id === play.victim)?.name ?? play.victim
-      return `Play Knight: robber to ${hexLabel(play.hex, board)}, ${play.victim === null ? 'rob nobody' : `steal from ${victim}`}`
-    }
+    case 'playKnight': return `Play Knight: robber to ${hexLabel(play.hex, board)}, ${knightTheft(play, board)}`
     case 'roadBuilding': {
       const edges = [play.first, play.second]
       const spots = edges.flatMap((edge) => edge === null ? [] : [spotLabel(parseEdgeId(edge), board)]).join(' / ')
@@ -166,6 +169,27 @@ export function playLabel(play: PreRollPlay, board: Board): string {
     case 'yearOfPlenty': return `Play Year of plenty: take ${play.first} and ${play.second}`
     case 'monopoly': return `Play Monopoly: name ${play.resource}`
   }
+}
+
+/** A move's place on the board and its title without that place, for the moves `moveSpot` draws. */
+function placeOf(move: Move, board: Board): { parts: VertexPart[]; title: string } | null {
+  switch (move.type) {
+    case 'buildSettlement': return { parts: vertexParts(board, move.vertexId), title: 'Build settlement' }
+    case 'upgradeCity': return { parts: vertexParts(board, move.vertexId), title: 'Upgrade to city' }
+    case 'buildRoad': return { parts: hexParts(board, parseEdgeId(move.edgeId)), title: 'Build road' }
+    case 'playKnight': return { parts: hexParts(board, [move.hex]), title: `Play Knight: ${knightTheft(move, board)}` }
+    case 'roadBuilding': {
+      const hexes = [move.first, move.second].flatMap((edge) => edge === null ? [] : parseEdgeId(edge))
+      return { parts: hexParts(board, hexes), title: 'Play Road building' }
+    }
+    default: return null
+  }
+}
+
+/** The hexes a move is placed on, drawn as tiles the way Best picks draws a spot: `label` names them for the tiles' accessible name and `title` is the move's label without the place. Null for a move with no place on the board. */
+export function moveSpot(move: Move, board: Board): { parts: VertexPart[]; label: string; title: string } | null {
+  const place = placeOf(move, board)
+  return place && place.parts.length > 0 ? { ...place, label: partsDescription(place.parts) } : null
 }
 
 export function adviceMarks(action: Move, color: string): HighlightMark[] {

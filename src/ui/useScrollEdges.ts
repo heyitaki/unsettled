@@ -25,3 +25,11 @@ export function useScrollEdges<T extends HTMLElement>() {
   }, [node, sync])
   return { ref: setNode, node, onScroll: sync, sync, ...edges }
 }
+
+/** Scrolls `scroller` the least distance that shows all of `row`, never the page. The scroller must be the row's offset parent (positioned). */
+export function revealInScroller(scroller: HTMLElement, row: HTMLElement) {
+  if (row.offsetTop < scroller.scrollTop) scroller.scrollTop = row.offsetTop
+  else if (row.offsetTop + row.offsetHeight > scroller.scrollTop + scroller.clientHeight) {
+    scroller.scrollTop = row.offsetTop + row.offsetHeight - scroller.clientHeight
+  }
+}

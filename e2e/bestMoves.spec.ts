@@ -71,7 +71,7 @@ function suite() {
     await expect(advice).toContainText("Not P2's turn.")
     await advice.locator('.analysis-row-select').first().click()
     await expect(advice.locator('.analysis-row.current')).toHaveCount(1)
-    await expect(advice.getByRole('button', { name: /^(Apply|End turn)/ })).toHaveCount(0)
+    await expect(advice.getByRole('button', { name: /^(Play|End turn)/ })).toHaveCount(0)
     await expect(page.getByRole('button', { name: "View P1's best moves" }).locator('.head-dot.me')).toHaveCount(1)
     await page.getByRole('button', { name: "View P3's best moves" }).click()
     await panel(page).getByRole('button', { name: 'End turn', exact: true }).click()
@@ -80,7 +80,7 @@ function suite() {
     await expect(page.getByRole('button', { name: "View P2's best moves" }).locator('.head-dot.me.head-dot-chip')).toHaveCount(1)
   })
 
-  test('a selected move pins its mark, Apply builds and pays, and one undo restores both', async ({ page }) => {
+  test('a selected move pins its mark, Play builds and pays, and one undo restores both', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }) })
     // No token on this board carries a 2 next to a red settlement, so the hand stays at one road's worth.
     await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
@@ -96,13 +96,29 @@ function suite() {
     await page.mouse.move(0, 0)
     await expect(page.locator('.board-canvas [class*="highlight"]')).not.toHaveCount(0)
 
-    await road.getByRole('button', { name: 'Apply', exact: true }).click()
+    await road.getByRole('button', { name: 'Play', exact: true }).click()
     await expect(pieces).toHaveCount(placed + 1)
     await expect.poll(() => redRow(page).allInnerTexts()).not.toEqual(before)
 
     await panel(page).locator('.panel-heading').getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(pieces).toHaveCount(placed)
     await expect.poll(() => redRow(page).allInnerTexts()).toEqual(before)
+  })
+
+  test('a row centres its disc, tiles and score on its text, and selecting it reveals costs without moving them', async ({ page }) => {
+    await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }) })
+    await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
+    const road = panel(page).locator('.analysis-row', { hasText: 'Build road' }).first()
+    const centres = () => road.evaluate((row) => ['.history-disc', '.analysis-row-body', '.move-spot', '.analysis-score'].map((selector) => {
+      const box = row.querySelector(selector)!.getBoundingClientRect()
+      return Math.round((box.top + box.height / 2 - row.getBoundingClientRect().top) * 2) / 2
+    }))
+    await expect(road.locator('.move-costs')).toBeHidden()
+    const resting = await centres()
+    expect(new Set(resting).size).toBe(1)
+    await road.locator('.analysis-row-select').click()
+    await expect(road.locator('.move-costs')).toBeVisible()
+    expect(await centres()).toEqual(resting)
   })
 
   test('a seven shows what to discard and where to move the robber', async ({ page }) => {

@@ -2,22 +2,23 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Cards, KnightPlay } from '../engine/advice/protocol'
 import type { Game } from '../model/game'
 import { activePlayerId, appendLog, currentTurnHistory, endTurn, recordBuyDev, setActivePlayer, turnState } from '../model/turn'
-import { RESOURCES, type Resource } from '../model/types'
+import { PLAYER_PALETTE, RESOURCES, type Resource } from '../model/types'
 import { adviceResponse, useAdvice } from './useAdvice'
 import {
-  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
+  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
 import { Ledger } from './Ledger'
 import { HistoryPanel } from './HistoryPanel'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { readableInk } from './colors'
+import { SpotTiles } from './SpotTiles'
 import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
 import { useCoarsePointer } from './useMediaQuery'
-import { useScrollEdges } from './useScrollEdges'
+import { revealInScroller, useScrollEdges } from './useScrollEdges'
 
 const recordedRolls = new WeakMap<Game, RecordedRoll>()
 const ACTION_TILES = [
@@ -65,6 +66,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const viewingTurn = viewedId === activeId
   const viewingMine = viewedId === board.mePlayerId
   const color = viewed?.color ?? '#8a7a63'
+  const light = color.toLowerCase() === PLAYER_PALETTE.white
   const coarse = useCoarsePointer()
   const [tray, setTray] = useState<(MoveTray & { id: number }) | null>(null)
   const traySequence = useRef(0)
@@ -108,9 +110,11 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     mark(null)
   }
   const commit = useCallback((next: Game) => dispatch({ type: 'commit-game', game: next }), [dispatch])
+  // Every caller ends or abandons a step (tab switch, undo, History opening), so a selected row goes too.
   const close = useCallback(() => {
     setTray(null)
     setKnight(null)
+    setSelected(null)
     dispatch({ type: 'pick-clear' })
     mark(null)
   }, [dispatch, mark])
@@ -154,6 +158,14 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   useEffect(() => {
     if (state.highlight !== own.current) setSelected(null)
   }, [state.highlight])
+  // A selected row opens its buttons, which can land below the scroller's edge.
+  const { node: movesBody, sync: syncEdges } = edges
+  useLayoutEffect(() => {
+    const row = movesBody?.querySelector<HTMLElement>('.analysis-row.current')
+    if (!movesBody || !row) return
+    revealInScroller(movesBody, row)
+    syncEdges()
+  }, [selected, movesBody, syncEdges])
   const pinned = seven || playingKnight || (selected?.game === game) || (state.highlight !== null && state.highlight !== own.current)
   const preview = (marks: HighlightMark[] | null) => { if (!coarse && !pinned) mark(marks) }
   const select = (card: MoveCard) => {
@@ -322,6 +334,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                   const current = selected?.game === game && selected.id === card.id
                   const applyCard = () => { if (card.move) apply(card.move) }
                   const previewCard = () => preview(card.move ? adviceMarks(card.move, color) : null)
+                  const spot = card.move && moveSpot(card.move, board)
                   return (
                     <div
                       key={card.id}
@@ -334,39 +347,36 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                         onClick={() => select(card)}
                         onMouseEnter={previewCard}
                       >
-                        {!card.title && (
-                          <span className="analysis-rank" style={{ background: color, color: readableInk(color) }}>
+                        {card.title
+                          ? <span className="history-disc start" aria-hidden="true"><PlayDevGlyph /></span>
+                          : <span className={`analysis-rank history-disc${light ? ' light' : ''}`} style={{ background: color, color: readableInk(color) }}>
                             {card.rank}
-                          </span>
-                        )}
+                          </span>}
                         <span className="analysis-row-body">
                           {card.title && <span className="analysis-likely-gone-title">{card.title}</span>}
-                          <span className="analysis-pick-line">
-                            <strong><MoveText text={card.label} /></strong>
-                            {card.score !== undefined && (
-                              <span className="analysis-score">
-                                {card.score.toLocaleString('en-US', {
-                                  minimumFractionDigits: 1,
-                                  maximumFractionDigits: 1,
-                                })}
-                              </span>
-                            )}
-                          </span>
+                          <strong><MoveText text={spot?.title ?? card.label} /></strong>
                           {card.reason && <span className="move-reason">{card.reason}</span>}
-                          {card.handDelta && RESOURCES.some((resource) => card.handDelta?.[resource] !== 0) && (
-                            <span className={`analysis-factors move-costs${current ? ' expanded' : ''}`}>
-                              <CardAmounts cards={card.handDelta} signed />
-                            </span>
-                          )}
                         </span>
+                        {spot && <span className="move-spot"><SpotTiles board={board} parts={spot.parts} label={spot.label} small /></span>}
+                        {card.score !== undefined && (
+                          <span className="analysis-score">
+                            {card.score.toLocaleString('en-US', {
+                              minimumFractionDigits: 1,
+                              maximumFractionDigits: 1,
+                            })}
+                          </span>
+                        )}
+                        {card.handDelta && RESOURCES.some((resource) => card.handDelta?.[resource] !== 0) && (
+                          <span className={`analysis-factors move-costs${current ? ' expanded' : ''}`}>
+                            <CardAmounts cards={card.handDelta} signed />
+                          </span>
+                        )}
                       </button>
-                      {card.title && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
-                      {!card.title && current && card.move && (
+                      {card.title && !current && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
+                      {current && (
                         <div className="analysis-touch-actions">
-                          {viewingTurn && <button type="button" className="primary" onClick={applyCard}>
-                            {card.move.type === 'pass'
-                              ? 'End turn'
-                              : card.move.type === 'offerTrade' ? 'Apply: who accepted?' : 'Apply'}
+                          {viewingTurn && card.move && <button type="button" className="primary" onClick={applyCard}>
+                            {card.move.type === 'pass' ? 'End turn' : 'Play'}
                           </button>}
                           <button type="button" onClick={clear}>Clear</button>
                         </div>

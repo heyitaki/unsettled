@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { revealInScroller } from './useScrollEdges'
 import { ChevronGlyph, TickGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 
@@ -92,12 +93,8 @@ export function MenuSelect<T extends string>({
     if (!popup || !option) return
     // Scrolled by hand rather than with scrollIntoView, which also scrolls every
     // ancestor, including the page under a popup that sits near a screen edge.
-    // offsetTop is measured from .menu-popup itself (it is position: absolute,
-    // so it is the options' offsetParent) and shares scrollTop's origin.
-    const top = option.offsetTop
-    const bottom = top + option.offsetHeight
-    if (top < popup.scrollTop) popup.scrollTop = top
-    else if (bottom > popup.scrollTop + popup.clientHeight) popup.scrollTop = bottom - popup.clientHeight
+    // .menu-popup is position: absolute, so it is the options' offsetParent.
+    revealInScroller(popup, option)
   }, [open, active, baseId])
 
   const selectedIndex = options.findIndex((option) => option.value === value)

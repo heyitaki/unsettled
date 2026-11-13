@@ -111,7 +111,7 @@ describe('Best moves recording', () => {
   })
 
 
-  it.each([null, 8])('views rival moves without changing the turn or enabling Apply after roll %s', async (roll) => {
+  it.each([null, 8])('views rival moves without changing the turn or enabling Play after roll %s', async (roll) => {
     const cards = emptyStats().hand
     const edge = boardGrid('standard4').edgeIds[0]
     const derived = { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 2 }
@@ -146,7 +146,7 @@ describe('Best moves recording', () => {
     await clickElement(sections[2].querySelector('.analysis-row-select'))
     expect(seen.state.highlight).toEqual([{ ref: edge, color: '#3063ba', kind: 'road' }])
     expect(sections[2].querySelector('.analysis-row.current')).not.toBeNull()
-    expect([...sections[2].querySelectorAll('button')].some((item) => /^(Apply|Play|End turn)/.test(item.textContent ?? ''))).toBe(false)
+    expect([...sections[2].querySelectorAll('button')].some((item) => /^(Play|End turn)/.test(item.textContent ?? ''))).toBe(false)
     await clickElement(sections[2].querySelectorAll('.analysis-row-select')[1])
     expect(sections[2].textContent).not.toContain('End turn')
     expect(activeTab(seen.state)).toBe(before)
@@ -664,6 +664,43 @@ describe('Best moves recording', () => {
     expect(advice.textContent).not.toContain('follow the roll')
   })
 
+  it('draws a build\'s spot as tiles beside a title without the place', async () => {
+    const cards = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+    const derived = { bank: cards, tradeRates: { wood: 4, sheep: 4, wheat: 4, brick: 4, ore: 4 }, devDeckRemaining: 21, unknownOwnCards: 0 }
+    const edgeId = boardGrid(game().board.layout).edgeIds[0]
+    respond = ({ decision }) => decision.kind === 'preRoll' ? { kind: 'preRoll', play: null, reason: '', derived }
+      : { kind: 'turn', actions: [
+        { action: { type: 'buildRoad', edgeId }, score: 2, reason: 'Reaches a spot', handDelta: { ...cards, wood: -1, brick: -1 } },
+        { action: { type: 'pass' }, score: 0, reason: 'Ends the turn', handDelta: cards },
+      ], derived }
+    await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(game(), 8, {}) }))
+    const [road, pass] = container.querySelectorAll('.moves-panel .analysis-row')
+    expect(road.querySelector('strong')?.textContent).toBe('Build road')
+    expect(road.querySelector('.move-spot svg.spot-tiles-small')?.getAttribute('aria-label')).toBeTruthy()
+    expect(pass.querySelector('strong')?.textContent).toBe('Pass')
+    expect(pass.querySelector('.move-spot')).toBeNull()
+  })
+
+  it('scrolls only the list to a selected row, and drops the selection when History opens', async () => {
+    const cards = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+    const derived = { bank: cards, tradeRates: { wood: 4, sheep: 4, wheat: 4, brick: 4, ore: 4 }, devDeckRemaining: 21, unknownOwnCards: 0 }
+    respond = ({ decision }) => decision.kind === 'preRoll' ? { kind: 'preRoll', play: null, reason: '', derived }
+      : { kind: 'turn', actions: [{ action: { type: 'pass' }, score: 0, reason: 'Ends the turn', handDelta: cards }], derived }
+    await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(game(), 8, {}) }))
+    const body = container.querySelector<HTMLElement>('.moves-body')!
+    const row = body.querySelector('.analysis-row')!
+    Object.defineProperties(body, { clientHeight: { value: 80 }, scrollHeight: { value: 400 } })
+    Object.defineProperties(row, { offsetTop: { value: 300 }, offsetHeight: { value: 60 } })
+    document.documentElement.scrollTop = 37
+    await clickElement(row.querySelector('.analysis-row-select'))
+    expect(body.scrollTop).toBe(280)
+    expect(document.documentElement.scrollTop).toBe(37)
+    expect(row.querySelector('.analysis-touch-actions')?.textContent).toBe('End turnClear')
+    await click('History')
+    await click('Close history')
+    expect(container.querySelector('.analysis-row.current')).toBeNull()
+  })
+
   it('shows playable dev cards only, and hides the tile after playing', async () => {
     await click('End turn')
     expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
@@ -798,7 +835,7 @@ describe('Best moves recording', () => {
       derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(game(), 8, {}) }))
     await clickElement(container.querySelector('.analysis-row-select'))
-    await click('Apply: who accepted?')
+    await click('Play')
     expect(button('Gives wood').textContent).toBe('2/5')
     expect(button('Gets ore').textContent).toBe('1')
     await click('Bee', tray())
@@ -886,7 +923,7 @@ describe('Best moves recording', () => {
       : { kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } }
     await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(setActivePlayer(adjustCounter(game(), 'b', 'devCards', 1), 'b'), 8, {}) }))
     await clickElement(container.querySelector('.analysis-row-select'))
-    await click('Apply')
+    await click('Play')
     expect(container.querySelectorAll('.hex-highlight')).toHaveLength(1)
     expect(container.querySelector('.move-robber')?.textContent).toContain('Suggested:')
     expect(container.querySelector('.move-robber')?.textContent).toContain('steal from aki')
@@ -1356,7 +1393,7 @@ describe('Best moves recording', () => {
     expect(container.querySelectorAll('.move-reason')).toHaveLength(0)
     await clickElement(container.querySelector('.analysis-row-select'))
     expect(seen.state.highlight).toEqual([{ ref: edge, color: game().board.players[0].color, kind: 'road' }])
-    await click('Apply')
+    await click('Play')
     expect(game().board.roads).toHaveLength(1)
     expect(game().stats.aki.hand).toMatchObject({ wood: 6, brick: 4 })
     expect(container.querySelector('.move-log li > span')?.textContent).toBe('Built a road')
