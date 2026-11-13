@@ -20,7 +20,7 @@ export function HistoryControls() {
       </>}</span>
       <button type="button" className="history-later" aria-label="Later turn" disabled={index === now} onClick={() => select(index + 1)}><ChevronGlyph /></button>
       <span className="history-divider" aria-hidden="true" />
-      <button type="button" className="history-now-button" disabled={index === now} onClick={() => select(now)}>Back to now</button>
+      <button type="button" className="history-now-button" disabled={index === now} onClick={() => dispatch({ type: 'history', open: false })}>Back to now</button>
     </div>
   )
 }

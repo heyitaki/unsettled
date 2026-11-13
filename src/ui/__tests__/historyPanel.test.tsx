@@ -71,7 +71,6 @@ it('shows the toggle only after a turn starts and swaps the panels with Now sele
   expect(button('History').getAttribute('aria-pressed')).toBe('true')
   expect(container.querySelector('.move-steps')).toBeNull()
   expect([...container.querySelectorAll('h2')].map((node) => node.textContent)).toEqual(['Ledger', 'History'])
-  expect(container.querySelector('.history-count')?.textContent).toBe('4 turns')
   expect([...container.querySelectorAll('.history-select')].map((node) => node.getAttribute('aria-label')))
     .toEqual(['Turn 5: Bee', 'Turn 4: aki', 'Turn 3: Cee', 'Turn 2: Bee', 'Turn 1: aki', 'Game start'])
   expect([...container.querySelectorAll('.history-round')].map((node) => node.textContent)).toEqual(['Round 2', 'Round 1', 'Setup'])
@@ -85,6 +84,24 @@ it('shows the toggle only after a turn starts and swaps the panels with Now sele
   expect(container.querySelector('.history-panel')).toBeNull()
   expect(container.querySelector('.history-controls')).toBeNull()
   expect(container.querySelector('.move-steps')).not.toBeNull()
+  await click('History')
+  await click('Close history')
+  expect(container.querySelector('.history-panel')).toBeNull()
+  expect(button('History').getAttribute('aria-pressed')).toBe('false')
+})
+
+it('steps turns from the History heading', async () => {
+  await commit(seed())
+  await click('History')
+  const heading = (label: string) => container.querySelector<HTMLButtonElement>(`.history-panel .panel-heading [aria-label="${label}"]`)!
+  expect(heading('Later turn').disabled).toBe(true)
+  await act(async () => heading('Earlier turn').click())
+  expect(seen.state.viewedTurn).toBe(4)
+  expect(button('Turn 4: aki').getAttribute('aria-pressed')).toBe('true')
+  await click('Game start')
+  expect(heading('Earlier turn').disabled).toBe(true)
+  await act(async () => heading('Later turn').click())
+  expect(seen.state.viewedTurn).toBe(1)
 })
 
 it('opens details, replaces the summary, and steps newer and older with the keyboard', async () => {
@@ -94,7 +111,8 @@ it('opens details, replaces the summary, and steps newer and older with the keyb
   const row = button('Turn 1: aki').closest('.history-row')!
   expect(row.querySelector('.history-summary')).toBeNull()
   expect(row.querySelector('.move-log')?.textContent).toBe('Built a road')
-  expect(row.querySelectorAll('.move-prod-cards svg')).toHaveLength(2)
+  expect(row.querySelectorAll('.move-prod-cards svg')).toHaveLength(1)
+  expect(row.querySelector('.move-prod-card')?.textContent).toBe('2')
   expect(container.querySelector('.ledger-asof')?.textContent).toBe('After turn 1')
   await act(async () => button('Turn 1: aki').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })))
   expect(button('Turn 2: Bee').getAttribute('aria-pressed')).toBe('true')
@@ -133,6 +151,8 @@ it('shows past pieces and hands without allowing Ledger edits or board input', a
   })
   await click('Back to now')
   expect(container.querySelector('.ledger-asof')).toBeNull()
+  expect(container.querySelector('.history-panel')).toBeNull()
+  expect(seen.state.historyOpen).toBe(false)
   expect(container.querySelector('[filter="url(#piece-shadow)"]')!.innerHTML).toBe(boardNow)
   expect(button('Correct aki').disabled).toBe(false)
 })

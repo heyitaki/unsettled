@@ -47,7 +47,8 @@ function historyTest() {
     await expect(page.locator('.ledger-asof')).toHaveCount(0)
     await expect(cities).toHaveCount(2)
     await expect(page.locator('.ledger-toggle').first()).toBeEnabled()
-    await expect(page.getByRole('button', { name: 'Back to now' })).toBeDisabled()
+    await expect(page.locator('.history-panel')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Back to now' })).toHaveCount(0)
   })
 }
 

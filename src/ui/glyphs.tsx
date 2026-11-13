@@ -479,6 +479,14 @@ export function ArrowRightGlyph() {
   )
 }
 
+export function CloseGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M5 5l10 10M15 5 5 15" />
+    </svg>
+  )
+}
+
 /** A die face, for the randomize action. */
 export function DiceGlyph() {
   return (

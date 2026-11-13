@@ -4,7 +4,7 @@ import { historyPlayer, turnSummary } from '../model/history'
 import { PLAYER_PALETTE } from '../model/types'
 import { ProductionPlayer } from './BestMovesTrays'
 import { readableInk } from './colors'
-import { BoardHexGlyph, RobberGlyph, TickGlyph } from './glyphs'
+import { ArrowLeftGlyph, ArrowRightGlyph, BoardHexGlyph, CloseGlyph, RobberGlyph, TickGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore } from './store'
 
@@ -32,17 +32,28 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
     dispatch({ type: 'view-turn', index: index === now ? null : index })
     revealBoardIfScrolledPast()
   }
+  const step = (delta: number) => {
+    const index = Math.max(first, Math.min(now, selected + delta))
+    select(index)
+    return index
+  }
   const rows = [{ index: now, turn: game.turn }, ...turns.map((turn, i) => ({ index: i + 1, turn })).reverse()]
   return (
     <section className={`${className} best-moves-panel history-panel${scrolled ? ' scrolled' : ''}`}
       aria-label="Turn history" onKeyDown={(event) => {
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
         event.preventDefault()
-        const index = Math.max(first, Math.min(now, selected + (event.key === 'ArrowUp' ? 1 : -1)))
-        select(index)
+        const index = step(event.key === 'ArrowUp' ? 1 : -1)
         listRef.current?.querySelector<HTMLButtonElement>(`[data-turn="${index}"]`)?.focus({ preventScroll: true })
       }}>
-      <div className="panel-heading"><h2>History</h2><span className="history-count">{turns.length} {turns.length === 1 ? 'turn' : 'turns'}</span></div>
+      <div className="panel-heading">
+        <h2>History</h2>
+        <div className="panel-actions">
+          <button type="button" className="panel-dots" aria-label="Earlier turn" data-label="Earlier" disabled={selected === first} onClick={() => step(-1)}><ArrowLeftGlyph /></button>
+          <button type="button" className="panel-dots" aria-label="Later turn" data-label="Later" disabled={selected === now} onClick={() => step(1)}><ArrowRightGlyph /></button>
+          <button type="button" className="panel-dots" aria-label="Close history" data-label="Close" onClick={() => dispatch({ type: 'history', open: false })}><CloseGlyph /></button>
+        </div>
+      </div>
       <div className="history-list" role="list" ref={listRef} onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
         {rows.map(({ index, turn }) => {
           if (!turn) return null
