@@ -99,7 +99,19 @@ describe('game history', () => {
   it('stores pieces as changes, not a full copy per turn', () => {
     let game = started()
     for (let turn = 0; turn < 6; turn += 1) game = endTurn(recordRoll(game, 8, {}))
-    expect(game.history?.turns.every((record) => !record.buildings && !record.roads)).toBe(true)
+    expect(game.history?.turns.every((record) => !record.buildings && !record.roads && !record.stats)).toBe(true)
+  })
+
+  it('stores only the players whose stats changed, and a removed player as null', () => {
+    let game = recordRoll(started(), 8, { c: { wood: 1, brick: 0, sheep: 0, wheat: 0, ore: 0 } })
+    game = endTurn(game)
+    expect(Object.keys(game.history?.turns[0].stats ?? {})).toEqual(['c'])
+    const before = game
+    game = endTurn(withBoard(game, { ...game.board, players: game.board.players.filter((player) => player.id !== 'c') }))
+    expect(game.history?.turns[1].stats).toMatchObject({ c: null })
+    expect(historyGame(game, 1).stats).toEqual(historyGame(before, 1).stats)
+    expect(historyGame(game, 2).stats).not.toHaveProperty('c')
+    expect(parseGame(serializeGame(game))).toEqual({ ok: true, game })
   })
 
   it('survives a save and reload', () => {

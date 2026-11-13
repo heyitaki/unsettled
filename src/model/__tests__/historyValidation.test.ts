@@ -50,7 +50,7 @@ describe('history validation and boundaries', () => {
     const raw = structuredClone(appendLog(game, 'Built a city'))
     const result = parseGame(raw)
     raw.history!.start.buildings[0].tier = 'superCity'
-    raw.history!.turns[0].stats.aki.hand.wood = 99
+    raw.history!.start.stats.aki.hand.wood = 99
     raw.turn!.log!.push('Changed input')
     expect(result).toEqual({ ok: true, game: appendLog(game, 'Built a city') })
   })
@@ -69,6 +69,8 @@ describe('history validation and boundaries', () => {
     (raw) => { raw.history!.start.stats.b.hand.wood = -1 },
     (raw) => { Object.assign(raw.history!.start, { robber: { q: 0 } }) },
     (raw) => { raw.history!.turns[0].rolled = 13 },
+    (raw) => { Object.assign(raw.history!.turns[0], { stats: { b: { hand: 1 } } }) },
+    (raw) => { Object.assign(raw.history!.turns[0], { stats: [] }) },
     (raw) => { raw.history!.turns[0].roads = { invalid: 'b' } },
     (raw) => { raw.history!.turns[0].buildings = { invalid: null } },
     (raw) => { raw.history!.turns[0].gains = { b: { wood: -1 } } },

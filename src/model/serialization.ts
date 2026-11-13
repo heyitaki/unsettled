@@ -136,9 +136,10 @@ const isGains = (value: unknown): value is NonNullable<TurnState['gains']> =>
   isRecord(value) && Object.values(value).every((cards) => isRecord(cards) &&
     Object.entries(cards).every(([resource, count]) => (RESOURCES as readonly string[]).includes(resource) && isCount(count) && count > 0))
 
-function isHistoryPosition(value: Record<string, unknown>): boolean {
+function isHistoryPosition(value: Record<string, unknown>, record = false): boolean {
   if (value.robber !== null && !isCoord(value.robber)) return false
-  if (!isRecord(value.stats) || !Object.values(value.stats).every((stats) => normalizePlayerStats(stats) !== null)) return false
+  if ((!record || Object.hasOwn(value, 'stats')) && (!isRecord(value.stats) ||
+    !Object.values(value.stats).every((stats) => record && stats === null || normalizePlayerStats(stats) !== null))) return false
   if (Object.hasOwn(value, 'awards')) {
     const awards = value.awards
     if (!isRecord(awards) || !exactKeys(awards, ['longestRoad', 'largestArmy']) ||
@@ -160,9 +161,9 @@ function isHistory(value: unknown): value is GameHistory {
     !Array.isArray(start.buildings) || !start.buildings.every(isBuilding) ||
     !Array.isArray(start.roads) || !start.roads.every(isRoad)) return false
   return Array.isArray(value.turns) && value.turns.every((record: unknown) => {
-    if (!isRecord(record) || !exactKeys(record, ['playerId', 'rolled', 'log', 'robber', 'stats',
-      ...['gains', 'buildings', 'roads', 'awards', 'devHand'].filter((key) => Object.hasOwn(record, key))]) ||
-      typeof record.playerId !== 'string' || !isRoll(record.rolled) || !isLog(record.log) || !isHistoryPosition(record)) return false
+    if (!isRecord(record) || !exactKeys(record, ['playerId', 'rolled', 'log', 'robber',
+      ...['gains', 'buildings', 'roads', 'stats', 'awards', 'devHand'].filter((key) => Object.hasOwn(record, key))]) ||
+      typeof record.playerId !== 'string' || !isRoll(record.rolled) || !isLog(record.log) || !isHistoryPosition(record, true)) return false
     if (Object.hasOwn(record, 'gains') && !isGains(record.gains)) return false
     if (Object.hasOwn(record, 'buildings') && (!isRecord(record.buildings) ||
       !Object.entries(record.buildings).every(([id, piece]) => isCanonicalId(id, parseVertexId) &&

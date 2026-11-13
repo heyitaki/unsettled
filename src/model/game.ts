@@ -73,7 +73,8 @@ export interface TurnRecord {
   buildings?: Record<string, Building | null>
   roads?: Record<string, string | null>
   robber: AxialCoord | null
-  stats: Record<string, PlayerStats>
+  /** Only the players whose stats changed since the previous record; null for a player who left the roster. */
+  stats?: Record<string, PlayerStats | null>
   awards?: AwardHolders
   devHand?: DevHand
 }

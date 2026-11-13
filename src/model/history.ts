@@ -1,5 +1,5 @@
-import type { Game, GameHistory, Position, TurnRecord, TurnState } from './game'
-import type { Board, EdgeId, Player, VertexId } from './types'
+import type { Game, GameHistory, PlayerStats, Position, TurnRecord, TurnState } from './game'
+import { RESOURCES, type Board, type EdgeId, type Player, type VertexId } from './types'
 
 const REMOVED_PLAYER = { name: 'Removed player', color: '#c5bfb5' }
 
@@ -22,7 +22,12 @@ export function positionOf(game: Game): Position {
 function foldPosition(history: GameHistory, index: number): Position {
   const buildings = new Map(history.start.buildings.map((piece) => [piece.vertexId, piece]))
   const roads = new Map(history.start.roads.map((piece) => [piece.edgeId, piece]))
+  const stats = { ...history.start.stats }
   for (const record of history.turns.slice(0, index)) {
+    for (const [id, playerStats] of Object.entries(record.stats ?? {})) {
+      if (playerStats === null) delete stats[id]
+      else stats[id] = playerStats
+    }
     for (const [id, building] of Object.entries(record.buildings ?? {})) {
       if (building === null) buildings.delete(id as VertexId)
       else buildings.set(building.vertexId, building)
@@ -35,7 +40,7 @@ function foldPosition(history: GameHistory, index: number): Position {
   }
   const position = index === 0 ? history.start : history.turns[index - 1]
   return {
-    buildings: [...buildings.values()], roads: [...roads.values()], robber: position.robber, stats: position.stats,
+    buildings: [...buildings.values()], roads: [...roads.values()], robber: position.robber, stats,
     ...(position.awards === undefined ? {} : { awards: position.awards }),
     ...(position.devHand === undefined ? {} : { devHand: position.devHand }),
   }
@@ -61,7 +66,7 @@ export function historyGame(game: Game, index: number): Game {
 
 export function turnRecord(game: Game, history: GameHistory, turn: TurnState): TurnRecord {
   const previous = foldPosition(history, history.turns.length)
-  const { buildings, roads, ...position } = positionOf(game)
+  const { buildings, roads, stats, ...position } = positionOf(game)
   const oldBuildings = new Map(previous.buildings.map((piece) => [piece.vertexId, piece]))
   const oldRoads = new Map(previous.roads.map((piece) => [piece.edgeId, piece.playerId]))
   const buildingDiff: NonNullable<TurnRecord['buildings']> = {}
@@ -77,12 +82,23 @@ export function turnRecord(game: Game, history: GameHistory, turn: TurnState): T
     oldRoads.delete(road.edgeId)
   }
   for (const id of oldRoads.keys()) roadDiff[id] = null
+  const statsDiff: NonNullable<TurnRecord['stats']> = {}
+  for (const [id, playerStats] of Object.entries(stats)) {
+    if (!sameStats(previous.stats[id], playerStats)) statsDiff[id] = playerStats
+  }
+  for (const id of Object.keys(previous.stats)) if (!Object.hasOwn(stats, id)) statsDiff[id] = null
   return {
     ...position, playerId: turn.playerId, rolled: turn.rolled, log: turn.log ?? [],
     ...(turn.gains === undefined ? {} : { gains: turn.gains }),
     ...(Object.keys(buildingDiff).length ? { buildings: buildingDiff } : {}),
     ...(Object.keys(roadDiff).length ? { roads: roadDiff } : {}),
+    ...(Object.keys(statsDiff).length ? { stats: statsDiff } : {}),
   }
+}
+
+function sameStats(a: PlayerStats | undefined, b: PlayerStats): boolean {
+  return a !== undefined && a.handUnknown === b.handUnknown && a.devCards === b.devCards && a.knights === b.knights &&
+    a.vpCards === b.vpCards && RESOURCES.every((resource) => a.hand[resource] === b.hand[resource])
 }
 
 export function turnSummary(log: readonly string[]): string {
