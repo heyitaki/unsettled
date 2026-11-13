@@ -690,7 +690,7 @@ describe('Best moves recording', () => {
   it('folds a recorded roll, shows production under it, and changes it after later actions', async () => {
     respond = () => ({ kind: 'produce', gains: { aki: { ...emptyStats().hand, wood: 2 } } })
     expect(container.querySelectorAll('.move-dice button')).toHaveLength(11)
-    expect(button('7').querySelector('.dice-pips')?.children).toHaveLength(0)
+    expect(button('7').querySelector('.seven-robber')).not.toBeNull()
     expect(button('8').querySelector('.dice-pips')?.children).toHaveLength(5)
     const before = game()
     await click('8')

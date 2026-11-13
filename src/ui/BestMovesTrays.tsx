@@ -13,7 +13,7 @@ import {
   adviceMarks, buildablePieces, cardRange, DEV_LABELS, discardInputCards, hexLabel, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
 import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
-import { PencilGlyph, ResourceGlyph } from './glyphs'
+import { PencilGlyph, ResourceGlyph, RobberGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'
 import { useBoardPick } from './useBoardPick'
@@ -132,11 +132,13 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
           {Array.from({ length: 11 }, (_, index) => index + 2).map((total) => (
             <button type="button" key={total} className={total === 7 ? 'seven' : ''} disabled={rolling?.game === game} onClick={() => roll(total)}>
               {total}
-              <svg className="dice-pips" viewBox="0 0 30 4" width="30" height="4" aria-hidden="true">
-                {Array.from({ length: total === 7 ? 0 : pips(total) }, (_, index) => (
-                  <circle key={index} cx={15 + (index - (pips(total) - 1) / 2) * 4} cy="2" r="1.3" fill="currentColor" />
-                ))}
-              </svg>
+              {total === 7 ? <RobberGlyph className="seven-robber" /> : (
+                <svg className="dice-pips" viewBox="0 0 30 4" width="30" height="4" aria-hidden="true">
+                  {Array.from({ length: pips(total) }, (_, index) => (
+                    <circle key={index} cx={15 + (index - (pips(total) - 1) / 2) * 4} cy="2" r="1.3" fill="currentColor" />
+                  ))}
+                </svg>
+              )}
             </button>
           ))}
         </div>

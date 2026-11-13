@@ -125,7 +125,7 @@ Once every starting settlement is placed the analysis block shows the draft reca
 What differs on the phone:
 
 - `Undo` and `Redo` in the heading follow the heading button size in S5, and every turn-order circle has a 44px touch target.
-- The dice are two rows of six rather than one row of eleven, each 44px tall; the action tiles and the robber popover's buttons are at least 44px tall.
+- The dice wrap into as many columns as fit at 36px or wider (eight on a 390px phone), each 4:5 like the desktop ones and so over 44px tall; the action tiles and the robber popover's buttons are at least 44px tall.
 - A card's cost chips show without selecting it, since there is no hover.
 - The Ledger uses columns `100px 1fr 36px 36px` with a 6px gap. The Ledger's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
 - A build or a robber move that needs a spot scrolls the board into view, as selecting a row does (S5).

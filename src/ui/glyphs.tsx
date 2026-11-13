@@ -284,6 +284,16 @@ export function ChevronGlyph({ className }: { className?: string }) {
   )
 }
 
+/** The board's robber in flat colour, for the 7 on the Roll step. */
+export function RobberGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="-15.5 -20.5 31 43.5" aria-hidden="true">
+      <circle cy={ROBBER_HEAD_CY} r={ROBBER_HEAD_R} fill="currentColor" />
+      <path d={ROBBER_BODY} fill="currentColor" />
+    </svg>
+  )
+}
+
 export function PencilGlyph() {
   return (
     <svg {...LINE_ART} width="17" height="17" viewBox="0 0 20 20" strokeWidth="1.7">
