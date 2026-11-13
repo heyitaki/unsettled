@@ -72,7 +72,7 @@ export function tabIsDirty(game: Game, saved: SavedMap): boolean {
 export type SaveTabResult =
   // `evicted`: the maps the library cap dropped to make room for a new entry.
   | { ok: true; id: string; name: string; evicted?: readonly string[] }
-  | { ok: false; error: string }
+  | { ok: false; error: string; quota?: true }
 
 /**
  * Save a tab into the library, with no prompt: the autosave has no name field

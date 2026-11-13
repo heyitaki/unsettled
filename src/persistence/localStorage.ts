@@ -43,9 +43,16 @@ export interface PersistedWorkspace {
   tabs: WorkspaceTab[]
 }
 
-type WriteResult = { ok: true } | { ok: false; error: string }
+type WriteResult = { ok: true } | { ok: false; error: string; quota?: true }
 // `evicted`: the ids the cap dropped to make room, present only when it did.
-type SaveMapResult = { ok: true; id: string; evicted?: readonly string[] } | { ok: false; error: string }
+type SaveMapResult = { ok: true; id: string; evicted?: readonly string[] } | Extract<WriteResult, { ok: false }>
+
+export function isQuotaError(error: unknown): boolean {
+  return error instanceof DOMException && (
+    error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    || error.code === 22 || error.code === 1014
+  )
+}
 
 /** How many maps the library keeps; a save beyond it drops the least recently touched. */
 export const MAX_MAPS = 50
@@ -58,7 +65,7 @@ function isNamedMapEntry(entry: unknown): entry is Record<string, unknown> & { n
 }
 
 // Empty ids would make unrelated entries share an identity.
-const mapEntryId = (entry: unknown): string | null =>
+export const mapEntryId = (entry: unknown): string | null =>
   isRecord(entry) && typeof entry.id === 'string' && entry.id.length > 0 ? entry.id : null
 
 // Maps are addressed by id everywhere above this layer: names are a label the
@@ -66,7 +73,7 @@ const mapEntryId = (entry: unknown): string | null =>
 const findMapIndexById = (maps: unknown[], id: string): number =>
   maps.findIndex((entry) => mapEntryId(entry) === id)
 
-function readRawMaps(): { entries: unknown[]; warning?: string } {
+export function readRawMaps(): { entries: unknown[]; warning?: string } {
   return parseRawMaps(localStorage.getItem(MAPS_KEY))
 }
 
@@ -93,7 +100,11 @@ function writeMaps(maps: unknown[]): WriteResult {
     localStorage.setItem(MAPS_KEY, JSON.stringify(maps))
     return { ok: true }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Unable to write localStorage' }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Unable to write localStorage',
+      ...(isQuotaError(error) ? { quota: true } : {}),
+    }
   }
 }
 
@@ -190,7 +201,7 @@ function mapEntry(name: string, game: Game, existing: Record<string, unknown> | 
 
 // The newest stamp an entry carries, so a board that was merely looked at
 // counts as touched; an entry with no stamps at all (legacy) is the coldest.
-function lastTouched(entry: unknown): number {
+export function lastTouched(entry: unknown): number {
   if (!isRecord(entry)) return -Infinity
   const stamps = [entry.createdAt, entry.modifiedAt, entry.openedAt]
     .filter((value): value is number => typeof value === 'number')
@@ -320,6 +331,16 @@ export function deleteMap(id: string): WriteResult {
   return writeMaps(entries.filter((_, at) => at !== index))
 }
 
+export function deleteMaps(ids: readonly string[]): WriteResult {
+  const wanted = new Set(ids)
+  const entries = readRawMaps().entries
+  const kept = entries.filter((entry) => {
+    const id = mapEntryId(entry)
+    return id === null || !wanted.has(id)
+  })
+  return kept.length === entries.length ? { ok: true } : writeMaps(kept)
+}
+
 /**
  * Deletes the row at a listed position: the one way to address an entry with
  * no usable id, or one with no name, whose id may repeat a real map's. Refused
@@ -392,7 +413,11 @@ export function saveWorkspaceBlob(blob: string): WriteResult {
     localStorage.setItem(WORKSPACE_KEY, blob)
     return { ok: true }
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Unable to autosave workspace' }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Unable to autosave workspace',
+      ...(isQuotaError(error) ? { quota: true } : {}),
+    }
   }
 }
 

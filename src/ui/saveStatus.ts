@@ -2,6 +2,7 @@ import type { WorkspaceTab } from '../persistence/localStorage'
 
 export interface SaveFailure {
   message: string
+  quota?: boolean
   tab?: WorkspaceTab
 }
 

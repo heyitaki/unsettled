@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSaveRecovery, useStore } from './store'
 import { createLibraryBackup } from '../persistence/backup'
 import { downloadBoard } from './boardFiles'
 import { recoveryTabs } from './saveStatus'
 import { persistedWorkspace } from './workspaceSync'
+import { deleteMaps, readLibrary, storedTabLinks } from '../persistence/localStorage'
+import { cleanupCandidates } from '../persistence/storageCleanup'
+import { StorageFullDialog } from './StorageFullDialog'
 
 /**
  * The toast, rendered by both shells so a notice reads the same wherever it is
@@ -12,8 +15,16 @@ import { persistedWorkspace } from './workspaceSync'
  */
 export function GlobalNotice() {
   const { state, dispatch } = useStore()
-  const { failures, retry } = useSaveRecovery()
+  const { failures, retry, storageFullAttempt, dismissStorageFull, retryAfterCleanup } = useSaveRecovery()
   const errors = Object.values(failures)
+  const openMaps = useCallback(() => new Set([
+    ...state.tabs.map((tab) => tab.mapId), ...storedTabLinks().values(),
+  ].filter((id): id is string => id !== null)), [state.tabs])
+  const cleanup = useMemo(() => {
+    void state.mapsRevision
+    return Object.values(failures).some((failure) => failure.quota)
+      ? cleanupCandidates(Date.now(), openMaps()) : { candidates: [], preselected: [] }
+  }, [failures, openMaps, state.mapsRevision])
   const [backupError, setBackupError] = useState<string | null>(null)
   // Pause auto-dismiss while the pointer is over the toast, so it can be read,
   // clicked, and text-selected; the timer restarts fresh once the pointer leaves.
@@ -33,21 +44,38 @@ export function GlobalNotice() {
     return () => window.removeEventListener('unsettled:notice', showNotice)
   }, [dispatch])
   if (errors.length > 0) return (
-    <div className="global-notice save-failure" role="alert">
-      <div>
-        {errors.map((error, index) => <p key={index}>{error.message}</p>)}
-        {backupError && <p>{backupError}</p>}
-        <button type="button" onClick={retry}>Retry saving</button>
-        <button type="button" onClick={() => {
-          try {
-            downloadBoard('unsettled-library-backup', createLibraryBackup(recoveryTabs(persistedWorkspace(state.tabs).tabs, errors)))
-            setBackupError(null)
-          } catch (error) {
-            setBackupError(`Backup failed: ${error instanceof Error ? error.message : 'Unable to export backup'}`)
-          }
-        }}>Export backup</button>
+    <>
+      {storageFullAttempt !== null && cleanup.candidates.length > 0 && <StorageFullDialog
+        key={storageFullAttempt}
+        {...cleanup}
+        onCancel={dismissStorageFull}
+        onDelete={(ids) => {
+          const open = openMaps()
+          const result = deleteMaps(ids.filter((id) => !open.has(id)))
+          if (!result.ok) return result.error
+          dispatch({ type: 'maps-changed', library: readLibrary() })
+          retryAfterCleanup()
+          return null
+        }}
+      />}
+      <div className="global-notice save-failure" role="alert">
+        <div>
+          {errors.map((error, index) => <p key={index}>{error.message}</p>)}
+          {errors.some((error) => error.quota) && cleanup.candidates.length === 0
+            && <p>Delete or export old games to make room.</p>}
+          {backupError && <p>{backupError}</p>}
+          <button type="button" onClick={retry}>Retry saving</button>
+          <button type="button" onClick={() => {
+            try {
+              downloadBoard('unsettled-library-backup', createLibraryBackup(recoveryTabs(persistedWorkspace(state.tabs).tabs, errors)))
+              setBackupError(null)
+            } catch (error) {
+              setBackupError(`Backup failed: ${error instanceof Error ? error.message : 'Unable to export backup'}`)
+            }
+          }}>Export backup</button>
+        </div>
       </div>
-    </div>
+    </>
   )
   if (!state.notice) return null
   return (

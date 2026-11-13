@@ -118,6 +118,8 @@ Bottom of the screen, above the safe area, with an ink ground, surface text and 
 
 Save failures stay visible until resolved, with `Retry saving` and `Export backup` actions. A board saved again after it closed says so, and its rescued edits land as a separate board rather than over the newer save. Ordinary notices still dismiss automatically.
 
+A quota failure clears the analysis cache and retries once before the shared `Storage is full` dialog offers closed games for deletion, as specified in [`../storage-full/plan.md`](../storage-full/plan.md). It excludes maps open here or in the stored workspace, lists the least recently used first, and checks games unused for at least 30 days (or the oldest five when none qualify). Deleting the checked games refreshes the library and retries saving; a further quota failure opens a fresh list. `Not now` keeps it closed until quota failures clear. With no candidates, the toast adds `Delete or export old games to make room.`
+
 ### S10 · Best moves
 
 Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (the `Ledger` section, `Record your turn` with its step rail and no player picker, then `Best moves`), on the main page so the Ledger is in view while choosing a move. The Players screen stays for the roster.

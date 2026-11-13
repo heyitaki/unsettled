@@ -23,6 +23,7 @@ import type {
   TileKind,
 } from '../model/types'
 import {
+  ANALYSIS_CACHE_KEY,
   loadActiveTab,
   loadMaps,
   loadWorkspace,
@@ -563,11 +564,19 @@ const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<Store
 const SaveRecoveryContext = createContext<{
   failures: Readonly<Record<string, SaveFailure>>
   retry(): void
+  storageFullAttempt: number | null
+  dismissStorageFull(): void
+  retryAfterCleanup(): void
 } | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
   const [failures, setFailures] = useState<Record<string, SaveFailure>>({})
+  const [cleanup, setCleanup] = useState<{
+    attempt: number
+    failures: Readonly<Record<string, SaveFailure>>
+    dismissed: boolean
+  } | null>(null)
   const reportSave = useCallback<ReportSave>((key, failure) => {
     setFailures((previous) => {
       if (failure === null && !(key in previous)) return previous
@@ -666,15 +675,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dispatch(action)
   }, [autosave])
   const value = useMemo(() => ({ state, dispatch: dispatchDiscarding }), [state, dispatchDiscarding])
-  const retry = () => {
+  const retry = useCallback(() => {
     const linked = autosave.flush()
     sync.arm(persistedWorkspace(linked ?? state.tabs))
     if (sync.flush() === 'deferred') {
       deferred.current = true
       rearm()
     }
+  }, [autosave, sync, state.tabs])
+  useEffect(() => {
+    if (!Object.values(failures).some((failure) => failure.quota)) {
+      setCleanup(null)
+      return
+    }
+    if (cleanup !== null) return
+    setCleanup({ attempt: 1, failures, dismissed: false })
+    try {
+      localStorage.removeItem(ANALYSIS_CACHE_KEY)
+    } catch {
+      // Storage can be blocked between the failed write and cache removal.
+    }
+    retry()
+  }, [failures, cleanup, retry])
+
+  // A deferred retry can leave the old failure visible until a later flush.
+  const storageFullAttempt = cleanup !== null && !cleanup.dismissed
+    && Object.entries(failures).some(([key, failure]) => failure.quota && failure !== cleanup.failures[key])
+    ? cleanup.attempt : null
+  const dismissStorageFull = () => setCleanup((previous) => previous && { ...previous, dismissed: true })
+  const retryAfterCleanup = () => {
+    setCleanup((previous) => ({ attempt: (previous?.attempt ?? 0) + 1, failures, dismissed: false }))
+    retry()
   }
-  return createElement(SaveRecoveryContext.Provider, { value: { failures, retry } },
+  return createElement(SaveRecoveryContext.Provider, {
+    value: { failures, retry, storageFullAttempt, dismissStorageFull, retryAfterCleanup },
+  },
     createElement(StoreContext.Provider, { value }, children))
 }
 
