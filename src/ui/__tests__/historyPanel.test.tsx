@@ -155,15 +155,15 @@ it('disables the controls at either end and names the current roll', async () =>
   expect(seen.state.viewedTurn).toBe(1)
 })
 
-it('hides the award menu in a past view and labels removed players', async () => {
+it('hides the award tie lines in a past view and labels removed players', async () => {
   let next = seed()
   next = adjustCounter(adjustCounter(next, 'aki', 'knights', 3), 'b', 'knights', 3)
   next = { ...next, history: { ...next.history!, start: { ...next.history!.start, stats: next.stats } } }
   await commit(next)
-  expect(button('Award holders')).toBeDefined()
+  expect(container.querySelector('.tie-line')).not.toBeNull()
   await click('History')
   await click('Game start')
-  expect(container.querySelector('[aria-label="Award holders"]')).toBeNull()
+  expect(container.querySelector('.tie-line')).toBeNull()
   await commit(withBoard(next, removePlayer(next.board, 'c')))
   expect(button('Turn 3: Removed player').querySelector<HTMLElement>('.history-disc')?.style.background).toBe('rgb(197, 191, 181)')
   await click('Turn 3: Removed player')

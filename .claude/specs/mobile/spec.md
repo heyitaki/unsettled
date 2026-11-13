@@ -110,7 +110,7 @@ Full-screen overlay. Header: back chevron, `Players`, then in the right corner a
 
 **Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `Picking 3rd and 6th` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
 
-The Best moves Ledger shows hands, pieces, awards and VP on both trees (O1), including before any player is active. Its heading has the same three-dot `Award holders` menu as desktop D8, shown only while an award is tied. The Players screen keeps the roster and snake draft.
+The Best moves Ledger shows hands, pieces, awards and VP on both trees (O1), including before any player is active. It has the same award tie lines as desktop D8 above its column headings, with the pills on their own row. The Players screen keeps the roster and snake draft.
 
 ### S9 · Toast
 
@@ -122,7 +122,7 @@ Save failures stay visible until resolved, with `Retry saving` and `Export backu
 
 Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (the `Ledger` section, `Record your turn` with its step rail and no player picker, then `Best moves`), on the main page so the Ledger is in view while choosing a move. The Players screen stays for the roster.
 
-The Ledger has the desktop's History toggle after the award button once `game.turn` exists. It swaps Record your turn and Best moves for the shared History panel. Rows, round labels, Now, Game start, summaries, selected production and log details, and ArrowUp/ArrowDown navigation follow desktop D8 and [`../history/plan.md`](../history/plan.md). A past row shows the saved board pieces and Ledger with `After turn N` or `At game start`, disables board input and Ledger editing, and hides the award menu. The 32px board pill sits centred 8px below the board, uses 12px type, and has the same Earlier, Later and Back to now states as desktop. Selecting a row calls `revealBoardIfScrolledPast`. The list scrolls internally up to 440px, with its heading rule and shadow only while scrolled; its side spacing is `var(--gutter)`. History closes on entering build mode. Opening History, committing, undoing, redoing or switching tabs selects Now. The view is temporary, while `Game.history` and `turn.log` persist with the game.
+The Ledger has the desktop's History toggle on its heading once `game.turn` exists. It swaps Record your turn and Best moves for the shared History panel. Rows, round labels, Now, Game start, summaries, selected production and log details, and ArrowUp/ArrowDown navigation follow desktop D8 and [`../history/plan.md`](../history/plan.md). A past row shows the saved board pieces and Ledger with `After turn N` or `At game start`, disables board input and Ledger editing, and hides the award tie lines. The 32px board pill sits centred 8px below the board, uses 12px type, and has the same Earlier, Later and Back to now states as desktop. Selecting a row calls `revealBoardIfScrolledPast`. The list scrolls internally up to 440px, with its heading rule and shadow only while scrolled; its side spacing is `var(--gutter)`. History closes on entering build mode. Opening History, committing, undoing, redoing or switching tabs selects Now. The view is temporary, while `Game.history` and `turn.log` persist with the game.
 
 What differs on the phone:
 
@@ -174,7 +174,7 @@ Do not rebuild these; move or restyle them.
 
 Resolved 2026-09-02.
 
-**O1 · Points ledger: replaced by the Best moves Ledger.** The tally columns and view switch are gone from desktop Players too. The Best moves Ledger shows hands, pieces, awards and VP on both trees, with corrections in its row editor and tied award holders in its heading menu. It also shows before any player is active. The Players screen carries the roster (no VP column, owner 2026-11-12) and snake draft. M10 is dropped.
+**O1 · Points ledger: replaced by the Best moves Ledger.** The tally columns and view switch are gone from desktop Players too. The Best moves Ledger shows hands, pieces, awards and VP on both trees, with corrections in its row editor and tied award holders in its tie lines. It also shows before any player is active. The Players screen carries the roster (no VP column, owner 2026-11-12) and snake draft. M10 is dropped.
 
 **O2 · Saving: automatic (B7).** No save control on the phone or on the desktop. Every edit autosaves the tab into its map; the first non-blank edit of an unlinked tab creates the map and links the tab. The desktop tab menu's `Save to library`, the dirty dots, the save-and-close prompt and the `MapsPanel` name field and button are removed.
 

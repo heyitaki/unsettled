@@ -5,13 +5,12 @@ import { adjustDevHand, handTotal } from '../model/turn'
 import { historyGame } from '../model/history'
 import { RESOURCES, type Resource } from '../model/types'
 import { DEV_LABELS, statsFor } from './bestMoves'
-import { ContextMenu, type ContextMenuItem } from './ContextMenu'
-import { CounterGlyph, DevCardGlyph, DotsGlyph, HistoryGlyph, MinusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { CounterGlyph, DevCardGlyph, HistoryGlyph, MinusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { RESOURCE_LABELS } from './vertexParts'
 
-const AWARDS: { kind: AwardKind; label: string }[] = [
-  { kind: 'longestRoad', label: 'Longest road' },
-  { kind: 'largestArmy', label: 'Largest army' },
+const AWARDS: { kind: AwardKind; label: string; medal: ReactNode }[] = [
+  { kind: 'longestRoad', label: 'Longest road', medal: <StructureGlyph shape="road" color="var(--accent)" size={14} /> },
+  { kind: 'largestArmy', label: 'Largest army', medal: <CounterGlyph shape="knight" /> },
 ]
 
 // `previous` is the newest game on the tab's undo stack and `onUndo` pops it,
@@ -28,24 +27,21 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
 }) {
   const id = useId()
   const [editing, setEditing] = useState<string | null>(null)
-  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   const readOnly = historyOpen && viewedTurn !== null
   const game = useMemo(() => readOnly ? historyGame(liveGame, viewedTurn) : liveGame, [liveGame, readOnly, viewedTurn])
   // Game start is before anyone's turn, so no row is marked.
   const shownPlayer = readOnly ? viewedTurn === 0 ? null : game.turn?.playerId : activeId
   if (readOnly && editing !== null) setEditing(null)
-  if (readOnly && menuTrigger !== null) setMenuTrigger(null)
   const standings = computeStandings(game)
   const { board } = game
-  const awardItems = AWARDS.flatMap(({ kind, label }): ContextMenuItem[] => {
-    const candidates = awardCandidates(game, kind)
+  // A tied award asks who got there first. Its holder is unknown until picked, unless one
+  // was recorded or (in a game that never recorded holders) road order settles it; picking
+  // the holder again clears it. Past views are read-only, so they show none.
+  const ties = readOnly ? [] : AWARDS.flatMap((award) => {
+    const candidates = awardCandidates(game, award.kind)
     if (candidates.length < 2) return []
-    const holder = standings.find((standing) => kind === 'longestRoad' ? standing.hasLongestRoad : standing.hasLargestArmy)?.playerId ?? null
-    return [...candidates, null].map((playerId) => ({
-      label: `${label}: ${playerId === null ? 'Unknown' : board.players.find((player) => player.id === playerId)!.name}`,
-      checked: holder === playerId,
-      onClick: () => commit(setAwardHolder(game, kind, playerId)),
-    }))
+    const holder = standings.find((standing) => award.kind === 'longestRoad' ? standing.hasLongestRoad : standing.hasLargestArmy)?.playerId ?? null
+    return [{ ...award, holder, candidates: candidates.map((playerId) => board.players.find((player) => player.id === playerId)!) }]
   })
   const me = board.mePlayerId
   const devHand = game.devHand?.playerId === me ? game.devHand : undefined
@@ -55,27 +51,30 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
       <div className="panel-heading">
         <h2>Ledger{readOnly && <span className="ledger-asof">{viewedTurn === 0 ? 'At game start' : `After turn ${viewedTurn}`}</span>}</h2>
         <div className="panel-actions">
-          {!readOnly && awardItems.length > 0 && <button
-            type="button"
-            className="panel-dots"
-            aria-label="Award holders"
-            aria-haspopup="menu"
-            aria-expanded={menuTrigger !== null}
-            onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
-          >
-            <DotsGlyph />
-          </button>}
           {liveGame.turn && onToggleHistory && <button type="button" className="history-toggle" aria-pressed={historyOpen} onClick={onToggleHistory}>
             <HistoryGlyph />History
           </button>}
         </div>
       </div>
-      {!readOnly && menuTrigger && awardItems.length > 0 && <ContextMenu
-        ariaLabel="Award holders"
-        trigger={menuTrigger}
-        items={awardItems}
-        onClose={() => setMenuTrigger(null)}
-      />}
+      {ties.map(({ kind, label, medal, holder, candidates }) => (
+        <div key={kind} className={`tie-line${holder ? ' settled' : ''}`} role="group" aria-label={`${label} tie`} aria-describedby={`${id}-${kind}`}>
+          <span className="tie-message" id={`${id}-${kind}`}>
+            <span className="ledger-medal" aria-hidden="true">{medal}</span>
+            <span>{holder
+              ? <><b>{label}</b> · {candidates.find((player) => player.id === holder)!.name} got there first</>
+              : <><b>{label} tie</b> · Who got there first?</>}</span>
+          </span>
+          <span className="tie-picks">
+            {candidates.map((player) => (
+              <button key={player.id} type="button" className="tie-pick" aria-pressed={holder === player.id}
+                title={holder === player.id ? 'Pick again to clear' : undefined}
+                onClick={() => commit(setAwardHolder(game, kind, holder === player.id ? null : player.id))}>
+                <span className="swatch" style={{ background: player.color }} />{player.name}
+              </button>
+            ))}
+          </span>
+        </div>
+      ))}
       <div className="ledger-header" aria-hidden="true">
         <span /><span>Hand</span><span>Cards</span><span>VP</span>
       </div>

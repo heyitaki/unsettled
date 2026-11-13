@@ -61,7 +61,7 @@ Placement analysis runs in a shared worker. A changed board or viewed pick shows
 
 ### D5 · Players panel
 
-The popover holds only the roster. It opens under the dots button of the header's player pill. Hands, pieces, awards and VP are shown in the Best moves Ledger (D8), whose heading menu corrects award holders.
+The popover holds only the roster. It opens under the dots button of the header's player pill. Hands, pieces, awards and VP are shown in the Best moves Ledger (D8), whose tie lines settle tied award holders.
 
 - **Heading**: h2 `Players`, and at the right a plus button (`PlusGlyph`, `aria-label="Add player"`), disabled at six players.
 - **Row**, left to right: grip (`GripGlyph`, starts a drag at once), swatch (24px, the player's colour), name cell. The `YOU` chip sits immediately after the name inside the name cell. Only the claimed row draws the chip.
@@ -91,8 +91,9 @@ Three sections, each its own panel, in both trees: Ledger, Record your turn, the
 
 **Ledger**, above `Record your turn`, also shows before any player is active, above a primary `Start game` button and the hint to claim yourself in Players. `Start game` records the first seat as the turn player. With no active player, no row gets the active bar. The approved design and dimensions are in [`../ledger/plan.md`](../ledger/plan.md).
 
-- Heading: `Ledger`, with a borderless three-dot `panel-dots` button (`DotsGlyph`, `aria-label="Award holders"`, `aria-haspopup="menu"`, `aria-expanded`) on the right only while Longest road or Largest army has at least two tied candidates. It opens an anchored `ContextMenu` named `Award holders`. For each tied award, Longest road before Largest army, the menu lists `<Award>: <player name>` in seat order, then `<Award>: Unknown`. Items are `menuitemradio` with `aria-checked` and a tick on the current holder, or Unknown when nobody holds it. Imported ties start as Unknown; a recorded incumbent keeps a tie. Each correction is one game commit and shares undo, redo and persistence. An award with one candidate needs no choice.
-- **History toggle**: after the award button, a 30px button with a 17px clock and `History` in 12px Inter 600. It appears only with `game.turn`. Hover turns the text and icon dark accent without a background; pressed adds an accent border and 7% accent wash. While viewing a past turn, the heading adds `After turn N` or `At game start` in 12px dark accent, the active bar marks that turn's player, rows cannot open, and the award menu is hidden.
+- Heading: `Ledger`.
+- **Award ties**: Above the column headings, one line per tied award (Longest road before Largest army) shows while that award has at least two tied candidates: a `role="group"` named `<Award> tie` with the award's medal glyph, then `**<Award> tie** · Who got there first?` on a 7% accent wash with an accent-tinted border, and a pill per candidate in seat order (swatch and name, `aria-pressed`). Picking a pill makes that player the holder, and the line turns plain and reads `**<Award>** · <name> got there first`; picking the pressed pill again clears it back to unknown. On phones the pills fill their own row at 36px. Imported ties start unknown; a recorded incumbent keeps a tie and shows as settled. Each pick is one game commit and shares undo, redo and persistence. An award with one candidate needs no line (owner 2026-11-13, replacing the heading's dots menu).
+- **History toggle**: on the heading's right, a 30px button with a 17px clock and `History` in 12px Inter 600. It appears only with `game.turn`. Hover turns the text and icon dark accent without a background; pressed adds an accent border and 7% accent wash. While viewing a past turn, the heading adds `After turn N` or `At game start` in 12px dark accent, the active bar marks that turn's player, rows cannot open, and the tie lines are hidden.
 - Header: an empty name cell, `Hand`, `Cards`, `VP`. One row per player in seat order, separated by hairlines, with the active, open and hovered rows drawn as rounded boxes: a 3px ink left edge on the active row, a tint on the open and hovered rows. All cells are vertically centred on a 20px line height.
 - Each row shows the player's swatch, ellipsized name, `YOU` on the claimed player, and red road or shield medals for held awards. Hand chips show each known resource, a bare `?` for unseen cards, and the untyped dev count after a hairline divider. An empty hand reads `No cards`. `Cards` is the resource hand total including unseen cards; `VP` is the computed total, including held awards. Both columns use centred Inter tabular figures.
 - Under the claimed player's main line, inside the row button and hidden while the row is open, pills show playable dev cards by type, then Victory point cards, then cards bought this turn. Zero counts are absent, and a count appears only above one. Bought pills have a dashed outline and a `new` label, titled `Bought this turn, playable next turn`.
@@ -128,7 +129,7 @@ Three sections, each its own panel, in both trees: Ledger, Record your turn, the
 
 Every recorded action is one commit, so one undo takes back the piece and the cards together. Advice comes from a worker and never runs during render; while a changed game is pending the old cards disappear. A robber destination is marked by a dashed ring on its hex, the one board mark this panel adds.
 
-The Players panel holds only the roster. The Ledger's row editor is the only place hands, dev cards, knights and VP cards are edited; its heading menu corrects tied award holders.
+The Players panel holds only the roster. The Ledger's row editor is the only place hands, dev cards, knights and VP cards are edited; its tie lines settle tied award holders.
 
 ## Behaviours that are not CSS
 
