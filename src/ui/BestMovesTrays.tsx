@@ -12,7 +12,7 @@ import { adviceResponse, useAdvice, useAdviceClient, type AdviceState } from './
 import {
   adviceMarks, buildablePieces, cardRange, DEV_LABELS, discardInputCards, hexLabel, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
-import { CardAmounts, MoveStepper, ResourcePicker } from './BestMovesTable'
+import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
 import { PencilGlyph, ResourceGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'

@@ -1,4 +1,5 @@
 import { isRedToken, pips } from '../model/board'
+import type { DevKind } from '../model/game'
 import type { Resource } from '../model/types'
 import { INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 
@@ -185,18 +186,18 @@ export function CounterGlyph({ shape }: { shape: CounterShape }) {
     'aria-hidden': true,
   }
   switch (shape) {
-    case 'unknownCard': // a card with the question cut out of it
+    case 'unknownCard': // a bare question mark
       return (
         <svg {...shell}>
-          <path d="M3.6 2.6h12.8v14.8H3.6Z" />
           <path
-            d="M7.4 7.2c.1-1.5 1.1-2.4 2.6-2.4s2.6.8 2.6 2.2c0 1.1-.6 1.7-1.6 2.3-.8.5-1 1-1 2"
+            d="M6.4 6.9c0-2.15 1.6-3.65 3.7-3.65 2.15 0 3.65 1.4 3.65 3.3 0 1.65-1.05 2.45-2.1 3.1-.9.55-1.55 1.2-1.55 2.35v.7"
             fill="none"
-            stroke={PAPER}
-            strokeWidth="1.7"
+            stroke={GLYPH_MUTED}
+            strokeWidth="2"
             strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          <circle cx="10" cy="14.4" r="1.1" fill={PAPER} />
+          <circle cx="10.1" cy="16.4" r="1.3" fill={GLYPH_MUTED} />
         </svg>
       )
     case 'devCard': // a fanned pair of cards, the front one cut out of the back
@@ -216,6 +217,43 @@ export function CounterGlyph({ shape }: { shape: CounterShape }) {
       return (
         <svg {...shell}>
           <path d="M10 2.6 12.3 7.4l5.3.7-3.8 3.7 1 5.2-4.8-2.6-4.8 2.6 1-5.2-3.8-3.7 5.3-.7Z" />
+        </svg>
+      )
+  }
+}
+
+export function DevCardGlyph({ kind }: { kind: DevKind }) {
+  const shell = { className: 'stat-icon', viewBox: GRID, 'aria-hidden': true, fill: 'currentColor' }
+  switch (kind) {
+    case 'knight':
+      return (
+        <svg {...shell}>
+          <path d="M10 1.4 12.2 4.2v7.8H7.8V4.2Z" />
+          <rect x="4.6" y="11.6" width="10.8" height="2.4" rx=".8" />
+          <rect x="8.9" y="13.6" width="2.2" height="3.4" />
+          <circle cx="10" cy="17.6" r="1.6" />
+        </svg>
+      )
+    case 'roadBuilding':
+      return (
+        <svg {...shell}>
+          <path d="M3.2 11.6 10 4.8M10 15.2l6.8-6.8" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" fill="none" />
+        </svg>
+      )
+    case 'yearOfPlenty':
+      return (
+        <svg {...shell}>
+          <rect x="3.8" y="9.4" width="12.4" height="8.2" rx=".8" />
+          <rect x="2.8" y="6.4" width="14.4" height="3.6" rx=".8" />
+          <path d="M10 6.4V17.6" stroke={PAPER} strokeWidth="1.6" />
+          <path d="M10 6.2C8.8 3.4 5.6 3 5.8 5c.1.9 1.6 1.2 4.2 1.2Zm0 0c1.2-2.8 4.4-3.2 4.2-1.2-.1.9-1.6 1.2-4.2 1.2Z" />
+        </svg>
+      )
+    case 'monopoly':
+      return (
+        <svg {...shell}>
+          <path d="M3.6 3h4.2v7.2a2.2 2.2 0 0 0 4.4 0V3h4.2v7.2a6.4 6.4 0 0 1-12.8 0Z" />
+          <path d="M3.6 6.6h4.2M12.2 6.6h4.2" stroke={PAPER} strokeWidth="1.2" />
         </svg>
       )
   }

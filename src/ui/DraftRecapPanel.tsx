@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { setActivePlayer } from '../model/turn'
 import { adviceBlockers } from './bestMoves'
-import { CardAmounts } from './BestMovesTable'
+import { CardAmounts } from './MoveInputs'
 import { INK_COLOR, readableInk } from './colors'
 import { SpotTiles } from './SpotTiles'
 import { activeTab, useStore } from './store'

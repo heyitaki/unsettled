@@ -292,33 +292,34 @@ describe('Best moves recording', () => {
     expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Buy card')).toBe(true)
   })
 
-  it('renders separate record and advice sections with the approved headings and notes', async () => {
+  it('renders separate Ledger, record and advice sections with the approved headings and notes', async () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await click('Retry advice')
     const sections = container.querySelectorAll('section.best-moves-panel')
-    expect([...sections].map((section) => section.querySelector('h2')?.textContent)).toEqual(['Record your turn', 'Best moves'])
-    expect(sections[0].querySelector('[aria-label="Undo"]')).not.toBeNull()
-    expect(sections[1].querySelector('[aria-label="Undo"]')).toBeNull()
+    expect([...sections].map((section) => section.querySelector('h2')?.textContent)).toEqual(['Ledger', 'Record your turn', 'Best moves'])
+    expect(sections[0].querySelector('[aria-label="Undo"]')).toBeNull()
+    expect(sections[1].querySelector('[aria-label="Undo"]')).not.toBeNull()
+    expect(sections[2].querySelector('[aria-label="Undo"]')).toBeNull()
     expect(container.textContent).not.toContain('Dev deck:')
     expect(container.textContent).not.toContain('Super cities count')
     expect(container.querySelectorAll('ol.move-steps > li')).toHaveLength(3)
     await click('Turn 2: Bee')
-    expect(sections[0].querySelector('h2')?.textContent).toBe("Record Bee's turn")
+    expect(sections[1].querySelector('h2')?.textContent).toBe("Record Bee's turn")
   })
 
   it('says in one sentence when no dev card is worth playing before the roll', async () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await click('Retry advice')
-    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    const advice = container.querySelectorAll('section.best-moves-panel')[2]
     expect(advice.querySelector('.analysis-row')).toBeNull()
     expect(advice.textContent).toContain('No dev card worth playing first.')
     expect(advice.textContent).toContain('Ranked trades, builds and cards follow the roll.')
     expect(advice.textContent).not.toContain('Your best moves')
     expect(advice.textContent).not.toContain('Hold your dev cards')
     await click('Turn 2: Bee')
-    expect(container.querySelectorAll('section.best-moves-panel')[1].querySelector('h2')?.textContent).toBe('Best moves for Bee')
+    expect(container.querySelectorAll('section.best-moves-panel')[2].querySelector('h2')?.textContent).toBe('Best moves for Bee')
   })
 
   it('offers a worthwhile pre-roll Knight as one row whose Play opens the prefilled robber flow', async () => {
@@ -327,7 +328,7 @@ describe('Best moves recording', () => {
     respond = () => ({ kind: 'preRoll', play: { type: 'playKnight', hex, victim: 'b' }, reason: 'Blocks 6 pips of Bee',
       derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await click('Retry advice')
-    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    const advice = container.querySelectorAll('section.best-moves-panel')[2]
     const row = advice.querySelector('.analysis-row')!
     expect(advice.querySelectorAll('.analysis-row')).toHaveLength(1)
     expect(row.className).not.toContain('move-dashed')
@@ -357,7 +358,7 @@ describe('Best moves recording', () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await act(async () => seen.dispatch({ type: 'commit-game', game: recordPlayDev(game(), { kind: 'yearOfPlenty', resources: ['wood', 'ore'] }) }))
-    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    const advice = container.querySelectorAll('section.best-moves-panel')[2]
     expect(advice.textContent).not.toContain('No dev card worth playing first.')
     expect(advice.textContent).toContain('Ranked trades, builds and cards follow the roll.')
   })
@@ -368,7 +369,7 @@ describe('Best moves recording', () => {
     respond = ({ decision }) => decision.kind === 'preRoll' ? { kind: 'preRoll', play: null, reason: '', derived }
       : { kind: 'turn', actions: [{ action: { type: 'pass' }, score: 0, reason: 'Ends the turn', handDelta: cards }], derived }
     await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(game(), 8, {}) }))
-    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    const advice = container.querySelectorAll('section.best-moves-panel')[2]
     expect(advice.querySelector('h2')?.textContent).toBe('Best moves')
     expect(advice.querySelector('.move-label')).toBeNull()
     expect(advice.querySelector('.analysis-list')?.classList.contains('pick-ledger')).toBe(true)
@@ -640,7 +641,7 @@ describe('Best moves recording', () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: incomplete }))
     expect(container.textContent).toContain('Finish the board to get advice:')
     expect(container.textContent).toContain('1 hex has no tile')
-    expect(container.querySelector('.move-table')).not.toBeNull()
+    expect(container.querySelector('.ledger-row')).not.toBeNull()
     await click('Trade')
     await click('Bee', tray())
     await click('Play card')
@@ -810,7 +811,7 @@ describe('Best moves recording', () => {
     expect(tray().textContent).toContain('You drew')
     await click('Knight', tray())
     expect(game().devHand?.bought.knight).toBe(1)
-    expect(container.querySelector('.move-mine .new')?.textContent).toBe('Knight 1')
+    expect(container.querySelector('.ledger-dev-pill.new')?.textContent).toBe('Knight new')
     await click('End turn')
     expect(game().turn?.playerId).toBe('b')
     expect(game().devHand?.playable.knight).toBe(2)
@@ -923,20 +924,17 @@ describe('Best moves recording', () => {
     expect(seen.state.pick?.want).toBe('hex')
   })
 
-  it('preserves the table view and row editor across turn and tab changes while closing the tray', async () => {
-    await click('Points')
-    await click('Correct aki by hand')
+  it('preserves the Ledger row editor across turn and tab changes while closing the tray', async () => {
+    await click('Correct aki')
     await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
     await click('Turn 2: Bee')
-    expect(button('Points').getAttribute('aria-pressed')).toBe('true')
-    expect(button('Correct aki by hand').getAttribute('aria-expanded')).toBe('true')
+    expect(button('Correct aki').getAttribute('aria-expanded')).toBe('true')
     expect(container.querySelector('.move-tray')).toBeNull()
     expect(seen.state.pick).toBeNull()
     await click('Trade')
     await act(async () => seen.dispatch({ type: 'tab-add' }))
-    expect(button('Points').getAttribute('aria-pressed')).toBe('true')
-    expect(button('Correct aki by hand').getAttribute('aria-expanded')).toBe('true')
+    expect(button('Correct aki').getAttribute('aria-expanded')).toBe('true')
     expect(container.querySelector('.move-tray')).toBeNull()
   })
 
@@ -974,12 +972,12 @@ describe('Best moves recording', () => {
   })
 
   it('shows only the active player dev defaults and counts bought cards as typed', async () => {
-    expect(container.querySelector('thead th')?.textContent).toBe('')
-    const note = 'Set your dev cards by type in the table'
+    expect(container.querySelector('.ledger-header > span')?.textContent).toBe('')
+    const note = 'Set your dev cards by type in the Ledger'
     expect(container.textContent).not.toContain(note)
     const bought = adjustDevHand(game(), 'bought', 'monopoly', 1)
     await act(async () => seen.dispatch({ type: 'commit-game', game: bought }))
-    expect(container.querySelector('.move-mine .new')?.textContent).toBe('Monopoly 1')
+    expect(container.querySelector('.ledger-dev-pill.new')?.textContent).toBe('Monopoly new')
     expect(container.textContent).not.toContain(note)
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(adjustCounter(game(), 'aki', 'devCards', 1), 'b', 'devCards', 2) }))
     expect(container.textContent).toContain(note)
@@ -1067,7 +1065,7 @@ describe('Best moves recording', () => {
 
   it('corrects a hand and dev type one undo step at a time', async () => {
     const before = game()
-    await click('Correct aki by hand')
+    await click('Correct aki')
     await click('More wood')
     expect(game().stats.aki.hand.wood).toBe(6)
     await click('More Knight')

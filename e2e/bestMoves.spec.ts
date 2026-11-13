@@ -46,7 +46,7 @@ async function open(page: Page, board: Board, stats: Record<string, PlayerStats>
 }
 
 const panel = (page: Page) => page.locator('.best-moves-panel')
-const redRow = (page: Page) => panel(page).locator('.move-table tbody tr').first().locator('td')
+const redRow = (page: Page) => panel(page).locator('.ledger-row').first().locator('.ledger-hand, .ledger-cards')
 
 function suite() {
   test('Best moves follows the recap after the last draft pick is placed', async ({ page }) => {
@@ -94,7 +94,7 @@ function suite() {
     // Discards come first: the robber prompt waits for them.
     await expect(panel(page).locator('.move-robber')).toHaveCount(0)
     await discard.getByRole('button', { name: 'Record', exact: true }).click()
-    await expect.poll(async () => (await redRow(page).allInnerTexts())[5]).toBe('4')
+    await expect(redRow(page).last()).toHaveText('4')
     await expect(panel(page).locator('.move-robber')).toContainText(/Suggested: .+, (rob nobody|steal from P\d)/)
     await expect(page.locator('.board-canvas .hex-highlight')).toHaveCount(1)
   })

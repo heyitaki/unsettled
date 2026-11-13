@@ -7,7 +7,8 @@ import { adviceResponse, useAdvice } from './useAdvice'
 import {
   actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, typedDevHand, type Move,
 } from './bestMoves'
-import { BestMovesTable, CardAmounts } from './BestMovesTable'
+import { CardAmounts } from './MoveInputs'
+import { Ledger } from './Ledger'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { readableInk } from './colors'
 import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph } from './glyphs'
@@ -243,6 +244,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   }
   return (
     <>
+      <section className={`${className} best-moves-panel ledger-panel`}>
+        <div className="panel-heading"><h2>Ledger</h2></div>
+        <Ledger game={game} activeId={activeId} commit={commit} />
+      </section>
       <section className={`${className} best-moves-panel`}>
         <div className="panel-heading">
           <h2>{mine ? 'Record your turn' : `Record ${active.name}'s turn`}</h2>
@@ -254,7 +259,6 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
           {' · '}
           {turn?.rolled == null ? 'not rolled yet' : `Rolled ${turn.rolled}`}
         </p>
-        <BestMovesTable game={game} activeId={activeId} commit={commit} />
         <ol className="move-steps">
           <li className={`move-step ${before ? 'now' : 'done'}`}>
             <span className="move-step-dot" aria-hidden="true">{before ? '1' : <StepDoneGlyph />}</span>
@@ -375,7 +379,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <li>{derived.unknownOwnCards} of {active.name}'s cards are of unknown type and ignored</li>
           )}
           {!mine && devCards > 0 && <li>{active.name}'s {devCards} dev cards are treated as unplayed knights</li>}
-          {mine && devCards > typedDevCards && <li>Set your dev cards by type in the table</li>}
+          {mine && devCards > typedDevCards && <li>Set your dev cards by type in the Ledger</li>}
         </ul>
       </section>
     </>

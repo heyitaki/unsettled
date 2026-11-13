@@ -120,14 +120,14 @@ Save failures stay visible until resolved, with `Retry saving` and `Export backu
 
 ### S10 · Best moves
 
-Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (the `Record your turn` section with its turn order, context line, table and step rail, then the `Best moves` section), on the main page so the table is in view while choosing a move. The Players screen stays for the roster.
+Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (the `Ledger` section, `Record your turn` with its turn order, context line and step rail, then `Best moves`), on the main page so the Ledger is in view while choosing a move. The Players screen stays for the roster.
 
 What differs on the phone:
 
 - `Undo` and `Redo` in the heading follow the heading button size in S5, and every turn-order circle has a 44px touch target.
 - The dice are two rows of six rather than one row of eleven, each 44px tall; the action tiles and the robber popover's buttons are at least 44px tall.
 - A card's cost chips show without selecting it, since there is no hover.
-- The table's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
+- The Ledger uses columns `100px 1fr 36px 36px` with a 6px gap. The Ledger's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
 - A build or a robber move that needs a spot scrolls the board into view, as selecting a row does (S5).
 
 ## Behaviours that are not CSS
@@ -167,7 +167,7 @@ Do not rebuild these; move or restyle them.
 
 Resolved 2026-09-02.
 
-**O1 · Points ledger: not on the phone.** The Players screen carries the roster and the snake draft only. The ledger (tally columns, view switch) stays a desktop-only part of `PlayerPanel`; its resource steppers were removed from the desktop too, in favour of the Best moves row editor. M10 is dropped.
+**O1 · Points ledger: not on the phone.** The Players screen carries the roster and the snake draft only. The ledger (tally columns, view switch) stays a desktop-only part of `PlayerPanel`; its resource steppers were removed from the desktop too, in favour of the Ledger's row editor. M10 is dropped.
 
 **O2 · Saving: automatic (B7).** No save control on the phone or on the desktop. Every edit autosaves the tab into its map; the first non-blank edit of an unlinked tab creates the map and links the tab. The desktop tab menu's `Save to library`, the dirty dots, the save-and-close prompt and the `MapsPanel` name field and button are removed.
 

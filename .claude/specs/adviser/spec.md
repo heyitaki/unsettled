@@ -44,13 +44,13 @@ Optional, following `awards?`. Absent means the claimed player's turn, not yet r
 | Round, current seat | Defaulted to 0; no policy reads them. | no |
 | Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | `Bank estimated: N cards of unknown type` when any `handUnknown` > 0 |
 | Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded in the panel; earlier ones are not known. | no (it hides `Buy card` at zero) |
-| My dev cards by type, bought this turn | `Game.devHand` (below). Absent: no playable cards. | the table's dev cell |
+| My dev cards by type, bought this turn | `Game.devHand` (below). Absent: no playable cards. | the Ledger's dev pills |
 | Dev card already played this turn | `turn.devPlayed`. | no |
 | The deciding player's hand | Exact for the claimed player. For a rival, the known cards only. | `N of Red's cards are of unknown type and ignored` |
-| Other players' hands by resource | Belief bounds: lower = `hand[r]`, upper = `hand[r] + handUnknown`, total = both. | the table shows the same range |
-| Other players' dev cards | Count from `stats.devCards`; knights from `stats.knights`. | the table |
-| Dev cards of unknown type held by the deciding player (any rival, or the claimed player before their cards are entered by type) | Counted as knights bought this turn: held, not playable. This shifts the dev card buy score slightly. | `Red's 2 dev cards are treated as unplayed knights`, or for the claimed player `Set your dev cards by type in the table` |
-| Awards | `Game.awards` when set; the engine's own rule when absent. | the table |
+| Other players' hands by resource | Belief bounds: lower = `hand[r]`, upper = `hand[r] + handUnknown`, total = both. | the Ledger shows the known count and unseen count separately |
+| Other players' dev cards | Count from `stats.devCards`; knights from `stats.knights`. | the Ledger |
+| Dev cards of unknown type held by the deciding player (any rival, or the claimed player before their cards are entered by type) | Counted as knights bought this turn: held, not playable. This shifts the dev card buy score slightly. | `Red's 2 dev cards are treated as unplayed knights`, or for the claimed player `Set your dev cards by type in the Ledger` |
+| Awards | `Game.awards` when set; the engine's own rule when absent. | the Ledger |
 | Offers already made this turn | Defaulted to 0. | no |
 | Player trading | `RuleConfig::player_trading = Some(TradeConfig::default())`, set by the bridge. | no |
 
@@ -79,10 +79,10 @@ ponytail: the upper bound is always lower plus unknown. Storing an upper bound p
 
 ### Panel structure
 
-Two sections: `Record your turn` (heading, turn-order row, context line, standings table, then the step rail with the open action's own controls), then `Best moves` (recommendations, notes). The same component renders in both trees.
+Three sections: `Ledger` (hands, VP, held awards and inline corrections), `Record your turn` (heading, turn-order row, context line, then the step rail with the open action's own controls), then `Best moves` (recommendations, notes). The same component renders in both trees.
 
+- **Ledger**: a section above `Record your turn`, with a button-free heading and one row per player in seat order. Each row shows the swatch, name, `YOU` on the claimed player, held-award medals, known resource counts, unseen cards as `?`, untyped dev cards, hand total and VP. The claimed player's typed dev cards and VP cards appear as pills below their main line; counts show only above one, and bought cards are dashed with a `new` label. The active row has an ink bar, and an open row is tinted. Tapping a row opens its piece and award stats, correction steppers and a `Done` footer. The Ledger's row editor is the only place a player's hand, dev cards, knights and VP cards are edited. The full approved design is in [`../ledger/plan.md`](../ledger/plan.md).
 - **Turn order** replaces the draft ribbon once the draft is complete: one circle per player in seat order, the active player ringed. Nothing marks the claimed player there; the draft ribbon lost its dot too.
-- **Standings table**: one row per player. A `Cards` view shows each resource (a number, or a range), the hand total and dev cards. A `Points` view shows settlements, cities, road length, knights, VP cards and the total, with the award holders marked. Tapping a row opens that player's stepper chips for corrections. Under it, the claimed player's dev cards by type as chips in three states (playable, none held, bought this turn as a faded grey outline with no label). It sits on the main page in both trees, and its row editor is the only place a player's card and knight counts are edited.
 - **Step rail**: Roll, then the actions (`Trade`, `Buy card`, `Play card`, `Build`, each shown only when it can happen), then End turn. Each acts for the active player, and selecting an action opens its controls.
   - Roll: eleven totals. Any total but seven asks the bridge for production and credits every player's `hand`. A seven lists every player holding more than seven cards with a discard to record (advised for each, typed for the claimed player, untyped by default for rivals), then the robber move.
   - Trade: the other party (bank or port at the active player's rate, or a player), what is given and what is received. When the claimed player is the one answering and the shape is one the policy models, the verdict is shown before recording.
@@ -90,7 +90,7 @@ Two sections: `Record your turn` (heading, turn-order row, context line, standin
   - Buy dev card: the cost is deducted; the claimed player says what was drawn.
   - Play dev card: Knight (robber move, knights played plus one), Road Building (two roads), Year of Plenty (two cards), Monopoly (the resource, and how many each player gave).
   - End turn: next seat, flags cleared, bought cards made playable.
-- **Recommendations** are for the active player: the pre-roll line before the roll, the ranked list after it. Every one has Apply. Apply commits when the bridge's answer is the whole fact (a build, a bank trade, a discard, Year of Plenty, Pass ends the turn). Otherwise it opens the matching action with the advice filled in, for the one thing only the table knows: who accepted an offer, what was drawn, what was stolen, how many cards a Monopoly took.
+- **Recommendations** are for the active player: the pre-roll line before the roll, the ranked list after it. Every one has Apply. Apply commits when the bridge's answer is the whole fact (a build, a bank trade, a discard, Year of Plenty, Pass ends the turn). Otherwise it opens the matching action with the advice filled in, for the one thing only the players know: who accepted an offer, what was drawn, what was stolen, how many cards a Monopoly took.
 - Each recorded action is one `commit-game`, so one undo takes it back.
 - Selecting a recommendation pins its mark with the Best picks rules. A robber destination is a ring on a hex, which is a new mark kind.
 - Scores are shown as the policy's raw numbers.
