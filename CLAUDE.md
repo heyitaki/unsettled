@@ -15,6 +15,8 @@ Unsettled: an offline, browser-only Catan starting-position analyzer (React 19 +
 - `npm run typecheck`: `tsc -b` (strict; no `any`)
 - `npm run lint`: `oxlint`
 - `npm run build`: typecheck + Vite build. Needs no Rust toolchain: the engine behind Best picks and Best moves is the committed `src/engine/advice/engine.wasm`.
+- `npm run ios:build`: typecheck, the iOS bundle (`vite build --mode native` into `dist-native/`, base `/`, no service worker) and `cap sync ios`. Then build and run `ios/App/App.xcodeproj` (scheme `App`) from Xcode or `xcodebuild`.
+- `npm run ios:archive`: `ios:build`, then `ios/archive.sh`: a Release archive at `ios/App/build/Unsettled.xcarchive`, numbered by the current UTC time and signed ad hoc with each target's entitlements (the script says why). `npm run ios:upload` sends it to App Store Connect (TestFlight) with `ios/ExportOptions.plist`, authenticated by the Apple account signed into Xcode; if that fails, Distribute App from the Xcode Organizer.
 - `simulator/tools/build-wasm.sh`: rebuilds that file and `engine.wasm.src-hash` (needs the `wasm32-unknown-unknown` target). `--check` verifies the source hash and the binary's checksum without Rust, and is what CI runs.
 
 ## Architecture

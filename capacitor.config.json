@@ -1,0 +1,9 @@
+{
+  "appId": "me.akshath.unsettled",
+  "appName": "Unsettled",
+  "webDir": "dist-native",
+  "backgroundColor": "#efe8d9",
+  "plugins": {
+    "CapacitorShareTarget": { "appGroupId": "group.me.akshath.unsettled" }
+  }
+}

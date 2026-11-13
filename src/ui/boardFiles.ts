@@ -167,6 +167,10 @@ export function loadedNotice(action: string, board: Parameters<typeof validateBo
 }
 
 export function downloadBoard(name: string, contents: string) {
+  if (import.meta.env.MODE === 'native') {
+    void import('../native/ios').then((ios) => ios.saveFile(name || 'board', '.catan.json', contents))
+    return
+  }
   const blob = new Blob([contents], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

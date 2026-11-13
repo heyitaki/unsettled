@@ -5,9 +5,12 @@ import { newId } from '../model/ids'
 export const MAPS_KEY = 'unsettled.maps.v1'
 export const MAPS_CORRUPT_KEY = `${MAPS_KEY}.corrupt`
 export const WORKSPACE_KEY = 'unsettled.workspace.v1'
-// Session-scoped, so it is per browser tab and fires no cross-document events.
+// Session-scoped, so it is per browser tab and fires no cross-document events
+// (local in the one-window iOS app: see saveActiveTab).
 export const ACTIVE_TAB_KEY = 'unsettled.activeTab.v1'
 export const WORKSPACE_CORRUPT_KEY = `${WORKSPACE_KEY}.corrupt`
+// What the iOS app copies to files, since iOS can wipe a WebView's storage.
+export const MIRRORED_KEYS = [MAPS_KEY, WORKSPACE_KEY, MAPS_CORRUPT_KEY, WORKSPACE_CORRUPT_KEY] as const
 // Best picks results by board content. Derived data: never backed up, and
 // safe to delete.
 export const ANALYSIS_CACHE_KEY = 'unsettled.analysisCache.v1'
@@ -91,13 +94,21 @@ function parseRawMaps(raw: string | null): { entries: unknown[]; warning?: strin
   }
 }
 
+// Every write of a MIRRORED_KEYS key, so the iOS app keeps its file copy current.
+export function storeKey(key: string, value: string): void {
+  localStorage.setItem(key, value)
+  if (import.meta.env.MODE === 'native') {
+    void import('../native/ios').then((ios) => ios.mirrorKey(key, value))
+  }
+}
+
 function writeMaps(maps: unknown[]): WriteResult {
   try {
     if (corruptMapsBlob !== null) {
-      localStorage.setItem(MAPS_CORRUPT_KEY, corruptMapsBlob)
+      storeKey(MAPS_CORRUPT_KEY, corruptMapsBlob)
       corruptMapsBlob = null
     }
-    localStorage.setItem(MAPS_KEY, JSON.stringify(maps))
+    storeKey(MAPS_KEY, JSON.stringify(maps))
     return { ok: true }
   } catch (error) {
     return {
@@ -370,12 +381,17 @@ export function readWorkspaceBlob(): string | null {
  * agree on the bytes — so every adoption was answered with a rewrite of every
  * board, purely to say which tab the answering window was looking at.
  *
+ * The iOS app has one window and a relaunch starts a new session, so there it
+ * is local: otherwise every cold open would land on the first tab.
+ *
  * A failure here costs the user a tab selection on reload, so it is swallowed
  * rather than surfaced.
  */
+const activeTabStore = () => import.meta.env.MODE === 'native' ? localStorage : sessionStorage
+
 export function saveActiveTab(id: string): void {
   try {
-    sessionStorage.setItem(ACTIVE_TAB_KEY, id)
+    activeTabStore().setItem(ACTIVE_TAB_KEY, id)
   } catch {
     // Session storage is full or blocked; the fallback chain still resolves.
   }
@@ -383,7 +399,7 @@ export function saveActiveTab(id: string): void {
 
 export function loadActiveTab(): string | null {
   try {
-    return sessionStorage.getItem(ACTIVE_TAB_KEY)
+    return activeTabStore().getItem(ACTIVE_TAB_KEY)
   } catch {
     return null
   }
@@ -407,10 +423,10 @@ export function tabLinks(tabs: readonly WorkspaceTab[]): Map<string, string | nu
 export function saveWorkspaceBlob(blob: string): WriteResult {
   try {
     if (corruptWorkspaceBlob !== null) {
-      localStorage.setItem(WORKSPACE_CORRUPT_KEY, corruptWorkspaceBlob)
+      storeKey(WORKSPACE_CORRUPT_KEY, corruptWorkspaceBlob)
       corruptWorkspaceBlob = null
     }
-    localStorage.setItem(WORKSPACE_KEY, blob)
+    storeKey(WORKSPACE_KEY, blob)
     return { ok: true }
   } catch (error) {
     return {

@@ -8,6 +8,7 @@ import {
 import { listMaps } from '../persistence/localStorage'
 import { type Game, mergeScreenshot, type ScreenshotRead } from '../model/game'
 import { firstFreeName } from '../model/names'
+import { newId } from '../model/ids'
 import { gameSignature } from '../model/serialization'
 import { fileTitle, type HeldBoard, mapGame, matchingBoard } from './boardFiles'
 import { PhotoGlyph } from './glyphs'
@@ -15,6 +16,7 @@ import { useStore } from './store'
 import { useLibrary } from './useLibrary'
 import { useCoarsePointer } from './useMediaQuery'
 import { ModalDialog } from './ModalDialog'
+import { takeSharedImage, useSharedImage } from './sharedImage'
 
 async function decodeImage(file: File): Promise<RgbaImage> {
   let bitmap: ImageBitmap
@@ -49,7 +51,7 @@ interface Match {
 // already holds (same layout, tiles, number tokens and ports) first asks
 // whether to update that one or import a separate board. `onImported` runs
 // once a parse has landed, as a new tab or an update, before either close.
-export function ImportDialog({ onClose, onImported }: { onClose: () => void; onImported?: () => void }) {
+export function ImportDialog({ onClose, onImported, file }: { onClose: () => void; onImported?: () => void; file?: File }) {
   const { state, dispatch } = useStore()
   const [issues, setIssues] = useState<ParseIssue[]>([])
   const [busy, setBusy] = useState(false)
@@ -95,6 +97,37 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
     if (gameSignature(merged) !== gameSignature(saved)) dispatch({ type: 'commit-game', game: merged })
     landed(`Updated "${heldName(held)}" from ${fileName}`, parseIssues)
   }
+
+  async function importFile(file: File) {
+    setBusy(true)
+    setIssues([])
+
+    // The last import's toast would otherwise sit beside this one's question.
+    dispatch({ type: 'notice', message: null })
+    try {
+      const image = await decodeImage(file)
+      const result = parseScreenshot(image)
+      if (result.ok) {
+        const held = matchingBoard(result.game.board, state.tabs)
+        const parsed = { fileName: file.name, game: result.game, issues: result.issues }
+        if (held === null) importNew(parsed)
+        else setMatch({ ...parsed, read: result.read, held })
+      } else notice(`Screenshot import failed: ${result.error}`)
+    } catch (error) {
+      notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const started = useRef(false)
+  useEffect(() => {
+    if (file && !started.current) {
+      started.current = true
+      void importFile(file)
+    }
+  })
+
   // An issue mark outlives the dialog otherwise, and the analysis panel reads a
   // highlight it does not own as a pinned selection: hover previews would stay
   // dead for the rest of the session.
@@ -117,25 +150,8 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
               const input = event.currentTarget
               const file = input.files?.[0]
               if (!file) return
-              setBusy(true)
-              setIssues([])
-              // The last import's toast would otherwise sit beside this one's question.
-              dispatch({ type: 'notice', message: null })
-              try {
-                const image = await decodeImage(file)
-                const result = parseScreenshot(image)
-                if (result.ok) {
-                  const held = matchingBoard(result.game.board, state.tabs)
-                  const parsed = { fileName: file.name, game: result.game, issues: result.issues }
-                  if (held === null) importNew(parsed)
-                  else setMatch({ ...parsed, read: result.read, held })
-                } else notice(`Screenshot import failed: ${result.error}`)
-              } catch (error) {
-                notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)
-              } finally {
-                setBusy(false)
-                input.value = ''
-              }
+              await importFile(file)
+              input.value = ''
             }}
           />
           <strong>{busy ? 'Analyzing board…' : coarse ? 'Tap to choose a screenshot' : 'Drop screenshot here'}</strong>
@@ -169,6 +185,35 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
         ) : <button type="button" onClick={onClose}>Done</button>}
       </div>
     </ModalDialog>
+  )
+}
+
+/**
+ * The import dialog for an image shared from the iOS share sheet. The file is
+ * taken out of the buffer once shown, so a swap between the phone and desktop
+ * trees closes the dialog, as it does the ImportButton's, rather than importing
+ * the file a second time. `onImported` runs like ImportButton's `onNavigate`.
+ */
+export function SharedImport({ onImported }: { onImported?: () => void }) {
+  const pending = useSharedImage()
+  const [shared, setShared] = useState<{ file: File; key: string } | null>(null)
+  const imported = useRef(false)
+  useEffect(() => {
+    if (pending === null) return
+    takeSharedImage(pending)
+    imported.current = false
+    setShared({ file: pending, key: newId() })
+  }, [pending])
+  return shared && (
+    <ImportDialog
+      key={shared.key}
+      file={shared.file}
+      onImported={() => { imported.current = true }}
+      onClose={() => {
+        setShared(null)
+        if (imported.current) onImported?.()
+      }}
+    />
   )
 }
 

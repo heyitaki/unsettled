@@ -9,7 +9,7 @@ import { useBoardActions } from './boardActions'
 import { HeaderControls, type HeaderPanel } from './HeaderControls'
 import { HeaderPopover } from './HeaderPopover'
 import { HistoryControls } from './HistoryControls'
-import { ImportButton } from './ImportDialog'
+import { ImportButton, SharedImport } from './ImportDialog'
 import { useBuildMode } from './useBuildMode'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
@@ -53,6 +53,7 @@ function Workspace() {
         </aside>
       </main>
       {actions.confirm}
+      <SharedImport />
     </div>
   )
 }

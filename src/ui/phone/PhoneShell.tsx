@@ -4,6 +4,7 @@ import { useBoardActions } from '../boardActions'
 import { BoardCanvas } from '../BoardCanvas'
 import { GlobalNotice } from '../GlobalNotice'
 import { HistoryControls } from '../HistoryControls'
+import { SharedImport } from '../ImportDialog'
 import type { HeaderPanel } from '../HeaderControls'
 import { activeTab, useStore } from '../store'
 import { MapsScreen } from './MapsScreen'
@@ -59,6 +60,7 @@ export function PhoneShell() {
       {overlay === 'maps' && <MapsScreen onClose={closeOverlay} />}
       {overlay === 'players' && <PlayersScreen onClose={closeOverlay} />}
       {actions.confirm}
+      <SharedImport onImported={() => { if (overlay !== null) closeOverlay() }} />
       <GlobalNotice />
     </div>
   )
