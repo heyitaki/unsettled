@@ -344,6 +344,15 @@ export function ChevronGlyph({ className }: { className?: string }) {
   )
 }
 
+export function HistoryGlyph() {
+  return (
+    <svg {...LINE_ART} width="17" height="17" viewBox="0 0 20 20" strokeWidth="1.7">
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6v4.2l2.8 1.8" />
+    </svg>
+  )
+}
+
 /** The board's robber in flat colour, for the 7 on the Roll step. */
 export function RobberGlyph({ className }: { className?: string }) {
   return (

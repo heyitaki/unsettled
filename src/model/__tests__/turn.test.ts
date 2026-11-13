@@ -84,12 +84,12 @@ describe('turn tracking', () => {
   it('recordRoll stores the total and credits every listed player', () => {
     const game = newGame(addPlayer(gameWithRival().board, { id: 'c', name: 'Cee', color: '#ffffff' }))
     const next = recordRoll(game, 8, { aki: { ...emptyStats().hand, wood: 2 }, b: { ...emptyStats().hand, ore: 1, wheat: 3 } })
-    expect(next.turn).toEqual({ playerId: 'aki', rolled: 8, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } })
+    expect(next.turn).toEqual({ playerId: 'aki', rolled: 8, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 }, gains: { aki: { wood: 2 }, b: { ore: 1, wheat: 3 } } })
     expect(next.stats.aki.hand.wood).toBe(2)
     expect(next.stats.b.hand).toEqual({ wood: 0, sheep: 0, wheat: 3, brick: 0, ore: 1 })
     expect(next.stats.c).toBe(game.stats.c)
     const played = { ...next, turn: { ...next.turn!, devPlayed: true, progressPlayed: { roadBuilding: 1, yearOfPlenty: 0, monopoly: 1 } } }
-    expect(recordRoll(played, 7, {}).turn).toEqual({ ...played.turn, rolled: 7, robberMoved: false })
+    expect(recordRoll(played, 7, {}).turn).toEqual({ ...played.turn, rolled: 7, robberMoved: false, gains: undefined })
     expect(recordRoll(game, 2, {}).turn?.rolled).toBe(2)
     expect(recordRoll(game, 12, {}).turn?.rolled).toBe(12)
   })

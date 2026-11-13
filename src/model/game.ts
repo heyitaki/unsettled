@@ -5,7 +5,7 @@
 // and geometry validation are unaffected).
 
 import { setupGrants } from './board'
-import { RESOURCES, type Board, type Issue, type Player, type Resource } from './types'
+import { RESOURCES, type AxialCoord, type Board, type Building, type Issue, type Player, type Resource, type Road } from './types'
 
 export interface PlayerStats {
   hand: Record<Resource, number>
@@ -24,6 +24,8 @@ export interface TurnState {
   playerId: string
   /** This turn's dice total, null before the roll. */
   rolled: number | null
+  log?: string[]
+  gains?: Record<string, Partial<Record<Resource, number>>>
   /** After a 7: false until the robber is placed. Absent on any other roll. */
   robberMoved?: boolean
   /** Dev cards bought this turn, which cannot be played until the next one. */
@@ -51,6 +53,34 @@ export interface Game {
   turn?: TurnState
   /** Absent until the claimed player's dev cards are entered by type. */
   devHand?: DevHand
+  history?: GameHistory
+}
+
+export interface Position {
+  buildings: Building[]
+  roads: Road[]
+  robber: AxialCoord | null
+  stats: Record<string, PlayerStats>
+  awards?: AwardHolders
+  devHand?: DevHand
+}
+
+export interface TurnRecord {
+  playerId: string
+  rolled: number | null
+  gains?: TurnState['gains']
+  log: string[]
+  buildings?: Record<string, Building | null>
+  roads?: Record<string, string | null>
+  robber: AxialCoord | null
+  stats: Record<string, PlayerStats>
+  awards?: AwardHolders
+  devHand?: DevHand
+}
+
+export interface GameHistory {
+  start: Position
+  turns: TurnRecord[]
 }
 
 export interface AwardHolders {

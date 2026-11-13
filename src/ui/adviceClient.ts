@@ -1,4 +1,5 @@
 import type { AdviceRequest, AdviceResponse, Decision } from '../engine/advice/protocol'
+import { engineRequest } from '../engine/advice/request'
 import type { Game } from '../model/game'
 
 export function decisionKey(decision: Decision): string {
@@ -76,13 +77,7 @@ export function createAdviceClient(factory: () => Worker) {
               if (workers.get(slot) === started) fail('Unable to read advice')
             }
           }
-          // The engine rejects unknown turn fields, and robberMoved and devBought only drive the panel.
-          let outgoing = request
-          if (request.game.turn) {
-            const { playerId, rolled, devPlayed, progressPlayed } = request.game.turn
-            outgoing = { ...request, game: { ...request.game, turn: { playerId, rolled, devPlayed, progressPlayed } } }
-          }
-          worker.postMessage({ id, request: outgoing })
+          worker.postMessage({ id, request: engineRequest(request) })
         } catch (error) {
           fail(error instanceof Error ? error.message : 'Unable to start advice')
         }

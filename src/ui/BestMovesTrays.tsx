@@ -118,13 +118,7 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
       </div>
       {total != null && gains !== undefined && <div className="move-prod">
           {gains === null ? 'Production not added: enter the cards by hand' : produced.length ? produced.map(({ player, cards }) => (
-            <span className="move-prod-player" key={player.id}>
-              <span className="swatch" style={{ background: player.color }} />
-              {player.name}
-              <span className="move-prod-cards" role="img" aria-label={RESOURCES.filter((resource) => cards[resource] > 0).map((resource) => `${cards[resource]} ${resource}`).join(', ')}>
-                {RESOURCES.flatMap((resource) => Array.from({ length: cards[resource] }, (_, index) => <ResourceGlyph key={`${resource}:${index}`} resource={resource} />))}
-              </span>
-            </span>
+            <ProductionPlayer key={player.id} player={player} cards={cards} />
           )) : 'Nobody produces'}
         </div>}
       {total == null && (
@@ -161,6 +155,19 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
         </>
       )}
     </>
+  )
+}
+
+/** One player's cards on a production line, shared by the Roll step and History. */
+export function ProductionPlayer({ player, cards }: { player: Pick<Player, 'name' | 'color'>; cards: Partial<Record<Resource, number>> }) {
+  return (
+    <span className="move-prod-player">
+      <span className="swatch" style={{ background: player.color }} />
+      {player.name}
+      <span className="move-prod-cards" role="img" aria-label={RESOURCES.filter((resource) => (cards[resource] ?? 0) > 0).map((resource) => `${cards[resource]} ${resource}`).join(', ')}>
+        {RESOURCES.flatMap((resource) => Array.from({ length: cards[resource] ?? 0 }, (_, index) => <ResourceGlyph key={`${resource}:${index}`} resource={resource} />))}
+      </span>
+    </span>
   )
 }
 

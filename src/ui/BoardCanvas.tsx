@@ -19,6 +19,7 @@ import {
 import { setupRoad } from '../engine/setupRoad'
 import { draftIsComplete, inferDraftState, restoreDraftPick } from '../engine/draft'
 import { activePlayerId } from '../model/turn'
+import { historyGame } from '../model/history'
 import { boardGrid, defaultPortEdges } from '../model/layouts'
 import {
   placeBuilding,
@@ -194,7 +195,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const { state, dispatch } = useStore()
   const coarse = useCoarsePointer()
   const tab = activeTab(state)
-  const { board } = tab.game
+  const readOnly = !!state.historyOpen && state.viewedTurn != null
+  const game = useMemo(() => readOnly ? historyGame(tab.game, state.viewedTurn!) : tab.game, [tab.game, readOnly, state.viewedTurn])
+  const { board } = game
   const [transform, setTransformState] = useState<ViewTransform>(IDENTITY)
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null)
   const transformRef = useRef<ViewTransform>(IDENTITY)
@@ -219,7 +222,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     ...grid.edgeIds.map((ref) => ({ ref, ...midpoint(edgeEndpointVertexIds(ref).map(vertexPoint)) })),
   ], [grid])
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
-  const highlight = state.highlight ?? restMarks ?? NO_MARKS
+  const highlight = state.historyOpen ? NO_MARKS : state.highlight ?? restMarks ?? NO_MARKS
   const gridEdgeSet = useMemo<ReadonlySet<string>>(() => new Set(grid.edgeIds), [grid])
   // Road marks are left out: they share the edge-id namespace with ports, and a recommended road
   // that happens to run along a port edge must not light the port up.
@@ -307,20 +310,21 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       : clampTransform(transformRef.current, { x: fitX, y: fitY, width: fitWidth, height: fitHeight }))
   }, [state.activeTabId, board.layout, fitX, fitY, fitWidth, fitHeight])
   const renderedViewBox = transformedViewBox(viewBox, transform)
-  const pick = state.pick
-  const pieceMode = !pick && state.tool.kind === 'piece'
-  const portTerrain = !pick && state.tool.kind === 'tile' && state.tool.tile !== 'desert' ? state.tool.tile : null
+  const pick = state.historyOpen ? null : state.pick
+  const pieceMode = !readOnly && !pick && state.tool.kind === 'piece'
+  const portTerrain = !readOnly && !pick && state.tool.kind === 'tile' && state.tool.tile !== 'desert' ? state.tool.tile : null
   const portsTappable = pieceMode || portTerrain !== null
   const draft = useMemo(() => inferDraftState(board), [board])
   const draftComplete = draftIsComplete(board, draft)
   const viewedSlot = state.viewedPick ?? draft.myRemainingPickIndices[0]
 
   // With the tools closed, a draft tap places only the viewed player's settlement, and only on a Best picks circle.
-  const draftPlayer = !pick && state.tool.kind === 'none' && !draftComplete &&
+  const draftPlayer = !readOnly && !pick && state.tool.kind === 'none' && !draftComplete &&
     board.hexes.some((hex) => hex.tile !== null) && draft.remainingPickIndices.includes(viewedSlot)
     ? draft.sequence[viewedSlot] : null
   const placementPlayer = pick ? activePlayerId(tab.game) : draftPlayer ?? tab.activePlayerId
   const placeableVertices = useMemo<VertexId[]>(() => {
+    if (readOnly) return []
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
     if (state.tool.kind !== 'piece' && draftPlayer === null) return []
     const occupied = new Set(board.buildings.map((building) => building.vertexId))
@@ -329,11 +333,12 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       : new Set(highlight.filter((mark) => mark.placeable).map((mark) => mark.ref))
     return buildingSlots(board, placementPlayer, 'settlement', 'edit')
       .filter((vertexId) => !occupied.has(vertexId) && (circles === null || circles.has(vertexId)))
-  }, [state.tool, board, placementPlayer, pick, draftPlayer, highlight])
+  }, [state.tool, board, placementPlayer, pick, draftPlayer, highlight, readOnly])
   const placeableEdges = useMemo<EdgeId[]>(() => {
+    if (readOnly) return []
     if (pick ? pick.want !== 'edge' : state.tool.kind !== 'piece') return []
     return roadSlots(board, placementPlayer, pick?.want === 'edge' ? pick.edges : undefined)
-  }, [state.tool, board, placementPlayer, pick])
+  }, [state.tool, board, placementPlayer, pick, readOnly])
   const candidates = useMemo(() => {
     const refs = new Set<string>([...placeableVertices, ...placeableEdges])
     if (pieceMode) {
@@ -429,7 +434,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const roadActive = pick ? pick.want === 'edge' : state.tool.kind === 'piece'
   const pieceActive = buildActive || roadActive
   const placementActive = pieceActive || portTerrain !== null
-  const hover = coarse ? undefined : candidates.find((target) => target.ref === hoveredTarget)
+  const hover = coarse || readOnly ? undefined : candidates.find((target) => target.ref === hoveredTarget)
   const hoverBuilding = hover && board.buildings.find((building) => building.vertexId === hover.ref)
   const hoverRoad = hover && board.roads.find((road) => road.edgeId === hover.ref)
   const hoverPort = hover ? parsePortRef(hover.ref) : null
@@ -466,7 +471,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     event.stopPropagation()
     actOnTarget(slot)
   }
-  const hexActive = pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token'
+  const hexActive = !readOnly && (pick ? pick.want === 'hex' : state.tool.kind === 'tile' || state.tool.kind === 'token')
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (overlayOpen()) return
     const point = pointOf(event)
@@ -888,7 +893,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         className="board-canvas"
         style={{ touchAction: 'pan-y' }}
         viewBox={`${renderedViewBox.x} ${renderedViewBox.y} ${renderedViewBox.width} ${renderedViewBox.height}`}
-        aria-label="Editable Catan board"
+        aria-label={readOnly ? 'Catan board history' : 'Editable Catan board'}
         onPointerDownCapture={() => {
           if (overlayOpen()) suppressClick.current = true
         }}
@@ -908,7 +913,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           // Only piece placement treats a moved click as a drag; a terrain click that drifts still paints its hex.
           const dragged = !coarse && pieceActive && start !== null &&
             Math.hypot(event.clientX - start.x, event.clientY - start.y) > PAN_THRESHOLD
-          if (!suppressClick.current && !dragged) return
+          if (!readOnly && !suppressClick.current && !dragged) return
           event.preventDefault()
           event.stopPropagation()
           suppressClick.current = false

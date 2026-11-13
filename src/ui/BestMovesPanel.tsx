@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Cards, KnightPlay } from '../engine/advice/protocol'
 import type { Game } from '../model/game'
-import { activePlayerId, currentTurnHistory, endTurn, recordBuyDev, setActivePlayer, turnState } from '../model/turn'
+import { activePlayerId, appendLog, currentTurnHistory, endTurn, recordBuyDev, setActivePlayer, turnState } from '../model/turn'
 import { RESOURCES, type Resource } from '../model/types'
 import { adviceResponse, useAdvice } from './useAdvice'
 import {
@@ -9,6 +9,7 @@ import {
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
 import { Ledger } from './Ledger'
+import { HistoryPanel } from './HistoryPanel'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { readableInk } from './colors'
 import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
@@ -17,7 +18,6 @@ import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
 import { useCoarsePointer } from './useMediaQuery'
 
-const actionLog = new WeakMap<Game, string>()
 const recordedRolls = new WeakMap<Game, RecordedRoll>()
 const ACTION_TILES = [
   { kind: 'trade', label: 'Trade', Glyph: TradeGlyph },
@@ -69,14 +69,14 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const [selected, setSelected] = useState<{ game: Game; id: string } | null>(null)
   const own = useRef<readonly HighlightMark[] | null>(null)
   const [, refreshRecords] = useState(0)
-  const pendingRecord = useRef<{ previous: Game; text?: string; roll?: RecordedRoll } | null>(null)
+  const pendingRecord = useRef<{ previous: Game; roll: RecordedRoll } | null>(null)
   const [knight, setKnight] = useState<{ game: Game; initial?: KnightPlay } | null>(null)
   const inHistory = (entry: Game) => entry === game || tab.past.includes(entry)
   const seven = robberPending(game)
   const playingKnight = knight !== null && inHistory(knight.game)
   const before = turn?.rolled === null
   const blockers = useMemo(() => adviceBlockers(board), [board])
-  const adviceEnabled = blockers.length === 0
+  const adviceEnabled = blockers.length === 0 && !state.historyOpen
   const moves = useAdvice(
     adviceEnabled && viewedId !== null && !seven && (!viewingTurn || !before) ? { kind: 'turn' } : null,
     viewedId,
@@ -121,8 +121,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   }, [tab, game, activeId, close])
   const record = useCallback((next: Game, text: string) => {
     if (next === game) return
-    pendingRecord.current = { previous: game, text }
-    commit(next)
+    commit(appendLog(next, text))
   }, [game, commit])
   useLayoutEffect(() => {
     const pending = pendingRecord.current
@@ -131,8 +130,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     if (tab.past.at(-1) !== pending.previous) return
 
     // Award changes can replace the submitted game, so retain the store's committed snapshot.
-    if (pending.text) actionLog.set(game, pending.text)
-    if (pending.roll) recordedRolls.set(game, pending.roll)
+    recordedRolls.set(game, pending.roll)
     refreshRecords((value) => value + 1)
   }, [game, tab.past])
   const rolled = useCallback((gains: Record<string, Cards> | null, discards: Discards) => {
@@ -147,6 +145,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     if (!seven && !playingKnight) mark(null)
   }, [viewedId, seven, playingKnight, mark])
   useEffect(() => () => dispatch({ type: 'highlight', marks: null }), [dispatch])
+  useEffect(() => () => dispatch({ type: 'history', open: false }), [dispatch])
+  useLayoutEffect(() => {
+    if (state.historyOpen) close()
+  }, [state.historyOpen, close])
   useEffect(() => {
     if (state.highlight !== own.current) setSelected(null)
   }, [state.highlight])
@@ -162,7 +164,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     const result = applyAdvice(game, move)
     clear()
     close()
-    if (!('open' in result)) record(result, recordedMoveLabel(move))
+    if (!('open' in result)) {
+      if (move.type === 'pass') commit(result)
+      else record(result, recordedMoveLabel(move))
+    }
     else if (result.open === 'play' && result.fill.type === 'playKnight') setKnight({ game, initial: result.fill })
     else setTray({ kind: result.open, fill: result, id: ++traySequence.current })
   }
@@ -204,9 +209,11 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const claimNote = board.mePlayerId === null ? <li>Claim yourself in Players to track your exact cards</li> : null
   const ledger = (
     <section className={`${className} best-moves-panel ledger-panel`}>
-      <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={commit} onUndo={() => dispatch({ type: 'undo' })} />
+      <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={commit} onUndo={() => dispatch({ type: 'undo' })}
+        historyOpen={state.historyOpen} viewedTurn={state.viewedTurn} onToggleHistory={() => dispatch({ type: 'history', open: !state.historyOpen })} />
     </section>
   )
+  if (state.historyOpen && game.turn) return <>{ledger}<HistoryPanel className={className} /></>
   if (!active || activeId === null || !viewed || viewedId === null) return (
     <>
       {ledger}
@@ -223,7 +230,11 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const tiles = ACTION_TILES.filter(({ kind }) => !seven && available?.[kind])
   const noActions = !before && !seven && tray === null && !playingKnight && tiles.length === 0
   const turnGames = currentTurnHistory([...tab.past, game])
-  const actions = turnGames.flatMap((entry) => actionLog.has(entry) ? [actionLog.get(entry)!] : [])
+  const actions = turn?.log ?? []
+  const previous = tab.past.at(-1)
+  const previousTurn = previous && turnState(previous)
+  const undoLog = previousTurn?.playerId === turn?.playerId && (previousTurn?.log?.length ?? 0) === actions.length - 1
+    && (previousTurn?.log ?? []).every((line, index) => line === actions[index])
   const rollIndex = turnGames.findIndex((entry) => turnState(entry)?.rolled != null)
   const rollGame = turnGames[rollIndex]
   // Change roll recommits the pre-roll snapshot as a new step, so Undo brings the roll and its actions back.
@@ -256,7 +267,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
               <div className="move-step-title">{noActions ? 'No actions possible' : 'Actions'}</div>
               {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}>
                 <TickGlyph /><span>{text}</span>
-                {index === actions.length - 1 && actionLog.has(game) && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
+                {index === actions.length - 1 && undoLog && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
               </li>)}</ul>}
               {tiles.length > 0 && <div className="move-tiles">
                 {tiles.map(({ kind, label, Glyph }) => (

@@ -5,6 +5,7 @@ import {
   type DevHand, type DevKind, type Game, type PlayerStats, type TurnState,
 } from './game'
 import { RESOURCES, type AxialCoord, type Board, type EdgeId, type Resource, type VertexId } from './types'
+import { positionOf, turnRecord } from './history'
 
 type Cards = Partial<Record<Resource, number>>
 
@@ -57,8 +58,9 @@ export function setActivePlayer(game: Game, playerId: string): Game {
   ensureStats(game, playerId)
   if (game.turn?.playerId === playerId) return game
   const progressPlayed = turnState(game)?.progressPlayed ?? { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 }
+  const started = begin(game)
   return {
-    ...(activePlayerId(game) === playerId ? game : promoteBought(game)),
+    ...(activePlayerId(game) === playerId ? started : promoteBought(started)),
     turn: { playerId, rolled: null, devPlayed: false, progressPlayed },
   }
 }
@@ -68,14 +70,32 @@ export function endTurn(game: Game): Game {
   const index = game.board.players.findIndex((player) => player.id === turn.playerId)
   if (index < 0) throw new RangeError(`Unknown player ${turn.playerId}`)
   const playerId = game.board.players[(index + 1) % game.board.players.length].id
-  return { ...promoteBought(game), turn: { playerId, rolled: null, devPlayed: false, progressPlayed: turn.progressPlayed } }
+  const history = game.history ?? { start: positionOf(game), turns: [] }
+  return {
+    ...promoteBought(game),
+    history: { ...history, turns: [...history.turns, turnRecord(game, history, turn)] },
+    turn: { playerId, rolled: null, devPlayed: false, progressPlayed: turn.progressPlayed },
+  }
+}
+
+export function appendLog(game: Game, text: string): Game {
+  game = begin(game)
+  const turn = requireTurn(game)
+  return { ...game, turn: { ...turn, log: [...turn.log ?? [], text] } }
 }
 
 export function recordRoll(game: Game, total: number, gains: Record<string, Record<Resource, number>>): Game {
+  game = begin(game)
   if (!Number.isInteger(total) || total < 2 || total > 12) throw new RangeError('Roll must be an integer from 2 to 12')
   const turn = { ...requireTurn(game), rolled: total }
   if (total === 7) turn.robberMoved = false
   else delete turn.robberMoved
+  delete turn.gains
+  const produced = Object.fromEntries(Object.entries(gains).flatMap(([id, cards]) => {
+    const nonzero = Object.fromEntries(RESOURCES.filter((resource) => cards[resource] > 0).map((resource) => [resource, cards[resource]]))
+    return Object.keys(nonzero).length ? [[id, nonzero]] : []
+  }))
+  if (total !== 7 && Object.keys(produced).length) turn.gains = produced
   let next: Game = { ...game, turn }
   for (const [playerId, cards] of Object.entries(gains)) next = gain(next, playerId, cards)
   return next
@@ -148,6 +168,7 @@ export function recordBuild(game: Game, piece: 'road' | 'settlement' | 'city', i
 }
 
 export function recordBuyDev(game: Game, drawn: DevKind | 'vp' | null): Game {
+  game = begin(game)
   const turn = requireTurn(game)
   const { playerId } = turn
   let next = spend(game, playerId, CARD_COSTS.devCard)
@@ -162,6 +183,7 @@ export function recordBuyDev(game: Game, drawn: DevKind | 'vp' | null): Game {
 }
 
 export function recordPlayDev(game: Game, play: DevPlay): Game {
+  game = begin(game)
   const turn = requireTurn(game)
   const { playerId } = turn
   let next = game
@@ -259,6 +281,11 @@ function promoteBought(game: Game): Game {
   const playable = { ...hand.playable }
   for (const kind of DEV_KINDS) playable[kind] += hand.bought[kind]
   return { ...game, devHand: { ...hand, playable, bought: emptyDevCounts() } }
+}
+
+// History starts at the first action that writes the turn. Usually that is picking the first player, but a mid-game import with no turn starts it at a roll, a dev card or a log line.
+function begin(game: Game): Game {
+  return game.turn || game.history ? game : { ...game, history: { start: positionOf(game), turns: [] } }
 }
 
 function requireTurn(game: Game): TurnState {

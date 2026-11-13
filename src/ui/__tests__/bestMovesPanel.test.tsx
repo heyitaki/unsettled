@@ -314,6 +314,7 @@ describe('Best moves recording', () => {
   })
 
   it('records mixed port lots exactly and undoes the newest log entry', async () => {
+    await act(async () => seen.dispatch({ type: 'commit-game', game: setActivePlayer(game(), 'aki') }))
     const ports = createBoard('standard4').ports.slice(0, 2).map((port, index) => ({ ...port, resource: index === 0 ? 'ore' as const : null, rate: index === 0 ? 2 : 3 }))
     let board: Game['board'] = { ...game().board, buildings: [], ports }
     for (const port of ports) board = placeBuilding(board, edgeEndpointVertexIds(port.edgeId)[0], 'aki', 'settlement')
@@ -445,7 +446,8 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.move-log li > span')?.textContent).toBe('Bought a dev card')
     expect(rollStep().querySelector('.move-prod-cards')?.getAttribute('aria-label')).toBe('2 wood')
     await act(async () => seen.dispatch({ type: 'tab-add', game: JSON.parse(JSON.stringify(game())) }))
-    expect(container.querySelector('.move-log')).toBeNull()
+    expect(container.querySelector('.move-log li > span')?.textContent).toBe('Bought a dev card')
+    expect(container.querySelector('.move-log button')).toBeNull()
     expect(rollStep().querySelector('.move-prod')).toBeNull()
     expect(rollStep().textContent).toBe('Rolled 8')
   })

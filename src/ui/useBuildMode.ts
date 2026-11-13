@@ -27,6 +27,7 @@ export function useBuildMode() {
   }, [session, building, dispatch])
   const enter = () => {
     setSession(openBuildSession(tab))
+    dispatch({ type: 'history', open: false })
     dispatch({ type: 'tool', tool: { kind: 'piece' } })
   }
   const done = () => {

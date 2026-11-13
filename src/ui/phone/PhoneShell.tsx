@@ -3,6 +3,7 @@ import { AnalysisPanel } from '../AnalysisPanel'
 import { useBoardActions } from '../boardActions'
 import { BoardCanvas } from '../BoardCanvas'
 import { GlobalNotice } from '../GlobalNotice'
+import { HistoryControls } from '../HistoryControls'
 import type { HeaderPanel } from '../HeaderControls'
 import { activeTab, useStore } from '../store'
 import { MapsScreen } from './MapsScreen'
@@ -52,6 +53,7 @@ export function PhoneShell() {
       <PhoneHeader building={building} onToggleMode={toggle} onOpen={openOverlay} />
       <main className="phone-page">
         <BoardCanvas restMarks={restMarks} />
+        {!building && <HistoryControls />}
         {building ? <BoardTools className="phone-block phone-block-flush phone-build" actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
       </main>
       {overlay === 'maps' && <MapsScreen onClose={closeOverlay} />}

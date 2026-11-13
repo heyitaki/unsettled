@@ -21,9 +21,9 @@ One board. One scrolling document. No bottom nav.
 - The **header** is the only chrome that stays: under a brand row that scrolls away, its controls row sticks and holds the board's identity, the roster, and the two controls that change what the page below is for.
 - The **page** below it is a single scroller: board, then one block that is either the analysis (which opens with the draft ribbon) or the board tools.
 - **Maps** and **Players** are full-screen overlays that slide in from the right and return you to exactly where you were. They are screens you go to and come back from, not drawers that share the page.
-- Nothing below the board has its own `overflow-y`. Nothing overflows horizontally except deliberately sideways-scrolling tool rows.
+- Only the History list (S10), capped at 440px, scrolls inside the page below the board. Nothing overflows horizontally except deliberately sideways-scrolling tool rows.
 
-This restores the layout contract already recorded for this arm (one scroller, a flat Sand page (`#efe8d9`), no nested scrollers, no sticky board) which the tab bar had been sitting on top of.
+This restores the layout contract already recorded for this arm (one page scroller with the History exception in S10, a flat Sand page (`#efe8d9`), no sticky board) which the tab bar had been sitting on top of.
 
 ## Surfaces
 
@@ -122,6 +122,8 @@ Save failures stay visible until resolved, with `Retry saving` and `Export backu
 
 Once every starting settlement is placed the analysis block shows the draft recap (desktop D8) until `Start game` records the first turn, and then becomes Best moves: the same component and the same order as desktop D8 (the `Ledger` section, `Record your turn` with its step rail and no player picker, then `Best moves`), on the main page so the Ledger is in view while choosing a move. The Players screen stays for the roster.
 
+The Ledger has the desktop's History toggle after the award button once `game.turn` exists. It swaps Record your turn and Best moves for the shared History panel. Rows, round labels, Now, Game start, summaries, selected production and log details, and ArrowUp/ArrowDown navigation follow desktop D8 and [`../history/plan.md`](../history/plan.md). A past row shows the saved board pieces and Ledger with `After turn N` or `At game start`, disables board input and Ledger editing, and hides the award menu. The 32px board pill sits centred 8px below the board, uses 12px type, and has the same Earlier, Later and Back to now states as desktop. Selecting a row calls `revealBoardIfScrolledPast`. The list scrolls internally up to 440px, with its heading rule and shadow only while scrolled; its side spacing is `var(--gutter)`. History closes on entering build mode. Opening History, committing, undoing, redoing or switching tabs selects Now. The view is temporary, while `Game.history` and `turn.log` persist with the game.
+
 What differs on the phone:
 
 - `Undo` and `Redo` in the heading follow the heading button size in S5. The header holds the turn ring and viewed-player chip (S1).
@@ -131,7 +133,7 @@ What differs on the phone:
 - `Buy card` asks `Which card did you draw?` with wrapping line-art chips and full card names; one tap records. Rival purchases still record on the action tap.
 - `Play card` uses the desktop's questions naming the active player, wrapping chips, robber question and hint, Year of plenty counted cells that record on the second card, and Monopoly player tiles with known-to-possible caps, minus buttons, a muted total and outlined check Record. Road building's two fixed slots are 44px tall, the last placed road has a corner minus, and the second road records; the outlined check button also records zero or one road.
 - `Build` uses wrapping chips with the active player's outlined piece glyph beside the name and the cost below it, then the question and hint for the board pick. Costs remain visible without selecting a chip.
-- The newest action-log entry has a curved SVG arrow and `Undo` at its right only when the current game is a recorded action; it uses the heading's undo and has a 36px minimum height.
+- The newest action-log entry has a curved SVG arrow and `Undo` at its right only when the newest undo entry has the same turn player and a matching log one line shorter; it uses the heading's undo and has a 36px minimum height.
 - The Ledger uses columns `100px 1fr 36px 36px` with a 6px gap. The Ledger's row editor is the only place to correct a hand on the phone. Its tiles are 68px tall, its tabs 44px and its Undo 36px.
 - A build or a robber move that needs a spot scrolls the board into view, as selecting a row does (S5).
 

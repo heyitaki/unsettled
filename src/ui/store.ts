@@ -108,6 +108,8 @@ export interface StoreState {
   pick?: BoardPick | null
   viewedPick?: number | null
   viewedPlayer?: string | null
+  historyOpen?: boolean
+  viewedTurn?: number | null
   // Bumped whenever the library changes, here or in another document. The maps
   // blob lives outside React, so panels that read it re-render off this.
   mapsRevision: number
@@ -130,6 +132,8 @@ export type StoreAction =
   | { type: 'picked'; ref: string }
   | { type: 'view-pick'; slot: number | null }
   | { type: 'view-player'; playerId: string | null }
+  | { type: 'history'; open: boolean }
+  | { type: 'view-turn'; index: number | null }
   | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -296,6 +300,10 @@ function unusedBoardTitle(tabs: TabState[]): string {
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   let next = reduceAction(state, action)
+  if (next.activeTabId !== state.activeTabId || ['commit', 'commit-game', 'undo', 'redo'].includes(action.type)) {
+    if (next.viewedTurn != null) next = { ...next, viewedTurn: null }
+    if (next.historyOpen && !activeTab(next).game.turn) next = { ...next, historyOpen: false }
+  }
   if (next === state) return next
   next = withViewedPlayer(next, next.activeTabId !== state.activeTabId ||
     activeTab(next).game.turn?.playerId !== activeTab(state).game.turn?.playerId ? null : next.viewedPlayer ?? null)
@@ -337,6 +345,16 @@ function reduceAction(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
     case 'view-player':
       return withViewedPlayer(state, action.playerId)
+    case 'history':
+      if (!action.open && !state.historyOpen) return state
+      return { ...state, historyOpen: action.open && activeTab(state).game.turn !== undefined, viewedTurn: null, pick: null, highlight: null }
+    case 'view-turn': {
+      const { history } = activeTab(state).game
+      const count = history?.turns.length ?? 0
+      const viewedTurn = state.historyOpen && history && action.index !== null && Number.isInteger(action.index) && action.index >= 0 && action.index <= count
+        ? action.index : null
+      return viewedTurn === (state.viewedTurn ?? null) ? state : { ...state, viewedTurn }
+    }
     case 'view-pick':
       return withViewedPick(state, action.slot)
     case 'commit':

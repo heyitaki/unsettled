@@ -8,6 +8,7 @@ import { BoardTools } from './BoardTools'
 import { useBoardActions } from './boardActions'
 import { HeaderControls, type HeaderPanel } from './HeaderControls'
 import { HeaderPopover } from './HeaderPopover'
+import { HistoryControls } from './HistoryControls'
 import { ImportButton } from './ImportDialog'
 import { useBuildMode } from './useBuildMode'
 import { GlobalNotice } from './GlobalNotice'
@@ -42,9 +43,10 @@ function Workspace() {
         )}
       </header>
       <GlobalNotice />
-      <main className="workspace">
+      <main className={`workspace${state.historyOpen && !building ? ' history-open' : ''}`}>
         <div className="center-column">
           <BoardCanvas restMarks={restMarks} />
+          {!building && <HistoryControls />}
         </div>
         <aside className="right-rail">
           {building ? <BoardTools actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel onBuild={enter} />}

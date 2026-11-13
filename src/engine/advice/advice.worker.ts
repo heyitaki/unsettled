@@ -1,4 +1,5 @@
 import type { AdviceRequest, AdviceResponse } from './protocol'
+import { engineRequest } from './request'
 import { createEngine, type Engine } from './wasm'
 
 let adviser: Promise<Engine['advise']> | null = null
@@ -19,7 +20,7 @@ self.onmessage = async (event: MessageEvent<{ id: number; request: AdviceRequest
   let response: AdviceResponse
   try {
     const advise = await loadAdviser()
-    response = JSON.parse(advise(JSON.stringify(request)))
+    response = JSON.parse(advise(JSON.stringify(engineRequest(request))))
   } catch (error) {
     // A trap leaves the instance's state half-written, so the next request loads a fresh one.
     adviser = null

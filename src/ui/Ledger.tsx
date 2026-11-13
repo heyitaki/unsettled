@@ -1,11 +1,12 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { awardCandidates, computeStandings, setAwardHolder } from '../engine/stats'
 import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type DevKind, type Game, type StatCounter } from '../model/game'
 import { adjustDevHand, handTotal } from '../model/turn'
+import { historyGame } from '../model/history'
 import { RESOURCES, type Resource } from '../model/types'
 import { DEV_LABELS, statsFor } from './bestMoves'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
-import { CounterGlyph, DevCardGlyph, DotsGlyph, MinusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { CounterGlyph, DevCardGlyph, DotsGlyph, HistoryGlyph, MinusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { RESOURCE_LABELS } from './vertexParts'
 
 const AWARDS: { kind: AwardKind; label: string }[] = [
@@ -15,16 +16,25 @@ const AWARDS: { kind: AwardKind; label: string }[] = [
 
 // `previous` is the newest game on the tab's undo stack and `onUndo` pops it,
 // so the editor's Undo is the app's own undo step rather than a second history.
-export function Ledger({ game, activeId, previous, commit, onUndo }: {
+export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, historyOpen = false, viewedTurn = null, onToggleHistory }: {
   game: Game
   activeId: string | null
   previous: Game | undefined
   commit(game: Game): void
   onUndo(): void
+  historyOpen?: boolean
+  viewedTurn?: number | null
+  onToggleHistory?(): void
 }) {
   const id = useId()
   const [editing, setEditing] = useState<string | null>(null)
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
+  const readOnly = historyOpen && viewedTurn !== null
+  const game = useMemo(() => readOnly ? historyGame(liveGame, viewedTurn) : liveGame, [liveGame, readOnly, viewedTurn])
+  // Game start is before anyone's turn, so no row is marked.
+  const shownPlayer = readOnly ? viewedTurn === 0 ? null : game.turn?.playerId : activeId
+  if (readOnly && editing !== null) setEditing(null)
+  if (readOnly && menuTrigger !== null) setMenuTrigger(null)
   const standings = computeStandings(game)
   const { board } = game
   const awardItems = AWARDS.flatMap(({ kind, label }): ContextMenuItem[] => {
@@ -43,19 +53,24 @@ export function Ledger({ game, activeId, previous, commit, onUndo }: {
   return (
     <>
       <div className="panel-heading">
-        <h2>Ledger</h2>
-        {awardItems.length > 0 && <button
-          type="button"
-          className="panel-dots"
-          aria-label="Award holders"
-          aria-haspopup="menu"
-          aria-expanded={menuTrigger !== null}
-          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
-        >
-          <DotsGlyph />
-        </button>}
+        <h2>Ledger{readOnly && <span className="ledger-asof">{viewedTurn === 0 ? 'At game start' : `After turn ${viewedTurn}`}</span>}</h2>
+        <div className="panel-actions">
+          {!readOnly && awardItems.length > 0 && <button
+            type="button"
+            className="panel-dots"
+            aria-label="Award holders"
+            aria-haspopup="menu"
+            aria-expanded={menuTrigger !== null}
+            onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
+          >
+            <DotsGlyph />
+          </button>}
+          {liveGame.turn && onToggleHistory && <button type="button" className="history-toggle" aria-pressed={historyOpen} onClick={onToggleHistory}>
+            <HistoryGlyph />History
+          </button>}
+        </div>
       </div>
-      {menuTrigger && awardItems.length > 0 && <ContextMenu
+      {!readOnly && menuTrigger && awardItems.length > 0 && <ContextMenu
         ariaLabel="Award holders"
         trigger={menuTrigger}
         items={awardItems}
@@ -73,8 +88,9 @@ export function Ledger({ game, activeId, previous, commit, onUndo }: {
         const rowId = `${id}-${index}`
         const showDev = mine && editing !== player.id && (typedTotal > 0 || stats.vpCards > 0)
         return (
-          <div key={player.id} className={`ledger-row${player.id === activeId ? ' active' : ''}${editing === player.id ? ' open' : ''}`}>
+          <div key={player.id} className={`ledger-row${player.id === shownPlayer ? ' active' : ''}${editing === player.id ? ' open' : ''}${readOnly ? ' read-only' : ''}`}>
             <button type="button" className="ledger-toggle" aria-label={`Correct ${player.name}`}
+              disabled={readOnly}
               aria-describedby={`${rowId}-player ${rowId}-hand ${rowId}-cards ${rowId}-vp${showDev ? ` ${rowId}-dev` : ''}`}
               aria-expanded={editing === player.id} onClick={() => toggle(player.id)}>
               <span className="ledger-player" id={`${rowId}-player`}>
