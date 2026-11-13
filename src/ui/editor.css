@@ -141,7 +141,7 @@ button.danger { color: var(--danger); }
 .sheet-menu > button:hover, .sheet-menu > button:focus-visible { color: var(--ink); background: var(--tint); }
 .sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--glyph); }
 .sheet-menu-narrow { width: 186px; }
-.board-canvas { width: 100%; display: block; max-height: calc(100vh - 144px); padding: 28px; border-radius: 14px; background: #3c7fbf; }
+.board-canvas { width: 100%; display: block; max-height: calc(100vh - 144px); padding: 28px; border-radius: var(--radius); background: #3c7fbf; }
 /* The sea is the SVG's own box, so the frame keeps its radius at any zoom; the rect inside would only repaint it. */
 .board-sea { display: none; }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay

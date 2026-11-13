@@ -69,8 +69,9 @@ const PORT_DOT_FINE = 2.8
 const BOARD_MARGIN = 18
 // Rounding on the sea's corners, in unscaled board units. The clip frame that
 // carries it while zoomed divides it by the scale, so the on-screen radius is
-// the same at 6x as it is at fit.
-const SEA_RADIUS = 32
+// the same at 6x as it is at fit. 5 units is about 6px (`--radius`) on the
+// desktop board at fit; the phone's board is half as wide, so 3px there.
+const SEA_RADIUS = 5
 // Shared outline width for every piece (buildings + roads), in unscaled board
 // units. Matches the settlement's original border (2.5 stroke × 0.8 scale).
 const PIECE_STROKE = 2
