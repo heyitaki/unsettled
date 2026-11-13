@@ -221,8 +221,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         <div className="panel-heading">
           <h2>Best moves</h2>
         </div>
-        <button type="button" className="primary" onClick={() => commit(setActivePlayer(game, board.players[0].id))}>Start game</button>
         <ul className="move-notes">{claimNote}</ul>
+        <button type="button" className="primary" onClick={() => commit(setActivePlayer(game, board.players[0].id))}>Start game</button>
       </section>
     </>
   )
@@ -295,6 +295,13 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             ? 'Not your turn. These are the moves you would make with this hand if your turn started now.'
             : `Not ${viewed.name}'s turn. These are the moves ${viewed.name} would make with this hand if their turn started now.`}
         </p>}
+        <ul className="move-notes">
+          {claimNote}
+          {derived && derived.unknownOwnCards > 0 && (
+            <li>{derived.unknownOwnCards} of {viewed.name}'s cards are of unknown type and ignored</li>
+          )}
+          {!viewingMine && devCards > 0 && <li>{viewed.name}'s {devCards} dev cards are treated as unplayed knights</li>}
+        </ul>
         {!adviceEnabled ? (
           <div className="hint">
             <p>Finish the board to get advice:</p>
@@ -373,13 +380,6 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             </p>}
           </>
         )}
-        <ul className="move-notes">
-          {claimNote}
-          {derived && derived.unknownOwnCards > 0 && (
-            <li>{derived.unknownOwnCards} of {viewed.name}'s cards are of unknown type and ignored</li>
-          )}
-          {!viewingMine && devCards > 0 && <li>{viewed.name}'s {devCards} dev cards are treated as unplayed knights</li>}
-        </ul>
       </section>
     </>
   )
