@@ -893,14 +893,14 @@ describe('Best moves recording', () => {
     expect(container.querySelectorAll('.move-step')[1].className).toContain('now')
   })
 
-  it('shows production as player groups with one glyph per card, including Nobody produces', async () => {
+  it('shows production as player groups with one glyph per resource and a count above one, including Nobody produces', async () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'produce', gains: { aki: { ...cards, wood: 2, ore: 1 }, b: { ...cards, wheat: 1 } } })
     await click('8')
     const groups = rollStep().querySelectorAll('.move-prod-player')
-    expect([...groups].map((group) => group.textContent)).toEqual(['aki', 'Bee'])
+    expect([...groups].map((group) => group.textContent)).toEqual(['aki2', 'Bee'])
     expect(groups[0].querySelector('.swatch')).not.toBeNull()
-    expect(groups[0].querySelectorAll('.stat-icon')).toHaveLength(3)
+    expect(groups[0].querySelectorAll('.stat-icon')).toHaveLength(2)
     expect(groups[1].querySelectorAll('.stat-icon')).toHaveLength(1)
     expect(rollStep().querySelector('.move-step-title')?.textContent).toContain('Rolled 8')
     await click('Change roll')
@@ -998,8 +998,8 @@ describe('Best moves recording', () => {
     expect(rollStep().className).toContain('done')
     expect(rollStep().textContent).toContain('Rolled 8')
     expect(rollStep().querySelectorAll('.move-prod-player')).toHaveLength(1)
-    expect(rollStep().querySelector('.move-prod-player')?.textContent).toBe('aki')
-    expect(rollStep().querySelectorAll('.move-prod-cards[aria-label="2 wood"] .stat-icon')).toHaveLength(2)
+    expect(rollStep().querySelector('.move-prod-player')?.textContent).toBe('aki2')
+    expect(rollStep().querySelectorAll('.move-prod-cards[aria-label="2 wood"] .stat-icon')).toHaveLength(1)
     expect(rollStep().querySelector('.move-step-title')?.textContent).toContain('Rolled 8')
     expect(button('Change roll').title).toBe('Change roll')
     expect(button('Change roll').textContent).toBe('')

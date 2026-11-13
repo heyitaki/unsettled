@@ -165,7 +165,9 @@ export function ProductionPlayer({ player, cards }: { player: Pick<Player, 'name
       <span className="swatch" style={{ background: player.color }} />
       {player.name}
       <span className="move-prod-cards" role="img" aria-label={RESOURCES.filter((resource) => (cards[resource] ?? 0) > 0).map((resource) => `${cards[resource]} ${resource}`).join(', ')}>
-        {RESOURCES.flatMap((resource) => Array.from({ length: cards[resource] ?? 0 }, (_, index) => <ResourceGlyph key={`${resource}:${index}`} resource={resource} />))}
+        {RESOURCES.map((resource) => (cards[resource] ?? 0) > 0 && (
+          <span className="move-prod-card" key={resource}><ResourceGlyph resource={resource} />{cards[resource] !== 1 && cards[resource]}</span>
+        ))}
       </span>
     </span>
   )

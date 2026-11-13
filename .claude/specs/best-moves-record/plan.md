@@ -34,7 +34,7 @@ Approved 2026-11-12. Mock-up: https://claude.ai/artifact/FXTAEV92eXLhZYSo7qsRSs 
 
 ## Second round of owner edits (2026-11-12)
 
-- The roll's production summary shows each producing player as a swatch bubble, the name and one resource icon per card. The context line shows only `Rolled N`.
+- The roll's production summary shows each producing player as a swatch bubble, the name and each resource icon, followed by its count when above one. The context line shows only `Rolled N`.
 - `Change` is an icon-only pencil button (`Change roll`).
 - The Actions step has no hint text.
 - The tiles are larger (30px glyphs, more padding), and each glyph is centred on the grid.
