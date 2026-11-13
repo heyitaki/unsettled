@@ -606,7 +606,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .history-round { display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .history-row { border-top: 1px solid var(--line); }
 .history-round + .history-row { border-top-color: transparent; }
-.history-row.current { box-shadow: inset 3px 0 0 var(--ink); }
+.history-row.current { box-shadow: inset 3px 0 0 var(--ink), inset -1px 0 0 var(--line); background: var(--tint); border-top-color: var(--line); border-bottom: 1px solid var(--line); margin-bottom: -1px; }
 .history-select { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 0 10px; width: 100%; min-height: 0; padding: 10px 10px 10px 12px; border: 0; border-radius: 0; background: transparent; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
 .history-row .history-select:hover:not(:disabled) { background: transparent; }
 .history-disc { display: grid; place-items: center; width: 20px; height: 20px; box-sizing: border-box; border: 1.5px solid transparent; border-radius: 50%; font: 800 11px/1 Inter, sans-serif; font-variant-numeric: tabular-nums lining-nums; }
