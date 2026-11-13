@@ -130,7 +130,7 @@ export function RollStep({ game, active, adviceEnabled, commit, rolled, recorded
       {total == null && (
         <div className="move-dice" role="group" aria-label="Dice total">
           {Array.from({ length: 11 }, (_, index) => index + 2).map((total) => (
-            <button type="button" key={total} className={total === 7 ? 'seven' : ''} disabled={rolling?.game === game} onClick={() => roll(total)}>
+            <button type="button" key={total} disabled={rolling?.game === game} onClick={() => roll(total)}>
               {total}
               {total === 7 ? <RobberGlyph className="seven-robber" /> : (
                 <svg className="dice-pips" viewBox="0 0 30 4" width="30" height="4" aria-hidden="true">
