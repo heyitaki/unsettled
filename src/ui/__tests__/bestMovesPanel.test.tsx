@@ -1112,7 +1112,7 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.ledger-dev-pill.new')?.textContent).toBe('Monopoly new')
     expect(container.textContent).not.toContain(note)
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(adjustCounter(game(), 'aki', 'devCards', 1), 'b', 'devCards', 2) }))
-    expect(container.textContent).toContain(note)
+    expect(container.textContent).not.toContain(note)
     expect(container.textContent).not.toContain('treated as unplayed knights')
     await click('Turn 2: Bee')
     expect(container.textContent).not.toContain(note)
@@ -1121,7 +1121,7 @@ describe('Best moves recording', () => {
     const withoutTypes = { ...game() }
     delete withoutTypes.devHand
     await act(async () => seen.dispatch({ type: 'commit-game', game: withoutTypes }))
-    expect(container.textContent).toContain(note)
+    expect(container.textContent).not.toContain(note)
   })
 
   it('shows a negative verdict for the claimed counterparty before recording the trade', async () => {

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Cards, KnightPlay } from '../engine/advice/protocol'
-import { devHandTotal, type Game } from '../model/game'
+import type { Game } from '../model/game'
 import { activePlayerId, currentTurnHistory, endTurn, recordBuyDev, setActivePlayer, turnState } from '../model/turn'
 import { RESOURCES, type Resource } from '../model/types'
 import { adviceResponse, useAdvice } from './useAdvice'
 import {
-  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, typedDevHand, type Move,
+  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
 import { Ledger } from './Ledger'
@@ -196,7 +196,6 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
       handDelta: advice.handDelta,
     })
   }
-  const unknown = board.players.reduce((sum, player) => sum + statsFor(game, player.id).handUnknown, 0)
   const order = (
     <div className="move-order" role="group" aria-label="Turn order">
       {board.players.map((player, index) => (
@@ -235,8 +234,6 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     </>
   )
   const devCards = statsFor(game, activeId).devCards
-  const devHand = typedDevHand(game, activeId)
-  const typedDevCards = devHand ? devHandTotal(devHand) : 0
   const tiles = ACTION_TILES.filter(({ kind }) => !seven && available?.[kind])
   const noActions = !before && !seven && tray === null && !playingKnight && tiles.length === 0
   const turnGames = currentTurnHistory([...tab.past, game])
@@ -382,12 +379,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         )}
         <ul className="move-notes">
           {claimNote}
-          {unknown > 0 && <li>Bank estimated: {unknown} cards of unknown type</li>}
           {derived && derived.unknownOwnCards > 0 && (
             <li>{derived.unknownOwnCards} of {active.name}'s cards are of unknown type and ignored</li>
           )}
           {!mine && devCards > 0 && <li>{active.name}'s {devCards} dev cards are treated as unplayed knights</li>}
-          {mine && devCards > typedDevCards && <li>Set your dev cards by type in the Ledger</li>}
         </ul>
       </section>
     </>

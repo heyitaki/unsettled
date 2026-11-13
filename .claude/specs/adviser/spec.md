@@ -42,14 +42,14 @@ Optional, following `awards?`. Absent means the claimed player's turn, not yet r
 | --- | --- | --- |
 | Whose turn, who decides | `turn.playerId`, sent to the bridge as `observer`. | the turn-order row |
 | Round, current seat | Defaulted to 0; no policy reads them. | no |
-| Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | `Bank estimated: N cards of unknown type` when any `handUnknown` > 0 |
+| Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | None |
 | Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded in the panel; earlier ones are not known. | no (it hides `Buy card` at zero) |
 | My dev cards by type, bought this turn | `Game.devHand` (below). Absent: no playable cards. | the Ledger's dev pills |
 | Dev card already played this turn | `turn.devPlayed`. | no |
 | The deciding player's hand | Exact for the claimed player. For a rival, the known cards only. | `N of Red's cards are of unknown type and ignored` |
 | Other players' hands by resource | Belief bounds: lower = `hand[r]`, upper = `hand[r] + handUnknown`, total = both. | the Ledger shows the known count and unseen count separately |
 | Other players' dev cards | Count from `stats.devCards`; knights from `stats.knights`. | the Ledger |
-| Dev cards of unknown type held by the deciding player (any rival, or the claimed player before their cards are entered by type) | Counted as knights bought this turn: held, not playable. This shifts the dev card buy score slightly. | `Red's 2 dev cards are treated as unplayed knights`, or for the claimed player `Set your dev cards by type in the Ledger` |
+| Dev cards of unknown type held by the deciding player (any rival, or the claimed player before their cards are entered by type) | Counted as knights bought this turn: held, not playable. This shifts the dev card buy score slightly. | `Red's 2 dev cards are treated as unplayed knights` (no note for the claimed player) |
 | Awards | `Game.awards` when set; the engine's own rule when absent. | the Ledger |
 | Offers already made this turn | Defaulted to 0. | no |
 | Player trading | `RuleConfig::player_trading = Some(TradeConfig::default())`, set by the bridge. | no |
