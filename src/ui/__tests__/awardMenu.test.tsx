@@ -65,7 +65,7 @@ it.each([true, false])('corrects a tied award in one undo step with an active pl
   expect(container.querySelector('section')?.classList.contains('ledger-panel')).toBe(true)
   expect(container.querySelectorAll('.ledger-row')).toHaveLength(2)
   expect(container.querySelectorAll('.ledger-row.active')).toHaveLength(active ? 1 : 0)
-  if (!active) expect(container.textContent).toContain('Tap a player to start tracking turns')
+  if (!active) expect(button('Start game').classList.contains('primary')).toBe(true)
   const trigger = button('Award holders')
   expect(trigger.closest('.panel-heading')?.querySelector('h2')?.textContent).toBe('Ledger')
   expect(trigger.classList.contains('panel-dots')).toBe(true)

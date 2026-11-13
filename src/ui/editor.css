@@ -63,6 +63,11 @@ button.danger { color: var(--danger); }
 .head-dots-more { color: var(--glyph); }
 .head-dot { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent); }
 .head-dot.me { border-color: var(--ink); box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ink); }
+.head-dots.in-game .head-dot-cell { width: 22px; }
+.head-dots.in-game .head-dot-cell.ringed { width: 26px; }
+.head-dots.in-game .head-dot { width: 15px; height: 15px; }
+.head-dots.in-game .head-dot-cell.chip { width: auto; padding: 0 4px; }
+.head-dots.in-game .head-dot-chip { width: auto; max-width: 72px; height: 22px; padding: 0 9px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 999px; border: 1.5px solid var(--ink); font: 700 12px/19px Inter, sans-serif; }
 .head-dots.unclaimed { animation: head-nudge 2.6s ease-in-out infinite; }
 @keyframes head-nudge { 0%, 82%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 88% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); } }
 .icon-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -408,10 +413,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .ledger-status b { color: var(--ink); font-weight: 600; }
 .ledger-undo { padding: 2px 0; border: 0; background: transparent; color: var(--accent-dark); font-size: 11.5px; font-weight: 700; }
 .right-rail .best-moves-panel + .best-moves-panel { margin-top: 12px; }
-.best-moves-panel .move-order { display: flex; justify-content: center; gap: 10px; margin: 2px 0 4px; }
-.best-moves-panel .move-seat { flex: none; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; border: 1.5px solid var(--ink); font: 800 13px Inter, sans-serif; }
-.best-moves-panel .move-seat[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--ink); }
-.move-context strong { color: var(--ink); }
 .move-label { margin: 12px 0 5px; color: var(--muted); font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .move-prod-player .swatch { flex: none; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--ink); }
 .move-chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -637,9 +638,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .ledger-undo { min-height: 36px; }
   .phone-block.phone-analysis { margin: 0; padding: 10px var(--gutter) 14px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .phone-block.phone-analysis .panel-heading h2 { font-size: 21px; }
-  .best-moves-panel .move-seat { position: relative; }
-  .best-moves-panel .move-seat::before { content: ''; position: absolute; width: 44px; height: 44px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
-  .best-moves-panel .move-order { gap: 14px; padding: 7px; }
   .best-moves-panel .move-tiles button, .move-card-choices button, .move-resource, .move-partners button, .move-record, .move-robber-pop button { min-height: 44px; }
   .move-road-slot { height: 44px; }
   .move-minus { width: 24px; height: 24px; top: -8px; right: -6px; }

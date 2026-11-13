@@ -502,7 +502,7 @@ test.describe('desktop', () => {
     await toggle.click()
     await expect(tools.locator('.structure-grid button')).toHaveText(['Randomize', 'Clear pieces', 'Clear board'])
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
-    await expect(tools.locator('.tool-hint')).toHaveText('Tap the board to edit pieces, the robber and ports. Pick a terrain or number, then tap a tile. A picked terrain turns a tapped port 2:1.')
+    await expect(tools.locator('.tool-hint')).toHaveText('Tap the board to edit pieces, the robber and ports. Pick a terrain or number, then tap a tile. A picked terrain turns a tapped port 2:1. Tap a player circle at the top to place pieces for that player.')
     await expect(svg.locator('.placement-slot').first()).toBeVisible()
     await clickCorner(corners[0])
     await expect(buildings).toHaveCount(1)

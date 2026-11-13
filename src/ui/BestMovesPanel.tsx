@@ -58,7 +58,11 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const turn = turnState(game)
   const active = board.players.find((player) => player.id === activeId)
   const mine = activeId === board.mePlayerId
-  const color = active?.color ?? '#8a7a63'
+  const viewed = board.players.find((player) => player.id === state.viewedPlayer) ?? active
+  const viewedId = viewed?.id ?? null
+  const viewingTurn = viewedId === activeId
+  const viewingMine = viewedId === board.mePlayerId
+  const color = viewed?.color ?? '#8a7a63'
   const coarse = useCoarsePointer()
   const [tray, setTray] = useState<(MoveTray & { id: number }) | null>(null)
   const traySequence = useRef(0)
@@ -74,11 +78,11 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const blockers = useMemo(() => adviceBlockers(board), [board])
   const adviceEnabled = blockers.length === 0
   const moves = useAdvice(
-    adviceEnabled && activeId !== null && !before && !seven ? { kind: 'turn' } : null,
-    activeId,
+    adviceEnabled && viewedId !== null && !seven && (!viewingTurn || !before) ? { kind: 'turn' } : null,
+    viewedId,
   )
   const pre = useAdvice(
-    adviceEnabled && activeId !== null && !seven && (before || !turn?.devPlayed) ? { kind: 'preRoll' } : null,
+    adviceEnabled && viewingTurn && activeId !== null && !seven && (before || !turn?.devPlayed) ? { kind: 'preRoll' } : null,
     activeId,
   )
   const ranked = adviceResponse(moves.response, 'turn')
@@ -138,6 +142,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   useEffect(() => {
     if (!seven && !playingKnight) mark(null)
   }, [game, seven, playingKnight, mark])
+  useEffect(() => {
+    setSelected(null)
+    if (!seven && !playingKnight) mark(null)
+  }, [viewedId, seven, playingKnight, mark])
   useEffect(() => () => dispatch({ type: 'highlight', marks: null }), [dispatch])
   useEffect(() => {
     if (state.highlight !== own.current) setSelected(null)
@@ -170,9 +178,6 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     commit(endTurn(game))
     close()
   }
-  const selectPlayer = (id: string) => {
-    if (activeId !== id) commit(setActivePlayer(game, id))
-  }
   const cards: MoveCard[] = []
 
   // After rolling, knights already appear among the ranked moves.
@@ -196,44 +201,25 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
       handDelta: advice.handDelta,
     })
   }
-  const order = (
-    <div className="move-order" role="group" aria-label="Turn order">
-      {board.players.map((player, index) => (
-        <button
-          type="button"
-          key={player.id}
-          className="move-seat"
-          style={{ background: player.color, color: readableInk(player.color) }}
-          aria-pressed={activeId === player.id}
-          aria-label={`Turn ${index + 1}: ${player.name}`}
-          title={`Turn ${index + 1}: ${player.name}`}
-          onClick={() => selectPlayer(player.id)}
-        >
-          {index + 1}
-        </button>
-      ))}
-    </div>
-  )
   const claimNote = board.mePlayerId === null ? <li>Claim yourself in Players to track your exact cards</li> : null
   const ledger = (
     <section className={`${className} best-moves-panel ledger-panel`}>
       <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={commit} onUndo={() => dispatch({ type: 'undo' })} />
     </section>
   )
-  if (!active || activeId === null) return (
+  if (!active || activeId === null || !viewed || viewedId === null) return (
     <>
       {ledger}
       <section className={`${className} best-moves-panel`}>
         <div className="panel-heading">
           <h2>Best moves</h2>
         </div>
-        {order}
-        <p className="hint">Tap a player to start tracking turns</p>
+        <button type="button" className="primary" onClick={() => commit(setActivePlayer(game, board.players[0].id))}>Start game</button>
         <ul className="move-notes">{claimNote}</ul>
       </section>
     </>
   )
-  const devCards = statsFor(game, activeId).devCards
+  const devCards = statsFor(game, viewedId).devCards
   const tiles = ACTION_TILES.filter(({ kind }) => !seven && available?.[kind])
   const noActions = !before && !seven && tray === null && !playingKnight && tiles.length === 0
   const turnGames = currentTurnHistory([...tab.past, game])
@@ -255,12 +241,6 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
           <h2>{mine ? 'Record your turn' : `Record ${active.name}'s turn`}</h2>
           <UndoRedoButtons />
         </div>
-        {order}
-        <p className="analysis-context move-context">
-          <strong>{active.name}</strong>
-          {' · '}
-          {turn?.rolled == null ? 'Not rolled yet' : `Rolled ${turn.rolled}`}
-        </p>
         <ol className="move-steps">
           <li className={`move-step ${before ? 'now' : 'done'}`}>
             <span className="move-step-dot" aria-hidden="true">{before ? '1' : <StepDoneGlyph />}</span>
@@ -298,7 +278,12 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         </ol>
       </section>
       <section className={`${className} best-moves-panel`}>
-        <div className="panel-heading"><h2>{mine ? 'Best moves' : `Best moves for ${active.name}`}</h2></div>
+        <div className="panel-heading"><h2>{viewingMine ? 'Best moves' : `Best moves for ${viewed.name}`}</h2></div>
+        {!viewingTurn && <p className="hint">
+          {viewingMine
+            ? 'Not your turn. These are the moves you would make with this hand if your turn started now.'
+            : `Not ${viewed.name}'s turn. These are the moves ${viewed.name} would make with this hand if their turn started now.`}
+        </p>}
         {!adviceEnabled ? (
           <div className="hint">
             <p>Finish the board to get advice:</p>
@@ -308,8 +293,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
           <p className="hint">Record the discards and the robber above. The ranked moves follow.</p>
         ) : (
           <>
-            <AdviceFeedback advice={before ? pre : moves} />
-            {!before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
+            <AdviceFeedback advice={viewingTurn && before ? pre : moves} />
+            {viewingTurn && !before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
               <AdviceFeedback advice={pre} />
             )}
             {cards.length > 0 && <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
@@ -358,11 +343,11 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                     {card.title && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
                     {!card.title && current && card.move && (
                       <div className="analysis-touch-actions">
-                        <button type="button" className="primary" onClick={applyCard}>
+                        {viewingTurn && <button type="button" className="primary" onClick={applyCard}>
                           {card.move.type === 'pass'
                             ? 'End turn'
                             : card.move.type === 'offerTrade' ? 'Apply: who accepted?' : 'Apply'}
-                        </button>
+                        </button>}
                         <button type="button" onClick={clear}>Clear</button>
                       </div>
                     )}
@@ -380,9 +365,9 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         <ul className="move-notes">
           {claimNote}
           {derived && derived.unknownOwnCards > 0 && (
-            <li>{derived.unknownOwnCards} of {active.name}'s cards are of unknown type and ignored</li>
+            <li>{derived.unknownOwnCards} of {viewed.name}'s cards are of unknown type and ignored</li>
           )}
-          {!mine && devCards > 0 && <li>{active.name}'s {devCards} dev cards are treated as unplayed knights</li>}
+          {!viewingMine && devCards > 0 && <li>{viewed.name}'s {devCards} dev cards are treated as unplayed knights</li>}
         </ul>
       </section>
     </>

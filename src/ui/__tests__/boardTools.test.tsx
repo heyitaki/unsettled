@@ -58,6 +58,10 @@ describe('Board tools', () => {
     Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
   })
 
+  it('explains the header player brush in the help paragraph', () => {
+    expect(container.querySelector('.tool-hint')?.textContent).toContain('Tap a player circle at the top to place pieces for that player.')
+  })
+
   it('selects the current layout and switches a blank board without a dialog', async () => {
     expect(button('4 players').getAttribute('aria-pressed')).toBe('true')
     expect(button('4 players').classList.contains('selected')).toBe(true)

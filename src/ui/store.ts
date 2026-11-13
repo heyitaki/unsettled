@@ -16,7 +16,7 @@ import { createBoard } from '../model/board'
 import { newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
-import { inferDraftState } from '../engine/draft'
+import { draftIsComplete, inferDraftState } from '../engine/draft'
 import type {
   Board,
   EdgeId,
@@ -107,6 +107,7 @@ export interface StoreState {
   highlight: readonly HighlightMark[] | null
   pick?: BoardPick | null
   viewedPick?: number | null
+  viewedPlayer?: string | null
   // Bumped whenever the library changes, here or in another document. The maps
   // blob lives outside React, so panels that read it re-render off this.
   mapsRevision: number
@@ -128,6 +129,7 @@ export type StoreAction =
   | { type: 'pick-clear' }
   | { type: 'picked'; ref: string }
   | { type: 'view-pick'; slot: number | null }
+  | { type: 'view-player'; playerId: string | null }
   | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -293,8 +295,10 @@ function unusedBoardTitle(tabs: TabState[]): string {
 }
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
-  const next = reduceAction(state, action)
+  let next = reduceAction(state, action)
   if (next === state) return next
+  next = withViewedPlayer(next, next.activeTabId !== state.activeTabId ||
+    activeTab(next).game.turn?.playerId !== activeTab(state).game.turn?.playerId ? null : next.viewedPlayer ?? null)
   if (next.activeTabId !== state.activeTabId) return withViewedPick(next, null)
   const board = activeTab(next).game.board
   const previous = activeTab(state).game.board
@@ -311,6 +315,14 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
   return next.viewedPick == null ? next : withViewedPick(next, next.viewedPick)
 }
 
+function withViewedPlayer(state: StoreState, playerId: string | null): StoreState {
+  const { game } = activeTab(state)
+  const viewedPlayer = game.turn && playerId !== game.turn.playerId &&
+    game.board.players.some((player) => player.id === playerId) &&
+    draftIsComplete(game.board, inferDraftState(game.board)) ? playerId : null
+  return viewedPlayer === (state.viewedPlayer ?? null) ? state : { ...state, viewedPlayer }
+}
+
 function withViewedPick(state: StoreState, slot: number | null): StoreState {
   const board = activeTab(state).game.board
   const draft = inferDraftState(board)
@@ -323,6 +335,8 @@ function withViewedPick(state: StoreState, slot: number | null): StoreState {
 
 function reduceAction(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
+    case 'view-player':
+      return withViewedPlayer(state, action.playerId)
     case 'view-pick':
       return withViewedPick(state, action.slot)
     case 'commit':

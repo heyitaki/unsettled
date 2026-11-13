@@ -57,8 +57,27 @@ function suite() {
     await page.getByRole('button', { name: 'Place settlement' }).click()
     await page.getByRole('button', { name: 'Start game' }).click()
     await expect(panel(page).getByRole('heading', { name: 'Best moves' })).toBeVisible()
-    await expect(panel(page).getByRole('group', { name: 'Turn order' }).getByRole('button')).toHaveCount(board.players.length)
-    await expect(panel(page).getByRole('button', { name: 'Turn 1: P1' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^View .+'s best moves$/ })).toHaveCount(board.players.length)
+    await expect(page.getByRole('button', { name: "View P1's best moves" })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+
+  test('views another hand without moving the recording turn and resets the view on End turn', async ({ page }) => {
+    await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }), p2: hand({ wood: 1, brick: 1 }) })
+    await page.getByRole('button', { name: "View P2's best moves" }).click()
+    await expect(page.getByRole('button', { name: "View P2's best moves" }).locator('.head-dot-chip')).toHaveText('P2')
+    await expect(page.getByRole('heading', { name: 'Record your turn', exact: true })).toBeVisible()
+    const advice = panel(page).filter({ has: page.getByRole('heading', { name: 'Best moves for P2', exact: true }) })
+    await expect(advice).toContainText("Not P2's turn.")
+    await advice.locator('.analysis-row-select').first().click()
+    await expect(advice.locator('.analysis-row.current')).toHaveCount(1)
+    await expect(advice.getByRole('button', { name: /^(Apply|End turn)/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: "View P1's best moves" }).locator('.head-dot.me')).toHaveCount(1)
+    await page.getByRole('button', { name: "View P3's best moves" }).click()
+    await panel(page).getByRole('button', { name: 'End turn', exact: true }).click()
+    await expect(page.getByRole('heading', { name: "Record P2's turn", exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: "View P2's best moves" })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: "View P2's best moves" }).locator('.head-dot.me.head-dot-chip')).toHaveCount(1)
   })
 
   test('a selected move pins its mark, Apply builds and pays, and one undo restores both', async ({ page }) => {
@@ -101,7 +120,7 @@ function suite() {
 
   test('an offer entered on a rival turn is answered with accept or decline', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 2, sheep: 1 }), p2: hand({ brick: 2 }) })
-    await panel(page).getByRole('button', { name: 'Turn 2: P2' }).click()
+    await panel(page).getByRole('button', { name: 'End turn', exact: true }).click()
     await panel(page).getByRole('button', { name: 'Trade', exact: true }).click()
     await panel(page).getByRole('button', { name: 'Gives brick', exact: true }).click()
     await panel(page).getByRole('button', { name: 'Gets wood', exact: true }).click()

@@ -21,7 +21,7 @@ When the draft is complete, Best picks becomes Best moves. The panel tracks the 
 
 ### The active player
 
-One notion, stored in the game: `turn.playerId` is whose turn it is, whose advice is shown, and who the recorded actions are for. `End turn` moves it to the next seat. Tapping a circle in the turn-order row sets it directly. The claimed player (`mePlayerId`) stays who you are: your cards are exact, and yours are the dev cards known by type.
+`turn.playerId` is whose turn it is and who recorded actions are for. `End turn` advances to the next seat; undo and redo restore recorded turns. Once a game has a recorded turn and a finished draft, the header rings that player. Outside build mode, tapping a header player button views their Best moves without changing the turn; the viewed player wears a name chip. In build mode the chip marks the piece brush while the ring stays on the turn. The temporary workspace `viewedPlayer` is outside persistence and undo: `null` means the turn player, selecting that player stores `null`, and a missing roster id reads as `null`. The view is also `null` while the draft is unfinished. It resets on tab switches and whenever the active tab's `turn.playerId` changes, including commits, undo and redo. The claimed player (`mePlayerId`) stays who you are: your cards are exact, and yours are the dev cards known by type.
 
 ```ts
 turn?: {
@@ -40,7 +40,7 @@ Optional, following `awards?`. Absent means the claimed player's turn, not yet r
 
 | Gap | Resolution | Shown in panel |
 | --- | --- | --- |
-| Whose turn, who decides | `turn.playerId`, sent to the bridge as `observer`. | the turn-order row |
+| Whose turn, who decides | `turn.playerId` owns recorded actions; the viewed player is sent as `observer` for Best moves. | Header turn ring and viewed-player name chip |
 | Round, current seat | Defaulted to 0; no policy reads them. | no |
 | Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | None |
 | Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded in the panel; earlier ones are not known. | no (it hides `Buy card` at zero) |
@@ -79,10 +79,9 @@ ponytail: the upper bound is always lower plus unknown. Storing an upper bound p
 
 ### Panel structure
 
-Three sections: `Ledger` (hands, VP, held awards and inline corrections), `Record your turn` (heading, turn-order row, context line, then the step rail with the open action's own controls), then `Best moves` (recommendations, notes). The same component renders in both trees.
+Three sections: `Ledger` (hands, VP, held awards and inline corrections), `Record your turn` (heading and the step rail with the open action's own controls, no player picker), then `Best moves` (recommendations, notes). The same component renders in both trees.
 
 - **Ledger**: a section above `Record your turn`, with a button-free heading and one row per player in seat order. Each row shows the swatch, name, `YOU` on the claimed player, held-award medals, known resource counts, unseen cards as `?`, untyped dev cards, hand total and VP. The claimed player's typed dev cards and VP cards appear as pills below their main line; counts show only above one, and bought cards are dashed with a `new` label. The active row has an ink bar, and an open row is tinted. Tapping a row opens its piece and award stats, correction steppers and a `Done` footer. The Ledger's row editor is the only place a player's hand, dev cards, knights and VP cards are edited. The full approved design is in [`../ledger/plan.md`](../ledger/plan.md).
-- **Turn order** replaces the draft ribbon once the draft is complete: one circle per player in seat order, the active player ringed. Nothing marks the claimed player there; the draft ribbon lost its dot too.
 - **Step rail**: Roll, then the actions (`Trade`, `Buy card`, `Play card`, `Build`, each shown only when it can happen), then End turn. Each acts for the active player, and selecting an action opens its controls.
   - Roll: eleven totals. Any total but seven asks the bridge for production and credits every player's `hand`. A seven lists every player holding more than seven cards with a discard to record (advised for each, typed for the claimed player, untyped by default for rivals), then the robber move.
   - Trade: the other party (bank or port at the active player's rate, or a player), what is given and what is received. When the claimed player is the one answering and the shape is one the policy models, the verdict is shown before recording.
@@ -90,7 +89,9 @@ Three sections: `Ledger` (hands, VP, held awards and inline corrections), `Recor
   - Buy dev card: the cost is deducted; the claimed player says what was drawn.
   - Play dev card: Knight (robber move, knights played plus one), Road Building (two roads), Year of Plenty (two cards), Monopoly (the resource, and how many each player gave).
   - End turn: next seat, flags cleared, bought cards made playable.
-- **Recommendations** are for the active player: the pre-roll line before the roll, the ranked list after it. Every one has Apply. Apply commits when the bridge's answer is the whole fact (a build, a bank trade, a discard, Year of Plenty, Pass ends the turn). Otherwise it opens the matching action with the advice filled in, for the one thing only the players know: who accepted an offer, what was drawn, what was stolen, how many cards a Monopoly took.
+- **Recommendations** follow the viewed player. For the turn player, show the pre-roll line before the roll and the ranked list after it, with Play or Apply. Apply commits when the bridge's answer is the whole fact (a build, a bank trade, a discard, Year of Plenty, Pass ends the turn). Otherwise it opens the matching action with the advice filled in, for the one thing only the players know: who accepted an offer, what was drawn, what was stolen, how many cards a Monopoly took.
+- **Viewing a non-turn player** requests only the `turn` ranking with that player as `observer`, without the turn player's pre-roll gate. A pending seven suppresses the ranking request and shows `Record the discards and the robber above. The ranked moves follow.` for every view. View changes and row hover or leave preserve the suggested robber mark during a seven or Knight flow. The heading is `Best moves for Blue`, or `Best moves` for the claimed player, followed by `Not Blue's turn. These are the moves Blue would make with this hand if their turn started now.` (use `your turn` and `you` for the claimed player). Rows preview and pin marks and retain Clear, but have no Apply, Play or pass/End turn apply button. Notes about unknown resources and dev cards name the viewed player. The Ledger's active bar and Record turn stay on the turn player.
+- With no recorded turn and nobody claimed, show a primary `Start game` button and the claim hint. Starting records seat one's turn.
 - Each recorded action is one `commit-game`, so one undo takes it back.
 - Selecting a recommendation pins its mark with the Best picks rules. A robber destination is a ring on a hex, which is a new mark kind.
 - Scores are shown as the policy's raw numbers.

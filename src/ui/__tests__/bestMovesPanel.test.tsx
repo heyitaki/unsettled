@@ -15,6 +15,7 @@ import { AdviceProvider } from '../AdviceProvider'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { BestMovesPanel } from '../BestMovesPanel'
 import { BoardCanvas } from '../BoardCanvas'
+import { HeaderControls } from '../HeaderControls'
 import { buildingSlots } from '../placementSlots'
 import { activeTab, StoreProvider, useStore, type StoreAction, type StoreState } from '../store'
 import { AnalysisContext } from '../useAnalysis'
@@ -35,6 +36,11 @@ function seed(): Game {
   for (const id of ['aki', 'b']) for (const resource of RESOURCES) game = adjustHand(game, id, resource, 5)
   for (const kind of ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly'] as const) game = adjustDevHand(game, 'playable', kind, 1)
   return game
+}
+
+function inGameSeed(): Game {
+  const game = seed()
+  return { ...game, board: placeBuilding(game.board, game.board.buildings[0].vertexId, 'aki', 'city') }
 }
 
 describe('Best moves recording', () => {
@@ -66,7 +72,7 @@ describe('Best moves recording', () => {
   }
   const remount = async () => {
     await act(async () => root.render(<StoreProvider><AdviceProvider>
-      <Capture report={(value) => { seen = value }} /><BoardCanvas /><BestMovesPanel key="remounted" />
+      <Capture report={(value) => { seen = value }} /><HeaderControls building={false} onToggleMode={() => {}} onOpen={() => {}} /><BoardCanvas /><BestMovesPanel key="remounted" />
     </AdviceProvider></StoreProvider>))
   }
   const skipDiscards = async () => {
@@ -94,7 +100,7 @@ describe('Best moves recording', () => {
     document.body.appendChild(container)
     root = createRoot(container)
     await act(async () => root.render(<StoreProvider><AdviceProvider>
-      <Capture report={(value) => { seen = value }} /><BoardCanvas /><BestMovesPanel />
+      <Capture report={(value) => { seen = value }} /><HeaderControls building={false} onToggleMode={() => {}} onOpen={() => {}} /><BoardCanvas /><BestMovesPanel />
     </AdviceProvider></StoreProvider>))
     await act(async () => seen.dispatch({ type: 'commit-game', game: seed() }))
   })
@@ -102,6 +108,156 @@ describe('Best moves recording', () => {
     act(() => root.unmount())
     container.remove()
     vi.unstubAllGlobals()
+  })
+
+
+  it.each([null, 8])('views rival moves without changing the turn or enabling Apply after roll %s', async (roll) => {
+    const cards = emptyStats().hand
+    const edge = boardGrid('standard4').edgeIds[0]
+    const derived = { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 2 }
+    respond = ({ decision }) => decision.kind === 'turn'
+      ? { kind: 'turn', actions: [
+        { action: { type: 'buildRoad', edgeId: edge }, score: 1, reason: '', handDelta: cards },
+        { action: { type: 'pass' }, score: 0, reason: '', handDelta: cards },
+      ], derived }
+      : { kind: 'preRoll', play: { type: 'monopoly', resource: 'ore' }, reason: '', derived }
+    const initial = adjustCounter(setActivePlayer(inGameSeed(), 'aki'), 'b', 'devCards', 2)
+    await act(async () => seen.dispatch({ type: 'commit-game', game: roll === null ? initial : recordRoll(initial, roll, {}) }))
+    const before = activeTab(seen.state)
+    requests.length = 0
+    await click("View Bee's best moves")
+    const sections = container.querySelectorAll('section.best-moves-panel')
+    expect(sections[1].querySelector('h2')?.textContent).toBe('Record your turn')
+    expect(sections[1].querySelector('[role="group"][aria-label^="Turn"]')).toBeNull()
+    expect(sections[2].querySelector('h2')?.textContent).toBe('Best moves for Bee')
+    expect(sections[2].textContent).toContain("Not Bee's turn. These are the moves Bee would make with this hand if their turn started now.")
+    expect(sections[2].textContent).toContain("2 of Bee's cards are of unknown type and ignored")
+    expect(sections[2].textContent).toContain("Bee's 2 dev cards are treated as unplayed knights")
+    expect(sections[2].textContent).not.toContain('Before you roll')
+    expect(requests.filter(({ decision }) => decision.kind === 'turn' || decision.kind === 'preRoll'))
+      .toEqual([expect.objectContaining({ observer: 'b', decision: { kind: 'turn' } })])
+    expect(activeTab(seen.state)).toBe(before)
+    expect(container.querySelector('.ledger-row.active')?.textContent).toContain('aki')
+    expect(button("View aki's best moves").querySelector('.head-dot.me')).not.toBeNull()
+    expect(button("View aki's best moves").querySelector('.head-dot-chip')).toBeNull()
+    expect(button("View Bee's best moves").getAttribute('aria-pressed')).toBe('true')
+    expect(button("View Bee's best moves").querySelector('.head-dot-chip')?.textContent).toBe('Bee')
+    expect(button("View Bee's best moves").querySelector('.head-dot.me')).toBeNull()
+    await clickElement(sections[2].querySelector('.analysis-row-select'))
+    expect(seen.state.highlight).toEqual([{ ref: edge, color: '#3063ba', kind: 'road' }])
+    expect(sections[2].querySelector('.analysis-row.current')).not.toBeNull()
+    expect([...sections[2].querySelectorAll('button')].some((item) => /^(Apply|Play|End turn)/.test(item.textContent ?? ''))).toBe(false)
+    await clickElement(sections[2].querySelectorAll('.analysis-row-select')[1])
+    expect(sections[2].textContent).not.toContain('End turn')
+    expect(activeTab(seen.state)).toBe(before)
+    await click("View aki's best moves")
+    expect(sections[2].querySelector('.analysis-row.current')).toBeNull()
+    expect(seen.state.highlight).toBeNull()
+  })
+
+  it('ends the recorded turn in seat order and resets the header view to the new turn', async () => {
+    const initial = inGameSeed()
+    initial.board = addPlayer(initial.board, { id: 'c', name: 'Cee', color: '#ffffff' })
+    initial.stats.c = emptyStats()
+    await act(async () => seen.dispatch({ type: 'commit-game', game: setActivePlayer(initial, 'b') }))
+    await click("View aki's best moves")
+    const sections = container.querySelectorAll('section.best-moves-panel')
+    expect(sections[1].querySelector('h2')?.textContent).toBe("Record Bee's turn")
+    expect(sections[2].querySelector('h2')?.textContent).toBe('Best moves')
+    expect(sections[2].textContent).toContain('Not your turn. These are the moves you would make with this hand if your turn started now.')
+    await click('Buy card', sections[1])
+    expect(game().stats.b.devCards).toBe(1)
+    expect(game().stats.aki.devCards).toBe(4)
+    await click('End turn', sections[1])
+    expect(game().turn?.playerId).toBe('c')
+    expect(seen.state.viewedPlayer).toBeNull()
+    expect(button("View Cee's best moves").getAttribute('aria-pressed')).toBe('true')
+    expect(button("View Cee's best moves").querySelector('.head-dot.me.head-dot-chip')).not.toBeNull()
+    expect(sections[1].querySelector('h2')?.textContent).toBe("Record Cee's turn")
+    expect(sections[2].textContent).not.toContain('Not your turn')
+    await click('Undo')
+    expect(game().turn?.playerId).toBe('b')
+    expect(button("View Bee's best moves").getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('preserves the seven suggestion across views and defers rival moves until the robber is recorded', async () => {
+    const initial = setActivePlayer(inGameSeed(), 'aki')
+    const hex = initial.board.hexes.find(({ coord }) => axialKey(coord) !== '0,0')!.coord
+    const cards = emptyStats().hand
+    const derived = { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 }
+    respond = ({ decision }) => decision.kind === 'robber'
+      ? { kind: 'robber', hex, victim: 'b', reason: 'Block wood', derived }
+      : decision.kind === 'turn'
+        ? { kind: 'turn', actions: [{ action: { type: 'buyDev' }, score: 1, reason: '', handDelta: cards }], derived }
+        : { error: 'Unavailable' }
+    await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(initial, 7, {}) }))
+    await skipDiscards()
+    const marks = [{ ref: axialKey(hex), kind: 'hex', color: initial.board.players[0].color }]
+    expect(seen.state.highlight).toEqual(marks)
+    requests.length = 0
+    await click("View Bee's best moves")
+    const advice = container.querySelectorAll('section.best-moves-panel')[2]
+    expect(seen.state.highlight).toEqual(marks)
+    expect(advice.textContent).toContain('Record the discards and the robber above. The ranked moves follow.')
+    expect(advice.querySelector('.analysis-row')).toBeNull()
+    expect(requests.filter(({ observer, decision }) => observer === 'b' && decision.kind === 'turn')).toEqual([])
+    await click("View aki's best moves")
+    expect(seen.state.highlight).toEqual(marks)
+    expect(container.querySelectorAll('.hex-highlight')).toHaveLength(1)
+  })
+
+  it('keeps the Knight suggestion pinned while hovering rival moves and switching views', async () => {
+    const initial = setActivePlayer(inGameSeed(), 'aki')
+    const hex = initial.board.hexes.find(({ coord }) => axialKey(coord) !== '0,0')!.coord
+    const cards = emptyStats().hand
+    const derived = { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 }
+    respond = ({ decision }) => decision.kind === 'robber'
+      ? { kind: 'robber', hex, victim: 'b', reason: 'Block wood', derived }
+      : decision.kind === 'turn'
+        ? { kind: 'turn', actions: [{ action: { type: 'buildRoad', edgeId: boardGrid('standard4').edgeIds[0] }, score: 1, reason: '', handDelta: cards }], derived }
+        : { error: 'Unavailable' }
+    await act(async () => seen.dispatch({ type: 'commit-game', game: initial }))
+    await click('Play card')
+    await click('Knight', tray())
+    const marks = [{ ref: axialKey(hex), kind: 'hex', color: initial.board.players[0].color }]
+    expect(seen.state.highlight).toEqual(marks)
+    await click("View Bee's best moves")
+    expect(seen.state.highlight).toEqual(marks)
+    const row = container.querySelector('.analysis-row-select')!
+    expect(row).not.toBeNull()
+    await act(async () => row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
+    expect(seen.state.highlight).toEqual(marks)
+    await act(async () => row.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body })))
+    expect(seen.state.highlight).toEqual(marks)
+    await click("View aki's best moves")
+    expect(seen.state.highlight).toEqual(marks)
+  })
+
+  it('closes an open tray when batched undo crosses End turn', async () => {
+    const initial = game()
+    await click('8')
+    await click('End turn')
+    expect(game().turn?.playerId).toBe('b')
+    await click('Trade')
+    expect(tray()).not.toBeNull()
+    await act(async () => {
+      seen.dispatch({ type: 'undo' })
+      seen.dispatch({ type: 'undo' })
+    })
+    expect(game()).toBe(initial)
+    expect(tray()).toBeNull()
+  })
+
+  it('starts seat one when there is no turn and nobody is claimed', async () => {
+    const initial = seed()
+    await act(async () => seen.dispatch({ type: 'commit-game', game: { ...initial, board: setMe(initial.board, null) } }))
+    expect(game().turn).toBeUndefined()
+    expect(button('Start game').classList.contains('primary')).toBe(true)
+    expect(container.querySelector('[role="group"][aria-label^="Turn"]')).toBeNull()
+    await click('Start game')
+    expect(game().turn?.playerId).toBe('aki')
+    expect(game().board.mePlayerId).toBeNull()
+    expect(container.textContent).toContain("Record aki's turn")
   })
 
   it('arms a saved pending seven with empty undo history and does not re-arm after a later Knight', async () => {
@@ -209,7 +365,7 @@ describe('Best moves recording', () => {
     await click('Bee', tray())
     expect(game().stats.b).toMatchObject({ hand: { ore: 0, wood: 1 }, handUnknown: 0 })
     await click('Undo')
-    await click('Turn 2: Bee')
+    await click('End turn')
     await click('Trade')
     expect(button('Gives ore').textContent).toBe('0')
     await click('Gives wood')
@@ -390,7 +546,7 @@ describe('Best moves recording', () => {
     expect([...tray().querySelectorAll('.move-card-choices button')].map((item) => item.textContent)).toEqual(['Knight', 'Road building', 'Year of plenty', 'Monopoly', 'Victory point'])
     expect(tray().querySelectorAll('.move-card-choices button > svg')).toHaveLength(5)
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(game(), 'b', 'devCards', 1) }))
-    await click('Turn 2: Bee')
+    await click('End turn')
     await click('Play card')
     expect(tray().querySelector('.move-question')?.textContent).toBe('Which card did Bee play?')
     await click('Year of plenty', tray())
@@ -433,7 +589,7 @@ describe('Best moves recording', () => {
     expect(container.textContent).not.toContain('Dev deck:')
     expect(container.textContent).not.toContain('Super cities count')
     expect(container.querySelectorAll('ol.move-steps > li')).toHaveLength(3)
-    await click('Turn 2: Bee')
+    await click('End turn')
     expect(sections[1].querySelector('h2')?.textContent).toBe("Record Bee's turn")
   })
 
@@ -447,7 +603,7 @@ describe('Best moves recording', () => {
     expect(advice.textContent).toContain('Ranked trades, builds and cards follow the roll.')
     expect(advice.textContent).not.toContain('Your best moves')
     expect(advice.textContent).not.toContain('Hold your dev cards')
-    await click('Turn 2: Bee')
+    await click('End turn')
     expect(container.querySelectorAll('section.best-moves-panel')[2].querySelector('h2')?.textContent).toBe('Best moves for Bee')
   })
 
@@ -507,7 +663,7 @@ describe('Best moves recording', () => {
   })
 
   it('shows playable dev cards only, and hides the tile after playing', async () => {
-    await click('Turn 2: Bee')
+    await click('End turn')
     expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
     await click('Buy card')
     expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Play card')).toBe(false)
@@ -520,7 +676,7 @@ describe('Best moves recording', () => {
     await click('Takes wood')
     await click('Takes ore')
     expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
-    await click('Turn 1: aki')
+    await click('End turn')
     let current = game()
     for (const kind of ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly'] as const) current = adjustDevHand(current, 'playable', kind, -1)
     current = adjustDevHand(current, 'bought', 'knight', 1)
@@ -543,7 +699,7 @@ describe('Best moves recording', () => {
   it('records rival-on-rival theft on the name tap and asks for a card when you are the victim', async () => {
     const board = addPlayer(game().board, { id: 'c', name: 'Cee', color: '#fff' })
     await act(async () => seen.dispatch({ type: 'commit-game', game: { ...game(), board, stats: { ...game().stats, c: emptyStats() } } }))
-    await click('Turn 3: Cee')
+    await act(async () => seen.dispatch({ type: 'commit-game', game: setActivePlayer(game(), 'c') }))
     await click('7')
     await skipDiscards()
     const before = game()
@@ -688,7 +844,7 @@ describe('Best moves recording', () => {
     await pickHex()
     const tabId = activeTab(seen.state).id
     await act(async () => root.render(<StoreProvider><AdviceProvider>
-      <Capture report={(value) => { seen = value }} /><BoardCanvas /><BestMovesPanel key="remount" />
+      <Capture report={(value) => { seen = value }} /><HeaderControls building={false} onToggleMode={() => {}} onOpen={() => {}} /><BoardCanvas /><BestMovesPanel key="remount" />
     </AdviceProvider></StoreProvider>))
     expect(seen.state.pick).toBeNull()
     expect(container.querySelector('.move-robber')).toBeNull()
@@ -701,7 +857,7 @@ describe('Best moves recording', () => {
     await click('Redo')
     expect(seen.state.pick).toBeNull()
     expect(container.querySelectorAll('.blink')).toHaveLength(0)
-    await click('Turn 2: Bee')
+    await click('End turn')
     await click('Undo')
     expect(seen.state.pick).toBeNull()
   })
@@ -744,7 +900,7 @@ describe('Best moves recording', () => {
     expect(groups[0].querySelector('.swatch')).not.toBeNull()
     expect(groups[0].querySelectorAll('.stat-icon')).toHaveLength(3)
     expect(groups[1].querySelectorAll('.stat-icon')).toHaveLength(1)
-    expect(container.querySelector('.move-context')?.textContent).toBe('aki · Rolled 8')
+    expect(rollStep().querySelector('.move-step-title')?.textContent).toContain('Rolled 8')
     await click('Change roll')
     respond = () => ({ kind: 'produce', gains: {} })
     await click('2', rollStep())
@@ -842,7 +998,7 @@ describe('Best moves recording', () => {
     expect(rollStep().querySelectorAll('.move-prod-player')).toHaveLength(1)
     expect(rollStep().querySelector('.move-prod-player')?.textContent).toBe('aki')
     expect(rollStep().querySelectorAll('.move-prod-cards[aria-label="2 wood"] .stat-icon')).toHaveLength(2)
-    expect(container.querySelector('.move-context')?.textContent).toBe('aki · Rolled 8')
+    expect(rollStep().querySelector('.move-step-title')?.textContent).toContain('Rolled 8')
     expect(button('Change roll').title).toBe('Change roll')
     expect(button('Change roll').textContent).toBe('')
     expect(container.querySelector('.move-dice')).toBeNull()
@@ -892,7 +1048,8 @@ describe('Best moves recording', () => {
   it('prompts an unclaimed player to claim themselves in Players', async () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: { ...game(), board: setMe(game().board, null) } }))
     expect(container.querySelector('.move-notes')?.textContent).toContain('Claim yourself in Players to track your exact cards')
-    await click('Turn 2: Bee')
+    await click('Start game')
+    await click('End turn')
     expect(container.querySelector('.move-notes')?.textContent).toContain('Claim yourself in Players to track your exact cards')
   })
 
@@ -1071,7 +1228,7 @@ describe('Best moves recording', () => {
     await click('Correct aki')
     await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
-    await click('Turn 2: Bee')
+    await click('End turn')
     expect(button('Correct aki').getAttribute('aria-expanded')).toBe('true')
     expect(container.querySelector('.move-tray')).toBeNull()
     expect(seen.state.pick).toBeNull()
@@ -1125,10 +1282,10 @@ describe('Best moves recording', () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(adjustCounter(game(), 'aki', 'devCards', 1), 'b', 'devCards', 2) }))
     expect(container.textContent).not.toContain(note)
     expect(container.textContent).not.toContain('treated as unplayed knights')
-    await click('Turn 2: Bee')
+    await click('End turn')
     expect(container.textContent).not.toContain(note)
     expect(container.textContent).toContain("Bee's 2 dev cards are treated as unplayed knights")
-    await click('Turn 1: aki')
+    await click('End turn')
     const withoutTypes = { ...game() }
     delete withoutTypes.devHand
     await act(async () => seen.dispatch({ type: 'commit-game', game: withoutTypes }))
@@ -1138,7 +1295,7 @@ describe('Best moves recording', () => {
   it('shows a negative verdict for the claimed counterparty before recording the trade', async () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'tradeResponse', accept: false, margin: -0.123, reason: 'Keep ore', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
-    await click('Turn 2: Bee')
+    await click('End turn')
     await click('Trade')
     await click('Gives wood')
     await click('Gets ore')
@@ -1230,7 +1387,7 @@ describe('Best moves recording', () => {
   it('clears a pick on turn changes and records for the turn player rather than the brush player', async () => {
     await click('Build')
     await clickElement([...tray().querySelectorAll('button')].find((button) => button.textContent?.startsWith('Road')) ?? null)
-    await click('Turn 2: Bee')
+    await click('End turn')
     expect(seen.state.pick).toBeNull()
     expect(container.querySelector('.move-tray')).toBeNull()
     await click('Build')
