@@ -68,6 +68,9 @@ button.danger { color: var(--danger); }
 .head-dots.in-game .head-dot { width: 15px; height: 15px; }
 .head-dots.in-game .head-dot-cell.chip { width: auto; padding: 0 4px; }
 .head-dots.in-game .head-dot-chip { width: auto; max-width: 72px; height: 22px; padding: 0 9px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 999px; border: 1.5px solid var(--ink); font: 700 12px/19px Inter, sans-serif; }
+.head-dots.in-game .head-dot-chip.me { height: 20px; line-height: 17px; }
+.head-dots.in-game .head-dot-cell.chip:first-child { padding-left: 1px; }
+.head-dots.in-game .head-dot-cell.chip:last-child { padding-right: 2px; }
 .head-dots.unclaimed { animation: head-nudge 2.6s ease-in-out infinite; }
 @keyframes head-nudge { 0%, 82%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 88% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); } }
 .icon-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
