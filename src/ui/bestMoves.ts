@@ -105,11 +105,14 @@ export function discardInputCards(mine: boolean, advised?: Cards): Cards {
   return mine && advised ? { ...advised } : emptyStats().hand
 }
 
+/** Text after a ` · ` starts with a capital, so a resource that opens a part is capitalized. */
+const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
+
 export function hexLabel(coord: AxialCoord, board: Board): string {
   const hex = board.hexes.find((hex) => axialKey(hex.coord) === axialKey(coord))
   if (!hex || hex.tile === null) return 'Unassigned'
   if (hex.tile === 'desert') return 'Desert'
-  return `${hex.tile} ${hex.numberToken ?? '?'}`
+  return `${capitalize(hex.tile)} ${hex.numberToken ?? '?'}`
 }
 
 function spotLabel(coords: AxialCoord[], board: Board): string {
@@ -141,7 +144,7 @@ export function recordedMoveLabel(move: Move): string {
       const count = [move.first, move.second].filter((edge) => edge !== null).length
       return `Played Road building · ${count} ${count === 1 ? 'road' : 'roads'}`
     }
-    case 'yearOfPlenty': return `Played Year of plenty · ${move.first} and ${move.second}`
+    case 'yearOfPlenty': return `Played Year of plenty · ${capitalize(move.first)} and ${move.second}`
     case 'pass': return 'Ended turn'
     case 'playKnight': return 'Played Knight'
     case 'monopoly': return `Played Monopoly on ${move.resource}`

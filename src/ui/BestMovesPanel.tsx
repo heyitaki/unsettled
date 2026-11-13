@@ -262,7 +262,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         <p className="analysis-context move-context">
           <strong>{active.name}</strong>
           {' · '}
-          {turn?.rolled == null ? 'not rolled yet' : `Rolled ${turn.rolled}`}
+          {turn?.rolled == null ? 'Not rolled yet' : `Rolled ${turn.rolled}`}
         </p>
         <ol className="move-steps">
           <li className={`move-step ${before ? 'now' : 'done'}`}>

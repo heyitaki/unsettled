@@ -250,7 +250,7 @@ export function RobberFlow({ game, active, adviceEnabled, initial, mark, commit,
     const destination = game.board.hexes.find((tile) => axialKey(tile.coord) === axialKey(hex))
     const label = destination?.numberToken ? `the ${destination.numberToken}` : 'the desert'
     const victim = game.board.players.find((player) => player.id === victimId)
-    commit(next, `${knight ? 'Played Knight · robber' : 'Robber'} to ${label}${victim ? `${knight ? ',' : ' ·'} stole from ${victim.name}` : ' · nobody robbed'}`)
+    commit(next, `${knight ? 'Played Knight · Robber' : 'Robber'} to ${label}${victim ? `${knight ? ', stole' : ' · Stole'} from ${victim.name}` : ' · Nobody robbed'}`)
     finish()
   }
   const candidates = hex ? robberCandidates(game, hex, active.id) : []
@@ -540,7 +540,7 @@ function MonopolyInputs({ game, activeId, who, initial, onRecord }: {
         </div>
         <div className="move-tray-footer"><span>Takes {total} {resource}</span>
           <button type="button" className="move-record" onClick={() => onRecord({ kind: 'monopoly', resource, taken },
-            `Played Monopoly on ${resource} · took ${total}`)}><CheckGlyph />Record</button>
+            `Played Monopoly on ${resource} · Took ${total}`)}><CheckGlyph />Record</button>
         </div>
       </>}
     </>

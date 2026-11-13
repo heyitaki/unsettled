@@ -31,6 +31,7 @@ Data flows from `parser/` to `model/Board`, then to `engine/` and `ui/store`, th
 ## Conventions
 
 - Inter ships as `src/ui/fonts/Inter.woff2`, a 15KB cut of Inter 4.1: ASCII plus `· × − – — …`, weights 400 to 800. A UI string with any other character renders that character in the system font, so cut the file again when adding one: `fonttools varLib.instancer InterVariable.ttf opsz=14 wght=400:800`, then `pyftsubset --unicodes=... --layout-features=kern,tnum --name-IDs=0,1,2,3,4,5,6,13,14 --flavor=woff2`.
+- UI copy capitalizes the first letter after a ` · ` separator (`Red · Not rolled yet`, `Robber to Wheat 8 · Stole from Blue`); a comma continues a sentence in lowercase.
 - CI runs the app gates and Rust debug and release tests before dispatching a site rebuild.
 - Full-page Chromium screenshots briefly resize to 1x1 and can mount the other responsive tree. Use viewport screenshots when asserting local selection or open-menu state afterward.
 - Simulator changes run `cargo test` in BOTH profiles from `simulator/`. Never let `HashMap` iteration or float accumulation order reach an output. Why, in [`contracts.md`](.claude/specs/simulator/contracts.md).

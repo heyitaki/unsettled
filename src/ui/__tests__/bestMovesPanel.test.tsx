@@ -381,7 +381,7 @@ describe('Best moves recording', () => {
     await click('Takes ore')
     await click('Takes ore')
     expect(game().stats.aki.hand).toMatchObject({ ore: 7, wood: 5 })
-    expect(container.querySelector('.move-log li > span')?.textContent).toBe('Played Year of plenty · ore and ore')
+    expect(container.querySelector('.move-log li > span')?.textContent).toBe('Played Year of plenty · Ore and ore')
   })
 
   it('names the active player in questions and shows full card labels with glyphs', async () => {
@@ -618,7 +618,7 @@ describe('Best moves recording', () => {
     expect(game().stats.b.hand.wood).toBe(4)
     expect(popover()).toBeNull()
     expect(seen.state.pick).toBeNull()
-    expect(container.querySelector('.move-log li > span')?.textContent).toContain('stole from Bee')
+    expect(container.querySelector('.move-log li > span')?.textContent).toContain('Stole from Bee')
     await click('Undo')
     expect(game()).toBe(before)
   })
@@ -861,10 +861,10 @@ describe('Best moves recording', () => {
     await click('Takes ore')
     await click('8')
     await click('Change roll')
-    expect([...container.querySelectorAll('.move-log li')].map((item) => item.querySelector('span')?.textContent)).toEqual(['Played Year of plenty · ore and ore'])
+    expect([...container.querySelectorAll('.move-log li')].map((item) => item.querySelector('span')?.textContent)).toEqual(['Played Year of plenty · Ore and ore'])
     await click('6')
     await click('Change roll')
-    expect([...container.querySelectorAll('.move-log li')].map((item) => item.querySelector('span')?.textContent)).toEqual(['Played Year of plenty · ore and ore'])
+    expect([...container.querySelectorAll('.move-log li')].map((item) => item.querySelector('span')?.textContent)).toEqual(['Played Year of plenty · Ore and ore'])
   })
 
   it('keeps completed discards folded while the other player discards', async () => {
