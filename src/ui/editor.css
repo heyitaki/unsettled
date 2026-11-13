@@ -374,8 +374,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .ledger-header > :nth-child(n+3) { text-align: center; }
 .ledger-row { position: relative; border-bottom: 1px solid var(--line); }
 .ledger-row > * { position: relative; z-index: 1; }
-.ledger-row:is(.active, .open)::after { content: ""; position: absolute; inset: -1px 0; border: 1px solid var(--line); border-radius: var(--radius); pointer-events: none; }
-.ledger-row.active::after { border-left: 3px solid var(--ink); }
+.ledger-row:is(.active, .open)::after { content: ""; position: absolute; inset: -1px 0; border: 1px solid var(--line); pointer-events: none; }
+.ledger-row.active::after { border-left: 0; box-shadow: inset 3px 0 0 var(--ink); }
 .ledger-row.open::after { background: var(--tint); }
 .ledger-row:is(.active, .open), .ledger-row:has(+ .ledger-row:is(.active, .open)), .ledger-header:has(+ .ledger-row:is(.active, .open)) { border-bottom-color: transparent; }
 .ledger-row .ledger-toggle { width: 100%; min-height: 40px; border: 0; border-radius: 0; background: transparent; text-align: left; }
@@ -556,6 +556,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .move-verdict { padding: 7px 9px; border-radius: var(--radius); background: var(--tint); font-size: 12px; line-height: 1.45; }
 .best-moves-panel .pick-ledger .analysis-row-select { grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 3px 10px; padding: 11px 2px; }
 .best-moves-panel .pick-ledger .analysis-rank { align-self: start; margin-top: -1.5px; }
+.best-moves-panel .pick-ledger .analysis-row.current { margin-left: -8px; border: 1px solid var(--line); border-left: 0; border-radius: 0; background: var(--tint); box-shadow: inset 3px 0 0 var(--ink); }
 .best-moves-panel > :is(.hint, .move-advice-error):not(:last-child) { margin-bottom: 11px; }
 .best-moves-panel > .pick-ledger { margin-top: -6px; }
 .best-moves-panel > .pick-ledger:last-child { margin-bottom: -11px; }
@@ -668,16 +669,13 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .list-row-name:not(.plain):hover, .list-row-name:not(.plain):focus-visible { text-decoration-color: var(--accent-dark); }
   .menu-popup button:hover:not(:disabled) { background: var(--tint); }
   .panel-dots:hover::after { opacity: 1; }
-  .ledger-row:not(.read-only):hover::after { content: ""; position: absolute; inset: -1px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--tint); pointer-events: none; }
-  .ledger-row.active:not(.read-only):hover::after { border-left: 3px solid var(--ink); }
-  .ledger-row:not(.read-only):hover, .ledger-row:has(+ .ledger-row:not(.read-only):hover), .ledger-header:has(+ .ledger-row:not(.read-only):hover) { border-bottom-color: transparent; }
   .ledger-row .ledger-toggle:hover:not(:disabled), .ledger-tab:hover:not(:disabled), .ledger-undo:hover:not(:disabled) { background: transparent; }
   .ledger-tab:hover { color: var(--ink); }
   .ledger-add:hover:not(:disabled) { border-color: var(--muted); background: var(--surface); }
   .ledger-tile.zero .ledger-add:hover:not(:disabled) { background: transparent; }
   .ledger-undo:hover { text-decoration: underline; text-underline-offset: 3px; }
   .analysis-row:hover:not(.current, :where(.pick-ledger *)) { border-color: var(--muted); }
-  .pick-ledger .analysis-row:hover:not(.current, :where(.phone-shell *)) .analysis-score { color: var(--accent-dark); }
+  .pick-ledger .analysis-row:hover:not(.current, :where(.phone-shell *, .best-moves-panel *)) .analysis-score { color: var(--accent-dark); }
   .head-dot-cell:hover:not(:disabled), .head-dots-more:hover:not(:disabled), .menu-trigger:hover:not(:disabled), .list-row-name:hover:not(:disabled), .list-row-select:hover:not(:disabled), .menu-backdrop:hover:not(:disabled), .analysis-row-select:hover:not(:disabled), .analysis-touch-select:hover:not(:disabled), .panel-dots:hover:not(:disabled) { background: transparent; }
   .global-notice-close:hover:not(:disabled) { background: color-mix(in srgb, var(--surface) 12%, transparent); }
   @media (pointer: fine) {
