@@ -158,10 +158,10 @@ Do not rebuild these; move or restyle them.
 
 | Behaviour | Where |
 | --- | --- |
-| Rename a player on name click | the name-bounded field is `InlineRename.tsx`, shared by `PlayerPanel.tsx`, `ListRow.tsx` and `phone/PlayersScreen.tsx` |
-| Reorder players by drag, both mouse DnD and a coarse-pointer hold, plus the grip that lifts at once | `useRowReorder.ts` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP`, shared by `PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
+| Rename a player on name click | the name-bounded field is `InlineRename.tsx`, shared by `RosterRow.tsx` (both trees' roster rows) and `ListRow.tsx` |
+| Reorder players by drag, both mouse DnD and a coarse-pointer hold, plus the grip that lifts at once | `useRowReorder.ts` + `rowDrag.ts`, `HOLD_MS`/`HOLD_SLOP`, behind `useRoster.ts`, shared by `PlayerPanel.tsx` and `phone/PlayersScreen.tsx` |
 | Add and remove players | `PlayerPanel.tsx` and `phone/PlayersScreen.tsx`, `addPlayer` / drag-to-trash |
-| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row, the `DraftRibbon.tsx` buttons while nobody is claimed, and a click on a roster row in `PlayerPanel.tsx` or `phone/PlayersScreen.tsx`, all through `setMe` |
+| Claim yourself | `AnalysisPanel.tsx`'s swatch claim row, the `DraftRibbon.tsx` buttons while nobody is claimed, and a click on a `RosterRow.tsx` row in either tree, all through `setMe` |
 | Saved-map sort, four keys, and the open, delete and rename paths | `library.ts` and `useLibrary.ts`, under the `LibraryLists.tsx` body that `MapsPanel.tsx` and `phone/MapsScreen.tsx` both render |
 | Import screenshot, import and export JSON | `ImportDialog.tsx`; `useJsonFiles.tsx`, shared by `MapsPanel.tsx` and `phone/MapsScreen.tsx` |
 | Layout switch with a confirm when the board is not blank | `boardActions.tsx`, `chooseLayout` in `useBoardActions` |
