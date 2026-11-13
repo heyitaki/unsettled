@@ -75,21 +75,21 @@ const BOARD_MARGIN = 18
 // the same at 6x as it is at fit. 5 units is about 6px (`--radius`) on the
 // desktop board at fit; the phone's board is half as wide, so 3px there.
 const SEA_RADIUS = 5
-// Shared outline width for every piece (buildings + roads), in unscaled board
-// units. Matches the settlement's original border (2.5 stroke × 0.8 scale).
-const PIECE_STROKE = 2
+// Shared outline width for every piece (buildings + roads), in unscaled board units. The piece
+// sizes, outline, road ends and shadow were chosen together on a live tuner (2026-11-13).
+const PIECE_STROKE = 1.8
 // Colored core width of a road; its casing adds PIECE_STROKE on each side.
-const ROAD_CORE = 7
+const ROAD_CORE = 6
 // Corner rounding on the road's rectangular ends (SVG rx on the casing/core
 // rects). Small enough to read as a squared-off plank, not a capsule.
-const ROAD_RADIUS = 2.5
+const ROAD_RADIUS = 1.95
 // Fraction of an edge trimmed from each end of a highlighted road direction, so the stub sits
 // between the vertex circles the same recommendation draws rather than running under them.
 const MARK_EDGE_INSET = 0.26
 const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
-const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.8, city: 0.92, superCity: 1.08 }
+const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.72, city: 0.828, superCity: 0.972 }
 const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, superCity: 11.3 }
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers/scales (city annex and super city ≈ 16 + outline). Used to keep edge pieces in-frame.
@@ -166,7 +166,7 @@ function roadGeometry(edgeId: EdgeId) {
   // meeting at a bare vertex don't pile up, and a road running into a
   // building is simply hidden by it — buildings paint after roads, and
   // the inset already tucks the road's tip inside the silhouette.
-  const inset = length * 0.07
+  const inset = length * 0.07 - 0.5
   const a2 = { x: a.x + dir.x * inset, y: a.y + dir.y * inset }
   const b2 = { x: b.x - dir.x * inset, y: b.y - dir.y * inset }
   const roadLength = Math.max(0, Math.hypot(b2.x - a2.x, b2.y - a2.y))
@@ -962,11 +962,11 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         <defs>
           {/* Buildings (not roads) sit slightly proud of the board. The filter
               region is widened past the default 120% so the blur isn't clipped. */}
-          <filter id="piece-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <filter id="piece-shadow" x="-50%" y="-50%" width="200%" height="200%">
             {/* Near-centred: the piece is opaque, so a large dy would hide the
-                shadow above it and smear it below. Blur carries the lift, and a
-                small dy keeps the piece grounded rather than glowing. */}
-            <feDropShadow dx="0" dy="1" stdDeviation="2.6" floodColor={INK_COLOR} floodOpacity="0.68" />
+                shadow above it and smear it below. A wide, light blur carries the
+                lift, and a small dy keeps the piece grounded rather than glowing. */}
+            <feDropShadow dx="0" dy="0.5" stdDeviation="4" floodColor={INK_COLOR} floodOpacity="0.5" />
           </filter>
           {/* Highlighted pieces: the same shadow, deeper and wider, so a hovered
               draft pick reads as lifted off the board. */}

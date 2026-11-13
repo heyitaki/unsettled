@@ -338,7 +338,7 @@ test.describe('build mode', () => {
     await svg.locator('.placement-slot').first().tap({ force: true })
     const buildings = svg.locator('g[filter="url(#piece-shadow)"]')
     await expect(buildings).toHaveCount(1)
-    await expect(buildings.locator('g[transform*="scale(0.8)"]')).toHaveCount(1)
+    await expect(buildings.locator('g[transform*="scale(0.72)"]')).toHaveCount(1)
   })
 
   test('the pencil swaps in the tools without moving the board, a layout switch stays in build mode, and Cancel restores the board', async ({ page }) => {
@@ -491,7 +491,7 @@ test('outside build mode a draft tap places a settlement only on a Best picks ci
   await tapCorner(corner)
   await expect(buildings).toHaveCount(1)
   await expect(buildings).toHaveAttribute('fill', player.color)
-  await expect(buildings).toHaveAttribute('transform', `translate(${corner.x} ${corner.y}) scale(0.8)`)
+  await expect(buildings).toHaveAttribute('transform', `translate(${corner.x} ${corner.y}) scale(0.72)`)
   // Away from the circles a double tap still zooms, and places nothing.
   await tapCorner(bare)
   await tapCorner(bare)
@@ -567,7 +567,7 @@ test('pieces maps a coastal tap through the padded svg content box', async ({ pa
   const svg = page.locator('.board-canvas')
   await svg.locator(`.placement-slot[cx="${corner.x}"][cy="${corner.y}"]`).tap({ force: true })
   const building = svg.locator(`g[fill="#c23f38"][transform^="translate(${corner.x} ${corner.y})"]`)
-  await expect(building).toHaveAttribute('transform', /scale\(0\.8\)/)
+  await expect(building).toHaveAttribute('transform', /scale\(0\.72\)/)
   const { box, content, view } = await svg.evaluate((element) => {
     const rect = element.getBoundingClientRect()
     const style = getComputedStyle(element)
@@ -594,7 +594,7 @@ test('pieces maps a coastal tap through the padded svg content box', async ({ pa
   expect(Math.hypot(wrong.x - (corner.x + end.x) / 2, wrong.y - (corner.y + end.y) / 2))
     .toBeLessThan(Math.hypot(wrong.x - corner.x, wrong.y - corner.y))
   await page.touchscreen.tap(tap.x, tap.y)
-  await expect(building).toHaveAttribute('transform', /scale\(0\.92\)/)
+  await expect(building).toHaveAttribute('transform', /scale\(0\.828\)/)
   await expect(svg.locator('g[transform*="rotate("]')).toHaveCount(0)
 })
 
