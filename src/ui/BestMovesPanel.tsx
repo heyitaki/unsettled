@@ -216,15 +216,23 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     </div>
   )
   const claimNote = board.mePlayerId === null ? <li>Claim yourself in Players to track your exact cards</li> : null
-  if (!active || activeId === null) return (
-    <section className={`${className} best-moves-panel`}>
-      <div className="panel-heading">
-        <h2>Best moves</h2>
-      </div>
-      {order}
-      <p className="hint">Tap a player to start tracking turns</p>
-      <ul className="move-notes">{claimNote}</ul>
+  const ledger = (
+    <section className={`${className} best-moves-panel ledger-panel`}>
+      <Ledger game={game} activeId={activeId} commit={commit} />
     </section>
+  )
+  if (!active || activeId === null) return (
+    <>
+      {ledger}
+      <section className={`${className} best-moves-panel`}>
+        <div className="panel-heading">
+          <h2>Best moves</h2>
+        </div>
+        {order}
+        <p className="hint">Tap a player to start tracking turns</p>
+        <ul className="move-notes">{claimNote}</ul>
+      </section>
+    </>
   )
   const devCards = statsFor(game, activeId).devCards
   const devHand = typedDevHand(game, activeId)
@@ -244,10 +252,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   }
   return (
     <>
-      <section className={`${className} best-moves-panel ledger-panel`}>
-        <div className="panel-heading"><h2>Ledger</h2></div>
-        <Ledger game={game} activeId={activeId} commit={commit} />
-      </section>
+      {ledger}
       <section className={`${className} best-moves-panel`}>
         <div className="panel-heading">
           <h2>{mine ? 'Record your turn' : `Record ${active.name}'s turn`}</h2>

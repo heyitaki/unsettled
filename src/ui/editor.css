@@ -701,8 +701,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .phone-overlay-body::-webkit-scrollbar { display: none; }
   .roster-row .swatch { pointer-events: none; }
 }
-.award-controls { margin-top: 12px; font-size: 12px; }
-.award-controls > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
 .save-failure p { margin: 0 0 8px; }
 .save-failure button { color: var(--ink); }
 .save-failure button + button { margin-left: 8px; }

@@ -4,7 +4,6 @@ import { PlusGlyph } from './glyphs'
 import { RosterRow, RosterTrash } from './RosterRow'
 import { activeTab, useStore } from './store'
 import { useRoster } from './useRoster'
-import { AwardControls } from './AwardControls'
 
 export function PlayerPanel() {
   const { state, dispatch } = useStore()
@@ -68,7 +67,6 @@ export function PlayerPanel() {
         })}
         <RosterTrash roster={roster} playerCount={board.players.length} />
       </div>
-      <AwardControls />
     </section>
   )
 }

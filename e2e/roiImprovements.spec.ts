@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Download, type Page } from '@playwright/test'
-import { addPlayer, createBoard } from '../src/model/board'
-import { adjustCounter, newGame } from '../src/model/game'
+import { adjustCounter } from '../src/model/game'
+import { setActivePlayer } from '../src/model/turn'
 import { MAPS_KEY, WORKSPACE_KEY } from '../src/persistence/localStorage'
+import { finishedDraft } from '../src/ui/__tests__/finishedDraft'
 
 async function downloadedBackup(download: Download) {
   const path = await download.path()
@@ -82,35 +83,38 @@ test('failed saves stay actionable until Retry saves the current board', async (
 })
 
 test('award corrections survive undo, redo and reload', async ({ page }) => {
-  const board = addPlayer(createBoard('standard4'), { id: 'blue', name: 'Blue', color: '#3063ba' })
-  const game = adjustCounter(adjustCounter(newGame(board), 'aki', 'knights', 3), 'blue', 'knights', 3)
+  const draft = finishedDraft()
+  const [first, second] = draft.board.players
+  const game = setActivePlayer(adjustCounter(adjustCounter(draft, first.id, 'knights', 3), second.id, 'knights', 3), first.id)
   await page.addInitScript(({ key, game }) => {
     if (localStorage.getItem(key) === null) {
       localStorage.setItem(key, JSON.stringify({ tabs: [{ id: 'awards', title: 'Awards', game }] }))
     }
   }, { key: WORKSPACE_KEY, game })
   await page.goto('')
-  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
-  await page.locator('.award-controls summary').click()
-  const holder = page.getByRole('button', { name: /Largest army holder/ })
-  await expect(holder).toContainText('Unknown')
+  const ledger = page.locator('.ledger-panel')
+  const holders = ledger.getByRole('button', { name: 'Award holders', exact: true })
+  const menu = page.getByRole('menu', { name: 'Award holders', exact: true })
+  const unknown = menu.getByRole('menuitemradio', { name: 'Largest army: Unknown', exact: true })
+  const holder = menu.getByRole('menuitemradio', { name: `Largest army: ${second.name}`, exact: true })
+  const record = page.locator('.best-moves-panel').filter({ has: page.getByRole('heading', { name: 'Record your turn', exact: true }) })
+  await holders.click()
+  await expect(unknown).toHaveAttribute('aria-checked', 'true')
+  await expect(unknown.locator('.menu-tick')).toBeVisible()
   await holder.click()
-  await page.getByRole('option', { name: 'Blue', exact: true }).click()
-  await expect(holder).toContainText('Blue')
-  await page.getByRole('button', { name: 'Edit the board' }).click()
-  await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
-  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
-  await page.locator('.award-controls summary').click()
-  await expect(holder).toContainText('Unknown')
+  await holders.click()
+  await expect(holder).toHaveAttribute('aria-checked', 'true')
   await page.keyboard.press('Escape')
-  await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
-  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
-  await page.locator('.award-controls summary').click()
-  await expect(holder).toContainText('Blue')
+  await record.getByRole('button', { name: 'Undo', exact: true }).click()
+  await holders.click()
+  await expect(unknown).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Escape')
+  await record.getByRole('button', { name: 'Redo', exact: true }).click()
+  await holders.click()
+  await expect(holder).toHaveAttribute('aria-checked', 'true')
   await page.reload()
-  await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
-  await page.locator('.award-controls summary').click()
-  await expect(holder).toContainText('Blue')
+  await holders.click()
+  await expect(holder).toHaveAttribute('aria-checked', 'true')
 })
 
 test('tapping a port badge in build mode deletes the port', async ({ page }) => {

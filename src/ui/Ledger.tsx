@@ -1,17 +1,34 @@
 import { useId, useState } from 'react'
-import { computeStandings } from '../engine/stats'
-import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type DevKind, type Game, type StatCounter } from '../model/game'
+import { awardCandidates, computeStandings, setAwardHolder } from '../engine/stats'
+import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type DevKind, type Game, type StatCounter } from '../model/game'
 import { adjustDevHand, handTotal } from '../model/turn'
 import { RESOURCES, type Resource } from '../model/types'
 import { DEV_LABELS, statsFor } from './bestMoves'
-import { CounterGlyph, DevCardGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+import { CounterGlyph, DevCardGlyph, DotsGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { MoveStepper } from './MoveInputs'
 
-export function Ledger({ game, activeId, commit }: { game: Game; activeId: string; commit(game: Game): void }) {
+const AWARDS: { kind: AwardKind; label: string }[] = [
+  { kind: 'longestRoad', label: 'Longest road' },
+  { kind: 'largestArmy', label: 'Largest army' },
+]
+
+export function Ledger({ game, activeId, commit }: { game: Game; activeId: string | null; commit(game: Game): void }) {
   const id = useId()
   const [editing, setEditing] = useState<string | null>(null)
+  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   const standings = computeStandings(game)
   const { board } = game
+  const awardItems = AWARDS.flatMap(({ kind, label }): ContextMenuItem[] => {
+    const candidates = awardCandidates(game, kind)
+    if (candidates.length < 2) return []
+    const holder = standings.find((standing) => kind === 'longestRoad' ? standing.hasLongestRoad : standing.hasLargestArmy)?.playerId ?? null
+    return [...candidates, null].map((playerId) => ({
+      label: `${label}: ${playerId === null ? 'Unknown' : board.players.find((player) => player.id === playerId)!.name}`,
+      checked: holder === playerId,
+      onClick: () => commit(setAwardHolder(game, kind, playerId)),
+    }))
+  })
   const me = board.mePlayerId
   const devHand = game.devHand?.playerId === me ? game.devHand : undefined
   const editor = board.players.find((player) => player.id === editing)
@@ -27,6 +44,25 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
     commit(adjustDevHand(game, 'playable', kind, value - (devHand?.playable[kind] ?? 0)))
   return (
     <>
+      <div className="panel-heading">
+        <h2>Ledger</h2>
+        {awardItems.length > 0 && <button
+          type="button"
+          className="panel-dots"
+          aria-label="Award holders"
+          aria-haspopup="menu"
+          aria-expanded={menuTrigger !== null}
+          onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}
+        >
+          <DotsGlyph />
+        </button>}
+      </div>
+      {menuTrigger && awardItems.length > 0 && <ContextMenu
+        ariaLabel="Award holders"
+        trigger={menuTrigger}
+        items={awardItems}
+        onClose={() => setMenuTrigger(null)}
+      />}
       <div className="ledger-header" aria-hidden="true">
         <span /><span>Hand</span><span>Cards</span><span>VP</span>
       </div>

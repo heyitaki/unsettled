@@ -61,9 +61,7 @@ Placement analysis runs in a shared worker. A changed board or viewed pick shows
 
 ### D5 · Players panel
 
-The popover holds the roster and award holders. It opens under the dots button of the header's player pill. Hands, pieces, awards and VP are shown in the Best moves Ledger (D8).
-
-Below the roster, `Award holders` opens Longest road and Largest army selectors when anyone qualifies. Only tied leaders can be chosen. Imported ties start as `Unknown`, while a recorded incumbent keeps a tie. Corrections share game undo, redo and persistence.
+The popover holds only the roster. It opens under the dots button of the header's player pill. Hands, pieces, awards and VP are shown in the Best moves Ledger (D8), whose heading menu corrects award holders.
 
 - **Heading**: h2 `Players`, and at the right a plus button (`PlusGlyph`, `aria-label="Add player"`), disabled at six players.
 - **Row**, left to right: grip (`GripGlyph`, starts a drag at once), swatch (24px, the player's colour), name cell. The `YOU` chip sits immediately after the name inside the name cell. Only the claimed row draws the chip.
@@ -91,8 +89,9 @@ Once every starting settlement is placed the analysis panel first shows the draf
 
 Three sections, each its own panel, in both trees: Ledger, Record your turn, then Best moves. The approved mock-up of this surface (direction C with B's action tiles) is https://claude.ai/artifact/FXTAEV92eXLhZYSo7qsRSs, and its decisions are recorded in [`.claude/specs/best-moves-record/plan.md`](../best-moves-record/plan.md).
 
-**Ledger**, above `Record your turn`, shows whenever a player is active. Its heading has no buttons. The approved Centred design and dimensions are in [`../ledger/plan.md`](../ledger/plan.md).
+**Ledger**, above `Record your turn`, also shows before any player is active, above `Tap a player to start tracking turns`. With no active player, no row gets the active bar. The approved Centred design and dimensions are in [`../ledger/plan.md`](../ledger/plan.md).
 
+- Heading: `Ledger`, with a borderless three-dot `panel-dots` button (`DotsGlyph`, `aria-label="Award holders"`, `aria-haspopup="menu"`, `aria-expanded`) on the right only while Longest road or Largest army has at least two tied candidates. It opens an anchored `ContextMenu` named `Award holders`. For each tied award, Longest road before Largest army, the menu lists `<Award>: <player name>` in seat order, then `<Award>: Unknown`. Items are `menuitemradio` with `aria-checked` and a tick on the current holder, or Unknown when nobody holds it. Imported ties start as Unknown; a recorded incumbent keeps a tie. Each correction is one game commit and shares undo, redo and persistence. An award with one candidate needs no choice.
 - Header: an empty name cell, `Hand`, `Cards`, `VP`. One row per player in seat order, separated by hairlines, with a 3px ink bar on the active row and a tint on the open row. All cells are vertically centred on a 20px line height.
 - Each row shows the player's swatch, ellipsized name, `YOU` on the claimed player, and red road or shield medals for held awards. Hand chips show each known resource, a bare `?` for unseen cards, and the untyped dev count after a hairline divider. An empty hand reads `No cards`. `Cards` is the resource hand total including unseen cards; `VP` is the computed total, including held awards. Both columns use centred Inter tabular figures.
 - Under the claimed player's main line, pills show playable dev cards by type, then Victory point cards, then cards bought this turn. Zero counts are absent, and a count appears only above one. Bought pills have a dashed outline and a `new` label, titled `Bought this turn, playable next turn`.
@@ -121,7 +120,7 @@ Three sections, each its own panel, in both trees: Ledger, Record your turn, the
 
 Every recorded action is one commit, so one undo takes back the piece and the cards together. Advice comes from a worker and never runs during render; while a changed game is pending the old cards disappear. A robber destination is marked by a dashed ring on its hex, the one board mark this panel adds.
 
-The Players panel holds the roster and award holders. The Ledger's row editor is the only place hands, dev cards, knights and VP cards are edited.
+The Players panel holds only the roster. The Ledger's row editor is the only place hands, dev cards, knights and VP cards are edited; its heading menu corrects tied award holders.
 
 ## Behaviours that are not CSS
 

@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { TickGlyph } from './glyphs'
 
 export interface ContextMenuItem {
   label: string
   onClick(): void
+  checked?: boolean
   /** A glyph before the label. */
   icon?: ReactNode
 }
@@ -54,13 +56,16 @@ export function ContextMenu({ ariaLabel, trigger, items, className, onClose }: {
     <button
       key={item.label}
       type="button"
-      role="menuitem"
+      role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+      aria-checked={item.checked}
+      className={item.checked ? 'active' : undefined}
       tabIndex={-1}
       onClick={() => {
         close()
         item.onClick()
       }}
     >
+      {item.checked !== undefined && <TickGlyph className="menu-tick" />}
       {item.icon !== undefined && <span className="menu-icon" aria-hidden="true">{item.icon}</span>}
       <span>{item.label}</span>
     </button>

@@ -110,7 +110,7 @@ Full-screen overlay. Header: back chevron, `Players`, then in the right corner a
 
 **Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `Picking 3rd and 6th` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
 
-The Best moves Ledger shows hands, pieces, awards and VP on both trees (O1). Below the snake draft, `Award holders` provides the same tie-correction controls as desktop D5 when anyone qualifies for an award.
+The Best moves Ledger shows hands, pieces, awards and VP on both trees (O1), including before any player is active. Its heading has the same three-dot `Award holders` menu as desktop D8, shown only while an award is tied. The Players screen keeps the roster and snake draft.
 
 ### S9 · Toast
 
@@ -172,7 +172,7 @@ Do not rebuild these; move or restyle them.
 
 Resolved 2026-09-02.
 
-**O1 · Points ledger: replaced by the Best moves Ledger.** The tally columns and view switch are gone from desktop Players too. The Best moves Ledger shows hands, pieces, awards and VP on both trees, with corrections in its row editor. The Players screen carries the roster (no VP column, owner 2026-11-12), snake draft and award holders. M10 is dropped.
+**O1 · Points ledger: replaced by the Best moves Ledger.** The tally columns and view switch are gone from desktop Players too. The Best moves Ledger shows hands, pieces, awards and VP on both trees, with corrections in its row editor and tied award holders in its heading menu. It also shows before any player is active. The Players screen carries the roster (no VP column, owner 2026-11-12) and snake draft. M10 is dropped.
 
 **O2 · Saving: automatic (B7).** No save control on the phone or on the desktop. Every edit autosaves the tab into its map; the first non-blank edit of an unlinked tab creates the map and links the tab. The desktop tab menu's `Save to library`, the dirty dots, the save-and-close prompt and the `MapsPanel` name field and button are removed.
 
