@@ -8,6 +8,7 @@ import { activeTab, useStore } from './store'
 import { useLibrary } from './useLibrary'
 import { useRenameTab } from './useRenameTab'
 import { useScrollEdges } from './useScrollEdges'
+import { useStorageCleanup } from './useStorageCleanup'
 
 /** Which name is being renamed, by row key, and the field's text. */
 type Editing = { key: string; draft: string }
@@ -28,6 +29,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
   const { state, dispatch } = useStore()
   const renameTab = useRenameTab()
   const { listed, openMap, deleteSavedMap, renameSavedMap } = useLibrary()
+  const { storageFull, plan, description, promptOpen, cleanUp, error } = useStorageCleanup()
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
   const [editing, setEditing] = useState<Editing | null>(null)
   // The in-place rename of one row, keyed so only that row's field is open.
@@ -58,6 +60,13 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
   const rowCount = unlisted.length + maps.length
   return (
     <div className="library-boards">
+      {storageFull && !promptOpen && <div className="storage-warning" role="status">
+        <div className="storage-warning-text">
+          <strong>Storage is full</strong>
+          <p>Your latest edits are not saved. {plan.count > 0 ? description : 'Delete or export games to make room.'}{error ? ` ${error}` : ''}</p>
+        </div>
+        {plan.count > 0 && <button type="button" className="storage-warning-action" onClick={cleanUp}>Clean up</button>}
+      </div>}
       <div className="group-label">
         <span>Boards ({rowCount})</span>
         <MenuSelect

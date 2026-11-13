@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSaveRecovery, useStore } from './store'
 import { createLibraryBackup } from '../persistence/backup'
 import { downloadBoard } from './boardFiles'
 import { recoveryTabs } from './saveStatus'
 import { persistedWorkspace } from './workspaceSync'
-import { deleteMaps, readLibrary, storedTabLinks } from '../persistence/localStorage'
-import { cleanupCandidates } from '../persistence/storageCleanup'
-import { StorageFullDialog } from './StorageFullDialog'
+import { ConfirmDialog } from './ConfirmDialog'
+import { useStorageCleanup } from './useStorageCleanup'
 
 /**
  * The toast, rendered by both shells so a notice reads the same wherever it is
@@ -15,16 +14,9 @@ import { StorageFullDialog } from './StorageFullDialog'
  */
 export function GlobalNotice() {
   const { state, dispatch } = useStore()
-  const { failures, retry, storageFullAttempt, dismissStorageFull, retryAfterCleanup } = useSaveRecovery()
+  const { failures, retry, dismissStorageFull } = useSaveRecovery()
+  const { storageFull, plan, description, promptOpen, cleanUp, error } = useStorageCleanup()
   const errors = Object.values(failures)
-  const openMaps = useCallback(() => new Set([
-    ...state.tabs.map((tab) => tab.mapId), ...storedTabLinks().values(),
-  ].filter((id): id is string => id !== null)), [state.tabs])
-  const cleanup = useMemo(() => {
-    void state.mapsRevision
-    return Object.values(failures).some((failure) => failure.quota)
-      ? cleanupCandidates(Date.now(), openMaps()) : { candidates: [], preselected: [] }
-  }, [failures, openMaps, state.mapsRevision])
   const [backupError, setBackupError] = useState<string | null>(null)
   // Pause auto-dismiss while the pointer is over the toast, so it can be read,
   // clicked, and text-selected; the timer restarts fresh once the pointer leaves.
@@ -45,26 +37,24 @@ export function GlobalNotice() {
   }, [dispatch])
   if (errors.length > 0) return (
     <>
-      {storageFullAttempt !== null && cleanup.candidates.length > 0 && <StorageFullDialog
-        key={storageFullAttempt}
-        {...cleanup}
+      {promptOpen && <ConfirmDialog
+        title="Storage is full"
+        message={`This browser has no room left, so your latest edits are not saved. ${description} You can also delete games yourself in Maps.${error ? ` ${error}` : ''}`}
         onCancel={dismissStorageFull}
-        onDelete={(ids) => {
-          const open = openMaps()
-          const result = deleteMaps(ids.filter((id) => !open.has(id)))
-          if (!result.ok) return result.error
-          dispatch({ type: 'maps-changed', library: readLibrary() })
-          retryAfterCleanup()
-          return null
-        }}
+        actions={[
+          { label: 'Clean up', variant: 'danger', onClick: cleanUp },
+          { label: 'Not now', onClick: dismissStorageFull },
+        ]}
       />}
       <div className="global-notice save-failure" role="alert">
-        <div>
-          {errors.map((error, index) => <p key={index}>{error.message}</p>)}
-          {errors.some((error) => error.quota) && cleanup.candidates.length === 0
+        <div className="save-failure-body">
+          {errors.map((error, index) => <strong key={index}>{error.message}</strong>)}
+          {storageFull && plan.count === 0
             && <p>Delete or export old games to make room.</p>}
           {backupError && <p>{backupError}</p>}
-          <button type="button" onClick={retry}>Retry saving</button>
+        </div>
+        <div className="save-failure-actions">
+          <button type="button" className="save-failure-retry" onClick={retry}>Retry saving</button>
           <button type="button" onClick={() => {
             try {
               downloadBoard('unsettled-library-backup', createLibraryBackup(recoveryTabs(persistedWorkspace(state.tabs).tabs, errors)))

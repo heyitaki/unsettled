@@ -9,7 +9,7 @@ import * as storage from '../../persistence/localStorage'
 import { CLEANUP_AGE } from '../../persistence/storageCleanup'
 import { GlobalNotice } from '../GlobalNotice'
 import { createLibraryAutosave } from '../libraryAutosave'
-import { relativeTime } from '../library'
+import { LibraryLists } from '../LibraryLists'
 import { activeTab, StoreProvider, useSaveRecovery, useStore, type TabState } from '../store'
 import { useLibrary } from '../useLibrary'
 
@@ -27,7 +27,7 @@ describe('storage full recovery', () => {
   let recovery: ReturnType<typeof useSaveRecovery>
   let library: ReturnType<typeof useLibrary>
   const dialog = () => container.querySelector('dialog')
-  const checkboxes = () => [...container.querySelectorAll<HTMLInputElement>('input[type=checkbox]')]
+  const warning = () => container.querySelector('.storage-warning')
   const button = (label: string | RegExp) => {
     const match = [...container.querySelectorAll('button')].find(({ textContent }) =>
       typeof label === 'string' ? textContent === label : label.test(textContent ?? ''))
@@ -43,7 +43,7 @@ describe('storage full recovery', () => {
     return null
   }
   const mount = (noticeKey = 'desktop') => act(() => root.render(
-    <StoreProvider><Capture /><GlobalNotice key={noticeKey} /></StoreProvider>,
+    <StoreProvider><Capture /><LibraryLists /><GlobalNotice key={noticeKey} /></StoreProvider>,
   ))
   const edit = () => act(() => store.dispatch({
     type: 'commit', board: setTile(activeTab(store.state).game.board, { q: 0, r: 0 }, 'wheat', 6),
@@ -71,12 +71,14 @@ describe('storage full recovery', () => {
       showModal: { configurable: true, value() {} },
       close: { configurable: true, value() {} },
     })
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
     container = document.createElement('div')
     root = createRoot(container)
   })
   afterEach(() => {
     act(() => root.unmount())
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     vi.useRealTimers()
     Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
     Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
@@ -98,6 +100,7 @@ describe('storage full recovery', () => {
     flush()
     expect(attempts).toEqual(['cached analysis', null])
     expect(dialog()?.getAttribute('aria-label')).toBe('Storage is full')
+    expect(warning()).toBeNull()
     expect(Object.values(recovery.failures)[0].quota).toBe(true)
   })
 
@@ -107,6 +110,7 @@ describe('storage full recovery', () => {
     edit()
     flush()
     expect(dialog()).toBeNull()
+    expect(warning()).toBeNull()
     expect(localStorage.getItem(storage.ANALYSIS_CACHE_KEY)).toBe('cached analysis')
     expect(container.querySelector('.save-failure')?.textContent).toContain('Could not save')
     expect(container.textContent).not.toContain('Delete or export old games to make room.')
@@ -123,6 +127,7 @@ describe('storage full recovery', () => {
     flush()
     expect(dialog()).toBeNull()
     expect(recovery.failures).toEqual({})
+    expect(warning()).toBeNull()
     expect(storage.listMaps().maps).toHaveLength(4)
   })
 
@@ -154,23 +159,35 @@ describe('storage full recovery', () => {
     expect(dialog()).toBeNull()
   })
 
-  it('shows preselection, relative times and checked sizes, disabling an empty selection', () => {
+  it.each([
+    { ages: [3 * CLEANUP_AGE, CLEANUP_AGE, 1000], games: 'the 2 games', when: "haven't opened in 30 days" },
+    { ages: [CLEANUP_AGE, 1000], games: 'the game', when: "haven't opened in 30 days" },
+    { ages: [7000, 6000, 5000, 4000, 3000, 2000, 1000], games: 'the 5 games', when: 'opened least recently' },
+    { ages: [1000], games: 'the game', when: 'opened least recently' },
+  ])('describes $games you $when with the exact actions and no checkboxes', ({ ages, games, when }) => {
+    const entries = ages.map((age, index) => entry(`game-${index}`, age))
+    localStorage.setItem(storage.MAPS_KEY, JSON.stringify(entries))
     mount()
     refuse()
     edit()
     flush()
-    expect(checkboxes().map((input) => input.checked)).toEqual([true, true, false])
-    expect(dialog()?.textContent).toContain(`Used ${relativeTime(NOW - 3 * CLEANUP_AGE, NOW)}`)
-    const bytes = JSON.stringify(entry('oldest', 3 * CLEANUP_AGE)).length
-      + JSON.stringify(entry('old', CLEANUP_AGE)).length
-    expect(button(`Delete 2 games · ${Math.ceil(bytes / 1024)} KB`).disabled).toBe(false)
-    act(() => checkboxes()[0].click())
-    expect(button(/^Delete 1 game · \d+ KB$/).disabled).toBe(false)
-    act(() => checkboxes()[1].click())
-    expect(button('Delete 0 games · 0 KB').disabled).toBe(true)
+    const sentence = `Clean up deletes ${games} you ${when}.`
+    expect(dialog()?.querySelector('p')?.textContent).toBe(
+      `This browser has no room left, so your latest edits are not saved. ${sentence} You can also delete games yourself in Maps.`,
+    )
+    expect(container.querySelectorAll('input[type=checkbox]')).toHaveLength(0)
+    expect([...dialog()!.querySelectorAll('button')].map(({ textContent }) => textContent)).toEqual(['Clean up', 'Not now'])
+    expect(button('Clean up').className).toBe('danger')
+    expect(button('Not now').className).toBe('')
+    expect(button('Not now').autofocus).toBe(true)
+    click('Not now')
+    expect(warning()?.querySelector('p')?.textContent).toBe(`Your latest edits are not saved. ${sentence}`)
+    expect(warning()?.querySelector('strong')?.textContent).toBe('Storage is full')
+    expect(warning()?.getAttribute('role')).toBe('status')
+    expect(container.querySelector('.library-boards')?.firstElementChild).toBe(warning())
   })
 
-  it('deletes checked ids, refreshes the library and retries in that order', () => {
+  it.each(['prompt', 'Maps warning'])('cleans up from the %s using the preselected ids, then refreshes and retries', (surface) => {
     mount()
     const original = Storage.prototype.setItem
     const operations: string[] = []
@@ -184,9 +201,14 @@ describe('storage full recovery', () => {
     })
     edit()
     flush()
+    if (surface === 'Maps warning') {
+      click('Not now')
+      expect(dialog()).toBeNull()
+      expect(warning()?.querySelector('button')?.textContent).toBe('Clean up')
+    }
     const revision = store.state.mapsRevision
     const deleted = vi.spyOn(storage, 'deleteMaps')
-    click(/^Delete 2 games/)
+    click('Clean up')
     expect(deleted).toHaveBeenCalledExactlyOnceWith(['oldest', 'old'])
     expect(operations[0]).toBe('recent')
     expect(operations[1].split(',')).toHaveLength(2)
@@ -195,9 +217,10 @@ describe('storage full recovery', () => {
     expect(recovery.failures).toEqual({})
     expect(dialog()).toBeNull()
     expect(container.querySelector('.save-failure')).toBeNull()
+    expect(warning()).toBeNull()
   })
 
-  it('reopens after deletion with the remaining candidates and fresh preselection if saving still fails', () => {
+  it('reopens with the next clean-up plan if saving still fails after deletion', () => {
     mount()
     const write = refuse()
     edit()
@@ -208,12 +231,27 @@ describe('storage full recovery', () => {
       if (key === storage.MAPS_KEY && (JSON.parse(value) as unknown[]).length > 1) throw quota()
       original.call(this, key, value)
     })
-    click(/^Delete 2 games/)
+    click('Clean up')
     expect(dialog()).not.toBeNull()
-    expect(checkboxes()).toHaveLength(1)
-    expect(checkboxes()[0].checked).toBe(true)
-    expect(dialog()?.textContent).toContain('recent')
-    expect(button(/^Delete 1 game/).disabled).toBe(false)
+    expect(dialog()?.querySelector('p')?.textContent).toBe(
+      `This browser has no room left, so your latest edits are not saved. Clean up deletes the game you opened least recently. You can also delete games yourself in Maps.`,
+    )
+    expect(warning()).toBeNull()
+  })
+
+  it('deletes only the five least recently used games when none is 30 days old', () => {
+    const entries = Array.from({ length: 7 }, (_, index) => entry(`recent-${index}`, (7 - index) * 1000))
+    localStorage.setItem(storage.MAPS_KEY, JSON.stringify(entries))
+    mount()
+    const write = refuse()
+    edit()
+    flush()
+    write.mockRestore()
+    const deleted = vi.spyOn(storage, 'deleteMaps')
+    click('Clean up')
+    expect(deleted).toHaveBeenCalledExactlyOnceWith(entries.slice(0, 5).map(({ id }) => id))
+    expect(storage.listMaps().maps.map(({ name }) => name)).toEqual(['recent-5', 'recent-6', 'Board 1'])
+    expect(recovery.failures).toEqual({})
   })
 
   it('keeps Not now closed through retries and a shell remount until quota failures clear', () => {
@@ -226,16 +264,18 @@ describe('storage full recovery', () => {
     mount('phone')
     expect(dialog()).toBeNull()
     expect(container.querySelector('.save-failure')).not.toBeNull()
+    expect(warning()).not.toBeNull()
     write.mockRestore()
     click('Retry saving')
     expect(recovery.failures).toEqual({})
+    expect(warning()).toBeNull()
     refuse()
     act(() => store.dispatch({
       type: 'commit', board: setTile(activeTab(store.state).game.board, { q: 0, r: 0 }, 'ore', 8),
     }))
     flush()
     expect(dialog()).not.toBeNull()
-    expect(checkboxes().map((input) => input.checked)).toEqual([true, true, false])
+    expect(warning()).toBeNull()
   })
 
   it('protects both local and stored tab links and adds the no-candidates toast line', () => {
@@ -248,18 +288,22 @@ describe('storage full recovery', () => {
     flush()
     expect(dialog()).toBeNull()
     expect(container.querySelector('.save-failure')?.textContent).toContain('Delete or export old games to make room.')
+    expect(warning()?.querySelector('p')?.textContent).toBe('Your latest edits are not saved. Delete or export games to make room.')
+    expect(warning()?.querySelector('button')).toBeNull()
     expect(storage.listMaps().maps).toHaveLength(2)
   })
 
-  it('keeps checked games and shows the error when deletion fails', () => {
+  it.each(['prompt', 'Maps warning'])('keeps games and shows the error when deletion from the %s fails', (surface) => {
     mount()
     refuse()
     edit()
     flush()
-    click(/^Delete 2 games/)
+    if (surface === 'Maps warning') click('Not now')
+    const revision = store.state.mapsRevision
+    click('Clean up')
     expect(storage.listMaps().maps).toHaveLength(3)
-    expect(dialog()?.querySelector('[role=alert]')?.textContent).toBe('Unable to write localStorage')
-    expect(checkboxes().map((input) => input.checked)).toEqual([true, true, false])
+    expect((surface === 'prompt' ? dialog() : warning())?.textContent).toContain('Unable to write localStorage')
+    expect(store.state.mapsRevision).toBe(revision)
   })
 
   it('does not delete a candidate another window has opened while the prompt was showing', () => {
@@ -270,7 +314,7 @@ describe('storage full recovery', () => {
     write.mockRestore()
     localStorage.setItem(storage.WORKSPACE_KEY, JSON.stringify({ tabs: [{ id: 'other', title: 'oldest', game, mapId: 'oldest' }] }))
     const deleted = vi.spyOn(storage, 'deleteMaps')
-    click(/^Delete 2 games/)
+    click('Clean up')
     expect(deleted).toHaveBeenCalledExactlyOnceWith(['old'])
     expect(storage.listMaps().maps.map(({ id }) => id)).toContain('oldest')
   })

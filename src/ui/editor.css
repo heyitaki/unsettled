@@ -187,6 +187,11 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
    keeps its height. Fade classes are set from JS. */
 .library-boards { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .library-boards > :not(.board-list) { flex: none; }
+.storage-warning { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; margin: 0 0 14px; padding: 10px 10px 12px 14px; border: 1px solid color-mix(in srgb, var(--danger) 26%, var(--surface)); border-radius: var(--radius); background: color-mix(in srgb, var(--danger) 6%, var(--surface)); }
+.storage-warning-text { display: contents; }
+.storage-warning strong { grid-area: 1 / 1; color: var(--danger); font: 600 12.5px/1.3 Inter, sans-serif; }
+.storage-warning p { grid-area: 2 / 1 / 3 / -1; margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+.storage-warning-action { grid-area: 1 / 2; height: 28px; min-height: 0; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--surface)); border-radius: var(--radius); background: var(--surface); color: var(--danger); font: 600 12px/1 Inter, sans-serif; white-space: nowrap; }
 /* Nine desktop rows and the top of a tenth, so a long library scrolls under the fade
    rather than running the popover off the page. */
 .board-list { flex: 0 1 auto; min-height: 0; max-height: 340px; overflow-y: auto; scrollbar-width: none; }
@@ -343,12 +348,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .confirm-dialog h3 { margin: 0 0 8px; font: 700 24px Georgia, serif; }
 .confirm-dialog p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; }
-.storage-cleanup-list { display: grid; gap: 4px; max-height: min(40vh, 300px); margin: 14px 0 0; padding: 0; overflow: auto; list-style: none; }
-.storage-cleanup-list label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
-.storage-cleanup-list input { flex: none; width: auto; accent-color: var(--accent-dark); }
-.storage-cleanup-list span { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
-.storage-cleanup-list small { display: block; color: var(--muted); font-size: 11px; }
-.storage-full-dialog .confirm-actions { flex-wrap: wrap; }
 .import-dialog { width: min(420px, calc(100vw - 30px)); padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .import-dialog h3 { margin: 0 0 12px; font: 700 22px Georgia, serif; }
 .import-dialog .drop-zone { padding: 26px 16px; }
@@ -671,6 +670,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 
 @media (hover: hover) {
   button:hover:not(:disabled, :where(.phone-shell *)) { background: var(--tint); }
+  .storage-warning-action:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 9%, var(--surface)); }
   .icon-btn[aria-pressed="true"]:hover:not(:disabled) { color: #fff; background: var(--accent-dark); border-color: var(--accent-dark); }
   button.primary:hover:not(:disabled, :where(.phone-shell *)), .hero-import:hover:not(:disabled, :where(.phone-shell *)) { background: var(--accent-dark); }
   button.selected:hover:not(:disabled, :where(.phone-shell *)) { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
@@ -837,6 +837,17 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .phone-overlay-body::-webkit-scrollbar { display: none; }
   .roster-row .swatch { pointer-events: none; }
 }
-.save-failure p { margin: 0 0 8px; }
-.save-failure button { color: var(--ink); }
-.save-failure button + button { margin-left: 8px; }
+.save-failure { flex-direction: column; gap: 10px; padding: 12px 14px; }
+.save-failure-body { display: grid; gap: 3px; font-size: 12px; line-height: 1.4; user-select: text; -webkit-user-select: text; }
+.save-failure strong { font-size: 13px; font-weight: 600; }
+.save-failure p { margin: 0; color: color-mix(in srgb, var(--surface) 70%, transparent); }
+.save-failure-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.save-failure-actions button { height: 30px; padding: 0 12px; border-color: color-mix(in srgb, var(--surface) 26%, transparent); background: transparent; color: var(--surface); font-size: 12px; font-weight: 600; }
+.save-failure-actions .save-failure-retry { border-color: var(--surface); background: var(--surface); color: var(--ink); }
+@media (hover: hover) {
+  .save-failure-actions button:hover { background: color-mix(in srgb, var(--surface) 12%, transparent); }
+  .save-failure-actions .save-failure-retry:hover { background: color-mix(in srgb, var(--surface) 86%, var(--ink)); }
+}
+@media (pointer: coarse) {
+  .save-failure-actions button { height: 36px; }
+}
