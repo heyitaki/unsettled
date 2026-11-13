@@ -233,7 +233,7 @@ describe('Best moves recording', () => {
     await click('Undo', entries[1])
     expect(game()).toBe(bought)
     await click('Correct aki')
-    await click('More wood')
+    await clickElement(container.querySelector('.ledger-add'))
     expect(container.querySelector('.move-log button')).toBeNull()
   })
 
@@ -621,6 +621,17 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.move-log li > span')?.textContent).toContain('Stole from Bee')
     await click('Undo')
     expect(game()).toBe(before)
+  })
+
+  it('never brings back an undone change on the Ledger Undo line', async () => {
+    await click('Correct aki')
+    await click('Add one Wood, now 5')
+    const status = () => container.querySelector('.ledger-status')!
+    await click('Undo', status())
+    // The same game is back on top of the stack under a change made elsewhere.
+    await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(game(), 'b', 'knights', 1) }))
+    expect(status().textContent).not.toContain('Added one Wood')
+    expect(status().querySelector('button')).toBeNull()
   })
 
   it('prefills trade advice for a single party tap', async () => {
@@ -1198,14 +1209,20 @@ describe('Best moves recording', () => {
   it('corrects a hand and dev type one undo step at a time', async () => {
     const before = game()
     await click('Correct aki')
-    await click('More wood')
+    await click('Add one Wood, now 5')
     expect(game().stats.aki.hand.wood).toBe(6)
-    await click('More Knight')
+    await click('Dev cards 4')
+    await click('Add one Knight, now 1')
     expect(game().devHand?.playable.knight).toBe(2)
     expect(game().stats.aki.devCards).toBe(5)
-    await click('Undo')
+    const status = () => container.querySelector('.ledger-status')!
+    expect(status().textContent).toContain('Added one Knight · Undo')
+    await click('Undo', status())
     expect(game().stats.aki.hand.wood).toBe(6)
     expect(game().devHand?.playable.knight).toBe(1)
+    // The line names only the change on top of the undo stack, which is now the wood.
+    expect(button('Undo', container.querySelector('.best-moves-panel:not(.ledger-panel)')!)).not.toBeNull()
+    expect(status().querySelector('button')).toBeNull()
     await click('Undo')
     expect(game()).toBe(before)
   })

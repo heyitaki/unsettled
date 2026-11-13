@@ -250,6 +250,14 @@ describe('turn tracking', () => {
     expect(endTurn(away).devHand?.playable.knight).toBe(1)
   })
 
+  it('typing a dev card keeps the cards whose type is unknown', () => {
+    const game = adjustCounter(gameWithRival(), 'aki', 'devCards', 2)
+    const typed = adjustDevHand(game, 'playable', 'knight', 1)
+    expect(typed.stats.aki.devCards).toBe(3)
+    expect(adjustDevHand(typed, 'playable', 'knight', -1).stats.aki.devCards).toBe(2)
+    expect(adjustDevHand(game, 'playable', 'knight', -1)).toMatchObject({ stats: { aki: { devCards: 2 } } })
+  })
+
   it('lowering the public dev count below the typed sum removes the typed hand', () => {
     const game = adjustDevHand(adjustDevHand(gameWithRival(), 'playable', 'knight', 1), 'bought', 'monopoly', 1)
     const extra = adjustCounter(game, 'aki', 'devCards', 1)
@@ -360,16 +368,16 @@ describe('turn tracking', () => {
     expect(rival.stats.b.devCards).toBe(0)
   })
 
-  it('adjustDevHand keeps devCards equal to the cards by type', () => {
+  it('adjustDevHand moves devCards by the typed change', () => {
     let game = adjustCounter(gameWithRival(), 'aki', 'devCards', 8)
     game = adjustDevHand(game, 'playable', 'knight', 2)
     game = adjustDevHand(game, 'bought', 'monopoly', 3)
-    expect(game.stats.aki.devCards).toBe(5)
+    expect(game.stats.aki.devCards).toBe(13)
     game = adjustDevHand(game, 'playable', 'knight', -10)
-    expect(game.stats.aki.devCards).toBe(3)
+    expect(game.stats.aki.devCards).toBe(11)
     expect(game.devHand?.playable.knight).toBe(0)
     const rivalTurn = adjustDevHand(setActivePlayer(game, 'b'), 'bought', 'roadBuilding', 1)
-    expect(rivalTurn.stats.aki.devCards).toBe(4)
+    expect(rivalTurn.stats.aki.devCards).toBe(12)
     expect(rivalTurn.stats.b.devCards).toBe(0)
     const stale = { ...game, devHand: { playerId: 'b', playable: { ...devCounts(), knight: 5 }, bought: devCounts() } }
     expect(adjustDevHand(stale, 'bought', 'monopoly', 1).devHand).toEqual({ playerId: 'aki', playable: devCounts(), bought: { ...devCounts(), monopoly: 1 } })

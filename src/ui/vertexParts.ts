@@ -1,7 +1,7 @@
 import { axialKey, edgeEndpointVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
 import type { AxialCoord, Board, Resource, TileKind, VertexId } from '../model/types'
 
-const RESOURCE_LABELS: Record<Resource, string> = {
+export const RESOURCE_LABELS: Record<Resource, string> = {
   wood: 'Wood',
   sheep: 'Sheep',
   wheat: 'Wheat',

@@ -1,19 +1,27 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { awardCandidates, computeStandings, setAwardHolder } from '../engine/stats'
 import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type DevKind, type Game, type StatCounter } from '../model/game'
 import { adjustDevHand, handTotal } from '../model/turn'
 import { RESOURCES, type Resource } from '../model/types'
 import { DEV_LABELS, statsFor } from './bestMoves'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
-import { CounterGlyph, DevCardGlyph, DotsGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
-import { MoveStepper } from './MoveInputs'
+import { CounterGlyph, DevCardGlyph, DotsGlyph, MinusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
+import { RESOURCE_LABELS } from './vertexParts'
 
 const AWARDS: { kind: AwardKind; label: string }[] = [
   { kind: 'longestRoad', label: 'Longest road' },
   { kind: 'largestArmy', label: 'Largest army' },
 ]
 
-export function Ledger({ game, activeId, commit }: { game: Game; activeId: string | null; commit(game: Game): void }) {
+// `previous` is the newest game on the tab's undo stack and `onUndo` pops it,
+// so the editor's Undo is the app's own undo step rather than a second history.
+export function Ledger({ game, activeId, previous, commit, onUndo }: {
+  game: Game
+  activeId: string | null
+  previous: Game | undefined
+  commit(game: Game): void
+  onUndo(): void
+}) {
   const id = useId()
   const [editing, setEditing] = useState<string | null>(null)
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
@@ -31,17 +39,7 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
   })
   const me = board.mePlayerId
   const devHand = game.devHand?.playerId === me ? game.devHand : undefined
-  const editor = board.players.find((player) => player.id === editing)
-  const stats = editor ? statsFor(game, editor.id) : null
   const toggle = (id: string) => setEditing((current) => current === id ? null : id)
-  const editHand = (resource: Resource, value: number) => {
-    if (editor && stats) commit(adjustHand(game, editor.id, resource, value - stats.hand[resource]))
-  }
-  const editCounter = (counter: StatCounter, value: number) => {
-    if (editor && stats) commit(adjustCounter(game, editor.id, counter, value - stats[counter]))
-  }
-  const editDev = (kind: DevKind, value: number) =>
-    commit(adjustDevHand(game, 'playable', kind, value - (devHand?.playable[kind] ?? 0)))
   return (
     <>
       <div className="panel-heading">
@@ -72,12 +70,12 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
         const mine = player.id === me
         const typedTotal = mine && devHand ? devHandTotal(devHand) : 0
         const untyped = stats.devCards - typedTotal
-        const cities = standing.cities + standing.superCities
         const rowId = `${id}-${index}`
+        const showDev = mine && editing !== player.id && (typedTotal > 0 || stats.vpCards > 0)
         return (
           <div key={player.id} className={`ledger-row${player.id === activeId ? ' active' : ''}${editing === player.id ? ' open' : ''}`}>
             <button type="button" className="ledger-toggle" aria-label={`Correct ${player.name}`}
-              aria-describedby={`${rowId}-player ${rowId}-hand ${rowId}-cards ${rowId}-vp`}
+              aria-describedby={`${rowId}-player ${rowId}-hand ${rowId}-cards ${rowId}-vp${showDev ? ` ${rowId}-dev` : ''}`}
               aria-expanded={editing === player.id} onClick={() => toggle(player.id)}>
               <span className="ledger-player" id={`${rowId}-player`}>
                 <span className="swatch" style={{ background: player.color }} />
@@ -115,44 +113,22 @@ export function Ledger({ game, activeId, commit }: { game: Game; activeId: strin
               </span>
               <span className="ledger-cards" id={`${rowId}-cards`} aria-label={`${handTotal(stats)} cards`}>{handTotal(stats)}</span>
               <span className="ledger-vp" id={`${rowId}-vp`} aria-label={`${standing.victoryPoints} VP`}>{standing.victoryPoints}</span>
+              {showDev && (
+                <span className="ledger-dev" id={`${rowId}-dev`}>
+                  {DEV_KINDS.map((kind) => <DevPill key={kind} kind={kind} count={devHand?.playable[kind] ?? 0} />)}
+                  <DevPill kind="vpCard" count={stats.vpCards} />
+                  {DEV_KINDS.map((kind) => <DevPill key={kind} kind={kind} count={devHand?.bought[kind] ?? 0} bought />)}
+                </span>
+              )}
             </button>
-            {mine && (typedTotal > 0 || stats.vpCards > 0) && (
-              <div className="ledger-dev">
-                {DEV_KINDS.map((kind) => <DevPill key={kind} kind={kind} count={devHand?.playable[kind] ?? 0} />)}
-                <DevPill kind="vpCard" count={stats.vpCards} />
-                {DEV_KINDS.map((kind) => <DevPill key={kind} kind={kind} count={devHand?.bought[kind] ?? 0} bought />)}
-              </div>
-            )}
-            {editing === player.id && (
-              <div className="ledger-edit">
-                <div className="ledger-stats">
-                  <span><b>{standing.settlements}</b> settlements</span>
-                  <span><b>{cities}</b> {cities === 1 ? 'city' : 'cities'}</span>
-                  <span className={standing.hasLongestRoad ? 'award' : ''}>Longest road <b>{standing.longestRoad}</b></span>
-                  <span className={standing.hasLargestArmy ? 'award' : ''}><b>{stats.knights}</b> {stats.knights === 1 ? 'knight' : 'knights'} played</span>
-                  <span><b>{stats.devCards}</b> dev cards</span>
-                </div>
-                <div className="move-chips">
-                  {RESOURCES.map((resource) => (
-                    <MoveStepper key={resource} label={resource} value={stats.hand[resource]} onChange={(value) => editHand(resource, value)}>
-                      <ResourceGlyph resource={resource} />
-                    </MoveStepper>
-                  ))}
-                  <MoveStepper label="Unseen" value={stats.handUnknown} onChange={(value) => editCounter('handUnknown', value)} />
-                  {mine ? DEV_KINDS.map((kind) => (
-                    <MoveStepper key={kind} label={DEV_LABELS[kind]} value={devHand?.playable[kind] ?? 0} onChange={(value) => editDev(kind, value)} />
-                  )) : (
-                    <MoveStepper label="Dev" value={stats.devCards} onChange={(value) => editCounter('devCards', value)} />
-                  )}
-                  <MoveStepper label="Knights" value={stats.knights} onChange={(value) => editCounter('knights', value)} />
-                  <MoveStepper label="VP" value={stats.vpCards} onChange={(value) => editCounter('vpCards', value)} />
-                </div>
-                <div className="ledger-footer">
-                  <span>Each change is one undo step</span>
-                  <button type="button" className="ledger-done" onClick={() => setEditing(null)}>Done</button>
-                </div>
-              </div>
-            )}
+            {editing === player.id && <LedgerEditor
+              key={player.id}
+              game={game}
+              playerId={player.id}
+              previous={previous}
+              commit={commit}
+              onUndo={onUndo}
+            />}
           </div>
         )
       })}
@@ -171,5 +147,106 @@ function DevPill({ kind, count, bought = false }: { kind: DevKind | 'vpCard'; co
         {bought && <b className="ledger-dev-new">{' '}new</b>}
       </span>
     </span>
+  )
+}
+
+type Field = Resource | DevKind | StatCounter
+interface Tile { field: Field; label: string; change: string; count: number; glyph: ReactNode; bought?: number; award?: boolean }
+type TabId = 'hand' | 'dev' | 'points'
+
+function LedgerEditor({ game, playerId, previous, commit, onUndo }: {
+  game: Game
+  playerId: string
+  previous: Game | undefined
+  commit(game: Game): void
+  onUndo(): void
+}) {
+  const [tab, setTab] = useState<TabId>('hand')
+  const [last, setLast] = useState<{ text: string; before: Game } | null>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  // Once the change is no longer the newest undo step it is gone for good: the same
+  // game can return to the top of the stack later, under someone else's change.
+  if (last && previous !== last.before) setLast(null)
+  const stats = statsFor(game, playerId)
+  const standing = computeStandings(game).find((entry) => entry.playerId === playerId)!
+  const mine = playerId === game.board.mePlayerId
+  const devHand = mine && game.devHand?.playerId === playerId ? game.devHand : undefined
+  const cities = standing.cities + standing.superCities
+  const untyped = stats.devCards - (devHand ? devHandTotal(devHand) : 0)
+  const unknownDev: Tile = { field: 'devCards', label: 'Unknown', change: 'unknown dev card', count: untyped, glyph: <CounterGlyph shape="devCard" /> }
+  const tiles: Record<TabId, Tile[]> = {
+    hand: [
+      ...RESOURCES.map((resource): Tile => ({ field: resource, label: RESOURCE_LABELS[resource], change: RESOURCE_LABELS[resource], count: stats.hand[resource], glyph: <ResourceGlyph resource={resource} /> })),
+      { field: 'handUnknown', label: 'Unseen', change: 'unseen card', count: stats.handUnknown, glyph: <CounterGlyph shape="unknownCard" /> },
+    ],
+    // The claimed player's dev cards are known by type, plus any whose type was never entered;
+    // a rival's are only a count.
+    dev: mine
+      ? [
+          ...DEV_KINDS.map((kind): Tile => ({ field: kind, label: DEV_LABELS[kind], change: DEV_LABELS[kind], count: devHand?.playable[kind] ?? 0, glyph: <DevCardGlyph kind={kind} />, bought: devHand?.bought[kind] ?? 0 })),
+          ...untyped > 0 ? [unknownDev] : [],
+        ]
+      : [unknownDev],
+    points: [
+      { field: 'knights', label: 'Knights played', change: 'knight played', count: stats.knights, glyph: <CounterGlyph shape="knight" />, award: standing.hasLargestArmy },
+      { field: 'vpCards', label: 'Victory points', change: 'victory point', count: stats.vpCards, glyph: <CounterGlyph shape="vpCard" /> },
+    ],
+  }
+  const tabs: { id: TabId; label: string; count: number | null }[] = [
+    { id: 'hand', label: 'Hand', count: handTotal(stats) },
+    { id: 'dev', label: 'Dev cards', count: stats.devCards },
+    { id: 'points', label: 'Points', count: null },
+  ]
+  const apply = (tile: Tile, delta: number) => {
+    const { field } = tile
+    const next = (RESOURCES as readonly string[]).includes(field) ? adjustHand(game, playerId, field as Resource, delta)
+      : (DEV_KINDS as readonly string[]).includes(field) ? adjustDevHand(game, 'playable', field as DevKind, delta)
+        : adjustCounter(game, playerId, field as StatCounter, delta)
+    if (next === game) return
+    setLast({ text: `${delta > 0 ? 'Added' : 'Took back'} one ${tile.change}`, before: game })
+    commit(next)
+  }
+  return (
+    <div className="ledger-edit">
+      <div className="ledger-tabs" role="group" aria-label="What to correct" ref={tabsRef}>
+        {tabs.map(({ id, label, count }) => (
+          <button key={id} type="button" className="ledger-tab" aria-pressed={tab === id} onClick={() => setTab(id)}>
+            {label}{count !== null && <> <span>{count}</span></>}
+          </button>
+        ))}
+      </div>
+      <div className="ledger-tiles" style={{ gridTemplateColumns: `repeat(${Math.max(4, tiles[tab].length)}, minmax(0, 1fr))` }}>
+        {tiles[tab].map((tile) => (
+          <div key={tile.field} className={`ledger-tile${tile.count === 0 && !tile.bought ? ' zero' : ''}`}>
+            <button type="button" className="ledger-add" title={tile.label} aria-label={`Add one ${tile.change}, now ${tile.count}`} onClick={() => apply(tile, 1)}>
+              {tile.glyph}
+              <span className={`ledger-tile-count${tile.award ? ' award' : ''}`}>{tile.count}</span>
+              <span className="ledger-tile-label">{tile.label}</span>
+              {!!tile.bought && <span className="ledger-tile-new">{tile.bought} new</span>}
+            </button>
+            {tile.count > 0 && (
+              <button type="button" className="move-minus" aria-label={`Take one ${tile.change} back`} onClick={(event) => {
+                // The badge unmounts at zero, so hand focus to its tile first.
+                if (tile.count === 1) (event.currentTarget.previousElementSibling as HTMLElement).focus()
+                apply(tile, -1)
+              }}><MinusGlyph /></button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="ledger-status" aria-live="polite">
+        {last && (
+          <span>{last.text} · <button type="button" className="ledger-undo" onClick={() => {
+            // The line unmounts with the undo, so keep focus in the editor.
+            tabsRef.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus()
+            onUndo()
+          }}>Undo</button></span>
+        )}
+        <span>
+          <b>{standing.settlements}</b> {standing.settlements === 1 ? 'settlement' : 'settlements'} · <b>{cities}</b> {cities === 1 ? 'city' : 'cities'}
+          {' · '}<span className={standing.hasLongestRoad ? 'award' : undefined}>Longest road <b>{standing.longestRoad}</b></span>
+        </span>
+      </div>
+    </div>
   )
 }

@@ -132,7 +132,7 @@ What differs on the phone:
 - `Play card` uses the desktop's questions naming the active player, wrapping chips, robber question and hint, Year of plenty counted cells that record on the second card, and Monopoly player tiles with known-to-possible caps, minus buttons, a muted total and outlined check Record. Road building's two fixed slots are 44px tall, the last placed road has a corner minus, and the second road records; the outlined check button also records zero or one road.
 - `Build` uses wrapping chips with the active player's outlined piece glyph beside the name and the cost below it, then the question and hint for the board pick. Costs remain visible without selecting a chip.
 - The newest action-log entry has a curved SVG arrow and `Undo` at its right only when the current game is a recorded action; it uses the heading's undo and has a 36px minimum height.
-- The Ledger uses columns `100px 1fr 36px 36px` with a 6px gap. The Ledger's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
+- The Ledger uses columns `100px 1fr 36px 36px` with a 6px gap. The Ledger's row editor is the only place to correct a hand on the phone. Its tiles are 68px tall, its tabs 44px and its Undo 36px.
 - A build or a robber move that needs a spot scrolls the board into view, as selecting a row does (S5).
 
 ## Behaviours that are not CSS

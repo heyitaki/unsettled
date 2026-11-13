@@ -217,7 +217,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const claimNote = board.mePlayerId === null ? <li>Claim yourself in Players to track your exact cards</li> : null
   const ledger = (
     <section className={`${className} best-moves-panel ledger-panel`}>
-      <Ledger game={game} activeId={activeId} commit={commit} />
+      <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={commit} onUndo={() => dispatch({ type: 'undo' })} />
     </section>
   )
   if (!active || activeId === null) return (

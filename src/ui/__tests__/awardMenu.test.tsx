@@ -99,7 +99,7 @@ it.each([true, false])('corrects a tied award in one undo step with an active pl
 })
 
 it.each([[0, 0], [2, 2], [3, 2], [3, 4]])('hides the menu without a qualifying tie at %i and %i knights', async (first, second) => {
-  await act(async () => root.render(<Ledger game={army(first, second)} activeId="aki" commit={() => {}} />))
+  await act(async () => root.render(<Ledger game={army(first, second)} activeId="aki" previous={undefined} commit={() => {}} onUndo={() => {}} />))
   expect(container.querySelector('[aria-label="Award holders"]')).toBeNull()
 })
 
@@ -110,7 +110,7 @@ it('lists both tied awards in award and seat order and marks their incumbents', 
   for (const edge of hexEdgeIds({ q: 2, r: -2 }).slice(0, 5)) board = placeRoad(board, edge, 'b')
   game = { ...game, board, awards: { longestRoad: 'aki', largestArmy: 'b' } }
   const commit = vi.fn<(game: Game) => void>()
-  await act(async () => root.render(<Ledger game={game} activeId="aki" commit={commit} />))
+  await act(async () => root.render(<Ledger game={game} activeId="aki" previous={undefined} commit={commit} onUndo={() => {}} />))
   await click('Award holders')
   expect(choices().map((choice) => choice.textContent)).toEqual([
     'Longest road: aki', 'Longest road: Bee', 'Longest road: Unknown',

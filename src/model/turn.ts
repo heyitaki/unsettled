@@ -208,7 +208,8 @@ export function adjustDevHand(game: Game, list: 'playable' | 'bought', kind: Dev
   const stats = ensureStats(game, playerId)
   const current = devHandFor(game, playerId)
   const devHand = { ...current, [list]: { ...current[list], [kind]: Math.max(0, current[list][kind] + delta) } }
-  const devCards = devHandTotal(devHand)
+  // Move the public count by the typed change only, so cards of unknown type stay counted.
+  const devCards = stats.devCards + devHandTotal(devHand) - devHandTotal(current)
   return { ...withStats(game, playerId, { ...stats, devCards }), devHand }
 }
 

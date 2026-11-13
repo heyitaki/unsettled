@@ -40,7 +40,7 @@ it('renders the Ledger hands, dev pills and awards, with one inline row editor',
   game = adjustCounter(adjustCounter(game, 'aki', 'knights', 3), 'b', 'knights', 3)
   game = adjustCounter(adjustCounter(adjustHand(game, 'b', 'ore', 1), 'b', 'handUnknown', 2), 'b', 'devCards', 3)
   game = { ...game, awards: { longestRoad: null, largestArmy: 'aki' } }
-  await act(async () => root.render(<Ledger game={game} activeId="b" commit={() => {}} />))
+  await act(async () => root.render(<Ledger game={game} activeId="b" previous={undefined} commit={() => {}} onUndo={() => {}} />))
   expect([...container.querySelectorAll('.ledger-header > span')].map((cell) => cell.textContent)).toEqual(['', 'Hand', 'Cards', 'VP'])
   expect(container.querySelector('.ledger-header')?.getAttribute('aria-hidden')).toBe('true')
   const rows = container.querySelectorAll('.ledger-row')
@@ -48,14 +48,14 @@ it('renders the Ledger hands, dev pills and awards, with one inline row editor',
   for (const row of rows) {
     const toggle = row.querySelector('.ledger-toggle')!
     const ids = toggle.getAttribute('aria-describedby')?.split(/\s+/) ?? []
-    expect(ids).toHaveLength(4)
+    expect(ids).toHaveLength(row.querySelector('.ledger-dev') ? 5 : 4)
     const descriptions = ids.map((id) => document.getElementById(id))
     for (const description of descriptions) {
       expect(description).not.toBeNull()
       expect(toggle.contains(description)).toBe(true)
     }
-    expect(descriptions).toEqual(['.ledger-player', '.ledger-hand', '.ledger-cards', '.ledger-vp']
-      .map((selector) => toggle.querySelector(selector)))
+    expect(descriptions).toEqual(['.ledger-player', '.ledger-hand', '.ledger-cards', '.ledger-vp', '.ledger-dev']
+      .slice(0, ids.length).map((selector) => toggle.querySelector(selector)))
   }
   const [mine, rival, empty] = rows
   expect(rival.classList.contains('active')).toBe(true)
@@ -73,23 +73,37 @@ it('renders the Ledger hands, dev pills and awards, with one inline row editor',
   expect(pills[0].querySelector('.ledger-dev-count')).toBeNull()
   expect(pills[1].querySelector('.ledger-dev-count')?.textContent?.trim()).toBe('2')
   expect(pills[3].getAttribute('title')).toBe('Bought this turn, playable next turn')
-  expect(pills[0].closest('button')).toBeNull()
+  expect(pills[0].closest('.ledger-toggle')).not.toBeNull()
   expect(empty.querySelector('.ledger-dev')).toBeNull()
 
   const toggle = mine.querySelector<HTMLButtonElement>('[aria-label="Correct aki"]')!
   await act(async () => toggle.click())
   expect(toggle.getAttribute('aria-expanded')).toBe('true')
-  expect(mine.querySelector('.ledger-stats')?.textContent).toBe('0 settlements0 citiesLongest road 03 knights played6 dev cards')
-  expect(mine.querySelector('.ledger-stats .award')?.textContent).toBe('3 knights played')
-  expect(mine.querySelector('.ledger-stats')?.closest('button')).toBeNull()
-  expect(mine.querySelector('[aria-label="More Knight"]')).not.toBeNull()
-  expect(mine.querySelector('[aria-label="More wheat"]')).not.toBeNull()
-  expect(mine.textContent).toContain('Each change is one undo step')
+  expect(mine.querySelector('.ledger-dev')).toBeNull()
+  const tabs = () => [...container.querySelectorAll('.ledger-tab')]
+  const tiles = () => [...container.querySelectorAll('.ledger-tile')].map((tile) => tile.querySelector('.ledger-tile-label')?.textContent)
+  expect(tabs().map((tab) => tab.textContent)).toEqual(['Hand 3', 'Dev cards 6', 'Points'])
+  expect(tabs()[0].getAttribute('aria-pressed')).toBe('true')
+  expect(tiles()).toEqual(['Wood', 'Sheep', 'Wheat', 'Brick', 'Ore', 'Unseen'])
+  expect(mine.querySelector('[aria-label="Add one Wheat, now 2"]')).not.toBeNull()
+  expect(mine.querySelector('[aria-label="Take one Wheat back"]')).not.toBeNull()
+  expect(mine.querySelector('[aria-label="Take one Wood back"]')).toBeNull()
+  expect(mine.querySelector('.ledger-status')?.textContent).toBe('0 settlements · 0 cities · Longest road 0')
+  await act(async () => (tabs()[1] as HTMLButtonElement).click())
+  expect(tiles()).toEqual(['Knight', 'Road building', 'Year of plenty', 'Monopoly', 'Unknown'])
+  expect(mine.querySelector('[aria-label="Add one unknown dev card, now 2"]')).not.toBeNull()
+  expect([...mine.querySelectorAll('.ledger-tile-new')].map((note) => note.textContent)).toEqual(['1 new'])
+  await act(async () => (tabs()[2] as HTMLButtonElement).click())
+  expect(tiles()).toEqual(['Knights played', 'Victory points'])
+  expect(mine.querySelector('.ledger-tile-count.award')?.textContent).toBe('3')
   await act(async () => rival.querySelector<HTMLButtonElement>('.ledger-toggle')!.click())
   expect(toggle.getAttribute('aria-expanded')).toBe('false')
   expect(mine.querySelector('.ledger-edit')).toBeNull()
-  expect(rival.querySelector('[aria-label="More Dev"]')).not.toBeNull()
-  await act(async () => rival.querySelector<HTMLButtonElement>('.ledger-done')!.click())
+  expect(tabs()[0].getAttribute('aria-pressed')).toBe('true')
+  await act(async () => (tabs()[1] as HTMLButtonElement).click())
+  expect(tiles()).toEqual(['Unknown'])
+  expect(rival.querySelector('[aria-label="Add one unknown dev card, now 3"]')).not.toBeNull()
+  await act(async () => rival.querySelector<HTMLButtonElement>('.ledger-toggle')!.click())
   expect(container.querySelector('.ledger-edit')).toBeNull()
   expect(container.querySelector('[aria-expanded="true"]')).toBeNull()
 })
