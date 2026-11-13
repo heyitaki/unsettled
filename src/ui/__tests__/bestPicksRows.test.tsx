@@ -264,28 +264,23 @@ describe('Best picks rows', () => {
     const side = small ? 11.5 : 14
     const k = side / 14
     const fixtures = [
-      { fill: TOKEN_COLOR, text: '3:1', ink: INK_COLOR, land: { q: -1, r: 2 }, sea: { q: -1, r: 3 } },
-      { fill: TILE_COLORS.ore, text: '2:1', ink: TOKEN_COLOR, land: { q: -2, r: 0 }, sea: { q: -3, r: 0 } },
+      { fill: 'none', stroke: INK_COLOR, text: '3:1', land: { q: -1, r: 2 }, sea: { q: -1, r: 3 } },
+      { fill: TILE_COLORS.ore, stroke: null, text: '', land: { q: -2, r: 0 }, sea: { q: -3, r: 0 } },
     ]
-    fixtures.forEach(({ fill, text, ink, land, sea }, index) => {
+    fixtures.forEach(({ fill, stroke, text, land, sea }, index) => {
       const parts = tiles(spots[index])
       expect(parts).toHaveLength(2)
       const port = spots[index].querySelector('g.spot-tile.spot-port')!
       expect(port).not.toBeNull()
       expect(parts[1]).toBe(port)
-      expect(port.querySelector('polygon, circle')).toBeNull()
-      const rect = port.querySelector('rect')!
-      expect(rect.getAttribute('fill')).toBe(fill)
-      expect(rect.getAttribute('stroke')).toBe(INK_COLOR)
-      for (const [attribute, expected] of Object.entries({ x: -10, y: -6, width: 20, height: 12, rx: 6, 'stroke-width': 1 })) {
-        expect(Number(rect.getAttribute(attribute))).toBeCloseTo(expected * k, 8)
-      }
-      const label = port.querySelector('text')!
-      expect(label.textContent).toBe(text)
-      expect(label.getAttribute('text-anchor')).toBe('middle')
-      expect(label.getAttribute('fill')).toBe(ink)
-      expect(Number(label.getAttribute('y'))).toBeCloseTo(2.7 * k, 8)
-      expect(parseFloat(label.style.fontSize)).toBeCloseTo(7.5 * k, 8)
+      expect(port.querySelector('polygon')).toBeNull()
+      const token = port.querySelector('circle')!
+      expect(token.getAttribute('fill')).toBe(fill)
+      expect(token.getAttribute('stroke')).toBe(stroke)
+      expect(Number(token.getAttribute('r'))).toBeCloseTo(7.6 * k, 8)
+      // A generic port spells its rate; a 2:1 resource port shows only its icon.
+      expect(port.textContent).toBe(text)
+      expect(port.querySelector('g') !== null).toBe(text === '')
       expectOffset(parts[0], port, land, sea, side)
     })
   })

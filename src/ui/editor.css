@@ -307,7 +307,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 @keyframes analysis-loading-in { from { opacity: 0; } }
 .analysis-body .analysis-stale * { color: transparent !important; transition: color .2s .12s, background-color .2s .12s, border-color .2s .12s, opacity .2s .12s, fill .2s .12s, stroke .2s .12s; }
 .analysis-stale :is(.analysis-score, .analysis-availability, .analysis-contest, .analysis-touch-select), .analysis-stale .pick-ledger :is(.analysis-follow-spot > span:first-child, .analysis-factors > span) { border-radius: var(--radius); background-color: var(--tint); }
-.analysis-stale .spot-tiles :is(polygon, .spot-port > rect) { fill: var(--tint); stroke: transparent; }
+.analysis-stale .spot-tiles :is(polygon, .spot-port > circle) { fill: var(--tint); stroke: transparent; }
 .analysis-stale .spot-tiles :is(circle, text), .analysis-stale .spot-tile > g { opacity: 0; }
 .analysis-stale .analysis-placeholder :is(p, p + span) { border-radius: var(--radius); background-color: var(--line); }
 .analysis-stale .analysis-rank { border-color: transparent; background-color: var(--tint) !important; }

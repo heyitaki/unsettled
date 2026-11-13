@@ -77,54 +77,60 @@ export function DesertGlyph() {
 
 /** A hand resource: a flat terrain-coloured mark with its ink details. */
 export function ResourceGlyph({ resource }: { resource: Resource }) {
-  const fill = TILE_COLORS[resource]
-  const shell = {
-    className: 'stat-icon',
-    viewBox: GRID,
-    'aria-hidden': true,
-  }
+  return (
+    <svg className="stat-icon" viewBox={GRID} aria-hidden>
+      <ResourceMarks resource={resource} />
+    </svg>
+  )
+}
+
+/**
+ * The marks of a resource glyph on its 20-unit grid, for a caller that places them itself. A
+ * `tone` draws every mark in that one colour, as the board's port tokens do.
+ */
+export function ResourceMarks({ resource, tone }: { resource: Resource; tone?: string }) {
+  const fill = tone ?? TILE_COLORS[resource]
+  const ink = tone ?? PIECE_INK
   switch (resource) {
     case 'wood': // pine over a dark trunk
       return (
-        <svg {...shell}>
-          <rect x="8.9" y="12.6" width="2.2" height="5.4" rx=".7" fill={PIECE_INK} />
+        <>
+          <rect x="8.9" y="12.6" width="2.2" height="5.4" rx=".7" fill={ink} />
           <path d="M10 2.2 14.8 9.2H5.2Z" fill={fill} />
           <path d="M10 6.6 16.2 14.4H3.8Z" fill={fill} />
-        </svg>
+        </>
       )
     case 'sheep': // fleece body, dark head and legs
       return (
-        <svg {...shell}>
-          <path d="M6.6 15.2v2.4M12.2 15.2v2.4" stroke={PIECE_INK} strokeWidth="1.6" strokeLinecap="round" />
+        <>
+          <path d="M6.6 15.2v2.4M12.2 15.2v2.4" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
           <ellipse cx="9.4" cy="11" rx="5.6" ry="4.4" fill={fill} />
-          <circle cx="15" cy="8.4" r="2.8" fill={PIECE_INK} />
-        </svg>
+          <circle cx="15" cy="8.4" r="2.8" fill={ink} />
+        </>
       )
     case 'wheat': // three grain heads on a bound stalk
       return (
-        <svg {...shell}>
-          <path d="M10 18.6v-5.4M10 14.8 6.4 12.4M10 14.8l3.6-2.4" fill="none" stroke={PIECE_INK} strokeWidth="1.4" strokeLinecap="round" />
+        <>
+          <path d="M10 18.6v-5.4M10 14.8 6.4 12.4M10 14.8l3.6-2.4" fill="none" stroke={ink} strokeWidth="1.4" strokeLinecap="round" />
           <ellipse cx="10" cy="6.2" rx="2.5" ry="4.9" fill={fill} />
           <ellipse cx="4.6" cy="8.4" rx="2.2" ry="4.3" fill={fill} transform="rotate(-30 4.6 8.4)" />
           <ellipse cx="15.4" cy="8.4" rx="2.2" ry="4.3" fill={fill} transform="rotate(30 15.4 8.4)" />
-        </svg>
+        </>
       )
     case 'brick': // two courses in a running bond
       return (
-        <svg {...shell}>
+        <>
           <rect x="3.5" y="5.9" width="13" height="4" rx=".7" fill={fill} />
           <rect x="3.5" y="10.8" width="5.6" height="4" rx=".7" fill={fill} />
           <rect x="10.9" y="10.8" width="5.6" height="4" rx=".7" fill={fill} />
-        </svg>
+        </>
       )
     default: // ore — a pickaxe, ore-coloured head on a dark handle
       return (
-        <svg {...shell}>
-          <g transform="rotate(-40 10 10)">
-            <rect x="9" y="7.2" width="2" height="11" rx=".7" fill={PIECE_INK} />
-            <path d="M2.6 9C6 3.8 14 3.8 17.4 9 13.6 6.6 6.4 6.6 2.6 9Z" fill={fill} stroke={fill} strokeWidth="1.4" strokeLinejoin="round" />
-          </g>
-        </svg>
+        <>
+          <rect x="9" y="7.2" width="2" height="11" rx=".7" fill={ink} transform="rotate(-40 10 10)" />
+          <path d="M2.6 9C6 3.8 14 3.8 17.4 9 13.6 6.6 6.4 6.6 2.6 9Z" fill={fill} stroke={fill} strokeWidth="1.4" strokeLinejoin="round" transform="rotate(-40 10 10)" />
+        </>
       )
   }
 }

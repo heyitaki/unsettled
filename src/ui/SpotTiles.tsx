@@ -1,8 +1,8 @@
 import { isRedToken } from '../model/board'
 import { axialToPixel } from '../model/coords'
 import type { Board, VertexId } from '../model/types'
-import { BLANK_TILE_COLOR, INK_COLOR, readableInk, TILE_COLORS, TOKEN_COLOR } from './colors'
-import { DesertGlyph } from './glyphs'
+import { BLANK_TILE_COLOR, INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { DesertGlyph, ResourceMarks } from './glyphs'
 import { vertexDescription, vertexParts } from './vertexParts'
 
 const PICK_TILE_SIDE = 14
@@ -37,11 +37,26 @@ export function SpotTiles({ board, vertexId, small = false }: { board: Board; ve
         const { x, y } = centres[index]
         const transform = `translate(${x - left} ${y - top})`
         if (part.kind === 'port') {
-          const fill = part.tile === null ? TOKEN_COLOR : TILE_COLORS[part.tile]
+          // The board's port token at number-token size. A port for any resource is an open ring,
+          // drawn in ink because the board's paper ring would vanish on the panel.
+          const rate = <text textAnchor="middle" y={2.3 * k} fill={part.tile === null ? INK_COLOR : TOKEN_COLOR} style={{ fontSize: 6.5 * k }}>{part.rate}:1</text>
           return (
             <g key={index} className="spot-tile spot-port" transform={transform}>
-              <rect x={-10 * k} y={-6 * k} width={20 * k} height={12 * k} rx={6 * k} strokeWidth={k} stroke={INK_COLOR} fill={fill} />
-              <text textAnchor="middle" y={2.7 * k} fill={readableInk(fill)} style={{ fontSize: 7.5 * k }}>{part.rate}:1</text>
+              {part.tile === null ? (
+                <>
+                  <circle r={7.6 * k} fill="none" stroke={INK_COLOR} strokeWidth={k} />
+                  {rate}
+                </>
+              ) : (
+                <>
+                  <circle r={7.6 * k} fill={TILE_COLORS[part.tile]} />
+                  {part.rate === 2 ? (
+                    <g transform={`translate(${-5.5 * k} ${-5.5 * k}) scale(${0.55 * k})`}>
+                      <ResourceMarks resource={part.tile} tone={TOKEN_COLOR} />
+                    </g>
+                  ) : rate}
+                </>
+              )}
             </g>
           )
         }

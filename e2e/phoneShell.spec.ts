@@ -141,16 +141,19 @@ test('the window is the only scroller and nothing overflows sideways', async ({ 
   await snap(page, 'page')
 })
 
-test('the analysis block opens with a ribbon of every pick and the board sits in a square sea', async ({ page }) => {
+test('the analysis block opens with a ribbon of every pick and the sea frame takes the board\'s proportions', async ({ page }) => {
   await open(page)
   await randomizePhoneBoard(page)
   const players = await page.locator('.head-dot').count()
   const slots = page.locator('.phone-analysis .draft-ribbon-slot')
   await expect(slots).toHaveCount(players * 2)
   await expect(slots.first()).toHaveClass(/\bviewing\b/)
-  const frame = await page.locator('.board-canvas').boundingBox()
+  const canvas = page.locator('.board-canvas')
+  const frame = await canvas.boundingBox()
   expect(frame).not.toBeNull()
-  expect(Math.abs(frame!.width - frame!.height)).toBeLessThanOrEqual(1)
+  // Square for content wider than tall, the content's own ratio otherwise (mobile spec S3).
+  const [, , width, height] = (await canvas.getAttribute('viewBox'))!.split(' ').map(Number)
+  expect(Math.abs(frame!.height - frame!.width / Math.min(1, width / height))).toBeLessThanOrEqual(1)
   await snap(page, 'ribbon-board')
 })
 

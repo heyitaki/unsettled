@@ -46,8 +46,8 @@ It leaves with the analysis block in build mode; nothing sits between the header
 
 The board sits in a sea frame with the 6px `--radius` and no shadow, the full width of the pane, sharing the `--gutter` the sections below use. The SVG paint stays fixed.
 
-- The frame is **square when the board's own content is wider than it is tall, and takes the content's proportions when it is not**: `aspect-ratio: min(1, contentWidth / contentHeight)`. `standard4` is wider than tall, so it keeps the square that gives it even margins; `extension6` is taller, so it gets a taller frame instead of shrinking to fit a square (which clipped its harbours).
-- Content bounds include the port chips, not just the hexes.
+- The frame is **square when the board's own content is wider than it is tall, and takes the content's proportions when it is not**: `aspect-ratio: min(1, contentWidth / contentHeight)`. Since the round port tokens, `standard4` is under 1% taller than wide, so its frame is a hair taller than square; `extension6` is clearly taller, so it gets a taller frame instead of shrinking to fit a square (which clipped its harbours).
+- Content bounds include the port tokens, not just the hexes.
 - No height cap. A cap makes the SVG shrink away from both gutters.
 
 Settlements show the same `1` and `2` order numbers inside the piece as desktop while the draft is in progress. The numbers are decoration and do not intercept taps.

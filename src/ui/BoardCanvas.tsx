@@ -35,7 +35,7 @@ import {
 } from '../model/board'
 import type { AxialCoord, Board, BuildingTier, EdgeId, Port, VertexId } from '../model/types'
 import { BLANK_TILE_COLOR, INK_COLOR, readableInk, SEA_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
-import { NumberTokenFace, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
+import { NumberTokenFace, ResourceMarks, ROBBER_BODY, ROBBER_HEAD_CY, ROBBER_HEAD_R, TokenPips } from './glyphs'
 import { overlayOpen } from './overlayPosition'
 import { buildingSlots, clickTarget, newPortEdges, nextBuildingTier, roadSlots } from './placementSlots'
 import { activeTab, useStore, type HighlightMark } from './store'
@@ -56,13 +56,16 @@ const SIZE = 58
 const REPEAT_DISTANCE = 10
 const DIRECT_DISTANCE = 8
 const PAN_THRESHOLD = 8
-// How far the port bubble sits beyond its coastal edge, along the outward
-// normal. A full apothem (SIZE·√3/2) would center it on the phantom neighbour
-// hex, making the leaders equilateral; squashing flattens that triangle.
-const PORT_TRIANGLE_SQUASH = 0.7
-const PORT_OFFSET = (SIZE * Math.sqrt(3)) / 2 * PORT_TRIANGLE_SQUASH
-const PORT_HALF_W = 25
-const PORT_HALF_H = 13
+const PORT_RADIUS = 14
+const PORT_RIM = 2.5
+const PORT_EXTENT = PORT_RADIUS + PORT_RIM / 2
+// How far a port token's centre sits beyond its coastal edge, along the outward normal: at least
+// twice its extent, so every point of the token is nearer the port than the coastal road's midpoint.
+const PORT_OFFSET = 31
+// The hover ring clears a port token's rim instead of sitting on it.
+const PORT_HOVER_RADIUS = PORT_EXTENT + 4
+// A pier starts this far from its corner, under where a building would sit.
+const PIER_CORNER_GAP = 7
 const PORT_DOT_COARSE = 3.6
 const PORT_DOT_FINE = 2.8
 // Sea margin kept around the outermost drawn content on every side.
@@ -130,7 +133,7 @@ const PORT_REF_PREFIX = 'port:'
 const portRef = (edgeId: EdgeId): string => `${PORT_REF_PREFIX}${edgeId}`
 const parsePortRef = (ref: string): EdgeId | null => ref.startsWith(PORT_REF_PREFIX) ? ref.slice(PORT_REF_PREFIX.length) as EdgeId : null
 
-/** Pushes the badge away from its land hex so a building on the edge never covers it. */
+/** Pushes the token away from its land hex so a building on the edge never covers it. */
 function portGeometry(edgeId: EdgeId, landKeys: ReadonlySet<string>) {
   const [a, b] = edgeEndpointVertexIds(edgeId).map(vertexPoint)
   const mid = midpoint([a, b])
@@ -138,14 +141,17 @@ function portGeometry(edgeId: EdgeId, landKeys: ReadonlySet<string>) {
   const landCenter = center(landKeys.has(axialKey(c1)) ? c1 : c2)
   const outward = { x: mid.x - landCenter.x, y: mid.y - landCenter.y }
   const length = Math.max(1, Math.hypot(outward.x, outward.y))
-
-  // The pill reaches further toward vertical edges, so add enough offset to keep the sea gap even.
-  const offset = PORT_OFFSET + (PORT_HALF_W - PORT_HALF_H) * (Math.abs(outward.x) / length - 0.5)
   const point = {
-    x: mid.x + (outward.x / length) * offset,
-    y: mid.y + (outward.y / length) * offset,
+    x: mid.x + (outward.x / length) * PORT_OFFSET,
+    y: mid.y + (outward.y / length) * PORT_OFFSET,
   }
   return { a, b, point }
+}
+
+/** The point `distance` along the line from `from` toward `to`. */
+function toward(from: Point, to: Point, distance: number): Point {
+  const length = Math.max(1, Math.hypot(to.x - from.x, to.y - from.y))
+  return { x: from.x + (to.x - from.x) / length * distance, y: from.y + (to.y - from.y) / length * distance }
 }
 
 /** A road's drawn length, centre and angle; the hover preview shares it so the two cannot drift. */
@@ -249,9 +255,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const portSlots = useMemo(() => newPortEdges(board).map((edgeId) => ({
     edgeId, ref: portRef(edgeId), ...portGeometry(edgeId, grid.landKeys).point,
   })), [board, grid])
-  // Fit the viewBox to everything drawn (hexes + port bubbles + placed buildings)
-  // plus an even margin, so the board is centered in the sea with room for the
-  // port leaders and no edge piece gets clipped.
+  // Fit the viewBox to everything drawn (hexes + port tokens + placed buildings)
+  // plus an even margin, so the board is centered in the sea and no edge piece gets clipped.
   const viewBox = useMemo(() => {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
     const include = (x: number, y: number) => {
@@ -269,16 +274,14 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         include(point.x + SIZE * Math.cos(angle), point.y + SIZE * Math.sin(angle))
       }
     }
-    for (const { point } of ports) includeBox(point, PORT_HALF_W, PORT_HALF_H)
+    for (const { point } of ports) includeBox(point, PORT_EXTENT, PORT_EXTENT)
 
-    // An empty default port spot reserves its badge, so deleting or restoring that
+    // An empty default port spot reserves its token, so deleting or restoring that
     // port leaves the frame alone. Any other open spot reserves only its dot.
     const defaultEdges = new Set(defaultPortEdges(board.layout))
     for (const slot of portSlots) {
-      const badge = defaultEdges.has(slot.edgeId)
-      const halfWidth = badge ? PORT_HALF_W : PORT_DOT_COARSE
-      const halfHeight = badge ? PORT_HALF_H : PORT_DOT_COARSE
-      includeBox(slot, halfWidth, halfHeight)
+      const reach = defaultEdges.has(slot.edgeId) ? PORT_EXTENT : PORT_DOT_COARSE
+      includeBox(slot, reach, reach)
     }
     for (const building of board.buildings) includeBox(vertexPoint(building.vertexId), PIECE_REACH, PIECE_REACH)
     return {
@@ -714,18 +717,49 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     )
   }, [board.robber, board.hexes])
-  const portLayer = useMemo(() => ports.map(({ port, a, b, point }) => {
-    const fill = port.resource ? TILE_COLORS[port.resource] : TOKEN_COLOR
-    const ink = port.resource ? readableInk(TILE_COLORS[port.resource]) : INK_COLOR
+  // A resource port is a token in its terrain colour with the icon in paper, and a port for any
+  // resource is an open paper ring with its rate. Each pier fades out toward its corner.
+  const portLayer = useMemo(() => ports.map(({ port, a, b, point }, index) => {
+    const rate = `${port.rate}:1`
     return (
       <g
         key={portRef(port.edgeId)}
-        className={highlightSet.has(port.edgeId) ? 'highlighted' : ''}
+        className={highlightSet.has(port.edgeId) ? 'board-port highlighted' : 'board-port'}
+        data-resource={port.resource ?? 'any'}
+        data-rate={port.rate}
       >
-        <line x1={a.x} y1={a.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
-        <line x1={b.x} y1={b.y} x2={point.x} y2={point.y} stroke={TOKEN_COLOR} strokeWidth="2" strokeDasharray="5 5" />
-        <rect x={point.x - PORT_HALF_W} y={point.y - PORT_HALF_H} width={PORT_HALF_W * 2} height={PORT_HALF_H * 2} rx={PORT_HALF_H} fill={fill} stroke={TOKEN_COLOR} strokeWidth="2.5" />
-        <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={ink}>{port.rate}:1</text>
+        {[a, b].map((corner, end) => {
+          const start = toward(corner, point, PIER_CORNER_GAP)
+          const stop = toward(point, corner, PORT_EXTENT + 0.25)
+          const gradient = `port-pier-${index}-${end}`
+          return (
+            <g key={end}>
+              <linearGradient id={gradient} gradientUnits="userSpaceOnUse" x1={start.x} y1={start.y} x2={stop.x} y2={stop.y}>
+                <stop offset="0" stopColor={TOKEN_COLOR} stopOpacity="0.1" />
+                <stop offset="1" stopColor={TOKEN_COLOR} />
+              </linearGradient>
+              <line x1={start.x} y1={start.y} x2={stop.x} y2={stop.y} stroke={`url(#${gradient})`} strokeWidth="3.2" strokeLinecap="round" />
+            </g>
+          )
+        })}
+        {/* `transparent`, not `none`, so the open ring's centre still takes the pointer. */}
+        <circle className="port-token" cx={point.x} cy={point.y} r={PORT_RADIUS} fill={port.resource ? TILE_COLORS[port.resource] : 'transparent'} stroke={TOKEN_COLOR} strokeWidth={PORT_RIM} />
+        {/* The token's contents leave the pointer to the token itself. */}
+        {port.resource === null ? (
+          <text x={point.x} y={point.y + 4} textAnchor="middle" className="port-text" fill={TOKEN_COLOR} pointerEvents="none">{rate}</text>
+        ) : port.rate === 2 ? (
+          <svg x={point.x - 9} y={point.y - 9} width="18" height="18" viewBox="0 0 20 20" pointerEvents="none">
+            <ResourceMarks resource={port.resource} tone={TOKEN_COLOR} />
+          </svg>
+        ) : (
+          // Only an unusual rate is spelled out on a resource port.
+          <g pointerEvents="none">
+            <svg x={point.x - 6.5} y={point.y - 10.5} width="13" height="13" viewBox="0 0 20 20">
+              <ResourceMarks resource={port.resource} tone={TOKEN_COLOR} />
+            </svg>
+            <text x={point.x} y={point.y + 10} textAnchor="middle" className="port-text" fill={TOKEN_COLOR} style={{ fontSize: 8.5 }}>{rate}</text>
+          </g>
+        )}
       </g>
     )
   }), [ports, highlightSet])
@@ -1017,7 +1051,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               strokeOpacity={0.75}
               strokeWidth={PIECE_STROKE}
             />}
-            {hover && !preview && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
+            {hover && !preview && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={hoverPort ? PORT_HOVER_RADIUS : 16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
           </g>
         </g>
       </svg>

@@ -113,7 +113,7 @@ test('award corrections survive undo, redo and reload', async ({ page }) => {
 
 test('tapping a port badge in build mode deletes the port', async ({ page }) => {
   await page.goto('')
-  const badges = page.locator('.board-canvas .port-text')
+  const badges = page.locator('.board-canvas .port-token')
   await expect(badges.first()).toBeVisible()
   const count = await badges.count()
   await page.getByRole('button', { name: 'Edit the board' }).click()

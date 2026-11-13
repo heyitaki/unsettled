@@ -617,7 +617,7 @@ test.describe('desktop', () => {
     await openBuild(page)
     await expect(tools.locator('button.selected:not(.layout-grid button)')).toHaveCount(0)
     const svg = page.locator('.board-canvas')
-    const badges = svg.locator('.port-text')
+    const badges = svg.locator('.port-token')
     const count = await badges.count()
     const badge = badges.first()
     await badge.hover()

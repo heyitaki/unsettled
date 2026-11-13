@@ -64,9 +64,9 @@ test('a tap on a tile with its own terrain selected blanks it and removes its ro
 })
 
 async function portPoint(page: Page, index: number) {
-  return page.locator('.board-canvas .port-text').nth(index).evaluate((badge) => ({
-    x: Number(badge.getAttribute('x')),
-    y: Number(badge.getAttribute('y')) - 4,
+  return page.locator('.board-canvas .port-token').nth(index).evaluate((token) => ({
+    x: Number(token.getAttribute('cx')),
+    y: Number(token.getAttribute('cy')),
   }))
 }
 
@@ -74,11 +74,11 @@ test('with no tool a port tap removes the port and a tap on its empty spot adds 
   await page.goto('')
   await page.getByRole('button', { name: 'Edit the board' }).click()
   const svg = page.locator('.board-canvas')
-  const badges = svg.locator('.port-text')
-  const generic = svg.locator('.port-text', { hasText: '3:1' })
+  const badges = svg.locator('.board-port')
+  const generic = svg.locator('.board-port[data-resource="any"]')
   const count = await badges.count()
   const genericCount = await generic.count()
-  const wasGeneric = (await badges.first().textContent()) === '3:1'
+  const wasGeneric = (await badges.first().getAttribute('data-resource')) === 'any'
   const point = await portPoint(page, 0)
   await clickPoint(page, point)
   await expect(badges).toHaveCount(count - 1)
@@ -93,24 +93,24 @@ test('a picked terrain turns a tapped port 2:1 for it and a second tap makes it 
   await seedBoard(page, { ports: board.ports.map((port) => ({ ...port, resource: null, rate: 3 })) })
   await page.getByRole('button', { name: 'Edit the board' }).click()
   const svg = page.locator('.board-canvas')
-  const badge = svg.locator('g:has(> .port-text)').first()
+  const badge = svg.locator('.board-port').first()
   const point = await portPoint(page, 0)
   const tools = page.locator('.tools-panel')
   await tools.getByRole('button', { name: 'wheat', exact: true }).click()
   await clickPoint(page, point)
-  await expect(badge.locator('.port-text')).toHaveText('2:1')
-  await expect(badge.locator('rect')).toHaveAttribute('fill', TILE_COLORS.wheat)
-  await expect(svg.locator('.port-text', { hasText: '2:1' })).toHaveCount(1)
+  await expect(badge).toHaveAttribute('data-rate', '2')
+  await expect(badge.locator('.port-token')).toHaveAttribute('fill', TILE_COLORS.wheat)
+  await expect(svg.locator('.board-port[data-rate="2"]')).toHaveCount(1)
   await clickPoint(page, point)
-  await expect(badge.locator('.port-text')).toHaveText('3:1')
-  await expect(svg.locator('.port-text', { hasText: '2:1' })).toHaveCount(0)
+  await expect(badge).toHaveAttribute('data-rate', '3')
+  await expect(svg.locator('.board-port[data-rate="2"]')).toHaveCount(0)
   await clickPoint(page, point)
-  await expect(badge.locator('rect')).toHaveAttribute('fill', TILE_COLORS.wheat)
+  await expect(badge.locator('.port-token')).toHaveAttribute('fill', TILE_COLORS.wheat)
   await tools.getByRole('button', { name: 'ore', exact: true }).click()
   await clickPoint(page, point)
-  await expect(badge.locator('.port-text')).toHaveText('2:1')
-  await expect(badge.locator('rect')).toHaveAttribute('fill', TILE_COLORS.ore)
-  await expect(svg.locator('.port-text')).toHaveCount(board.ports.length)
+  await expect(badge).toHaveAttribute('data-rate', '2')
+  await expect(badge.locator('.port-token')).toHaveAttribute('fill', TILE_COLORS.ore)
+  await expect(svg.locator('.board-port')).toHaveCount(board.ports.length)
 })
 
 test('a picked terrain puts a 2:1 port on an empty coastal spot and still sets tiles', async ({ page }) => {
@@ -123,8 +123,8 @@ test('a picked terrain puts a 2:1 port on an empty coastal spot and still sets t
   const slots = svg.locator('.placement-slot')
   await expect(slots.first()).toBeVisible()
   await slots.first().click({ force: true })
-  await expect(svg.locator('.port-text')).toHaveCount(board.ports.length)
-  await expect(svg.locator(`g:has(> .port-text) rect[fill="${TILE_COLORS.brick}"]`)).toHaveCount(
+  await expect(svg.locator('.board-port')).toHaveCount(board.ports.length)
+  await expect(svg.locator(`.port-token[fill="${TILE_COLORS.brick}"]`)).toHaveCount(
     board.ports.slice(1).filter((port) => port.resource === 'brick').length + 1)
   const tiles = svg.locator(`polygon[fill="${TILE_COLORS.brick}"]`)
   const tileCount = await tiles.count()
@@ -152,9 +152,9 @@ test('desert and number tools leave ports alone', async ({ page }) => {
   await page.goto('')
   await page.getByRole('button', { name: 'Edit the board' }).click()
   const svg = page.locator('.board-canvas')
-  const count = await svg.locator('.port-text').count()
+  const count = await svg.locator('.board-port').count()
   const point = await portPoint(page, 0)
-  const first = svg.locator('g:has(> .port-text)').first()
+  const first = svg.locator('.board-port').first()
   const before = await first.innerHTML()
   const tools = page.locator('.tools-panel')
   await tools.getByRole('button', { name: 'desert', exact: true }).click()
@@ -162,7 +162,7 @@ test('desert and number tools leave ports alone', async ({ page }) => {
   await clickPoint(page, point)
   await tools.getByRole('button', { name: '6', exact: true }).click()
   await clickPoint(page, point)
-  await expect(svg.locator('.port-text')).toHaveCount(count)
+  await expect(svg.locator('.board-port')).toHaveCount(count)
   expect(await first.innerHTML()).toBe(before)
 })
 
@@ -180,7 +180,7 @@ test('deleting a default port keeps the board viewBox unchanged', async ({ page 
     const before = await svg.getAttribute('viewBox')
     const point = await portPoint(page, board.ports.findIndex((port) => port.edgeId === edgeId))
     await clickPoint(page, point)
-    await expect(svg.locator('.port-text')).toHaveCount(board.ports.length - 1)
+    await expect(svg.locator('.board-port')).toHaveCount(board.ports.length - 1)
     await expect(svg).toHaveAttribute('viewBox', before!)
   }
 })
