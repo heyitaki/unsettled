@@ -34,14 +34,14 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
   if (readOnly && editing !== null) setEditing(null)
   const standings = computeStandings(game)
   const { board } = game
-  // A tied award asks who got there first. Its holder is unknown until picked, unless one
-  // was recorded or (in a game that never recorded holders) road order settles it; picking
-  // the holder again clears it. Past views are read-only, so they show none.
+  // A tied award asks who got there first while its holder is unknown: not recorded, and (in a
+  // game that never recorded holders) not settled by road order. A pick settles it and the line
+  // goes away; undo brings it back. Past views are read-only, so they show none.
   const ties = readOnly ? [] : AWARDS.flatMap((award) => {
     const candidates = awardCandidates(game, award.kind)
     if (candidates.length < 2) return []
-    const holder = standings.find((standing) => award.kind === 'longestRoad' ? standing.hasLongestRoad : standing.hasLargestArmy)?.playerId ?? null
-    return [{ ...award, holder, candidates: candidates.map((playerId) => board.players.find((player) => player.id === playerId)!) }]
+    if (standings.some((standing) => award.kind === 'longestRoad' ? standing.hasLongestRoad : standing.hasLargestArmy)) return []
+    return [{ ...award, candidates: candidates.map((playerId) => board.players.find((player) => player.id === playerId)!) }]
   })
   const me = board.mePlayerId
   const devHand = game.devHand?.playerId === me ? game.devHand : undefined
@@ -56,19 +56,16 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
           </button>}
         </div>
       </div>
-      {ties.map(({ kind, label, medal, holder, candidates }) => (
-        <div key={kind} className={`tie-line${holder ? ' settled' : ''}`} role="group" aria-label={`${label} tie`} aria-describedby={`${id}-${kind}`}>
+      {ties.map(({ kind, label, medal, candidates }) => (
+        <div key={kind} className="tie-line" role="group" aria-label={`${label} tie`} aria-describedby={`${id}-${kind}`}>
           <span className="tie-message" id={`${id}-${kind}`}>
             <span className="ledger-medal" aria-hidden="true">{medal}</span>
-            <span>{holder
-              ? <><b>{label}</b> · {candidates.find((player) => player.id === holder)!.name} got there first</>
-              : <><b>{label} tie</b> · Who got there first?</>}</span>
+            <span><b>{label} tie</b> · Who got there first?</span>
           </span>
           <span className="tie-picks">
             {candidates.map((player) => (
-              <button key={player.id} type="button" className="tie-pick" aria-pressed={holder === player.id}
-                title={holder === player.id ? 'Pick again to clear' : undefined}
-                onClick={() => commit(setAwardHolder(game, kind, holder === player.id ? null : player.id))}>
+              <button key={player.id} type="button" className="tie-pick"
+                onClick={() => commit(setAwardHolder(game, kind, player.id))}>
                 <span className="swatch" style={{ background: player.color }} />{player.name}
               </button>
             ))}
