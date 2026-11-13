@@ -1049,10 +1049,10 @@ describe('Best moves recording', () => {
 
   it('prompts an unclaimed player to claim themselves in Players', async () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: { ...game(), board: setMe(game().board, null) } }))
-    expect(container.querySelector('.move-notes')?.textContent).toContain('Claim yourself in Players to track your exact cards')
+    expect(container.textContent).toContain('Claim yourself in Players to track your exact cards.')
     await click('Start game')
     await click('End turn')
-    expect(container.querySelector('.move-notes')?.textContent).toContain('Claim yourself in Players to track your exact cards')
+    expect(container.textContent).toContain('Claim yourself in Players to track your exact cards.')
   })
 
   it('renders the three highest offers from unsorted advice and preserves the other rows', async () => {

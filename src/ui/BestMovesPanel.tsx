@@ -206,7 +206,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
       handDelta: advice.handDelta,
     })
   }
-  const claimNote = board.mePlayerId === null ? <li>Claim yourself in Players to track your exact cards</li> : null
+  const claimNote = board.mePlayerId === null ? 'Claim yourself in Players to track your exact cards.' : null
   const ledger = (
     <section className={`${className} best-moves-panel ledger-panel`}>
       <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={commit} onUndo={() => dispatch({ type: 'undo' })}
@@ -221,12 +221,21 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         <div className="panel-heading">
           <h2>Best moves</h2>
         </div>
-        <ul className="move-notes">{claimNote}</ul>
+        {claimNote && <p className="hint">{claimNote}</p>}
         <button type="button" className="primary" onClick={() => commit(setActivePlayer(game, board.players[0].id))}>Start game</button>
       </section>
     </>
   )
   const devCards = statsFor(game, viewedId).devCards
+  // One paragraph above the advice: the not-your-turn line, then each note that applies.
+  const intro = [
+    !viewingTurn && (viewingMine
+      ? 'Not your turn. These are the moves you would make with this hand if your turn started now.'
+      : `Not ${viewed.name}'s turn. These are the moves ${viewed.name} would make with this hand if their turn started now.`),
+    claimNote,
+    derived && derived.unknownOwnCards > 0 && `${derived.unknownOwnCards} of ${viewed.name}'s cards are of unknown type and ignored.`,
+    !viewingMine && devCards > 0 && `${viewed.name}'s ${devCards} dev cards are treated as unplayed knights.`,
+  ].filter(Boolean).join(' ')
   const tiles = ACTION_TILES.filter(({ kind }) => !seven && available?.[kind])
   const noActions = !before && !seven && tray === null && !playingKnight && tiles.length === 0
   const turnGames = currentTurnHistory([...tab.past, game])
@@ -290,18 +299,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
       </section>
       <section className={`${className} best-moves-panel`}>
         <div className="panel-heading"><h2>{viewingMine ? 'Best moves' : `Best moves for ${viewed.name}`}</h2></div>
-        {!viewingTurn && <p className="hint">
-          {viewingMine
-            ? 'Not your turn. These are the moves you would make with this hand if your turn started now.'
-            : `Not ${viewed.name}'s turn. These are the moves ${viewed.name} would make with this hand if their turn started now.`}
-        </p>}
-        <ul className="move-notes">
-          {claimNote}
-          {derived && derived.unknownOwnCards > 0 && (
-            <li>{derived.unknownOwnCards} of {viewed.name}'s cards are of unknown type and ignored</li>
-          )}
-          {!viewingMine && devCards > 0 && <li>{viewed.name}'s {devCards} dev cards are treated as unplayed knights</li>}
-        </ul>
+        {intro && <p className="hint">{intro}</p>}
         {!adviceEnabled ? (
           <div className="hint">
             <p>Finish the board to get advice:</p>
