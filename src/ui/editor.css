@@ -40,6 +40,8 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .maps-panel > :not(.library-boards) { flex: none; }
 .maps-panel .panel-heading { margin-bottom: 0; }
 .panel-actions { display: flex; gap: 2px; }
+/* Pulls the forward arrow's tip, not its tap box, to the content edge. */
+.analysis-panel .panel-actions, .tools-panel .panel-actions { margin-right: -9.5px; }
 .panel-dots { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--glyph); }
 .center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel { padding: 17px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -81,19 +83,18 @@ button.danger { color: var(--danger); }
 .tool-hint { color: var(--muted); font-size: 12px; margin: 6px 0 16px; font-weight: normal; line-height: 1.35; }
 .tool-count { margin-left: auto; font-variant-numeric: tabular-nums; }
 .tool-count.short { color: var(--danger); font-weight: 700; }
-.tool-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tool-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .tool-grid button { padding: 8px 5px; font-size: 11px; text-transform: capitalize; }
-.layout-grid { grid-template-columns: repeat(2, 1fr); }
-.layout-grid button { text-transform: none; padding: 9px 5px; font-size: 12px; font-weight: 600; }
+.layout-grid button { text-transform: none; padding: 9px 16px; font-size: 12px; font-weight: 600; }
 .structure-grid { gap: 4px; }
-.structure-grid button { text-transform: none; display: grid; grid-template-rows: 22px auto; place-items: end center; gap: 3px; padding: 6px 2px; font-size: 11px; }
+.structure-grid button { text-transform: none; display: grid; grid-template-rows: 22px auto; place-items: end center; gap: 3px; padding: 6px 12px; font-size: 11px; }
 .tool-icon { flex: none; fill: currentColor; }
-.terrain-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.terrain-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; font-size: 11px; text-align: center; }
+.terrain-grid { gap: 5px; }
+.terrain-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 58px; padding: 6px 8px; font-size: 11px; text-align: center; }
 .hex-swatch { width: 20px; height: 22px; }
 .hex-swatch polygon { stroke: rgba(0,0,0,.18); stroke-width: 1; }
-.token-tools { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.token-tools button { display: grid; place-items: center; width: 100%; max-width: 54px; margin-inline: auto; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; }
+.token-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.token-tools button { display: grid; place-items: center; width: 48px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; }
 .token-tools svg { display: block; width: 100%; height: auto; }
 .token-tools .selected .token-disc { stroke: var(--accent); fill: color-mix(in srgb, var(--accent) 14%, var(--page)); }
 
@@ -574,7 +575,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   /* The lifted row tracks the finger, which easing would lag behind. The native
      drag path instead eases it into the slot it would land in. */
   .roster-row.dragging { transition: none; }
-  .terrain-grid { grid-template-columns: repeat(3, 1fr); }
   .terrain-grid button { min-height: 56px; font-size: 12px; }
   .hex-swatch { width: 28px; height: 30px; }
   .structure-grid button { grid-template-rows: 28px auto; font-size: 12px; }
@@ -660,7 +660,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .phone-shell .board-stage { padding: 4px var(--gutter) 0; }
   .phone-shell .board-canvas { aspect-ratio: min(1, var(--board-aspect)); width: 100%; height: auto; max-height: none; padding: 5px; }
   .phone-analysis .panel-dots, .phone-build .panel-dots { width: 36px; height: 44px; }
-  .phone-analysis .panel-actions, .phone-build .panel-actions { gap: 0; margin-right: -10px; }
+  .phone-analysis .panel-actions, .phone-build .panel-actions { gap: 0; margin-right: -12.5px; }
   .phone-analysis .draft-ribbon { margin: 17px 0; }
   .phone-analysis .analysis-loading { inset: 4px var(--radius) auto; height: 3px; border-radius: 2px; }
   .phone-analysis:not(.best-moves-panel) .pick-ledger { padding: 4px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -675,11 +675,12 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .block-actions { padding: 10px 14px; }
   .block-actions button { padding: 11px; }
   .phone-shell .tool-group + .tool-group { margin-top: 10px; padding-top: 10px; }
-  .phone-shell .tool-grid, .phone-shell .token-tools { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
+  .phone-shell .tool-grid, .phone-shell .token-tools { display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
   .phone-shell .tool-grid::-webkit-scrollbar, .phone-shell .token-tools::-webkit-scrollbar { height: 0; }
   .phone-shell .tool-grid button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; min-height: 0; padding: 7px 6px; border-radius: var(--radius); font-size: 11px; font-weight: 600; line-height: normal; overflow: visible; }
-  .phone-shell .structure-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow-x: visible; }
-  .phone-shell .layout-grid button { flex: 1; white-space: nowrap; padding: 11px 6px; font-size: 12px; }
+  .phone-shell .structure-grid { overflow-x: visible; }
+  .phone-shell .structure-grid button { min-width: 0; padding: 7px 12px; }
+  .phone-shell .layout-grid button { white-space: nowrap; padding: 11px 16px; font-size: 12px; }
   .phone-shell .token-tools button { flex: none; width: 42px; min-width: 42px; min-height: 0; margin: 0; }
   .phone-shell .hex-swatch { width: 21px; height: 23px; }
   .phone-shell .global-notice { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); left: 14px; right: 14px; max-width: none; padding: 11px 13px; border: 0; border-radius: var(--radius); background: var(--ink); color: var(--surface); }
