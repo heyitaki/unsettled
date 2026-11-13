@@ -30,4 +30,4 @@ Approved 2026-11-13: when the browser refuses a save for lack of space, ask the 
 | Update the prompt e2e and add the Not now then Maps clean-up e2e | done; both storageFull e2e tests pass |
 | Docs: desktop and mobile specs, CLAUDE.md `persistence/` bullet | updated for the revised design |
 | Review, typecheck, lint and `npm test` | done; typecheck and lint pass, full unit run: 1,203 passed and 44 skipped, then all 4 performance tests pass |
-| Land on main | previous implementation landed 2026-11-13; revised design awaiting the owner's look |
+| Land on main | done 2026-11-13: revised design and toast restyle landed in f34def01 |
