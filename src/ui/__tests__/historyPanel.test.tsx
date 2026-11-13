@@ -190,23 +190,29 @@ it('hides the award tie lines in a past view and labels removed players', async 
   expect(container.querySelector('.history-controls')?.textContent).toContain('Removed player rolled 8')
 })
 
-it('scrolls only the list to reveal selection and shows the heading shadow only after scrolling', async () => {
+it('scrolls only the list to reveal selection and shows each edge shadow while rows hide past it', async () => {
   await commit(seed())
   await click('History')
   const list = container.querySelector<HTMLElement>('.history-list')!
   const row = button('Turn 1: aki').closest('.history-row')!
-  Object.defineProperty(list, 'clientHeight', { value: 80 })
+  Object.defineProperties(list, { clientHeight: { value: 80 }, scrollHeight: { value: 400 } })
   Object.defineProperties(row, { offsetTop: { value: 300 }, offsetHeight: { value: 60 } })
   document.documentElement.scrollTop = 37
   await click('Turn 1: aki')
   expect(list.scrollTop).toBe(280)
   expect(document.documentElement.scrollTop).toBe(37)
-  expect(container.querySelector('.history-panel.scrolled')).not.toBeNull()
+  expect(list.classList.contains('more-above')).toBe(true)
   await act(async () => {
     list.scrollTop = 0
     list.dispatchEvent(new Event('scroll', { bubbles: true }))
   })
-  expect(container.querySelector('.history-panel.scrolled')).toBeNull()
+  expect(list.classList.contains('more-above')).toBe(false)
+  expect(list.classList.contains('more-below')).toBe(true)
+  await act(async () => {
+    list.scrollTop = 320
+    list.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+  expect(list.classList.contains('more-below')).toBe(false)
 })
 
 it('reveals a phone board only when it has scrolled past the header', async () => {

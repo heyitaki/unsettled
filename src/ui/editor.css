@@ -557,9 +557,10 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .best-moves-panel .pick-ledger .analysis-row-select { grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 3px 10px; padding: 11px 2px; }
 .best-moves-panel .pick-ledger .analysis-rank { align-self: start; margin-top: -1.5px; }
 .best-moves-panel .pick-ledger .analysis-row.current { margin-left: -8px; border: 1px solid var(--line); border-left: 0; border-radius: 0; background: var(--tint); box-shadow: inset 3px 0 0 var(--ink); }
-.best-moves-panel > :is(.hint, .move-advice-error):not(:last-child) { margin-bottom: 11px; }
-.best-moves-panel > .pick-ledger { margin-top: -6px; }
-.best-moves-panel > .pick-ledger:last-child { margin-bottom: -11px; }
+:is(.best-moves-panel, .moves-body) > :is(.hint, .move-advice-error):not(:last-child) { margin-bottom: 11px; }
+:is(.best-moves-panel, .moves-body) > .pick-ledger { margin-top: -6px; }
+:is(.best-moves-panel, .moves-body) > .pick-ledger:last-child { margin-bottom: -11px; }
+.moves-body { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; }
 .best-moves-panel .analysis-row-body { gap: 2px; margin-left: 0; justify-items: stretch; }
 .best-moves-panel .analysis-pick-line strong { font: 700 13px/1.3 Inter, sans-serif; }
 .best-moves-panel .analysis-score { font: 600 13px/1.3 Inter, sans-serif; color: var(--muted); }
@@ -596,15 +597,26 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .phone-shell .history-panel { --history-pad: var(--gutter); }
 .history-panel .panel-actions, .tools-panel .panel-actions { margin-right: -10px; }
 .history-panel .panel-heading { position: relative; z-index: 1; margin: 0 calc(-1 * var(--history-pad)); padding: 0 var(--history-pad) 10px; }
-.history-panel .panel-heading::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 12px; border-top: 1px solid rgba(45, 41, 36, .07); background: linear-gradient(rgba(45, 41, 36, .055), rgba(45, 41, 36, .03) 25%, rgba(45, 41, 36, .012) 55%, rgba(45, 41, 36, 0)); opacity: 0; transition: opacity .15s; pointer-events: none; }
-.history-panel.scrolled .panel-heading::after { opacity: 1; }
+/* Best moves' heading has no actions but takes History's height (its 30px or phone 44px actions, border-box, plus the 10px gap), so both titles and scroll edges line up. */
+.moves-panel .panel-heading { min-height: 40px; margin-bottom: 0; padding-bottom: 10px; }
 .history-panel .history-list { margin: 0 calc(-1 * var(--history-pad)); padding: 0 var(--history-pad); }
-.workspace .history-panel .history-list { margin-bottom: -17px; padding-bottom: var(--history-pad); border-radius: 0 0 var(--radius) var(--radius); }
+.workspace .history-panel .history-list { --edge-bottom: var(--history-pad); margin-bottom: -17px; padding-bottom: 0; border-radius: 0 0 var(--radius) var(--radius); }
 .history-row.current .history-select { padding-bottom: 2px; }
 .history-list { position: relative; display: grid; align-content: start; overflow: auto; overscroll-behavior: contain; min-height: 0; }
-.history-open .right-rail { align-self: stretch; display: flex; flex-direction: column; }
-.workspace .history-panel { flex: 1 1 0; max-height: max-content; min-height: 0; min-height: calc-size(max-content, min(size, 280px)); display: flex; flex-direction: column; }
+.history-open .right-rail, .workspace .right-rail:has(.moves-panel) { align-self: stretch; display: flex; flex-direction: column; }
+.workspace :is(.history-panel, .moves-panel) { flex: 1 1 0; max-height: max-content; min-height: 0; min-height: calc-size(max-content, min(size, 280px)); display: flex; flex-direction: column; }
 .workspace .history-list { flex: 1; }
+/* Below Ledger and Record your turn there is less room than History gets, so the floor is about two moves. */
+.workspace .moves-panel { min-height: calc-size(max-content, min(size, 160px)); }
+/* Everything under the heading scrolls, out to the panel border. The 8px top space (`--edge-top`) matches History's first round label and leaves room for the ranked list's 6px pull. */
+.workspace .moves-panel > .moves-body { --edge-top: 8px; --edge-bottom: 17px; min-height: 0; overflow: auto; overscroll-behavior: contain; margin: 0 -17px -17px; padding: 0 17px; border-radius: 0 0 var(--radius) var(--radius); }
+/* Sticky shadows inside a scroller, full width over its side padding, shown while rows are hidden past that edge. Each also makes the scroller's space at its end (`--edge-top`, `--edge-bottom`), in place of padding, which sticky offsets would count from: so a shadow's place in the flow is the very edge, rows never show past it, and it never lifts off as the list reaches its end. */
+.history-list { --edge-pad: var(--history-pad); }
+.workspace .moves-panel > .moves-body { --edge-pad: 17px; }
+.scroll-edges::before, .scroll-edges::after { content: ""; position: sticky; z-index: 2; display: block; box-sizing: border-box; height: 12px; margin-inline: calc(-1 * var(--edge-pad, 0px)); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.scroll-edges::before { --edge-height: max(12px, var(--edge-top, 0px)); top: 0; height: var(--edge-height); margin-bottom: calc(var(--edge-top, 0px) - var(--edge-height)); border-top: 1px solid rgba(45, 41, 36, .07); background: linear-gradient(rgba(45, 41, 36, .055), rgba(45, 41, 36, .03) 25%, rgba(45, 41, 36, .012) 55%, rgba(45, 41, 36, 0)) top / 100% 11px no-repeat; }
+.scroll-edges::after { --edge-height: max(12px, var(--edge-bottom, 0px)); bottom: 0; height: var(--edge-height); margin-top: calc(var(--edge-bottom, 0px) - var(--edge-height)); border-bottom: 1px solid rgba(45, 41, 36, .07); background: linear-gradient(0deg, rgba(45, 41, 36, .055), rgba(45, 41, 36, .03) 25%, rgba(45, 41, 36, .012) 55%, rgba(45, 41, 36, 0)) bottom / 100% 11px no-repeat; }
+.scroll-edges.more-above::before, .scroll-edges.more-below::after { opacity: 1; }
 .phone-shell .history-list { max-height: 440px; }
 .history-list > .history-round:first-child { padding-top: 8px; }
 .history-round { display: flex; align-items: center; gap: 8px; padding: 10px 0 2px; color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -643,7 +655,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .history-controls .history-now-button { width: auto; padding: 0 10px; font: 600 12px/1 Inter, sans-serif; color: var(--accent-dark); }
 .phone-shell .history-controls { margin-top: 8px; font-size: 12px; }
 .history-open .board-canvas { max-height: calc(100vh - 196px); }
-.workspace .history-controls { margin-top: 0; }
+/* Hangs below the board outside the grid row, so History beside it ends level with the board. */
+.workspace .history-controls { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); margin: 0; }
 .ledger-panel .history-toggle[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
 .ledger-panel .panel-actions { align-items: center; }
 .ledger-row.read-only .ledger-toggle { opacity: 1; cursor: default; }
@@ -653,7 +666,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .history-later svg { transform: rotate(-90deg); }
 .history-disc.start polygon { stroke: currentColor; }
 .phone-shell .history-panel .panel-heading { margin-bottom: 0; }
-.phone-shell .history-panel .history-list { margin-bottom: -14px; padding-bottom: 6px; }
+.phone-shell .moves-panel .panel-heading { min-height: 54px; margin-bottom: 0; }
+.phone-shell .history-panel .history-list { --edge-bottom: 6px; margin-bottom: -14px; padding-bottom: 0; }
 
 @media (hover: hover) {
   button:hover:not(:disabled, :where(.phone-shell *)) { background: var(--tint); }
@@ -721,8 +735,9 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .center-column { position: static; }
   .board-canvas { max-height: max(320px, calc(100dvh - 152px)); }
   .history-open .board-canvas { max-height: max(268px, calc(100dvh - 204px)); }
-  .workspace .history-panel { flex: none; }
-  .workspace .history-list { max-height: 440px; }
+  .workspace :is(.history-panel, .moves-panel) { flex: none; }
+  .workspace :is(.history-list, .moves-panel > .moves-body) { max-height: 440px; }
+  .workspace .history-controls { position: static; transform: none; }
 }
 
 /* The phone arm: App mounts PhoneShell here, so nothing of the Workspace tree is styled. */

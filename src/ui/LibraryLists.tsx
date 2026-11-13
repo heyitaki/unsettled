@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { boardColor } from './boardColor'
 import { SortGlyph, TrashGlyph } from './glyphs'
 import { ListRow } from './ListRow'
@@ -7,6 +7,7 @@ import { MenuSelect } from './MenuSelect'
 import { activeTab, useStore } from './store'
 import { useLibrary } from './useLibrary'
 import { useRenameTab } from './useRenameTab'
+import { useScrollEdges } from './useScrollEdges'
 
 /** Which name is being renamed, by row key, and the field's text. */
 type Editing = { key: string; draft: string }
@@ -53,26 +54,8 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
   // Fade whichever end of the scroller still hides cut-off rows. Its
   // max-height bounds it on the desktop; the phone arms unbound it, where both
   // ends measure flush and no mask is drawn.
-  const scrollerRef = useRef<HTMLDivElement>(null)
-  const [fades, setFades] = useState({ top: false, bottom: false })
-  const syncFades = useCallback(() => {
-    const el = scrollerRef.current
-    if (!el) return
-    const top = el.scrollTop > 1
-    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 1
-    setFades((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }))
-  }, [])
-  // The row count covers the rows the scroller holds; the observer covers its
-  // height, which moves with the popover around it.
+  const fades = useScrollEdges<HTMLDivElement>()
   const rowCount = unlisted.length + maps.length
-  useLayoutEffect(() => {
-    syncFades()
-    const el = scrollerRef.current
-    if (!el) return
-    const observer = new ResizeObserver(syncFades)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [syncFades, rowCount])
   return (
     <div className="library-boards">
       <div className="group-label">
@@ -89,9 +72,9 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       {listed.warning && <p className="hint">{listed.warning}</p>}
       <div
-        ref={scrollerRef}
+        ref={fades.ref}
         className={`list board-list ${fades.top ? 'fade-top' : ''} ${fades.bottom ? 'fade-bottom' : ''}`}
-        onScroll={syncFades}
+        onScroll={fades.onScroll}
       >
         {unlisted.map((tab) => {
           const key = `tab:${tab.id}`

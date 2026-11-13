@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useLayoutEffect } from 'react'
 import { pips } from '../model/board'
 import { historyPlayer, turnSummary } from '../model/history'
 import { PLAYER_PALETTE } from '../model/types'
@@ -7,6 +7,7 @@ import { readableInk } from './colors'
 import { ArrowLeftGlyph, ArrowRightGlyph, BoardHexGlyph, CloseGlyph, RobberGlyph, TickGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore } from './store'
+import { useScrollEdges } from './useScrollEdges'
 
 export function HistoryPanel({ className = 'panel analysis-panel' }: { className?: string }) {
   const { state, dispatch } = useStore()
@@ -16,18 +17,17 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
   // A game saved before history existed has no recorded start, so its earliest view is now.
   const first = game.history ? 0 : now
   const selected = state.viewedTurn ?? now
-  const listRef = useRef<HTMLDivElement>(null)
-  const [scrolled, setScrolled] = useState(false)
+  const edges = useScrollEdges<HTMLDivElement>()
+  const { node: list, sync } = edges
   useLayoutEffect(() => {
-    const list = listRef.current
     const row = list?.querySelector<HTMLElement>('.history-row.current')
     if (!list || !row) return
     if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop
     else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) {
       list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight
     }
-    setScrolled(list.scrollTop > 0)
-  }, [selected])
+    sync()
+  }, [selected, list, sync])
   const select = (index: number) => {
     dispatch({ type: 'view-turn', index: index === now ? null : index })
     revealBoardIfScrolledPast()
@@ -39,12 +39,12 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
   }
   const rows = [{ index: now, turn: game.turn }, ...turns.map((turn, i) => ({ index: i + 1, turn })).reverse()]
   return (
-    <section className={`${className} best-moves-panel history-panel${scrolled ? ' scrolled' : ''}`}
+    <section className={`${className} best-moves-panel history-panel`}
       aria-label="Turn history" onKeyDown={(event) => {
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
         event.preventDefault()
         const index = step(event.key === 'ArrowUp' ? 1 : -1)
-        listRef.current?.querySelector<HTMLButtonElement>(`[data-turn="${index}"]`)?.focus({ preventScroll: true })
+        list?.querySelector<HTMLButtonElement>(`[data-turn="${index}"]`)?.focus({ preventScroll: true })
       }}>
       <div className="panel-heading">
         <h2>History</h2>
@@ -54,7 +54,7 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
           <button type="button" className="panel-dots" aria-label="Close history" data-label="Close" onClick={() => dispatch({ type: 'history', open: false })}><CloseGlyph /></button>
         </div>
       </div>
-      <div className="history-list" role="list" ref={listRef} onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}>
+      <div className={`history-list scroll-edges${edges.top ? ' more-above' : ''}${edges.bottom ? ' more-below' : ''}`} role="list" ref={edges.ref} onScroll={edges.onScroll}>
         {rows.map(({ index, turn }) => {
           if (!turn) return null
           const round = Math.ceil(index / game.board.players.length)

@@ -17,6 +17,7 @@ import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
 import { useCoarsePointer } from './useMediaQuery'
+import { useScrollEdges } from './useScrollEdges'
 
 const recordedRolls = new WeakMap<Game, RecordedRoll>()
 const ACTION_TILES = [
@@ -51,6 +52,7 @@ function MoveText({ text }: { text: string }) {
 
 export function BestMovesPanel({ className = 'panel analysis-panel' }: { className?: string }) {
   const { state, dispatch } = useStore()
+  const edges = useScrollEdges<HTMLDivElement>()
   const tab = activeTab(state)
   const game = tab.game
   const { board } = game
@@ -297,87 +299,90 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
           </li>
         </ol>
       </section>
-      <section className={`${className} best-moves-panel`}>
+      <section className={`${className} best-moves-panel moves-panel`}>
         <div className="panel-heading"><h2>{viewingMine ? 'Best moves' : `Best moves for ${viewed.name}`}</h2></div>
-        {intro && <p className="hint">{intro}</p>}
-        {!adviceEnabled ? (
-          <div className="hint">
-            <p>Finish the board to get advice:</p>
-            <ul>{blockers.map((message) => <li key={message}>{message}</li>)}</ul>
-          </div>
-        ) : seven ? (
-          <p className="hint">Record the discards and the robber above. The ranked moves follow.</p>
-        ) : (
-          <>
-            <AdviceFeedback advice={viewingTurn && before ? pre : moves} />
-            {viewingTurn && !before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
-              <AdviceFeedback advice={pre} />
-            )}
-            {cards.length > 0 && <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
-              {cards.map((card) => {
-                const current = selected?.game === game && selected.id === card.id
-                const applyCard = () => { if (card.move) apply(card.move) }
-                const previewCard = () => preview(card.move ? adviceMarks(card.move, color) : null)
-                return (
-                  <div
-                    key={card.id}
-                    className={`analysis-row${card.title ? ' move-pre' : ''}${current ? ' current' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className="analysis-row-select"
-                      aria-pressed={current}
-                      onClick={() => select(card)}
-                      onMouseEnter={previewCard}
+        <div className={`moves-body scroll-edges${edges.top ? ' more-above' : ''}${edges.bottom ? ' more-below' : ''}`}
+          ref={edges.ref} onScroll={edges.onScroll}>
+          {intro && <p className="hint">{intro}</p>}
+          {!adviceEnabled ? (
+            <div className="hint">
+              <p>Finish the board to get advice:</p>
+              <ul>{blockers.map((message) => <li key={message}>{message}</li>)}</ul>
+            </div>
+          ) : seven ? (
+            <p className="hint">Record the discards and the robber above. The ranked moves follow.</p>
+          ) : (
+            <>
+              <AdviceFeedback advice={viewingTurn && before ? pre : moves} />
+              {viewingTurn && !before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
+                <AdviceFeedback advice={pre} />
+              )}
+              {cards.length > 0 && <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
+                {cards.map((card) => {
+                  const current = selected?.game === game && selected.id === card.id
+                  const applyCard = () => { if (card.move) apply(card.move) }
+                  const previewCard = () => preview(card.move ? adviceMarks(card.move, color) : null)
+                  return (
+                    <div
+                      key={card.id}
+                      className={`analysis-row${card.title ? ' move-pre' : ''}${current ? ' current' : ''}`}
                     >
-                      {!card.title && (
-                        <span className="analysis-rank" style={{ background: color, color: readableInk(color) }}>
-                          {card.rank}
-                        </span>
-                      )}
-                      <span className="analysis-row-body">
-                        {card.title && <span className="analysis-likely-gone-title">{card.title}</span>}
-                        <span className="analysis-pick-line">
-                          <strong><MoveText text={card.label} /></strong>
-                          {card.score !== undefined && (
-                            <span className="analysis-score">
-                              {card.score.toLocaleString('en-US', {
-                                minimumFractionDigits: 1,
-                                maximumFractionDigits: 1,
-                              })}
+                      <button
+                        type="button"
+                        className="analysis-row-select"
+                        aria-pressed={current}
+                        onClick={() => select(card)}
+                        onMouseEnter={previewCard}
+                      >
+                        {!card.title && (
+                          <span className="analysis-rank" style={{ background: color, color: readableInk(color) }}>
+                            {card.rank}
+                          </span>
+                        )}
+                        <span className="analysis-row-body">
+                          {card.title && <span className="analysis-likely-gone-title">{card.title}</span>}
+                          <span className="analysis-pick-line">
+                            <strong><MoveText text={card.label} /></strong>
+                            {card.score !== undefined && (
+                              <span className="analysis-score">
+                                {card.score.toLocaleString('en-US', {
+                                  minimumFractionDigits: 1,
+                                  maximumFractionDigits: 1,
+                                })}
+                              </span>
+                            )}
+                          </span>
+                          {card.reason && <span className="move-reason">{card.reason}</span>}
+                          {card.handDelta && RESOURCES.some((resource) => card.handDelta?.[resource] !== 0) && (
+                            <span className={`analysis-factors move-costs${current ? ' expanded' : ''}`}>
+                              <CardAmounts cards={card.handDelta} signed />
                             </span>
                           )}
                         </span>
-                        {card.reason && <span className="move-reason">{card.reason}</span>}
-                        {card.handDelta && RESOURCES.some((resource) => card.handDelta?.[resource] !== 0) && (
-                          <span className={`analysis-factors move-costs${current ? ' expanded' : ''}`}>
-                            <CardAmounts cards={card.handDelta} signed />
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                    {card.title && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
-                    {!card.title && current && card.move && (
-                      <div className="analysis-touch-actions">
-                        {viewingTurn && <button type="button" className="primary" onClick={applyCard}>
-                          {card.move.type === 'pass'
-                            ? 'End turn'
-                            : card.move.type === 'offerTrade' ? 'Apply: who accepted?' : 'Apply'}
-                        </button>}
-                        <button type="button" onClick={clear}>Clear</button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>}
-            {before && preRoll && <p className="move-empty">
-              {/* The engine answers null after a pre-roll play too, since only one dev card is allowed per turn. */}
-              {preRoll.play === null && !turn?.devPlayed && <><b>No dev card worth playing first.</b>{' '}</>}
-              Ranked trades, builds and cards follow the roll.
-            </p>}
-          </>
-        )}
+                      </button>
+                      {card.title && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
+                      {!card.title && current && card.move && (
+                        <div className="analysis-touch-actions">
+                          {viewingTurn && <button type="button" className="primary" onClick={applyCard}>
+                            {card.move.type === 'pass'
+                              ? 'End turn'
+                              : card.move.type === 'offerTrade' ? 'Apply: who accepted?' : 'Apply'}
+                          </button>}
+                          <button type="button" onClick={clear}>Clear</button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>}
+              {before && preRoll && <p className="move-empty">
+                {/* The engine answers null after a pre-roll play too, since only one dev card is allowed per turn. */}
+                {preRoll.play === null && !turn?.devPlayed && <><b>No dev card worth playing first.</b>{' '}</>}
+                Ranked trades, builds and cards follow the roll.
+              </p>}
+            </>
+          )}
+        </div>
       </section>
     </>
   )
