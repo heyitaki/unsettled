@@ -6,6 +6,8 @@ import { boardGrid } from '../layouts'
 import {
   activePlayerId,
   bankRate,
+  bankPorts,
+  isValidBankTrade,
   adjustDevHand,
   CARD_COSTS,
   endTurn,
@@ -156,8 +158,39 @@ describe('turn tracking', () => {
 
   it('a bank trade spends the rate and gains the count', () => {
     const game = adjustHand(gameWithRival(), 'aki', 'wood', 4)
-    const next = recordBankTrade(game, 'wood', 4, 'ore', 2)
+    const next = recordBankTrade(game, { wood: 4 }, { ore: 2 })
     expect(next.stats.aki.hand).toEqual({ wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 2 })
+  })
+
+  it('trades mixed whole port lots for multiple resources without mutating the game', () => {
+    const base = gameWithRival()
+    const ports = base.board.ports.slice(0, 2).map((port, index) => ({ ...port, resource: index === 0 ? 'ore' as const : null, rate: index === 0 ? 2 : 3 }))
+    let board: Game['board'] = { ...base.board, ports }
+    for (const port of ports) board = placeBuilding(board, edgeEndpointVertexIds(port.edgeId)[0], 'aki', 'settlement')
+    const game = adjustCounter(adjustHand(newGame(board), 'aki', 'ore', 4), 'aki', 'handUnknown', 3)
+    expect(bankPorts(board, 'aki')).toEqual(ports)
+    expect(bankPorts(board, 'b')).toEqual([])
+    expect(isValidBankTrade(board, 'aki', { ore: 4, wood: 3 }, { brick: 3 })).toBe(true)
+    expect(isValidBankTrade(board, 'aki', { ore: 4, wood: 3 }, { brick: 2, sheep: 1 })).toBe(true)
+    const before = structuredClone(game)
+    freeze(game)
+    const next = recordBankTrade(game, { ore: 4, wood: 3 }, { brick: 3 })
+    expect(next.stats.aki).toMatchObject({ hand: { ore: 0, wood: 0, brick: 3 }, handUnknown: 0 })
+    expect(next.stats.b).toBe(game.stats.b)
+    expect(game).toEqual(before)
+    for (const [gives, gets] of [
+      [{ ore: 3, wood: 3 }, { brick: 3 }],
+      [{ ore: 4, wood: 3 }, { brick: 2 }],
+      [{ ore: 4, wood: 3 }, { brick: 4 }],
+      [{ ore: 4 }, { ore: 2 }],
+      [{}, { brick: 1 }],
+      [{ ore: 4 }, {}],
+      [{ ore: -2 }, { brick: 1 }],
+      [{ ore: 2 }, { brick: 0.5, sheep: 0.5 }],
+      [{ ore: Infinity }, { brick: Infinity }],
+    ]) expect(isValidBankTrade(board, 'aki', gives, gets)).toBe(false)
+    expect(isValidBankTrade(board, 'b', { ore: 4, wood: 4 }, { brick: 2 })).toBe(true)
+    expect(isValidBankTrade(board, 'b', { ore: 2 }, { brick: 1 })).toBe(false)
   })
 
   it('a player trade moves cards both ways', () => {
@@ -348,7 +381,7 @@ describe('turn tracking', () => {
       () => endTurn(game),
       () => recordRoll(game, 6, {}),
       () => recordRobber(game, hex, 'b', null),
-      () => recordBankTrade(game, 'wood', 1, 'ore', 1),
+      () => recordBankTrade(game, { wood: 1 }, { ore: 1 }),
       () => recordPlayerTrade(game, 'b', {}, {}),
       () => recordBuild(game, 'road', edge),
       () => recordBuyDev(game, null),
@@ -408,7 +441,7 @@ describe('turn tracking', () => {
     recordDiscard(game, 'b', 2)
     recordRobber(game, hex, 'b', 'ore')
     recordRobber(game, hex, 'b', null)
-    recordBankTrade(game, 'wood', 2, 'ore', 1)
+    recordBankTrade(game, { wood: 2 }, { ore: 1 })
     recordPlayerTrade(game, 'b', { wood: 1 }, { ore: 1 })
     recordBuild(game, 'road', edge)
     recordBuild(game, 'settlement', vertex)

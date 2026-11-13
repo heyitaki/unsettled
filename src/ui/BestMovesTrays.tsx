@@ -4,16 +4,16 @@ import { pips } from '../model/board'
 import { axialKey, parseAxialKey } from '../model/coords'
 import { DEV_KINDS, emptyStats, type DevKind, type Game } from '../model/game'
 import {
-  bankRate, CARD_COSTS, handTotal, recordBankTrade, recordBuild, recordBuyDev, recordDiscard,
+  bankPorts, bankRate, CARD_COSTS, handTotal, isValidBankTrade, recordBankTrade, recordBuild, recordBuyDev, recordDiscard,
   recordPlayDev, recordPlayerTrade, recordRobber, recordRoll, turnState, type DevPlay,
 } from '../model/turn'
 import { RESOURCES, type AxialCoord, type EdgeId, type Player, type Resource, type VertexId } from '../model/types'
 import { adviceResponse, useAdvice, useAdviceClient, type AdviceState } from './useAdvice'
 import {
-  adviceMarks, buildablePieces, cardRange, DEV_LABELS, discardInputCards, hexLabel, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
+  adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
 import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
-import { PencilGlyph, ResourceGlyph, RobberGlyph } from './glyphs'
+import { CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'
 import { useBoardPick } from './useBoardPick'
@@ -263,7 +263,7 @@ export function RobberFlow({ game, active, adviceEnabled, initial, mark, commit,
           {response?.reason && `. ${response.reason}`}
         </p>
       )}
-      <p className="move-robber-prompt">{active.id === me ? 'Tap the number you move the robber to.' : `Tap the number ${active.name} moved the robber to.`}</p>
+      <div className="move-question">Where did the robber go?<span>Tap its new number on the board</span></div>
       <RobberPick onPick={(hex) => {
         const id = ++pickSequence.current
         if (robberCandidates(game, hex, active.id).length === 0) record(hex, null, null)
@@ -346,7 +346,10 @@ function TradeTray({ game, active, tray, adviceEnabled, commit, close }: TrayPro
   const received = RESOURCES.filter((resource) => gets[resource])
   const give = given.length === 1 ? given[0] : null
   const get = received.length === 1 ? received[0] : null
-  const rate = give ? bankRate(game.board, active.id, give) : 4
+  const stats = statsFor(game, active.id)
+  const ports = bankPorts(game.board, active.id)
+  const genericRate = ports.some((port) => port.resource === null && port.rate === 3) ? 3 : 4
+  const valid = given.length > 0 && received.length > 0 && !given.some((resource) => received.includes(resource)) && canCover(stats, gives)
   const decision = give && get && active.id !== game.board.mePlayerId
     ? tradeVerdictRequest(game, active.id, game.board.mePlayerId, { resource: give, count: gives[give]! }, { resource: get, count: gets[get]! })
     : null
@@ -355,26 +358,37 @@ function TradeTray({ game, active, tray, adviceEnabled, commit, close }: TrayPro
   const amounts = (cards: Partial<Cards>) => RESOURCES.filter((resource) => cards[resource]).map((resource) => `${cards[resource]} ${resource}`).join(' and ')
   return (
     <div className="move-tray">
-      <div className="move-tray-row"><span>{active.name} gives<button type="button" className="move-trade-clear" onClick={() => { setGives({}); setGets({}) }}>Clear</button></span>
-        <ResourcePicker label="Gives" cards={gives} onChange={(resource) => setGives({ ...gives, [resource]: (gives[resource] ?? 0) + 1 })} />
+      <div className="move-tray-head"><span>{active.name} gives</span>
+        {(given.length > 0 || received.length > 0) && <button type="button" className="move-trade-clear" aria-label="Clear" title="Clear" onClick={() => { setGives({}); setGets({}) }}><EraserGlyph /></button>}
       </div>
-      <div className="move-tray-row"><span>and gets</span>
-        <ResourcePicker label="Gets" cards={gets} onChange={(resource) => setGets({ ...gets, [resource]: (gets[resource] ?? 0) + 1 })} />
-      </div>
-      <div className="move-pick" role="group" aria-label="With">
-        <span>With</span>
-        <button type="button" disabled={!give || !get || give === get} onClick={() => {
-          if (!give || !get) return
-          const count = gets[get]!
-          commit(recordBankTrade(game, give, rate * count, get, count), recordedMoveLabel({ type: 'tradeBank', give, get, rate, count }))
+      <ResourcePicker label="Gives" cards={gives} available={stats.handUnknown === 0 ? stats.hand : undefined}
+        disabled={(resource) => !canCover(stats, { ...gives, [resource]: (gives[resource] ?? 0) + 1 })}
+        onChange={(resource) => setGives({ ...gives, [resource]: (gives[resource] ?? 0) + 1 })}
+        onRemove={(resource) => setGives({ ...gives, [resource]: gives[resource]! - 1 })} />
+      <div className="move-tray-head">and gets</div>
+      <ResourcePicker label="Gets" cards={gets}
+        onChange={(resource) => setGets({ ...gets, [resource]: (gets[resource] ?? 0) + 1 })}
+        onRemove={(resource) => setGets({ ...gets, [resource]: gets[resource]! - 1 })} />
+      <div className="move-tray-head">with</div>
+      <div className="move-partners" role="group" aria-label="Trade partner">
+        <button type="button" disabled={!valid || !isValidBankTrade(game.board, active.id, gives, gets)} onClick={() => {
+          const ordered = given.toSorted((a, b) => bankRate(game.board, active.id, a) - bankRate(game.board, active.id, b))
+          const paid = ordered.map((resource) => `${gives[resource]} ${resource}`).join(' and ')
+          const party = given.every((resource) => bankRate(game.board, active.id, resource) === 4) ? 'bank' : 'port'
+          commit(recordBankTrade(game, gives, gets), `Traded ${paid} to the ${party} for ${amounts(gets)}`)
           close()
-        }}>{rate < 4 ? 'Port' : 'Bank'} {rate}:1</button>
-        {game.board.players.filter((player) => player.id !== active.id).map((player) => (
-          <button type="button" key={player.id} disabled={!given.length || !received.length || given.some((resource) => received.includes(resource))} onClick={() => {
-            commit(recordPlayerTrade(game, player.id, gives, gets), `Traded ${amounts(gives)} to ${player.name} for ${amounts(gets)}`)
-            close()
-          }}>{player.name}</button>
-        ))}
+        }}>{ports.length ? 'Port' : 'Bank'} <small>{genericRate}:1{ports.flatMap((port) => port.rate === 2 && port.resource !== null
+          ? <span key={port.edgeId}> · 2:1 <span role="img" aria-label={port.resource}><ResourceGlyph resource={port.resource} /></span></span>
+          : [])}</small></button>
+        {game.board.players.filter((player) => player.id !== active.id).map((player) => {
+          const covers = canCover(statsFor(game, player.id), gets)
+          return <button type="button" key={player.id} disabled={!valid || !covers}
+            title={!covers ? `${player.name} cannot hold those cards` : !valid ? 'Enter different cards in both rows that the active player can give' : undefined}
+            onClick={() => {
+              commit(recordPlayerTrade(game, player.id, gives, gets), `Traded ${amounts(gives)} to ${player.name} for ${amounts(gets)}`)
+              close()
+            }}><span className="move-player-dot" style={{ background: player.color }} />{player.name}</button>
+        })}
       </div>
       {adviceEnabled && decision && <AdviceFeedback advice={verdict} />}
       {decision && response && (
@@ -396,20 +410,21 @@ function BuildTray({ game, active, commit, close }: TrayProps) {
     commit(recordBuild(game, piece, ref as EdgeId | VertexId), `Built a ${piece}`)
     close()
   })
-  const name = active.id === game.board.mePlayerId ? 'your' : `${active.name}'s`
+  const who = active.id === game.board.mePlayerId ? 'you' : active.name
   return (
     <div className="move-tray">
-      <div className="move-pick" role="group" aria-label="Piece">
-        <span>Piece</span>
+      <div className="move-question">What did {who} build?</div>
+      <div className="move-card-choices move-build-choices" role="group" aria-label="Piece">
         {pieces.map((kind) => (
-          <button type="button" key={kind} aria-pressed={piece === kind} onClick={() => setPiece(kind)}>
-            {kind[0].toUpperCase() + kind.slice(1)}
-            {' '}
-            <CardAmounts cards={CARD_COSTS[kind]} />
+          <button type="button" className={`move-build-${kind}`} key={kind} aria-pressed={piece === kind} onClick={() => setPiece(kind)}>
+            <StructureGlyph shape={kind} color={active.color} size={17} />
+            <span className="move-piece-text"><span className="move-piece-name">{kind[0].toUpperCase() + kind.slice(1)}</span>
+              <span className="move-piece-cost"><CardAmounts cards={CARD_COSTS[kind]} /></span>
+            </span>
           </button>
         ))}
       </div>
-      <p>Then tap the spot on the board. The cost comes off {name} hand, known cards first.</p>
+      {piece && <div className="move-question">Where is the new {piece}?<span>Tap its spot on the board</span></div>}
     </div>
   )
 }
@@ -417,11 +432,11 @@ function BuildTray({ game, active, commit, close }: TrayProps) {
 function BuyTray({ game, commit, close }: TrayProps) {
   return (
     <div className="move-tray">
-      <div className="move-pick" role="group" aria-label="You drew">
-        <span>You drew</span>
+      <div className="move-question">Which card did you draw?</div>
+      <div className="move-card-choices" role="group" aria-label="Drawn card">
         {[...DEV_KINDS, 'vp' as const].map((kind) => (
           <button type="button" key={kind} onClick={() => { commit(recordBuyDev(game, kind), recordedMoveLabel({ type: 'buyDev' })); close() }}>
-            {kind === 'vp' ? 'VP' : DEV_LABELS[kind]}
+            <DevChipGlyph kind={kind} /><span>{kind === 'vp' ? 'Victory point' : DEV_LABELS[kind]}</span>
           </button>
         ))}
       </div>
@@ -433,28 +448,29 @@ function PlayTray({ game, active, tray, commit, close, knight }: TrayProps) {
   const fill = tray.fill?.open === 'play' ? tray.fill.fill : null
   const [kind, setKind] = useState<DevKind | null>(fill?.type === 'monopoly' ? 'monopoly' : null)
   const typed = typedDevHand(game, active.id)
+  const who = active.id === game.board.mePlayerId ? 'you' : active.name
   const record = (play: DevPlay, text: string) => {
     commit(recordPlayDev(game, play), text)
     close()
   }
   return (
     <div className="move-tray">
-      <div className="move-pick" role="group" aria-label="Card">
-        <span>Card</span>
+      <div className="move-question">Which card did {who} play?</div>
+      <div className="move-card-choices" role="group" aria-label="Played card">
         {DEV_KINDS.filter((card) => !typed || typed.playable[card] > 0).map((card) => (
           <button type="button" key={card} aria-pressed={kind === card} onClick={() => card === 'knight' ? knight() : setKind(card)}>
-            {DEV_LABELS[card]}
+            <DevChipGlyph kind={card} /><span>{DEV_LABELS[card]}</span>
           </button>
         ))}
       </div>
-      {kind === 'roadBuilding' && <RoadBuildingInputs onRecord={record} />}
-      {kind === 'yearOfPlenty' && <PlentyInputs onRecord={record} />}
-      {kind === 'monopoly' && <MonopolyInputs game={game} activeId={active.id} initial={fill?.type === 'monopoly' ? fill.resource : null} onRecord={record} />}
+      {kind === 'roadBuilding' && <RoadBuildingInputs color={active.color} onRecord={record} />}
+      {kind === 'yearOfPlenty' && <PlentyInputs who={who} onRecord={record} />}
+      {kind === 'monopoly' && <MonopolyInputs game={game} activeId={active.id} who={who} initial={fill?.type === 'monopoly' ? fill.resource : null} onRecord={record} />}
     </div>
   )
 }
 
-function RoadBuildingInputs({ onRecord }: { onRecord(play: DevPlay, text: string): void }) {
+function RoadBuildingInputs({ color, onRecord }: { color: string; onRecord(play: DevPlay, text: string): void }) {
   const [edges, setEdges] = useState<readonly [] | readonly [EdgeId]>([])
   const record = (roads: readonly [] | readonly [EdgeId] | readonly [EdgeId, EdgeId]) =>
     onRecord({ kind: 'roadBuilding', edges: roads }, `Played Road building · ${roads.length} ${roads.length === 1 ? 'road' : 'roads'}`)
@@ -465,29 +481,36 @@ function RoadBuildingInputs({ onRecord }: { onRecord(play: DevPlay, text: string
   })
   return (
     <>
-      <p>Tap up to two road spots on the board. {edges.length} selected.</p>
-      {edges.length > 0 && <button type="button" onClick={() => setEdges([])}>Clear roads</button>}
-      <button type="button" className="primary" onClick={() => record(edges)}>Record {edges.length} {edges.length === 1 ? 'road' : 'roads'}</button>
+      <div className="move-question">Where did the roads go?<span>Tap each spot on the board</span></div>
+      <div className="move-road-slots">
+        {[0, 1].map((index) => <div key={index} className={`move-road-slot${edges.length > index ? ' placed' : edges.length === index ? ' next' : ''}`}>
+          <StructureGlyph shape="road" color={edges.length > index ? color : 'transparent'} size={18} />
+          <span>{edges.length > index ? `Road ${index + 1} placed` : edges.length === index ? `Road ${index + 1}: tap a spot` : `Road ${index + 1}`}</span>
+          {edges.length > index && index === edges.length - 1 && <button type="button" className="move-minus" aria-label={`Take back road ${index + 1}`} onClick={() => setEdges([])}><MinusGlyph /></button>}
+        </div>)}
+      </div>
+      <div className="move-tray-footer"><button type="button" className="move-record" onClick={() => record(edges)}><CheckGlyph />Record {edges.length} {edges.length === 1 ? 'road' : 'roads'}</button></div>
     </>
   )
 }
 
-function PlentyInputs({ onRecord }: { onRecord(play: DevPlay, text: string): void }) {
+function PlentyInputs({ who, onRecord }: { who: string; onRecord(play: DevPlay, text: string): void }) {
   const [first, setFirst] = useState<Resource | null>(null)
   return (
-    <div className="move-tray-row">
-      <span>Takes two{first && <> · First: {first}<button type="button" className="move-trade-clear" onClick={() => setFirst(null)}>Clear</button></>}</span>
-      <ResourcePicker label="Takes" value={first} cards={first ? { [first]: 1 } : undefined} onChange={(resource) => {
+    <>
+      <div className="move-question">Which two cards did {who} take?</div>
+      <ResourcePicker label="Takes" cards={first ? { [first]: 1 } : {}} onRemove={() => setFirst(null)} onChange={(resource) => {
         if (first) onRecord({ kind: 'yearOfPlenty', resources: [first, resource] }, recordedMoveLabel({ type: 'yearOfPlenty', first, second: resource }))
         else setFirst(resource)
       }} />
-    </div>
+    </>
   )
 }
 
-function MonopolyInputs({ game, activeId, initial, onRecord }: {
+function MonopolyInputs({ game, activeId, who, initial, onRecord }: {
   game: Game
   activeId: string
+  who: string
   initial: Resource | null
   onRecord(play: DevPlay, text: string): void
 }) {
@@ -495,19 +518,30 @@ function MonopolyInputs({ game, activeId, initial, onRecord }: {
   const counts = (resource: Resource | null) => Object.fromEntries(others.map(({ id }) => [id, resource ? statsFor(game, id).hand[resource] : 0]))
   const [resource, setResource] = useState<Resource | null>(initial)
   const [taken, setTaken] = useState<Record<string, number>>(() => counts(initial))
+  const total = Object.values(taken).reduce((sum, count) => sum + count, 0)
   return (
     <>
-      <div className="move-tray-row"><span>Names</span>
-        <ResourcePicker label="Names" value={resource} onChange={(resource) => { setResource(resource); setTaken(counts(resource)) }} />
-      </div>
+      <div className="move-question">Which resource did {who} name?</div>
+      <ResourcePicker label="Named resource" value={resource} onChange={(resource) => { setResource(resource); setTaken(counts(resource)) }} />
       {resource && <>
-        <div className="move-chips">
-          {others.map((player) => <MoveStepper key={player.id} label={player.name} value={taken[player.id] ?? 0}
-            max={cardRange(statsFor(game, player.id), resource, false).hi}
-            onChange={(count) => setTaken({ ...taken, [player.id]: count })} />)}
+        <div className="move-question">How many did each player give?</div>
+        <div className="move-monopoly-players">
+          {others.map((player) => {
+            const count = taken[player.id] ?? 0
+            const { lo, hi } = cardRange(statsFor(game, player.id), resource, false)
+            return <div key={player.id} className={`move-monopoly-player${count > 0 ? ' has-cards' : ''}`}>
+              <span className="move-monopoly-name"><span className="move-player-dot" style={{ background: player.color }} /><span>{player.name}</span></span>
+              <button type="button" className="move-monopoly-count" aria-label={`One more from ${player.name}`} disabled={count >= hi}
+                onClick={() => setTaken({ ...taken, [player.id]: count + 1 })}>{count}</button>
+              <small>of {lo === hi ? lo : `${lo}\u2013${hi}`}</small>
+              {count > 0 && <button type="button" className="move-minus" aria-label={`One fewer from ${player.name}`} onClick={() => setTaken({ ...taken, [player.id]: count - 1 })}><MinusGlyph /></button>}
+            </div>
+          })}
         </div>
-        <button type="button" className="primary" onClick={() => onRecord({ kind: 'monopoly', resource, taken },
-          `Played Monopoly on ${resource} · took ${Object.values(taken).reduce((sum, count) => sum + count, 0)}`)}>Record</button>
+        <div className="move-tray-footer"><span>Takes {total} {resource}</span>
+          <button type="button" className="move-record" onClick={() => onRecord({ kind: 'monopoly', resource, taken },
+            `Played Monopoly on ${resource} · took ${total}`)}><CheckGlyph />Record</button>
+        </div>
       </>}
     </>
   )

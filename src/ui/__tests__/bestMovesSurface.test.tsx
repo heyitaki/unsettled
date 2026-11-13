@@ -94,14 +94,22 @@ it('renders the Ledger hands, dev pills and awards, with one inline row editor',
   expect(container.querySelector('[aria-expanded="true"]')).toBeNull()
 })
 
-it('makes selected build and resource glyphs white while preserving advice glyph colours', async () => {
+it('preserves resource colours in pressed tray cells, build costs and advice', async () => {
   await act(async () => root.render(<>
-    <button aria-pressed="true">Road <CardAmounts cards={CARD_COSTS.road} /></button>
-    <ResourcePicker label="Gives" value="brick" onChange={() => {}} />
+    <div className="move-tray">
+      <button aria-pressed="true">Road <CardAmounts cards={CARD_COSTS.road} /></button>
+      <ResourcePicker label="Gives" cards={{ brick: 1 }} onChange={() => {}} onRemove={() => {}} />
+    </div>
     <button className="analysis-row-select" aria-pressed="true"><CardAmounts cards={CARD_COSTS.road} /></button>
   </>))
   const pressed = container.querySelectorAll('button[aria-pressed="true"]:not(.analysis-row-select) .stat-icon')
   expect(pressed).toHaveLength(3)
-  for (const glyph of pressed) expect(getComputedStyle(glyph).filter).toBe('brightness(0) invert(1)')
-  for (const glyph of container.querySelectorAll('button[aria-pressed="false"] .stat-icon, .analysis-row-select .stat-icon')) expect(getComputedStyle(glyph).filter).toBe('none')
+  for (const glyph of container.querySelectorAll('.stat-icon')) expect(getComputedStyle(glyph).filter).not.toContain('invert')
+  expect(container.querySelectorAll('.move-minus')).toHaveLength(1)
+  expect(container.querySelector('.move-minus svg path')?.getAttribute('d')).toBe('M5 10h10')
+  expect(container.querySelector('[aria-label="Gives wood"]')?.textContent).toBe('0')
+  expect(container.querySelector('[aria-label="Gives brick"]')?.textContent).toBe('1')
+  expect(getComputedStyle(container.querySelector('.move-resource .stat-icon')!).width).toBe('18px')
+  expect(getComputedStyle(container.querySelector('.move-resource')!).minHeight).toBe('36px')
+  expect(getComputedStyle(container.querySelector('.move-minus')!).width).toBe('20px')
 })

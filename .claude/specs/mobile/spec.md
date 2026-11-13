@@ -126,7 +126,12 @@ What differs on the phone:
 
 - `Undo` and `Redo` in the heading follow the heading button size in S5, and every turn-order circle has a 44px touch target.
 - The dice wrap into as many columns as fit at 36px or wider (eight on a 390px phone), each 4:5 like the desktop ones and so over 44px tall; the action tiles and the robber popover's buttons are at least 44px tall.
-- A card's cost chips show without selecting it, since there is no hover.
+- Actions use the desktop's unframed trays, 13px weight-500 questions, labels, hints and totals, and light accent pressed state. Card choices always wrap as chips; they and resource cells are at least 44px tall. Resource counts sit beside 18px icons; corner minus buttons are 24px, positioned at top -8px and right -6px. Inside the trays nothing is solid; End turn is the step's one solid button.
+- `Trade` keeps the desktop's gives, gets and lowercase `with` rows, conditional eraser Clear and wrapping partners. Exact hands show `n/N`, known plus unseen cards bound gives and player partners, and bank/port trades accept mixed whole lots that add up to the received total. The party tap records the entered cards with the same bank/port log wording.
+- `Buy card` asks `Which card did you draw?` with wrapping line-art chips and full card names; one tap records. Rival purchases still record on the action tap.
+- `Play card` uses the desktop's questions naming the active player, wrapping chips, robber question and hint, Year of plenty counted cells that record on the second card, and Monopoly player tiles with known-to-possible caps, minus buttons, a muted total and outlined check Record. Road building's two fixed slots are 44px tall, the last placed road has a corner minus, and the second road records; the outlined check button also records zero or one road.
+- `Build` uses wrapping chips with the active player's outlined piece glyph beside the name and the cost below it, then the question and hint for the board pick. Costs remain visible without selecting a chip.
+- The newest action-log entry has a curved SVG arrow and `Undo` at its right only when the current game is a recorded action; it uses the heading's undo and has a 36px minimum height.
 - The Ledger uses columns `100px 1fr 36px 36px` with a 6px gap. The Ledger's row editor is the only place to correct a hand on the phone. Its stepper buttons are 30px wide with 44px of height.
 - A build or a robber move that needs a spot scrolls the board into view, as selecting a row does (S5).
 

@@ -81,7 +81,7 @@ function suite() {
     await expect(pieces).toHaveCount(placed + 1)
     await expect.poll(() => redRow(page).allInnerTexts()).not.toEqual(before)
 
-    await panel(page).getByRole('button', { name: 'Undo', exact: true }).click()
+    await panel(page).locator('.panel-heading').getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(pieces).toHaveCount(placed)
     await expect.poll(() => redRow(page).allInnerTexts()).toEqual(before)
   })

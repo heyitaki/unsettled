@@ -53,10 +53,6 @@ export function typedDevHand(game: Game, playerId: string) {
   return playerId === game.board.mePlayerId && game.devHand?.playerId === playerId ? game.devHand : null
 }
 
-export function couldAfford(stats: PlayerStats, cost: Partial<Cards>): boolean {
-  return RESOURCES.reduce((missing, resource) => missing + Math.max(0, (cost[resource] ?? 0) - stats.hand[resource]), 0) <= stats.handUnknown
-}
-
 export function buildablePieces(game: Game, playerId: string) {
   const { board } = game
   const stats = statsFor(game, playerId)
@@ -64,7 +60,7 @@ export function buildablePieces(game: Game, playerId: string) {
   // Match the base per-player supplies in simulator/crates/engine/src/rules.rs.
   const limits = { road: 15, settlement: 5, city: 4 }
   return (['road', 'settlement', 'city'] as const).filter((piece) => {
-    if (!couldAfford(stats, CARD_COSTS[piece])) return false
+    if (!canCover(stats, CARD_COSTS[piece])) return false
     const placed = piece === 'road' ? board.roads.filter((road) => road.playerId === playerId).length
       : board.buildings.filter((building) => building.playerId === playerId && building.tier === piece).length
     return placed < limits[piece] && (piece === 'road'
@@ -79,7 +75,7 @@ export function availableActions(game: Game, playerId: string, devDeckRemaining?
   const turn = turnState(game)
   return {
     trade: handTotal(stats) > 0,
-    buy: couldAfford(stats, CARD_COSTS.devCard) && devDeckRemaining !== 0,
+    buy: canCover(stats, CARD_COSTS.devCard) && devDeckRemaining !== 0,
     play: !turn?.devPlayed && (typed ? DEV_KINDS.some((kind) => typed.playable[kind] > 0)
       : stats.devCards - (turn?.devBought ?? 0) > 0),
     build: buildablePieces(game, playerId).length > 0,
@@ -99,6 +95,10 @@ export function robberCandidates(game: Game, hex: AxialCoord, moverId: string): 
 
 export function cardRange(stats: PlayerStats, resource: Resource, exact: boolean) {
   return { lo: stats.hand[resource], hi: stats.hand[resource] + (exact ? 0 : stats.handUnknown) }
+}
+
+export function canCover(stats: PlayerStats, cards: Partial<Cards>): boolean {
+  return RESOURCES.reduce((missing, resource) => missing + Math.max(0, (cards[resource] ?? 0) - stats.hand[resource]), 0) <= stats.handUnknown
 }
 
 export function discardInputCards(mine: boolean, advised?: Cards): Cards {
@@ -136,7 +136,7 @@ export function recordedMoveLabel(move: Move): string {
     case 'buildSettlement': return 'Built a settlement'
     case 'upgradeCity': return 'Built a city'
     case 'buyDev': return 'Bought a dev card'
-    case 'tradeBank': return `Traded ${move.rate * move.count} ${move.give} for ${move.count} ${move.get} with ${move.rate < 4 ? `a ${move.rate}:1 port` : 'the bank'}`
+    case 'tradeBank': return `Traded ${move.rate * move.count} ${move.give} to the ${move.rate < 4 ? 'port' : 'bank'} for ${move.count} ${move.get}`
     case 'roadBuilding': {
       const count = [move.first, move.second].filter((edge) => edge !== null).length
       return `Played Road building · ${count} ${count === 1 ? 'road' : 'roads'}`
@@ -178,7 +178,7 @@ export function applyAdvice(game: Game, action: Move): Game | AdviceInput {
     case 'buildRoad': return recordBuild(game, 'road', action.edgeId)
     case 'buildSettlement': return recordBuild(game, 'settlement', action.vertexId)
     case 'upgradeCity': return recordBuild(game, 'city', action.vertexId)
-    case 'tradeBank': return recordBankTrade(game, action.give, action.rate * action.count, action.get, action.count)
+    case 'tradeBank': return recordBankTrade(game, { [action.give]: action.rate * action.count }, { [action.get]: action.count })
     case 'pass': return endTurn(game)
     case 'yearOfPlenty': return recordPlayDev(game, { kind: 'yearOfPlenty', resources: [action.first, action.second] })
     case 'roadBuilding': {

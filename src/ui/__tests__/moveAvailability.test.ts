@@ -4,7 +4,7 @@ import { edgeEndpointVertexIds } from '../../model/coords'
 import { emptyStats, newGame, type Game } from '../../model/game'
 import { boardGrid } from '../../model/layouts'
 import { adjustDevHand, CARD_COSTS, endTurn, recordBuyDev, recordPlayDev, recordRobber, recordRoll, setActivePlayer } from '../../model/turn'
-import { availableActions, buildablePieces, couldAfford, robberPending } from '../bestMoves'
+import { availableActions, buildablePieces, canCover, robberPending } from '../bestMoves'
 import { buildingSlots, roadSlots } from '../placementSlots'
 
 function funded(): Game {
@@ -17,10 +17,10 @@ function funded(): Game {
 describe('move availability', () => {
   it('covers the total resource shortfall with unknown cards, without using surplus known cards', () => {
     const stats = { ...emptyStats(), hand: { ...emptyStats().hand, wood: 10, wheat: 1 } }
-    expect(couldAfford(stats, CARD_COSTS.devCard)).toBe(false)
-    expect(couldAfford({ ...stats, handUnknown: 1 }, CARD_COSTS.devCard)).toBe(false)
-    expect(couldAfford({ ...stats, handUnknown: 2 }, CARD_COSTS.devCard)).toBe(true)
-    expect(couldAfford({ ...stats, hand: { ...stats.hand, sheep: 1, ore: 1 } }, CARD_COSTS.devCard)).toBe(true)
+    expect(canCover(stats, CARD_COSTS.devCard)).toBe(false)
+    expect(canCover({ ...stats, handUnknown: 1 }, CARD_COSTS.devCard)).toBe(false)
+    expect(canCover({ ...stats, handUnknown: 2 }, CARD_COSTS.devCard)).toBe(true)
+    expect(canCover({ ...stats, hand: { ...stats.hand, sheep: 1, ore: 1 } }, CARD_COSTS.devCard)).toBe(true)
   })
 
   it('hides all actions for an empty hand without dev cards', () => {

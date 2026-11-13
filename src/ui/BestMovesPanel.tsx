@@ -11,7 +11,7 @@ import { CardAmounts } from './MoveInputs'
 import { Ledger } from './Ledger'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { readableInk } from './colors'
-import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph } from './glyphs'
+import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
@@ -272,7 +272,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <span className="move-step-dot" aria-hidden="true">{noActions ? <StepDoneGlyph /> : '2'}</span>
             <div className="move-step-body">
               <div className="move-step-title">{noActions ? 'No actions possible' : 'Actions'}</div>
-              {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}><TickGlyph /><span>{text}</span></li>)}</ul>}
+              {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}>
+                <TickGlyph /><span>{text}</span>
+                {index === actions.length - 1 && actionLog.has(game) && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
+              </li>)}</ul>}
               {tiles.length > 0 && <div className="move-tiles">
                 {tiles.map(({ kind, label, Glyph }) => (
                   <button type="button" className="move-tile" key={kind} aria-pressed={tray?.kind === kind} onClick={() => toggleTray(kind)}>

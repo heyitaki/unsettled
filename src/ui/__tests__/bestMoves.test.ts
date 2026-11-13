@@ -5,7 +5,7 @@ import { vertexAdjacentVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { setActivePlayer } from '../../model/turn'
 import type { AdviceAction, PreRollPlay } from '../../engine/advice/protocol'
-import { actionLabel, adviceBlockers, adviceMarks, applyAdvice, cardRange, discardInputCards, playLabel, sevenDiscards, tradeVerdictRequest } from '../bestMoves'
+import { actionLabel, adviceBlockers, adviceMarks, applyAdvice, canCover, cardRange, discardInputCards, playLabel, recordedMoveLabel, sevenDiscards, tradeVerdictRequest } from '../bestMoves'
 
 const [edge, second] = boardGrid('standard4').edgeIds
 const vertex = boardGrid('standard4').vertexIds[0]
@@ -47,6 +47,19 @@ describe('best moves', () => {
     expect(cardRange(stats, 'wood', true)).toEqual({ lo: 2, hi: 2 })
     expect(cardRange(stats, 'wood', false)).toEqual({ lo: 2, hi: 5 })
     expect(cardRange(emptyStats(), 'wood', false)).toEqual({ lo: 0, hi: 0 })
+  })
+
+  it('covers a mix only when its combined shortfall fits the unseen hand', () => {
+    const stats = { ...emptyStats(), hand: { ...emptyStats().hand, wood: 2 }, handUnknown: 2 }
+    expect(canCover(stats, { wood: 3, ore: 1 })).toBe(true)
+    expect(canCover(stats, { wood: 3, ore: 2 })).toBe(false)
+    expect(canCover({ ...stats, handUnknown: 0 }, { wood: 2 })).toBe(true)
+    expect(canCover({ ...stats, handUnknown: 0 }, { wood: 3 })).toBe(false)
+  })
+
+  it('labels advised bank and port trades in the same order as manual entries', () => {
+    expect(recordedMoveLabel({ type: 'tradeBank', give: 'ore', rate: 2, count: 2, get: 'brick' })).toBe('Traded 4 ore to the port for 2 brick')
+    expect(recordedMoveLabel({ type: 'tradeBank', give: 'wood', rate: 4, count: 1, get: 'ore' })).toBe('Traded 4 wood to the bank for 1 ore')
   })
 
   it('labels every action kind', () => {

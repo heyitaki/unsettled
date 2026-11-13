@@ -100,14 +100,32 @@ export function recordRobber(game: Game, hex: AxialCoord, victimId: string | nul
 }
 
 export function bankRate(board: Board, playerId: string, resource: Resource): number {
-  const owned = new Set(board.buildings.filter((building) => building.playerId === playerId).map((building) => building.vertexId))
-  return board.ports.reduce((rate, port) => (port.resource === null || port.resource === resource)
-    && edgeEndpointVertexIds(port.edgeId).some((vertex) => owned.has(vertex)) ? Math.min(rate, port.rate) : rate, 4)
+  return bankPorts(board, playerId).reduce((rate, port) => port.resource === null || port.resource === resource
+    ? Math.min(rate, port.rate) : rate, 4)
 }
 
-export function recordBankTrade(game: Game, give: Resource, giveCount: number, get: Resource, getCount: number): Game {
+export function bankPorts(board: Board, playerId: string) {
+  const owned = new Set(board.buildings.filter((building) => building.playerId === playerId).map((building) => building.vertexId))
+  return board.ports.filter((port) => edgeEndpointVertexIds(port.edgeId).some((vertex) => owned.has(vertex)))
+}
+
+export function isValidBankTrade(board: Board, playerId: string, gives: Cards, gets: Cards): boolean {
+  let lots = 0
+  let received = 0
+  for (const resource of RESOURCES) {
+    const give = gives[resource] ?? 0
+    const get = gets[resource] ?? 0
+    const rate = bankRate(board, playerId, resource)
+    if (!Number.isInteger(give) || !Number.isInteger(get) || give < 0 || get < 0 || give > 0 && get > 0 || give % rate !== 0) return false
+    lots += give / rate
+    received += get
+  }
+  return lots > 0 && lots === received
+}
+
+export function recordBankTrade(game: Game, gives: Cards, gets: Cards): Game {
   const { playerId } = requireTurn(game)
-  return gain(spend(game, playerId, { [give]: giveCount }), playerId, { [get]: getCount })
+  return gain(spend(game, playerId, gives), playerId, gets)
 }
 
 export function recordPlayerTrade(game: Game, otherId: string, gives: Cards, gets: Cards): Game {

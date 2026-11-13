@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { RESOURCES, type Resource } from '../model/types'
-import { ResourceGlyph } from './glyphs'
+import { MinusGlyph, ResourceGlyph } from './glyphs'
 
 export function MoveStepper({ label, value, onChange, max = Infinity, children }: {
   label: string
@@ -22,27 +22,35 @@ export function MoveStepper({ label, value, onChange, max = Infinity, children }
   )
 }
 
-export function ResourcePicker({ label, value, cards, onChange }: {
+export function ResourcePicker({ label, value, cards, available, disabled, onChange, onRemove }: {
   label?: string
   value?: Resource | null
   cards?: Partial<Record<Resource, number>>
+  available?: Record<Resource, number>
+  disabled?(resource: Resource): boolean
   onChange(value: Resource): void
+  onRemove?(value: Resource): void
 }) {
   return (
     <div className="move-res-row" role="group" aria-label={label}>
-      {RESOURCES.map((resource) => (
-        <button
-          type="button"
-          key={resource}
-          title={resource}
-          aria-label={label ? `${label} ${resource}` : resource}
-          aria-pressed={value === undefined ? undefined : value === resource}
-          onClick={() => onChange(resource)}
-        >
-          <ResourceGlyph resource={resource} />
-          {!!cards?.[resource] && <span className="count">{cards[resource]}</span>}
-        </button>
-      ))}
+      {RESOURCES.map((resource) => {
+        const count = cards?.[resource] ?? 0
+        return <div className="move-res-cell" key={resource}>
+          <button
+            type="button"
+            className="move-resource"
+            title={resource}
+            aria-label={label ? `${label} ${resource}` : resource}
+            aria-pressed={value === undefined ? cards === undefined ? undefined : count > 0 : value === resource}
+            disabled={disabled?.(resource)}
+            onClick={() => onChange(resource)}
+          >
+            <ResourceGlyph resource={resource} />
+            {cards && <span className={`move-count${count === 0 ? ' zero' : ''}`}>{count}{available && <span>/{available[resource]}</span>}</span>}
+          </button>
+          {onRemove && count > 0 && <button type="button" className="move-minus" aria-label={`One fewer ${resource}`} onClick={() => onRemove(resource)}><MinusGlyph /></button>}
+        </div>
+      })}
     </div>
   )
 }

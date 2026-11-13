@@ -276,6 +276,66 @@ const LINE_ART = {
   'aria-hidden': true,
 }
 
+export function EraserGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox={GRID} strokeWidth="1.5">
+      <rect x="5" y="6.5" width="11" height="6" rx="1.2" transform="rotate(-45 10.5 9.5)" />
+      <path d="M9.5 6.5v6" transform="rotate(-45 10.5 9.5)" />
+      <path d="M4 17.2h12" />
+    </svg>
+  )
+}
+
+export function UndoGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox={GRID} strokeWidth="1.6">
+      <path d="M7.5 4.5 4 8l3.5 3.5" />
+      <path d="M4 8h7.5a4.5 4.5 0 0 1 0 9H8.5" />
+    </svg>
+  )
+}
+
+export function CheckGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox={GRID} strokeWidth="1.7">
+      <path d="M4.8 10.4 8.3 13.9 15.2 6.6" />
+    </svg>
+  )
+}
+
+export function MinusGlyph() {
+  return (
+    <svg {...LINE_ART} width="12" height="12" viewBox={GRID} strokeWidth="2">
+      <path d="M5 10h10" />
+    </svg>
+  )
+}
+
+export function DevChipGlyph({ kind }: { kind: DevKind | 'vp' }) {
+  const shell = { ...LINE_ART, viewBox: GRID, strokeWidth: 1.5 }
+  switch (kind) {
+    case 'knight':
+      return <svg {...shell}><path d="M10 2.8 4.4 4.9v4.5c0 3.6 2.3 6.3 5.6 7.8 3.3-1.5 5.6-4.2 5.6-7.8V4.9Z" /></svg>
+    case 'roadBuilding':
+      return <svg {...shell}>
+        <rect x="1.6" y="10.6" width="11" height="3.4" rx="1.1" transform="rotate(-30 7.1 12.3)" />
+        <path d="M15 3.2v6M12 6.2h6" />
+      </svg>
+    case 'yearOfPlenty':
+      return <svg {...shell}>
+        <rect x="3" y="5" width="8" height="11.5" rx="1.5" transform="rotate(-10 7 10.75)" />
+        <rect x="9" y="4" width="8" height="11.5" rx="1.5" transform="rotate(10 13 9.75)" />
+      </svg>
+    case 'monopoly':
+      return <svg {...shell}>
+        <path d="M3.5 2.8h3.7v7.9a2.8 2.8 0 0 0 5.6 0V2.8h3.7v7.9a6.5 6.5 0 0 1-13 0Z" />
+        <path d="M3.5 2.8h3.7v3.8H3.5ZM12.8 2.8h3.7v3.8h-3.7Z" fill="currentColor" />
+      </svg>
+    case 'vp':
+      return <svg {...shell}><path d="M10 2.8l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 8.1l5-.7Z" /></svg>
+  }
+}
+
 export function ChevronGlyph({ className }: { className?: string }) {
   return (
     <svg {...LINE_ART} className={className} viewBox="0 0 12 8" strokeWidth="2">
