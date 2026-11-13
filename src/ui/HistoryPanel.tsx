@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { pips } from '../model/board'
 import { historyPlayer, turnSummary } from '../model/history'
 import { PLAYER_PALETTE } from '../model/types'
@@ -7,7 +7,13 @@ import { readableInk } from './colors'
 import { ArrowLeftGlyph, ArrowRightGlyph, BoardHexGlyph, CloseGlyph, RobberGlyph, TickGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore } from './store'
-import { revealInScroller, useScrollEdges } from './useScrollEdges'
+import { useRevealRow, useScrollEdges } from './useScrollEdges'
+
+/** A turn or rank number on the player's colour, with an ink ring for white. */
+export function PlayerDisc({ color, className = '', children }: { color: string; className?: string; children: ReactNode }) {
+  const light = color.toLowerCase() === PLAYER_PALETTE.white
+  return <span className={`history-disc${light ? ' light' : ''}${className && ` ${className}`}`} style={{ background: color, color: readableInk(color) }}>{children}</span>
+}
 
 export function HistoryPanel({ className = 'panel analysis-panel' }: { className?: string }) {
   const { state, dispatch } = useStore()
@@ -18,13 +24,8 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
   const first = game.history ? 0 : now
   const selected = state.viewedTurn ?? now
   const edges = useScrollEdges<HTMLDivElement>()
-  const { node: list, sync } = edges
-  useLayoutEffect(() => {
-    const row = list?.querySelector<HTMLElement>('.history-row.current')
-    if (!list || !row) return
-    revealInScroller(list, row)
-    sync()
-  }, [selected, list, sync])
+  const list = edges.node
+  useRevealRow(edges, '.history-row.current', selected)
   const select = (index: number) => {
     dispatch({ type: 'view-turn', index: index === now ? null : index })
     revealBoardIfScrolledPast()
@@ -64,7 +65,7 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
             <div className={`history-row${current ? ' current' : ''}`} role="listitem">
               <button type="button" className="history-select" data-turn={index} aria-label={`Turn ${index}: ${player.name}`}
                 aria-pressed={current} onClick={() => select(index)}>
-                <span className={`history-disc${player.color.toLowerCase() === PLAYER_PALETTE.white ? ' light' : ''}`} style={{ background: player.color, color: readableInk(player.color) }}>{index}</span>
+                <PlayerDisc color={player.color}>{index}</PlayerDisc>
                 <span className="history-main">
                   <span className="history-title">{player.name}{index === now && <span className="history-now">Now</span>}</span>
                   {!current && <span className="history-summary">{turnSummary(log) || (index === now ? 'Nothing recorded yet' : 'No actions')}</span>}

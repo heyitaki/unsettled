@@ -26,6 +26,17 @@ export function useScrollEdges<T extends HTMLElement>() {
   return { ref: setNode, node, onScroll: sync, sync, ...edges }
 }
 
+/** Reveals the scroller's row matching `selector` (see `revealInScroller`) whenever `key` changes, then re-measures the edges. */
+export function useRevealRow(edges: { node: HTMLElement | null; sync: () => void }, selector: string, key: unknown) {
+  const { node, sync } = edges
+  useLayoutEffect(() => {
+    const row = node?.querySelector<HTMLElement>(selector)
+    if (!node || !row) return
+    revealInScroller(node, row)
+    sync()
+  }, [key, node, sync, selector])
+}
+
 /** Scrolls `scroller` the least distance that shows all of `row`, never the page. The scroller must be the row's offset parent (positioned). */
 export function revealInScroller(scroller: HTMLElement, row: HTMLElement) {
   if (row.offsetTop < scroller.scrollTop) scroller.scrollTop = row.offsetTop
