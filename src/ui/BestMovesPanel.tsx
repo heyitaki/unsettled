@@ -175,12 +175,12 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const cards: MoveCard[] = []
 
   // After rolling, knights already appear among the ranked moves.
-  if (preRoll && (before || (preRoll.play !== null && preRoll.play.type !== 'playKnight'))) {
+  if (preRoll && preRoll.play !== null && (before || preRoll.play.type !== 'playKnight')) {
     cards.push({
       id: 'preRoll',
       title: before ? mine ? 'Before you roll' : `Before ${active?.name} rolls` : 'Dev card',
       move: preRoll.play,
-      label: preRoll.play ? playLabel(preRoll.play, board) : 'Hold your dev cards',
+      label: playLabel(preRoll.play, board),
       reason: preRoll.reason,
     })
   }
@@ -289,10 +289,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
         </ol>
       </section>
       <section className={`${className} best-moves-panel`}>
-        <div className="panel-heading"><h2>Best moves</h2></div>
-        <div className="move-label">
-          <span>{mine ? 'Your best moves' : `Best moves for ${active.name}`}</span>
-        </div>
+        <div className="panel-heading"><h2>{mine ? 'Best moves' : `Best moves for ${active.name}`}</h2></div>
         {!adviceEnabled ? (
           <div className="hint">
             <p>Finish the board to get advice:</p>
@@ -306,7 +303,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             {!before && !turn?.devPlayed && pre.status === 'error' && moves.status !== 'error' && (
               <AdviceFeedback advice={pre} />
             )}
-            <div className="analysis-list" onMouseLeave={() => preview(null)}>
+            {cards.length > 0 && <div className="analysis-list pick-ledger" onMouseLeave={() => preview(null)}>
               {cards.map((card) => {
                 const current = selected?.game === game && selected.id === card.id
                 const applyCard = () => { if (card.move) apply(card.move) }
@@ -314,7 +311,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                 return (
                   <div
                     key={card.id}
-                    className={`analysis-row${card.title ? ' move-dashed' : ''}${current ? ' current' : ''}`}
+                    className={`analysis-row${card.title ? ' move-pre' : ''}${current ? ' current' : ''}`}
                   >
                     <button
                       type="button"
@@ -349,7 +346,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                         )}
                       </span>
                     </button>
-                    {current && card.move && (
+                    {card.title && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
+                    {!card.title && current && card.move && (
                       <div className="analysis-touch-actions">
                         <button type="button" className="primary" onClick={applyCard}>
                           {card.move.type === 'pass'
@@ -362,7 +360,12 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                   </div>
                 )
               })}
-            </div>
+            </div>}
+            {before && preRoll && <p className="move-empty">
+              {/* The engine answers null after a pre-roll play too, since only one dev card is allowed per turn. */}
+              {preRoll.play === null && !turn?.devPlayed && <><b>No dev card worth playing first.</b>{' '}</>}
+              Ranked trades, builds and cards follow the roll.
+            </p>}
           </>
         )}
         <ul className="move-notes">

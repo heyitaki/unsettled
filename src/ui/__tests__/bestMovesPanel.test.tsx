@@ -307,6 +307,75 @@ describe('Best moves recording', () => {
     expect(sections[0].querySelector('h2')?.textContent).toBe("Record Bee's turn")
   })
 
+  it('says in one sentence when no dev card is worth playing before the roll', async () => {
+    const cards = emptyStats().hand
+    respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
+    await click('Retry advice')
+    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    expect(advice.querySelector('.analysis-row')).toBeNull()
+    expect(advice.textContent).toContain('No dev card worth playing first.')
+    expect(advice.textContent).toContain('Ranked trades, builds and cards follow the roll.')
+    expect(advice.textContent).not.toContain('Your best moves')
+    expect(advice.textContent).not.toContain('Hold your dev cards')
+    await click('Turn 2: Bee')
+    expect(container.querySelectorAll('section.best-moves-panel')[1].querySelector('h2')?.textContent).toBe('Best moves for Bee')
+  })
+
+  it('offers a worthwhile pre-roll Knight as one row whose Play opens the prefilled robber flow', async () => {
+    const cards = emptyStats().hand
+    const hex = game().board.hexes.find(({ coord }) => axialKey(coord) !== '0,0')!.coord
+    respond = () => ({ kind: 'preRoll', play: { type: 'playKnight', hex, victim: 'b' }, reason: 'Blocks 6 pips of Bee',
+      derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
+    await click('Retry advice')
+    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    const row = advice.querySelector('.analysis-row')!
+    expect(advice.querySelectorAll('.analysis-row')).toHaveLength(1)
+    expect(row.className).not.toContain('move-dashed')
+    expect(row.textContent).toContain('Before you roll')
+    expect(row.textContent).toContain('Blocks 6 pips of Bee')
+    expect(advice.textContent).not.toContain('No dev card worth playing first.')
+    expect(advice.textContent).toContain('Ranked trades, builds and cards follow the roll.')
+    await click('Play', row)
+    expect(container.querySelector('.move-robber')?.textContent).toContain('Suggested:')
+    expect(container.querySelectorAll('.hex-highlight')).toHaveLength(1)
+  })
+
+  it('names Play after its row and records pre-roll Road building in one tap', async () => {
+    const cards = emptyStats().hand
+    const corner = boardGrid(game().board.layout).vertexIds[0]
+    const [first, second] = boardGrid(game().board.layout).edgeIds.filter((edge) => edgeEndpointVertexIds(edge).includes(corner))
+    respond = () => ({ kind: 'preRoll', play: { type: 'roadBuilding', first, second }, reason: '',
+      derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
+    await click('Retry advice')
+    const row = () => container.querySelector('.analysis-row')!
+    expect(button('Play', row()).getAttribute('aria-label')).toContain('Play Road building')
+    await click('Play', row())
+    expect(game().board.roads).toHaveLength(2)
+  })
+
+  it('does not say no card is worth playing once one was played before the roll', async () => {
+    const cards = emptyStats().hand
+    respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
+    await act(async () => seen.dispatch({ type: 'commit-game', game: recordPlayDev(game(), { kind: 'yearOfPlenty', resources: ['wood', 'ore'] }) }))
+    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    expect(advice.textContent).not.toContain('No dev card worth playing first.')
+    expect(advice.textContent).toContain('Ranked trades, builds and cards follow the roll.')
+  })
+
+  it('lists ranked moves as ledger rows without the old label', async () => {
+    const cards = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+    const derived = { bank: cards, tradeRates: { wood: 4, sheep: 4, wheat: 4, brick: 4, ore: 4 }, devDeckRemaining: 21, unknownOwnCards: 0 }
+    respond = ({ decision }) => decision.kind === 'preRoll' ? { kind: 'preRoll', play: null, reason: '', derived }
+      : { kind: 'turn', actions: [{ action: { type: 'pass' }, score: 0, reason: 'Ends the turn', handDelta: cards }], derived }
+    await act(async () => seen.dispatch({ type: 'commit-game', game: recordRoll(game(), 8, {}) }))
+    const advice = container.querySelectorAll('section.best-moves-panel')[1]
+    expect(advice.querySelector('h2')?.textContent).toBe('Best moves')
+    expect(advice.querySelector('.move-label')).toBeNull()
+    expect(advice.querySelector('.analysis-list')?.classList.contains('pick-ledger')).toBe(true)
+    expect(advice.querySelector('.analysis-row .analysis-rank')?.textContent).toBe('1')
+    expect(advice.textContent).not.toContain('follow the roll')
+  })
+
   it('shows playable dev cards only, and hides the tile after playing', async () => {
     await click('Turn 2: Bee')
     expect([...container.querySelectorAll('button')].some((button) => button.textContent === 'Play card')).toBe(false)
@@ -443,8 +512,7 @@ describe('Best moves recording', () => {
     respond = () => ({ kind: 'preRoll', play: { type: 'monopoly', resource: 'ore' }, reason: '',
       derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustDevHand(game(), 'playable', 'knight', -1) }))
-    await clickElement(container.querySelector('.analysis-row-select'))
-    await click('Apply')
+    await click('Play', container.querySelector('.analysis-row')!)
     expect([...tray().querySelectorAll('[aria-label="Card"] button')].map((button) => button.textContent)).toEqual(['Road building', 'Year of plenty', 'Monopoly'])
     expect(button('Names ore').getAttribute('aria-pressed')).toBe('true')
     expect(tray().textContent).toContain('Bee 5')
@@ -1031,8 +1099,7 @@ describe('Best moves recording', () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: { type: 'playKnight', hex, victim: 'b' }, reason: 'Block wood', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 21, unknownOwnCards: 0 } })
     await click('Retry advice')
-    await clickElement(container.querySelector('.analysis-row-select'))
-    await click('Apply')
+    await click('Play', container.querySelector('.analysis-row')!)
     expect(container.querySelectorAll('.hex-highlight')).toHaveLength(1)
     expect(container.querySelectorAll('.highlighted, .vertex-highlight, .edge-highlight')).toHaveLength(0)
     expect(container.textContent).toContain('Suggested:')
