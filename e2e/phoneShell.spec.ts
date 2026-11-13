@@ -83,7 +83,7 @@ test('the build heading holds history, with board actions in the tools and expor
   const tools = page.locator('.phone-build')
   const heading = tools.locator('.panel-heading')
   expect(await heading.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label'))))
-    .toEqual(['Undo', 'Redo'])
+    .toEqual(['Undo', 'Redo', 'Close board tools'])
   await expect(heading.getByRole('button', { name: 'Undo' })).toBeDisabled()
   await expect(tools.getByRole('button', { name: 'Clear board', exact: true })).toBeVisible()
   await snap(page, 'build-actions')

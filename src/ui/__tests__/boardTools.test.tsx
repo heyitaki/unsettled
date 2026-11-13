@@ -97,7 +97,7 @@ describe('Board tools', () => {
     expect(button('Undo').disabled).toBe(true)
     expect(button('Redo').disabled).toBe(true)
     const headings = [...container.querySelectorAll('.panel-heading button')]
-    expect(headings.map((item) => item.getAttribute('aria-label'))).toEqual(['Undo', 'Redo'])
+    expect(headings.map((item) => item.getAttribute('aria-label'))).toEqual(['Undo', 'Redo', 'Close board tools'])
     expect([...container.querySelectorAll('[aria-label]')].some((item) => item.getAttribute('aria-label') === 'Board options')).toBe(false)
     await fill()
     const edited = board()

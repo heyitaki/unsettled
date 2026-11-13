@@ -91,12 +91,12 @@ describe('Phone board tools', () => {
     expect(container.querySelector('.head-dot')?.classList.contains('me')).toBe(true)
   })
 
-  it('puts only Undo and Redo in the build heading without a Player row', async () => {
+  it('puts only Undo, Redo and Close in the build heading without a Player row', async () => {
     await render(true)
     expect([...container.querySelectorAll('.phone-build .tool-label')].map((label) => label.firstChild?.textContent))
       .toEqual(['Layout', 'Terrain', 'Number token', 'Board'])
     expect([...container.querySelectorAll('.panel-heading button')].map((item) => item.getAttribute('aria-label')))
-      .toEqual(['Undo', 'Redo'])
+      .toEqual(['Undo', 'Redo', 'Close board tools'])
   })
 
   it('can randomize an untouched deal again after reopening build mode', async () => {

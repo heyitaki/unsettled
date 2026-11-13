@@ -1,4 +1,5 @@
 import type { useBoardActions } from './boardActions'
+import { CloseGlyph } from './glyphs'
 import { ToolGroups } from './ToolGroups'
 import { UndoRedoButtons } from './UndoRedoButtons'
 
@@ -18,7 +19,9 @@ export function BoardTools({ className = 'panel tools-panel', actions, onDone, o
       <div className="block-inner">
         <div className="panel-heading">
           <h2>Board tools</h2>
-          <UndoRedoButtons />
+          <UndoRedoButtons>
+            <button type="button" className="panel-dots" aria-label="Close board tools" data-label="Close" onClick={onDone}><CloseGlyph /></button>
+          </UndoRedoButtons>
         </div>
         <ToolGroups onLayout={chooseLayout} onRandomize={randomize} onClearPieces={clearPieces} onClear={clear} />
       </div>
