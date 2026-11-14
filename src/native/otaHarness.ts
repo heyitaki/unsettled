@@ -82,7 +82,7 @@ async function write(event: string, detail: Record<string, unknown>): Promise<vo
   const [{ bundle }, { bundles }, raw, { build }] = await Promise.all([
     CapacitorUpdater.current(),
     CapacitorUpdater.list(),
-    // Diagnostics only (spec Requirement 7): the boot module never reads the raw registry.
+    // Diagnostics only: the boot module never reads the raw registry.
     CapacitorUpdater.list({ raw: true }),
     App.getInfo(),
   ])

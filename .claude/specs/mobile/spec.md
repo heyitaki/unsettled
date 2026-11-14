@@ -89,6 +89,7 @@ Full-screen overlay. Header: back chevron, `Maps` left-aligned, then in the righ
 
 1. **`Import screenshot`**: the filled accent button, first on the page. It is why the screen was opened.
 2. **`Boards (n)`** with a sort control on the right of the label: the existing four-key sort (`Last modified`, `Created`, `Last opened`, `Name`), default `Last modified`. One list: every saved map in sort order, with any open board that has no row among them (never saved, or its map missing from the listing) ahead of them. Rows: colour hex, name, relative timestamp, trash. Rows have transparent grounds and transparent 1px borders. The board on screen has the neutral tint.
+3. **Version line** (iOS app only, `VersionLine`): last on the page in muted type, `Version <running bundle label>`, then `A newer version is on the App Store.` while the last manifest check found an update this store build cannot take. The website build renders nothing.
 
 Every board autosaves into a map (O2), so an open board and its saved map are one thing and the list shows it once. Nothing marks a map as loaded: tapping one already loaded just switches to it. An unsaved board carries no timestamp, because it has nothing saved; the timestamp answers "can I delete this?". The trash deletes the map and drops the board loaded from it in one gesture (an unsaved board is simply dropped, pending edit included). The library keeps the 50 most recently touched boards; older ones leave the list on their own, board and map together (desktop D1). Desktop spec D1 holds the store actions each row reaches.
 

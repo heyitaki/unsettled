@@ -1,4 +1,4 @@
-// OTA end-to-end proof on the booted iOS simulator (spec Requirement 13):
+// OTA end-to-end proof on the booted iOS simulator:
 //   npm run ota:harness [-- --only 1,2]
 // Wipes the simulator's Unsettled data. Prints one PASS or FAIL line per
 // scenario and for the run-wide log check, and exits nonzero on any failure.
@@ -378,4 +378,7 @@ try {
 const summary = [`OTA harness summary (${new Date().toISOString()}, run directory ${workRoot})`, ...results].join('\n')
 writeFileSync(join(workRoot, 'summary.txt'), `${summary}\n`)
 console.log(`\n${summary}`)
+// The harness builds leave dist-native/ and the synced iOS project as a harness build
+// (plain-HTTP downloads, a deleted throwaway key), so Xcode must not run them as they are.
+console.log('Run npm run ios:build before building from Xcode: the iOS project still holds the harness build.')
 process.exit(failed ? 1 : 0)
