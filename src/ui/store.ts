@@ -624,6 +624,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // document; written straight out rather than debounced because it is one
   // short string and losing it costs the user their place.
   useEffect(() => saveActiveTab(state.activeTabId), [state.activeTabId])
+  // The workspace and library were parsed in the first render, so this bundle
+  // has booted: the iOS app tells its updater so, then checks for an update.
+  useEffect(() => {
+    if (import.meta.env.MODE === 'native') {
+      void import('../native/ota').then((ota) => ota.startUpdates()).catch((error: unknown) => console.error(error))
+    }
+  }, [])
   // Layout as well: the unload flush below drains whatever the autosave last
   // saw, and a page hidden between this commit and a passive effect would flush
   // a set without the edit. The workspace still keeps it, but a reload

@@ -25,6 +25,9 @@ void (async () => {
   // A failed boot costs the restore and share listener, never the app itself.
   if (import.meta.env.MODE === 'native') {
     await import('./native/ios').then((ios) => ios.bootNative()).catch((error: unknown) => console.error(error))
+    // Never settles once it has switched bundles, so the reloading page never
+    // mounts; any failure mounts on the current bundle.
+    await import('./native/ota').then((ota) => ota.applyAtColdStart()).catch((error: unknown) => console.error(error))
   }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
