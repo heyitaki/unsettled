@@ -260,6 +260,11 @@ export function webBuild(server, env) {
 export async function otaBundle(server, keys, workRoot, label, buildEnv = {}) {
   log(`building OTA bundle ${label}`, Object.keys(buildEnv).join(' '))
   await webBuild(server, buildEnv)
+  return packBundle(server, keys, workRoot, label)
+}
+
+/** Zips and encrypts whatever dist-native holds; a second call gives a re-encrypted copy at a new URL. */
+export function packBundle(server, keys, workRoot, label) {
   const workDir = mkdtempSync(join(workRoot, `pack-${label}-`))
   const env = { ...cleanEnv(), UNSETTLED_OTA_BUNDLE_PUBLIC_KEY_FILE: keys.pub }
   const { file, checksum, sessionKey } = capgoPack(REPO, { label, keyFile: keys.key, workDir, env })
