@@ -49,6 +49,11 @@ describe('VersionLine', () => {
     expect(lines()).toEqual(['Version 1.0.521'])
   })
 
+  it('shows the App Store note alone before the running label is known', () => {
+    act(() => updateOtaStatus({ storeUpdate: true }))
+    expect(lines()).toEqual(['A newer version is on the App Store.'])
+  })
+
   it('renders nothing outside the native build', () => {
     vi.stubEnv('MODE', 'production')
     act(() => updateOtaStatus({ bundleVersion: '1.0.521', storeUpdate: true }))

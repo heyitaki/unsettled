@@ -106,7 +106,22 @@ describe('ready and check', () => {
     expect(init?.signal).toBeInstanceOf(AbortSignal)
     const { url: bundleUrl, version, checksum, sessionKey } = manifest
     expect(plugin.download).toHaveBeenCalledWith({ url: bundleUrl, version, checksum, sessionKey })
-    expect(plugin.list).toHaveBeenCalledWith()
+    // Every list() is the default form: the raw registry would block a retry.
+    expect(plugin.list.mock.calls.every((args) => args.length === 0)).toBe(true)
+  })
+
+  it('checks again on a later resume after a check that threw', async () => {
+    const { ota } = await load()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    plugin.download.mockRejectedValueOnce(new Error('download failed'))
+    await ota.startUpdates()
+    await flush()
+    expect(plugin.download).toHaveBeenCalledTimes(1)
+    const onResume = app.addListener.mock.calls[0][1] as () => void
+    onResume()
+    await flush()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(plugin.download).toHaveBeenCalledTimes(2)
   })
 
   it('runs once per page load', async () => {
@@ -144,6 +159,15 @@ describe('ready and check', () => {
     const { ota, status } = await load()
     status.updateOtaStatus({ storeUpdate: true })
     fetchMock.mockRejectedValue(new TypeError('offline'))
+    await ota.checkForUpdate()
+    expect(status.getOtaStatus().storeUpdate).toBe(true)
+    expect(plugin.download).not.toHaveBeenCalled()
+  })
+
+  it('leaves the store note alone on a non-OK response', async () => {
+    const { ota, status } = await load()
+    status.updateOtaStatus({ storeUpdate: true })
+    fetchMock.mockImplementation(() => Promise.resolve(new Response('not found', { status: 404 })))
     await ota.checkForUpdate()
     expect(status.getOtaStatus().storeUpdate).toBe(true)
     expect(plugin.download).not.toHaveBeenCalled()

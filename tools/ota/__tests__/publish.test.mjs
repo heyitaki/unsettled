@@ -254,3 +254,21 @@ describe('publish', () => {
     expect(existsSync(join(out, 'bundles', manifest.url.split('/').pop()))).toBe(true)
   }, 60_000)
 })
+
+describe('no-network preload', () => {
+  const preload = join(REPO_ROOT, 'tools/ota/no-network.cjs')
+  const blocked = (script) => {
+    try {
+      execFileSync(process.execPath, ['--require', preload, '-e', script], { stdio: 'pipe' })
+    } catch (error) {
+      return String(error.stderr)
+    }
+    return 'exited 0'
+  }
+
+  it('blocks fetch, sockets and DNS', () => {
+    expect(blocked("fetch('https://example.com').catch((e) => { console.error(e.message); process.exit(1) })")).toContain('no-network: blocked fetch')
+    expect(blocked("require('node:net').connect(443, 'example.com')")).toContain('no-network: blocked socket connect')
+    expect(blocked("require('node:dns').lookup('example.com', () => {})")).toContain('no-network: blocked dns.lookup')
+  })
+})
