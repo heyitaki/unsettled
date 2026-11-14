@@ -1,3 +1,6 @@
+# The site's jekyll.yml lists this file's green push runs by file name, and
+# dispatch-site.yml triggers on the name "Check and deploy": renaming either
+# breaks the site and OTA publish.
 name: Check and deploy
 
 on:
@@ -21,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      # The updater plugin belongs to the iOS build only.
+      - run: "! grep -rq CapacitorUpdater dist"
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
