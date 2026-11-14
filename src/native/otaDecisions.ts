@@ -56,7 +56,7 @@ function allowedUrl(url: string, harness: boolean): boolean {
   } catch {
     return false
   }
-  if (parsed.protocol === 'https:') return parsed.hostname !== ''
+  if (parsed.protocol === 'https:') return true
   // Harness builds fetch bundles from a plain-HTTP loopback server; production never does.
   return harness && parsed.protocol === 'http:' && parsed.port !== '' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')
 }

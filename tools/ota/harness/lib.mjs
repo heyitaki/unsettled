@@ -1,6 +1,6 @@
 // Building blocks for the OTA simulator harness (run.mjs): the loopback
 // server, the whole-run log stream, simulator and container access, the
-// harness builds and polling waits. See spec Requirement 13.
+// harness builds and polling waits.
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, generateKeyPairSync } from 'node:crypto'
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -34,13 +34,13 @@ export function run(cmd, args, { env = cleanEnv(), cwd = REPO } = {}) {
 }
 
 /** Polls `probe` until it returns a truthy value; fails after 60 s with `describe()`'s last state. */
-export async function waitFor(what, probe, { timeout = STEP_TIMEOUT_MS, interval = 200, describe } = {}) {
-  const deadline = Date.now() + timeout
+export async function waitFor(what, probe, { interval = 200, describe } = {}) {
+  const deadline = Date.now() + STEP_TIMEOUT_MS
   for (;;) {
     const value = await probe()
     if (value) return value
     if (Date.now() > deadline) {
-      throw new Error(`timed out after ${timeout / 1000} s waiting for ${what}${describe ? `\n${describe()}` : ''}`)
+      throw new Error(`timed out after ${STEP_TIMEOUT_MS / 1000} s waiting for ${what}${describe ? `\n${describe()}` : ''}`)
     }
     await new Promise((resolve) => setTimeout(resolve, interval))
   }
@@ -247,7 +247,7 @@ export function libraryDigest(entries) {
 }
 
 /** Harness builds share the manifest URL; `env` adds the per-bundle switches. */
-export function harnessEnv(server, env = {}) {
+function harnessEnv(server, env = {}) {
   return { ...cleanEnv(), VITE_OTA_HARNESS: '1', VITE_OTA_MANIFEST_URL: `${server.origin}/ios.json`, ...env }
 }
 
@@ -272,11 +272,11 @@ export function packBundle(server, keys, workRoot, label) {
   return { version: label, file, hash, checksum, sessionKey, url: server.publish(file, `${hash}.zip`) }
 }
 
-/** The manifest of Requirement 5 for a served bundle. */
-export const manifestFor = (bundle, minNativeBuild = 0, url = bundle.url) => ({
+/** The published manifest shape for a served bundle. */
+export const manifestFor = (bundle, minNativeBuild = 0) => ({
   schema: 1,
   version: bundle.version,
-  url,
+  url: bundle.url,
   checksum: bundle.checksum,
   sessionKey: bundle.sessionKey,
   minNativeBuild,

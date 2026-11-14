@@ -16,8 +16,6 @@ function subscribe(listener: () => void) {
   return () => { listeners.delete(listener) }
 }
 
-const snapshot = () => status
-
 export function getOtaStatus(): OtaStatus {
   return status
 }
@@ -30,5 +28,5 @@ export function updateOtaStatus(change: Partial<OtaStatus>): void {
 }
 
 export function useOtaStatus(): OtaStatus {
-  return useSyncExternalStore(subscribe, snapshot, snapshot)
+  return useSyncExternalStore(subscribe, getOtaStatus, getOtaStatus)
 }
