@@ -1,0 +1,36 @@
+# After every green push run of "Check and deploy" on main, ping the personal
+# site (heyitaki.github.io) to rebuild so akshath.me/unsettled and the iOS OTA
+# bundle pick up this commit. The site's jekyll.yml listens for the
+# "unsettled-update" repository_dispatch event and publishes the newest commit
+# with a successful "Check and deploy" push run, so this must fire after that
+# run completes, not inside it. A workflow_run trigger only fires from the
+# default branch's copy of this file.
+#
+# Requires a repo secret SITE_DISPATCH_TOKEN: a fine-grained PAT scoped to
+# heyitaki/heyitaki.github.io with Contents: Read and write (cross-repo dispatch
+# can't use the default GITHUB_TOKEN).
+name: Dispatch site rebuild
+
+on:
+  workflow_run:
+    workflows: ["Check and deploy"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch rebuild to personal site
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          curl --fail -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
+            https://api.github.com/repos/heyitaki/heyitaki.github.io/dispatches \
+            -d '{"event_type":"unsettled-update"}'
