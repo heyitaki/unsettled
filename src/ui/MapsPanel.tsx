@@ -5,6 +5,7 @@ import { DotsGlyph, PlusGlyph } from './glyphs'
 import { LibraryLists } from './LibraryLists'
 import { useStore } from './store'
 import { useJsonFiles } from './useJsonFiles'
+import { VersionLine } from './VersionLine'
 
 /**
  * The desktop's Library panel (spec D1), opened from the header title.
@@ -41,6 +42,7 @@ export function MapsPanel() {
         </div>
       </div>
       <LibraryLists />
+      <VersionLine />
       {fileInput}
       {menuTrigger && (
         <ContextMenu
