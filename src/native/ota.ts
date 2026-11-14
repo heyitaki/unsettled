@@ -48,7 +48,7 @@ export async function applyAtColdStart(): Promise<void> {
 
 async function fetchManifestBody(): Promise<string | null> {
   const url = new URL(import.meta.env.VITE_OTA_MANIFEST_URL || DEFAULT_MANIFEST_URL)
-  // Pages serves max-age=600 behind Cloudflare, so the query and no-store dodge both caches.
+  // Pages caches the manifest and Cloudflare sits in front of it, so the query and no-store dodge both caches.
   url.searchParams.set('t', String(Date.now()))
   // AbortSignal.timeout needs iOS 16 and the deployment target is 15.
   const controller = new AbortController()

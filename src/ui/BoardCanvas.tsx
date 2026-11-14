@@ -76,7 +76,7 @@ const BOARD_MARGIN = 18
 // desktop board at fit; the phone's board is half as wide, so 3px there.
 const SEA_RADIUS = 5
 // Shared outline width for every piece (buildings + roads), in unscaled board units. The piece
-// sizes, outline, road ends and shadow were chosen together on a live tuner (2026-11-13).
+// sizes, outline, road ends and shadow were tuned together, so change them as a set.
 const PIECE_STROKE = 1.8
 // Colored core width of a road; its casing adds PIECE_STROKE on each side.
 const ROAD_CORE = 6
@@ -92,7 +92,7 @@ const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.72, city: 0.828, superCity: 0.972 }
 const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, superCity: 11.3 }
 // Conservative half-extent a placed building reaches from its vertex, across all
-// tiers/scales (city annex and super city ≈ 16 + outline). Used to keep edge pieces in-frame.
+// tiers and scales, outline included. Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
 
 type Point = { x: number; y: number }

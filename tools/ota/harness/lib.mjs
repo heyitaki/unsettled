@@ -33,7 +33,7 @@ export function run(cmd, args, { env = cleanEnv(), cwd = REPO } = {}) {
   })
 }
 
-/** Polls `probe` until it returns a truthy value; fails after 60 s with `describe()`'s last state. */
+/** Polls `probe` until it returns a truthy value; fails after STEP_TIMEOUT_MS with `describe()`'s last state. */
 export async function waitFor(what, probe, { interval = 200, describe } = {}) {
   const deadline = Date.now() + STEP_TIMEOUT_MS
   for (;;) {
