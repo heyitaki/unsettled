@@ -8,6 +8,16 @@ import { updateOtaStatus } from './otaStatus'
 // reset() or delete(), and every list() is the default form, which lists bundle
 // folders on disk (the raw registry keeps records that would block a retry).
 
+// Harness builds only (VITE_OTA_HARNESS=1); every other build folds this to
+// null and drops the module.
+const harness = import.meta.env.VITE_OTA_HARNESS === '1' ? import('./otaHarness') : null
+
+async function trace(event: string, detail?: Record<string, unknown>): Promise<void> {
+  if (harness) await (await harness).record(event, detail)
+}
+
+const seeded = async () => harness !== null && (await harness).seeded
+
 const DEFAULT_MANIFEST_URL = 'https://akshath.me/unsettled-ota/ios.json'
 const MANIFEST_TIMEOUT_MS = 5000
 
@@ -25,10 +35,13 @@ async function running() {
  * notifyAppReady(). A rejection lets the caller mount on the current bundle.
  */
 export async function applyAtColdStart(): Promise<void> {
+  if (await seeded()) return
   const { currentId, label, builtin } = await running()
   const { bundles } = await CapacitorUpdater.list()
   const candidate = chooseCandidate(bundles, currentId, label, builtin)
+  await trace('cold-start', candidate ? { decision: 'set', id: candidate.id, version: candidate.version } : { decision: 'none' })
   if (!candidate) return
+  await trace('set-called', { id: candidate.id, version: candidate.version })
   await CapacitorUpdater.set({ id: candidate.id })
   await new Promise<never>(() => {})
 }
@@ -56,6 +69,7 @@ export async function checkForUpdate(): Promise<void> {
     const { url, version, checksum, sessionKey } = manifest
     await CapacitorUpdater.download({ url, version, checksum, sessionKey })
   }
+  await trace('check-done', { manifest: manifest?.version ?? null, ...outcome })
 }
 
 let started = false
@@ -66,7 +80,10 @@ function runCheck(): void {
   if (checking) return
   checking = true
   void checkForUpdate()
-    .catch((error: unknown) => console.warn('Update check failed', error))
+    .catch((error: unknown) => {
+      console.warn('Update check failed', error)
+      return trace('check-done', { error: String(error) })
+    })
     .finally(() => { checking = false })
 }
 
@@ -79,7 +96,11 @@ function runCheck(): void {
 export async function startUpdates(): Promise<void> {
   if (started) return
   started = true
+  if (await seeded()) return
+  await trace('mounted')
+  if (harness) await (await harness).beforeReady()
   await CapacitorUpdater.notifyAppReady()
+  await trace('ready')
   runCheck()
   await App.addListener('resume', runCheck)
 }

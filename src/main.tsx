@@ -24,6 +24,12 @@ window.addEventListener(SHARE_EVENT, (event) => {
 void (async () => {
   // A failed boot costs the restore and share listener, never the app itself.
   if (import.meta.env.MODE === 'native') {
+    if (import.meta.env.VITE_OTA_HARNESS === '1') {
+      await (await import('./native/otaHarness')).record('boot')
+      // The harness's bad bundle: thrown outside every catch below, so nothing
+      // mounts and notifyAppReady() never runs.
+      if (import.meta.env.VITE_OTA_HARNESS_FAIL === '1') throw new Error('ota-harness bad bundle')
+    }
     await import('./native/ios').then((ios) => ios.bootNative()).catch((error: unknown) => console.error(error))
     // Never settles once it has switched bundles, so the reloading page never
     // mounts; any failure mounts on the current bundle.
