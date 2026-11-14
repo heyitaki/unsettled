@@ -14,7 +14,8 @@
     "typecheck": "tsc -b",
     "ios:build": "tsc -b && vite build --mode native && cap sync ios",
     "ios:archive": "ios/archive.sh",
-    "ios:upload": "xcodebuild -exportArchive -archivePath ios/App/build/Unsettled.xcarchive -exportOptionsPlist ios/ExportOptions.plist -exportPath ios/App/build/export -allowProvisioningUpdates"
+    "ios:upload": "xcodebuild -exportArchive -archivePath ios/App/build/Unsettled.xcarchive -exportOptionsPlist ios/ExportOptions.plist -exportPath ios/App/build/export -allowProvisioningUpdates",
+    "ota:harness": "node tools/ota/harness/run.mjs"
   },
   "dependencies": {
     "@capacitor/app": "8.1.2",

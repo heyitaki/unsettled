@@ -71,7 +71,7 @@ export function minNativeBuild(repo, tags = storeTags(repo)) {
   return min
 }
 
-const cleanEnv = () =>
+export const cleanEnv = () =>
   Object.fromEntries(
     Object.entries(process.env).filter(([k]) => !k.startsWith('VITE_OTA_') && !k.startsWith('UNSETTLED_OTA_')),
   )
@@ -81,15 +81,17 @@ function viteBuild(repo) {
 }
 
 // Zips dist-native (the CLI also checks it calls notifyAppReady()) and encrypts
-// it, offline under the no-network preload. Returns the encrypted zip's path and
-// the manifest's checksum and sessionKey.
-function capgoPack(repo, { label, keyFile, workDir }) {
+// it, offline under the no-network preload (the simulator harness packs its
+// bundles with it too). Returns the encrypted zip's path and
+// the manifest's checksum and sessionKey. The CLI loads capacitor.config.ts,
+// so the harness passes `env` with its throwaway public key.
+export function capgoPack(repo, { label, keyFile, workDir, env = cleanEnv() }) {
   const run = (...args) =>
     JSON.parse(
       execFileSync(join(TOOLS, 'capgo'), [...args, '--json'], {
         cwd: repo,
         encoding: 'utf8',
-        env: { ...cleanEnv(), NODE_OPTIONS: `--require ${NO_NETWORK}` },
+        env: { ...env, NODE_OPTIONS: `--require ${NO_NETWORK}` },
         stdio: ['ignore', 'pipe', 'inherit'],
       }),
     )
