@@ -13,7 +13,7 @@
     "test:pwa": "playwright test --config playwright.production.config.ts",
     "typecheck": "tsc -b",
     "ios:build": "tsc -b && vite build --mode native && cap sync ios",
-    "ios:archive": "npm run ios:build && ios/archive.sh",
+    "ios:archive": "ios/archive.sh",
     "ios:upload": "xcodebuild -exportArchive -archivePath ios/App/build/Unsettled.xcarchive -exportOptionsPlist ios/ExportOptions.plist -exportPath ios/App/build/export -allowProvisioningUpdates"
   },
   "dependencies": {
