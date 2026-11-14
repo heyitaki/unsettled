@@ -562,7 +562,7 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
             .collect::<Vec<_>>()
     };
 
-    // Compare the nine old domains and all 45 seat-derived seeds on both
+    // Compare the nine old domains, PERF_SEED and all 45 seat-derived seeds on both
     // layouts, including boards at different indices that a bare seat xor would overlap.
     let mut domains = [
         ("tuning", TUNING_SEED),
@@ -574,6 +574,7 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
         ("tuning3", TUNING3_SEED),
         ("eval3", EVAL3_SEED),
         ("gate3", GATE3_SEED),
+        ("perf", PERF_SEED),
     ]
     .into_iter()
     .map(|(name, seed)| (name.to_string(), seed))
@@ -593,6 +594,7 @@ fn tuning_and_evaluation_domains_have_disjoint_seeds_and_boards() {
             domains.push((format!("{}-{seats}", domain.name()), domain.seed(seats)));
         }
     }
+    assert_eq!(domains.len(), 55);
     let layouts = [(Layout::Standard4, 4), (Layout::Extension6, 6)];
     for (index, (left_name, left)) in domains.iter().enumerate() {
         for (right_name, right) in &domains[index + 1..] {

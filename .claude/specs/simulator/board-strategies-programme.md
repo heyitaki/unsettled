@@ -1,6 +1,6 @@
 # Board-specific strategies programme
 
-Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 67176051
+Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 9aeda5ff
 
 ## Summary
 
@@ -267,6 +267,8 @@ Dropped by the owner on 2026-10-14 (Decisions). Requirements 18 to 22 stay as th
 Drafted 2026-10-14 after M-129 passed. Approved by the owner on 2026-10-14 as written, including A5's choice that a ranking's rollouts use that ranking's one vector. Item 10 at five seats is this amendment; three, four and six seats close as M-124, M-125 and M-127 left them.
 
 A1. **Strategy file.** New `simulator/placement/seat-strategies/seats-5.json`, the one strategy file, holding `{"rule": "slot>=1&topCrowding>=10", "leaves": {"/contestWeight": 0.5, "/repriceFirstExpansion": 1}}`. A new `strategy_for_seats(seats) -> Option<&'static SeatStrategy>` in `placement/analysis.rs`, beside `weights_for_seats`, embeds it with `include_str!` and returns `None` for every other seat count. `SeatStrategy` holds the parsed `Rule` and the full vector (`weights_for_seats(5)` with the leaves applied), built once in a `OnceLock`. A rule that fails to parse, or a leaf that names no weight, panics on first use; the pin test below runs it.
+
+A1a. **Layout.** The rule is chosen by seat count alone, like `weights_for_seats`, so it also fires on a five-player `standard4` board. Every five-seat measurement (M-126, M-128, M-129) ran on `extension6`; the `standard4` case is unmeasured and kept as is, the review's default on 2026-11-13; the owner has not ruled on it.
 
 A2. **Features move.** `simulator/crates/cli/src/features.rs` moves whole to `simulator/crates/engine/src/placement/features.rs` (`git mv`), exported as `unsettled_engine::placement::features`; `evaluate.rs` and `slice.rs` change only their `use` lines. `TerrainFeatures::read(board: &SimBoard, topology)` becomes `TerrainFeatures::read(topology, tiles: &[Option<Resource>], tokens: &[Option<u8>], seats: usize)`, so the analysis's own `Board` (`tiles`, `tokens`, `player_ids.len()`) and `SimBoard` (`tiles()`, `tokens()`, `seats()`) call the same function. Its body does not change. The race readings move with the file and stay diagnostics no rule may use.
 

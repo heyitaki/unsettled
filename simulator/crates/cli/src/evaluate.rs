@@ -524,7 +524,8 @@ pub fn evaluate_in_chunks(
     let reference_index = request.reference.and_then(|reference| {
         request.arms.iter().position(|(label, _)| label == reference)
     });
-    let mut fired_schedule = Vec::new();
+    let mut fired_schedule = rule.as_ref().map(|_| Vec::new());
+    let mut fired_units = 0;
     let mut indicators = (0..request.arms.len())
         .map(|_| Vec::with_capacity(units))
         .collect::<Vec<_>>();
@@ -538,7 +539,10 @@ pub fn evaluate_in_chunks(
             &request, &topology, domain_seed, board_start..board_end, rule.as_ref(),
         )?;
         let chunk_units = chunk_indices.len();
-        fired_schedule.extend(chunk_indices.iter().map(|index| schedule[*index]));
+        if let Some(fired_schedule) = &mut fired_schedule {
+            fired_schedule.extend(chunk_indices.iter().map(|index| schedule[*index]));
+        }
+        fired_units += chunk_units;
         let game_count = jobs.len();
         let outcomes: Vec<EvaluationOutcome> = pool.install(|| {
             jobs.par_iter()
@@ -553,23 +557,23 @@ pub fn evaluate_in_chunks(
                     } else {
                         arena.play(board, &topology, &rules, &config)
                     };
-                    let race = traced.then(|| {
+                    let race = if traced {
                         let levels = (0..request.seats).map(|seat| {
                             let pick = trace.iter().find(|pick| usize::from(pick.seat) == seat && pick.pick == 1)
-                                .expect("completed reference setup");
-                            road_readiness(board, &topology, pick.vertex)
-                        }).collect::<Vec<_>>();
-                        RaceReadings::from_levels(&levels, unit.hero_seat)
-                    });
-                    EvaluationOutcome {
+                                .ok_or_else(|| format!("incomplete reference setup: board {} seat {seat} has no second settlement", unit.board))?;
+                            Ok(road_readiness(board, &topology, pick.vertex))
+                        }).collect::<Result<Vec<_>, String>>()?;
+                        Some(RaceReadings::from_levels(&levels, unit.hero_seat))
+                    } else { None };
+                    Ok(EvaluationOutcome {
                         hero_won: result.winner == Some(unit.hero_seat as u8),
                         draw: result.draw,
                         illegal_actions: result.illegal_actions,
                         race,
-                    }
+                    })
                 })
-                .collect()
-        });
+                .collect::<Result<_, String>>()
+        })?;
         if outcomes.len() != game_count {
             return Err(format!(
                 "evaluation schedule integrity error: expected {game_count} games, collected {}",
@@ -594,7 +598,7 @@ pub fn evaluate_in_chunks(
         if seen.iter().any(|played| !played)
             || indicators
                 .iter()
-                .any(|arm_indicators| arm_indicators.len() != fired_schedule.len())
+                .any(|arm_indicators| arm_indicators.len() != fired_units)
         {
             return Err(
                 "evaluation schedule integrity error: not every arm and unit pair was played exactly once"
@@ -621,11 +625,16 @@ pub fn evaluate_in_chunks(
             write_chunk().map_err(|error| format!("units.csv: {error}"))?;
         }
     }
-    if fired_schedule.is_empty() {
+    if fired_units == 0 {
         return Err(format!("--where {:?} fires on no unit", request.where_rule.unwrap_or("always")));
     }
-    let fired_boards = renumber_boards(&mut fired_schedule);
-    let schedule = fired_schedule;
+    let (schedule, fired_boards) = if let Some(mut fired_schedule) = fired_schedule {
+        drop(schedule);
+        let fired_boards = renumber_boards(&mut fired_schedule);
+        (fired_schedule, fired_boards)
+    } else {
+        (schedule, request.boards)
+    };
 
     let z = alpha_z(request.alpha)?;
     let arms = request
@@ -648,11 +657,7 @@ pub fn evaluate_in_chunks(
     let board_of_unit = schedule.iter().map(|unit| unit.board).collect::<Vec<_>>();
     let mut pairs = Vec::new();
     if let Some(reference_label) = request.reference {
-        let reference_index = request
-            .arms
-            .iter()
-            .position(|(label, _)| label == reference_label)
-            .expect("validated evaluation reference");
+        let reference_index = reference_index.expect("validated evaluation reference");
         let mut arm_indices = (0..request.arms.len())
             .filter(|arm_index| *arm_index != reference_index)
             .collect::<Vec<_>>();
@@ -686,7 +691,7 @@ pub fn evaluate_in_chunks(
     if request.where_rule.is_some() {
         config.fired_units = Some(schedule.len());
         config.fired_share = Some(schedule.len() as f64 / units as f64);
-        config.floor_met = Some(5_u128 * schedule.len() as u128 >= units as u128);
+        config.floor_met = Some(crate::slice::FLOOR_DENOMINATOR as u128 * schedule.len() as u128 >= units as u128);
     }
     Ok(Evaluation {
         config,

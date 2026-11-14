@@ -113,8 +113,7 @@ pub(super) fn rank_candidates(
     let first_receives_grant = receives_second_settlement_grant(draft, first_pick_index);
     let second_receives_grant =
         second_pick_index.is_some_and(|second| receives_second_settlement_grant(draft, second));
-    let reprice = scorer.weights().reprice_first_expansion == 1.0
-        && scorer.weights().expansion_weight != 0.0 && !mid_turns.is_empty();
+    let reprice = scorer.weights().reprices_first_expansion() && !mid_turns.is_empty();
 
     // A mid-window's pieces and distance closure, copied into reusable buffers.
     let mut blocked = Vec::new();
@@ -170,10 +169,7 @@ pub(super) fn rank_candidates(
             let first_holdings = if reprice {
                 let (road, first_holdings) = play_mid_window(&mut blocked, &mut vertex_owner, &mut edge_owner);
 
-                // The vertex reset before scoring and road reset afterward mirror
-                // `Lookahead::value_with_marginal` and cut-off requirement 16, though inert here.
-
-                // A reused setup edge must retain the road that was already priced at pick time.
+                // Put back pick-time owners, as `Lookahead::value_with_marginal` does, so the candidate and its road are not counted twice.
                 vertex_owner[usize::from(*candidate)] = window.vertex_owner[usize::from(*candidate)];
                 if let Some(edge) = road {
                     edge_owner[usize::from(edge)] = window.edge_owner[usize::from(edge)];

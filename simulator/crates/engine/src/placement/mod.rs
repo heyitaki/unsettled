@@ -1,3 +1,4 @@
+use std::cell::OnceCell;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -141,12 +142,8 @@ pub fn prepare_app_formula_boards(
     topology: &Topology,
     kinds: &[PlacementKind],
 ) {
-    let has_strategy = kinds.iter().any(|kind| match *kind {
-        PlacementKind::AppFormulaDraft(index) => draft_definition(index).strategy.is_some(),
-        _ => false,
-    });
     for board in boards {
-        let terrain = has_strategy.then(|| features::TerrainFeatures::read(topology, board.tiles(), board.tokens(), board.seats()));
+        let terrain = OnceCell::new();
         for kind in kinds {
             match *kind {
                 PlacementKind::AppFormula(index) => {
@@ -155,10 +152,19 @@ pub fn prepare_app_formula_boards(
                 }
                 PlacementKind::AppFormulaDraft(index) => {
                     let definition = draft_definition(index);
-                    let strategy = definition.strategy.and_then(|strategy| {
-                        let seats = (0..board.seats()).filter(|slot| strategy.rule.matches(terrain.unwrap(), *slot))
-                            .fold(0_u8, |mask, slot| mask | (1 << slot));
-                        (seats != 0).then_some((&strategy.weights, seats))
+                    let strategy = definition.strategy.and_then(|_| {
+                        let n = board.seats();
+                        let terrain = terrain.get_or_init(|| features::TerrainFeatures::read(topology, board.tiles(), board.tokens(), n));
+                        let base = analysis::weights_for_seats(n);
+                        let mut strategy = None;
+                        for slot in 0..n {
+                            let weights = analysis::selected_weights(n, slot, *terrain);
+                            if !std::ptr::eq(weights, base) {
+                                let (_, seats) = strategy.get_or_insert((weights, 0_u8));
+                                *seats |= 1 << slot;
+                            }
+                        }
+                        strategy
                     });
                     board.prepare_app_formula_draft(
                         index,
@@ -576,6 +582,31 @@ mod tests {
     use crate::wire::WireBoard;
 
     #[test]
+    fn prepared_strategy_pairs_share_an_exact_scorer_clone() {
+        let topology = Topology::shared(Layout::Extension6).unwrap();
+        let wire = WireBoard::parse_str(include_str!(
+            "../../../../../src/parser/__tests__/expected/board-draft-empty.json"
+        )).unwrap();
+        let mut board = SimBoard::try_from_wire(wire, topology, &RuleConfig::base(Layout::Extension6), ConversionOptions::default()).unwrap();
+        let weights = analysis::weights_for_seats(5).clone();
+        let strategy = &analysis::strategy_for_seats(5).unwrap().weights;
+        let fresh = app_formula::AppFormulaScorer::new(&board, topology, strategy.clone());
+        let cloned = fresh.clone();
+        assert_eq!(cloned.id, fresh.id);
+        board.prepare_app_formula_draft(0, topology, weights.clone(), weights, Some((strategy, 1 << 2)));
+        let prepared = board.draft_scorer(0, 2).unwrap();
+        assert_eq!(prepared.hero.id, prepared.opponent.id);
+        let vertices = vec![EMPTY; topology.vertex_count()];
+        let edges = vec![EMPTY; topology.edge_count()];
+        for vertex in 0..topology.vertex_count() as Vertex {
+            let expected = fresh.score_for_owner(&vertices, &edges, 2, vertex, false).to_bits();
+            for scorer in [&cloned, &prepared.hero, &prepared.opponent] {
+                assert_eq!(scorer.score_for_owner(&vertices, &edges, 2, vertex, false).to_bits(), expected);
+            }
+        }
+    }
+
+    #[test]
     fn shipped_selection_plays_the_strategy_by_seat() {
         let topology = Topology::shared(Layout::Extension6).unwrap();
         let wire = WireBoard::parse_str(include_str!(
@@ -597,13 +628,13 @@ mod tests {
             edges.fill(EMPTY);
             edges[edge] = 4;
             let pick = |kind, seat| choose(kind, &board, topology, &vertices, &edges, seat, &[0; 5], false, &mut Xoshiro256StarStar::from_seed(7));
-            if pick(plain, 2) != pick(changed, 2) {
+            if pick(plain, 2) != pick(changed, 2) && pick(plain, 0) != pick(changed, 0) {
                 assert_eq!(pick(shipped, 0), pick(plain, 0));
                 assert_eq!(pick(shipped, 2), pick(changed, 2));
                 witness = true;
                 break;
             }
         }
-        assert!(witness, "the draft arms must choose different pieces for slot 2");
+        assert!(witness, "the draft arms must choose different pieces for slots 0 and 2");
     }
 }

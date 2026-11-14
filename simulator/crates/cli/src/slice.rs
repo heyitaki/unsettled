@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::evaluate::{EvaluationUnit, PairStats, pair_verdict, renumber_boards, try_paired_stats};
+use crate::evaluate::{EvaluationUnit, PairStats, evaluation_schedule, pair_verdict, renumber_boards, try_paired_stats};
 use unsettled_engine::placement::features::{RaceReadings, Rule, TERRAIN_NAMES, TerrainFeatures, UNIT_COLUMNS};
 use crate::stats::alpha_z;
 
@@ -134,18 +134,19 @@ pub fn read_run(directory: &Path) -> Result<RunData, String> {
     let header = lines.next().ok_or("units.csv missing header")?
         .map_err(|error| format!("units.csv header: {error}"))?;
     let columns = header.split(',').collect::<Vec<_>>();
-    if columns.len() < UNIT_COLUMNS.len() || columns[..10] != UNIT_COLUMNS {
+    let fixed = UNIT_COLUMNS.len();
+    if columns.len() < fixed || columns[..fixed] != UNIT_COLUMNS {
         return Err("units.csv header must start with the ten fixed columns".into());
     }
-    let labels = columns[10..].iter().copied().collect::<BTreeSet<_>>();
-    if labels.len() != columns.len() - 10
+    let labels = columns[fixed..].iter().copied().collect::<BTreeSet<_>>();
+    if labels.len() != columns.len() - fixed
         || labels != expected_arms.keys().map(String::as_str).collect()
         || labels.iter().any(|label| UNIT_COLUMNS.contains(label))
     {
         return Err("units.csv arm labels do not match evaluation.json arms without repeats".into());
     }
     let reference_label = config.reference.unwrap();
-    let arms = columns[10..].iter().map(|label| label.to_string()).collect::<Vec<_>>();
+    let arms = columns[fixed..].iter().map(|label| label.to_string()).collect::<Vec<_>>();
     let reference = arms.iter().position(|label| *label == reference_label)
         .ok_or("evaluation.json config.reference does not name an arm column")?;
     let mut rows = Vec::new();
@@ -179,7 +180,7 @@ pub fn read_run(directory: &Path) -> Result<RunData, String> {
         let race = RaceReadings { hero_ready: levels[0] as u8, ready_ahead: levels[1] as u8,
             ready_ahead_trade: levels[2] as u8 };
         let mut indicators = Vec::with_capacity(arms.len());
-        for (arm, cell) in cells[10..].iter().enumerate() {
+        for (arm, cell) in cells[fixed..].iter().enumerate() {
             let won = match *cell {
                 "0" => false,
                 "1" => true,
@@ -197,9 +198,7 @@ pub fn read_run(directory: &Path) -> Result<RunData, String> {
         return Err(format!("units.csv has {} rows, expected {} from config.units", rows.len(), config.units));
     }
     let per_board = config.reps * config.seats;
-    for (index, row) in rows.iter().enumerate() {
-        let expected = EvaluationUnit { board: index / per_board,
-            rep: index % per_board / config.seats, hero_seat: index % config.seats };
+    for (index, (row, expected)) in rows.iter().zip(evaluation_schedule(config.boards, config.reps, config.seats)).enumerate() {
         if row.unit != expected {
             return Err(format!("units.csv schedule mismatch at row {}: {:?}, expected {expected:?}", index + 1, row.unit));
         }
@@ -366,7 +365,10 @@ pub fn slice_run(directory: &Path) -> Result<Slices, String> {
     };
     let mut json = serde_json::to_vec_pretty(&report).map_err(|error| error.to_string())?;
     json.push(b'\n');
-    fs::write(directory.join("slices.json"), json).map_err(|error| format!("slices.json: {error}"))?;
+    let temporary = directory.join(format!("slices.json.{}.tmp", std::process::id()));
+    fs::write(&temporary, json)
+        .and_then(|_| fs::rename(&temporary, directory.join("slices.json")))
+        .map_err(|error| format!("slices.json: {error}"))?;
     Ok(report)
 }
 
@@ -620,6 +622,21 @@ mod tests {
             assert_eq!(fs::read_to_string(dir.join("slices.json")).unwrap(), "keep");
             fs::remove_dir_all(dir).unwrap();
         }
+    }
+
+    #[test]
+    fn slices_replace_the_file_without_overwriting_its_previous_contents() {
+        let dir = fixture(7, 4, 2, &["base", "arm"], |_, _, _, arm| arm > 0);
+        let path = dir.join("slices.json");
+        let previous = dir.join("previous.json");
+        fs::write(&previous, "keep").unwrap();
+        fs::hard_link(&previous, &path).unwrap();
+        let report = slice_run(&dir).unwrap();
+        assert_eq!(fs::read_to_string(previous).unwrap(), "keep");
+        let mut expected = serde_json::to_vec_pretty(&report).unwrap();
+        expected.push(b'\n');
+        assert_eq!(fs::read(path).unwrap(), expected);
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

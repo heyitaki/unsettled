@@ -149,7 +149,7 @@ pub struct EngineWeights {
     /// looks at it, the mirror image of the search-control fields below that only the app reads.
     pub setup_denial_weight: f64,
     pub contest_weight: f64,
-    /// Unread by scoring until first-pick re-pricing lands.
+    /// 1 re-scores the first pick on the board after the mid window; 0 scores it at pick time.
     pub reprice_first_expansion: f64,
     pub opponent_top_k: f64,
     pub softmax_temperature: f64,
@@ -264,6 +264,10 @@ impl EngineWeights {
         }
         self.validate_slot_scales()?;
         Ok(())
+    }
+
+    pub(crate) fn reprices_first_expansion(&self) -> bool {
+        self.reprice_first_expansion == 1.0 && self.expansion_weight != 0.0
     }
 
     /// The `slotScales` block's exact-key rule and its domain.

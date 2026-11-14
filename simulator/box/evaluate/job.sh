@@ -4,7 +4,8 @@
 # --boards <b> --arms <label>[,<label>...] [--units] [--where <rule>]. Before a run on any domain
 # other than perf, the same command plays perf boards at 2,000 and 20,000 and the job ends with
 # nothing spent if memory still grows with boards or the run would not fit the cap. evaluate
-# writes nothing until every game is played, so a job that ends early leaves no evaluation.json.
+# writes evaluation.json only once every game is played (--units writes units.csv as it goes), so
+# a job that ends early leaves no evaluation.json.
 set -e
 units=() where=()
 while [ $# -gt 0 ]; do
@@ -45,14 +46,19 @@ box_record "$(jq -nc --arg rustc "$(rustc --version)" --argjson nproc "$(nproc)"
 play() {
   local -a command=(evaluate "${head[@]}" --domain "$1" "${middle[@]}" --reference base --boards "$2"
     "${tail[@]}" "${units[@]}" "${where[@]}" --out "$3")
-  box_log "unsettled-sim ${command[*]}"
+  box_log "unsettled-sim $(printf '%q ' "${command[@]}")"
   /usr/bin/time -f '%e %M' -o "$3.time" ./target/release/unsettled-sim "${command[@]}" \
     > "$3.stdout" 2> "$3.stderr"
 }
 
 if [ "$domain" != perf ]; then
   for size in 2000 20000; do
-    box_phase "perf-$size" play perf "$size" "$BOX_WORK/perf-$size" || exit 1
+    # A failed perf run is a bad argument: deliver its stderr and keep evaluate's own status.
+    box_phase "perf-$size" play perf "$size" "$BOX_WORK/perf-$size" || {
+      status=$?
+      for file in "perf-$size.time" "perf-$size.stderr"; do cp "$BOX_WORK/$file" "$BOX_OUT/$file"; done
+      exit "$status"
+    }
   done
   read -r smallSeconds smallKib < "$BOX_WORK/perf-2000.time"
   read -r seconds kib < "$BOX_WORK/perf-20000.time"

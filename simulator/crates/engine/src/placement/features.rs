@@ -119,7 +119,7 @@ pub struct Rule {
 
 #[derive(Clone, Debug)]
 struct Predicate {
-    feature: usize,
+    feature: Option<usize>,
     at_least: bool,
     cutoff: f64,
 }
@@ -133,22 +133,22 @@ impl Rule {
             return Err(format!("rule {text:?} must have no spaces"));
         }
         let parts = text.split('&').collect::<Vec<_>>();
+        if let Some(part) = parts.iter().find(|part| part.is_empty()) {
+            return Err(format!("empty predicate {part:?} in rule {text:?}"));
+        }
         if parts.len() > 2 {
             return Err(format!("third predicate {:?} in rule {text:?}", parts[2]));
         }
         let mut predicates = Vec::new();
         for part in parts {
-            if part.is_empty() {
-                return Err(format!("empty predicate {part:?} in rule {text:?}"));
-            }
             let end = part.find(|c: char| !c.is_ascii_alphanumeric()).unwrap_or(part.len());
             let name = &part[..end];
-            if ["heroReady", "readyAhead", "readyAheadTrade"].contains(&name) {
+            if UNIT_COLUMNS[7..].contains(&name) {
                 return Err(format!("{name} is a diagnostic no rule may use: {part}"));
             }
-            let feature = if name == "slot" { 4 } else {
-                TERRAIN_NAMES.iter().position(|value| *value == name)
-                    .ok_or_else(|| format!("unknown feature {name} in {part}"))?
+            let feature = if name == "slot" { None } else {
+                Some(TERRAIN_NAMES.iter().position(|value| *value == name)
+                    .ok_or_else(|| format!("unknown feature {name} in {part}"))?)
             };
             let rest = &part[end..];
             let (at_least, number) = if let Some(number) = rest.strip_prefix(">=") {
@@ -170,7 +170,7 @@ impl Rule {
 
     pub fn matches(&self, terrain: TerrainFeatures, slot: usize) -> bool {
         self.predicates.iter().all(|predicate| {
-            let value = if predicate.feature == 4 { slot as f64 } else { terrain.values()[predicate.feature] };
+            let value = predicate.feature.map_or(slot as f64, |feature| terrain.values()[feature]);
             if predicate.at_least { value >= predicate.cutoff } else { value < predicate.cutoff }
         })
     }
@@ -199,6 +199,14 @@ mod tests {
     fn board(wire: WireBoard, topology: &Topology) -> SimBoard {
         SimBoard::try_from_wire(wire, topology, &RuleConfig::base(topology.layout()),
             ConversionOptions { allow_unofficial: true }).unwrap()
+    }
+
+    #[test]
+    fn doubled_separator_reports_an_empty_predicate() {
+        let rule = "slot>=1&&roadPips<3";
+        let error = Rule::parse(rule).unwrap_err();
+        assert!(error.contains("empty predicate"), "{error}");
+        assert!(error.contains(rule), "{error}");
     }
 
     #[test]

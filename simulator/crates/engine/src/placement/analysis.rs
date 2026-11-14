@@ -309,7 +309,7 @@ pub fn strategy_for_seats(seats: usize) -> Option<&'static SeatStrategy> {
     }))
 }
 
-fn selected_weights(seats: usize, slot: usize, terrain: TerrainFeatures) -> &'static EngineWeights {
+pub(crate) fn selected_weights(seats: usize, slot: usize, terrain: TerrainFeatures) -> &'static EngineWeights {
     strategy_for_seats(seats)
         .filter(|strategy| strategy.rule.matches(terrain, slot))
         .map_or_else(|| weights_for_seats(seats), |strategy| &strategy.weights)
@@ -675,7 +675,7 @@ fn analyze_request(
     let options = request.options;
     let seats = board.player_ids.len();
     let terrain = TerrainFeatures::read(board.topology, &board.tiles, &board.tokens, seats);
-    let mut variants: Vec<&EngineWeights> = Vec::new();
+    let mut variants = vec![options.weights.as_ref().unwrap_or_else(|| weights_for_seats(seats))];
     let seat_variants = (0..seats).map(|slot| {
         let weights = options.weights.as_ref().unwrap_or_else(|| selected_weights(seats, slot, terrain));
         if let Some(index) = variants.iter().position(|variant| std::ptr::eq(*variant, weights)) {
@@ -712,7 +712,7 @@ fn analyze_request(
     Ok(ranking.analyze(&board, request.target_pick, max_results, true, progress))
 }
 
-/// The scorer, partner tables, seed and rollout override shared by nested rankings.
+/// Each seat's scorer and partner tables, with the seed and rollout override every nested ranking shares.
 struct Ranking<'a> {
     contexts: Vec<window::Context<'a>>,
     seat_variants: Vec<usize>,
@@ -1015,6 +1015,17 @@ mod tests {
                     };
                     assert!(std::ptr::eq(selected_weights(seats, slot, terrain), expected), "seats {seats} slot {slot} crowding {expected_crowding}");
                 }
+            }
+        }
+        for top_crowding in [9, 10, 11] {
+            let terrain = TerrainFeatures { road_pips: 0, road_pips_min: 0, spot_falloff: 0.0, top_crowding };
+            for slot in 0..5 {
+                let expected = if slot >= 1 && top_crowding >= 10 {
+                    &strategy_for_seats(5).unwrap().weights
+                } else {
+                    weights_for_seats(5)
+                };
+                assert!(std::ptr::eq(selected_weights(5, slot, terrain), expected), "slot {slot} crowding {top_crowding}");
             }
         }
     }

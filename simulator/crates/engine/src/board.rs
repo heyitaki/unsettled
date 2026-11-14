@@ -71,8 +71,7 @@ pub struct SimBoard {
 #[derive(Clone, Debug)]
 struct PreparedDraftScorers {
     base: DraftScorers,
-    strategy: Option<DraftScorers>,
-    strategy_seats: u8,
+    strategy: Option<(DraftScorers, u8)>,
 }
 
 impl SimBoard {
@@ -278,8 +277,10 @@ impl SimBoard {
 
     pub(crate) fn draft_scorer(&self, index: u8, seat: u8) -> Option<&DraftScorers> {
         self.draft_scorers.iter().find(|(candidate, _)| *candidate == index).map(|(_, scorers)| {
-            if scorers.strategy_seats & (1 << seat) != 0 {
-                scorers.strategy.as_ref().expect("selected strategy was prepared")
+            if let Some((strategy, seats)) = &scorers.strategy
+                && seats & (1 << seat) != 0
+            {
+                strategy
             } else {
                 &scorers.base
             }
@@ -294,7 +295,7 @@ impl SimBoard {
         opponent: crate::placement::app_formula::EngineWeights,
         strategy: Option<(&crate::placement::app_formula::EngineWeights, u8)>,
     ) {
-        if self.draft_scorer(index, 0).is_none() {
+        if !self.draft_scorers.iter().any(|(candidate, _)| *candidate == index) {
             self.draft_scorers.push((
                 index,
                 PreparedDraftScorers {
@@ -302,11 +303,10 @@ impl SimBoard {
                         hero: AppFormulaScorer::new(self, topology, hero),
                         opponent: AppFormulaScorer::new(self, topology, opponent),
                     },
-                    strategy: strategy.map(|(weights, _)| DraftScorers {
-                        hero: AppFormulaScorer::new(self, topology, weights.clone()),
-                        opponent: AppFormulaScorer::new(self, topology, weights.clone()),
+                    strategy: strategy.map(|(weights, seats)| {
+                        let hero = AppFormulaScorer::new(self, topology, weights.clone());
+                        (DraftScorers { opponent: hero.clone(), hero }, seats)
                     }),
-                    strategy_seats: strategy.map_or(0, |(_, seats)| seats),
                 },
             ));
         }

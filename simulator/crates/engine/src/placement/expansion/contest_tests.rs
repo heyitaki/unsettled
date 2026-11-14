@@ -67,6 +67,7 @@ fn contest_masks_match_reference_on_scrambled_boards() {
                 rival += occupancy.rival_edges.count_ones();
                 let tiers = contest_tiers(&scorer, &occupancy);
                 assert_eq!(tiers[0] & tiers[1], 0);
+                CONTEST_MEMO.with(|memo| memo.set(None));
                 assert_eq!(contest_tiers(&scorer, &Occupancy { blocked: !occupancy.blocked, ..occupancy }), tiers);
                 for vertex in 0..topology.vertex_count() as Vertex {
                     let tier = if tiers[0] & (1 << vertex) != 0 { 1 }

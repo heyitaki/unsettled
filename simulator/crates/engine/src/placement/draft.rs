@@ -740,8 +740,7 @@ impl<'a> Lookahead<'a> {
         marginal: f64,
     ) -> f64 {
         let road = self.replay(vertex_owner, edge_owner, candidate, None);
-        let marginal = if self.hero_scorer.weights().reprice_first_expansion == 1.0
-            && self.hero_scorer.weights().expansion_weight != 0.0 && !self.intervening.is_empty()
+        let marginal = if self.hero_scorer.weights().reprices_first_expansion() && !self.intervening.is_empty()
         {
             // Put back pick-time owners so the candidate and its road are not counted twice.
             self.owners[usize::from(candidate)] = vertex_owner[usize::from(candidate)];

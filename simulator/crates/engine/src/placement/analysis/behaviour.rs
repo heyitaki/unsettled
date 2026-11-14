@@ -2431,6 +2431,31 @@ fn nested_rankings_choose_by_their_own_picker() {
 }
 
 #[test]
+fn nested_rankings_keep_explicit_weights_for_every_picker() {
+    let board = five_seat_strategy_board();
+    let weights = weights_file("seat-weights/seats-5");
+    let options = json!({ "rollouts": 1, "weights": weights });
+    let strategy = json!({ "rollouts": 1, "weights": weights_file("arms/co_flat_reprice_s5") });
+    let differs = ["p1", "p2"].iter().any(|player| {
+        let scratch = with_me(board.clone(), player);
+        let plain = analysis(&scratch, None, options.clone());
+        let changed = analysis(&scratch, None, strategy.clone());
+        recommendations(&plain)[0]["firstPick"] != recommendations(&changed)[0]["firstPick"]
+    });
+    assert!(differs, "a picker ahead must change its top pick under the strategy vector");
+
+    forget_nested_rankings();
+    let response = analysis(&with_me(board.clone(), "p3"), None, options.clone());
+    let predicted = taken(&response);
+    assert_eq!(predicted.iter().map(|entry| text(&entry["playerId"])).collect::<Vec<_>>(), ["p0", "p1", "p2"]);
+    for (index, entry) in predicted.iter().enumerate() {
+        let scratch = with_me(play_out(&board, &predicted[..index]), text(&entry["playerId"]));
+        let own = analysis(&scratch, None, options.clone());
+        assert_eq!(entry["vertexId"], recommendations(&own)[0]["firstPick"], "picker {index}");
+    }
+}
+
+#[test]
 fn the_first_picker_ranks_with_the_seat_vector() {
     let board = five_seat_strategy_board();
     for (player, file) in [("p0", "seat-weights/seats-5"), ("p1", "arms/co_flat_reprice_s5")] {
