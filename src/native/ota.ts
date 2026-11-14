@@ -50,11 +50,16 @@ async function fetchManifestBody(): Promise<string | null> {
   const url = new URL(import.meta.env.VITE_OTA_MANIFEST_URL || DEFAULT_MANIFEST_URL)
   // Pages serves max-age=600 behind Cloudflare, so the query and no-store dodge both caches.
   url.searchParams.set('t', String(Date.now()))
+  // AbortSignal.timeout needs iOS 16 and the deployment target is 15.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), MANIFEST_TIMEOUT_MS)
   try {
-    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) })
+    const response = await fetch(url, { cache: 'no-store', signal: controller.signal })
     return response.ok ? await response.text() : null
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
