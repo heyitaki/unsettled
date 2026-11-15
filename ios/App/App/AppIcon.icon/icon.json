@@ -1,0 +1,43 @@
+{
+  "fill": {
+    "solid": "srgb:0.93725,0.90980,0.85098,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "dots.svg",
+          "name": "dots"
+        },
+        {
+          "glass": false,
+          "image-name": "line.svg",
+          "name": "line",
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.98431,0.97255,0.94510,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "iOS"
+    ]
+  }
+}
