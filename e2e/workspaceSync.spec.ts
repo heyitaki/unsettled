@@ -15,6 +15,7 @@ const active = (page: Page) => page.locator('.board-list .list-row.current .list
 async function open(context: BrowserContext): Promise<Page> {
   const page = await context.newPage()
   await page.goto('')
+  await page.locator('.head-title').click()
   await expect(openBoards(page)).not.toHaveCount(0)
   return page
 }
@@ -73,6 +74,7 @@ test('closing every board while the other window is in use leaves one blank boar
   // And it has to still be true after a reload, or the blob kept what the
   // board list did not.
   await a.reload()
+  await a.locator('.head-title').click()
   await expect(openBoards(a)).toHaveCount(1)
 })
 
@@ -119,6 +121,7 @@ test('each window keeps its own place in the board list', async ({ context }) =>
 
   // A reload keeps this window's place rather than inheriting the other's.
   await b.reload()
+  await b.locator('.head-title').click()
   await expect(active(b)).toHaveText('Board 2')
   await expect(active(a)).toHaveText('Board 3')
 })

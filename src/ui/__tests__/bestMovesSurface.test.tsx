@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { createBoard } from '../../model/board'
-import { newGame } from '../../model/game'
-import { CARD_COSTS } from '../../model/turn'
-import { BestMovesTable, CardAmounts, ResourcePicker } from '../BestMovesTable'
+import { addPlayer, createBoard } from '../../model/board'
+import { adjustCounter, adjustHand, newGame } from '../../model/game'
+import { adjustDevHand, CARD_COSTS } from '../../model/turn'
+import { Ledger } from '../Ledger'
+import { CardAmounts, ResourcePicker } from '../MoveInputs'
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -27,35 +28,102 @@ afterEach(() => {
   style.remove()
 })
 
-it('keeps Cards and Points equally selected with the hand editor open, without a cross-fade', async () => {
-  await act(async () => root.render(<BestMovesTable game={newGame(createBoard('standard4'))} activeId="aki" commit={() => {}} />))
-  const [cards, points] = container.querySelectorAll<HTMLButtonElement>('.move-seg button')
-  const selectedStyle = (button: HTMLButtonElement) => {
-    const computed = getComputedStyle(button)
-    return { color: computed.color, background: computed.backgroundColor, opacity: computed.opacity || '1', transition: computed.transition }
+it('renders the Ledger hands, dev pills and awards, with one inline row editor', async () => {
+  const board = addPlayer(addPlayer(createBoard('standard4'), { id: 'b', name: 'Bee', color: '#3063ba' }), { id: 'c', name: 'Cee', color: '#fff' })
+  let game = adjustHand(newGame(board), 'aki', 'wheat', 2)
+  game = adjustCounter(game, 'aki', 'handUnknown', 1)
+  game = adjustDevHand(game, 'playable', 'knight', 1)
+  game = adjustDevHand(game, 'playable', 'roadBuilding', 2)
+  game = adjustDevHand(game, 'bought', 'monopoly', 1)
+  game = adjustCounter(game, 'aki', 'devCards', 2)
+  game = adjustCounter(game, 'aki', 'vpCards', 1)
+  game = adjustCounter(adjustCounter(game, 'aki', 'knights', 3), 'b', 'knights', 3)
+  game = adjustCounter(adjustCounter(adjustHand(game, 'b', 'ore', 1), 'b', 'handUnknown', 2), 'b', 'devCards', 3)
+  game = { ...game, awards: { longestRoad: null, largestArmy: 'aki' } }
+  await act(async () => root.render(<Ledger game={game} activeId="b" previous={undefined} commit={() => {}} onUndo={() => {}} />))
+  expect([...container.querySelectorAll('.ledger-header > span')].map((cell) => cell.textContent)).toEqual(['', 'Hand', 'Cards', 'VP'])
+  expect(container.querySelector('.ledger-header')?.getAttribute('aria-hidden')).toBe('true')
+  const rows = container.querySelectorAll('.ledger-row')
+  expect(rows).toHaveLength(3)
+  for (const row of rows) {
+    const toggle = row.querySelector('.ledger-toggle')!
+    const ids = toggle.getAttribute('aria-describedby')?.split(/\s+/) ?? []
+    expect(ids).toHaveLength(row.querySelector('.ledger-dev') ? 5 : 4)
+    const descriptions = ids.map((id) => document.getElementById(id))
+    for (const description of descriptions) {
+      expect(description).not.toBeNull()
+      expect(toggle.contains(description)).toBe(true)
+    }
+    expect(descriptions).toEqual(['.ledger-player', '.ledger-hand', '.ledger-cards', '.ledger-vp', '.ledger-dev']
+      .slice(0, ids.length).map((selector) => toggle.querySelector(selector)))
   }
-  const initial = selectedStyle(cards)
-  expect(initial.transition).toBe('none')
-  expect(initial.opacity).toBe('1')
-  expect(initial.color).toBe('rgb(255, 255, 255)')
-  await act(async () => points.click())
-  await act(async () => container.querySelector<HTMLButtonElement>('.move-who')!.click())
-  expect(container.querySelector('.move-edit')).not.toBeNull()
-  expect(points.disabled).toBe(false)
-  expect(points.getAttribute('aria-pressed')).toBe('true')
-  expect(selectedStyle(points)).toEqual(initial)
-  await act(async () => cards.click())
-  expect(selectedStyle(cards)).toEqual(initial)
+  const [mine, rival, empty] = rows
+  expect(rival.classList.contains('active')).toBe(true)
+  expect(mine.querySelector('.you-chip')?.textContent).toBe('YOU')
+  expect(rival.querySelector('.you-chip')).toBeNull()
+  expect(mine.querySelector('[aria-label="Largest army, +2 VP"]')).not.toBeNull()
+  expect(rival.querySelector('[aria-label="Largest army, +2 VP"]')).toBeNull()
+  expect([...mine.querySelectorAll('.ledger-hand [aria-label]')].map((chip) => chip.getAttribute('aria-label'))).toEqual(['2 wheat', '1 unseen card', '2 dev cards'])
+  expect([...rival.querySelectorAll('.ledger-hand [aria-label]')].map((chip) => chip.getAttribute('aria-label'))).toEqual(['1 ore', '2 unseen cards', '3 dev cards'])
+  expect(mine.querySelector('.ledger-cards')?.textContent).toBe('3')
+  expect(mine.querySelector('.ledger-vp')?.textContent).toBe('3')
+  expect(empty.querySelector('.ledger-hand')?.textContent).toBe('No cards')
+  const pills = mine.querySelectorAll('.ledger-dev-pill')
+  expect([...pills].map((pill) => pill.textContent)).toEqual(['Knight', 'Road building 2', 'Victory point', 'Monopoly new'])
+  expect(pills[0].querySelector('.ledger-dev-count')).toBeNull()
+  expect(pills[1].querySelector('.ledger-dev-count')?.textContent?.trim()).toBe('2')
+  expect(pills[3].getAttribute('title')).toBe('Bought this turn, playable next turn')
+  expect(pills[0].closest('.ledger-toggle')).not.toBeNull()
+  expect(empty.querySelector('.ledger-dev')).toBeNull()
+
+  const toggle = mine.querySelector<HTMLButtonElement>('[aria-label="Correct aki"]')!
+  await act(async () => toggle.click())
+  expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  expect(mine.querySelector('.ledger-dev')).toBeNull()
+  const tabs = () => [...container.querySelectorAll('.ledger-tab')]
+  const tiles = () => [...container.querySelectorAll('.ledger-tile')].map((tile) => tile.querySelector('.ledger-tile-label')?.textContent)
+  expect(tabs().map((tab) => tab.textContent)).toEqual(['Hand 3', 'Dev cards 6', 'Points'])
+  expect(tabs()[0].getAttribute('aria-pressed')).toBe('true')
+  expect(tiles()).toEqual(['Wood', 'Sheep', 'Wheat', 'Brick', 'Ore', 'Unseen'])
+  expect(mine.querySelector('[aria-label="Add one Wheat, now 2"]')).not.toBeNull()
+  expect(mine.querySelector('[aria-label="Take one Wheat back"]')).not.toBeNull()
+  expect(mine.querySelector('[aria-label="Take one Wood back"]')).toBeNull()
+  expect(mine.querySelector('.ledger-status')?.textContent).toBe('0 settlements · 0 cities · Longest road 0')
+  await act(async () => (tabs()[1] as HTMLButtonElement).click())
+  expect(tiles()).toEqual(['Knight', 'Road building', 'Year of plenty', 'Monopoly', 'Unknown'])
+  expect(mine.querySelector('[aria-label="Add one unknown dev card, now 2"]')).not.toBeNull()
+  expect([...mine.querySelectorAll('.ledger-tile-new')].map((note) => note.textContent)).toEqual(['1 new'])
+  await act(async () => (tabs()[2] as HTMLButtonElement).click())
+  expect(tiles()).toEqual(['Knights played', 'Victory points'])
+  expect(mine.querySelector('.ledger-tile-count.award')?.textContent).toBe('3')
+  await act(async () => rival.querySelector<HTMLButtonElement>('.ledger-toggle')!.click())
+  expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  expect(mine.querySelector('.ledger-edit')).toBeNull()
+  expect(tabs()[0].getAttribute('aria-pressed')).toBe('true')
+  await act(async () => (tabs()[1] as HTMLButtonElement).click())
+  expect(tiles()).toEqual(['Unknown'])
+  expect(rival.querySelector('[aria-label="Add one unknown dev card, now 3"]')).not.toBeNull()
+  await act(async () => rival.querySelector<HTMLButtonElement>('.ledger-toggle')!.click())
+  expect(container.querySelector('.ledger-edit')).toBeNull()
+  expect(container.querySelector('[aria-expanded="true"]')).toBeNull()
 })
 
-it('makes selected build and resource glyphs white while preserving advice glyph colours', async () => {
+it('preserves resource colours in pressed tray cells, build costs and advice', async () => {
   await act(async () => root.render(<>
-    <button aria-pressed="true">Road <CardAmounts cards={CARD_COSTS.road} /></button>
-    <ResourcePicker label="Gives" value="brick" onChange={() => {}} />
+    <div className="move-tray">
+      <button aria-pressed="true">Road <CardAmounts cards={CARD_COSTS.road} /></button>
+      <ResourcePicker label="Gives" cards={{ brick: 1 }} onChange={() => {}} onRemove={() => {}} />
+    </div>
     <button className="analysis-row-select" aria-pressed="true"><CardAmounts cards={CARD_COSTS.road} /></button>
   </>))
   const pressed = container.querySelectorAll('button[aria-pressed="true"]:not(.analysis-row-select) .stat-icon')
   expect(pressed).toHaveLength(3)
-  for (const glyph of pressed) expect(getComputedStyle(glyph).filter).toBe('brightness(0) invert(1)')
-  for (const glyph of container.querySelectorAll('button[aria-pressed="false"] .stat-icon, .analysis-row-select .stat-icon')) expect(getComputedStyle(glyph).filter).toBe('none')
+  for (const glyph of container.querySelectorAll('.stat-icon')) expect(getComputedStyle(glyph).filter).not.toContain('invert')
+  expect(container.querySelectorAll('.move-minus')).toHaveLength(1)
+  expect(container.querySelector('.move-minus svg path')?.getAttribute('d')).toBe('M5 10h10')
+  expect(container.querySelector('[aria-label="Gives wood"]')?.textContent).toBe('0')
+  expect(container.querySelector('[aria-label="Gives brick"]')?.textContent).toBe('1')
+  expect(getComputedStyle(container.querySelector('.move-resource .stat-icon')!).width).toBe('18px')
+  expect(getComputedStyle(container.querySelector('.move-resource')!).minHeight).toBe('36px')
+  expect(getComputedStyle(container.querySelector('.move-minus')!).width).toBe('20px')
 })

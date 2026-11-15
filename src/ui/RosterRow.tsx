@@ -11,7 +11,7 @@ export function RosterRow({ player, index, roster, swatch, children }: {
   index: number
   roster: Roster
   swatch?: ReactNode
-  children: ReactNode
+  children?: ReactNode
 }) {
   const { reorder } = roster
   const me = roster.mePlayerId === player.id

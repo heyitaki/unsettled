@@ -1,6 +1,6 @@
 import { parseEdgeId, parseVertexId } from '../model/coords'
 import { boardGrid } from '../model/layouts'
-import type { Building, Road, VertexId } from '../model/types'
+import type { Building, EdgeId, Road, VertexId } from '../model/types'
 import { labelComponents, neighbors } from './components'
 import { nearColor, pixel, type Rgb, type RgbaImage } from './image'
 import { nearest, type ParserPalette } from './palette'
@@ -69,12 +69,8 @@ export function detectPieces(
     return { vertexId, x, y }
   })
   const edges = grid.edgeIds.map((edgeId) => {
-    const centers = parseEdgeId(edgeId).map(registration.center)
-    return {
-      edgeId,
-      x: (centers[0][0] + centers[1][0]) / 2,
-      y: (centers[0][1] + centers[1][1]) / 2,
-    }
+    const [x, y] = edgePoint(registration, edgeId)
+    return { edgeId, x, y }
   })
   const roads = new Map<string, Road & { area: number }>()
   const buildings = new Map<string, Building & { area: number }>()
@@ -132,27 +128,36 @@ export function orderDraftSettlements(
   registration: Registration,
   buildings: Building[],
   seatIds: string[],
-): { buildings: Building[]; unorderedPlayerIds: string[] } {
+): { buildings: Building[]; unorderedPlayerIds: string[]; ordered: boolean } {
   const byPlayer = seatIds.map((id) => buildings.filter((building) => building.playerId === id))
   const draftShape = buildings.every((building) => building.tier === 'settlement') &&
     byPlayer.every((placed) => placed.length <= 2)
-  if (!draftShape) return { buildings, unorderedPlayerIds: [] }
+  if (!draftShape) return { buildings, unorderedPlayerIds: [], ordered: false }
   const incomplete = byPlayer.some((placed) => placed.length < 2)
   const unorderedPlayerIds: string[] = []
+  let ordered = true
   for (const placed of byPlayer) {
     if (placed.length !== 2) continue
     const [first, second] = placed.map((building) => readSettlementOrdinal(image, palette, registration, building.vertexId))
     if (first === second) {
+      ordered = false
       if (incomplete) unorderedPlayerIds.push(placed[0].playerId)
     } else if (first === 2 || second === 1) placed.reverse()
   }
-  const ordered: Building[] = []
-  for (const placed of byPlayer) if (placed[0]) ordered.push(placed[0])
-  for (const placed of [...byPlayer].reverse()) if (placed[1]) ordered.push(placed[1])
-  return { buildings: ordered, unorderedPlayerIds }
+  return { buildings: snakeOrder(byPlayer), unorderedPlayerIds, ordered }
 }
 
-export function vertexPoint(registration: Registration, vertexId: VertexId): [number, number] {
+export function snakeOrder<T>(byPlayer: readonly (readonly T[])[]): T[] {
+  return [...byPlayer.flatMap((placed) => placed.slice(0, 1)),
+    ...[...byPlayer].reverse().flatMap((placed) => placed.slice(1, 2))]
+}
+
+export function edgePoint(registration: Pick<Registration, 'center'>, edgeId: EdgeId): [number, number] {
+  const [a, b] = parseEdgeId(edgeId).map(registration.center)
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+}
+
+export function vertexPoint(registration: Pick<Registration, 'center'>, vertexId: VertexId): [number, number] {
   const centers = parseVertexId(vertexId).map(registration.center)
   return [
     centers.reduce((sum, center) => sum + center[0], 0) / 3,

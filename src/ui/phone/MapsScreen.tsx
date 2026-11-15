@@ -4,6 +4,7 @@ import { PlusGlyph } from '../glyphs'
 import { LibraryLists } from '../LibraryLists'
 import { useStore } from '../store'
 import { useJsonFiles } from '../useJsonFiles'
+import { VersionLine } from '../VersionLine'
 import { PhoneOverlay } from './PhoneOverlay'
 
 /**
@@ -36,6 +37,7 @@ export function MapsScreen({ onClose }: { onClose: () => void }) {
     >
       <ImportButton onNavigate={onClose} />
       <LibraryLists onNavigate={onClose} />
+      <VersionLine />
       {fileInput}
     </PhoneOverlay>
   )

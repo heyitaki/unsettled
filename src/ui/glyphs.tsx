@@ -1,13 +1,9 @@
 import { isRedToken, pips } from '../model/board'
+import type { DevKind } from '../model/game'
 import type { Resource } from '../model/types'
 import { INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
 
-// Shared inline icons, one flat family on a 20-unit grid (desktop spec D3,
-// option C): pieces are filled blocks of a player or tool colour with no
-// casing, counters and resources are filled silhouettes at the same weight, and
-// the line-art marks (anchor, trash) are drawn thick enough to sit beside them.
-// The board keeps its own piece shapes; only the robber's outline and the
-// number token's face are shared.
+// Shared inline icons on a 20-unit grid. The board keeps its own piece shapes.
 
 const PIECE_INK = '#30271f'
 /** The paper the cut-out detail of a flat glyph shows through. */
@@ -19,8 +15,8 @@ const PAPER = '#fbf8f1'
  */
 export const GLYPH_MUTED = '#8e867a'
 
-export type StructureShape =
-  | 'road' | 'settlement' | 'city' | 'superCity' | 'robber' | 'port' | 'erase'
+type StructureShape =
+  | 'road' | 'settlement' | 'city' | 'superCity'
 
 /**
  * The robber, in board units, drawn by BoardCanvas. Its base is an arc of the
@@ -34,16 +30,10 @@ export const ROBBER_BODY =
 /** Every flat glyph shares this box, so a row of them shares a baseline and a width. */
 const GRID = '0 0 20 20'
 
-/**
- * A piece or tool mark standing `size` px square. Pieces take `color` as their
- * fill; the robber, the anchor and the trash can inherit `currentColor`, so
- * they invert with the tile they sit on. Pass `currentColor` as the colour to
- * do the same for a piece (the selected tile).
- */
-export function StructureGlyph({ shape, color, size = 16 }: {
+export function StructureGlyph({ shape, color, size }: {
   shape: StructureShape
   color: string
-  size?: number
+  size: number
 }) {
   const style = { height: size, width: size }
   switch (shape) {
@@ -57,59 +47,19 @@ export function StructureGlyph({ shape, color, size = 16 }: {
     case 'settlement':
       return (
         <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
-          <path d="M4.1 17V9.6L10 4.4l5.9 5.2V17Z" fill={color} />
+          <path d="M4.6 17V9.6L10 4.4l5.4 5.2V17Z" fill={color} />
         </svg>
       )
     case 'city':
       return (
         <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
-          <path d="M1.6 17.2V8.8l5.9-5.3 5.9 5.3V8.6h5v8.6Z" fill={color} />
+          <path d="M2.3 17.2V8.8l5.4-5.3 5.4 5.3V8.6h4.6v8.6Z" fill={color} />
         </svg>
       )
     case 'superCity':
       return (
         <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
           <path d="M2.2 17V9.6l3.8-5.3 2.7 3.7V3.8h2.6V8l2.7-3.7 3.8 5.3V17Z" fill={color} />
-        </svg>
-      )
-    case 'robber':
-      return (
-        <svg className="tool-icon" style={style} viewBox={GRID} aria-hidden="true">
-          <circle cx="10" cy="5.4" r="3.2" />
-          <path d="M4.2 17.2c0-4.9 2.2-7.6 5.8-7.6s5.8 2.7 5.8 7.6Z" />
-        </svg>
-      )
-    case 'port': // an anchor, in line art the weight of the filled shapes
-      return (
-        <svg
-          className="tool-icon"
-          viewBox={GRID}
-          style={{ ...style, fill: 'none' }}
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-          aria-hidden="true"
-        >
-          <circle cx="10" cy="4.9" r="1.6" />
-          <path d="M10 6.5v10.3M6.8 9.6h6.4M4.4 12.2a5.6 5.6 0 0 0 11.2 0" />
-        </svg>
-      )
-    default: // erase — a trash can
-      return (
-        <svg
-          className="tool-icon"
-          viewBox={GRID}
-          style={{ ...style, fill: 'none' }}
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-          aria-hidden="true"
-        >
-          <path d="M3.4 5.8h13.2" />
-          <path d="M7.8 5.8V3.6h4.4v2.2" />
-          <path d="M5.4 5.8 6.2 17.2h7.6l.8-11.4" />
         </svg>
       )
   }
@@ -127,54 +77,60 @@ export function DesertGlyph() {
 
 /** A hand resource: a flat terrain-coloured mark with its ink details. */
 export function ResourceGlyph({ resource }: { resource: Resource }) {
-  const fill = TILE_COLORS[resource]
-  const shell = {
-    className: 'stat-icon',
-    viewBox: GRID,
-    'aria-hidden': true,
-  }
+  return (
+    <svg className="stat-icon" viewBox={GRID} aria-hidden>
+      <ResourceMarks resource={resource} />
+    </svg>
+  )
+}
+
+/**
+ * The marks of a resource glyph on its 20-unit grid, for a caller that places them itself. A
+ * `tone` draws every mark in that one colour, as the board's port tokens do.
+ */
+export function ResourceMarks({ resource, tone }: { resource: Resource; tone?: string }) {
+  const fill = tone ?? TILE_COLORS[resource]
+  const ink = tone ?? PIECE_INK
   switch (resource) {
     case 'wood': // pine over a dark trunk
       return (
-        <svg {...shell}>
-          <rect x="8.9" y="12.6" width="2.2" height="5.4" rx=".7" fill={PIECE_INK} />
+        <>
+          <rect x="8.9" y="12.6" width="2.2" height="5.4" rx=".7" fill={ink} />
           <path d="M10 2.2 14.8 9.2H5.2Z" fill={fill} />
           <path d="M10 6.6 16.2 14.4H3.8Z" fill={fill} />
-        </svg>
+        </>
       )
     case 'sheep': // fleece body, dark head and legs
       return (
-        <svg {...shell}>
-          <path d="M6.6 15.2v2.4M12.2 15.2v2.4" stroke={PIECE_INK} strokeWidth="1.6" strokeLinecap="round" />
+        <>
+          <path d="M6.6 15.2v2.4M12.2 15.2v2.4" stroke={ink} strokeWidth="1.6" strokeLinecap="round" />
           <ellipse cx="9.4" cy="11" rx="5.6" ry="4.4" fill={fill} />
-          <circle cx="15" cy="8.4" r="2.8" fill={PIECE_INK} />
-        </svg>
+          <circle cx="15" cy="8.4" r="2.8" fill={ink} />
+        </>
       )
     case 'wheat': // three grain heads on a bound stalk
       return (
-        <svg {...shell}>
-          <path d="M10 18.6v-5.4M10 14.8 6.4 12.4M10 14.8l3.6-2.4" fill="none" stroke={PIECE_INK} strokeWidth="1.4" strokeLinecap="round" />
+        <>
+          <path d="M10 18.6v-5.4M10 14.8 6.4 12.4M10 14.8l3.6-2.4" fill="none" stroke={ink} strokeWidth="1.4" strokeLinecap="round" />
           <ellipse cx="10" cy="6.2" rx="2.5" ry="4.9" fill={fill} />
           <ellipse cx="4.6" cy="8.4" rx="2.2" ry="4.3" fill={fill} transform="rotate(-30 4.6 8.4)" />
           <ellipse cx="15.4" cy="8.4" rx="2.2" ry="4.3" fill={fill} transform="rotate(30 15.4 8.4)" />
-        </svg>
+        </>
       )
     case 'brick': // two courses in a running bond
       return (
-        <svg {...shell}>
+        <>
           <rect x="3.5" y="5.9" width="13" height="4" rx=".7" fill={fill} />
           <rect x="3.5" y="10.8" width="5.6" height="4" rx=".7" fill={fill} />
           <rect x="10.9" y="10.8" width="5.6" height="4" rx=".7" fill={fill} />
-        </svg>
+        </>
       )
     default: // ore — a pickaxe, ore-coloured head on a dark handle
       return (
-        <svg {...shell}>
-          <g transform="rotate(-40 10 10)">
-            <rect x="9" y="7.2" width="2" height="11" rx=".7" fill={PIECE_INK} />
-            <path d="M2.6 9C6 3.8 14 3.8 17.4 9 13.6 6.6 6.4 6.6 2.6 9Z" fill={fill} stroke={fill} strokeWidth="1.4" strokeLinejoin="round" />
-          </g>
-        </svg>
+        <>
+          <rect x="9" y="7.2" width="2" height="11" rx=".7" fill={ink} transform="rotate(-40 10 10)" />
+          <path d="M2.6 9C6 3.8 14 3.8 17.4 9 13.6 6.6 6.4 6.6 2.6 9Z" fill={fill} stroke={fill} strokeWidth="1.4" strokeLinejoin="round" transform="rotate(-40 10 10)" />
+        </>
       )
   }
 }
@@ -202,9 +158,8 @@ const TOKEN_STROKE = 2.5
 export const NUMBER_TOKEN_EXTENT = TOKEN_RADIUS + TOKEN_STROKE / 2
 
 /**
- * A number token in board units, centred on (x, y). The board and the tools
- * palette both draw this one face, so the palette's tokens keep the board's
- * proportions at any size.
+ * A number token in board units, centred on (x, y). The board and Board tools
+ * share this face so the tokens keep the same proportions at any size.
  */
 export function NumberTokenFace({ number, x = 0, y = 0, discOnly = false }: {
   number: number
@@ -237,18 +192,18 @@ export function CounterGlyph({ shape }: { shape: CounterShape }) {
     'aria-hidden': true,
   }
   switch (shape) {
-    case 'unknownCard': // a card with the question cut out of it
+    case 'unknownCard': // a bare question mark
       return (
         <svg {...shell}>
-          <path d="M3.6 2.6h12.8v14.8H3.6Z" />
           <path
-            d="M7.4 7.2c.1-1.5 1.1-2.4 2.6-2.4s2.6.8 2.6 2.2c0 1.1-.6 1.7-1.6 2.3-.8.5-1 1-1 2"
+            d="M6.4 6.9c0-2.15 1.6-3.65 3.7-3.65 2.15 0 3.65 1.4 3.65 3.3 0 1.65-1.05 2.45-2.1 3.1-.9.55-1.55 1.2-1.55 2.35v.7"
             fill="none"
-            stroke={PAPER}
-            strokeWidth="1.7"
+            stroke={GLYPH_MUTED}
+            strokeWidth="2"
             strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          <circle cx="10" cy="14.4" r="1.1" fill={PAPER} />
+          <circle cx="10.1" cy="16.4" r="1.3" fill={GLYPH_MUTED} />
         </svg>
       )
     case 'devCard': // a fanned pair of cards, the front one cut out of the back
@@ -273,6 +228,43 @@ export function CounterGlyph({ shape }: { shape: CounterShape }) {
   }
 }
 
+export function DevCardGlyph({ kind }: { kind: DevKind }) {
+  const shell = { className: 'stat-icon', viewBox: GRID, 'aria-hidden': true, fill: 'currentColor' }
+  switch (kind) {
+    case 'knight':
+      return (
+        <svg {...shell}>
+          <path d="M10 1.4 12.2 4.2v7.8H7.8V4.2Z" />
+          <rect x="4.6" y="11.6" width="10.8" height="2.4" rx=".8" />
+          <rect x="8.9" y="13.6" width="2.2" height="3.4" />
+          <circle cx="10" cy="17.6" r="1.6" />
+        </svg>
+      )
+    case 'roadBuilding':
+      return (
+        <svg {...shell}>
+          <path d="M3.2 11.6 10 4.8M10 15.2l6.8-6.8" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" fill="none" />
+        </svg>
+      )
+    case 'yearOfPlenty':
+      return (
+        <svg {...shell}>
+          <rect x="3.8" y="9.4" width="12.4" height="8.2" rx=".8" />
+          <rect x="2.8" y="6.4" width="14.4" height="3.6" rx=".8" />
+          <path d="M10 6.4V17.6" stroke={PAPER} strokeWidth="1.6" />
+          <path d="M10 6.2C8.8 3.4 5.6 3 5.8 5c.1.9 1.6 1.2 4.2 1.2Zm0 0c1.2-2.8 4.4-3.2 4.2-1.2-.1.9-1.6 1.2-4.2 1.2Z" />
+        </svg>
+      )
+    case 'monopoly':
+      return (
+        <svg {...shell}>
+          <path d="M3.6 3h4.2v7.2a2.2 2.2 0 0 0 4.4 0V3h4.2v7.2a6.4 6.4 0 0 1-12.8 0Z" />
+          <path d="M3.6 6.6h4.2M12.2 6.6h4.2" stroke={PAPER} strokeWidth="1.2" />
+        </svg>
+      )
+  }
+}
+
 /** The colour hex that stands for a board wherever it is named; see boardColor.ts. */
 export function BoardHexGlyph({ color, className }: { color: string; className?: string }) {
   return (
@@ -290,10 +282,89 @@ const LINE_ART = {
   'aria-hidden': true,
 }
 
+export function EraserGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox={GRID} strokeWidth="1.5">
+      <rect x="5" y="6.5" width="11" height="6" rx="1.2" transform="rotate(-45 10.5 9.5)" />
+      <path d="M9.5 6.5v6" transform="rotate(-45 10.5 9.5)" />
+      <path d="M4 17.2h12" />
+    </svg>
+  )
+}
+
+export function UndoGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox={GRID} strokeWidth="1.6">
+      <path d="M7.5 4.5 4 8l3.5 3.5" />
+      <path d="M4 8h7.5a4.5 4.5 0 0 1 0 9H8.5" />
+    </svg>
+  )
+}
+
+export function CheckGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox={GRID} strokeWidth="1.7">
+      <path d="M4.8 10.4 8.3 13.9 15.2 6.6" />
+    </svg>
+  )
+}
+
+export function MinusGlyph() {
+  return (
+    <svg {...LINE_ART} width="12" height="12" viewBox={GRID} strokeWidth="2">
+      <path d="M5 10h10" />
+    </svg>
+  )
+}
+
+export function DevChipGlyph({ kind }: { kind: DevKind | 'vp' }) {
+  const shell = { ...LINE_ART, viewBox: GRID, strokeWidth: 1.5 }
+  switch (kind) {
+    case 'knight':
+      return <svg {...shell}><path d="M10 2.8 4.4 4.9v4.5c0 3.6 2.3 6.3 5.6 7.8 3.3-1.5 5.6-4.2 5.6-7.8V4.9Z" /></svg>
+    case 'roadBuilding':
+      return <svg {...shell}>
+        <rect x="1.6" y="10.6" width="11" height="3.4" rx="1.1" transform="rotate(-30 7.1 12.3)" />
+        <path d="M15 3.2v6M12 6.2h6" />
+      </svg>
+    case 'yearOfPlenty':
+      return <svg {...shell}>
+        <rect x="3" y="5" width="8" height="11.5" rx="1.5" transform="rotate(-10 7 10.75)" />
+        <rect x="9" y="4" width="8" height="11.5" rx="1.5" transform="rotate(10 13 9.75)" />
+      </svg>
+    case 'monopoly':
+      return <svg {...shell}>
+        <path d="M3.5 2.8h3.7v7.9a2.8 2.8 0 0 0 5.6 0V2.8h3.7v7.9a6.5 6.5 0 0 1-13 0Z" />
+        <path d="M3.5 2.8h3.7v3.8H3.5ZM12.8 2.8h3.7v3.8h-3.7Z" fill="currentColor" />
+      </svg>
+    case 'vp':
+      return <svg {...shell}><path d="M10 2.8l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 8.1l5-.7Z" /></svg>
+  }
+}
+
 export function ChevronGlyph({ className }: { className?: string }) {
   return (
     <svg {...LINE_ART} className={className} viewBox="0 0 12 8" strokeWidth="2">
       <path d="M1.4 2 6 6.2 10.6 2" />
+    </svg>
+  )
+}
+
+export function HistoryGlyph() {
+  return (
+    <svg {...LINE_ART} width="17" height="17" viewBox="0 0 20 20" strokeWidth="1.7">
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6v4.2l2.8 1.8" />
+    </svg>
+  )
+}
+
+/** The board's robber in flat colour, for the 7 on the Roll step. */
+export function RobberGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="-15.5 -20.5 31 43.5" aria-hidden="true">
+      <circle cy={ROBBER_HEAD_CY} r={ROBBER_HEAD_R} fill="currentColor" />
+      <path d={ROBBER_BODY} fill="currentColor" />
     </svg>
   )
 }
@@ -369,6 +440,15 @@ export function GripGlyph() {
 }
 
 /** The check beside a dropdown's current option. */
+/** The solid white tick inside a finished Best moves step's green disc. */
+export function StepDoneGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 10.4 8.3 14.2 15.5 6.3" />
+    </svg>
+  )
+}
+
 export function TickGlyph({ className }: { className?: string }) {
   return (
     <svg {...LINE_ART} className={className} viewBox="0 0 14 14" strokeWidth="2.2">
@@ -405,11 +485,19 @@ export function ArrowRightGlyph() {
   )
 }
 
+export function CloseGlyph() {
+  return (
+    <svg {...LINE_ART} width="16" height="16" viewBox="0 0 20 20" strokeWidth="1.7">
+      <path d="M5 5l10 10M15 5 5 15" />
+    </svg>
+  )
+}
+
 /** A die face, for the randomize action. */
 export function DiceGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="3.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="7" cy="7" r="1.35" />
       <circle cx="13" cy="7" r="1.35" />
       <circle cx="10" cy="10" r="1.35" />
@@ -443,6 +531,56 @@ export function ClearBoardGlyph() {
     <svg {...LINE_ART} width="22" height="22" viewBox="0 0 20 20" strokeWidth="1.5">
       <path d="M10 2.6 16.4 6.3V13.7L10 17.4 3.6 13.7V6.3Z" />
       <path d="M6.3 13.4 13.7 6.4" />
+    </svg>
+  )
+}
+
+/** A struck settlement marks clearing pieces while keeping the map. */
+export function ClearPiecesGlyph() {
+  return (
+    <svg {...LINE_ART} width="22" height="22" viewBox="0 0 20 20" strokeWidth="1.5">
+      <path d="M4.4 16.6V9.3L10 4l5.6 5.3v7.3Z" />
+      <path d="M6.6 14.6 13.4 8.4" />
+    </svg>
+  )
+}
+
+export function TradeGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M3.5 7h13" />
+      <path d="M13.5 4l3 3-3 3" />
+      <path d="M16.5 13h-13" />
+      <path d="M6.5 10l-3 3 3 3" />
+    </svg>
+  )
+}
+
+export function BuyDevGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M6.6 2.6h7.6a1.8 1.8 0 0 1 1.8 1.8v9.6" />
+      <rect x="4" y="4.6" width="10" height="12.8" rx="1.8" />
+      <path d="M9 8.6v6M6 11.6h6" />
+    </svg>
+  )
+}
+
+export function PlayDevGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <rect x="4.5" y="2.5" width="11" height="15" rx="1.8" />
+      <path d="M7.7 7v6l4.8-3Z" />
+    </svg>
+  )
+}
+
+export function BuildGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M3 16.4h14" />
+      <path d="M5 16.4V8.9l5-4.6 5 4.6v7.5" />
+      <path d="M8.5 16.4v-3.6h3v3.6" />
     </svg>
   )
 }

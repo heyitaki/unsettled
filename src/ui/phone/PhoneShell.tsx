@@ -1,19 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useAnalysis } from '../useAnalysis'
+import { useEffect, useState } from 'react'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { useBoardActions } from '../boardActions'
 import { BoardCanvas } from '../BoardCanvas'
-import { viewedPlayerId } from '../draftSlots'
 import { GlobalNotice } from '../GlobalNotice'
-import { restingMarks } from '../restMarks'
+import { HistoryControls } from '../HistoryControls'
+import { SharedImport } from '../ImportDialog'
+import type { HeaderPanel } from '../HeaderControls'
 import { activeTab, useStore } from '../store'
-import { buildSessionEnded, cancelTarget, openBuildSession, type BuildSession } from './buildMode'
 import { MapsScreen } from './MapsScreen'
-import { PhoneBuild } from './PhoneBuild'
+import { BoardTools } from '../BoardTools'
+import { useBuildMode } from '../useBuildMode'
 import { PhoneHeader } from './PhoneHeader'
 import { PlayersScreen } from './PlayersScreen'
-
-export type PhoneOverlay = 'maps' | 'players'
 
 /** How long a closing overlay stays mounted for its slide out; matches the CSS animation. */
 const OVERLAY_EXIT_MS = 280
@@ -30,13 +28,12 @@ export function PhoneShell() {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const actions = useBoardActions(tab, dispatch)
-  const { analysis } = useAnalysis()
-  const [session, setSession] = useState<BuildSession | null>(null)
-  const [overlay, setOverlay] = useState<PhoneOverlay | null>(null)
+  const { building, enter, done, cancel, toggle, restMarks } = useBuildMode()
+  const [overlay, setOverlay] = useState<HeaderPanel | null>(null)
   // An overlay leaves the way it came: it stays mounted, sliding out, until the
   // timer unmounts it. Opening another during that ride cancels the exit.
   const [closing, setClosing] = useState(false)
-  const openOverlay = (next: PhoneOverlay) => {
+  const openOverlay = (next: HeaderPanel) => {
     setClosing(false)
     setOverlay(next)
   }
@@ -52,45 +49,18 @@ export function PhoneShell() {
     }, OVERLAY_EXIT_MS)
     return () => window.clearTimeout(timer)
   }, [closing])
-  const building = session !== null && !buildSessionEnded(session, tab)
-  // What the board shows while nothing is selected (spec S5); bare in build
-  // mode, where the analysis block is not on the page.
-  const { board } = tab.game
-  const playerId = viewedPlayerId(board, state.viewedPick)
-  const restMarks = useMemo(
-    () => building ? null : restingMarks(board, analysis, playerId),
-    [board, building, analysis, playerId],
-  )
-  // The board under the tools was replaced by a tab switch or import:
-  // that exit is a Done, so the session is dropped without a restore.
-  useEffect(() => {
-    if (session === null || building) return
-    setSession(null)
-    dispatch({ type: 'tool', tool: { kind: 'none' } })
-  }, [session, building, dispatch])
-  const enter = () => {
-    setSession(openBuildSession(tab))
-    dispatch({ type: 'tool', tool: { kind: 'piece' } })
-  }
-  const done = () => {
-    setSession(null)
-    dispatch({ type: 'tool', tool: { kind: 'none' } })
-  }
-  const cancel = () => {
-    const game = session && cancelTarget(session, tab)
-    if (game) dispatch({ type: 'commit-game', game })
-    done()
-  }
   return (
     <div className="phone-shell" data-overlay={overlay ?? undefined} data-closing={closing || undefined}>
-      <PhoneHeader building={building} onToggleMode={building ? done : enter} onOpen={openOverlay} />
+      <PhoneHeader building={building} onToggleMode={toggle} onOpen={openOverlay} />
       <main className="phone-page">
         <BoardCanvas restMarks={restMarks} />
-        {building ? <PhoneBuild actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
+        {!building && <HistoryControls />}
+        {building ? <BoardTools className="phone-block phone-block-flush phone-build" actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel className="phone-block phone-analysis" onBuild={enter} />}
       </main>
       {overlay === 'maps' && <MapsScreen onClose={closeOverlay} />}
       {overlay === 'players' && <PlayersScreen onClose={closeOverlay} />}
       {actions.confirm}
+      <SharedImport onImported={() => { if (overlay !== null) closeOverlay() }} />
       <GlobalNotice />
     </div>
   )

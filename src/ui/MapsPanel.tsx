@@ -5,11 +5,11 @@ import { DotsGlyph, PlusGlyph } from './glyphs'
 import { LibraryLists } from './LibraryLists'
 import { useStore } from './store'
 import { useJsonFiles } from './useJsonFiles'
+import { VersionLine } from './VersionLine'
 
 /**
- * The desktop's Library panel (spec D1): the document switcher and the rename
- * surface, under Board tools in the left rail. Everything below the heading is
- * `LibraryLists`, the list the phone's Maps screen shows under its import button.
+ * The desktop's Library panel (spec D1), opened from the header title.
+ * `LibraryLists` also supplies the phone's Maps screen.
  */
 export function MapsPanel() {
   const { state, dispatch } = useStore()
@@ -42,6 +42,7 @@ export function MapsPanel() {
         </div>
       </div>
       <LibraryLists />
+      <VersionLine />
       {fileInput}
       {menuTrigger && (
         <ContextMenu

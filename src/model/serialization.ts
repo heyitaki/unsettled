@@ -1,6 +1,6 @@
 import { createBoard, validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
-import { DEV_KINDS, newGame, reconcileStats, validateGameStats, type AwardHolders, type DevHand, type DevKind, type Game, type PlayerStats, type TurnState } from './game'
+import { DEV_KINDS, newGame, reconcileStats, validateGameStats, type AwardHolders, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type TurnState } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
 type ParseBoardResult =
@@ -130,6 +130,51 @@ function normalizePlayerStats(value: unknown): PlayerStats | null {
   }
 }
 
+const isLog = (value: unknown): value is string[] => Array.isArray(value) && value.every((line) => typeof line === 'string')
+const isRoll = (value: unknown): value is number | null => value === null || isCount(value) && value >= 2 && value <= 12
+const isGains = (value: unknown): value is NonNullable<TurnState['gains']> =>
+  isRecord(value) && Object.values(value).every((cards) => isRecord(cards) &&
+    Object.entries(cards).every(([resource, count]) => (RESOURCES as readonly string[]).includes(resource) && isCount(count) && count > 0))
+
+function isHistoryPosition(value: Record<string, unknown>, record = false): boolean {
+  if (value.robber !== null && !isCoord(value.robber)) return false
+  if ((!record || Object.hasOwn(value, 'stats')) && (!isRecord(value.stats) ||
+    !Object.values(value.stats).every((stats) => record && stats === null || normalizePlayerStats(stats) !== null))) return false
+  if (Object.hasOwn(value, 'awards')) {
+    const awards = value.awards
+    if (!isRecord(awards) || !exactKeys(awards, ['longestRoad', 'largestArmy']) ||
+      !Object.values(awards).every((id) => id === null || typeof id === 'string')) return false
+  }
+  if (Object.hasOwn(value, 'devHand')) {
+    const hand = value.devHand
+    if (!isRecord(hand) || !exactKeys(hand, ['playerId', 'playable', 'bought']) || typeof hand.playerId !== 'string' ||
+      !normalizeDevCounts(hand.playable) || !normalizeDevCounts(hand.bought)) return false
+  }
+  return true
+}
+
+function isHistory(value: unknown): value is GameHistory {
+  if (!isRecord(value) || !exactKeys(value, ['start', 'turns'])) return false
+  const start = value.start
+  if (!isRecord(start) || !exactKeys(start, ['buildings', 'roads', 'robber', 'stats',
+    ...['awards', 'devHand'].filter((key) => Object.hasOwn(start, key))]) || !isHistoryPosition(start) ||
+    !Array.isArray(start.buildings) || !start.buildings.every(isBuilding) ||
+    !Array.isArray(start.roads) || !start.roads.every(isRoad)) return false
+  return Array.isArray(value.turns) && value.turns.every((record: unknown) => {
+    if (!isRecord(record) || !exactKeys(record, ['playerId', 'rolled', 'log', 'robber',
+      ...['gains', 'buildings', 'roads', 'stats', 'awards', 'devHand'].filter((key) => Object.hasOwn(record, key))]) ||
+      typeof record.playerId !== 'string' || !isRoll(record.rolled) || !isLog(record.log) || !isHistoryPosition(record, true)) return false
+    if (Object.hasOwn(record, 'gains') && !isGains(record.gains)) return false
+    if (Object.hasOwn(record, 'buildings') && (!isRecord(record.buildings) ||
+      !Object.entries(record.buildings).every(([id, piece]) => isCanonicalId(id, parseVertexId) &&
+        (piece === null || isBuilding(piece) && piece.vertexId === id)))) return false
+    if (Object.hasOwn(record, 'roads') && (!isRecord(record.roads) ||
+      !Object.entries(record.roads).every(([id, owner]) => isCanonicalId(id, parseEdgeId) &&
+        (owner === null || typeof owner === 'string')))) return false
+    return true
+  })
+}
+
 /** Parse a game, zero-filling missing roster stats while rejecting malformed data. */
 export function parseGame(data: unknown): ParseGameResult {
   let value = data
@@ -143,7 +188,7 @@ export function parseGame(data: unknown): ParseGameResult {
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
   if (!['schemaVersion', 'board', 'stats'].every((key) => Object.hasOwn(value, key)) ||
-    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand'].includes(key))) {
+    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history'].includes(key))) {
     return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
   }
   const parsedBoard = parseBoard(value.board)
@@ -162,12 +207,14 @@ export function parseGame(data: unknown): ParseGameResult {
   }
   let turn: TurnState | undefined
   if (Object.hasOwn(value, 'turn')) {
-    if (!isRecord(value.turn) || !exactKeys(value.turn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed'])) {
+    const savedTurn = value.turn
+    if (!isRecord(savedTurn) || !exactKeys(savedTurn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed',
+      ...['robberMoved', 'devBought', 'log', 'gains'].filter((key) => Object.hasOwn(savedTurn, key))])) {
       return { ok: false, errors: ['Invalid turn state'] }
     }
-    const { playerId, rolled, devPlayed, progressPlayed } = value.turn
+    const { playerId, rolled, devPlayed, progressPlayed } = savedTurn
     if (!inRoster(playerId) ||
-      !(rolled === null || isCount(rolled) && rolled >= 2 && rolled <= 12) ||
+      !isRoll(rolled) ||
       typeof devPlayed !== 'boolean' || !isRecord(progressPlayed) ||
       !exactKeys(progressPlayed, ['roadBuilding', 'yearOfPlenty', 'monopoly']) ||
       !isCount(progressPlayed.roadBuilding) || !isCount(progressPlayed.yearOfPlenty) || !isCount(progressPlayed.monopoly)) {
@@ -176,6 +223,22 @@ export function parseGame(data: unknown): ParseGameResult {
     turn = { playerId, rolled, devPlayed, progressPlayed: {
       roadBuilding: progressPlayed.roadBuilding, yearOfPlenty: progressPlayed.yearOfPlenty, monopoly: progressPlayed.monopoly,
     } }
+    if (Object.hasOwn(savedTurn, 'robberMoved')) {
+      if (typeof savedTurn.robberMoved !== 'boolean') return { ok: false, errors: ['Invalid turn state'] }
+      turn.robberMoved = savedTurn.robberMoved
+    }
+    if (Object.hasOwn(savedTurn, 'devBought')) {
+      if (!isCount(savedTurn.devBought)) return { ok: false, errors: ['Invalid turn state'] }
+      turn.devBought = savedTurn.devBought
+    }
+    if (Object.hasOwn(savedTurn, 'log')) {
+      if (!isLog(savedTurn.log)) return { ok: false, errors: ['Invalid turn log'] }
+      turn.log = [...savedTurn.log]
+    }
+    if (Object.hasOwn(savedTurn, 'gains')) {
+      if (!isGains(savedTurn.gains)) return { ok: false, errors: ['Invalid turn gains'] }
+      turn.gains = structuredClone(savedTurn.gains)
+    }
   }
   let devHand: DevHand | undefined
   if (Object.hasOwn(value, 'devHand')) {
@@ -208,6 +271,7 @@ export function parseGame(data: unknown): ParseGameResult {
     ...(awards === undefined ? {} : { awards }),
     ...(turn === undefined ? {} : { turn }),
     ...(devHand === undefined ? {} : { devHand }),
+    ...(isHistory(value.history) ? { history: structuredClone(value.history) } : {}),
   }
   // reconcileStats zero-fills missing entries, so any surviving issue is a
   // stats key pointing at a player outside the roster.

@@ -1,7 +1,7 @@
 import { axialKey, edgeEndpointVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
 import type { AxialCoord, Board, Resource, TileKind, VertexId } from '../model/types'
 
-const RESOURCE_LABELS: Record<Resource, string> = {
+export const RESOURCE_LABELS: Record<Resource, string> = {
   wood: 'Wood',
   sheep: 'Sheep',
   wheat: 'Wheat',
@@ -10,16 +10,21 @@ const RESOURCE_LABELS: Record<Resource, string> = {
 }
 
 /** What a vertex touches: its hexes, then any port on an edge it ends. */
-type VertexPart =
+export type VertexPart =
   | { kind: 'hex'; coord: AxialCoord; tile: TileKind | null; number: number | null }
   | { kind: 'port'; coord: AxialCoord; tile: Resource | null; rate: number }
 
-export function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
-  const touching = new Set(parseVertexId(vertexId).map(axialKey))
-  const land = new Set(board.hexes.map((hex) => axialKey(hex.coord)))
-  const hexes = board.hexes
-    .filter((hex) => touching.has(axialKey(hex.coord)))
+/** The board's hexes at `coords`, each once, in board order; sea coords give nothing. */
+export function hexParts(board: Board, coords: AxialCoord[]): VertexPart[] {
+  const keys = new Set(coords.map(axialKey))
+  return board.hexes
+    .filter((hex) => keys.has(axialKey(hex.coord)))
     .map((hex): VertexPart => ({ kind: 'hex', coord: hex.coord, tile: hex.tile, number: hex.numberToken }))
+}
+
+export function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
+  const land = new Set(board.hexes.map((hex) => axialKey(hex.coord)))
+  const hexes = hexParts(board, parseVertexId(vertexId))
   const ports = board.ports
     .filter((port) => edgeEndpointVertexIds(port.edgeId).includes(vertexId))
     .map((port): VertexPart => {
@@ -30,9 +35,9 @@ export function vertexParts(board: Board, vertexId: VertexId): VertexPart[] {
   return [...hexes, ...ports]
 }
 
-/** The vertex in words, for tooltips and accessible names. */
-export function vertexDescription(board: Board, vertexId: VertexId): string {
-  return vertexParts(board, vertexId).map((part) => {
+/** Parts in words, for tooltips and accessible names. */
+export function partsDescription(parts: VertexPart[]): string {
+  return parts.map((part) => {
     if (part.kind === 'hex') {
       if (part.tile === 'desert') return 'Desert'
       if (part.tile === null) return 'Unassigned'
@@ -40,4 +45,8 @@ export function vertexDescription(board: Board, vertexId: VertexId): string {
     }
     return part.tile === null ? `${part.rate}:1 port` : `${RESOURCE_LABELS[part.tile]} ${part.rate}:1 port`
   }).join(' · ')
+}
+
+export function vertexDescription(board: Board, vertexId: VertexId): string {
+  return partsDescription(vertexParts(board, vertexId))
 }

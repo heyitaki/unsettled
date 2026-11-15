@@ -2,7 +2,7 @@ import type { Game } from '../model/game'
 import { newId } from '../model/ids'
 import { firstFreeName, isCopyName } from '../model/names'
 import { isFreshGame, isRecord, parseGame, serializeGame } from '../model/serialization'
-import { MAPS_CORRUPT_KEY, MAPS_KEY, MAX_MAPS, WORKSPACE_CORRUPT_KEY, type WorkspaceTab } from './localStorage'
+import { MAPS_CORRUPT_KEY, MAPS_KEY, MAX_MAPS, storeKey, WORKSPACE_CORRUPT_KEY, type WorkspaceTab } from './localStorage'
 
 interface BackupMap {
   id: string
@@ -105,7 +105,7 @@ export function restoreLibraryBackup(data: unknown): { ok: true; count: number }
         ? `This backup holds ${count} new boards and the library holds at most ${MAX_MAPS}`
         : `Restore would exceed ${MAX_MAPS} boards. Make room in the library first.`)
     }
-    if (count > 0) localStorage.setItem(MAPS_KEY, JSON.stringify(maps))
+    if (count > 0) storeKey(MAPS_KEY, JSON.stringify(maps))
     return { ok: true, count }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Unable to restore backup' }

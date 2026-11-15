@@ -30,7 +30,7 @@ function suite() {
     await recap.getByRole('button', { name: 'Start game' }).click()
     const moves = page.locator('.best-moves-panel')
     await expect(moves.getByRole('heading', { name: 'Best moves' })).toBeVisible()
-    await expect(moves.getByRole('group', { name: 'Turn order' }).getByRole('button', { name: 'Turn 1: P1' }))
+    await expect(page.getByRole('button', { name: "View P1's best moves" }))
       .toHaveAttribute('aria-pressed', 'true')
     await moves.getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(recap.getByRole('heading', { name: 'Draft recap' })).toBeVisible()

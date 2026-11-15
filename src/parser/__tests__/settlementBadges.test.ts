@@ -93,6 +93,9 @@ describe('imported settlement order', () => {
     )
     expect(pieces.buildings.map((building) => building.vertexId)).toEqual([vertices[3], vertices[2], vertices[1], vertices[0]])
     expect(pieces.unorderedPlayerIds).toEqual([])
+     // Every pair was ordered by its badges, so an update may take this order.
+    const parsed = parseScreenshot(image)
+    expect(parsed.ok && parsed.read.picks).toBe(true)
   })
 
   it.each([
@@ -122,6 +125,9 @@ describe('imported settlement order', () => {
     )
     expect(pieces.buildings.find((building) => building.vertexId === vertices[1])?.tier).toBe('city')
     expect(pieces.unorderedPlayerIds).toEqual([])
+    // No badge ordered anything, so an update keeps the saved order.
+    const parsed = parseScreenshot(image)
+    expect(parsed.ok && parsed.read.picks).toBe(false)
   })
 
   it('does not warn about missing badges once every roster player has two settlements', () => {
@@ -134,6 +140,7 @@ describe('imported settlement order', () => {
       expect(parsed.game.board.buildings.filter((building) => building.playerId === player.id && building.tier === 'settlement')).toHaveLength(2)
     }
     expect(parsed.issues.filter((issue) => issue.stage === 'pieces')).toEqual([])
+     expect(parsed.read.picks).toBe(false)
   })
 
   it('retains each player\'s scan order and warns when neither badge can be read', () => {

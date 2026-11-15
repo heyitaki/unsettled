@@ -44,7 +44,11 @@ export function InlineRename({ name, draft, onDraft, onStart, onCommit, onCancel
         onBlur={() => finish(true)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') finish(true)
-          else if (event.key === 'Escape') finish(false)
+          else if (event.key === 'Escape') {
+            // Keep a popover around the field open when the rename is cancelled.
+            event.preventDefault()
+            finish(false)
+          }
         }}
       />
     )

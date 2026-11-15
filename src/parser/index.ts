@@ -1,7 +1,7 @@
-import { AWARD_VP, buildingPoints } from '../model/board'
+import { AWARD_VP, buildingPoints, RESOURCE_COUNTS } from '../model/board'
 import { axialKey } from '../model/coords'
-import { newGame } from '../model/game'
-import { defaultPortEdges, inferMissingNumberToken } from '../model/layouts'
+import { newGame, type Game } from '../model/game'
+import { defaultPortEdges, inferMissingNumberToken, NUMBER_TOKEN_COUNTS } from '../model/layouts'
 import { parseBoard } from '../model/serialization'
 import type { Board, Hex, Player } from '../model/types'
 import type { RgbaImage } from './image'
@@ -9,6 +9,8 @@ import { playerFromSeed } from './palette'
 import { detectPieces, orderDraftSettlements, type PieceOwner } from './pieces'
 import { detectPorts } from './ports'
 import { registerBoard } from './registration'
+import { synthesizeRoster } from './roster'
+import { parseColonist } from './sources/colonist'
 import { detectRoster } from './sources/settled/pills'
 import { choosePalette } from './sources/settled/palette'
 import type { ParseIssue, SourceParse } from './sources/types'
@@ -20,6 +22,36 @@ export type { RgbaImage } from './image'
 export type { ParseIssue } from './sources/types'
 
 export function parseScreenshot(image: RgbaImage): SourceParse {
+  return parseColonistScreenshot(image) ?? parseSettled(image)
+}
+
+function parseColonistScreenshot(image: RgbaImage): Extract<SourceParse, { ok: true }> | null {
+  try {
+    const colonist = parseColonist(image)
+    if (!colonist) return null
+    const assembled = assembleBoard(colonist.board, colonist.issues)
+    if (!assembled.ok) return null
+    const { game } = assembled
+    checkDistributions(game.board, colonist.issues)
+    const hands = applyPlayerStats(game, colonist.roster, colonist.issues)
+    return {
+      ok: true,
+      game,
+      issues: colonist.issues,
+      read: {
+        roster: colonist.roster.length > 0,
+        order: colonist.ordered,
+        picks: false,
+        hands,
+      },
+    }
+  } catch {
+    // Registration and malformed images can fail without a usable board.
+    return null
+  }
+}
+
+function parseSettled(image: RgbaImage): SourceParse {
   const failure = (error: string): SourceParse => ({ ok: false, error })
   let palette
   try {
@@ -64,20 +96,13 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
       ? [...rosterOwners, ...missingColorOwners]
       : fallbackColors
     const pieces = detectPieces(image, palette, registration, owners)
-    let players: Player[]
+    const players = roster.players.map((entry) => entry.player)
+    const detected = missingColorOwners.filter((entry) => pieces.usedPlayerIds.has(entry.id))
+      .map((entry) => entry.player)
+    if (players.length === 0 && detected.length === 0) detected.push(fallbackColors[0].player)
+    synthesizeRoster(players, detected, issues, roster.players.length > 0 ? 6 : Infinity)
     let mePlayerId: string | null
     if (roster.players.length > 0) {
-      players = roster.players.map((entry) => entry.player)
-      for (const fallback of missingColorOwners) {
-        if (pieces.usedPlayerIds.has(fallback.id) && players.length < 6) {
-          players.push(fallback.player)
-          issues.push({
-            stage: 'roster',
-            severity: 'warning',
-            message: `Synthesized a player for an unmatched ${fallback.player.name.toLowerCase()} piece`,
-          })
-        }
-      }
       mePlayerId = roster.turnPlayerId
       if (mePlayerId === null) {
         issues.push({
@@ -87,18 +112,11 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
         })
       }
     } else {
-      players = fallbackColors.filter((entry) => pieces.usedPlayerIds.has(entry.id)).map((entry) => entry.player)
-      if (players.length === 0) players = [fallbackColors[0].player]
       mePlayerId = null
-      issues.push({
-        stage: 'roster',
-        severity: 'warning',
-        message: 'Roster was synthesized from detected pieces',
-      })
     }
     const playerIds = new Set(players.map((player) => player.id))
     const roads = pieces.roads.filter((road) => playerIds.has(road.playerId))
-    const { buildings, unorderedPlayerIds } = orderDraftSettlements(
+    const { buildings, unorderedPlayerIds, ordered } = orderDraftSettlements(
       image, palette, registration,
       pieces.buildings.filter((building) => playerIds.has(building.playerId)),
       players.map((player) => player.id),
@@ -197,20 +215,7 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
     }
     const robber = robberCandidates.sort((a, b) => b.corePixels - a.corePixels)[0]?.coord ?? null
 
-    // A single hidden token is recoverable from the fixed distribution.
-    const inferred = inferMissingNumberToken(hexes, registration.layout)
-    if (inferred) {
-      const ref = axialKey(inferred.coord)
-      const hex = hexes.find((candidate) => axialKey(candidate.coord) === ref)
-      if (hex) hex.numberToken = inferred.number
-      const issue = issues.find((candidate) => candidate.stage === 'tokens' && candidate.ref === ref)
-      if (issue) {
-        issue.severity = 'warning'
-        issue.message = `Number token was hidden, inferred ${inferred.number} from the standard number distribution`
-      }
-    }
-    const board: Board = {
-      schemaVersion: 1,
+    const assembled = assembleBoard({
       layout: registration.layout,
       hexes,
       ports,
@@ -219,35 +224,10 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
       buildings,
       players,
       mePlayerId,
-    }
-    const validated = parseBoard(board)
-    if (!validated.ok) return failure(`Parsed board was invalid: ${validated.errors.join('; ')}`)
-    const game = newGame(board)
-    for (const entry of roster.players) {
-      if (entry.hand !== null) game.stats[entry.player.id].handUnknown = entry.hand
-      else issues.push({
-        stage: 'stats',
-        severity: 'unreadable',
-        message: `Could not read hand cards for ${entry.player.name}`,
-      })
-      if (entry.vp === null) {
-        issues.push({
-          stage: 'stats',
-          severity: 'unreadable',
-          message: `Could not read victory points for ${entry.player.name}`,
-        })
-      } else {
-        const buildingVP = buildings.filter((building) => building.playerId === entry.player.id)
-          .reduce((sum, building) => sum + buildingPoints(building.tier), 0)
-        if (![0, AWARD_VP, 2 * AWARD_VP].includes(entry.vp - buildingVP)) {
-          issues.push({
-            stage: 'stats',
-            severity: 'warning',
-            message: `Victory points disagree with parsed buildings for ${entry.player.name}`,
-          })
-        }
-      }
-    }
+    }, issues)
+    if (!assembled.ok) return assembled
+    const { game } = assembled
+    const hands = applyPlayerStats(game, roster.players, issues)
 
     for (const playerId of unorderedPlayerIds) {
       const player = players.find((candidate) => candidate.id === playerId)
@@ -259,10 +239,109 @@ export function parseScreenshot(image: RgbaImage): SourceParse {
     }
     const read = {
       roster: roster.players.length > 0,
-      hands: roster.players.filter((entry) => entry.hand !== null).map((entry) => entry.player.id),
+      order: roster.players.length > 0,
+      picks: roster.players.length > 0 && ordered,
+      hands,
     }
     return { ok: true, game, issues, read }
   } catch {
     return failure('could not parse this image')
   }
+}
+
+function applyPlayerStats(game: Game, entries: {
+  player: Player
+  hand: number | null
+  vp: number | null
+  devCards?: number | null
+  knights?: number | null
+}[], issues: ParseIssue[]): string[] {
+  const hands: string[] = []
+  for (const entry of entries) {
+    if (entry.hand !== null) {
+      game.stats[entry.player.id].handUnknown = entry.hand
+      hands.push(entry.player.id)
+    } else issues.push({
+      stage: 'stats',
+      severity: 'unreadable',
+      message: `Could not read hand cards for ${entry.player.name}`,
+    })
+    if (entry.vp === null) {
+      issues.push({
+        stage: 'stats',
+        severity: 'unreadable',
+        message: `Could not read victory points for ${entry.player.name}`,
+      })
+    } else {
+      const buildingVP = game.board.buildings.filter((building) => building.playerId === entry.player.id)
+        .reduce((sum, building) => sum + buildingPoints(building.tier), 0)
+      if (![0, AWARD_VP, 2 * AWARD_VP].includes(entry.vp - buildingVP)) {
+        issues.push({
+          stage: 'stats',
+          severity: 'warning',
+          message: `Victory points disagree with parsed buildings for ${entry.player.name}`,
+        })
+      }
+    }
+    for (const [field, label] of [['devCards', 'development cards'], ['knights', 'knights played']] as const) {
+      const count = entry[field]
+      if (count === undefined) continue
+      if (count !== null) game.stats[entry.player.id][field] = count
+      else issues.push({
+        stage: 'stats',
+        severity: 'unreadable',
+        message: `Could not read ${label} for ${entry.player.name}`,
+      })
+    }
+  }
+  return hands
+}
+
+function assembleBoard(fields: Omit<Board, 'schemaVersion'>, issues: ParseIssue[]):
+  { ok: true; game: Game } | { ok: false; error: string } {
+  const { hexes, layout } = fields
+
+  // A single hidden token is recoverable from the fixed distribution.
+  const inferred = inferMissingNumberToken(hexes, layout)
+  if (inferred) {
+    const ref = axialKey(inferred.coord)
+    const hex = hexes.find((candidate) => axialKey(candidate.coord) === ref)
+    if (hex) hex.numberToken = inferred.number
+    const issue = issues.find((candidate) => candidate.stage === 'tokens' && candidate.ref === ref)
+    if (issue) {
+      issue.severity = 'warning'
+      issue.message = `Number token was hidden, inferred ${inferred.number} from the standard number distribution`
+    }
+  }
+  const board: Board = { schemaVersion: 1, ...fields }
+  const validated = parseBoard(board)
+  if (!validated.ok) return { ok: false, error: `Parsed board was invalid: ${validated.errors.join('; ')}` }
+  return { ok: true, game: newGame(board) }
+}
+
+function checkDistributions(board: Board, issues: ParseIssue[]): void {
+
+  // ponytail: Colonist variants and custom maps would be flagged by these base-game counts.
+  checkCounts(board.hexes, (hex) => hex.tile, RESOURCE_COUNTS[board.layout], 'Tiles', 'registration', issues)
+  checkCounts(board.hexes.filter((hex) => hex.tile !== 'desert'),
+    (hex) => hex.numberToken === null ? null : String(hex.numberToken), NUMBER_TOKEN_COUNTS[board.layout], 'Number tokens', 'tokens', issues)
+}
+
+function checkCounts(
+  hexes: Hex[], value: (hex: Hex) => string | null, expected: Readonly<Record<string, number>>,
+  noun: string, stage: ParseIssue['stage'], issues: ParseIssue[],
+): void {
+  const counts = new Map<string | null, number>()
+  for (const hex of hexes) counts.set(value(hex), (counts.get(value(hex)) ?? 0) + 1)
+  if (Object.entries(expected).every(([key, count]) => counts.get(key) === count)) return
+  const suspects = hexes.filter((hex) => {
+    const key = value(hex)
+    return key === null || counts.get(key)! > (expected[key] ?? 0)
+  })
+  issues.push({
+    stage,
+    severity: 'unreadable',
+    message: `${noun} disagree with the standard distribution`,
+    ...(suspects.length === 1 ? { ref: axialKey(suspects[0].coord) } : {}),
+  })
 }

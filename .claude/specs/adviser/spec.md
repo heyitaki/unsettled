@@ -21,34 +21,36 @@ When the draft is complete, Best picks becomes Best moves. The panel tracks the 
 
 ### The active player
 
-One notion, stored in the game: `turn.playerId` is whose turn it is, whose advice is shown, and who the action bar acts for. `End turn` moves it to the next seat. Tapping a circle in the turn-order row sets it directly. The claimed player (`mePlayerId`) stays who you are: your cards are exact, and yours are the dev cards known by type.
+`turn.playerId` is whose turn it is and who recorded actions are for. `End turn` advances to the next seat; undo and redo restore recorded turns. Once a game has a recorded turn and a finished draft, the header rings that player. Outside build mode, tapping a header player button views their Best moves without changing the turn; the viewed player wears a name chip. In build mode the chip marks the piece brush while the ring stays on the turn. The temporary workspace `viewedPlayer` is outside persistence and undo: `null` means the turn player, selecting that player stores `null`, and a missing roster id reads as `null`. The view is also `null` while the draft is unfinished. It resets on tab switches and whenever the active tab's `turn.playerId` changes, including commits, undo and redo. The claimed player (`mePlayerId`) stays who you are: your cards are exact, and yours are the dev cards known by type.
 
 ```ts
 turn?: {
   playerId: string
   rolled: number | null   // this turn's dice total, null before the roll
+  robberMoved?: boolean   // false after a seven until its robber move is recorded; absent otherwise
+  devBought?: number      // dev cards bought this turn (a rival cannot play them yet)
   devPlayed: boolean      // a dev card was played this turn
   progressPlayed: Record<Exclude<DevKind, 'knight'>, number>  // progress cards recorded as played all game, by kind: they have left the deck
 }
 ```
 
-Optional, following `awards?`. Absent means the claimed player's turn, not yet rolled.
+Optional, following `awards?`. Absent means the claimed player's turn, not yet rolled. `robberMoved` and `devBought` are app-only: `adviceClient` drops them before a request reaches the engine, whose `Turn` rejects unknown keys.
 
 ### State the policy reads that `Game` lacks
 
 | Gap | Resolution | Shown in panel |
 | --- | --- | --- |
-| Whose turn, who decides | `turn.playerId`, sent to the bridge as `observer`. | the turn-order row |
+| Whose turn, who decides | `turn.playerId` owns recorded actions; the viewed player is sent as `observer` for Best moves. | Header turn ring and viewed-player name chip |
 | Round, current seat | Defaulted to 0; no policy reads them. | no |
-| Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | `Bank estimated: N cards of unknown type` when any `handUnknown` > 0 |
-| Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded through the action bar; earlier ones are not known. | `Dev deck: N left` |
-| My dev cards by type, bought this turn | `Game.devHand` (below). Absent: no playable cards. | the table's dev cell |
+| Bank stock | Derived: rule supply minus every known card. Cards in `handUnknown` are not subtracted. | None |
+| Dev deck remaining | Derived: deck size minus cards held by all players, minus knights played. Progress cards played are counted once they are recorded in the panel; earlier ones are not known. | no (it hides `Buy card` at zero) |
+| My dev cards by type, bought this turn | `Game.devHand` (below). Absent: no playable cards. | the Ledger's dev pills |
 | Dev card already played this turn | `turn.devPlayed`. | no |
 | The deciding player's hand | Exact for the claimed player. For a rival, the known cards only. | `N of Red's cards are of unknown type and ignored` |
-| Other players' hands by resource | Belief bounds: lower = `hand[r]`, upper = `hand[r] + handUnknown`, total = both. | the table shows the same range |
-| Other players' dev cards | Count from `stats.devCards`; knights from `stats.knights`. | the table |
-| Dev cards of unknown type held by the deciding player (any rival, or the claimed player before their cards are entered by type) | Counted as knights bought this turn: held, not playable. This shifts the dev card buy score slightly. | `Red's 2 dev cards are treated as unplayed knights`, or for the claimed player `Set your dev cards by type in the table` |
-| Awards | `Game.awards` when set; the engine's own rule when absent. | the table |
+| Other players' hands by resource | Belief bounds: lower = `hand[r]`, upper = `hand[r] + handUnknown`, total = both. | the Ledger shows the known count and unseen count separately |
+| Other players' dev cards | Count from `stats.devCards`; knights from `stats.knights`. | the Ledger |
+| Dev cards of unknown type held by the deciding player (any rival, or the claimed player before their cards are entered by type) | Counted as knights bought this turn: held, not playable. This shifts the dev card buy score slightly. | `Red's 2 dev cards are treated as unplayed knights` (no note for the claimed player) |
+| Awards | `Game.awards` when set; the engine's own rule when absent. | the Ledger |
 | Offers already made this turn | Defaulted to 0. | no |
 | Player trading | `RuleConfig::player_trading = Some(TradeConfig::default())`, set by the bridge. | no |
 
@@ -77,22 +79,23 @@ ponytail: the upper bound is always lower plus unknown. Storing an upper bound p
 
 ### Panel structure
 
-Heading, turn-order row, standings table, action bar, the open action's own controls, recommendations, notes. The same component renders in both trees.
+Three sections: `Ledger` (hands, VP, held awards and inline corrections), `Record your turn` (heading and the step rail with the open action's own controls, no player picker), then `Best moves` (recommendations, notes). The same component renders in both trees.
 
-- **Turn order** replaces the draft ribbon once the draft is complete: one circle per player in seat order, the active player ringed. Nothing marks the claimed player there; the draft ribbon lost its dot too.
-- **Standings table**: one row per player. A `Cards` view shows each resource (a number, or a range), the hand total and dev cards. A `Points` view shows settlements, cities, road length, knights, VP cards and the total, with the award holders marked. Tapping a row opens that player's stepper chips for corrections. Under it, the claimed player's dev cards by type as chips in three states (playable, none held, bought this turn as a faded grey outline with no label). It sits on the main page in both trees, and its row editor is the only place a player's card and knight counts are edited.
-- **Action bar**: Roll, Trade, Build, Buy dev card, Play dev card, End turn. Each acts for the active player; selecting one opens its controls.
+- **Ledger**: a section above `Record your turn`, with a button-free heading and one row per player in seat order. Each row shows the swatch, name, `YOU` on the claimed player, held-award medals, known resource counts, unseen cards as `?`, untyped dev cards, hand total and VP. The claimed player's typed dev cards and VP cards appear as pills below their main line; counts show only above one, and bought cards are dashed with a `new` label. The active row has an ink bar, and an open row is tinted. Tapping a row opens its piece and award stats, correction steppers and a `Done` footer. The Ledger's row editor is the only place a player's hand, dev cards, knights and VP cards are edited. The full approved design is in [`../ledger/plan.md`](../ledger/plan.md).
+- **Step rail**: Roll, then the actions (`Trade`, `Buy card`, `Play card`, `Build`, each shown only when it can happen), then End turn. Each acts for the active player, and selecting an action opens its controls.
   - Roll: eleven totals. Any total but seven asks the bridge for production and credits every player's `hand`. A seven lists every player holding more than seven cards with a discard to record (advised for each, typed for the claimed player, untyped by default for rivals), then the robber move.
   - Trade: the other party (bank or port at the active player's rate, or a player), what is given and what is received. When the claimed player is the one answering and the shape is one the policy models, the verdict is shown before recording.
   - Build: road, settlement or city, then the spot on the board; the cost is deducted.
   - Buy dev card: the cost is deducted; the claimed player says what was drawn.
   - Play dev card: Knight (robber move, knights played plus one), Road Building (two roads), Year of Plenty (two cards), Monopoly (the resource, and how many each player gave).
   - End turn: next seat, flags cleared, bought cards made playable.
-- **Recommendations** are for the active player: the pre-roll line before the roll, the ranked list after it. Every one has Apply. Apply commits when the bridge's answer is the whole fact (a build, a bank trade, a discard, Year of Plenty, Pass ends the turn). Otherwise it opens the matching action with the advice filled in, for the one thing only the table knows: who accepted an offer, what was drawn, what was stolen, how many cards a Monopoly took.
+- **Recommendations** follow the viewed player. For the turn player, show the pre-roll line before the roll and the ranked list after it, with `Play` beside `Clear` on the selected row (the pre-roll row also shows `Play` while unselected). Play commits when the bridge's answer is the whole fact (a build, a bank trade, a discard, Year of Plenty, Pass ends the turn). Otherwise it opens the matching action with the advice filled in, for the one thing only the players know: who accepted an offer, what was drawn, what was stolen, how many cards a Monopoly took.
+- **Viewing a non-turn player** requests only the `turn` ranking with that player as `observer`, without the turn player's pre-roll gate. A pending seven suppresses the ranking request and shows `Record the discards and the robber above. The ranked moves follow.` for every view. View changes and row hover or leave preserve the suggested robber mark during a seven or Knight flow. The heading is `Best moves for Blue`, or `Best moves` for the claimed player, followed by `Not Blue's turn. These are the moves Blue would make with this hand if their turn started now.` (use `your turn` and `you` for the claimed player). Rows preview and pin marks and retain Clear, but have no Play or pass/End turn button. Notes about unknown resources and dev cards name the viewed player. The Ledger's active bar and Record turn stay on the turn player.
+- With no recorded turn and nobody claimed, show a primary `Start game` button and the claim hint. Starting records seat one's turn.
 - Each recorded action is one `commit-game`, so one undo takes it back.
 - Selecting a recommendation pins its mark with the Best picks rules. A robber destination is a ring on a hex, which is a new mark kind.
 - Scores are shown as the policy's raw numbers.
-- The heading holds the store's Undo and Redo, drawn as straight arrows (the user's pick). Never the Unicode curved arrows.
+- The `Record your turn` heading holds the store's Undo and Redo, drawn as straight arrows (the user's pick). Never the Unicode curved arrows.
 - The surface is specified in desktop D8 and mobile S10.
 
 ### Advice surface
@@ -102,7 +105,7 @@ Heading, turn-order row, standings table, action bar, the open action's own cont
 - Trade response: `accept` is `acceptance_margin > 0`, the deterministic centre of the policy's random draw. The margin is the reported score. This also keeps `exp()` off every parity path.
 - Reasons: `advice.rs` builds each one-line reason from the terms the scorer already computes. `vertex_score` is split into named terms summed in the original order. No score expression changes.
 - Any action that reaches the winning VP says `Wins the game` in its reason.
-- Super cities: counted for production and VP by the base rules already; `legal_city` only upgrades settlements, so none is ever recommended. The panel says so.
+- Super cities: counted for production and VP by the base rules already; `legal_city` only upgrades settlements, so none is ever recommended. The panel no longer says so (removed 2026-11-12 at the owner's request).
 
 ### Build and staleness
 
@@ -148,14 +151,17 @@ Win chance is measured, not scored: the engine plays the game out from the draft
 
 ### Client
 
-`useDraftRecap` asks for `RECAP_GAMES` (1,000) in batches of `RECAP_BATCH` (50) through the advice client, one request at a time, and adds the counts up as they arrive, so the percentages settle on screen. `decisionKey` includes `games` and `batch`. The client's per-game cache makes a return to the recap (an undo of `Start game`) instant. A game change cancels the run the way it cancels advice.
+`useDraftRecap` asks for `RECAP_GAMES` (1,000) in batches of `RECAP_BATCH` (50) through the advice client, up to `recapWorkers` at a time (the core count less one, capped at four), and adds the counts up as they arrive, so the percentages settle on screen. More than one puts the batches on that many extra workers, picked by batch index and stopped when the last pending batch answers. `decisionKey` includes `games` and `batch`. The client's per-game cache makes a return to the recap (an undo of `Start game`) instant. A game change cancels the run the way it cancels advice.
 
 ### Surface
 
 One component in both trees, in place of Best moves:
 
-- Heading `Draft recap`, with the same `Undo` and `Redo` buttons as Best moves.
-- One row per player, highest win chance first, ties in turn order: rank circle in the player's colour, name, the player's two spots as the Best picks tile thumbnails, the player's hand from `Game.stats` as `CardAmounts` when it holds a card, a bar as wide as the share, and the whole percentage. Rows are not selectable and put no marks on the board. Before the first batch the percentage reads `…`.
+- Heading `Draft recap`, with the same `Undo` and `Redo` buttons as `Record your turn`.
+- Approved mock-up (2026-11-12): the `Draft recap · proposed` artboard on the `Recap and ports` page of https://claude.ai/artifact/GpfbeCAGbda2AegvcEvLKb.
+- Under the heading, a header for one player: the claimed player, or the highest win chance when nobody is claimed. A muted 13px line `{name}'s win chance`, then the whole percentage at 46px weight 800, then one 14px weight 700 line in `--accent-dark`: `Leads {second} by {n} points` when that player has the highest win chance, `Trails {leader} by {n} points` when not, and `Level with {name}` when the rounded percentages are equal. Before the first batch the percentage reads `…` and the line is absent.
+- Under the header, an 8px share bar split across the players in card order, each segment as wide as that player's win count, in the player's colour with 2px gaps and 4px radii; a white player's segment takes a 1px ink inset ring. Absent before the first batch.
+- One card per player in a two-column grid with 10px gaps, highest win chance first, ties in turn order: the row surface, hairline border and 6px radius, 12px padding. Each card holds the rank circle in the player's colour, the name, a `YOU` tag in `--accent-dark` on the claimed player's card, the whole percentage at 26px weight 800, the player's two spots as the Best picks tile thumbnails, and the player's hand from `Game.stats` as `CardAmounts` when it holds a card. The claimed player's card takes the selected Best picks row treatment (1px accent border, 7% accent wash). Cards are not selectable and put no marks on the board. Before the first batch the percentage reads `…`.
 - While batches are outstanding, the Best picks progress bar with `Simulating games…`.
 - `Start game`, the primary button, as wide as the rows and enabled at all times.
 - Once every game is counted, one note: `Win chance over 1,000 simulated games, every seat played by the adviser. Expect about 3 points of noise.` A second line gives the draw count when any game hit the turn cap. Neither shows mid-run, after an error or on a blocked board, where the claim would be false.

@@ -46,7 +46,7 @@ async function open(page: Page, board: Board, stats: Record<string, PlayerStats>
 }
 
 const panel = (page: Page) => page.locator('.best-moves-panel')
-const redRow = (page: Page) => panel(page).locator('.move-table tbody tr').first().locator('td')
+const redRow = (page: Page) => panel(page).locator('.ledger-row').first().locator('.ledger-hand, .ledger-cards')
 
 function suite() {
   test('Best moves follows the recap after the last draft pick is placed', async ({ page }) => {
@@ -57,13 +57,31 @@ function suite() {
     await page.getByRole('button', { name: 'Place settlement' }).click()
     await page.getByRole('button', { name: 'Start game' }).click()
     await expect(panel(page).getByRole('heading', { name: 'Best moves' })).toBeVisible()
-    await expect(panel(page).getByRole('group', { name: 'Turn order' }).getByRole('button')).toHaveCount(board.players.length)
-    await expect(panel(page).getByRole('button', { name: 'Turn 1: P1' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^View .+'s best moves$/ })).toHaveCount(board.players.length)
+    await expect(page.getByRole('button', { name: "View P1's best moves" })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  test('a selected move pins its mark, Apply builds and pays, and one undo restores both', async ({ page }) => {
+
+  test('views another hand without moving the recording turn and resets the view on End turn', async ({ page }) => {
+    await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }), p2: hand({ wood: 1, brick: 1 }) })
+    await page.getByRole('button', { name: "View P2's best moves" }).click()
+    await expect(page.getByRole('button', { name: "View P2's best moves" }).locator('.head-dot-chip')).toHaveText('P2')
+    await expect(page.getByRole('heading', { name: 'Record your turn', exact: true })).toBeVisible()
+    const advice = panel(page).filter({ has: page.getByRole('heading', { name: 'Best moves for P2', exact: true }) })
+    await expect(advice).toContainText("Not P2's turn.")
+    await advice.locator('.analysis-row-select').first().click()
+    await expect(advice.locator('.analysis-row.current')).toHaveCount(1)
+    await expect(advice.getByRole('button', { name: /^(Play|End turn)/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: "View P1's best moves" }).locator('.head-dot.me')).toHaveCount(1)
+    await page.getByRole('button', { name: "View P3's best moves" }).click()
+    await panel(page).getByRole('button', { name: 'End turn', exact: true }).click()
+    await expect(page.getByRole('heading', { name: "Record P2's turn", exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: "View P2's best moves" })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: "View P2's best moves" }).locator('.head-dot.me.head-dot-chip')).toHaveCount(1)
+  })
+
+  test('a selected move pins its mark, Play builds and pays, and one undo restores both', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }) })
-    await panel(page).getByRole('button', { name: 'Roll', exact: true }).click()
     // No token on this board carries a 2 next to a red settlement, so the hand stays at one road's worth.
     await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
     const before = await redRow(page).allInnerTexts()
@@ -78,35 +96,50 @@ function suite() {
     await page.mouse.move(0, 0)
     await expect(page.locator('.board-canvas [class*="highlight"]')).not.toHaveCount(0)
 
-    await road.getByRole('button', { name: 'Apply', exact: true }).click()
+    await road.getByRole('button', { name: 'Play', exact: true }).click()
     await expect(pieces).toHaveCount(placed + 1)
     await expect.poll(() => redRow(page).allInnerTexts()).not.toEqual(before)
 
-    await panel(page).getByRole('button', { name: 'Undo', exact: true }).click()
+    await panel(page).locator('.panel-heading').getByRole('button', { name: 'Undo', exact: true }).click()
     await expect(pieces).toHaveCount(placed)
     await expect.poll(() => redRow(page).allInnerTexts()).toEqual(before)
   })
 
+  test('a row centres its disc, tiles and score on its text, and selecting it reveals costs without moving them', async ({ page }) => {
+    await open(page, drafted(10), { p1: hand({ wood: 1, brick: 1 }) })
+    await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
+    const road = panel(page).locator('.analysis-row', { hasText: 'Build road' }).first()
+    const centres = () => road.evaluate((row) => ['.history-disc', '.analysis-row-body', '.move-spot', '.analysis-score'].map((selector) => {
+      const box = row.querySelector(selector)!.getBoundingClientRect()
+      return Math.round((box.top + box.height / 2 - row.getBoundingClientRect().top) * 2) / 2
+    }))
+    await expect(road.locator('.move-costs')).toBeHidden()
+    const resting = await centres()
+    expect(new Set(resting).size).toBe(1)
+    await road.locator('.analysis-row-select').click()
+    await expect(road.locator('.move-costs')).toBeVisible()
+    expect(await centres()).toEqual(resting)
+  })
+
   test('a seven shows what to discard and where to move the robber', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 4, brick: 4 }) })
-    await panel(page).getByRole('button', { name: 'Roll', exact: true }).click()
     await panel(page).getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '7', exact: true }).click()
     const discard = panel(page).getByRole('group', { name: "P1's discard" })
     await expect(discard).toContainText(/Keeps|toward/)
-    await expect(panel(page).locator('.move-pick', { hasText: 'Robber' })).toContainText(/to .+, (rob nobody|steal from P\d)/)
-    await panel(page).getByRole('button', { name: 'Show', exact: true }).click()
-    await expect(page.locator('.board-canvas .hex-highlight')).toHaveCount(1)
+    // Discards come first: the robber prompt waits for them.
+    await expect(panel(page).locator('.move-robber')).toHaveCount(0)
     await discard.getByRole('button', { name: 'Record', exact: true }).click()
-    await expect.poll(async () => (await redRow(page).allInnerTexts())[5]).toBe('4')
+    await expect(redRow(page).last()).toHaveText('4')
+    await expect(panel(page).locator('.move-robber')).toContainText(/Suggested: .+, (rob nobody|steal from P\d)/)
+    await expect(page.locator('.board-canvas .hex-highlight')).toHaveCount(1)
   })
 
   test('an offer entered on a rival turn is answered with accept or decline', async ({ page }) => {
     await open(page, drafted(10), { p1: hand({ wood: 2, sheep: 1 }), p2: hand({ brick: 2 }) })
-    await panel(page).getByRole('button', { name: 'Turn 2: P2' }).click()
+    await panel(page).getByRole('button', { name: 'End turn', exact: true }).click()
     await panel(page).getByRole('button', { name: 'Trade', exact: true }).click()
-    await panel(page).getByRole('group', { name: 'With' }).getByRole('button', { name: 'P1', exact: true }).click()
-    await panel(page).getByRole('button', { name: 'P2 gives: brick', exact: true }).click()
-    await panel(page).getByRole('button', { name: 'and gets: wood', exact: true }).click()
+    await panel(page).getByRole('button', { name: 'Gives brick', exact: true }).click()
+    await panel(page).getByRole('button', { name: 'Gets wood', exact: true }).click()
     await expect(panel(page).locator('.move-verdict')).toContainText(/Advice for you: (Accept|Decline) \(/)
   })
 }

@@ -4,6 +4,8 @@ import { createLibraryBackup } from '../persistence/backup'
 import { downloadBoard } from './boardFiles'
 import { recoveryTabs } from './saveStatus'
 import { persistedWorkspace } from './workspaceSync'
+import { ConfirmDialog } from './ConfirmDialog'
+import { useStorageCleanup } from './useStorageCleanup'
 
 /**
  * The toast, rendered by both shells so a notice reads the same wherever it is
@@ -12,7 +14,8 @@ import { persistedWorkspace } from './workspaceSync'
  */
 export function GlobalNotice() {
   const { state, dispatch } = useStore()
-  const { failures, retry } = useSaveRecovery()
+  const { failures, retry, dismissStorageFull } = useSaveRecovery()
+  const { storageFull, plan, description, promptOpen, cleanUp, error } = useStorageCleanup()
   const errors = Object.values(failures)
   const [backupError, setBackupError] = useState<string | null>(null)
   // Pause auto-dismiss while the pointer is over the toast, so it can be read,
@@ -33,21 +36,36 @@ export function GlobalNotice() {
     return () => window.removeEventListener('unsettled:notice', showNotice)
   }, [dispatch])
   if (errors.length > 0) return (
-    <div className="global-notice save-failure" role="alert">
-      <div>
-        {errors.map((error, index) => <p key={index}>{error.message}</p>)}
-        {backupError && <p>{backupError}</p>}
-        <button type="button" onClick={retry}>Retry saving</button>
-        <button type="button" onClick={() => {
-          try {
-            downloadBoard('unsettled-library-backup', createLibraryBackup(recoveryTabs(persistedWorkspace(state.tabs).tabs, errors)))
-            setBackupError(null)
-          } catch (error) {
-            setBackupError(`Backup failed: ${error instanceof Error ? error.message : 'Unable to export backup'}`)
-          }
-        }}>Export backup</button>
+    <>
+      {promptOpen && <ConfirmDialog
+        title="Storage is full"
+        message={`This browser has no room left, so your latest edits are not saved. ${description} You can also delete games yourself in Maps.${error ? ` ${error}` : ''}`}
+        onCancel={dismissStorageFull}
+        actions={[
+          { label: 'Clean up', variant: 'danger', onClick: cleanUp },
+          { label: 'Not now', onClick: dismissStorageFull },
+        ]}
+      />}
+      <div className="global-notice save-failure" role="alert">
+        <div className="save-failure-body">
+          {errors.map((error, index) => <strong key={index}>{error.message}</strong>)}
+          {storageFull && plan.count === 0
+            && <p>Delete or export old games to make room.</p>}
+          {backupError && <p>{backupError}</p>}
+        </div>
+        <div className="save-failure-actions">
+          <button type="button" className="save-failure-retry" onClick={retry}>Retry saving</button>
+          <button type="button" onClick={() => {
+            try {
+              downloadBoard('unsettled-library-backup', createLibraryBackup(recoveryTabs(persistedWorkspace(state.tabs).tabs, errors)))
+              setBackupError(null)
+            } catch (error) {
+              setBackupError(`Backup failed: ${error instanceof Error ? error.message : 'Unable to export backup'}`)
+            }
+          }}>Export backup</button>
+        </div>
       </div>
-    </div>
+    </>
   )
   if (!state.notice) return null
   return (

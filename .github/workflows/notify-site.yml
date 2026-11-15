@@ -1,10 +1,6 @@
-# On every push to main, ping the personal site (heyitaki.github.io) to rebuild
-# so akshath.me/unsettled picks up this commit. The site's jekyll.yml listens
-# for the "unsettled-update" repository_dispatch event.
-#
-# Requires a repo secret SITE_DISPATCH_TOKEN: a fine-grained PAT scoped to
-# heyitaki/heyitaki.github.io with Contents: Read and write (cross-repo dispatch
-# can't use the default GITHUB_TOKEN).
+# The site's jekyll.yml lists this file's green push runs by file name, and
+# dispatch-site.yml triggers on the name "Check and deploy": renaming either
+# breaks the site and OTA publish.
 name: Check and deploy
 
 on:
@@ -28,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      # The updater plugin belongs to the iOS build only.
+      - run: "! grep -rq CapacitorUpdater dist"
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -54,17 +52,3 @@ jobs:
         run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
       - name: Check the committed wasm is current
         run: simulator/tools/build-wasm.sh --check
-  notify:
-    needs: [app, rust]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch rebuild to personal site
-        env:
-          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
-        run: |
-          curl --fail -sS -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $SITE_DISPATCH_TOKEN" \
-            https://api.github.com/repos/heyitaki/heyitaki.github.io/dispatches \
-            -d '{"event_type":"unsettled-update"}'

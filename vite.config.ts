@@ -3,12 +3,17 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+// `--mode native` is the iOS app's bundle: served from capacitor://localhost/,
+// where WKWebView runs no service worker, so the PWA plugin only stubs its
+// virtual module.
+export default defineConfig(({ mode }) => ({
   // Hosted under akshath.me/unsettled, so emitted asset URLs are prefixed.
-  base: '/unsettled/',
+  base: mode === 'native' ? '/' : '/unsettled/',
+  build: mode === 'native' ? { outDir: 'dist-native' } : {},
   plugins: [
     react(),
     VitePWA({
+      disable: mode === 'native',
       registerType: 'autoUpdate',
       manifest: {
         name: 'Unsettled: Catan Analyzer',
@@ -55,4 +60,4 @@ export default defineConfig({
     // perf suite asserts elapsed time explicitly.
     testTimeout: 20_000,
   },
-})
+}))

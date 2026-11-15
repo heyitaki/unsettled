@@ -1,4 +1,5 @@
 import type { AdviceRequest, AdviceResponse, Decision } from '../engine/advice/protocol'
+import { engineRequest } from '../engine/advice/request'
 import type { Game } from '../model/game'
 
 export function decisionKey(decision: Decision): string {
@@ -76,7 +77,7 @@ export function createAdviceClient(factory: () => Worker) {
               if (workers.get(slot) === started) fail('Unable to read advice')
             }
           }
-          worker.postMessage({ id, request })
+          worker.postMessage({ id, request: engineRequest(request) })
         } catch (error) {
           fail(error instanceof Error ? error.message : 'Unable to start advice')
         }

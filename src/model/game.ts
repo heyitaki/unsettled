@@ -5,11 +5,11 @@
 // and geometry validation are unaffected).
 
 import { setupGrants } from './board'
-import { RESOURCES, type Board, type Issue, type Player, type Resource } from './types'
+import { RESOURCES, type AxialCoord, type Board, type Building, type Issue, type Player, type Resource, type Road } from './types'
 
 export interface PlayerStats {
   hand: Record<Resource, number>
-  /** Cards known to be held but not to be of a known resource. Settled exposes only the total. */
+  /** Cards known to be held but not to be of a known resource. A screenshot import reads only the total. */
   handUnknown: number
   devCards: number
   knights: number
@@ -24,6 +24,12 @@ export interface TurnState {
   playerId: string
   /** This turn's dice total, null before the roll. */
   rolled: number | null
+  log?: string[]
+  gains?: Record<string, Partial<Record<Resource, number>>>
+  /** After a 7: false until the robber is placed. Absent on any other roll. */
+  robberMoved?: boolean
+  /** Dev cards bought this turn, which cannot be played until the next one. */
+  devBought?: number
   devPlayed: boolean
   /** Progress cards (not knights) recorded as played over the whole game: they have left the dev deck. */
   progressPlayed: Record<Exclude<DevKind, 'knight'>, number>
@@ -47,6 +53,35 @@ export interface Game {
   turn?: TurnState
   /** Absent until the claimed player's dev cards are entered by type. */
   devHand?: DevHand
+  history?: GameHistory
+}
+
+export interface Position {
+  buildings: Building[]
+  roads: Road[]
+  robber: AxialCoord | null
+  stats: Record<string, PlayerStats>
+  awards?: AwardHolders
+  devHand?: DevHand
+}
+
+export interface TurnRecord {
+  playerId: string
+  rolled: number | null
+  gains?: TurnState['gains']
+  log: string[]
+  buildings?: Record<string, Building | null>
+  roads?: Record<string, string | null>
+  robber: AxialCoord | null
+  /** Only the players whose stats changed since the previous record; null for a player who left the roster. */
+  stats?: Record<string, PlayerStats | null>
+  awards?: AwardHolders
+  devHand?: DevHand
+}
+
+export interface GameHistory {
+  start: Position
+  turns: TurnRecord[]
 }
 
 export interface AwardHolders {
@@ -130,10 +165,14 @@ function replaceBoard(game: Game, board: Board, stats: Record<string, PlayerStat
   return next
 }
 
-/** What a screenshot's player pills supplied, which the parsed Game cannot say for itself. */
+/** What a screenshot supplied, which the parsed Game cannot say for itself. */
 export interface ScreenshotRead {
-  /** False when there were no pills: the players are then only the colours with pieces on the board. */
+  /** False when no roster was read: only piece colours identify players. */
   roster: boolean
+  /** Whether the screenshot showed turn order. Implies `roster`. */
+  order: boolean
+  /** Whether the screenshot showed which settlement each player placed first. */
+  picks: boolean
   /** Parsed ids of the players whose hand size was read. A zero hand is otherwise the same as an unread one. */
   hands: readonly string[]
 }
@@ -141,13 +180,15 @@ export interface ScreenshotRead {
 /**
  * Fold a later screenshot of a saved game into it. The screenshot wins on what
  * it shows: the roster and its order, the pieces, the robber and each hand's
- * size. The saved game keeps what a screenshot cannot show: names, the claim,
- * dev cards, knights, VP cards, awards and the recorded turn. It also keeps
- * what this screenshot failed to read: a hand missing from `read.hands`, and a
- * robber nobody found.
+ * size. The saved game keeps names, the claim, dev cards, knights, VP cards,
+ * awards and the recorded turn. It also keeps what this screenshot failed to
+ * read: a hand missing from `read.hands`, and a robber nobody found. Without
+ * turn order, surviving saved players keep their order and newcomers follow in
+ * screenshot order. Without pick order, buildings at saved vertices with the
+ * same owner come first in saved order, taking the screenshot's tiers; other
+ * buildings follow in screenshot order.
  *
- * Parsed ids follow pill order and parsed names are colour names, so players
- * are matched by colour and a match keeps its saved id and name.
+ * Players are matched by colour and a match keeps its saved id and name.
  */
 export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): Game {
   const byColor = new Map<string, Player>()
@@ -181,11 +222,25 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
     }
     return merged
   })
-  // With no roster read, a saved player missing from the screenshot only has
-  // no piece on the board yet, so nobody is dropped and the saved order stands.
-  const players = read.roster ? shotPlayers : [...saved.board.players, ...newcomers]
+
+  // Without turn order, saved seats stay in order; without a roster, nobody leaves.
+  const players = read.order ? shotPlayers : [
+    ...saved.board.players.filter((player) => !read.roster || shotPlayers.some((shot) => shot.id === player.id)),
+    ...newcomers,
+  ]
   const remapOwner = <T extends { playerId: string }>(piece: T): T =>
     ({ ...piece, playerId: ids.get(piece.playerId) ?? piece.playerId })
+  let buildings = shot.board.buildings.map(remapOwner)
+  if (!read.picks) {
+    const remaining = new Map(buildings.map((building) => [building.vertexId, building]))
+    const retained = saved.board.buildings.flatMap((building) => {
+      const match = remaining.get(building.vertexId)
+      if (!match || match.playerId !== building.playerId) return []
+      remaining.delete(building.vertexId)
+      return [match]
+    })
+    buildings = [...retained, ...remaining.values()]
+  }
   const savedClaim = saved.board.mePlayerId
   const claim = savedClaim !== null && players.some((player) => player.id === savedClaim)
     ? savedClaim
@@ -196,7 +251,7 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
     robber: shot.board.robber ?? saved.board.robber,
     players,
     roads: shot.board.roads.map(remapOwner),
-    buildings: shot.board.buildings.map(remapOwner),
+    buildings,
     mePlayerId: claim,
   }, Object.fromEntries(players.map((player) => [player.id, stats.get(player.id) ?? saved.stats[player.id]])))
 }

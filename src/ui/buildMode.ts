@@ -1,5 +1,5 @@
-import type { Game } from '../../model/game'
-import type { TabState } from '../store'
+import type { Game } from '../model/game'
+import type { TabState } from './store'
 
 /**
  * What the pencil captured on the way in (spec B1): the tab it opened on and

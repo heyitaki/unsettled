@@ -6,6 +6,8 @@ import { boardGrid } from '../layouts'
 import {
   activePlayerId,
   bankRate,
+  bankPorts,
+  isValidBankTrade,
   adjustDevHand,
   CARD_COSTS,
   endTurn,
@@ -82,12 +84,12 @@ describe('turn tracking', () => {
   it('recordRoll stores the total and credits every listed player', () => {
     const game = newGame(addPlayer(gameWithRival().board, { id: 'c', name: 'Cee', color: '#ffffff' }))
     const next = recordRoll(game, 8, { aki: { ...emptyStats().hand, wood: 2 }, b: { ...emptyStats().hand, ore: 1, wheat: 3 } })
-    expect(next.turn).toEqual({ playerId: 'aki', rolled: 8, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } })
+    expect(next.turn).toEqual({ playerId: 'aki', rolled: 8, devPlayed: false, progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 }, gains: { aki: { wood: 2 }, b: { ore: 1, wheat: 3 } } })
     expect(next.stats.aki.hand.wood).toBe(2)
     expect(next.stats.b.hand).toEqual({ wood: 0, sheep: 0, wheat: 3, brick: 0, ore: 1 })
     expect(next.stats.c).toBe(game.stats.c)
     const played = { ...next, turn: { ...next.turn!, devPlayed: true, progressPlayed: { roadBuilding: 1, yearOfPlenty: 0, monopoly: 1 } } }
-    expect(recordRoll(played, 7, {}).turn).toEqual({ ...played.turn, rolled: 7 })
+    expect(recordRoll(played, 7, {}).turn).toEqual({ ...played.turn, rolled: 7, robberMoved: false, gains: undefined })
     expect(recordRoll(game, 2, {}).turn?.rolled).toBe(2)
     expect(recordRoll(game, 12, {}).turn?.rolled).toBe(12)
   })
@@ -156,8 +158,39 @@ describe('turn tracking', () => {
 
   it('a bank trade spends the rate and gains the count', () => {
     const game = adjustHand(gameWithRival(), 'aki', 'wood', 4)
-    const next = recordBankTrade(game, 'wood', 4, 'ore', 2)
+    const next = recordBankTrade(game, { wood: 4 }, { ore: 2 })
     expect(next.stats.aki.hand).toEqual({ wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 2 })
+  })
+
+  it('trades mixed whole port lots for multiple resources without mutating the game', () => {
+    const base = gameWithRival()
+    const ports = base.board.ports.slice(0, 2).map((port, index) => ({ ...port, resource: index === 0 ? 'ore' as const : null, rate: index === 0 ? 2 : 3 }))
+    let board: Game['board'] = { ...base.board, ports }
+    for (const port of ports) board = placeBuilding(board, edgeEndpointVertexIds(port.edgeId)[0], 'aki', 'settlement')
+    const game = adjustCounter(adjustHand(newGame(board), 'aki', 'ore', 4), 'aki', 'handUnknown', 3)
+    expect(bankPorts(board, 'aki')).toEqual(ports)
+    expect(bankPorts(board, 'b')).toEqual([])
+    expect(isValidBankTrade(board, 'aki', { ore: 4, wood: 3 }, { brick: 3 })).toBe(true)
+    expect(isValidBankTrade(board, 'aki', { ore: 4, wood: 3 }, { brick: 2, sheep: 1 })).toBe(true)
+    const before = structuredClone(game)
+    freeze(game)
+    const next = recordBankTrade(game, { ore: 4, wood: 3 }, { brick: 3 })
+    expect(next.stats.aki).toMatchObject({ hand: { ore: 0, wood: 0, brick: 3 }, handUnknown: 0 })
+    expect(next.stats.b).toBe(game.stats.b)
+    expect(game).toEqual(before)
+    for (const [gives, gets] of [
+      [{ ore: 3, wood: 3 }, { brick: 3 }],
+      [{ ore: 4, wood: 3 }, { brick: 2 }],
+      [{ ore: 4, wood: 3 }, { brick: 4 }],
+      [{ ore: 4 }, { ore: 2 }],
+      [{}, { brick: 1 }],
+      [{ ore: 4 }, {}],
+      [{ ore: -2 }, { brick: 1 }],
+      [{ ore: 2 }, { brick: 0.5, sheep: 0.5 }],
+      [{ ore: Infinity }, { brick: Infinity }],
+    ]) expect(isValidBankTrade(board, 'aki', gives, gets)).toBe(false)
+    expect(isValidBankTrade(board, 'b', { ore: 4, wood: 4 }, { brick: 2 })).toBe(true)
+    expect(isValidBankTrade(board, 'b', { ore: 2 }, { brick: 1 })).toBe(false)
   })
 
   it('a player trade moves cards both ways', () => {
@@ -215,6 +248,14 @@ describe('turn tracking', () => {
     expect(away.devHand?.playable.knight).toBe(1)
     expect(away.devHand?.bought.knight).toBe(0)
     expect(endTurn(away).devHand?.playable.knight).toBe(1)
+  })
+
+  it('typing a dev card keeps the cards whose type is unknown', () => {
+    const game = adjustCounter(gameWithRival(), 'aki', 'devCards', 2)
+    const typed = adjustDevHand(game, 'playable', 'knight', 1)
+    expect(typed.stats.aki.devCards).toBe(3)
+    expect(adjustDevHand(typed, 'playable', 'knight', -1).stats.aki.devCards).toBe(2)
+    expect(adjustDevHand(game, 'playable', 'knight', -1)).toMatchObject({ stats: { aki: { devCards: 2 } } })
   })
 
   it('lowering the public dev count below the typed sum removes the typed hand', () => {
@@ -327,16 +368,16 @@ describe('turn tracking', () => {
     expect(rival.stats.b.devCards).toBe(0)
   })
 
-  it('adjustDevHand keeps devCards equal to the cards by type', () => {
+  it('adjustDevHand moves devCards by the typed change', () => {
     let game = adjustCounter(gameWithRival(), 'aki', 'devCards', 8)
     game = adjustDevHand(game, 'playable', 'knight', 2)
     game = adjustDevHand(game, 'bought', 'monopoly', 3)
-    expect(game.stats.aki.devCards).toBe(5)
+    expect(game.stats.aki.devCards).toBe(13)
     game = adjustDevHand(game, 'playable', 'knight', -10)
-    expect(game.stats.aki.devCards).toBe(3)
+    expect(game.stats.aki.devCards).toBe(11)
     expect(game.devHand?.playable.knight).toBe(0)
     const rivalTurn = adjustDevHand(setActivePlayer(game, 'b'), 'bought', 'roadBuilding', 1)
-    expect(rivalTurn.stats.aki.devCards).toBe(4)
+    expect(rivalTurn.stats.aki.devCards).toBe(12)
     expect(rivalTurn.stats.b.devCards).toBe(0)
     const stale = { ...game, devHand: { playerId: 'b', playable: { ...devCounts(), knight: 5 }, bought: devCounts() } }
     expect(adjustDevHand(stale, 'bought', 'monopoly', 1).devHand).toEqual({ playerId: 'aki', playable: devCounts(), bought: { ...devCounts(), monopoly: 1 } })
@@ -348,7 +389,7 @@ describe('turn tracking', () => {
       () => endTurn(game),
       () => recordRoll(game, 6, {}),
       () => recordRobber(game, hex, 'b', null),
-      () => recordBankTrade(game, 'wood', 1, 'ore', 1),
+      () => recordBankTrade(game, { wood: 1 }, { ore: 1 }),
       () => recordPlayerTrade(game, 'b', {}, {}),
       () => recordBuild(game, 'road', edge),
       () => recordBuyDev(game, null),
@@ -408,7 +449,7 @@ describe('turn tracking', () => {
     recordDiscard(game, 'b', 2)
     recordRobber(game, hex, 'b', 'ore')
     recordRobber(game, hex, 'b', null)
-    recordBankTrade(game, 'wood', 2, 'ore', 1)
+    recordBankTrade(game, { wood: 2 }, { ore: 1 })
     recordPlayerTrade(game, 'b', { wood: 1 }, { ore: 1 })
     recordBuild(game, 'road', edge)
     recordBuild(game, 'settlement', vertex)

@@ -1,4 +1,3 @@
-import { computeStandings } from '../../engine/stats'
 import { addPlayer } from '../../model/board'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { DraftGrid } from '../DraftGrid'
@@ -7,7 +6,6 @@ import { RosterRow, RosterTrash } from '../RosterRow'
 import { activeTab, useStore } from '../store'
 import { useRoster } from '../useRoster'
 import { PhoneOverlay } from './PhoneOverlay'
-import { AwardControls } from '../AwardControls'
 
 /**
  * The roster and the snake draft (spec S8). A row claims on tap, renames on
@@ -20,7 +18,6 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const { game } = activeTab(state)
   const { board } = game
   const commit = (next: Board) => dispatch({ type: 'commit', board: next })
-  const standings = computeStandings(game)
   const roster = useRoster(board, commit)
   const { reorder } = roster
   const add = () => {
@@ -54,17 +51,12 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           {...reorder.listProps}
         >
           {board.players.map((player, index) => (
-            <RosterRow key={player.id} player={player} index={index} roster={roster}>
-              <span className="roster-vp" aria-label={`Victory points: ${standings[index].victoryPoints}`}>
-                {standings[index].victoryPoints}
-              </span>
-            </RosterRow>
+            <RosterRow key={player.id} player={player} index={index} roster={roster} />
           ))}
           <RosterTrash roster={roster} playerCount={board.players.length} />
         </div>
       </div>
       <DraftGrid board={board} />
-      <AwardControls />
     </PhoneOverlay>
   )
 }

@@ -72,7 +72,7 @@ export function tabIsDirty(game: Game, saved: SavedMap): boolean {
 export type SaveTabResult =
   // `evicted`: the maps the library cap dropped to make room for a new entry.
   | { ok: true; id: string; name: string; evicted?: readonly string[] }
-  | { ok: false; error: string }
+  | { ok: false; error: string; quota?: true }
 
 /**
  * Save a tab into the library, with no prompt: the autosave has no name field
@@ -167,6 +167,10 @@ export function loadedNotice(action: string, board: Parameters<typeof validateBo
 }
 
 export function downloadBoard(name: string, contents: string) {
+  if (import.meta.env.MODE === 'native') {
+    void import('../native/ios').then((ios) => ios.saveFile(name || 'board', '.catan.json', contents))
+    return
+  }
   const blob = new Blob([contents], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

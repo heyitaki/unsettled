@@ -9,6 +9,9 @@ import { boardGrid, defaultPortEdges } from '../../model/layouts'
 import { BoardCanvas } from '../BoardCanvas'
 import { StoreProvider, useStore, type HighlightMark } from '../store'
 
+// The draft tap asks the engine for a setup road; none is needed to see where a tap lands.
+vi.mock('../../engine/setupRoad', () => ({ setupRoad: async () => null }))
+
 const grid = boardGrid('standard4')
 const EDGE = grid.edgeIds[0]
 const VERTEX = grid.vertexIds[0]
@@ -40,22 +43,28 @@ const draw = (marks: readonly HighlightMark[]): void => {
   })
 }
 
-function DraftRings() {
+const draftBoard = () => {
+  let board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Blue', color: COLOR })
+  board = setHexTile(board, { q: 0, r: 0 }, 'wood')
+  return placeBuilding(board, VERTEX, board.players[0].id, 'settlement')
+}
+
+/** A board in mid-draft with the tools closed, wearing the marks under test. */
+function DraftBoard({ marks }: { marks: readonly HighlightMark[] }) {
   const { dispatch } = useStore()
   useEffect(() => {
-    let board = addPlayer(createBoard('standard4'), { id: 'b', name: 'Blue', color: COLOR })
-    board = setHexTile(board, { q: 0, r: 0 }, 'wood')
-    board = placeBuilding(board, VERTEX, board.players[0].id, 'settlement')
-    const [ringOnly, shared] = legalSettlementVertices(board)
-    dispatch({ type: 'commit', board })
-    dispatch({ type: 'highlight', marks: [
-      { ref: shared, color: COLOR, faded: true },
-      { ref: ringOnly, color: COLOR, kind: 'ring' },
-      { ref: shared, color: COLOR, kind: 'ring' },
-    ] })
-  }, [dispatch])
+    dispatch({ type: 'commit', board: draftBoard() })
+    dispatch({ type: 'highlight', marks })
+  }, [dispatch, marks])
   return <BoardCanvas />
 }
+
+const [RING_ONLY, SHARED, UNRANKED, RANKED] = legalSettlementVertices(draftBoard())
+const RING_MARKS: readonly HighlightMark[] = [
+  { ref: SHARED, color: COLOR, faded: true },
+  { ref: RING_ONLY, color: COLOR, kind: 'ring' },
+  { ref: SHARED, color: COLOR, kind: 'ring' },
+]
 
 describe('board mark layer', () => {
   beforeEach(() => {
@@ -123,17 +132,40 @@ describe('board mark layer', () => {
     }
   })
 
-  it('keeps the draft dot under a ring alone and hides it under a ring with a vertex mark', () => {
-    act(() => root.render(<StoreProvider><DraftRings /></StoreProvider>))
+  it('draws no draft dots outside edit mode, under a ring or anywhere else', () => {
+    act(() => root.render(<StoreProvider><DraftBoard marks={RING_MARKS} /></StoreProvider>))
     const rings = [...container.querySelectorAll('.vertex-ring')]
     expect(rings).toHaveLength(2)
-    expect(container.querySelectorAll('.placement-slot').length).toBeGreaterThan(0)
+    expect(container.querySelectorAll('.placement-slot')).toHaveLength(0)
     rings.forEach((ring, index) => {
       const at = `[cx="${ring.getAttribute('cx')}"][cy="${ring.getAttribute('cy')}"]`
-      expect(container.querySelectorAll(`.placement-slot${at}`)).toHaveLength(index === 0 ? 1 : 0)
       expect(container.querySelectorAll(`.vertex-highlight${at}`)).toHaveLength(index === 0 ? 0 : 1)
       expect(ring.getAttribute('r')).toBe(index === 0 ? '16' : '19')
     })
+  })
+
+  it('takes a draft tap on a placeable circle and on no other mark', async () => {
+    // A likely-gone circle is solid like a first pick, and only the flag tells them apart.
+    const marks: HighlightMark[] = [...RING_MARKS, { ref: UNRANKED, color: COLOR, label: '1' }, { ref: RANKED, color: COLOR, label: '1', placeable: true }]
+    act(() => root.render(<StoreProvider><DraftBoard marks={marks} /></StoreProvider>))
+    const svg = container.querySelector<SVGSVGElement>('.board-canvas')!
+    // Laid over its own view box, so a client point is a board point.
+    const [x, y, width, height] = svg.getAttribute('viewBox')!.split(' ').map(Number)
+    svg.getBoundingClientRect = () => new DOMRect(x, y, width, height)
+    const buildings = () => container.querySelectorAll('g[filter="url(#piece-shadow)"] > g, g[filter="url(#piece-highlight)"] > g').length
+    const tap = async (vertex: string) => {
+      const points = parseVertexId(vertex).map((coord) => axialToPixel(coord, 58))
+      const clientX = points.reduce((sum, p) => sum + p.x, 0) / 3
+      const clientY = points.reduce((sum, p) => sum + p.y, 0) / 3
+      await act(async () => { svg.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX, clientY })) })
+    }
+    expect(buildings()).toBe(1)
+    for (const vertex of [SHARED, RING_ONLY, UNRANKED]) {
+      await tap(vertex)
+      expect(buildings()).toBe(1)
+    }
+    await tap(RANKED)
+    expect(buildings()).toBe(2)
   })
 
   it('draws a vertex mark as a circle and no edge stroke', () => {

@@ -5,7 +5,8 @@ import { vertexAdjacentVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { setActivePlayer } from '../../model/turn'
 import type { AdviceAction, PreRollPlay } from '../../engine/advice/protocol'
-import { actionLabel, adviceBlockers, adviceMarks, applyAdvice, cardRange, discardInputCards, playLabel, sevenDiscards, tradeVerdictRequest } from '../bestMoves'
+import { actionLabel, adviceBlockers, adviceMarks, applyAdvice, canCover, cardRange, discardInputCards, moveSpot, playLabel, recordedMoveLabel, sevenDiscards, tradeVerdictRequest } from '../bestMoves'
+import { vertexDescription, vertexParts } from '../vertexParts'
 
 const [edge, second] = boardGrid('standard4').edgeIds
 const vertex = boardGrid('standard4').vertexIds[0]
@@ -49,6 +50,19 @@ describe('best moves', () => {
     expect(cardRange(emptyStats(), 'wood', false)).toEqual({ lo: 0, hi: 0 })
   })
 
+  it('covers a mix only when its combined shortfall fits the unseen hand', () => {
+    const stats = { ...emptyStats(), hand: { ...emptyStats().hand, wood: 2 }, handUnknown: 2 }
+    expect(canCover(stats, { wood: 3, ore: 1 })).toBe(true)
+    expect(canCover(stats, { wood: 3, ore: 2 })).toBe(false)
+    expect(canCover({ ...stats, handUnknown: 0 }, { wood: 2 })).toBe(true)
+    expect(canCover({ ...stats, handUnknown: 0 }, { wood: 3 })).toBe(false)
+  })
+
+  it('labels advised bank and port trades in the same order as manual entries', () => {
+    expect(recordedMoveLabel({ type: 'tradeBank', give: 'ore', rate: 2, count: 2, get: 'brick' })).toBe('Traded 4 ore to the port for 2 brick')
+    expect(recordedMoveLabel({ type: 'tradeBank', give: 'wood', rate: 4, count: 1, get: 'ore' })).toBe('Traded 4 wood to the bank for 1 ore')
+  })
+
   it('labels every action kind', () => {
     const board = game().board
     const cases: [AdviceAction, string][] = [
@@ -66,6 +80,22 @@ describe('best moves', () => {
     expect(playLabel({ type: 'yearOfPlenty', first: 'wood', second: 'ore' }, board)).toBe('Play Year of plenty: take wood and ore')
     expect(playLabel({ type: 'monopoly', resource: 'wheat' }, board)).toBe('Play Monopoly: name wheat')
     expect(playLabel({ type: 'playKnight', hex, victim: null }, board)).toContain('nobody')
+  })
+
+  it('draws a placed move as tiles and drops the place from its title', () => {
+    const base = game().board
+    const board = { ...base, hexes: base.hexes.map((tile) => ({ ...tile, tile: 'wood' as const, numberToken: 6 })) }
+    const city: AdviceAction = { type: 'upgradeCity', vertexId: vertex }
+    expect(moveSpot(city, board)).toEqual({ parts: vertexParts(board, vertex), label: vertexDescription(board, vertex), title: 'Upgrade to city' })
+    const road = moveSpot({ type: 'buildRoad', edgeId: edge }, board)
+    expect(road?.parts.length).toBeGreaterThan(0)
+    expect(road?.label).toBe(road?.parts.map(() => 'Wood 6').join(' · '))
+    // Road building's two roads draw as one cluster, each hex once.
+    expect(moveSpot({ type: 'roadBuilding', first: edge, second: edge }, board)).toEqual({ ...road, title: 'Play Road building' })
+    expect(moveSpot({ type: 'roadBuilding', first: edge, second }, board)?.title).toBe('Play Road building')
+    expect(moveSpot({ type: 'playKnight', hex, victim: 'b' }, board)?.title).toBe('Play Knight: steal from Bee')
+    expect(moveSpot({ type: 'playKnight', hex, victim: null }, board)?.label).toBe('Wood 6')
+    for (const move of [{ type: 'buyDev' }, { type: 'pass' }, { type: 'monopoly', resource: 'wheat' }] as const) expect(moveSpot(move, board)).toBeNull()
   })
 
   it('a build marks its spot, a road its edge and a robber move its hex', () => {

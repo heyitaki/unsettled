@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Download, type Page } from '@playwright/test'
-import { addPlayer, createBoard } from '../src/model/board'
-import { adjustCounter, newGame } from '../src/model/game'
+import { adjustCounter } from '../src/model/game'
+import { setActivePlayer } from '../src/model/turn'
 import { MAPS_KEY, WORKSPACE_KEY } from '../src/persistence/localStorage'
+import { finishedDraft } from '../src/ui/__tests__/finishedDraft'
 
 async function downloadedBackup(download: Download) {
   const path = await download.path()
@@ -11,12 +12,14 @@ async function downloadedBackup(download: Download) {
 }
 
 async function randomize(page: Page) {
-  await page.getByRole('button', { name: 'Randomize board' }).click()
+  await page.getByRole('button', { name: 'Edit the board' }).click()
+  await page.getByRole('button', { name: 'Randomize', exact: true }).click()
+  await page.locator('.tools-panel').getByRole('button', { name: 'Done', exact: true }).click()
 }
 
 test('screenshot import contains keyboard focus and Escape restores the opener', async ({ page }) => {
   await page.goto('')
-  const opener = page.getByRole('button', { name: 'Import screenshot', exact: true })
+  const opener = page.locator('.site-header').getByRole('button', { name: 'Import screenshot', exact: true })
   await opener.click()
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   const input = dialog.locator('input[type=file]')
@@ -33,6 +36,7 @@ test('screenshot import contains keyboard focus and Escape restores the opener',
 test('a whole-library backup restores into another browser without losing its boards', async ({ page, browser, baseURL }) => {
   await page.goto('')
   await randomize(page)
+  await page.locator('.head-title').click()
   await page.getByRole('button', { name: 'Import and export files' }).click()
   const downloaded = page.waitForEvent('download')
   await page.getByRole('menuitem', { name: 'Back up library' }).click()
@@ -41,6 +45,7 @@ test('a whole-library backup restores into another browser without losing its bo
   try {
     const restored = await context.newPage()
     await restored.goto('')
+    await restored.locator('.head-title').click()
     await restored.getByRole('button', { name: 'Import and export files' }).click()
     const choosing = restored.waitForEvent('filechooser')
     await restored.getByRole('menuitem', { name: 'Restore library backup' }).click()
@@ -78,36 +83,40 @@ test('failed saves stay actionable until Retry saves the current board', async (
 })
 
 test('award corrections survive undo, redo and reload', async ({ page }) => {
-  const board = addPlayer(createBoard('standard4'), { id: 'blue', name: 'Blue', color: '#3063ba' })
-  const game = adjustCounter(adjustCounter(newGame(board), 'aki', 'knights', 3), 'blue', 'knights', 3)
+  const draft = finishedDraft()
+  const [first, second] = draft.board.players
+  const game = setActivePlayer(adjustCounter(adjustCounter(draft, first.id, 'knights', 3), second.id, 'knights', 3), first.id)
   await page.addInitScript(({ key, game }) => {
     if (localStorage.getItem(key) === null) {
       localStorage.setItem(key, JSON.stringify({ tabs: [{ id: 'awards', title: 'Awards', game }] }))
     }
   }, { key: WORKSPACE_KEY, game })
   await page.goto('')
-  await page.locator('.award-controls summary').click()
-  const holder = page.getByRole('button', { name: /Largest army holder/ })
-  await expect(holder).toContainText('Unknown')
+  const ledger = page.locator('.ledger-panel')
+  const tie = ledger.getByRole('group', { name: 'Largest army tie', exact: true })
+  const holder = tie.getByRole('button', { name: second.name, exact: true })
+  const record = page.locator('.best-moves-panel').filter({ has: page.getByRole('heading', { name: 'Record your turn', exact: true }) })
+  const award = ledger.getByLabel('Largest army, +2 VP')
+  await expect(tie).toContainText('Who got there first?')
   await holder.click()
-  await page.getByRole('option', { name: 'Blue', exact: true }).click()
-  await expect(holder).toContainText('Blue')
-  await page.locator('.tools-panel').getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(holder).toContainText('Unknown')
-  await page.locator('.tools-panel').getByRole('button', { name: 'Redo', exact: true }).click()
-  await expect(holder).toContainText('Blue')
+  await expect(tie).toHaveCount(0)
+  await expect(award).toHaveCount(1)
+  await record.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(tie).toContainText('Who got there first?')
+  await expect(award).toHaveCount(0)
+  await record.getByRole('button', { name: 'Redo', exact: true }).click()
+  await expect(tie).toHaveCount(0)
   await page.reload()
-  await page.locator('.award-controls summary').click()
-  await expect(holder).toContainText('Blue')
+  await expect(award).toHaveCount(1)
+  await expect(tie).toHaveCount(0)
 })
 
-test('the erase tool removes a port from a click on its badge', async ({ page }) => {
+test('tapping a port badge in build mode deletes the port', async ({ page }) => {
   await page.goto('')
-  const badges = page.locator('.board-canvas .port-text')
+  const badges = page.locator('.board-canvas .port-token')
   await expect(badges.first()).toBeVisible()
   const count = await badges.count()
-  await page.getByText('Edit manually').click()
-  await page.locator('.structure-grid').getByRole('button', { name: 'erase' }).click()
+  await page.getByRole('button', { name: 'Edit the board' }).click()
   await badges.first().click()
   await expect(badges).toHaveCount(count - 1)
 })

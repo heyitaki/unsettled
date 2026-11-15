@@ -1,13 +1,16 @@
-interface Bounds {
+export interface Bounds {
   minX: number
   maxX: number
   minY: number
   maxY: number
 }
 
-interface Component<Label> extends Bounds {
+export interface Fill<Label> extends Bounds {
   label: Label
   area: number
+}
+
+interface Component<Label> extends Fill<Label> {
   x: number
   y: number
 }
@@ -26,14 +29,15 @@ export function* labelComponents<Label>(
   { step = 1, discardAdjacent = false, visit }: LabelOptions = {},
 ): Generator<Component<Label>> {
   const { minX, maxX, minY, maxY } = bounds
-  const width = maxX - minX + 1
+  const width = Math.max(0, maxX - minX + 1)
   const seen = new Uint8Array(width * Math.max(0, maxY - minY + 1))
   const index = (x: number, y: number) => (y - minY) * width + x - minX
   for (let y = minY; y <= maxY; y += step) {
     for (let x = minX; x <= maxX; x += step) {
-      if (seen[index(x, y)]) continue
+      const current = index(x, y)
+      if (seen[current]) continue
       const label = classify(x, y)
-      seen[index(x, y)] = 1
+      seen[current] = 1
       if (label === null) continue
       const claim = (nextX: number, nextY: number): boolean => {
         if (nextX < minX || nextX > maxX || nextY < minY || nextY > maxY) return false
@@ -48,6 +52,16 @@ export function* labelComponents<Label>(
       yield floodComponent(x, y, label, claim, step, visit)
     }
   }
+}
+
+export function enclosedHoles(bounds: Bounds, ink: (x: number, y: number) => boolean, minArea: number) {
+  return [...labelComponents(bounds, (x, y) => ink(x, y) ? null : true)]
+    .filter((hole) => insideBounds(hole, bounds) && hole.area > minArea)
+}
+
+export function insideBounds(component: Bounds, bounds: Bounds): boolean {
+  return component.minX > bounds.minX && component.maxX < bounds.maxX &&
+    component.minY > bounds.minY && component.maxY < bounds.maxY
 }
 
 export function labelPixelSet(

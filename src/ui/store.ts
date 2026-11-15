@@ -16,14 +16,14 @@ import { createBoard } from '../model/board'
 import { newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
-import { inferDraftState } from '../engine/draft'
+import { draftIsComplete, inferDraftState } from '../engine/draft'
 import type {
   Board,
   EdgeId,
-  Resource,
   TileKind,
 } from '../model/types'
 import {
+  ANALYSIS_CACHE_KEY,
   loadActiveTab,
   loadMaps,
   loadWorkspace,
@@ -46,10 +46,7 @@ export type Tool =
   | { kind: 'none' }
   | { kind: 'tile'; tile: TileKind }
   | { kind: 'token'; number: number }
-  | { kind: 'port'; resource: Resource | null; rate: number }
-  | { kind: 'robber' }
-  | { kind: 'erase' }
-  // The tool rows are open and no other tool is selected: a board click places pieces.
+  // Build mode with no tool button selected: taps act on the nearest target.
   | { kind: 'piece' }
 
 /**
@@ -57,6 +54,8 @@ export type Tool =
  * optionally tinted to a player's colour and stamped with a short label (a pick
  * number). Drives the coloured, numbered circles the AnalysisPanel draws. A
  * faded mark sits back from the others: a planned follow-up pick or its road.
+ * A `placeable` mark is a Best picks first pick, the one mark a draft tap
+ * places on while the tools are closed.
  *
  * `kind: 'road'` names a direction rather than a place, and it exists because a
  * road and a port are both keyed by the edge they sit on: without it the canvas
@@ -68,6 +67,7 @@ export interface HighlightMark {
   color?: string
   label?: string
   faded?: boolean
+  placeable?: boolean
   kind?: 'road' | 'hex' | 'ring'
 }
 
@@ -108,6 +108,9 @@ export interface StoreState {
   highlight: readonly HighlightMark[] | null
   pick?: BoardPick | null
   viewedPick?: number | null
+  viewedPlayer?: string | null
+  historyOpen?: boolean
+  viewedTurn?: number | null
   // Bumped whenever the library changes, here or in another document. The maps
   // blob lives outside React, so panels that read it re-render off this.
   mapsRevision: number
@@ -129,6 +132,9 @@ export type StoreAction =
   | { type: 'pick-clear' }
   | { type: 'picked'; ref: string }
   | { type: 'view-pick'; slot: number | null }
+  | { type: 'view-player'; playerId: string | null }
+  | { type: 'history'; open: boolean }
+  | { type: 'view-turn'; index: number | null }
   | { type: 'tab-add'; game?: Game; title?: string; id?: string; mapId?: string }
   | { type: 'tab-select'; id: string }
   | { type: 'tab-rename'; id: string; title: string }
@@ -294,8 +300,14 @@ function unusedBoardTitle(tabs: TabState[]): string {
 }
 
 export function reducer(state: StoreState, action: StoreAction): StoreState {
-  const next = reduceAction(state, action)
+  let next = reduceAction(state, action)
+  if (next.activeTabId !== state.activeTabId || ['commit', 'commit-game', 'undo', 'redo'].includes(action.type)) {
+    if (next.viewedTurn != null) next = { ...next, viewedTurn: null }
+    if (next.historyOpen && !activeTab(next).game.turn) next = { ...next, historyOpen: false }
+  }
   if (next === state) return next
+  next = withViewedPlayer(next, next.activeTabId !== state.activeTabId ||
+    activeTab(next).game.turn?.playerId !== activeTab(state).game.turn?.playerId ? null : next.viewedPlayer ?? null)
   if (next.activeTabId !== state.activeTabId) return withViewedPick(next, null)
   const board = activeTab(next).game.board
   const previous = activeTab(state).game.board
@@ -312,6 +324,14 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
   return next.viewedPick == null ? next : withViewedPick(next, next.viewedPick)
 }
 
+function withViewedPlayer(state: StoreState, playerId: string | null): StoreState {
+  const { game } = activeTab(state)
+  const viewedPlayer = game.turn && playerId !== game.turn.playerId &&
+    game.board.players.some((player) => player.id === playerId) &&
+    draftIsComplete(game.board, inferDraftState(game.board)) ? playerId : null
+  return viewedPlayer === (state.viewedPlayer ?? null) ? state : { ...state, viewedPlayer }
+}
+
 function withViewedPick(state: StoreState, slot: number | null): StoreState {
   const board = activeTab(state).game.board
   const draft = inferDraftState(board)
@@ -324,6 +344,18 @@ function withViewedPick(state: StoreState, slot: number | null): StoreState {
 
 function reduceAction(state: StoreState, action: StoreAction): StoreState {
   switch (action.type) {
+    case 'view-player':
+      return withViewedPlayer(state, action.playerId)
+    case 'history':
+      if (!action.open && !state.historyOpen) return state
+      return { ...state, historyOpen: action.open && activeTab(state).game.turn !== undefined, viewedTurn: null, pick: null, highlight: null }
+    case 'view-turn': {
+      const { history } = activeTab(state).game
+      const count = history?.turns.length ?? 0
+      const viewedTurn = state.historyOpen && history && action.index !== null && Number.isInteger(action.index) && action.index >= 0 && action.index <= count
+        ? action.index : null
+      return viewedTurn === (state.viewedTurn ?? null) ? state : { ...state, viewedTurn }
+    }
     case 'view-pick':
       return withViewedPick(state, action.slot)
     case 'commit':
@@ -352,7 +384,7 @@ function reduceAction(state: StoreState, action: StoreAction): StoreState {
         }
       })
     case 'tool':
-      return { ...state, tool: action.tool }
+      return state.tool.kind === 'none' && action.tool.kind === 'none' ? state : { ...state, tool: action.tool }
     case 'active-player':
       // Reconciled like every other write to activePlayerId: a dangling id would
       // reach placeRoad/placeBuilding, which reject it by throwing.
@@ -532,11 +564,19 @@ const StoreContext = createContext<{ state: StoreState; dispatch: Dispatch<Store
 const SaveRecoveryContext = createContext<{
   failures: Readonly<Record<string, SaveFailure>>
   retry(): void
+  storageFullAttempt: number | null
+  dismissStorageFull(): void
+  retryAfterCleanup(): void
 } | null>(null)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
   const [failures, setFailures] = useState<Record<string, SaveFailure>>({})
+  const [cleanup, setCleanup] = useState<{
+    attempt: number
+    failures: Readonly<Record<string, SaveFailure>>
+    dismissed: boolean
+  } | null>(null)
   const reportSave = useCallback<ReportSave>((key, failure) => {
     setFailures((previous) => {
       if (failure === null && !(key in previous)) return previous
@@ -584,6 +624,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // document; written straight out rather than debounced because it is one
   // short string and losing it costs the user their place.
   useEffect(() => saveActiveTab(state.activeTabId), [state.activeTabId])
+  // The workspace and library were parsed in the first render, so this bundle
+  // has booted: the iOS app tells its updater so, then checks for an update.
+  useEffect(() => {
+    if (import.meta.env.MODE === 'native') {
+      void import('../native/ota').then((ota) => ota.startUpdates()).catch((error: unknown) => console.error(error))
+    }
+  }, [])
   // Layout as well: the unload flush below drains whatever the autosave last
   // saw, and a page hidden between this commit and a passive effect would flush
   // a set without the edit. The workspace still keeps it, but a reload
@@ -635,15 +682,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dispatch(action)
   }, [autosave])
   const value = useMemo(() => ({ state, dispatch: dispatchDiscarding }), [state, dispatchDiscarding])
-  const retry = () => {
+  const retry = useCallback(() => {
     const linked = autosave.flush()
     sync.arm(persistedWorkspace(linked ?? state.tabs))
     if (sync.flush() === 'deferred') {
       deferred.current = true
       rearm()
     }
+  }, [autosave, sync, state.tabs])
+  useEffect(() => {
+    if (!Object.values(failures).some((failure) => failure.quota)) {
+      setCleanup(null)
+      return
+    }
+    if (cleanup !== null) return
+    setCleanup({ attempt: 1, failures, dismissed: false })
+    try {
+      localStorage.removeItem(ANALYSIS_CACHE_KEY)
+    } catch {
+      // Storage can be blocked between the failed write and cache removal.
+    }
+    retry()
+  }, [failures, cleanup, retry])
+
+  // A deferred retry can leave the old failure visible until a later flush.
+  const storageFullAttempt = cleanup !== null && !cleanup.dismissed
+    && Object.entries(failures).some(([key, failure]) => failure.quota && failure !== cleanup.failures[key])
+    ? cleanup.attempt : null
+  const dismissStorageFull = () => setCleanup((previous) => previous && { ...previous, dismissed: true })
+  const retryAfterCleanup = () => {
+    setCleanup((previous) => ({ attempt: (previous?.attempt ?? 0) + 1, failures, dismissed: false }))
+    retry()
   }
-  return createElement(SaveRecoveryContext.Provider, { value: { failures, retry } },
+  return createElement(SaveRecoveryContext.Provider, {
+    value: { failures, retry, storageFullAttempt, dismissStorageFull, retryAfterCleanup },
+  },
     createElement(StoreContext.Provider, { value }, children))
 }
 

@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { revealInScroller } from './useScrollEdges'
 import { ChevronGlyph, TickGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 
@@ -14,9 +15,9 @@ import { placeBelow } from './overlayPosition'
 const optionId = (baseId: string, index: number) => `${baseId}-option-${index}`
 
 /**
- * The shared popup-listbox dropdown: a transparent trigger showing the current
- * value, a fixed full-screen backdrop that closes on any outside click, and an
- * absolutely-positioned option menu.
+ * The shared listbox has a transparent trigger and a fixed backdrop for outside clicks.
+ * Its menu is absolute, except inside a header popover where CSS makes it fixed.
+ * The placement effect reads that rule with getComputedStyle before applying placeBelow's coordinates.
  *
  * Keyboard: the popup itself takes focus and holds the single tab stop, moving
  * an `aria-activedescendant` marker rather than focus between options, so the
@@ -60,7 +61,7 @@ export function MenuSelect<T extends string>({
     const trigger = triggerRef.current
     const popup = popupRef.current
     if (!wrap || !trigger || !popup) return
-    const wrapBox = wrap.getBoundingClientRect()
+    const origin = getComputedStyle(popup).position === 'fixed' ? { left: 0, top: 0 } : wrap.getBoundingClientRect()
     const triggerBox = trigger.getBoundingClientRect()
     // Offsets, not a client rect: the phone's popup is mid-scale on its first frame.
     const popupBox = { width: popup.offsetWidth, height: popup.offsetHeight }
@@ -74,7 +75,7 @@ export function MenuSelect<T extends string>({
       width: clientWidth,
       height: clientHeight,
     })
-    setAt({ left: placed.left - wrapBox.left, top: placed.top - wrapBox.top })
+    setAt({ left: placed.left - origin.left, top: placed.top - origin.top })
   }, [open, options.length])
   // preventScroll: the popup is already beside its trigger, and letting focus
   // scroll to the not-yet-positioned first paint would jolt the page.
@@ -92,12 +93,8 @@ export function MenuSelect<T extends string>({
     if (!popup || !option) return
     // Scrolled by hand rather than with scrollIntoView, which also scrolls every
     // ancestor, including the page under a popup that sits near a screen edge.
-    // offsetTop is measured from .menu-popup itself (it is position: absolute,
-    // so it is the options' offsetParent) and shares scrollTop's origin.
-    const top = option.offsetTop
-    const bottom = top + option.offsetHeight
-    if (top < popup.scrollTop) popup.scrollTop = top
-    else if (bottom > popup.scrollTop + popup.clientHeight) popup.scrollTop = bottom - popup.clientHeight
+    // .menu-popup is position: absolute, so it is the options' offsetParent.
+    revealInScroller(popup, option)
   }, [open, active, baseId])
 
   const selectedIndex = options.findIndex((option) => option.value === value)

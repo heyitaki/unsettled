@@ -251,7 +251,10 @@ export function createWorkspaceSync(dispatch: (action: StoreAction) => void, rep
           // but without re-arming here: an immediate retry would fail the same
           // way and do it every 500ms.
           dispatch({ type: 'notice', message: `Autosave failed: ${result.error}` })
-          report('workspace', { message: `Workspace autosave failed: ${result.error}` })
+          report('workspace', {
+            message: `Workspace autosave failed: ${result.error}`,
+            ...(result.quota ? { quota: true } : {}),
+          })
           return 'settled'
         }
       }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createBoard, setLayout } from '../../model/board'
 import { setTile } from '../../model/__tests__/helpers'
 import { newGame, withBoard } from '../../model/game'
-import { buildSessionEnded, cancelTarget, openBuildSession } from '../phone/buildMode'
+import { buildSessionEnded, cancelTarget, openBuildSession } from '../buildMode'
 import type { TabState } from '../store'
 
 const tab = (id: string, game = newGame(createBoard('standard4'))): TabState => ({

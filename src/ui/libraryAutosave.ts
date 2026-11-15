@@ -57,7 +57,7 @@ export function createLibraryAutosave(
   // library that just refused this one would only repeat the toast, but a
   // close or unload is the last chance before the tab's copy is gone.
   const failed = new Map<string, Game>()
-  const closedFailures = new Map<string, TabState>()
+  const closedFailures = new Map<string, { tab: TabState; quota?: true }>()
   const timers = new Map<string, number>()
   // Links made by the current flush, for the tab set it returns.
   const flushed = new Map<string, { mapId: string; title: string }>()
@@ -99,8 +99,12 @@ export function createLibraryAutosave(
       // Once per attempt: the debounce has already folded a burst of edits into
       // this one write, and the next edit is what retries it.
       failed.set(id, tab.game)
-      if (closing) closedFailures.set(id, tab)
-      report(`library:${id}`, { message: `Could not save "${tab.title}": ${result.error}`, tab: failureTab(tab) })
+      if (closing) closedFailures.set(id, { tab, ...(result.quota ? { quota: true } : {}) })
+      report(`library:${id}`, {
+        message: `Could not save "${tab.title}": ${result.error}`,
+        tab: failureTab(tab),
+        ...(result.quota ? { quota: true } : {}),
+      })
       dispatch({
         type: 'notice',
         message: closing
@@ -117,13 +121,15 @@ export function createLibraryAutosave(
     // A closed tab's failed rescue of this same map would now write over
     // what just landed, and neither copy is known to be the newer one. Unlink
     // it, so a retry lands its edits beside the map as a board of their own.
-    for (const [other, closedTab] of closedFailures) {
+    for (const [other, failure] of closedFailures) {
+      const closedTab = failure.tab
       if (closedTab.mapId !== result.id) continue
       const unlinked = { ...closedTab, mapId: null }
-      closedFailures.set(other, unlinked)
+      closedFailures.set(other, { ...failure, tab: unlinked })
       report(`library:${other}`, {
         message: `"${closedTab.title}" was saved again after it closed; its last edits will be kept as a separate board`,
         tab: failureTab(unlinked),
+        ...(failure.quota ? { quota: true } : {}),
       })
     }
     if (result.id !== tab.mapId) {
@@ -212,7 +218,7 @@ export function createLibraryAutosave(
       closed.clear()
       // By key, re-read each time: one rescue's success can unlink another's.
       for (const id of [...closedFailures.keys()]) {
-        const tab = closedFailures.get(id)
+        const tab = closedFailures.get(id)?.tab
         if (tab !== undefined) save(tab, latest, true)
       }
       for (const id of owing()) fire(id, latest)
