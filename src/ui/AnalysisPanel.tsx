@@ -371,7 +371,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   const empty = boardIsEmpty(board)
   const panel = (
     <section className={className}>
-      <div className="panel-heading">
+      <div className={empty ? 'panel-heading empty-heading' : 'panel-heading'}>
         <h2>{empty ? 'This board is empty' : 'Best picks'}</h2>
         {!empty && (
           <div className="panel-actions">

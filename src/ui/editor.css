@@ -761,6 +761,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .ledger-undo { min-height: 36px; }
   .phone-block.phone-analysis { margin: 0; padding: 10px var(--gutter) 14px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .phone-block.phone-analysis .panel-heading h2 { font-size: 21px; }
+  .phone-block.phone-analysis .empty-heading { margin-top: 10px; }
+  .phone-block.phone-analysis.ledger-panel .panel-heading { margin-top: 7px; }
   .best-moves-panel .move-tiles button, .move-card-choices button, .move-resource, .move-partners button, .move-record, .move-robber-pop button { min-height: 44px; }
   .move-road-slot { height: 44px; }
   .move-minus { width: 24px; height: 24px; top: -8px; right: -6px; }
