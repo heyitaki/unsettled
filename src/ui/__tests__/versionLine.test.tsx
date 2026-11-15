@@ -42,16 +42,17 @@ describe('VersionLine', () => {
     expect(lines()).toEqual(['Version 1.0.521'])
   })
 
-  it('adds the App Store note while the store update is set, and drops it when cleared', () => {
+  it('adds the update link while the store update is set, and drops it when cleared', () => {
     act(() => updateOtaStatus({ bundleVersion: '1.0.521', storeUpdate: true }))
-    expect(lines()).toEqual(['Version 1.0.521', 'A newer version is on the App Store.'])
+    expect(lines()).toEqual(['Version 1.0.521 · Update in TestFlight'])
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('itms-beta://')
     act(() => updateOtaStatus({ storeUpdate: false }))
     expect(lines()).toEqual(['Version 1.0.521'])
   })
 
-  it('shows the App Store note alone before the running label is known', () => {
+  it('shows the update link alone before the running label is known', () => {
     act(() => updateOtaStatus({ storeUpdate: true }))
-    expect(lines()).toEqual(['A newer version is on the App Store.'])
+    expect(lines()).toEqual(['Update in TestFlight'])
   })
 
   it('renders nothing outside the native build', () => {
