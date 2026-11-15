@@ -144,7 +144,8 @@ button.danger { color: var(--danger); }
 .sheet-menu > button:hover, .sheet-menu > button:focus-visible { color: var(--ink); background: var(--tint); }
 .sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--glyph); }
 .sheet-menu-narrow { width: 186px; }
-.board-canvas { width: 100%; display: block; max-height: calc(100vh - 148px); padding: 28px; border-radius: var(--radius); background: #3c7fbf; }
+/* 114px is the header with its margins; the rest is the shell's top and bottom padding, which grow with the safe-area insets on an iPad, so a height-capped board never makes the page scroll. */
+.board-canvas { width: 100%; display: block; max-height: calc(100vh - 114px - max(16px, env(safe-area-inset-top)) - max(18px, env(safe-area-inset-bottom))); padding: 28px; border-radius: var(--radius); background: #3c7fbf; }
 /* The sea is the SVG's own box, so the frame keeps its radius at any zoom; the rect inside would only repaint it. */
 .board-sea { display: none; }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay

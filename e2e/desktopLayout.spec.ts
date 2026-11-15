@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
-import { seedUnclaimedRoster } from './seed'
+import { seedBoard, seedUnclaimedRoster } from './seed'
 
 /**
  * The desktop layout (desktop spec, The model and D3): the board beside one
@@ -120,6 +121,19 @@ test.describe('desktop layout', () => {
     await expect(pencil(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(page.locator('.tools-panel')).toBeHidden()
     await expect(page.locator('.maps-panel')).toBeVisible()
+  })
+
+  // A page even a few pixels taller than the window scrolls, and the header jitters with it.
+  test('a board capped by the window height leaves the page exactly one window tall', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 800 })
+    await page.goto('')
+    await seedBoard(page, JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8')))
+    const canvas = page.locator('.board-canvas')
+    await expect(canvas).toBeVisible()
+    // The tall six-seat board, so the height cap rather than the width sizes it.
+    const cap = await canvas.evaluate((element) => parseFloat(getComputedStyle(element).maxHeight))
+    expect(Math.abs((await canvas.boundingBox())!.height - cap)).toBeLessThan(1)
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800)
   })
 
   test('a short, wide window keeps the column inside the page', async ({ page }) => {
