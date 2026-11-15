@@ -37,10 +37,19 @@ jobs:
           path: test-results/
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     strategy:
       matrix:
         profile: [debug, release]
+    env:
+      # The debug leg exists for debug assertions and overflow checks, not for
+      # unoptimised code, which ran the engine's unit tests 16x slower than
+      # release. Fat LTO only speeds up the shipped binaries and makes every
+      # test binary slow to link, so the release leg tests without it.
+      CARGO_PROFILE_DEV_OPT_LEVEL: "3"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.94.0
