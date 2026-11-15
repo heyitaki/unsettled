@@ -28,12 +28,34 @@ jobs:
       - run: "! grep -rq CapacitorUpdater dist"
       - run: npm test
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
       - run: npm run test:pwa
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: browser-failures
+          path: test-results/
+  # The e2e suite keeps one worker per run (see playwright.config.ts), so it is
+  # split across runners instead: each shard has its own dev server and browser.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-failures-${{ matrix.shard }}
           path: test-results/
   rust:
     runs-on: ubuntu-latest
@@ -56,8 +78,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: simulator
+      # nextest runs every test binary's tests across all cores at once, where
+      # cargo test runs the binaries one after another. The crates have no doctests.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Test simulator and placement parity
         working-directory: simulator
-        run: cargo test --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: cargo nextest run --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
       - name: Check the committed wasm is current
         run: simulator/tools/build-wasm.sh --check
