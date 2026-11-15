@@ -84,12 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      fail-fast: false
       matrix:
         profile: [debug, release]
-        # The tests are CPU-bound on the runner's four cores, so each profile's
-        # tests are split across two runners.
-        partition: [1, 2]
     env:
       # The debug leg exists for debug assertions and overflow checks, not for
       # unoptimised code, which ran the engine's unit tests 16x slower than
@@ -113,7 +109,6 @@ jobs:
           tool: cargo-nextest
       - name: Test simulator and placement parity
         working-directory: simulator
-        run: cargo nextest run --workspace --partition count:${{ matrix.partition }}/2 ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: cargo nextest run --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
       - name: Check the committed wasm is current
-        if: matrix.partition == 1
         run: simulator/tools/build-wasm.sh --check
