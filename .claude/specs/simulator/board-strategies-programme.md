@@ -1,6 +1,6 @@
 # Board-specific strategies programme
 
-Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 7a8e33ae
+Vet: 6/10 staged-build 2026-10-13 pair: .claude/pairs/board-strategies-programme sha: 0b27b640
 
 ## Summary
 
@@ -73,6 +73,7 @@ Proposed; becomes the working queue when the owner approves the spec.
 | 9   | Gate each confirmed candidate on `gate6`                                                                                                           | done 2026-10-14, M-129: five seats passed on `gate6`, +0.58pp (+0.55pp to +0.61pp), `better`, `floorMet` true. Adoption needs requirement 28's amendment, approved by the owner                                                                                                                                                                                                                                                                                                                                                 |
 | 10  | Adopt passing rules in the engine and the app, or close with none; ledger and Outcome section                                                      | done 2026-10-14: five seats adopted in `d970e382` (A1 to A8), cost in M-130; three, four and six closed; Outcome written                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 11  | Contested scorer speed-up before landing (owner 2026-11-14, after the review): keep the memos the contest discount turns off, scores bit-identical | done 2026-11-14 in two Codex rounds, M-131: contested rankings from about 2x to 1.21x to 1.24x the uncontested instructions, plain path at most 1.004; the rest is value-memo misses no larger memo removed                                                                                                                                                                                                                                                                                                                     |
+| 12  | Land `cut-off-programme` on `main` (owner 2026-11-15)                                                                                              | done 2026-11-15: `main` merged into the branch (`c950b757`, one conflict in `CLAUDE.md`), every gate green on the merge, `main` fast-forwarded                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Requirements
 
