@@ -4621,3 +4621,23 @@ The other 54 of 73 rows are unchanged or within 0.1% (12 `advise` rows move by u
 **Result.** Of 39 rows, the largest instruction-count ratio is 1.008 (`placement/standard4/draft/first`, 13,078,382 to 13,181,047), from reading a seat's scorers through its slot; `placement/extension6/prepare` reads 1.004, which is the terrain read per board, and no other row moves by more than 0.1%. The three `analyze` rows read 1.000, 1.000 and 1.000 (`analyze/extension6/behind_three` 2,649,150,106 to 2,649,141,926), because the suite sends explicit weights, which turn selection off. The `decisions differ` notes on placement rows appear identically in M-119's same-commit runs and are not a change; `bench-hashes.json` did not move.
 
 **The cost the suite does not see.** A five-seat ranking where the rule fires pays for the strategy's vector as four and six seats pay for theirs (M-119, about twice the instructions of the plain vector), and builds a second scorer and context when seats on both sides of the rule are ranked. The new `analysisPerf.test.ts` case, seat 3's first pick on a crowded five-seat board with nested rankings under both vectors, measured 153 ms (fastest of three, laptop, under load) against its 1,200 ms bound. `engine.wasm` grew from 1,141,228 to 1,225,155 bytes (+7.4%) with the embedded rule parser, features and strategy loading.
+
+## M-131: what the contested scorer costs after the speed-up
+
+**Question.** Item 11 of [`board-strategies-programme.md`](board-strategies-programme.md): how much of the cost M-119 measured the speed-up of the contested scorer (`placement/expansion.rs`) removes, with no bar. Not a reading on a domain and nothing is spent. Scores are bit-identical: no fixture changed, and `evaluate` on `perf` at four and six seats wrote byte-identical `evaluation.json` and `units.csv` before and after.
+
+**Runs.** The box, 2026-11-14. Base is `e3fe31d2`, the branch before the speed-up. The candidate side's counts with `--weights placement/seat-weights/seats-4.json` (the same bytes as `seats-6.json`): run `20261114T112731Z-a4061443` with `e3fe31d2` under both ref names, run `20261114T112731Z-79edcbdb` with the first round, run `20261114T125904Z-c78f8e38` with both rounds. The plain path, base `e3fe31d2` against the speed-up with no weights argument: runs `20261114T112731Z-83c4ff75` (first round) and `20261114T125904Z-3ba71b88` (both rounds).
+
+| Scenario | Before the discount (M-119) | Before | First round | Both rounds | Both rounds over before the discount |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `analyze/standard4/opening` | 364,110,323 | 674,990,513 | 475,255,154 | 439,010,837 | 1.206 |
+| `analyze/extension6/opening` | 374,677,189 | 746,415,476 | 498,130,164 | 461,433,547 | 1.232 |
+| `analyze/extension6/behind_three` | 1,320,323,824 | 2,650,947,269 | 1,783,019,072 | 1,637,727,591 | 1.240 |
+| `placement/standard4/full_draft` | 33,005,513 | 39,877,015 | 39,535,979 | 37,967,837 | 1.150 |
+| `placement/extension6/full_draft` | 106,871,567 | 123,716,790 | 122,846,208 | 117,700,996 | 1.101 |
+
+The `draft/first` and `draft/middle` rows fall 3% to 4% with both rounds; the greedy rows do not move. On the plain path no row other than `analyze` reads above 1.004; the `analyze` rows fall there too because a ranking always runs the shipped seat vector.
+
+**What changed.** First round: the value memo keys contested rows by the contest tiers of the reachable sites, in its own table allocated on first contested use; the single-road tables serve contested rows; the roads memo keys a contested table path by the buildings and edges the tiers of its open sites can read instead of the whole occupancy. Second round: rival road ends come from a per-edge endpoint table instead of a scan of every vertex. Each fast path asserts against its reference in debug and test builds.
+
+**What is left.** Profiling the same ranking with `contestWeight` 0 and with the shipped vector put the rest mostly in value-memo misses that contested keys cannot share (5% to 8% of a ranking in extra pricing, 3% to 6% in the lookup), which larger or reorganised memos did not reduce; every other contested cost read under 3%.

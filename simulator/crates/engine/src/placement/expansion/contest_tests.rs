@@ -255,3 +255,95 @@ fn zero_expansion_never_classifies_and_full_contest_can_zero_the_term() {
     assert!(discounted_sites() > before);
     assert_eq!(row_value(&scorer, &Holdings::empty(), 0, &occupancy, &mut PriceMemo::default(), None), 0.0);
 }
+
+#[test]
+fn contested_value_cache_keys_reachable_tiers_and_clears_reused_serials() {
+    let (topology, board) = tests::walk_fixtures().into_iter().nth(1).unwrap();
+    let scorer = AppFormulaScorer::new(&board, &topology, witness_weights());
+    let holdings = Holdings::empty();
+    let mut memo = PriceMemo::default();
+    assert!(memo.contested_values.is_empty());
+    assert_eq!(std::mem::size_of::<ValueEntry>(), 64);
+    let sites = [0, 1 << 3, 0];
+    let serial = memo.serial(scorer.id, 0);
+    price_sites::<false>(&scorer, &holdings, 0, &mut memo, Some(serial), sites, [0; 2]);
+    assert!(memo.contested_values.is_empty());
+    let mut values = Vec::new();
+    for tiers in [[0, 0], [1 << 3, 0], [0, 1 << 3], [0, 0]] {
+        let expected = price_sites::<true>(&scorer, &holdings, 0, &mut memo, None, sites, tiers);
+        let value = price_sites::<true>(&scorer, &holdings, 0, &mut memo, Some(serial), sites, tiers);
+        assert_eq!(value.to_bits(), expected.to_bits());
+        values.push(value.to_bits());
+    }
+    assert_ne!(values[0], values[1]);
+    assert_ne!(values[1], values[2]);
+    assert_eq!(values[0], values[3]);
+    assert!(memo.contested_values.iter().any(|(entry, _)| entry.key != 0));
+    memo.next_serial = u32::MAX;
+    assert_eq!(memo.serial(scorer.id + 1, 0), serial);
+    assert!(memo.contested_values.iter().all(|(entry, _)| entry.key == 0));
+}
+
+#[test]
+fn contested_road_keys_preserve_reachable_sites_and_their_tiers() {
+    let mut shared = 0;
+    let mut separated = 0;
+    for (topology, board) in tests::walk_fixtures() {
+        let scorer = AppFormulaScorer::new(&board, &topology, witness_weights());
+        let mut memo = PriceMemo::default();
+        for (vertices, edges) in tests::scrambled_owners(&topology).into_iter().take(3) {
+            let original = Occupancy::new(&scorer, &vertices, &edges, 0);
+            for candidate in 0..topology.vertex_count() as Vertex {
+                if !scorer.reach.table_path(candidate, &original) { continue; }
+                let open = scorer.reach.open[usize::from(candidate)].sites;
+                let tiers = contest_tiers(&scorer, &original).map(|tier| tier & open);
+                let sites = scorer.reach.sites(candidate, &original, &mut memo.sites);
+                let key = original.road_key(&scorer, candidate);
+                for bit in 0..topology.edge_count().max(topology.vertex_count()) {
+                    for field in 0..5 {
+                        let mut changed = original;
+                        let (mask, length) = match field {
+                            0 => (&mut changed.own_vertices, topology.vertex_count()),
+                            1 => (&mut changed.blocked, topology.vertex_count()),
+                            2 => (&mut changed.rival_vertices, topology.vertex_count()),
+                            3 => (&mut changed.own_edges, topology.edge_count()),
+                            _ => (&mut changed.rival_edges, topology.edge_count()),
+                        };
+                        if bit >= length { continue; }
+                        *mask ^= 1 << bit;
+                        if !scorer.reach.table_path(candidate, &changed) { continue; }
+                        let changed_tiers = contest_tiers(&scorer, &changed).map(|tier| tier & open);
+                        if key == changed.road_key(&scorer, candidate) {
+                            assert_eq!(tiers, changed_tiers, "candidate {candidate}, field {field}, bit {bit}");
+                            assert_eq!(sites, scorer.reach.sites(candidate, &changed, &mut memo.sites));
+                            shared += 1;
+                        } else if tiers != changed_tiers {
+                            separated += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(shared > 100 && separated > 100, "shared={shared}, separated={separated}");
+}
+
+#[test]
+fn contest_road_end_table_separates_edges_and_topologies() {
+    for (topology, board) in tests::walk_fixtures() {
+        let scorer = AppFormulaScorer::new(&board, &topology, witness_weights());
+        let mut roads = 0;
+        let mut all_ends = 0;
+        for edge in 0..128 {
+            let expected = if edge < topology.edge_count() {
+                let [a, b] = topology.edge_endpoints(edge as Edge);
+                (1 << a) | (1 << b)
+            } else { 0 };
+            assert_eq!(scorer.reach.road_ends(1 << edge), expected, "edge {edge}");
+            roads |= 1 << edge;
+            all_ends |= expected;
+            assert_eq!(scorer.reach.road_ends(roads), all_ends);
+        }
+        assert_eq!(scorer.reach.road_ends(0), 0);
+    }
+}

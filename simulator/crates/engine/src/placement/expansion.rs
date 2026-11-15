@@ -76,6 +76,8 @@ pub(super) struct ReachTable {
     open: Vec<OpenReach>,
     links: Vec<VertexLinks>,
     single: OnceLock<Arc<SingleRoadTables>>,
+    contest: OnceLock<Vec<(u128, u128)>>,
+    edge_ends: OnceLock<Vec<u128>>,
 }
 
 impl ReachTable {
@@ -169,6 +171,46 @@ impl ReachTable {
         let tables = self.single.get_or_init(|| SingleRoadTables::shared(&self.links));
         tables.rows[usize::from(edge) * self.links.len() + usize::from(candidate)]
             .get_or_init(|| SingleRoadReach::new(&self.links, candidate, edge))
+    }
+
+    fn contest_masks(&self, candidate: Vertex) -> (u128, u128) {
+        self.contest.get_or_init(|| self.open.iter().map(|open| {
+            let mut vertices = open.sites;
+            let mut edges = 0;
+            let mut sites = open.sites;
+            while sites != 0 {
+                let site = sites.trailing_zeros() as Vertex;
+                sites &= sites - 1;
+                for (edge, middle) in self.links[usize::from(site)].steps() {
+                    edges |= 1 << edge;
+                    vertices |= 1 << middle;
+                    for (edge, to) in self.links[usize::from(middle)].steps() {
+                        edges |= 1 << edge;
+                        vertices |= 1 << to;
+                    }
+                }
+            }
+            (vertices, edges)
+        }).collect())[usize::from(candidate)]
+    }
+
+    fn road_ends(&self, mut roads: u128) -> u128 {
+        let by_edge = self.edge_ends.get_or_init(|| {
+            let mut ends = vec![0; 128];
+            for (vertex, links) in self.links.iter().enumerate() {
+                for (edge, _) in links.steps() {
+                    ends[usize::from(edge)] |= 1 << vertex;
+                }
+            }
+            ends
+        });
+        let mut ends = 0;
+        while roads != 0 {
+            let edge = roads.trailing_zeros() as usize;
+            roads &= roads - 1;
+            ends |= by_edge[edge];
+        }
+        ends
     }
 
     #[inline(always)]
@@ -389,10 +431,18 @@ impl Occupancy {
 
     /// Table paths read only local obstacles; own-road walks may reach beyond that table.
     pub(super) fn road_key(&self, scorer: &AppFormulaScorer, candidate: Vertex) -> [u128; 5] {
-        if !scorer.contested && scorer.reach.table_path(candidate, self) {
+        if scorer.reach.table_path(candidate, self) {
             let open = &scorer.reach.open[usize::from(candidate)];
+
+            // Tiers read buildings two steps out and edges incident to a site or its neighbours.
+            let (vertices, edges) = if scorer.contested {
+                scorer.reach.contest_masks(candidate)
+            } else {
+                (0, 0)
+            };
             [self.own_vertices, self.blocked & open.sites,
-                self.rival_vertices & open.through, 0, self.rival_edges & open.edges]
+                self.rival_vertices & (open.through | vertices), self.own_edges & edges,
+                self.rival_edges & (open.edges | edges)]
         } else {
             [self.own_vertices, self.blocked, self.rival_vertices, self.own_edges, self.rival_edges]
         }
@@ -723,6 +773,7 @@ pub(super) struct PriceMemo {
     next_context: [usize; CONTEXT_MEMO_SETS],
     prices: Vec<(u64, f64)>,
     values: Vec<ValueEntry>,
+    contested_values: Vec<(ValueEntry, [u128; 2])>,
     next_serial: u32,
     sites: Vec<SitesEntry>,
     walks: WalkMemo,
@@ -735,6 +786,7 @@ impl Default for PriceMemo {
             next_context: [0; CONTEXT_MEMO_SETS],
             prices: vec![(0, 0.0); PRICE_MEMO_LEN],
             values: vec![ValueEntry::default(); VALUE_MEMO_LEN],
+            contested_values: Vec::new(),
             next_serial: 1,
             sites: vec![SitesEntry::default(); SITES_MEMO_LEN],
             walks: WalkMemo::default(),
@@ -755,6 +807,7 @@ impl PriceMemo {
             self.next_context.fill(0);
             self.prices.fill((0, 0.0));
             self.values.fill(ValueEntry::default());
+            self.contested_values.fill((ValueEntry::default(), [0; 2]));
             self.next_serial = 1;
         }
         let serial = self.next_serial;
@@ -822,8 +875,7 @@ pub(super) fn row_value(
     row_value_inner::<false>(scorer, holdings, candidate, occupancy, memo, serial)
 }
 
-#[cold]
-#[inline(never)]
+#[inline]
 fn contested_row_value(
     scorer: &AppFormulaScorer,
     holdings: &Holdings,
@@ -879,12 +931,13 @@ pub(super) fn single_road_value(
     if scorer.weights().expansion_weight == 0.0 {
         return 0.0;
     }
-    if scorer.contested {
-        return contested_row_value(scorer, holdings, candidate, occupancy, memo, Some(serial));
-    }
     let sites = reach.sites(candidate, occupancy, &mut memo.sites);
     #[cfg(any(test, debug_assertions))]
     assert_eq!(sites, memo.walks.sites(scorer, occupancy, candidate));
+    if scorer.contested {
+        return price_sites::<true>(scorer, holdings, candidate, memo, Some(serial), sites,
+            contest_tiers(scorer, occupancy));
+    }
     price_sites::<false>(scorer, holdings, candidate, memo, Some(serial), sites, [0; 2])
 }
 
@@ -897,9 +950,8 @@ pub(super) fn row_value_with_single_road(
     memo: &mut PriceMemo,
     serial: Option<u32>,
 ) -> f64 {
-    // A contested scorer takes `row_value`, whose contested path applies the tier discount.
     let single = occupancy.single_edge()
-        .filter(|_| !scorer.contested && !scorer.reach.table_path(candidate, occupancy));
+        .filter(|_| !scorer.reach.table_path(candidate, occupancy));
     let Some(edge) = single else {
         return row_value(scorer, holdings, candidate, occupancy, memo, serial);
     };
@@ -913,6 +965,10 @@ pub(super) fn row_value_with_single_road(
     let sites = reach.sites(candidate, occupancy, &mut memo.sites);
     #[cfg(any(test, debug_assertions))]
     assert_eq!(sites, memo.walks.sites(scorer, occupancy, candidate));
+    if scorer.contested {
+        return price_sites::<true>(scorer, holdings, candidate, memo, serial, sites,
+            contest_tiers(scorer, occupancy));
+    }
     price_sites::<false>(scorer, holdings, candidate, memo, serial, sites, [0; 2])
 }
 
@@ -930,13 +986,37 @@ fn price_sites<const CONTESTED: bool>(
     if rest == 0 {
         return 0.0;
     }
-    let remembered = if CONTESTED { None } else { serial }.map(|serial| {
+    let contest_key = tiers.map(|tier| tier & rest);
+    let remembered = serial.map(|serial| {
         let entry = ValueEntry::new(serial, candidate, sites);
-        (entry.index(), entry)
+        let index = if CONTESTED {
+            let mut hash = entry.index() as u64;
+            for (i, tier) in contest_key.iter().enumerate() {
+                hash ^= (*tier as u64).rotate_left((i * 17) as u32)
+                    ^ ((*tier >> 64) as u64).rotate_left((i * 17 + 7) as u32);
+            }
+            mix64(hash) as usize & (VALUE_MEMO_LEN - 1)
+        } else {
+            entry.index()
+        };
+        (index, entry)
     });
     if let Some((index, entry)) = &remembered {
-        if memo.values[*index].same_key(entry) {
-            return memo.values[*index].value;
+        let held = if CONTESTED {
+            if memo.contested_values.is_empty() {
+                memo.contested_values.resize(VALUE_MEMO_LEN, (ValueEntry::default(), [0; 2]));
+            }
+            let (held, tiers) = &memo.contested_values[*index];
+            (held.same_key(entry) && *tiers == contest_key).then_some(held.value)
+        } else {
+            memo.values[*index].same_key(entry).then_some(memo.values[*index].value)
+        };
+        if let Some(value) = held {
+            #[cfg(any(test, debug_assertions))]
+            assert_eq!(value.to_bits(), price_sites::<CONTESTED>(
+                scorer, holdings, candidate, memo, None, sites, tiers,
+            ).to_bits());
+            return value;
         }
     }
     let mut pricer = None;
@@ -987,7 +1067,11 @@ fn price_sites<const CONTESTED: bool>(
     let value = scorer.weights().expansion_weight * total;
     if let Some((index, mut entry)) = remembered {
         entry.value = value;
-        memo.values[index] = entry;
+        if CONTESTED {
+            memo.contested_values[index] = (entry, contest_key);
+        } else {
+            memo.values[index] = entry;
+        }
     }
     value
 }
@@ -1004,8 +1088,7 @@ pub(super) fn row_road(
     row_road_inner::<false>(scorer, vertex_owner, edge_owner, seat, candidate, occupancy)
 }
 
-#[cold]
-#[inline(never)]
+#[inline]
 fn contested_row_road(
     scorer: &AppFormulaScorer,
     vertex_owner: &[u8],
@@ -1228,13 +1311,18 @@ fn contest_tiers(scorer: &AppFormulaScorer, occupancy: &Occupancy) -> [u128; 2] 
             return tiers;
         }
         let buildings = occupancy.own_vertices | occupancy.rival_vertices;
-        let mut ends = 0_u128;
-        for vertex in 0..scorer.reach.links.len() as Vertex {
-            if buildings & (1 << vertex) == 0 && scorer.steps(vertex)
-                .any(|(edge, _)| occupancy.rival_edges & (1 << edge) != 0)
-            {
-                ends |= 1 << vertex;
+        let mut ends = scorer.reach.road_ends(occupancy.rival_edges) & !buildings;
+        #[cfg(any(test, debug_assertions))]
+        {
+            let mut reference = 0_u128;
+            for vertex in 0..scorer.reach.links.len() as Vertex {
+                if buildings & (1 << vertex) == 0 && scorer.steps(vertex)
+                    .any(|(edge, _)| occupancy.rival_edges & (1 << edge) != 0)
+                {
+                    reference |= 1 << vertex;
+                }
             }
+            assert_eq!(ends, reference);
         }
         let mut first = ends;
         while ends != 0 {
