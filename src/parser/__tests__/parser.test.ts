@@ -10,6 +10,7 @@ import { colored, load, sorted, toSrgb } from './pillPixels'
 import expectedTwo from './expected/settled-2p-first-pick.json'
 import expectedThree from './expected/settled-3p-pick-cards.json'
 import expectedFive from './expected/settled-5p-draft-start.json'
+import expectedFiveMidgame from './expected/settled-5p-midgame-hand.json'
 import expectedEndgame from './expected/board-endgame-pieces.json'
 import endgameRoadOrder from './expected/board-endgame-road-order.json'
 
@@ -23,6 +24,8 @@ describe('screenshot parser', () => {
     ['settled-2p-first-pick', expectedTwo],
     ['settled-3p-pick-cards', expectedThree],
     ['settled-5p-draft-start', expectedFive],
+    // The Ore card in the hand has the mountain tiles' colour and size.
+    ['settled-5p-midgame-hand', expectedFiveMidgame],
   ])('parses %s into the pinned board in draft order', (name, expected) => {
     const result = parseScreenshot(image(`../../../fixtures/${name}.png`))
     expect(result.ok).toBe(true)

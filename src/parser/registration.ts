@@ -37,13 +37,23 @@ export function registerBoard(image: RgbaImage, palette: ParserPalette): Registr
       row.y = row.tiles.reduce((sum, tile) => sum + tile.y, 0) / row.tiles.length
     } else rows.push({ y: component.y, tiles: [component] })
   }
-  const signature = rows.map((row) => row.tiles.length).join('-')
-  const layout: LayoutId | null =
-    signature === '3-4-5-4-3' ? 'standard4' : signature === '3-4-5-6-5-4-3' ? 'extension6' : null
+  // Resource cards in the hand share the tile colours and size, so they form
+  // extra rows outside the board: take the run of rows that spells a layout.
+  const counts = rows.map((row) => row.tiles.length)
+  let layout: LayoutId | null = null
+  let start = -1
+  for (const candidate of ['extension6', 'standard4'] as const) {
+    const pattern = layoutRows(candidate).map((spec) => spec.count)
+    start = counts.findIndex((_count, index) => pattern.every((length, offset) => counts[index + offset] === length))
+    if (start >= 0) {
+      layout = candidate
+      break
+    }
+  }
   if (!layout) return null
   const specs = layoutRows(layout)
   const observations: (RegisteredTile & { x: number; y: number })[] = []
-  rows.forEach((row, rowIndex) => {
+  rows.slice(start, start + specs.length).forEach((row, rowIndex) => {
     row.tiles.sort((a, b) => a.x - b.x).forEach((tile, index) => observations.push({
       q: specs[rowIndex].qStart + index,
       r: specs[rowIndex].r,
