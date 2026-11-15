@@ -107,7 +107,8 @@ button.danger { color: var(--danger); }
 .token-tools .selected .token-disc { stroke: var(--accent); fill: color-mix(in srgb, var(--accent) 14%, var(--page)); }
 
 .draft-ribbon { container-type: inline-size; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
-.draft-ribbon-slot { --size: min(30px, 100cqw / (var(--slots) * 1.27 - .27)); flex: none; width: var(--size); height: var(--size); min-height: 0; padding: 0; border: 1.5px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font: 800 calc(var(--size) * .43) Inter, sans-serif; }
+/* A squeezed row spans 92% of the block, the share a ten-slot row of 30px circles takes of the 404px desktop column, so it keeps side gaps and the viewed ring stays inside. */
+.draft-ribbon-slot { --size: min(30px, 92cqw / (var(--slots) * 1.27 - .27)); flex: none; width: var(--size); height: var(--size); min-height: 0; padding: 0; border: 1.5px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font: 800 calc(var(--size) * .43) Inter, sans-serif; }
 .draft-ribbon-slot + .draft-ribbon-slot { margin-left: calc(var(--size) * .27); }
 .draft-ribbon-slot.viewing { box-shadow: 0 0 0 calc(var(--size) * .1) var(--surface), 0 0 0 calc(var(--size) * .167) var(--ink); }
 
