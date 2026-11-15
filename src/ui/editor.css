@@ -605,7 +605,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .ledger-panel .history-toggle[aria-pressed="true"] svg { color: var(--accent-dark); }
 .ledger-panel .panel-actions { margin-right: 0; }
 .history-panel { --history-pad: 17px; }
-.phone-shell .history-panel { --history-pad: var(--gutter); }
+.phone-shell .history-panel { --history-pad: 14px; }
 .history-panel .panel-actions, .tools-panel .panel-actions { margin-right: -10px; }
 .history-panel .panel-heading { position: relative; z-index: 1; margin: 0 calc(-1 * var(--history-pad)); padding: 0 var(--history-pad) 10px; }
 /* Best moves' heading has no actions but takes History's height (its 30px or phone 44px actions, border-box, plus the 10px gap), so both titles and scroll edges line up. */
@@ -678,7 +678,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .history-disc.start polygon { stroke: currentColor; }
 .phone-shell .history-panel .panel-heading { margin-bottom: 0; }
 .phone-shell .moves-panel .panel-heading { min-height: 54px; margin-bottom: 0; }
-.phone-shell .history-panel .history-list { --edge-bottom: 6px; margin-bottom: -14px; padding-bottom: 0; }
+.phone-shell .history-panel .history-list { --edge-bottom: 6px; margin-bottom: -14px; padding-bottom: 0; border-radius: 0 0 var(--radius) var(--radius); }
 
 @media (hover: hover) {
   button:hover:not(:disabled, :where(.phone-shell *)) { background: var(--tint); }
@@ -759,10 +759,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .tie-pick { flex: 1; justify-content: center; height: 36px; padding: 0 14px 0 11px; font-size: 13px; }
   .ledger-tab { min-height: 44px; align-items: center; padding-block: 0; }
   .ledger-undo { min-height: 36px; }
-  .phone-block.phone-analysis { margin: 0; padding: 10px var(--gutter) 14px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .phone-block.phone-analysis .panel-heading h2 { font-size: 21px; }
-  .phone-block.phone-analysis .empty-heading { margin-top: 10px; }
-  .phone-block.phone-analysis.ledger-panel .panel-heading { margin-top: 7px; }
   .best-moves-panel .move-tiles button, .move-card-choices button, .move-resource, .move-partners button, .move-record, .move-robber-pop button { min-height: 44px; }
   .move-road-slot { height: 44px; }
   .move-minus { width: 24px; height: 24px; top: -8px; right: -6px; }
@@ -810,14 +807,8 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .phone-analysis .panel-actions, .phone-build .panel-actions { gap: 0; margin-right: -12.5px; }
   .phone-analysis.ledger-panel .panel-actions { margin-right: 0; }
   .phone-analysis .draft-ribbon { margin: 17px 0; }
-  .phone-analysis .analysis-loading { inset: 4px var(--radius) auto; height: 3px; border-radius: 2px; }
-  .phone-analysis:not(.best-moves-panel) .pick-ledger { padding: 4px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-  .phone-analysis:not(.best-moves-panel) .pick-ledger :is(.analysis-row-select, .analysis-ghost) { padding-inline: 14px; }
-  .phone-analysis:not(.best-moves-panel) .pick-ledger .analysis-row.current { margin: 0 0 -1px; box-shadow: none; }
-  .phone-analysis:not(.best-moves-panel) .pick-ledger .analysis-row.current::before { left: -1px; }
-  .phone-analysis:not(.best-moves-panel) .pick-ledger .analysis-row.current .analysis-touch-actions { padding-inline: 44px 14px; }
   .phone-block { margin: 12px var(--gutter) 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
-  .phone-block.phone-build { margin-top: 8px; }
+  :is(.board-stage, .history-controls) + .phone-block { margin-top: 8px; }
   .phone-block .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
   .phone-block .panel-heading h2 { margin: 0; font: 700 19px/1.1 Georgia, serif; }
   .phone-block-flush { padding: 0; overflow: hidden; }
