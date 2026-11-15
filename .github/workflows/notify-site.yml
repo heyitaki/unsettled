@@ -12,6 +12,27 @@ permissions:
   contents: read
 
 jobs:
+  # The Rust jobs read only these paths, so a web-only commit skips them; a
+  # skipped job still leaves the run green for the site dispatch.
+  changes:
+    runs-on: ubuntu-latest
+    # paths-filter lists a pull request's files through the API.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'simulator/**'
+              - 'src/engine/advice/engine.wasm*'
+              - 'src/parser/__tests__/expected/board-draft-empty.json'
+              - '.github/workflows/notify-site.yml'
   app:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -58,11 +79,17 @@ jobs:
           name: e2e-failures-${{ matrix.shard }}
           path: test-results/
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         profile: [debug, release]
+        # The tests are CPU-bound on the runner's four cores, so each profile's
+        # tests are split across two runners.
+        partition: [1, 2]
     env:
       # The debug leg exists for debug assertions and overflow checks, not for
       # unoptimised code, which ran the engine's unit tests 16x slower than
@@ -78,6 +105,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: simulator
+          key: ${{ matrix.profile }}
       # nextest runs every test binary's tests across all cores at once, where
       # cargo test runs the binaries one after another. The crates have no doctests.
       - uses: taiki-e/install-action@v2
@@ -85,6 +113,7 @@ jobs:
           tool: cargo-nextest
       - name: Test simulator and placement parity
         working-directory: simulator
-        run: cargo nextest run --workspace ${{ matrix.profile == 'release' && '--release' || '' }}
+        run: cargo nextest run --workspace --partition count:${{ matrix.partition }}/2 ${{ matrix.profile == 'release' && '--release' || '' }}
       - name: Check the committed wasm is current
+        if: matrix.partition == 1
         run: simulator/tools/build-wasm.sh --check
