@@ -441,9 +441,9 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .move-chip button { width: 22px; min-height: 0; padding: 4px 0; border: 0; background: transparent; font-size: 12px; }
 .move-steps { display: grid; gap: 0; margin: 12px 0 0; padding: 0; list-style: none; }
 .move-step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; position: relative; padding-bottom: 14px; }
-.move-step:not(:last-child)::before { content: ''; position: absolute; left: 12.5px; top: 28px; bottom: 0; width: 1.5px; background: var(--line); }
+.move-step:not(:last-child)::before { content: ''; position: absolute; left: 12.5px; top: 26px; bottom: 0; width: 1.5px; background: var(--line); }
 .move-step:last-child { align-items: center; padding-bottom: 0; }
-.move-step:last-child::before { content: ''; position: absolute; left: 12.5px; top: 0; height: calc(50% - 15px); width: 1.5px; background: var(--line); }
+.move-step:last-child::before { content: ''; position: absolute; left: 12.5px; top: 0; height: calc(50% - 13px); width: 1.5px; background: var(--line); }
 .move-step-dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 800 12px Inter, sans-serif; border: 1.5px solid var(--faint); color: var(--muted); background: var(--surface); }
 .move-step.now .move-step-dot { border: 2.5px solid var(--ink); color: var(--ink); }
 .move-step.done .move-step-dot { background: #22b14c; border-color: #22b14c; }
@@ -469,6 +469,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .move-trade-clear:hover { color: var(--ink); border-color: var(--line); }
 .move-tiles button, .move-card-choices button { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 10px 0 8px; font-size: 12.5px; font-weight: 500; line-height: 1.2; white-space: nowrap; color: var(--ink); }
 .move-tiles svg, .move-card-choices button > svg { flex: none; display: block; width: 17px; height: 17px; }
+.move-tiles button { min-height: 32px; }
 .move-card-choices { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
 .move-build-choices button { align-items: baseline; padding-block: 5px; }
 .move-build-choices button > svg { translate: 0 2.5px; }
@@ -495,7 +496,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .move-end-turn { width: 100%; padding: 11px; font-weight: 700; font-size: 13px; }
 .move-res-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .move-res-cell { position: relative; display: grid; min-width: 0; }
-.move-resource { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 36px; padding: 0; font-variant-numeric: tabular-nums; }
+.move-resource { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 32px; padding: 0; font-variant-numeric: tabular-nums; }
 .move-res-row .move-resource .stat-icon { flex: none; width: 18px; height: 18px; }
 .move-resource[aria-pressed="true"]:disabled { opacity: 1; }
 .move-count { font-size: 12.5px; font-weight: 800; line-height: 1; }
@@ -504,7 +505,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .move-minus { position: absolute; top: -6px; right: -5px; width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--muted); }
 .move-minus svg { display: block; width: 12px; height: 12px; }
 .move-partners { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
-.move-partners button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; }
+.move-partners button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; font-size: 12px; font-weight: 600; }
 .move-partners small { font-size: 11px; font-weight: 500; color: var(--muted); }
 .move-partners small, .move-partners small span { display: inline-flex; align-items: center; gap: 3px; }
 .move-partners small .stat-icon { width: 14px; height: 14px; }
