@@ -3,7 +3,7 @@ import { TILE_COLORS } from './colors'
 
 /** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is public/favicon.svg: one sharp-cornered tile with three candidate corners sized by rank, the best in the accent and the runners-up in wheat and wood. */
 export function Brand() {
-  // The mask cuts the outline 2.5 units clear of each dot, as favicon.svg does; the id is unique per mount and safe inside url().
+  // The mask cuts the outline around each dot as favicon.svg does. The id is unique per mount and safe inside url().
   const cut = `brand-cut-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   return (
     <>
