@@ -16,9 +16,11 @@ test('reloads offline and imports a board', async ({ page, context }) => {
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   await dialog.locator('input[type=file]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
   await expect(page.locator('.site-header').getByRole('button', { name: 'board-endgame-pieces', exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Done' }).click()
+  // The screenshot shows no turn order, so the import asks for it first.
+  await page.locator('.import-review-panel').getByRole('button', { name: 'Skip', exact: true }).click()
   // The fixture is a game past its draft: the move adviser's wasm engine must answer from the precache.
   await expect(page.getByRole('heading', { name: 'Best moves' })).toBeVisible()
-  await dialog.getByRole('button', { name: 'Done' }).click()
   await page.getByRole('button', { name: 'Start game', exact: true }).click()
   await page.getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '2', exact: true }).click()
   await expect(page.locator('.best-moves-panel .analysis-rank').first()).toBeVisible()
