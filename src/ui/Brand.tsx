@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { TILE_COLORS } from './colors'
 
-/** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is public/favicon.svg: one sharp-cornered tile with three candidate corners sized by rank, the best in the accent and the runners-up in wheat and wood. */
+/** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is public/favicon.svg: one sharp-cornered tile with three candidate corners sized by rank, the best in wood and the runners-up in wheat and the accent. The outline is a cool charcoal, softer than the page ink. */
 export function Brand() {
   // The mask cuts the outline around each dot as favicon.svg does. The id is unique per mount and safe inside url().
   const cut = `brand-cut-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
@@ -15,10 +15,10 @@ export function Brand() {
           <circle cx="50" cy="85" r="12.5" />
           <circle cx="19.69" cy="32.5" r="9.5" />
         </mask>
-        <polygon points="50,15 80.31,32.5 80.31,67.5 50,85 19.69,67.5 19.69,32.5" fill="none" stroke="var(--ink)" strokeWidth="9" strokeLinejoin="miter" mask={`url(#${cut})`} />
-        <circle cx="80.31" cy="32.5" r="14" fill="var(--accent)" />
+        <polygon points="50,15 80.31,32.5 80.31,67.5 50,85 19.69,67.5 19.69,32.5" fill="none" stroke="#343a40" strokeWidth="9" strokeLinejoin="miter" mask={`url(#${cut})`} />
+        <circle cx="80.31" cy="32.5" r="14" fill={TILE_COLORS.wood} />
         <circle cx="50" cy="85" r="10" fill={TILE_COLORS.wheat} />
-        <circle cx="19.69" cy="32.5" r="7" fill={TILE_COLORS.wood} />
+        <circle cx="19.69" cy="32.5" r="7" fill="var(--accent)" />
       </svg>
       <h1>Unsettled</h1>
     </>
