@@ -840,11 +840,11 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   @keyframes phone-overlay-out { to { transform: translateX(100%); } }
   @media (prefers-reduced-motion: reduce) { .phone-overlay, .phone-shell[data-closing] .phone-overlay { animation: none; } }
   .phone-ohead-btn svg { width: 15px; }
-  .phone-overlay-head { flex: none; display: flex; align-items: center; gap: 4px; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; border-bottom: 1px solid var(--line); }
+  .phone-overlay-head { flex: none; display: flex; align-items: center; gap: 4px; padding: calc(10px + env(safe-area-inset-top)) 5px 10px 12px; }
   .phone-overlay-title { flex: 1; min-width: 0; font: 700 19px/1 Georgia, serif; }
   .phone-ohead-btn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--glyph); }
-  .phone-ohead-btn.back { margin-left: -6px; color: var(--ink); }
-  .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 14px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+  .phone-ohead-btn.back { margin-left: -10px; color: var(--ink); }
+  .phone-overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 4px 14px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
   .phone-overlay-body::-webkit-scrollbar { display: none; }
   .phone-overlay-body > .version-line { margin: auto 0 -14px; }
   .roster-row .swatch { pointer-events: none; }
