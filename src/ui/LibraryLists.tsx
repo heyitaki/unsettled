@@ -121,7 +121,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
               current={map === currentMap}
               color={boardColor(map.name)}
               name={map.name || 'empty name'}
-              meta={!map.valid ? 'corrupt' : stamp === undefined ? '' : relativeTime(stamp)}
+              meta={!map.valid ? 'Corrupt' : stamp === undefined ? '' : relativeTime(stamp)}
               selectLabel={`Switch to ${map.name}`}
               selectDisabled={!map.valid}
               // A refused open has toasted why; the list stays for a retry.

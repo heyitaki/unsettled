@@ -53,8 +53,8 @@ describe('relativeTime', () => {
   const ago = (seconds: number) => relativeTime(now - seconds * 1000, now)
 
   it('rounds the youngest stamps to just now', () => {
-    expect(ago(0)).toBe('just now')
-    expect(ago(44)).toBe('just now')
+    expect(ago(0)).toBe('Just now')
+    expect(ago(44)).toBe('Just now')
   })
 
   it('steps through seconds, minutes, hours, days and weeks', () => {

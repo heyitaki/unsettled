@@ -9,7 +9,7 @@ function DraftLabel({ draft }: { draft: DraftState }) {
   return (
     <div className="group-label">
       <span>Snake draft</span>
-      <span>{turnIndex === null ? 'draft complete' : `pick ${turnIndex + 1} of ${sequence.length}`}</span>
+      <span>{turnIndex === null ? 'Draft complete' : `Pick ${turnIndex + 1} of ${sequence.length}`}</span>
     </div>
   )
 }

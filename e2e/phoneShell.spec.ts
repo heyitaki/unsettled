@@ -647,7 +647,7 @@ test.describe('maps screen', () => {
     // listed after the blank board that has no map yet: one list, not two.
     await expect(rows.locator('.list-row-name')).toHaveText(['Board 2', 'Thursday'])
     await expect(rows.nth(1)).toHaveClass(/\bcurrent\b/)
-    await expect(rows.nth(1).locator('.list-row-meta')).toHaveText('just now')
+    await expect(rows.nth(1).locator('.list-row-meta')).toHaveText('Just now')
     await expect(screen.locator('.group-label')).toContainText('Boards (2)')
 
     await screen.getByRole('button', { name: 'Delete Board 2', exact: true }).click()
@@ -694,7 +694,7 @@ test.describe('maps screen', () => {
     await page.locator('.head-title').click()
     // One board, one row, even now that it is saved.
     await expect(rows).toHaveCount(1)
-    await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
+    await expect(rows.first().locator('.list-row-meta')).toHaveText('Just now')
     await rows.first().getByRole('button', { name: `Rename ${todayTitle('aki')}`, exact: true }).click()
     const field = screen.getByRole('textbox', { name: `Rename ${todayTitle('aki')}` })
     await field.fill('Friday')
@@ -760,7 +760,7 @@ test.describe('players screen', () => {
     await expect(screen.locator('.roster-row.me')).toHaveCount(0)
     await expect(screen.locator('.draft-grid-slot')).toHaveCount(8)
     await expect(screen.locator('.draft-grid-slot.now')).toHaveCount(1)
-    await expect(screen.locator('.group-label').nth(1)).toContainText('pick 1 of 8')
+    await expect(screen.locator('.group-label').nth(1)).toContainText('Pick 1 of 8')
     await snap(page, 'players-screen')
 
     await screen.getByRole('button', { name: 'Claim Blue', exact: true }).click()

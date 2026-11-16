@@ -119,7 +119,7 @@ test.describe('desktop', () => {
     await randomize(page)
     await openMaps(page)
     await expect(rows).toHaveCount(1)
-    await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
+    await expect(rows.first().locator('.list-row-meta')).toHaveText('Just now')
 
     await rows.first().getByRole('button', { name: `Rename ${todayTitle('aki')}`, exact: true }).click()
     const field = maps.locator('.list-row-rename')

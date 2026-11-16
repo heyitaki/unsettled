@@ -72,7 +72,7 @@ describe('DraftGrid', () => {
     expect(taken(slots()[0])).toBe(true)
     expect(taken(slots()[1])).toBe(true)
     expect(slots().flatMap((slot, index) => slot.classList.contains('now') ? [index] : [])).toEqual([2])
-    expect(counter()).toBe('pick 3 of 8')
+    expect(counter()).toBe('Pick 3 of 8')
   })
 
   it('names the seat each pick belongs to, one column per player', () => {
@@ -89,6 +89,6 @@ describe('DraftGrid', () => {
 
     expect(slots().every(taken)).toBe(true)
     expect(slots().some((slot) => slot.classList.contains('now'))).toBe(false)
-    expect(counter()).toBe('draft complete')
+    expect(counter()).toBe('Draft complete')
   })
 })

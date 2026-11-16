@@ -40,7 +40,7 @@ const UNITS: [number, string][] = [
 // Compact timestamps fit the Maps popover.
 export function relativeTime(ts: number, now = Date.now()): string {
   const seconds = Math.round((now - ts) / 1000)
-  if (seconds < 45) return 'just now'
+  if (seconds < 45) return 'Just now'
   const [size, suffix] = UNITS.find(([n]) => seconds >= n) ?? [1, 's']
   return `${Math.floor(seconds / size)}${suffix} ago`
 }
