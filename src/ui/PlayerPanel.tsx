@@ -1,6 +1,7 @@
 import { addPlayer } from '../model/board'
 import { PLAYER_PALETTE, type Board } from '../model/types'
 import { PlusGlyph } from './glyphs'
+import { ConfirmDialog } from './ConfirmDialog'
 import { RosterRow, RosterTrash } from './RosterRow'
 import { activeTab, useStore } from './store'
 import { useRoster } from './useRoster'
@@ -11,7 +12,7 @@ export function PlayerPanel() {
   const { game } = tab
   const { board } = game
   const commit = (nextBoard: Board) => dispatch({ type: 'commit', board: nextBoard })
-  const roster = useRoster(board, commit)
+  const roster = useRoster(game, commit)
   const { listRef, dragId, listProps } = roster.reorder
   const addSeat = () => {
     const index = board.players.length
@@ -23,6 +24,7 @@ export function PlayerPanel() {
 
   return (
     <section className="panel player-panel">
+      {roster.confirm && <ConfirmDialog {...roster.confirm} />}
       <div className="panel-heading">
         <h2>Players</h2>
         <button

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type ReactNode } from 'react'
 import { clearBoard, clearPieces, isBlank, randomizeBoard, setLayout } from '../model/board'
-import { newGame } from '../model/game'
+import { newGame, withBoard } from '../model/game'
 import type { Board, LayoutId } from '../model/types'
 import { newBoardTitle } from './boardFiles'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -22,8 +22,13 @@ export function useBoardActions(tab: TabState, dispatch: Dispatch<StoreAction>) 
 
   const dealt = useRef<Board | null>(null)
   const deal = () => (dealt.current = randomizeBoard(board))
+  const freshGame = (next: Board) => {
+    const game = newGame(next)
+    if (tab.game.avatars) game.avatars = tab.game.avatars
+    return withBoard(game, next)
+  }
   const reset = (next: Board) => {
-    dispatch({ type: 'commit-game', game: newGame(next) })
+    dispatch({ type: 'commit-game', game: freshGame(next) })
     close()
   }
   let confirm: ReactNode = null
@@ -39,7 +44,7 @@ export function useBoardActions(tab: TabState, dispatch: Dispatch<StoreAction>) 
               label: 'New board',
               variant: 'primary',
               onClick: () => {
-                dispatch({ type: 'tab-add', game: newGame(deal()), title: newBoardTitle(state.tabs) })
+                dispatch({ type: 'tab-add', game: freshGame(deal()), title: newBoardTitle(state.tabs) })
                 close()
               },
             },

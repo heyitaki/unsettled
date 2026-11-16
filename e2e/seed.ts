@@ -100,3 +100,9 @@ export async function seedSavedMaps(page: Page, count: number) {
   }, count)
   await page.reload()
 }
+
+/** A board's automatic title when it was created today (`model/names.ts` `automaticTitle`). */
+export function todayTitle(...names: string[]): string {
+  const today = new Date()
+  return `${today.getMonth() + 1}/${today.getDate()} ${names.join(', ')}`
+}

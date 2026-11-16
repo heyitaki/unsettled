@@ -213,7 +213,7 @@ describe('storage full recovery', () => {
     expect(operations[0]).toBe('recent')
     expect(operations[1].split(',')).toHaveLength(2)
     expect(store.state.mapsRevision).toBeGreaterThan(revision)
-    expect(library.listed.maps.map(({ name }) => name)).toEqual(['recent', 'Board 1'])
+    expect(library.listed.maps.map(({ name }) => name)).toEqual(['recent', '2/4 aki'])
     expect(recovery.failures).toEqual({})
     expect(dialog()).toBeNull()
     expect(container.querySelector('.save-failure')).toBeNull()
@@ -250,7 +250,7 @@ describe('storage full recovery', () => {
     const deleted = vi.spyOn(storage, 'deleteMaps')
     click('Clean up')
     expect(deleted).toHaveBeenCalledExactlyOnceWith(entries.slice(0, 5).map(({ id }) => id))
-    expect(storage.listMaps().maps.map(({ name }) => name)).toEqual(['recent-5', 'recent-6', 'Board 1'])
+    expect(storage.listMaps().maps.map(({ name }) => name)).toEqual(['recent-5', 'recent-6', '2/4 aki'])
     expect(recovery.failures).toEqual({})
   })
 

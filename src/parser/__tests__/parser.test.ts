@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
+import { PRINT_CUTOFF, printDistance } from '../../model/people'
 import { parseBoard } from '../../model/serialization'
 import type { Board } from '../../model/types'
 import { parseScreenshot } from '../index'
@@ -73,7 +74,12 @@ describe('screenshot parser', () => {
     expect(raw.ok).toBe(true)
     expect(converted.ok).toBe(true)
     if (!raw.ok || !converted.ok) return
-    expect(converted.game).toEqual(raw.game)
+    const { avatars: rawAvatars, ...rawGame } = raw.game
+    const { avatars: convertedAvatars, ...convertedGame } = converted.game
+    expect(convertedGame).toEqual(rawGame)
+    for (const player of raw.game.board.players) {
+      expect(printDistance(convertedAvatars![player.id], rawAvatars![player.id])).toBeLessThan(PRINT_CUTOFF)
+    }
     expect(converted.issues).toEqual([])
   })
 

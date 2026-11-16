@@ -1,16 +1,19 @@
 import type { Game } from '../model/game'
 import { isRecord, parseGame, type ParseGameResult } from '../model/serialization'
 import { newId } from '../model/ids'
+import { isDefaultName, isPrint, nameKey, type Person } from '../model/people'
 
 export const MAPS_KEY = 'unsettled.maps.v1'
 export const MAPS_CORRUPT_KEY = `${MAPS_KEY}.corrupt`
 export const WORKSPACE_KEY = 'unsettled.workspace.v1'
+export const PEOPLE_KEY = 'unsettled.people.v1'
+export const PEOPLE_CORRUPT_KEY = `${PEOPLE_KEY}.corrupt`
 // Session-scoped, so it is per browser tab and fires no cross-document events
 // (local in the one-window iOS app: see saveActiveTab).
 export const ACTIVE_TAB_KEY = 'unsettled.activeTab.v1'
 export const WORKSPACE_CORRUPT_KEY = `${WORKSPACE_KEY}.corrupt`
 // What the iOS app copies to files, since iOS can wipe a WebView's storage.
-export const MIRRORED_KEYS = [MAPS_KEY, WORKSPACE_KEY, MAPS_CORRUPT_KEY, WORKSPACE_CORRUPT_KEY] as const
+export const MIRRORED_KEYS = [MAPS_KEY, WORKSPACE_KEY, PEOPLE_KEY, MAPS_CORRUPT_KEY, WORKSPACE_CORRUPT_KEY, PEOPLE_CORRUPT_KEY] as const
 // Best picks results by board content. Derived data: never backed up, and
 // safe to delete.
 export const ANALYSIS_CACHE_KEY = 'unsettled.analysisCache.v1'
@@ -62,6 +65,51 @@ export const MAX_MAPS = 50
 const MISSING_MAP = 'That map is no longer in the library'
 let corruptMapsBlob: string | null = null
 let corruptWorkspaceBlob: string | null = null
+let corruptPeopleBlob: string | null = null
+
+export function parsePeople(value: unknown): Person[] | null {
+  if (!Array.isArray(value)) return null
+  const names = new Set<string>()
+  const people: Person[] = []
+  for (const entry of value) {
+    if (!isRecord(entry) || Object.keys(entry).length !== 2 || !Object.hasOwn(entry, 'name') || !Object.hasOwn(entry, 'prints') || typeof entry.name !== 'string'
+      || !entry.name.trim() || entry.name !== entry.name.trim() || isDefaultName(entry.name) || names.has(nameKey(entry.name))
+      || !Array.isArray(entry.prints) || entry.prints.length === 0 || !entry.prints.every(isPrint)) return null
+    names.add(nameKey(entry.name))
+    people.push({ name: entry.name, prints: [...entry.prints] })
+  }
+  return people
+}
+
+export function loadPeople(): Person[] {
+  const raw = localStorage.getItem(PEOPLE_KEY)
+  if (raw === null) return []
+  try {
+    const people = parsePeople(JSON.parse(raw))
+    if (people !== null) return people
+  } catch {
+    // Preserve invalid JSON as well as invalid entries on the next save.
+  }
+  corruptPeopleBlob = raw
+  return []
+}
+
+export function savePeople(people: readonly Person[]): WriteResult {
+  try {
+    if (corruptPeopleBlob !== null) {
+      storeKey(PEOPLE_CORRUPT_KEY, corruptPeopleBlob)
+      corruptPeopleBlob = null
+    }
+    storeKey(PEOPLE_KEY, JSON.stringify(people))
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error || error instanceof DOMException ? error.message : 'Unable to save people',
+      ...(isQuotaError(error) ? { quota: true } : {}),
+    }
+  }
+}
 
 function isNamedMapEntry(entry: unknown): entry is Record<string, unknown> & { name: string } {
   return isRecord(entry) && typeof entry.name === 'string'
@@ -146,6 +194,12 @@ export function readLibrary(): LibraryView {
  * Every name a save would collide with, including entries with no usable id.
  * Such entries are absent from readLibrary but still reserve their names.
  */
+/** When the map was created, from its raw entry; undefined for a missing map or a legacy entry with no stamp. */
+export function mapCreatedAt(id: string): number | undefined {
+  const entry = readRawMaps().entries.find((candidate) => mapEntryId(candidate) === id)
+  return isRecord(entry) && typeof entry.createdAt === 'number' ? entry.createdAt : undefined
+}
+
 export function takenMapNames(): Set<string> {
   const names = new Set<string>()
   for (const entry of readRawMaps().entries) {

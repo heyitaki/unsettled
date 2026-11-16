@@ -133,7 +133,7 @@ describe('Board tools', () => {
     const original = tab()
     await click('Randomize')
     await click('New board')
-    expect(tab().title).toBe('Board 2')
+    expect(tab().title).toBe('Board 1')
     expect(board().players).toEqual(original.game.board.players)
     expect(seen.state.tabs.find((item) => item.id === original.id)?.game).toBe(original.game)
     expect(container.querySelector('dialog')).toBeNull()

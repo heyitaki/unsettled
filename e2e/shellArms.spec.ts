@@ -8,7 +8,7 @@ import { boardGrid } from '../src/model/layouts'
 import type { Board, VertexId } from '../src/model/types'
 import { LISTED_PICKS } from '../src/ui/restMarks'
 import { buildingSlots } from '../src/ui/placementSlots'
-import { contestFixture, seedBoard, seedSavedMaps, seedUnclaimedRoster, UNCLAIMED_ROSTER } from './seed'
+import { contestFixture, seedBoard, seedSavedMaps, seedUnclaimedRoster, todayTitle, UNCLAIMED_ROSTER } from './seed'
 
 /**
  * The `Workspace` tree, which every viewport wider than 760px gets (spec B8),
@@ -121,7 +121,7 @@ test.describe('desktop', () => {
     await expect(rows).toHaveCount(1)
     await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
 
-    await rows.first().getByRole('button', { name: 'Rename Board 1', exact: true }).click()
+    await rows.first().getByRole('button', { name: `Rename ${todayTitle('aki')}`, exact: true }).click()
     const field = maps.locator('.list-row-rename')
     await expect(field).toBeFocused()
     await field.fill('Harbour')
@@ -396,7 +396,7 @@ test.describe('desktop', () => {
     await expect(dialog).toHaveCount(0)
     await expect.poll(tokens).not.toEqual(third)
     await openMaps(page)
-    await page.getByRole('button', { name: 'Switch to Board 1', exact: true }).click()
+    await page.getByRole('button', { name: `Switch to ${todayTitle('aki')}`, exact: true }).click()
     await expect.poll(tokens).toEqual(second)
 
     await openBuild(page)

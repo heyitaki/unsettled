@@ -25,7 +25,10 @@ export function useJsonFiles({ onImported }: { onImported?: () => void } = {}) {
     mode.current = 'game'
     inputRef.current?.click()
   }
-  const exportJson = () => downloadBoard(title, serializeGame(game))
+  const exportJson = () => {
+    const { avatars: _avatars, ...shared } = game
+    downloadBoard(title, serializeGame(shared))
+  }
   const exportLibrary = () => {
     try {
       downloadBoard('unsettled-library-backup', createLibraryBackup(persistedWorkspace(state.tabs).tabs))

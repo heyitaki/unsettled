@@ -1,4 +1,5 @@
 import { createBoard, validateBoard } from './board'
+import { isPrint } from './people'
 import { parseEdgeId, parseVertexId } from './coords'
 import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type ScreenshotRead, type TurnState } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
@@ -11,7 +12,17 @@ export type ParseGameResult =
   | { ok: true; game: Game }
   | { ok: false; errors: string[] }
 
-export const serializeGame = (game: Game): string => JSON.stringify(game, null, 2)
+export const serializeGame = (game: Game): string => JSON.stringify({
+  schemaVersion: game.schemaVersion,
+  board: game.board,
+  stats: game.stats,
+  awards: game.awards,
+  turn: game.turn,
+  devHand: game.devHand,
+  avatars: game.avatars,
+  history: game.history,
+  pendingImport: game.pendingImport,
+}, null, 2)
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -203,7 +214,7 @@ export function parseGame(data: unknown): ParseGameResult {
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
   if (!['schemaVersion', 'board', 'stats'].every((key) => Object.hasOwn(value, key)) ||
-    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history', 'pendingImport'].includes(key))) {
+    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history', 'pendingImport', 'avatars'].includes(key))) {
     return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
   }
   const parsedBoard = parseBoard(value.board)
@@ -214,6 +225,13 @@ export function parseGame(data: unknown): ParseGameResult {
   if (Object.hasOwn(value, 'pendingImport')) {
     if (!isScreenshotRead(value.pendingImport, parsedBoard.board)) return { ok: false, errors: ['Invalid pending import'] }
     pendingImport = structuredClone(value.pendingImport)
+  }
+  let avatars: Record<string, string> | undefined
+  if (Object.hasOwn(value, 'avatars')) {
+    if (!isRecord(value.avatars) || !Object.entries(value.avatars).every(([id, print]) => inRoster(id) && isPrint(print))) {
+      return { ok: false, errors: ['Invalid avatars'] }
+    }
+    avatars = { ...value.avatars } as Record<string, string>
   }
   let awards: AwardHolders | undefined
   if (Object.hasOwn(value, 'awards')) {
@@ -297,6 +315,7 @@ export function parseGame(data: unknown): ParseGameResult {
     ...(awards === undefined ? {} : { awards }),
     ...(turn === undefined ? {} : { turn }),
     ...(devHand === undefined ? {} : { devHand }),
+    ...(avatars === undefined ? {} : { avatars }),
     ...(isHistory(value.history) ? { history: structuredClone(value.history) } : {}),
     ...(pendingImport === undefined ? {} : { pendingImport }),
   }

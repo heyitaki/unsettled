@@ -15,7 +15,7 @@ test('reloads offline and imports a board', async ({ page, context }) => {
   await page.locator('.site-header').getByRole('button', { name: 'Import screenshot', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   await dialog.locator('input[type=file]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
-  await expect(page.locator('.site-header').getByRole('button', { name: 'board-endgame-pieces', exact: true })).toBeVisible()
+  await expect(page.locator('.site-header .head-title')).toHaveText('Board 1')
   await dialog.getByRole('button', { name: 'Done' }).click()
   // The screenshot shows no turn order, so the import asks for it first.
   await page.locator('.import-review-panel').getByRole('button', { name: 'Skip', exact: true }).click()
@@ -32,7 +32,7 @@ test('keeps import warnings open until Done and allows editing afterwards', asyn
   await page.locator('.site-header').getByRole('button', { name: 'Import screenshot', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   await dialog.locator('input[type=file]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
-  await expect(page.locator('.site-header').getByRole('button', { name: 'board-endgame-pieces', exact: true })).toBeVisible()
+  await expect(page.locator('.site-header .head-title')).toHaveText('Board 2')
   await expect(dialog).toBeVisible()
   await expect(dialog).toContainText('Roster was synthesized from detected pieces')
   await dialog.getByRole('button', { name: 'Done' }).click()

@@ -1,6 +1,7 @@
 import { addPlayer } from '../../model/board'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import { DraftGrid } from '../DraftGrid'
+import { ConfirmDialog } from '../ConfirmDialog'
 import { PlusGlyph } from '../glyphs'
 import { RosterRow, RosterTrash } from '../RosterRow'
 import { activeTab, useStore } from '../store'
@@ -18,7 +19,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
   const { game } = activeTab(state)
   const { board } = game
   const commit = (next: Board) => dispatch({ type: 'commit', board: next })
-  const roster = useRoster(board, commit)
+  const roster = useRoster(game, commit)
   const { reorder } = roster
   const add = () => {
     const index = board.players.length
@@ -41,6 +42,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
       }
       onClose={onClose}
     >
+      {roster.confirm && <ConfirmDialog {...roster.confirm} />}
       <div>
         <div className="group-label">
           <span>Roster</span>

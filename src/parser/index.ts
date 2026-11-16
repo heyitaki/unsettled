@@ -231,6 +231,8 @@ function parseSettled(image: RgbaImage): SourceParse {
     if (!assembled.ok) return assembled
     const { game } = assembled
     const hands = applyPlayerStats(game, roster.players, issues)
+    const avatars = Object.fromEntries(roster.players.flatMap(({ player, avatar }) => avatar === undefined ? [] : [[player.id, avatar]]))
+    if (Object.keys(avatars).length > 0) game.avatars = avatars
 
     const read = {
       roster: roster.players.length > 0,

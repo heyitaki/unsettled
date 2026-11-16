@@ -8,7 +8,7 @@ import { boardGrid } from '../src/model/layouts'
 import type { Board, VertexId } from '../src/model/types'
 import { clientToUnits, IDENTITY } from '../src/ui/boardViewport'
 import { buildingSlots } from '../src/ui/placementSlots'
-import { contestFixture, seedBoard, seedUnclaimedRoster as seedRoster, UNCLAIMED_ROSTER } from './seed'
+import { contestFixture, seedBoard, seedUnclaimedRoster as seedRoster, todayTitle, UNCLAIMED_ROSTER } from './seed'
 import { randomizePhoneBoard } from './phoneBoardTools'
 
 /**
@@ -117,7 +117,7 @@ test('randomizing a board that has something on it asks first, and can deal a ne
   await page.screenshot({ path: 'test-results/phone/randomize-confirm.png' })
   await dialog.getByRole('button', { name: 'New board' }).click()
   await expect(dialog).toHaveCount(0)
-  await expect(page.locator('.head-title')).toHaveText('Board 2')
+  await expect(page.locator('.head-title')).toHaveText('Board 1')
 })
 
 test('the window is the only scroller and nothing overflows sideways', async ({ page }) => {
@@ -245,7 +245,7 @@ test('an import with parse issues keeps its dialog over the new board, and close
   // warning. The board fills, the empty state goes, and the dialog must
   // survive that to show the warning.
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
-  await expect(page.locator('.head-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
+  await expect(page.locator('.head-title')).toHaveText('Board 2', { timeout: 30_000 })
   await expect(block.getByRole('heading', { name: 'Finish import', exact: true })).toBeVisible()
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.issue-list button.warning')).not.toHaveCount(0)
@@ -695,8 +695,8 @@ test.describe('maps screen', () => {
     // One board, one row, even now that it is saved.
     await expect(rows).toHaveCount(1)
     await expect(rows.first().locator('.list-row-meta')).toHaveText('just now')
-    await rows.first().getByRole('button', { name: 'Rename Board 1', exact: true }).click()
-    const field = screen.getByRole('textbox', { name: 'Rename Board 1' })
+    await rows.first().getByRole('button', { name: `Rename ${todayTitle('aki')}`, exact: true }).click()
+    const field = screen.getByRole('textbox', { name: `Rename ${todayTitle('aki')}` })
     await field.fill('Friday')
     await field.press('Enter')
     await expect(field).toHaveCount(0)
@@ -735,7 +735,7 @@ test.describe('maps screen', () => {
     // A screenshot that parses becomes the active board and takes the screen with it.
     await screen.getByRole('button', { name: 'Import screenshot' }).click()
     await importDialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/settled-3p-pick-cards.png'))
-    await expect(page.locator('.head-title')).toHaveText('settled-3p-pick-cards', { timeout: 30_000 })
+    await expect(page.locator('.head-title')).toHaveText('Board 2', { timeout: 30_000 })
     await expect(screen).toHaveCount(0)
     await expect(importDialog).toHaveCount(0)
   })

@@ -5,12 +5,13 @@ import {
   type ParseIssue,
   type RgbaImage,
 } from '../parser'
-import { listMaps } from '../persistence/localStorage'
+import { listMaps, loadPeople } from '../persistence/localStorage'
 import { type Game, mergeScreenshot, type ScreenshotRead } from '../model/game'
-import { firstFreeName } from '../model/names'
+import { automaticTitle } from '../model/names'
+import { namePlayers } from '../model/people'
 import { newId } from '../model/ids'
 import { gameSignature } from '../model/serialization'
-import { fileTitle, type HeldBoard, mapGame, matchingBoard } from './boardFiles'
+import { newBoardTitle, type HeldBoard, mapGame, matchingBoard } from './boardFiles'
 import { PhotoGlyph } from './glyphs'
 import { useStore } from './store'
 import { useLibrary } from './useLibrary'
@@ -102,7 +103,9 @@ export function ImportDialog({ onClose, onImported, file }: { onClose: () => voi
       ...state.tabs.map((tab) => tab.title),
       ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
     ])
-    dispatch({ type: 'tab-add', game: prepareImport(game, read), title: firstFreeName(fileTitle(fileName), reserved) })
+    const named = prepareImport(namePlayers(game, loadPeople()), read)
+    const title = automaticTitle(named, new Date(), reserved) ?? newBoardTitle(state.tabs)
+    dispatch({ type: 'tab-add', game: named, title })
     landed(`Imported ${fileName}`, parseIssues)
   }
   const heldName = (held: HeldBoard) => ('map' in held ? held.map.name : held.tab.title)
@@ -114,7 +117,7 @@ export function ImportDialog({ onClose, onImported, file }: { onClose: () => voi
       ? mapGame(held.map.id, state.tabs)
       : state.tabs.find((tab) => tab.id === held.tab.id)?.game ?? null
     if (saved === null) return
-    const merged = mergeScreenshot(saved, game, read)
+    const merged = namePlayers(mergeScreenshot(saved, game, read), loadPeople())
     const translated = mergedRead(merged, game, read)
     // A map is rendered in its tab before the commit: the autosave takes the
     // first game it sees in a tab as already saved, so a map opened and updated

@@ -70,6 +70,7 @@ export interface Game {
   history?: GameHistory
   /** The screenshot read behind this game's open import questions, in this game's player ids; absent once answered or skipped. */
   pendingImport?: ScreenshotRead
+  avatars?: Record<string, string>
 }
 
 export interface Position {
@@ -174,7 +175,8 @@ export function withBoard(game: Game, board: Board): Game {
 function replaceBoard(game: Game, board: Board, stats: Record<string, PlayerStats>): Game {
   const dropTurn = game.turn !== undefined && !Object.hasOwn(stats, game.turn.playerId)
   const dropDevHand = game.devHand !== undefined && !Object.hasOwn(stats, game.devHand.playerId)
-  if (board === game.board && stats === game.stats && !dropTurn && !dropDevHand) return game
+  const pruneAvatars = game.avatars !== undefined && Object.keys(game.avatars).some((id) => !Object.hasOwn(stats, id))
+  if (board === game.board && stats === game.stats && !dropTurn && !dropDevHand && !pruneAvatars) return game
   const next = { ...game, board, stats }
   if (dropTurn) delete next.turn
   if (dropDevHand) delete next.devHand
@@ -189,6 +191,7 @@ function replaceBoard(game: Game, board: Board, stats: Record<string, PlayerStat
       points: Object.fromEntries(Object.entries(read.points).filter(([id]) => inRoster(id))),
     }
   }
+  if (pruneAvatars) next.avatars = Object.fromEntries(Object.entries(game.avatars!).filter(([id]) => Object.hasOwn(stats, id)))
   return next
 }
 
@@ -279,7 +282,7 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
     ? savedClaim
     : ids.get(shot.board.mePlayerId ?? '') ?? null
   // Not withBoard: a screenshot says what each hand holds now, so no hand follows the draft here.
-  return replaceBoard(saved, {
+  const merged = replaceBoard(saved, {
     ...shot.board,
     robber: shot.board.robber ?? saved.board.robber,
     players,
@@ -287,6 +290,12 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
     buildings,
     mePlayerId: claim,
   }, Object.fromEntries(players.map((player) => [player.id, stats.get(player.id) ?? saved.stats[player.id]])))
+  const avatars = Object.fromEntries(shot.board.players.flatMap((player) => {
+    const print = shot.avatars?.[player.id]
+    return typeof print === 'string' ? [[ids.get(player.id)!, print]] : []
+  }))
+  if (Object.keys(avatars).length > 0) merged.avatars = { ...merged.avatars, ...avatars }
+  return merged
 }
 
 export function ensureStats(game: Game, playerId: string): PlayerStats {

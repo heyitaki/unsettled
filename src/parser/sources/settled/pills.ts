@@ -1,4 +1,5 @@
 import { PLAYER_PALETTE, type Player } from '../../../model/types'
+import { PRINT_CUTOFF, printDistance } from '../../../model/people'
 import { labelComponents } from '../../components'
 import { nearColor, pixel, type Rect, type Rgb, type RgbaImage } from '../../image'
 import { classifyPlayerSeed, playerFromSeed, type ParserPalette } from '../../palette'
@@ -11,6 +12,7 @@ interface DetectedPlayer {
   anchor: Rgb
   vp: number | null
   hand: number | null
+  avatar?: string
 }
 
 interface SettledRoster {
@@ -66,10 +68,53 @@ export function detectRoster(
     players.push({
       player: playerFromSeed(id, seed),
       anchor,
+      avatar: fingerprint(image, pill, contentHeight),
       vp: readPillCounter(image, palette, pill, pill.x + 2 * contentHeight, 1, degraded),
       hand: readPillCounter(image, palette, pill, pill.x + pill.width - 0.15 * pill.height, -1, degraded),
     })
     if (pill.highlighted) highlighted.push(id)
   }
+  const shared = players.filter(({ avatar }, index) => avatar !== undefined && players.some((other, at) =>
+    at !== index && other.avatar !== undefined && printDistance(avatar, other.avatar) < PRINT_CUTOFF))
+  for (const entry of shared) delete entry.avatar
   return { players, turnPlayerId: highlighted.length === 1 ? highlighted[0] : null, issues }
+}
+
+function fingerprint(image: RgbaImage, pill: Rect, contentHeight: number): string | undefined {
+  const h = contentHeight
+  const y = pill.y + pill.height / 2
+  const fill = pixel(image, pill.x + 0.6 * h, pill.y + 0.15 * h)
+  let first: number | undefined
+  let last = 0
+  for (let x = Math.ceil(pill.x + 0.55 * h); x <= pill.x + 1.5 * h; x += 1) {
+    if (!nearColor(pixel(image, x, y), fill, 20)) {
+      first ??= x
+      last = x
+    }
+  }
+  if (first === undefined || last === first) return undefined
+  const center = (first + last) / 2
+  const side = 1.3 * (last - first) / 2
+  const values: number[] = []
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      const sum = [0, 0, 0]
+      let count = 0
+      for (let cy = Math.ceil(y - side / 2 + row * side / 8); cy < y - side / 2 + (row + 1) * side / 8; cy += 1) {
+        for (let cx = Math.ceil(center - side / 2 + col * side / 8); cx < center - side / 2 + (col + 1) * side / 8; cx += 1) {
+          const color = pixel(image, cx, cy)
+          for (let channel = 0; channel < 3; channel += 1) sum[channel] += color[channel]
+          count += 1
+        }
+      }
+      if (count === 0) return undefined
+      values.push(...sum.map((total) => Math.round(total / count)))
+    }
+  }
+
+  // Measure spatial variation per channel so a solid coloured placeholder is blank too.
+  const means = [0, 1, 2].map((channel) => values.filter((_, index) => index % 3 === channel).reduce((sum, value) => sum + value, 0) / 64)
+  const variance = values.reduce((sum, value, index) => sum + (value - means[index % 3]) ** 2, 0) / values.length
+  if (variance < 4 ** 2) return undefined
+  return values.map((value) => value.toString(16).padStart(2, '0')).join('')
 }

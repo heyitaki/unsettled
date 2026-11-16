@@ -5,6 +5,7 @@ import { WORKSPACE_KEY } from '../src/persistence/localStorage'
 import { SHARE_EVENT } from '../src/ui/sharedImage'
 
 const FIXTURE = 'settled-3p-pick-cards'
+const IMPORT_TITLE = 'Board 2'
 
 /** What the iOS app does with an image from the share sheet: a File on the share event. */
 async function share(page: Page) {
@@ -15,17 +16,17 @@ async function share(page: Page) {
   }, { event: SHARE_EVENT, base64, name: `${FIXTURE}.png` })
 }
 
-/** Open boards named after the fixture, once the workspace autosave has written them. */
+/** Imported boards, once the workspace autosave has written them. */
 const boards = (page: Page) => page.evaluate(({ key, name }) => {
   const workspace = JSON.parse(localStorage.getItem(key) ?? '{"tabs":[]}') as { tabs: { title: string }[] }
   return workspace.tabs.filter((tab) => tab.title === name).length
-}, { key: WORKSPACE_KEY, name: FIXTURE })
+}, { key: WORKSPACE_KEY, name: IMPORT_TITLE })
 
 test('a shared screenshot opens as a new board, and sharing it again updates that board', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('')
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
-  const title = page.locator('.site-header').getByRole('button', { name: FIXTURE, exact: true })
+  const title = page.locator('.site-header').getByRole('button', { name: IMPORT_TITLE, exact: true })
 
   await share(page)
   await expect(title).toBeVisible({ timeout: 30_000 })
@@ -33,7 +34,7 @@ test('a shared screenshot opens as a new board, and sharing it again updates tha
   await expect.poll(() => boards(page)).toBe(1)
 
   await share(page)
-  await expect(dialog).toContainText(`You already have this board as "${FIXTURE}"`, { timeout: 30_000 })
+  await expect(dialog).toContainText(`You already have this board as "${IMPORT_TITLE}"`, { timeout: 30_000 })
   await dialog.getByRole('button', { name: 'Update', exact: true }).click()
   await expect(dialog).toHaveCount(0)
   await expect(title).toBeVisible()
@@ -51,7 +52,7 @@ test.describe('phone', () => {
     await expect(screen).toBeVisible()
 
     await share(page)
-    await expect(page.locator('.head-title')).toHaveText(FIXTURE, { timeout: 30_000 })
+    await expect(page.locator('.head-title')).toHaveText(IMPORT_TITLE, { timeout: 30_000 })
     await expect(page.getByRole('dialog', { name: 'Import screenshot' })).toHaveCount(0)
     await expect(screen).toHaveCount(0)
   })

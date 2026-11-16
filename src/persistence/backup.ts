@@ -1,8 +1,9 @@
 import type { Game } from '../model/game'
 import { newId } from '../model/ids'
 import { firstFreeName, isCopyName } from '../model/names'
+import { nameKey, type Person } from '../model/people'
 import { isFreshGame, isRecord, parseGame, serializeGame } from '../model/serialization'
-import { MAPS_CORRUPT_KEY, MAPS_KEY, MAX_MAPS, storeKey, WORKSPACE_CORRUPT_KEY, type WorkspaceTab } from './localStorage'
+import { loadPeople, MAPS_CORRUPT_KEY, MAPS_KEY, MAX_MAPS, parsePeople, PEOPLE_CORRUPT_KEY, PEOPLE_KEY, savePeople, storeKey, WORKSPACE_CORRUPT_KEY, type WorkspaceTab } from './localStorage'
 
 interface BackupMap {
   id: string
@@ -58,11 +59,20 @@ export function createLibraryBackup(tabs: readonly WorkspaceTab[]): string {
     // board` exports a file the cap would refuse to restore.
     else if (tab.mapId !== undefined || !isFreshGame(tab.game)) maps.push({ id: tab.mapId ?? tab.id, name: tab.title, game: tab.game })
   }
-  for (const key of [MAPS_CORRUPT_KEY, WORKSPACE_CORRUPT_KEY]) {
+  let people: Person[] = []
+  const rawPeople = read(PEOPLE_KEY)
+  if (rawPeople !== null) {
+    try {
+      const parsed = parsePeople(JSON.parse(rawPeople))
+      if (parsed === null) throw new Error('Unreadable people list')
+      people = parsed
+    } catch { recovery[PEOPLE_KEY] = rawPeople }
+  }
+  for (const key of [MAPS_CORRUPT_KEY, WORKSPACE_CORRUPT_KEY, PEOPLE_CORRUPT_KEY]) {
     const value = read(key)
     if (value !== null) recovery[key] = value
   }
-  return JSON.stringify({ format: 'unsettled-library', version: 1, maps, recovery }, null, 2)
+  return JSON.stringify({ format: 'unsettled-library', version: 1, maps, people, recovery }, null, 2)
 }
 
 export function restoreLibraryBackup(data: unknown): { ok: true; count: number } | { ok: false; error: string } {
@@ -75,6 +85,14 @@ export function restoreLibraryBackup(data: unknown): { ok: true; count: number }
     if (incoming.some((map) => map === null)) throw new Error('Backup contains an invalid board')
     const valid = incoming as BackupMap[]
     if (new Set(valid.map((map) => map.id)).size !== valid.length) throw new Error('Backup contains duplicate board IDs')
+    const incomingPeople = Object.hasOwn(value, 'people') ? parsePeople(value.people) : []
+    if (incomingPeople === null) throw new Error('Backup contains an invalid people list')
+    const people = loadPeople()
+    for (const person of incomingPeople) {
+      const existing = people.find((candidate) => nameKey(candidate.name) === nameKey(person.name))
+      if (existing) existing.prints = [...new Set([...existing.prints, ...person.prints])]
+      else people.push(person)
+    }
     const unreadable = 'Export and recover the unreadable library before restoring a backup'
     const stored = localStorage.getItem(MAPS_KEY) ?? '[]'
     let raw: unknown
@@ -104,6 +122,10 @@ export function restoreLibraryBackup(data: unknown): { ok: true; count: number }
       throw new Error(count > MAX_MAPS
         ? `This backup holds ${count} new boards and the library holds at most ${MAX_MAPS}`
         : `Restore would exceed ${MAX_MAPS} boards. Make room in the library first.`)
+    }
+    if (incomingPeople.length > 0) {
+      const saved = savePeople(people)
+      if (!saved.ok) throw new Error(saved.error)
     }
     if (count > 0) storeKey(MAPS_KEY, JSON.stringify(maps))
     return { ok: true, count }

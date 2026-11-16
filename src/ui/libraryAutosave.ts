@@ -6,8 +6,10 @@
 
 import type { Dispatch } from 'react'
 import type { Game } from '../model/game'
-import { MAX_MAPS, loadMap, readLibrary, type WorkspaceTab } from '../persistence/localStorage'
-import { saveTab, savedMap, tabIsDirty } from './boardFiles'
+import { automaticTitle, isAutomaticTitle } from '../model/names'
+import { MAX_MAPS, loadMap, mapCreatedAt, readLibrary, takenMapNames, type WorkspaceTab } from '../persistence/localStorage'
+import { newBoardTitle, saveTab, savedMap, tabIsDirty } from './boardFiles'
+import { renameTab } from './useRenameTab'
 import type { StoreAction, TabState } from './store'
 import type { ReportSave } from './saveStatus'
 
@@ -59,6 +61,8 @@ export function createLibraryAutosave(
   const failed = new Map<string, Game>()
   const closedFailures = new Map<string, { tab: TabState; quota?: true }>()
   const timers = new Map<string, number>()
+  // The automatic title each tab's map last refused.
+  const refusedTitles = new Map<string, string>()
   // Links made by the current flush, for the tab set it returns.
   const flushed = new Map<string, { mapId: string; title: string }>()
   // Tabs the current flush closed because the cap evicted their maps; the
@@ -211,6 +215,26 @@ export function createLibraryAutosave(
         const known = baseline.get(tab.id)
         if (known === undefined) baseline.set(tab.id, tab.game)
         else if (known !== tab.game && failed.get(tab.id) !== tab.game) schedule(tab.id)
+        const before = previous.find((other) => other.id === tab.id)
+        if (!before || before.game === tab.game || !isAutomaticTitle(tab.title)) continue
+        // Raw entries, not listMaps: every save changes the blob, and listing re-validates every board.
+        const library = readLibrary()
+        if (!library.readable) continue
+        const own = tab.mapId === null ? undefined : library.maps.find((map) => map.id === tab.mapId)
+        const others = latest.filter((other) => other.id !== tab.id)
+        const taken = takenMapNames()
+        if (own) taken.delete(own.name)
+        for (const other of others) taken.add(other.title)
+        const created = tab.mapId === null ? undefined : mapCreatedAt(tab.mapId)
+        const wanted = automaticTitle(tab.game, new Date(created ?? Date.now()), taken)
+          ?? (/^Board \d+$/.test(tab.title) ? tab.title : newBoardTitle(others))
+        // A refused rename has already said why; retrying it on every edit would repeat the message.
+        if (wanted === tab.title || refusedTitles.get(tab.id) === wanted) continue
+        if (renameTab(tab, wanted, dispatch) === null) refusedTitles.set(tab.id, wanted)
+        else {
+          refusedTitles.delete(tab.id)
+          latest = latest.map((other) => other.id === tab.id ? { ...other, title: wanted } : other)
+        }
       }
     },
     flush() {

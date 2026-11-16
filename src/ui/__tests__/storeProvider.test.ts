@@ -60,7 +60,7 @@ describe('StoreProvider', () => {
     act(() => dispatch({ type: 'commit', board: setTile(tab.game.board, { q: 0, r: 0 }, 'wheat', 6) }))
     // The unload flush wrote the tab and linked it; a flush that had not seen
     // the edit would leave the library empty and the tab unlinked.
-    expect(listMaps().maps.map((map) => map.name)).toEqual([tab.title])
+    expect(listMaps().maps.map((map) => map.name)).toEqual([activeTab(seen.state).title])
     expect(activeTab(seen.state).mapId).not.toBeNull()
   })
 
