@@ -215,7 +215,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const claimNote = board.mePlayerId === null ? 'Claim yourself in Players to track your exact cards.' : null
   const ledger = (
     <section className={`${className} best-moves-panel ledger-panel`}>
-      <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={commit} onUndo={() => dispatch({ type: 'undo' })}
+      <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={(next) => dispatch({ type: 'commit-game', game: next, correction: true })} onUndo={() => dispatch({ type: 'undo' })}
         historyOpen={state.historyOpen} viewedTurn={state.viewedTurn} onToggleHistory={() => dispatch({ type: 'history', open: !state.historyOpen })} />
     </section>
   )
@@ -248,7 +248,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const actions = turn?.log ?? []
   const previous = tab.past.at(-1)
   const previousTurn = previous && turnState(previous)
-  const undoLog = previousTurn?.playerId === turn?.playerId && (previousTurn?.log?.length ?? 0) === actions.length - 1
+  // An open correction group's line takes back one tap, not the line, so it gets no Undo.
+  const undoLog = !turn?.correction && previousTurn?.playerId === turn?.playerId && (previousTurn?.log?.length ?? 0) === actions.length - 1
     && (previousTurn?.log ?? []).every((line, index) => line === actions[index])
   const rollIndex = turnGames.findIndex((entry) => turnState(entry)?.rolled != null)
   const rollGame = turnGames[rollIndex]

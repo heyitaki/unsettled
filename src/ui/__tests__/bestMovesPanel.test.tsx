@@ -394,6 +394,19 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.move-log button')).toBeNull()
   })
 
+  it('records ledger corrections after an action as one log line with no log Undo', async () => {
+    await click('Buy card')
+    await click('Victory point', tray())
+    await click('Correct aki')
+    await clickElement(container.querySelector('.ledger-add'))
+    await clickElement(container.querySelector('.ledger-add'))
+    const entries = [...container.querySelectorAll('.move-log li')].map((entry) => entry.textContent)
+    expect(entries).toHaveLength(2)
+    expect(entries[1]).toMatch(/^Corrected .+: [a-z]+ \+2$/)
+    expect(game().turn?.correction).toBeDefined()
+    expect(container.querySelector('.move-log button')).toBeNull()
+  })
+
   it('takes back the last Road building slot without recording or spending the card', async () => {
     const before = game()
     await click('Play card')

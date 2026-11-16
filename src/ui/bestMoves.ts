@@ -1,12 +1,13 @@
 import type { AdviceAction, Cards, Decision, KnightPlay, PreRollPlay, ScoredAdvice } from '../engine/advice/protocol'
 import { validateBoard } from '../model/board'
 import { axialKey, hexVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
-import { DEV_KINDS, emptyStats, type Game, type PlayerStats } from '../model/game'
+import { DEV_KINDS, emptyStats, type Correction, type CorrectionField, type Game, type PlayerStats } from '../model/game'
+import { historyPlayer } from '../model/history'
 import { activePlayerId, CARD_COSTS, endTurn, handTotal, recordBankTrade, recordBuild, recordBuyDev, recordPlayDev, turnState } from '../model/turn'
 import { RESOURCES, type AxialCoord, type Board, type Resource } from '../model/types'
 import { buildingSlots, roadSlots } from './placementSlots'
 import type { HighlightMark } from './store'
-import { hexParts, partsDescription, vertexParts, type VertexPart } from './vertexParts'
+import { hexParts, partsDescription, RESOURCE_LABELS, vertexParts, type VertexPart } from './vertexParts'
 
 export const DEV_LABELS = { knight: 'Knight', roadBuilding: 'Road building', yearOfPlenty: 'Year of plenty', monopoly: 'Monopoly' } as const
 export type Move = AdviceAction | PreRollPlay
@@ -15,6 +16,23 @@ export type AdviceInput =
   | { open: 'buy'; fill: Extract<AdviceAction, { type: 'buyDev' }> }
   | { open: 'play'; fill: Extract<PreRollPlay, { type: 'playKnight' | 'monopoly' }> }
 interface TradeCards { resource: Resource; count: number }
+
+export function correctionLine(board: Board, correction: Correction): string {
+  const labels: Record<CorrectionField, string> = {
+    ...RESOURCE_LABELS, ...DEV_LABELS, handUnknown: 'Unseen cards', devCards: 'Unknown dev cards',
+    knights: 'Knights played', vpCards: 'Victory points',
+  }
+  const parts = Object.entries(correction.changes).map(([playerId, fields]) => {
+    const changes = Object.entries(fields).map(([field, delta]) =>
+      `${labels[field as CorrectionField].toLowerCase()} ${delta > 0 ? '+' : '−'}${Math.abs(delta)}`)
+    return `${historyPlayer(board, playerId).name}: ${changes.join(', ')}`
+  })
+  for (const [kind, playerId] of Object.entries(correction.awards ?? {})) {
+    const award = `${kind === 'longestRoad' ? 'longest road' : 'largest army'} to ${historyPlayer(board, playerId).name}`
+    parts.push(parts.length ? capitalize(award) : award)
+  }
+  return `Corrected ${parts.join(' · ')}`
+}
 
 export function limitTradeOffers(actions: readonly ScoredAdvice[]): ScoredAdvice[] {
   const offers = actions.map((advice, index) => ({ ...advice, index })).filter(({ action }) => action.type === 'offerTrade')

@@ -13,9 +13,10 @@ import {
   type ReactNode,
 } from 'react'
 import { createBoard } from '../model/board'
-import { newGame, withBoard, type Game } from '../model/game'
+import { isEmptyCorrection, newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
+import { closeCorrection } from '../model/turn'
 import { draftIsComplete, inferDraftState } from '../engine/draft'
 import type {
   Board,
@@ -121,7 +122,8 @@ export type StoreAction =
   // game (reconciling stats with any roster change). Stat edits dispatch the
   // whole next Game via commit-game. Both share one undo stack of games.
   | { type: 'commit'; board: Board }
-  | { type: 'commit-game'; game: Game }
+  // `correction` marks a ledger correction, which keeps an open correction run open.
+  | { type: 'commit-game'; game: Game; correction?: boolean }
   | { type: 'tool'; tool: Tool }
   | { type: 'active-player'; playerId: string | null }
   | { type: 'undo' }
@@ -299,6 +301,15 @@ function unusedBoardTitle(tabs: TabState[]): string {
   return `Board ${index}`
 }
 
+// Ledger corrections undo one tap at a time while their run is open. Any other commit closes the
+// run, which then undoes as one step, or drops out of the stack when its taps cancel out.
+function closeCorrectionRun(tab: TabState): Game[] {
+  const run = tab.game.turn?.correction
+  if (!run) return [...tab.past, tab.game].slice(-50)
+  const before = tab.past.slice(0, tab.past.findLastIndex((game) => !game.turn?.correction) + 1)
+  return (isEmptyCorrection(run) ? before : [...before, tab.game]).slice(-50)
+}
+
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   let next = reduceAction(state, action)
   if (next.activeTabId !== state.activeTabId || ['commit', 'commit-game', 'undo', 'redo'].includes(action.type)) {
@@ -364,22 +375,23 @@ function reduceAction(state: StoreState, action: StoreAction): StoreState {
         if (game === tab.game) return tab
         return {
           ...tab,
-          game,
+          game: closeCorrection(game),
           activePlayerId: activePlayerFor(game.board, tab.activePlayerId),
-          past: [...tab.past, tab.game].slice(-50),
+          past: closeCorrectionRun(tab),
           future: [],
         }
       })
     case 'commit-game':
       return updateActiveTab(state, (tab) => {
         if (action.game === tab.game) return tab
+        const next = action.correction ? action.game : closeCorrection(action.game)
         return {
           ...tab,
-          game: action.game.awards !== tab.game.awards ? initializeAwards(action.game) : trackAwards(tab.game, action.game),
+          game: next.awards !== tab.game.awards ? initializeAwards(next) : trackAwards(tab.game, next),
           // A whole game can carry a different roster (build mode's Cancel
           // restores one), so the id is reconciled as every other write is.
           activePlayerId: activePlayerFor(action.game.board, tab.activePlayerId),
-          past: [...tab.past, tab.game].slice(-50),
+          past: action.correction ? [...tab.past, tab.game].slice(-50) : closeCorrectionRun(tab),
           future: [],
         }
       })

@@ -106,6 +106,10 @@ export function turnSummary(log: readonly string[]): string {
   const roads = log.filter((line) => line === 'Built a road').length
   for (const line of log) {
     if (!line) continue
+    if (line.startsWith('Corrected ')) {
+      if (!parts.includes('corrected the ledger')) parts.push('corrected the ledger')
+      continue
+    }
     if (line === 'Built a road') {
       const summary = roads === 1 ? 'built a road' : `built ${roads} roads`
       if (!parts.includes(summary)) parts.push(summary)

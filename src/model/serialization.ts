@@ -1,6 +1,6 @@
 import { createBoard, validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
-import { DEV_KINDS, newGame, reconcileStats, validateGameStats, type AwardHolders, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type TurnState } from './game'
+import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type TurnState } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
 type ParseBoardResult =
@@ -136,6 +136,13 @@ const isGains = (value: unknown): value is NonNullable<TurnState['gains']> =>
   isRecord(value) && Object.values(value).every((cards) => isRecord(cards) &&
     Object.entries(cards).every(([resource, count]) => (RESOURCES as readonly string[]).includes(resource) && isCount(count) && count > 0))
 
+const isCorrection = (value: unknown): value is Correction =>
+  isRecord(value) && exactKeys(value, ['changes', ...Object.hasOwn(value, 'awards') ? ['awards'] : []]) &&
+  isRecord(value.changes) && Object.values(value.changes).every((fields) => isRecord(fields) && Object.keys(fields).length > 0 &&
+    Object.entries(fields).every(([field, delta]) => (CORRECTION_FIELDS as readonly string[]).includes(field) && Number.isInteger(delta) && delta !== 0)) &&
+  (!Object.hasOwn(value, 'awards') || isRecord(value.awards) && Object.keys(value.awards).length > 0 &&
+    Object.entries(value.awards).every(([kind, holder]) => ['longestRoad', 'largestArmy'].includes(kind) && typeof holder === 'string'))
+
 function isHistoryPosition(value: Record<string, unknown>, record = false): boolean {
   if (value.robber !== null && !isCoord(value.robber)) return false
   if ((!record || Object.hasOwn(value, 'stats')) && (!isRecord(value.stats) ||
@@ -209,7 +216,7 @@ export function parseGame(data: unknown): ParseGameResult {
   if (Object.hasOwn(value, 'turn')) {
     const savedTurn = value.turn
     if (!isRecord(savedTurn) || !exactKeys(savedTurn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed',
-      ...['robberMoved', 'devBought', 'log', 'gains'].filter((key) => Object.hasOwn(savedTurn, key))])) {
+      ...['robberMoved', 'devBought', 'log', 'gains', 'correction'].filter((key) => Object.hasOwn(savedTurn, key))])) {
       return { ok: false, errors: ['Invalid turn state'] }
     }
     const { playerId, rolled, devPlayed, progressPlayed } = savedTurn
@@ -238,6 +245,12 @@ export function parseGame(data: unknown): ParseGameResult {
     if (Object.hasOwn(savedTurn, 'gains')) {
       if (!isGains(savedTurn.gains)) return { ok: false, errors: ['Invalid turn gains'] }
       turn.gains = structuredClone(savedTurn.gains)
+    }
+    if (Object.hasOwn(savedTurn, 'correction')) {
+      if (!isCorrection(savedTurn.correction)) return { ok: false, errors: ['Invalid turn correction'] }
+      turn.correction = structuredClone(savedTurn.correction)
+      // The next correction rewrites the log's last line, so an open run must own it.
+      if (!isEmptyCorrection(turn.correction) && !turn.log?.at(-1)?.startsWith('Corrected ')) return { ok: false, errors: ['Invalid turn correction'] }
     }
   }
   let devHand: DevHand | undefined

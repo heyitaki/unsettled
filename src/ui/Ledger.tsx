@@ -1,10 +1,10 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import { awardCandidates, computeStandings, setAwardHolder } from '../engine/stats'
-import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type DevKind, type Game, type StatCounter } from '../model/game'
-import { adjustDevHand, handTotal } from '../model/turn'
+import { awardCandidates, computeStandings, setAwardHolder, trackAwards } from '../engine/stats'
+import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type CorrectionField, type DevKind, type Game, type StatCounter } from '../model/game'
+import { adjustDevHand, handTotal, recordCorrection } from '../model/turn'
 import { historyGame } from '../model/history'
 import { RESOURCES, type Resource } from '../model/types'
-import { DEV_LABELS, statsFor } from './bestMoves'
+import { correctionLine, DEV_LABELS, statsFor } from './bestMoves'
 import { CounterGlyph, DevCardGlyph, HistoryGlyph, MinusGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { RESOURCE_LABELS } from './vertexParts'
 
@@ -65,7 +65,8 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
           <span className="tie-picks">
             {candidates.map((player) => (
               <button key={player.id} type="button" className="tie-pick"
-                onClick={() => commit(setAwardHolder(game, kind, player.id))}>
+                onClick={() => commit(recordCorrection(game, setAwardHolder(game, kind, player.id),
+                  { award: kind, playerId: player.id }, (correction) => correctionLine(game.board, correction)))}>
                 <span className="swatch" style={{ background: player.color }} />{player.name}
               </button>
             ))}
@@ -162,8 +163,7 @@ function DevPill({ kind, count, bought = false }: { kind: DevKind | 'vpCard'; co
   )
 }
 
-type Field = Resource | DevKind | StatCounter
-interface Tile { field: Field; label: string; change: string; count: number; glyph: ReactNode; bought?: number; award?: boolean }
+interface Tile { field: CorrectionField; label: string; change: string; count: number; glyph: ReactNode; bought?: number; award?: boolean }
 type TabId = 'hand' | 'dev' | 'points'
 
 function LedgerEditor({ game, playerId, previous, commit, onUndo }: {
@@ -216,7 +216,8 @@ function LedgerEditor({ game, playerId, previous, commit, onUndo }: {
         : adjustCounter(game, playerId, field as StatCounter, delta)
     if (next === game) return
     setLast({ text: `${delta > 0 ? 'Added' : 'Took back'} one ${tile.change}`, before: game })
-    commit(next)
+    // Awards are tracked first so the line drops a settled tie this tap moves on.
+    commit(recordCorrection(game, trackAwards(game, next), { playerId, field, delta }, (correction) => correctionLine(game.board, correction)))
   }
   return (
     <div className="ledger-edit">

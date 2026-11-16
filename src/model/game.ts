@@ -19,12 +19,26 @@ export interface PlayerStats {
 export const DEV_KINDS = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly'] as const
 export type DevKind = (typeof DEV_KINDS)[number]
 
+export const CORRECTION_FIELDS = [...RESOURCES, 'handUnknown', ...DEV_KINDS, 'devCards', 'knights', 'vpCards'] as const
+export type CorrectionField = (typeof CORRECTION_FIELDS)[number]
+
+export interface Correction {
+  changes: Record<string, Partial<Record<CorrectionField, number>>>
+  awards?: Partial<Record<AwardKind, string>>
+}
+
+export function isEmptyCorrection(correction: Correction): boolean {
+  return Object.keys(correction.changes).length === 0 && correction.awards === undefined
+}
+
 export interface TurnState {
   /** Whose turn it is. Advice and recorded actions are for this player. */
   playerId: string
   /** This turn's dice total, null before the roll. */
   rolled: number | null
   log?: string[]
+  /** Net ledger edits since the last recorded action. */
+  correction?: Correction
   gains?: Record<string, Partial<Record<Resource, number>>>
   /** After a 7: false until the robber is placed. Absent on any other roll. */
   robberMoved?: boolean

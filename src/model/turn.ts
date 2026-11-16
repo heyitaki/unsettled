@@ -2,7 +2,7 @@ import { placeBuilding, placeRoad, setRobber, setupGrants } from './board'
 import { edgeEndpointVertexIds } from './coords'
 import {
   adjustCounter, DEV_KINDS, devHandTotal, ensureStats, withBoard,
-  type DevHand, type DevKind, type Game, type PlayerStats, type TurnState,
+  isEmptyCorrection, type AwardKind, type Correction, type CorrectionField, type DevHand, type DevKind, type Game, type PlayerStats, type TurnState,
 } from './game'
 import { RESOURCES, type AxialCoord, type Board, type EdgeId, type Resource, type VertexId } from './types'
 import { positionOf, turnRecord } from './history'
@@ -79,15 +79,55 @@ export function endTurn(game: Game): Game {
 }
 
 export function appendLog(game: Game, text: string): Game {
-  game = begin(game)
+  game = closeCorrection(begin(game))
   const turn = requireTurn(game)
   return { ...game, turn: { ...turn, log: [...turn.log ?? [], text] } }
+}
+
+export function recordCorrection(
+  before: Game,
+  after: Game,
+  change: { playerId: string; field: CorrectionField; delta: number } | { award: AwardKind; playerId: string },
+  describe: (correction: Correction) => string,
+): Game {
+  if (after === before || !before.turn || !after.turn) return after
+  const previous = before.turn.correction
+  const correction: Correction = { changes: {}, ...previous }
+  if ('field' in change) {
+    const { playerId, field, delta } = change
+    const fields = { ...(Object.hasOwn(correction.changes, playerId) ? correction.changes[playerId] : {}) }
+    fields[field] = (fields[field] ?? 0) + delta
+    if (fields[field] === 0) delete fields[field]
+    correction.changes = { ...correction.changes, [playerId]: fields }
+    if (Object.keys(fields).length === 0) delete correction.changes[playerId]
+  } else {
+    correction.awards = { ...correction.awards, [change.award]: change.playerId }
+  }
+  // A later tap can move a settled award on, so only awards the game still gives stay in the line.
+  if (correction.awards) {
+    const awards = Object.fromEntries(Object.entries(correction.awards).filter(([kind, holder]) => after.awards?.[kind as AwardKind] === holder))
+    if (Object.keys(awards).length) correction.awards = awards
+    else delete correction.awards
+  }
+  const log = [...after.turn.log ?? []]
+  if (previous && !isEmptyCorrection(previous)) log.pop()
+  if (!isEmptyCorrection(correction)) log.push(describe(correction))
+  return { ...after, turn: { ...after.turn, correction, log } }
+}
+
+/** Ends an open correction run, keeping its line. */
+export function closeCorrection(game: Game): Game {
+  if (!game.turn?.correction) return game
+  const turn = { ...game.turn }
+  delete turn.correction
+  return { ...game, turn }
 }
 
 export function recordRoll(game: Game, total: number, gains: Record<string, Record<Resource, number>>): Game {
   game = begin(game)
   if (!Number.isInteger(total) || total < 2 || total > 12) throw new RangeError('Roll must be an integer from 2 to 12')
   const turn = { ...requireTurn(game), rolled: total }
+  delete turn.correction
   if (total === 7) turn.robberMoved = false
   else delete turn.robberMoved
   delete turn.gains
