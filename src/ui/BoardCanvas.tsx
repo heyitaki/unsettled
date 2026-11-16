@@ -91,6 +91,8 @@ const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 // unscaled path units — a highlight number sits just above that footing.
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.72, city: 0.828, superCity: 0.972 }
 const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, superCity: 11.3 }
+// How far a number's baseline sits above that footing, in board units.
+const LABEL_LIFT = 3.7
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers and scales, outline included. Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
@@ -827,7 +829,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           <text
             className="settlement-ordinal"
             x={point.x}
-            y={point.y + TIER_BASE_Y.settlement * scale - 4.2}
+            y={point.y + TIER_BASE_Y.settlement * scale - LABEL_LIFT}
             textAnchor="middle"
             fill={readableInk(color)}
             pointerEvents="none"
@@ -884,7 +886,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       // On a piece the number drops to just above its base, where the
       // silhouette is widest; on a bare circle it stays centred.
       const labelY = marked
-        ? point.y + TIER_BASE_Y[marked.tier] * TIER_SCALE[marked.tier] - 4.2
+        ? point.y + TIER_BASE_Y[marked.tier] * TIER_SCALE[marked.tier] - LABEL_LIFT
         : point.y + 4.73
       const fill = mark.color
       const ink = mark.color ? readableInk(mark.color) : undefined
@@ -905,7 +907,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               x={point.x}
               y={labelY}
               textAnchor="middle"
-              className={`vertex-highlight-label${faded}`}
+              className={`vertex-highlight-label${marked ? ' on-piece' : ''}${faded}`}
               fill={ink}
             >
               {mark.label}
