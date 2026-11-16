@@ -1,7 +1,7 @@
+import { snakeOrder } from '../../../model/board'
 import type { Building, Player } from '../../../model/types'
 import { labelComponents } from '../../components'
 import { pixel, type Rgb, type RgbaImage } from '../../image'
-import { snakeOrder } from '../../pieces'
 import type { ParseIssue } from '../types'
 import { readCounter } from './counters'
 import { isSea, seatPlayer, type Seat } from './palette'
@@ -112,11 +112,6 @@ export function readPanel(image: RgbaImage, registration: ColonistRegistration, 
     const start = rotations[0]
     return { players: [...players.slice(start), ...players.slice(0, start)], mePlayerId, ordered: true, issues }
   }
-  issues.push({
-    stage: 'roster',
-    severity: 'warning',
-    message: 'The first player could not be told; players are listed in panel order',
-  })
   return { players, mePlayerId, ordered: false, issues }
 }
 

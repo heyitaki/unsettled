@@ -379,6 +379,11 @@ export function draftOrder(board: Board): string[] {
   return order.concat([...order].reverse())
 }
 
+export function snakeOrder<T>(byPlayer: readonly (readonly T[])[]): T[] {
+  return [...byPlayer.flatMap((placed) => placed.slice(0, 1)),
+    ...[...byPlayer].reverse().flatMap((placed) => placed.slice(1, 2))]
+}
+
 export const pips = (token: number | null): number => token === null ? 0 : Math.max(0, 6 - Math.abs(7 - token))
 
 export function vertexProduction(board: Board, vertexId: VertexId): Partial<Record<Resource, number>> {

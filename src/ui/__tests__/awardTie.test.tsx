@@ -32,7 +32,7 @@ const line = (award: string) => {
   if (!match) throw new Error(`Missing ${award} tie line`)
   return match
 }
-const picks = (award: string) => [...line(award).querySelectorAll<HTMLButtonElement>('button.tie-pick')]
+const picks = (award: string) => [...line(award).querySelectorAll<HTMLButtonElement>('.tie-picks button')]
 const pick = async (award: string, name: string) => act(async () => picks(award).find((button) => button.textContent === name)!.click())
 
 beforeEach(() => {

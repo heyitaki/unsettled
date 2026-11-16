@@ -1,6 +1,6 @@
 import { createBoard, validateBoard } from './board'
 import { parseEdgeId, parseVertexId } from './coords'
-import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type TurnState } from './game'
+import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type ScreenshotRead, type TurnState } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
 type ParseBoardResult =
@@ -103,6 +103,14 @@ export function parseBoard(data: unknown): ParseBoardResult {
 
 const isCount = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0
 
+function isScreenshotRead(value: unknown, board: Board): value is ScreenshotRead {
+  const inRoster = (id: unknown) => typeof id === 'string' && board.players.some((player) => player.id === id)
+  return isRecord(value) && exactKeys(value, ['roster', 'order', 'picks', 'hands', 'unorderedPicks', 'points', 'knights']) &&
+    typeof value.roster === 'boolean' && typeof value.order === 'boolean' && typeof value.picks === 'boolean' &&
+    ['hands', 'unorderedPicks', 'knights'].every((key) => Array.isArray(value[key]) && value[key].every(inRoster)) &&
+    isRecord(value.points) && Object.entries(value.points).every(([id, points]) => inRoster(id) && isCount(points))
+}
+
 function normalizeDevCounts(value: unknown): Record<DevKind, number> | null {
   if (!isRecord(value) || !exactKeys(value, DEV_KINDS) ||
     !isCount(value.knight) || !isCount(value.roadBuilding) ||
@@ -195,13 +203,18 @@ export function parseGame(data: unknown): ParseGameResult {
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
   if (!['schemaVersion', 'board', 'stats'].every((key) => Object.hasOwn(value, key)) ||
-    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history'].includes(key))) {
+    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history', 'pendingImport'].includes(key))) {
     return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
   }
   const parsedBoard = parseBoard(value.board)
   if (!parsedBoard.ok) return parsedBoard
   const inRoster = (id: unknown): id is string =>
     typeof id === 'string' && parsedBoard.board.players.some((player) => player.id === id)
+  let pendingImport: ScreenshotRead | undefined
+  if (Object.hasOwn(value, 'pendingImport')) {
+    if (!isScreenshotRead(value.pendingImport, parsedBoard.board)) return { ok: false, errors: ['Invalid pending import'] }
+    pendingImport = structuredClone(value.pendingImport)
+  }
   let awards: AwardHolders | undefined
   if (Object.hasOwn(value, 'awards')) {
     if (!isRecord(value.awards) || !exactKeys(value.awards, ['longestRoad', 'largestArmy'])) {
@@ -285,6 +298,7 @@ export function parseGame(data: unknown): ParseGameResult {
     ...(turn === undefined ? {} : { turn }),
     ...(devHand === undefined ? {} : { devHand }),
     ...(isHistory(value.history) ? { history: structuredClone(value.history) } : {}),
+    ...(pendingImport === undefined ? {} : { pendingImport }),
   }
   // reconcileStats zero-fills missing entries, so any surviving issue is a
   // stats key pointing at a player outside the roster.

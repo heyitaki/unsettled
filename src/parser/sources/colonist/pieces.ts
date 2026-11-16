@@ -1,9 +1,10 @@
+import { snakeOrder } from '../../../model/board'
 import { parseEdgeId } from '../../../model/coords'
 import { boardGrid } from '../../../model/layouts'
 import type { Board, Building, EdgeId, Player, Road, VertexId } from '../../../model/types'
 import { insideBounds, labelComponents, type Bounds, type Fill } from '../../components'
 import { pixel, type Rgb, type RgbaImage } from '../../image'
-import { edgePoint, snakeOrder, vertexPoint } from '../../pieces'
+import { edgePoint, vertexPoint } from '../../pieces'
 import type { ParseIssue } from '../types'
 import { SEATS, seatPlayer, type Seat } from './palette'
 import type { ColonistRegistration } from './registration'
@@ -89,23 +90,19 @@ export function detectPieces(image: RgbaImage, registration: ColonistRegistratio
   return { buildings, roads, players }
 }
 
-export function orderPieces({ buildings, roads, players }: Pick<Board, 'buildings' | 'roads' | 'players'>, issues: ParseIssue[]) {
+export function orderPieces({ buildings, roads, players }: Pick<Board, 'buildings' | 'roads' | 'players'>) {
   const seatOrder = (id: string) => players.findIndex((player) => player.id === id)
   buildings = [...buildings].sort((a, b) => seatOrder(a.playerId) - seatOrder(b.playerId))
   roads = [...roads].sort((a, b) => seatOrder(a.playerId) - seatOrder(b.playerId))
   const byPlayer = players.map((player) => buildings.filter((building) => building.playerId === player.id))
   if (buildings.every((building) => building.tier === 'settlement') && byPlayer.every((placed) => placed.length <= 2)) {
-    if (byPlayer.some((placed) => placed.length === 2)) issues.push({
-      stage: 'pieces',
-      severity: 'warning',
-      message: "The order of each player's two settlements could not be told",
-    })
     return {
       buildings: snakeOrder(byPlayer),
       roads,
+      unorderedPicks: byPlayer.filter((placed) => placed.length === 2).map((placed) => placed[0].playerId),
     }
   }
-  return { buildings, roads }
+  return { buildings, roads, unorderedPicks: [] }
 }
 
 const brightness = ([r, g, b]: Rgb) => 0.21 * r + 0.72 * g + 0.07 * b

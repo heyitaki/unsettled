@@ -68,6 +68,8 @@ export interface Game {
   /** Absent until the claimed player's dev cards are entered by type. */
   devHand?: DevHand
   history?: GameHistory
+  /** The screenshot read behind this game's open import questions, in this game's player ids; absent once answered or skipped. */
+  pendingImport?: ScreenshotRead
 }
 
 export interface Position {
@@ -176,12 +178,23 @@ function replaceBoard(game: Game, board: Board, stats: Record<string, PlayerStat
   const next = { ...game, board, stats }
   if (dropTurn) delete next.turn
   if (dropDevHand) delete next.devHand
+  if (next.pendingImport && board.players !== game.board.players) {
+    const read = next.pendingImport
+    const inRoster = (id: string) => Object.hasOwn(stats, id)
+    next.pendingImport = {
+      ...read,
+      hands: read.hands.filter(inRoster),
+      unorderedPicks: read.unorderedPicks.filter(inRoster),
+      knights: read.knights.filter(inRoster),
+      points: Object.fromEntries(Object.entries(read.points).filter(([id]) => inRoster(id))),
+    }
+  }
   return next
 }
 
 /** What a screenshot supplied, which the parsed Game cannot say for itself. */
 export interface ScreenshotRead {
-  /** False when no roster was read: only piece colours identify players. */
+  /** False when any players were identified only from piece colours. */
   roster: boolean
   /** Whether the screenshot showed turn order. Implies `roster`. */
   order: boolean
@@ -189,6 +202,12 @@ export interface ScreenshotRead {
   picks: boolean
   /** Parsed ids of the players whose hand size was read. A zero hand is otherwise the same as an unread one. */
   hands: readonly string[]
+  /** Parsed ids of players with two settlements whose placement order was unread. */
+  unorderedPicks: readonly string[]
+  /** Parsed player ids to the victory points shown, only when read. */
+  points: Readonly<Record<string, number>>
+  /** Parsed ids of players whose knights-played count was read. */
+  knights: readonly string[]
 }
 
 /**

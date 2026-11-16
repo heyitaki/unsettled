@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url'
 import { PNG } from 'pngjs'
 import { describe, expect, it } from 'vitest'
 import { axialKey, vertexIdOf } from '../../model/coords'
+import { addPlayer } from '../../model/board'
+import { mergeScreenshot, newGame } from '../../model/game'
 import type { AxialCoord } from '../../model/types'
+import { importQuestions } from '../../ui/importQuestions'
 import { cropImage, pixel, type Rect, type Rgb } from '../image'
 import { parseScreenshot, type RgbaImage } from '../index'
 import { vertexPoint } from '../pieces'
@@ -53,6 +56,28 @@ function token(image: RgbaImage, number: number) {
 }
 
 describe.skipIf(!existsSync(dir))('Colonist damaged screenshots', () => {
+  it('asks for the whole order when a missing panel player is recovered from pieces', () => {
+    const image = load()
+    const registration = registered(image)
+    const [x, y] = registration.center({ q: 2, r: 0 })
+    const size = registration.size
+    const background = pixel(image, x + 7.23 * size, y + 3.46 * size)
+    paint(image, { x: x + 6.35 * size, y: y + 3.13 * size,
+      width: 0.66 * size, height: 0.66 * size }, background)
+    const result = parseScreenshot(image)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.game.board.players).toHaveLength(4)
+    expect(result.read.knights).toHaveLength(3)
+    expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'roster', message: expect.stringContaining('Synthesized a player') }))
+    expect(result.read.roster).toBe(false)
+    expect(result.read.order).toBe(false)
+    expect(importQuestions(result.game, result.read).order).toBe('all')
+
+    const saved = newGame(addPlayer(result.game.board, { id: 'saved', name: 'Saved', color: '#884400' }))
+    expect(mergeScreenshot(saved, result.game, result.read).board.players).toEqual(saved.board.players)
+  })
+
   it('a: flags a hidden rival avatar', () => {
     const image = load()
     const registration = registered(image)
@@ -134,7 +159,6 @@ describe.skipIf(!existsSync(dir))('Colonist damaged screenshots', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.game.board.buildings.some((building) => building.vertexId === vertex)).toBe(false)
-    expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'roster', severity: 'warning' }))
     expect(result.issues).toContainEqual(expect.objectContaining({ stage: 'stats', severity: 'warning' }))
     expect(result.read.order).toBe(false)
   })

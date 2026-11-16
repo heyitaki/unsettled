@@ -107,7 +107,7 @@ describe('starting hands follow the draft', () => {
   it('leaves every hand alone when a later screenshot is merged', () => {
     const dealt = finish(newGame(openDraft()))
     const shot = adjustCounter(newGame(placeBuilding(dealt.board, A2, 'aki', 'city')), 'aki', 'handUnknown', 2)
-    const merged = mergeScreenshot(dealt, shot, { roster: true, order: true, picks: true, hands: ['aki'] })
+    const merged = mergeScreenshot(dealt, shot, { roster: true, order: true, picks: true, hands: ['aki'], unorderedPicks: [], points: {}, knights: [] })
     expect(merged.stats.aki.hand).toEqual(AKI_HAND)
     expect(merged.stats.b.hand).toEqual(dealt.stats.b.hand)
   })

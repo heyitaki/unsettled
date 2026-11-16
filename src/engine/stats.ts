@@ -8,7 +8,7 @@ import type { AwardHolders, AwardKind, Game } from '../model/game'
 import type { Board, EdgeId, VertexId } from '../model/types'
 
 const LONGEST_ROAD_MIN = 5
-const LARGEST_ARMY_MIN = 3
+export const LARGEST_ARMY_MIN = 3
 
 // Trail enumeration is exponential in road density, and nothing caps a player at
 // 15 roads: all 72 edges owned by one player took ~22s exhaustively, freezing the

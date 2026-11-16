@@ -15,7 +15,7 @@ const AWARDS: { kind: AwardKind; label: string; medal: ReactNode }[] = [
 
 // `previous` is the newest game on the tab's undo stack and `onUndo` pops it,
 // so the editor's Undo is the app's own undo step rather than a second history.
-export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, historyOpen = false, viewedTurn = null, onToggleHistory }: {
+export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, historyOpen = false, viewedTurn = null, onToggleHistory, ties: askTies = true }: {
   game: Game
   activeId: string | null
   previous: Game | undefined
@@ -24,6 +24,8 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
   historyOpen?: boolean
   viewedTurn?: number | null
   onToggleHistory?(): void
+  /** False while the Finish import card asks the award holders itself. */
+  ties?: boolean
 }) {
   const id = useId()
   const [editing, setEditing] = useState<string | null>(null)
@@ -37,7 +39,7 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
   // A tied award asks who got there first while its holder is unknown: not recorded, and (in a
   // game that never recorded holders) not settled by road order. A pick settles it and the line
   // goes away; undo brings it back. Past views are read-only, so they show none.
-  const ties = readOnly ? [] : AWARDS.flatMap((award) => {
+  const ties = readOnly || !askTies ? [] : AWARDS.flatMap((award) => {
     const candidates = awardCandidates(game, award.kind)
     if (candidates.length < 2) return []
     if (standings.some((standing) => award.kind === 'longestRoad' ? standing.hasLongestRoad : standing.hasLargestArmy)) return []
@@ -64,7 +66,7 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
           </span>
           <span className="tie-picks">
             {candidates.map((player) => (
-              <button key={player.id} type="button" className="tie-pick"
+              <button key={player.id} type="button" className="choice-pill"
                 onClick={() => commit(recordCorrection(game, setAwardHolder(game, kind, player.id),
                   { award: kind, playerId: player.id }, (correction) => correctionLine(game.board, correction)))}>
                 <span className="swatch" style={{ background: player.color }} />{player.name}

@@ -246,13 +246,14 @@ test('an import with parse issues keeps its dialog over the new board, and close
   // survive that to show the warning.
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/board-endgame-pieces.png'))
   await expect(page.locator('.head-title')).toHaveText('board-endgame-pieces', { timeout: 30_000 })
-  // The fixture is a game past its draft, so the block is the move adviser.
-  await expect(block.getByRole('heading', { name: 'Best moves', exact: true })).toBeVisible()
+  await expect(block.getByRole('heading', { name: 'Finish import', exact: true })).toBeVisible()
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.issue-list button.warning')).not.toHaveCount(0)
   await snap(page, 'import-issues')
   await dialog.getByRole('button', { name: 'Done' }).click()
   await expect(dialog).toHaveCount(0)
+  await block.getByRole('button', { name: 'Skip', exact: true }).click()
+  await expect(block.getByRole('heading', { name: 'Best moves', exact: true })).toBeVisible()
   // Emptying the board again must not bring the dialog back on its own.
   await page.getByRole('button', { name: 'Edit the board' }).click()
   await page.locator('.phone-build').getByRole('button', { name: 'Clear board', exact: true }).click()

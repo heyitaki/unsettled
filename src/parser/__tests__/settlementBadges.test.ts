@@ -143,7 +143,7 @@ describe('imported settlement order', () => {
      expect(parsed.read.picks).toBe(false)
   })
 
-  it('retains each player\'s scan order and warns when neither badge can be read', () => {
+  it('retains each player\'s scan order and reports unread picks when neither badge can be read', () => {
     const { image, palette, registration, owners } = scene([null, null, null, null])
     const pieces = orderDraftSettlements(
       image, palette, registration, detectPieces(image, palette, registration, owners).buildings,
@@ -154,9 +154,8 @@ describe('imported settlement order', () => {
     const parsed = parseScreenshot(image)
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
-    expect(parsed.issues.filter((issue) => issue.stage === 'pieces').map((issue) => issue.message)).toEqual([
-      'Could not determine settlement order for White',
-      'Could not determine settlement order for Brown',
-    ])
+    expect(parsed.issues.filter((issue) => issue.stage === 'pieces')).toEqual([])
+    const name = (id: string) => parsed.game.board.players.find((player) => player.id === id)?.name
+    expect(parsed.read.unorderedPicks.map(name)).toEqual(['White', 'Brown'])
   })
 })

@@ -16,6 +16,7 @@ import { useStore } from './store'
 import { useLibrary } from './useLibrary'
 import { useCoarsePointer } from './useMediaQuery'
 import { ModalDialog } from './ModalDialog'
+import { hasQuestions, importQuestions, settleImport } from './importQuestions'
 import { takeSharedImage, useSharedImage } from './sharedImage'
 
 async function decodeImage(file: File): Promise<RgbaImage> {
@@ -36,13 +37,40 @@ async function decodeImage(file: File): Promise<RgbaImage> {
   return { width: canvas.width, height: canvas.height, data: data.data }
 }
 
-/** A parse of a board the app already holds, waiting on the user's answer. */
-interface Match {
+/** A parsed screenshot awaiting import. */
+interface Parsed {
   fileName: string
   game: Game
   issues: ParseIssue[]
   read: ScreenshotRead
-  held: HeldBoard
+}
+
+interface Match extends Parsed { held: HeldBoard }
+
+function mergedRead(game: Game, shot: Game, read: ScreenshotRead): ScreenshotRead {
+  const ids = new Map(shot.board.players.map((player) => [player.id,
+    game.board.players.find((candidate) => candidate.color === player.color)?.id]))
+  const remap = (players: readonly string[]) => players.flatMap((id) => ids.get(id) ?? [])
+  return {
+    ...read,
+    roster: true,
+    order: true,
+    picks: true,
+    unorderedPicks: [],
+    hands: remap(read.hands),
+    knights: remap(read.knights),
+    points: Object.fromEntries(Object.entries(read.points).flatMap(([id, points]) => {
+      const merged = ids.get(id)
+      return merged === undefined ? [] : [[merged, points]]
+    })),
+  }
+}
+
+function prepareImport(game: Game, read: ScreenshotRead): Game {
+  const settled = settleImport(game, read, {})
+  if (hasQuestions(importQuestions(settled, read))) return { ...settled, pendingImport: read }
+  const { pendingImport: _pending, ...ready } = settled
+  return ready
 }
 
 // Screenshot import lives in a modal. On a clean parse it closes itself; when
@@ -67,24 +95,27 @@ export function ImportDialog({ onClose, onImported, file }: { onClose: () => voi
     setIssues(parseIssues)
     if (parseIssues.length === 0) onClose()
   }
-  const importNew = ({ fileName, game, issues: parseIssues }: Pick<Match, 'fileName' | 'game' | 'issues'>) => {
+  const importNew = ({ fileName, game, issues: parseIssues, read }: Parsed) => {
     // Disambiguate the title against open tabs and saved maps so a
     // repeat import never spawns a second tab with the same label.
     const reserved = new Set([
       ...state.tabs.map((tab) => tab.title),
       ...listMaps().maps.filter((map) => !map.synthetic).map((map) => map.name),
     ])
-    dispatch({ type: 'tab-add', game, title: firstFreeName(fileTitle(fileName), reserved) })
+    dispatch({ type: 'tab-add', game: prepareImport(game, read), title: firstFreeName(fileTitle(fileName), reserved) })
     landed(`Imported ${fileName}`, parseIssues)
   }
   const heldName = (held: HeldBoard) => ('map' in held ? held.map.name : held.tab.title)
-  const update = ({ fileName, game, issues: parseIssues, read, held }: Match) => {
+  const update = (parsed: Match) => {
+    const { fileName, game, issues: parseIssues, read, held } = parsed
     // Looked up now, not when the question went up: another window can have
     // edited the board since, and the merge must start from what the tab holds.
     const saved = 'map' in held
       ? mapGame(held.map.id, state.tabs)
       : state.tabs.find((tab) => tab.id === held.tab.id)?.game ?? null
     if (saved === null) return
+    const merged = mergeScreenshot(saved, game, read)
+    const translated = mergedRead(merged, game, read)
     // A map is rendered in its tab before the commit: the autosave takes the
     // first game it sees in a tab as already saved, so a map opened and updated
     // in one render would never be written back. A refusal is already toasted,
@@ -93,8 +124,8 @@ export function ImportDialog({ onClose, onImported, file }: { onClose: () => voi
     else if (!flushSync(() => openMap(held.map))) return
     // One commit on the board's own tab, so the update is a single undo step
     // and the autosave writes it into that board's library entry.
-    const merged = mergeScreenshot(saved, game, read)
-    if (gameSignature(merged) !== gameSignature(saved)) dispatch({ type: 'commit-game', game: merged })
+    const settled = prepareImport(merged, translated)
+    if (gameSignature(settled) !== gameSignature(saved)) dispatch({ type: 'commit-game', game: settled })
     landed(`Updated "${heldName(held)}" from ${fileName}`, parseIssues)
   }
 
@@ -109,9 +140,9 @@ export function ImportDialog({ onClose, onImported, file }: { onClose: () => voi
       const result = parseScreenshot(image)
       if (result.ok) {
         const held = matchingBoard(result.game.board, state.tabs)
-        const parsed = { fileName: file.name, game: result.game, issues: result.issues }
+        const parsed = { fileName: file.name, game: result.game, issues: result.issues, read: result.read }
         if (held === null) importNew(parsed)
-        else setMatch({ ...parsed, read: result.read, held })
+        else setMatch({ ...parsed, held })
       } else notice(`Screenshot import failed: ${result.error}`)
     } catch (error) {
       notice(`Screenshot import failed: ${error instanceof Error ? error.message : 'unknown error'}`)

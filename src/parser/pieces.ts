@@ -1,3 +1,4 @@
+import { snakeOrder } from '../model/board'
 import { parseEdgeId, parseVertexId } from '../model/coords'
 import { boardGrid } from '../model/layouts'
 import type { Building, EdgeId, Road, VertexId } from '../model/types'
@@ -133,7 +134,6 @@ export function orderDraftSettlements(
   const draftShape = buildings.every((building) => building.tier === 'settlement') &&
     byPlayer.every((placed) => placed.length <= 2)
   if (!draftShape) return { buildings, unorderedPlayerIds: [], ordered: false }
-  const incomplete = byPlayer.some((placed) => placed.length < 2)
   const unorderedPlayerIds: string[] = []
   let ordered = true
   for (const placed of byPlayer) {
@@ -141,15 +141,10 @@ export function orderDraftSettlements(
     const [first, second] = placed.map((building) => readSettlementOrdinal(image, palette, registration, building.vertexId))
     if (first === second) {
       ordered = false
-      if (incomplete) unorderedPlayerIds.push(placed[0].playerId)
+      unorderedPlayerIds.push(placed[0].playerId)
     } else if (first === 2 || second === 1) placed.reverse()
   }
   return { buildings: snakeOrder(byPlayer), unorderedPlayerIds, ordered }
-}
-
-export function snakeOrder<T>(byPlayer: readonly (readonly T[])[]): T[] {
-  return [...byPlayer.flatMap((placed) => placed.slice(0, 1)),
-    ...[...byPlayer].reverse().flatMap((placed) => placed.slice(1, 2))]
 }
 
 export function edgePoint(registration: Pick<Registration, 'center'>, edgeId: EdgeId): [number, number] {

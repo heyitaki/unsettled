@@ -16,6 +16,7 @@ export function parseColonist(image: RgbaImage): {
   roster: PanelPlayer[]
   // The roster is in turn order: the panel told the first player and no piece needed a synthesized seat.
   ordered: boolean
+  unorderedPicks: string[]
   issues: ParseIssue[]
 } | null {
   const registration = registerBoard(image)
@@ -76,7 +77,7 @@ export function parseColonist(image: RgbaImage): {
   if (panel) issues.push(...panel.issues)
   const candidates = panel ? detected.filter((entry) => used.has(entry.id)) : detected
   if (synthesizeRoster(pieces.players, candidates, issues)) ordered = false
-  const orderedPieces = orderPieces(pieces, issues)
+  const orderedPieces = orderPieces(pieces)
   return {
     board: {
       layout: 'standard4',
@@ -90,6 +91,7 @@ export function parseColonist(image: RgbaImage): {
     },
     roster: panel?.players ?? [],
     ordered,
+    unorderedPicks: orderedPieces.unorderedPicks,
     issues,
   }
 }

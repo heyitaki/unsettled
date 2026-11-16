@@ -39,10 +39,13 @@ function parseColonistScreenshot(image: RgbaImage): Extract<SourceParse, { ok: t
       game,
       issues: colonist.issues,
       read: {
-        roster: colonist.roster.length > 0,
+        roster: colonist.roster.length > 0 && colonist.roster.length === game.board.players.length,
         order: colonist.ordered,
         picks: false,
         hands,
+        unorderedPicks: colonist.unorderedPicks,
+        points: readPoints(colonist.roster),
+        knights: colonist.roster.filter((entry) => entry.knights !== null).map((entry) => entry.player.id),
       },
     }
   } catch {
@@ -229,25 +232,23 @@ function parseSettled(image: RgbaImage): SourceParse {
     const { game } = assembled
     const hands = applyPlayerStats(game, roster.players, issues)
 
-    for (const playerId of unorderedPlayerIds) {
-      const player = players.find((candidate) => candidate.id === playerId)
-      if (player) issues.push({
-        stage: 'pieces',
-        severity: 'warning',
-        message: `Could not determine settlement order for ${player.name}`,
-      })
-    }
     const read = {
       roster: roster.players.length > 0,
       order: roster.players.length > 0,
       picks: roster.players.length > 0 && ordered,
       hands,
+      unorderedPicks: unorderedPlayerIds,
+      points: readPoints(roster.players),
+      knights: [],
     }
     return { ok: true, game, issues, read }
   } catch {
     return failure('could not parse this image')
   }
 }
+
+const readPoints = (entries: readonly { player: Player; vp: number | null }[]): Record<string, number> =>
+  Object.fromEntries(entries.flatMap((entry) => entry.vp === null ? [] : [[entry.player.id, entry.vp]]))
 
 function applyPlayerStats(game: Game, entries: {
   player: Player

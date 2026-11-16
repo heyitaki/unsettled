@@ -146,7 +146,7 @@ describe('mergeScreenshot', () => {
   const blue = { name: 'Blue', color: PLAYER_PALETTE.blue }
   const white = { name: 'White', color: PLAYER_PALETTE.white }
   // Pills for everyone, every hand size read.
-  const pills = (hands = ['p1', 'p2', 'p3']) => ({ roster: true, order: true, picks: true, hands })
+  const pills = (hands = ['p1', 'p2', 'p3']) => ({ roster: true, order: true, picks: true, hands, unorderedPicks: [], points: {}, knights: [] })
   const empty = (): Board => ({ ...createBoard('standard4'), players: [], mePlayerId: null })
 
   // Saved: aki (red, claimed) and a renamed blue player, with hand-entered stats.
@@ -271,7 +271,7 @@ describe('mergeScreenshot', () => {
     board = addPlayer(board, { id: 's-blue', ...blue })
     board = placeBuilding(board, vertexA, 's-blue', 'settlement')
     board = placeBuilding(board, vertexB, 's-white', 'settlement')
-    const merged = mergeScreenshot(before, newGame(board), { roster: false, order: false, picks: false, hands: [] })
+    const merged = mergeScreenshot(before, newGame(board), { roster: false, order: false, picks: false, hands: [], unorderedPicks: [], points: {}, knights: [] })
     expect(merged.board.players).toEqual([...before.board.players, { id: 's-white', ...white }])
     expect(merged.board.buildings.map((building) => building.playerId)).toEqual(['b', 's-white'])
     expect(merged.board.mePlayerId).toBe('aki')

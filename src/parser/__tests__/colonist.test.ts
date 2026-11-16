@@ -220,9 +220,8 @@ function expectPanel(name: string, result: Extract<ReturnType<typeof parseScreen
     return [colors[index], [handUnknown, devCards, knights].join(' ')]
   }))).toEqual(Object.fromEntries(rows.map(([color, ...counts]) => [color, counts.join(' ')])))
   expect(result.issues.filter((issue) => issue.stage === 'stats')).toEqual([])
-  expect(result.issues.some((issue) => issue.stage === 'roster')).toBe(PANELS[name].first === null)
   // Colonist never shows which of a player's settlements came first.
-  expect(result.read).toEqual({
+  expect(result.read).toMatchObject({
     roster: true,
     order: PANELS[name].first !== null,
     picks: false,

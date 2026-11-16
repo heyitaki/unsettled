@@ -8,7 +8,7 @@ import {
   actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
-import { Ledger } from './Ledger'
+import { LedgerPanel } from './LedgerPanel'
 import { HistoryPanel, PlayerDisc } from './HistoryPanel'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { SpotTiles } from './SpotTiles'
@@ -213,12 +213,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     })
   }
   const claimNote = board.mePlayerId === null ? 'Claim yourself in Players to track your exact cards.' : null
-  const ledger = (
-    <section className={`${className} best-moves-panel ledger-panel`}>
-      <Ledger game={game} activeId={activeId} previous={tab.past.at(-1)} commit={(next) => dispatch({ type: 'commit-game', game: next, correction: true })} onUndo={() => dispatch({ type: 'undo' })}
-        historyOpen={state.historyOpen} viewedTurn={state.viewedTurn} onToggleHistory={() => dispatch({ type: 'history', open: !state.historyOpen })} />
-    </section>
-  )
+  const ledger = <LedgerPanel className={className} />
   if (state.historyOpen && game.turn) return <>{ledger}<HistoryPanel className={className} /></>
   if (!active || activeId === null || !viewed || viewedId === null) return (
     <>

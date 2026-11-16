@@ -16,6 +16,8 @@ import { DraftRecapPanel } from './DraftRecapPanel'
 import { SpotTiles } from './SpotTiles'
 import { ArrowLeftGlyph, ArrowRightGlyph, PencilGlyph, PhotoGlyph } from './glyphs'
 import { ImportDialog } from './ImportDialog'
+import { ImportReviewPanel } from './ImportReviewPanel'
+import { openImportQuestions } from './importQuestions'
 import { MenuSelect } from './MenuSelect'
 import { LISTED_PICKS } from './restMarks'
 import { revealBoardIfScrolledPast } from './revealBoard'
@@ -464,7 +466,9 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
   // dialog must outlive both to show any parse issues.
   return (
     <>
-      {!empty && draftIsComplete(board, analysis.draft)
+      {openImportQuestions(game)
+        ? <ImportReviewPanel key={state.activeTabId} className={className} />
+        : !empty && draftIsComplete(board, analysis.draft)
         ? awaitingFirstTurn(game) ? <DraftRecapPanel className={className} /> : <BestMovesPanel className={className} />
         : panel}
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}

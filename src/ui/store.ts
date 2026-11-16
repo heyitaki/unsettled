@@ -34,6 +34,7 @@ import {
   type WorkspaceTab,
 } from '../persistence/localStorage'
 import { savedMap, tabIsDirty } from './boardFiles'
+import { openImportQuestions } from './importQuestions'
 import { AUTOSAVE_DELAY, createLibraryAutosave } from './libraryAutosave'
 import type { ReportSave, SaveFailure } from './saveStatus'
 import {
@@ -310,6 +311,14 @@ function closeCorrectionRun(tab: TabState): Game[] {
   return (isEmptyCorrection(run) ? before : [...before, tab.game]).slice(-50)
 }
 
+// Edits can leave an import's questions with nothing to ask; its read is dropped then, so the Finish
+// import card never comes back later over the screenshot's old points.
+function settledImport(game: Game): Game {
+  if (!game.pendingImport || openImportQuestions(game)) return game
+  const { pendingImport: _read, ...rest } = game
+  return rest
+}
+
 export function reducer(state: StoreState, action: StoreAction): StoreState {
   let next = reduceAction(state, action)
   if (next.activeTabId !== state.activeTabId || ['commit', 'commit-game', 'undo', 'redo'].includes(action.type)) {
@@ -371,7 +380,7 @@ function reduceAction(state: StoreState, action: StoreAction): StoreState {
       return withViewedPick(state, action.slot)
     case 'commit':
       return updateActiveTab(state, (tab) => {
-        const game = trackAwards(tab.game, withBoard(tab.game, action.board))
+        const game = settledImport(trackAwards(tab.game, withBoard(tab.game, action.board)))
         if (game === tab.game) return tab
         return {
           ...tab,
@@ -387,7 +396,7 @@ function reduceAction(state: StoreState, action: StoreAction): StoreState {
         const next = action.correction ? action.game : closeCorrection(action.game)
         return {
           ...tab,
-          game: next.awards !== tab.game.awards ? initializeAwards(next) : trackAwards(tab.game, next),
+          game: settledImport(next.awards !== tab.game.awards ? initializeAwards(next) : trackAwards(tab.game, next)),
           // A whole game can carry a different roster (build mode's Cancel
           // restores one), so the id is reconciled as every other write is.
           activePlayerId: activePlayerFor(action.game.board, tab.activePlayerId),

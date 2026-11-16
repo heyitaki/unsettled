@@ -35,6 +35,16 @@ describe('screenshot parser', () => {
     expect(result.issues).toEqual([])
   })
 
+  it('reports unread picks and read points from the finished five-player draft', () => {
+    const result = parseScreenshot(image('../../../fixtures/settled-5p-midgame-hand.png'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const ids = result.game.board.players.map((player) => player.id)
+    expect(result.read.unorderedPicks).toEqual(ids)
+    expect(result.read.points).toEqual(Object.fromEntries(ids.map((id) => [id, 2])))
+    expect(result.read.knights).toEqual([])
+  })
+
   it.each([
     ['raw', '../../../fixtures/board-endgame-pieces.png'],
     ['sRGB', './derived/board-endgame-pieces.srgb.png'],

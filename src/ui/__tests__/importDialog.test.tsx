@@ -2,8 +2,9 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { addPlayer, createBoard, placeBuilding, randomizeBoard, renamePlayer, setMe } from '../../model/board'
-import { newGame, type Game } from '../../model/game'
+import { addPlayer, createBoard, placeBuilding, placeRoad, randomizeBoard, renamePlayer, setMe } from '../../model/board'
+import { adjustCounter, newGame, type Game, type ScreenshotRead } from '../../model/game'
+import { hexEdgeIds, hexVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { PLAYER_PALETTE, type Board } from '../../model/types'
 import type { SourceParse } from '../../parser'
@@ -89,8 +90,8 @@ describe('a screenshot of a board the library already holds', () => {
   }
   const button = (label: string) =>
     [...container.querySelectorAll('button')].find((candidate) => candidate.textContent === label)
-  const choose = async (game: Game) => {
-    parsed.result = { ok: true, game, issues: [], read: { roster: true, order: true, picks: true, hands: ['p1'] } }
+  const choose = async (game: Game, read: Partial<ScreenshotRead> = {}, issues: Extract<SourceParse, { ok: true }>['issues'] = []) => {
+    parsed.result = { ok: true, game, issues, read: { roster: true, order: true, picks: true, hands: ['p1'], unorderedPicks: [], points: {}, knights: [], ...read } }
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
     Object.defineProperty(input, 'files', { configurable: true, value: [new File([], 'later.png')] })
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
@@ -225,6 +226,110 @@ describe('a screenshot of a board the library already holds', () => {
     expect(button('Update')).toBeUndefined()
     expect(store.tabs).toHaveLength(tabs + 1)
     expect(activeTab(store).mapId).toBeNull()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  const unreadDraft = () => {
+    const hexes = terrain.hexes.map((hex) => hex.numberToken === 5 ? { ...hex, numberToken: 9 } : hex.numberToken === 9 ? { ...hex, numberToken: 5 } : hex)
+    let board = addPlayer(shot({ ...terrain, hexes }).board, { id: 'p2', name: 'Blue', color: PLAYER_PALETTE.blue })
+    board = placeBuilding(board, hexVertexIds({ q: 0, r: 2 })[3], 'p1', 'settlement')
+    return newGame(board)
+  }
+
+  it('lands unread picks at once in one tab with pendingImport and the parser guesses', async () => {
+    const game = unreadDraft()
+    const tabs = store.tabs.length
+    await choose(game, { order: false, picks: false, unorderedPicks: ['p1'] })
+    expect(store.tabs).toHaveLength(tabs + 1)
+    const tab = activeTab(store)
+    expect(tab.game.board).toEqual(game.board)
+    expect(tab.game.pendingImport).toEqual(parsed.result?.ok ? parsed.result.read : null)
+    expect(tab.past).toEqual([])
+    expect(container.querySelector('[aria-label="Second settlement"]')).toBeNull()
+    expect(button('Skip')).toBeUndefined()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('omits pendingImport when the screenshot leaves no questions', async () => {
+    await choose(unreadDraft())
+    expect(activeTab(store).game).not.toHaveProperty('pendingImport')
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('Import as new lands at once and keeps issues usable over the imported board', async () => {
+    const game = unreadDraft()
+    game.board.hexes = terrain.hexes
+    const tabs = store.tabs.length
+    await choose(game, { picks: false, unorderedPicks: ['p1'] }, [
+      { stage: 'tokens', severity: 'unreadable', message: 'Review token', ref: '0,0' },
+    ])
+    act(() => button('Import as new')!.click())
+    expect(store.tabs).toHaveLength(tabs + 1)
+    expect(activeTab(store).game.pendingImport?.unorderedPicks).toEqual(['p1'])
+    expect(container.querySelector('[aria-label="Second settlement"]')).toBeNull()
+    expect(close).not.toHaveBeenCalled()
+    act(() => container.querySelector<HTMLButtonElement>('.issue-list button')!.click())
+    expect(store.highlight).toEqual([{ ref: '0,0' }])
+  })
+
+  it.each([true, false])('updates from the latest saved game with only awards pending, roster read: %s', async (roster) => {
+    const saved = newGame(addPlayer(terrain, { id: 'blue', name: 'Bee', color: PLAYER_PALETTE.blue }))
+    act(() => dispatch({ type: 'tab-add', game: saved, title: 'Friday game', mapId }))
+    const before = activeTab(store)
+    let board: Board = { ...terrain, buildings: [], roads: [], players: [
+      { id: 'p1', name: 'Red', color: PLAYER_PALETTE.red },
+      { id: 'p2', name: 'Blue', color: PLAYER_PALETTE.blue },
+    ], mePlayerId: 'p1' }
+    for (const edge of hexEdgeIds({ q: 0, r: 0 }).slice(0, 5)) board = placeRoad(board, edge, 'p1')
+    for (const edge of hexEdgeIds({ q: 2, r: -2 }).slice(0, 5)) board = placeRoad(board, edge, 'p2')
+    await choose(newGame(board), { roster, order: false, picks: false, unorderedPicks: ['p1'], points: { p1: 2, p2: 2 } })
+    act(() => dispatch({ type: 'commit', board: renamePlayer(activeTab(store).game.board, 'aki', 'Aki R') }))
+    const latest = activeTab(store)
+    act(() => button('Update')!.click())
+    const tab = activeTab(store)
+    expect(tab.id).toBe(before.id)
+    expect(tab.game.board.players.map((player) => player.id)).toEqual(['aki', 'blue'])
+    expect(tab.game.board.players[0].name).toBe('Aki R')
+    expect(tab.game.awards).toEqual({ longestRoad: null, largestArmy: null })
+    expect(tab.game.pendingImport).toEqual({
+      roster: true, order: true, picks: true, unorderedPicks: [], points: { aki: 2, blue: 2 }, hands: ['aki'], knights: [],
+    })
+    expect(tab.past).toEqual([...latest.past, latest.game])
+    expect(container.querySelector('[aria-label="Longest road"]')).toBeNull()
+    act(() => dispatch({ type: 'undo' }))
+    expect(activeTab(store).game).toEqual(latest.game)
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('applies a forced award before landing and leaves no pendingImport', async () => {
+    await choose(unreadDraft(), { points: { p1: 2, p2: 2 } })
+    expect(activeTab(store).game.awards?.largestArmy).toBe('p2')
+    expect(activeTab(store).game.stats.p2.knights).toBe(3)
+    expect(activeTab(store).game).not.toHaveProperty('pendingImport')
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('remaps read knight ids into the open award review on Update', async () => {
+    const saved = adjustCounter(adjustCounter(newGame(addPlayer(terrain, {
+      id: 'blue', name: 'Bee', color: PLAYER_PALETTE.blue,
+    })), 'aki', 'knights', 3), 'blue', 'knights', 3)
+    act(() => dispatch({ type: 'tab-add', game: saved, title: 'Friday game', mapId }))
+    const before = activeTab(store)
+    const board = addPlayer(shot().board, { id: 'p2', name: 'Blue', color: PLAYER_PALETTE.blue })
+    await choose(newGame(board), { knights: ['p1', 'p2'] })
+    act(() => button('Update')!.click())
+    expect(activeTab(store).game.awards?.largestArmy).toBeNull()
+    expect(activeTab(store).game.pendingImport?.knights).toEqual(['aki', 'blue'])
+    expect(activeTab(store).past).toEqual([before.game])
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('clears an older pendingImport when an update leaves nothing unanswered', async () => {
+    const pendingImport = { roster: true, order: false, picks: false, hands: [], unorderedPicks: [], points: {}, knights: [] }
+    act(() => dispatch({ type: 'tab-add', game: { ...newGame(terrain), pendingImport }, title: 'Friday game', mapId }))
+    await choose(shot())
+    act(() => button('Update')!.click())
+    expect(activeTab(store).game).not.toHaveProperty('pendingImport')
     expect(close).toHaveBeenCalledOnce()
   })
 })

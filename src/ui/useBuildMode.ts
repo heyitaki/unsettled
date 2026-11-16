@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { openImportQuestions } from './importQuestions'
 import { buildSessionEnded, cancelTarget, openBuildSession, type BuildSession } from './buildMode'
 import { viewedPlayerId } from './draftSlots'
 import { restingMarks } from './restMarks'
@@ -14,9 +15,11 @@ export function useBuildMode() {
   const building = session !== null && !buildSessionEnded(session, tab)
   const { board } = tab.game
   const playerId = viewedPlayerId(board, state.viewedPick)
+  // The Finish import card stands in for Best picks, so its circles (and the draft taps they allow) wait for it.
+  const importing = useMemo(() => openImportQuestions(tab.game) !== null, [tab.game])
   const restMarks = useMemo(
-    () => building ? null : restingMarks(board, analysis, playerId),
-    [board, building, analysis, playerId],
+    () => building || importing ? null : restingMarks(board, analysis, playerId),
+    [board, building, importing, analysis, playerId],
   )
 
   // Switching tabs keeps the edits and drops the session without a restore.
