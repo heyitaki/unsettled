@@ -124,6 +124,6 @@ it('preserves resource colours in pressed tray cells, build costs and advice', a
   expect(container.querySelector('[aria-label="Gives wood"]')?.textContent).toBe('0')
   expect(container.querySelector('[aria-label="Gives brick"]')?.textContent).toBe('1')
   expect(getComputedStyle(container.querySelector('.move-resource .stat-icon')!).width).toBe('18px')
-  expect(getComputedStyle(container.querySelector('.move-resource')!).minHeight).toBe('36px')
+  expect(getComputedStyle(container.querySelector('.move-resource')!).minHeight).toBe('32px')
   expect(getComputedStyle(container.querySelector('.move-minus')!).width).toBe('20px')
 })
