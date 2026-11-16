@@ -9,7 +9,7 @@ import { useBoardActions } from './boardActions'
 import { HeaderControls, type HeaderPanel } from './HeaderControls'
 import { HeaderPopover } from './HeaderPopover'
 import { HistoryControls } from './HistoryControls'
-import { ImportButton, SharedImport } from './ImportDialog'
+import { ImportDialog, SharedImport } from './ImportDialog'
 import { useBuildMode } from './useBuildMode'
 import { GlobalNotice } from './GlobalNotice'
 import { MapsPanel } from './MapsPanel'
@@ -24,6 +24,7 @@ function Workspace() {
   const actions = useBoardActions(activeTab(state), dispatch)
   const { building, enter, done, cancel, toggle, restMarks } = useBuildMode()
   const [open, setOpen] = useState<{ panel: HeaderPanel; trigger: HTMLButtonElement } | null>(null)
+  const [importing, setImporting] = useState(false)
   useEffect(() => setOpen((current) => current?.panel === 'players' ? null : current), [building])
   const togglePanel = (panel: HeaderPanel, trigger: HTMLButtonElement) => {
     setOpen((current) => current?.panel === panel ? null : { panel, trigger })
@@ -34,11 +35,10 @@ function Workspace() {
         <Brand />
         <div className="head-controls">
           <HeaderControls building={building} onToggleMode={toggle} onOpen={togglePanel} openPanel={open?.panel ?? null} />
-          <ImportButton />
         </div>
         {open && (
           <HeaderPopover key={open.panel} label={open.panel === 'maps' ? 'Maps' : 'Players'} className={open.panel === 'maps' ? 'head-maps' : 'head-players'} trigger={open.trigger} onClose={() => setOpen((current) => current === open ? null : current)}>
-            {open.panel === 'maps' ? <MapsPanel /> : <PlayerPanel />}
+            {open.panel === 'maps' ? <MapsPanel onImport={() => { setOpen(null); setImporting(true) }} /> : <PlayerPanel />}
           </HeaderPopover>
         )}
       </header>
@@ -53,6 +53,9 @@ function Workspace() {
         </aside>
       </main>
       {actions.confirm}
+      {/* The dialog outlives the Maps popover that opens it. Closing Maps first returns
+          focus to the title button, which the dialog then restores on close. */}
+      {importing && <ImportDialog onClose={() => setImporting(false)} />}
       <SharedImport />
     </div>
   )

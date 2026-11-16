@@ -251,9 +251,18 @@ export function SharedImport({ onImported }: { onImported?: () => void }) {
   )
 }
 
+export function ImportHero({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="hero-import" onClick={onClick}>
+      <PhotoGlyph />
+      Import screenshot
+    </button>
+  )
+}
+
 /**
- * The hero button that opens the dialog: in the desktop's header controls row and
- * on the phone's Maps screen. `onNavigate` runs when the dialog closes after a
+ * The hero button and dialog on the phone's Maps screen.
+ * `onNavigate` runs when the dialog closes after a
  * parse has landed, however it closed, and never after a plain dismissal.
  */
 export function ImportButton({ onNavigate }: { onNavigate?: () => void }) {
@@ -261,17 +270,12 @@ export function ImportButton({ onNavigate }: { onNavigate?: () => void }) {
   const imported = useRef(false)
   return (
     <>
-      <button
-        type="button"
-        className="hero-import"
+      <ImportHero
         onClick={() => {
           imported.current = false
           setOpen(true)
         }}
-      >
-        <PhotoGlyph />
-        Import screenshot
-      </button>
+      />
       {open && (
         <ImportDialog
           onImported={() => { imported.current = true }}

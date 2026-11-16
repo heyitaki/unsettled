@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { newBoardTitle } from './boardFiles'
 import { ContextMenu } from './ContextMenu'
 import { DotsGlyph, PlusGlyph } from './glyphs'
+import { ImportHero } from './ImportDialog'
 import { LibraryLists } from './LibraryLists'
 import { useStore } from './store'
 import { useJsonFiles } from './useJsonFiles'
@@ -11,7 +12,7 @@ import { VersionLine } from './VersionLine'
  * The desktop's Library panel (spec D1), opened from the header title.
  * `LibraryLists` also supplies the phone's Maps screen.
  */
-export function MapsPanel() {
+export function MapsPanel({ onImport }: { onImport: () => void }) {
   const { state, dispatch } = useStore()
   const { items, fileInput } = useJsonFiles()
   const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
@@ -41,6 +42,7 @@ export function MapsPanel() {
           </button>
         </div>
       </div>
+      <ImportHero onClick={onImport} />
       <LibraryLists />
       <VersionLine />
       {fileInput}

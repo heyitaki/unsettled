@@ -4,7 +4,7 @@ import { seedBoard, seedUnclaimedRoster } from './seed'
 
 /**
  * The desktop layout (desktop spec, The model and D3): the board beside one
- * column, with Maps, Players, the pencil and the import in the header.
+ * column, with Maps, Players and the pencil beside the brand, and Import in Maps.
  */
 test.describe('desktop layout', () => {
   test.use({ viewport: { width: 1440, height: 900 } })
@@ -13,18 +13,16 @@ test.describe('desktop layout', () => {
   const title = (page: import('@playwright/test').Page) => page.locator(`${header} .head-title`)
   const pencil = (page: import('@playwright/test').Page) => page.locator(header).getByRole('button', { name: 'Edit the board' })
 
-  test('shows the board and one column, with the controls in a row under the brand', async ({ page }) => {
+  test('shows the board and one column, with the controls centred beside the brand', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('.analysis-panel')).toBeVisible()
     for (const hidden of ['.tools-panel', '.maps-panel', '.player-panel']) await expect(page.locator(hidden)).toBeHidden()
 
-    const brand = (await page.locator(`${header} h1`).boundingBox())!
-    const controls = [title(page), page.locator(header).getByRole('button', { name: 'Players' }), pencil(page), page.locator(header).getByRole('button', { name: 'Import screenshot' })]
+    const brand = (await page.locator(`${header} .brand-mark`).boundingBox())!
+    const controls = [title(page), page.locator(`${header} .head-dots`), pencil(page)]
     const boxes = []
     for (const control of controls) boxes.push((await control.boundingBox())!)
-    // One row, under the brand, in this order.
-    for (const box of boxes) expect(box.y).toBeGreaterThanOrEqual(brand.y + brand.height)
-    for (const box of boxes.slice(1)) expect(Math.abs(box.y + box.height / 2 - (boxes[0].y + boxes[0].height / 2))).toBeLessThan(2)
+    for (const box of boxes) expect(Math.abs(box.y + box.height / 2 - (brand.y + brand.height / 2))).toBeLessThanOrEqual(1)
     for (let index = 1; index < boxes.length; index += 1) expect(boxes[index].x).toBeGreaterThan(boxes[index - 1].x)
 
     // The board is 75% of the window height wide and the column sits against it.
@@ -35,6 +33,21 @@ test.describe('desktop layout', () => {
     expect(column.x).toBeGreaterThan(board.x + board.width)
     expect(column.x - (board.x + board.width)).toBeLessThan(24)
     expect(Math.round(column.width)).toBe(440)
+    await expect(page.locator('.head-controls .hero-import')).toHaveCount(0)
+    await title(page).click()
+    await expect(page.locator('.maps-panel').getByRole('button', { name: 'Import screenshot' })).toBeVisible()
+  })
+
+  test('Import closes Maps and Escape returns focus to the board title', async ({ page }) => {
+    await page.goto('')
+    await title(page).click()
+    await page.locator('.maps-panel').getByRole('button', { name: 'Import screenshot' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Maps', exact: true })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(title(page)).toBeFocused()
   })
 
   test('the pencil swaps the column for Board tools, Cancel restores the board and Done keeps it', async ({ page }) => {
@@ -124,15 +137,18 @@ test.describe('desktop layout', () => {
   })
 
   // A page even a few pixels taller than the window scrolls, and the header jitters with it.
-  test('a board capped by the window height leaves the page exactly one window tall', async ({ page }) => {
+  test('a board filling the window height leaves the page exactly one window tall', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 800 })
     await page.goto('')
     await seedBoard(page, JSON.parse(readFileSync('src/parser/__tests__/expected/board-draft-empty.json', 'utf8')))
     const canvas = page.locator('.board-canvas')
     await expect(canvas).toBeVisible()
-    // The tall six-seat board, so the height cap rather than the width sizes it.
-    const cap = await canvas.evaluate((element) => parseFloat(getComputedStyle(element).maxHeight))
-    expect(Math.abs((await canvas.boundingBox())!.height - cap)).toBeLessThan(1)
+    await expect(canvas).toHaveCSS('max-height', 'none')
+    const brand = (await page.locator(`${header} .brand-mark`).boundingBox())!
+    const board = (await canvas.boundingBox())!
+    const bottomPadding = await page.locator('.app-shell').evaluate((element) => parseFloat(getComputedStyle(element).paddingBottom))
+    expect(Math.abs(board.y - brand.y)).toBeLessThan(1)
+    expect(Math.abs(board.y + board.height + bottomPadding - 800)).toBeLessThan(1)
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800)
   })
 
@@ -159,7 +175,7 @@ test.describe('desktop layout', () => {
     expect(panel.y).toBeGreaterThanOrEqual(button.y + button.height)
     expect(Math.abs(panel.x + panel.width - (button.x + button.width))).toBeLessThan(2)
     expect(Math.round(panel.width)).toBe(372)
-    await page.locator(`${header} h1`).click()
+    await page.mouse.click(4, 450)
     await expect(players).toBeHidden()
   })
 

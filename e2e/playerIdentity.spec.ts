@@ -9,7 +9,8 @@ test('remembers a face across Settled screenshot imports', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   const players = page.locator('.player-panel')
 
-  await header.getByRole('button', { name: 'Import screenshot', exact: true }).click()
+  await header.locator('.head-title').click()
+  await page.locator('.maps-panel').getByRole('button', { name: 'Import screenshot', exact: true }).click()
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/settled-5p-draft-start.png'))
   await expect(header.locator('.head-title')).toHaveText('Board 2', { timeout: 30_000 })
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Done', exact: true }).click()
@@ -25,7 +26,8 @@ test('remembers a face across Settled screenshot imports', async ({ page }) => {
   })
   await expect(header.locator('.head-title')).toHaveText(`${today} alice, Brown, Blue, Red, Green`)
 
-  await header.getByRole('button', { name: 'Import screenshot', exact: true }).click()
+  await header.locator('.head-title').click()
+  await page.locator('.maps-panel').getByRole('button', { name: 'Import screenshot', exact: true }).click()
   await dialog.locator('input[type="file"]').setInputFiles(resolve('fixtures/settled-5p-midgame-hand.png'))
   await expect(header.locator('.head-title')).toHaveText(`${today} Green, Blue, Brown, Red, alice`, { timeout: 30_000 })
   if (await dialog.isVisible()) await dialog.getByRole('button', { name: 'Done', exact: true }).click()

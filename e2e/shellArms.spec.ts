@@ -89,9 +89,9 @@ test.describe('desktop', () => {
     const maps = page.locator('.maps-panel')
     const rows = maps.locator('.board-list .list-row')
     await expect(maps).toBeVisible()
-    // Import stays in the header while Maps is open.
-    await expect(page.locator('.site-header .hero-import')).toHaveText('Import screenshot')
-    await expect(maps.locator('.hero-import')).toHaveCount(0)
+    await expect(page.locator('.head-controls .hero-import')).toHaveCount(0)
+    await expect(maps.locator('.hero-import')).toHaveCount(1)
+    await expect(maps.locator('.hero-import')).toHaveText('Import screenshot')
     await expect(maps.locator('.group-label')).toContainText('Boards (1)')
     await expect(rows).toHaveCount(1)
     await expect(rows.first()).toHaveClass(/\bcurrent\b/)
