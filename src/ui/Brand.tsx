@@ -1,7 +1,7 @@
 import { useId } from 'react'
 import { TILE_COLORS } from './colors'
 
-/** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is public/favicon.svg: one sharp-cornered tile with three candidate corners sized by rank, the best in wood and the runners-up in wheat and the accent. The outline is a cool charcoal, softer than the page ink. */
+/** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is public/favicon.svg: one sharp-cornered tile with three candidate corners sized by rank, the best in wood and the runners-up in wheat and the accent. favicon.svg draws the outline in cool charcoal. In the app, editor.css strokes it in the surface cream for the sea-blue page. */
 export function Brand() {
   // The mask cuts the outline around each dot as favicon.svg does. The id is unique per mount and safe inside url().
   const cut = `brand-cut-${useId().replace(/[^a-zA-Z0-9]/g, '')}`

@@ -462,7 +462,7 @@ export function AnalysisPanel({ className = 'panel analysis-panel', onBuild }: {
     </section>
   )
   // The dialog is the panel's sibling at a fixed position: a successful import replaces the
-  // board, which drops the empty branch or swaps the whole panel for the recap or Best moves, and the
+  // board, which drops the empty branch or swaps the whole panel for Finish import, the recap or Best moves, and the
   // dialog must outlive both to show any parse issues.
   return (
     <>

@@ -1,6 +1,6 @@
 # Import questions
 
-After a screenshot parses, the import lands at once and the analysis column asks only what the screenshot could not show: the parsed Ledger, and under it an `Import questions` card, in place of Best picks, the draft recap or Best moves until the card is answered or skipped. Approved by the owner 2026-11-15 ("looks good. current award dialogs can be moved into here"); moved out of the import dialog into the column the same day ("we can see the imported board as well as the currently parsed ledger and the import questions are in a separate component under the ledger").
+After a screenshot parses, the import lands at once and the analysis column asks only what the screenshot could not show: the parsed Ledger, and under it a `Finish import` card (first built as `Import questions`), in place of Best picks, the draft recap or Best moves until the card is answered or skipped. Approved by the owner 2026-11-15 ("looks good. current award dialogs can be moved into here"); moved out of the import dialog into the column the same day ("we can see the imported board as well as the currently parsed ledger and the import questions are in a separate component under the ledger").
 
 ## Decisions
 
