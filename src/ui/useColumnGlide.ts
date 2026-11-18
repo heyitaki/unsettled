@@ -16,7 +16,8 @@ type Box = { top: number; left: number; width: number; height: number }
  * right rail is centred on the board, so any card growing, shrinking, arriving
  * or leaving moves every card in it. Each change glides the cards from where
  * they were drawn to their new places, eases a card's surface from its old
- * height to its new one, fades a new card in and fades a removed one out in place.
+ * height to its new one, and opens a new card or closes a removed one with the
+ * gap its neighbours glide around, fading it in or out.
  *
  * Positions come from offsetTop and offsetHeight, which ignore transforms. The
  * cards' animations touch only transform, opacity, clip-path and shadow, and the
@@ -53,7 +54,25 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       return glide && progress != null ? glide.from * (1 - progress) : 0
     }
 
-    const ghost = (card: HTMLElement, box: Box) => {
+    /**
+     * A card arriving or leaving shares its slot with neighbours still gliding toward or away
+     * from it, so it is clipped to the gap between them: the clip runs on the glides' own
+     * timing, its edges travel with the neighbours' edges, and the card opens or closes with
+     * the gap instead of passing under or over them. Each value is how far to clip from that end.
+     */
+    const band = (box: Box, above: Box | undefined, below: Box | undefined) => ({
+      top: above ? Math.min(Math.max(above.top + above.height - box.top, 0), box.height) : 0,
+      bottom: below ? Math.min(Math.max(box.top + box.height - below.top, 0), box.height) : 0,
+    })
+    type Gap = { top: number; bottom: number }
+    // An end that meets a neighbour clips at the card's own edge, so it tracks that neighbour from the first frame; a free end keeps its shadow.
+    const clip = (gap: Gap, at: Gap) => {
+      const end = (meets: number, value: number) => meets ? `${value}px` : `-${BLEED}px`
+      return `inset(${end(at.top, gap.top)} -${BLEED}px ${end(at.bottom, gap.bottom)} -${BLEED}px)`
+    }
+    const shut = { top: 0, bottom: 0 }
+
+    const ghost = (card: HTMLElement, box: Box, gap: Gap) => {
       const copy = card.cloneNode(true) as HTMLElement
       copy.dataset.ghost = ''
       copy.inert = true
@@ -62,6 +81,7 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       column.append(copy)
       // Under the cards, so the card replacing it fades in on top: a crossfade with no empty frame between them.
       copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DURATION, easing: 'ease-in' }).finished.finally(() => copy.remove())
+      copy.animate([{ clipPath: clip(shut, gap) }, { clipPath: clip(gap, gap) }], { duration: DURATION, easing: EASING })
     }
 
     /**
@@ -100,14 +120,21 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
     const settle = () => {
       const animate = !reducedMotion.matches && column.offsetWidth === width
       width = column.offsetWidth
-      const next = new Map<HTMLElement, Box>()
-      for (const card of cards()) {
-        const box = boxOf(card)
-        next.set(card, box)
+      const now = cards()
+      const next = new Map(now.map((card) => [card, boxOf(card)]))
+      // Where each card that stays is drawn right now, before any glide below restarts.
+      const drawn = new Map([...boxes].filter(([card]) => next.has(card)).map(([card, box]) => [card, { ...box, top: box.top + drawnOffset(card) }]))
+      const nearest = (order: HTMLElement[], index: number, step: 1 | -1, boxesOf: Map<HTMLElement, Box>) => {
+        for (let at = index + step; at >= 0 && at < order.length; at += step) if (boxesOf.has(order[at])) return boxesOf.get(order[at])
+      }
+      for (const [index, card] of now.entries()) {
+        const box = next.get(card)!
         if (!animate) continue
         const before = boxes.get(card)
         if (!before) {
-          card.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: DURATION, easing: EASING })
+          // Opens from the gap its neighbours are drawn around now, and fades in as it does.
+          const gap = band(box, nearest(now, index, -1, drawn), nearest(now, index, 1, drawn))
+          card.animate([{ opacity: 0, clipPath: clip(gap, gap) }, { opacity: 1, clipPath: clip(shut, gap) }], { duration: DURATION, easing: EASING })
           continue
         }
         // Only a layout move starts a glide: a settle that moved nothing leaves the one in flight to finish its easing.
@@ -115,13 +142,16 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
         const shift = before.top + drawnOffset(card) - box.top
         if (moved && Math.abs(shift) > .5) {
           glides.get(card)?.animation.cancel()
-          // Added to any entrance still running, so the two never fight over the transform.
-          const animation = card.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }], { duration: DURATION, easing: EASING, composite: 'add' })
+          const animation = card.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }], { duration: DURATION, easing: EASING })
           glides.set(card, { animation, from: shift })
         }
         if (Math.abs(box.height - before.height) > .5) resurface(card, box, before, moved ? shift : 0)
       }
-      if (animate) for (const [card, box] of boxes) if (!next.has(card)) ghost(card, box)
+      if (animate) {
+        // Closes onto the gap its neighbours glide to.
+        const order = [...boxes.keys()]
+        for (const [index, card] of order.entries()) if (!next.has(card)) ghost(card, boxes.get(card)!, band(boxes.get(card)!, nearest(order, index, -1, next), nearest(order, index, 1, next)))
+      }
       boxes = next
       top = column.offsetTop
     }

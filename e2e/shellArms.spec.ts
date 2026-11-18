@@ -22,17 +22,20 @@ const snap = (page: Page, name: string, fullPage = false) =>
 
 const pencil = (page: Page) => page.locator('.head-controls').getByRole('button', { name: 'Edit the board' })
 
+// The desktop column glides its cards into place and fades the leaving one out under them; measure and query once they land,
+// or a locator meets the leaving copy too. Only the unclaimed pill's nudge loops forever; a glide a later one replaces is cancelled.
+const columnSettled = (page: Page) => page.evaluate(() => Promise.all((document.querySelector('.right-rail')?.getAnimations({ subtree: true }) ?? [])
+  .filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished.catch(() => {}))))
+
 async function openBuild(page: Page) {
   if (await pencil(page).getAttribute('aria-pressed') !== 'true') await pencil(page).click()
+  await columnSettled(page)
 }
 
 async function openMaps(page: Page) {
   if (!await page.locator('.maps-panel').isVisible()) await page.locator('.head-controls .head-title').click()
+  await columnSettled(page)
 }
-
-// The desktop column glides its cards into place; measure them once they land. Only the unclaimed pill's nudge loops forever.
-const columnSettled = (page: Page) => page.evaluate(() => Promise.all((document.querySelector('.right-rail')?.getAnimations({ subtree: true }) ?? [])
-  .filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished)))
 
 async function openPlayers(page: Page) {
   if (!await page.locator('.player-panel').isVisible()) await page.locator('.head-controls').getByRole('button', { name: 'Players' }).click()
@@ -43,6 +46,7 @@ async function randomize(page: Page) {
   await openBuild(page)
   await page.getByRole('button', { name: 'Randomize', exact: true }).click()
   await page.locator('.tools-panel').getByRole('button', { name: 'Done', exact: true }).click()
+  await columnSettled(page)
 }
 
 test.describe('desktop', () => {

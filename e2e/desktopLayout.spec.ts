@@ -185,16 +185,29 @@ test.describe('desktop layout', () => {
     expect(Math.abs(panel.y - (button.y + button.height + 12))).toBeLessThanOrEqual(1)
     expect(Math.abs(analysis.y - (panel.y + panel.height + 12))).toBeLessThanOrEqual(1)
     expect(Math.round(panel.width)).toBe(440)
-    // The card fades out where it stood: its copy keeps the card's box, read before the card left the page.
-    const ghost = await pill.evaluate(async (button) => {
+    // The card fades out where it stood (its copy keeps the card's box, read before the card left the page)
+    // and closes with the gap, so the controls gliding down never pass over it.
+    const { ghost, clearance } = await pill.evaluate(async (button) => {
       (button as HTMLElement).click()
       await new Promise((resolve) => setTimeout(resolve, 0))
       const copy = document.querySelector('.right-rail > .player-panel[data-ghost]')
-      return copy && JSON.parse(JSON.stringify(copy.getBoundingClientRect()))
+      const controls = document.querySelector('.right-rail > .head-controls')!
+      if (!copy) return { ghost: null, clearance: [] }
+      const ghost = JSON.parse(JSON.stringify(copy.getBoundingClientRect())) as DOMRect
+      const clearance: number[] = []
+      for (let frame = 0; frame < 10; frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        if (!copy.isConnected) break
+        const cut = parseFloat(/^inset\(([^ )]*)/.exec(getComputedStyle(copy).clipPath)?.[1] ?? '0')
+        clearance.push(copy.getBoundingClientRect().top + Math.max(0, cut) - controls.getBoundingClientRect().bottom)
+      }
+      return { ghost, clearance }
     })
     expect(ghost).not.toBeNull()
-    expect(Math.abs(ghost.x - panel.x)).toBeLessThan(1)
-    expect(Math.abs(ghost.width - panel.width)).toBeLessThan(1)
+    expect(Math.abs(ghost!.x - panel.x)).toBeLessThan(1)
+    expect(Math.abs(ghost!.width - panel.width)).toBeLessThan(1)
+    expect(clearance.length).toBeGreaterThan(3)
+    for (const gap of clearance) expect(gap).toBeGreaterThanOrEqual(-1)
     await expect(players).toBeHidden()
   })
 
