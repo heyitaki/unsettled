@@ -89,7 +89,7 @@ const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 const TIER_SCALE: Record<BuildingTier, number> = { settlement: 0.72, city: 0.828, superCity: 0.972 }
 const TIER_BASE_Y: Record<BuildingTier, number> = { settlement: 13, city: 12.2, superCity: 11.3 }
 // How far a number's baseline sits above that footing, in board units.
-const LABEL_LIFT = 3.7
+const LABEL_LIFT = 4.5
 // Conservative half-extent a placed building reaches from its vertex, across all
 // tiers and scales, outline included. Used to keep edge pieces in-frame.
 const PIECE_REACH = 22
