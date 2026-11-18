@@ -4,32 +4,36 @@ import { seedBoard, seedUnclaimedRoster } from './seed'
 
 /**
  * The desktop layout (desktop spec, The model and D3): the board beside one
- * column, with Maps, Players and the pencil beside the brand, and Import in Maps.
+ * column centred on the window, with Maps, Players and the pencil heading the
+ * column, Maps and Players opening as cards in it, and Import in Maps.
  */
 test.describe('desktop layout', () => {
   test.use({ viewport: { width: 1440, height: 900 } })
 
   const header = '.site-header'
-  const title = (page: import('@playwright/test').Page) => page.locator(`${header} .head-title`)
-  const pencil = (page: import('@playwright/test').Page) => page.locator(header).getByRole('button', { name: 'Edit the board' })
+  const controls = '.head-controls'
+  const title = (page: import('@playwright/test').Page) => page.locator(`${controls} .head-title`)
+  const pencil = (page: import('@playwright/test').Page) => page.locator(controls).getByRole('button', { name: 'Edit the board' })
 
-  test('shows the board and one column, with the controls centred beside the brand', async ({ page }) => {
+  test('shows the board and one column centred on the window, with the controls heading the column', async ({ page }) => {
     await page.goto('')
     await expect(page.locator('.analysis-panel')).toBeVisible()
     for (const hidden of ['.tools-panel', '.maps-panel', '.player-panel']) await expect(page.locator(hidden)).toBeHidden()
+    await expect(page.locator(`${header} ${controls}`)).toHaveCount(0)
 
-    const brand = (await page.locator(`${header} .brand-mark`).boundingBox())!
-    const controls = [title(page), pencil(page), page.locator(`${header} .head-dots`)]
+    const items = [title(page), pencil(page), page.locator(`${controls} .head-dots`)]
     const boxes = []
-    for (const control of controls) boxes.push((await control.boundingBox())!)
-    for (const box of boxes) expect(Math.abs(box.y + box.height / 2 - (brand.y + brand.height / 2))).toBeLessThanOrEqual(1)
+    for (const item of items) boxes.push((await item.boundingBox())!)
+    for (const box of boxes) expect(Math.abs(box.y + box.height / 2 - (boxes[0].y + boxes[0].height / 2))).toBeLessThanOrEqual(1)
     for (let index = 1; index < boxes.length; index += 1) expect(boxes[index].x).toBeGreaterThan(boxes[index - 1].x)
 
-    // The board is 75% of the window height wide and the column sits against it.
+    // The board's box and the column, controls included, share the window's vertical centre; the board is as wide as its box is tall.
     const board = (await page.locator('.board-canvas').boundingBox())!
     const column = (await page.locator('.analysis-panel').boundingBox())!
-    expect(Math.abs(board.width - 0.75 * 900)).toBeLessThan(2)
-    expect(board.y + board.height).toBeLessThanOrEqual(900)
+    expect(Math.abs(board.y + board.height / 2 - 450)).toBeLessThan(1)
+    expect(Math.abs((boxes[0].y + column.y + column.height) / 2 - 450)).toBeLessThan(1)
+    expect(Math.abs(column.y - (boxes[0].y + boxes[0].height + 12))).toBeLessThan(1)
+    expect(Math.abs(board.width - board.height)).toBeLessThan(2)
     expect(column.x).toBeGreaterThan(board.x + board.width)
     expect(column.x - (board.x + board.width)).toBeLessThan(24)
     expect(Math.round(column.width)).toBe(440)
@@ -44,7 +48,7 @@ test.describe('desktop layout', () => {
     await page.locator('.maps-panel').getByRole('button', { name: 'Import screenshot' }).click()
     const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
     await expect(dialog).toBeVisible()
-    await expect(page.getByRole('dialog', { name: 'Maps', exact: true })).toHaveCount(0)
+    await expect(page.locator('.maps-panel')).toHaveCount(0)
     await page.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)
     await expect(title(page)).toBeFocused()
@@ -90,16 +94,17 @@ test.describe('desktop layout', () => {
     await expect(pencil(page)).toHaveAttribute('aria-pressed', 'true')
   })
 
-  test('the title opens Maps under itself, and Escape closes it and returns the focus', async ({ page }) => {
+  test('the title opens Maps in place of the column\'s cards, and Escape closes it and returns the focus', async ({ page }) => {
     await page.goto('')
     const maps = page.locator('.maps-panel')
     await title(page).click()
     await expect(maps.locator('h2')).toHaveText('Maps')
+    await expect(page.locator('.analysis-panel')).toBeHidden()
     const button = (await title(page).boundingBox())!
     const panel = (await maps.boundingBox())!
-    expect(panel.y).toBeGreaterThanOrEqual(button.y + button.height)
-    expect(Math.abs(panel.x - button.x)).toBeLessThan(2)
-    expect(Math.round(panel.width)).toBe(400)
+    expect(Math.abs(panel.y - (button.y + button.height + 12))).toBeLessThan(1)
+    expect(Math.abs(panel.x - button.x)).toBeLessThan(1)
+    expect(Math.round(panel.width)).toBe(440)
     await maps.getByRole('button', { name: 'New board' }).click()
     await expect(title(page)).toHaveText('Board 2')
     await expect(maps).toBeVisible()
@@ -146,10 +151,9 @@ test.describe('desktop layout', () => {
     await expect(canvas).toHaveCSS('max-height', 'none')
     const brand = (await page.locator(`${header} .brand-mark`).boundingBox())!
     const board = (await canvas.boundingBox())!
-    const bottomPadding = await page.locator('.app-shell').evaluate((element) => parseFloat(getComputedStyle(element).paddingBottom))
-    // The board starts under the header's 12px bottom margin, so it centres below the header.
+    // The board starts under the header's 12px bottom margin and keeps the same room below, so it centres on the window.
     expect(Math.abs(board.y - (brand.y + brand.height + 12))).toBeLessThan(1)
-    expect(Math.abs(board.y + board.height + bottomPadding - 800)).toBeLessThan(1)
+    expect(Math.abs(800 - (board.y + board.height) - board.y)).toBeLessThan(1)
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800)
   })
 
@@ -164,20 +168,41 @@ test.describe('desktop layout', () => {
     }
   })
 
-  test('the player pill opens Players under itself, and a click outside closes it', async ({ page }) => {
+  test('the player pill adds Players above the column\'s cards, and a second click closes it', async ({ page }) => {
     await page.goto('')
     await seedUnclaimedRoster(page)
     const players = page.locator('.player-panel')
-    const pill = page.locator(header).getByRole('button', { name: 'Players' })
+    const pill = page.locator(controls).getByRole('button', { name: 'Players' })
     await pill.click()
     await expect(players.locator('h2')).toHaveText('Players')
+    await expect(page.locator('.analysis-panel')).toBeVisible()
+    // The cards glide into place; only the unclaimed pill's nudge loops forever.
+    await page.locator('.right-rail').evaluate((node) => Promise.all(node.getAnimations({ subtree: true })
+      .filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished)))
     const button = (await pill.boundingBox())!
     const panel = (await players.boundingBox())!
-    expect(panel.y).toBeGreaterThanOrEqual(button.y + button.height)
-    expect(Math.abs(panel.x + panel.width - (button.x + button.width))).toBeLessThan(2)
-    expect(Math.round(panel.width)).toBe(372)
-    await page.mouse.click(4, 450)
+    const analysis = (await page.locator('.analysis-panel').boundingBox())!
+    expect(Math.abs(panel.y - (button.y + button.height + 12))).toBeLessThanOrEqual(1)
+    expect(Math.abs(analysis.y - (panel.y + panel.height + 12))).toBeLessThanOrEqual(1)
+    expect(Math.round(panel.width)).toBe(440)
+    await pill.click()
     await expect(players).toBeHidden()
+  })
+
+  // The column scrolls rather than cut a card short, and the page itself never scrolls.
+  test('a column taller than the window scrolls whole, with Players at its full height', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 560 })
+    await page.goto('')
+    await seedUnclaimedRoster(page)
+    await page.locator(controls).getByRole('button', { name: 'Players' }).click()
+    const players = page.locator('.player-panel')
+    await expect(players).toBeVisible()
+    expect(await players.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeLessThanOrEqual(1)
+    expect(await page.locator('.right-rail').evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true)
+    expect(await page.evaluate(() => [document.documentElement.scrollHeight, document.documentElement.scrollWidth])).toEqual([560, 1440])
+    await page.locator('.right-rail').evaluate((node) => { node.scrollTop = node.scrollHeight })
+    const analysis = (await page.locator('.analysis-panel').boundingBox())!
+    expect(analysis.y + analysis.height).toBeLessThanOrEqual(560)
   })
 
   test('a long title truncates beside six players and the title stays aligned with the column', async ({ page }) => {
@@ -190,20 +215,22 @@ test.describe('desktop layout', () => {
     await page.keyboard.type('Screenshot 2026-07-23 at 12.41.07 with a much longer name')
     await page.keyboard.press('Enter')
     await title(page).click()
-    const name = page.locator(`${header} .head-title-name`)
+    const name = page.locator(`${controls} .head-title-name`)
     await expect(name).toHaveText(/much longer name/)
     expect(await name.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
     const titleBox = (await title(page).boundingBox())!
-    const players = (await page.locator(`${header} .head-player-controls`).boundingBox())!
+    const players = (await page.locator(`${controls} .head-player-controls`).boundingBox())!
     const column = (await page.locator('.analysis-panel').boundingBox())!
     expect(Math.abs(titleBox.x - column.x)).toBeLessThan(1)
     expect(titleBox.x + titleBox.width).toBeLessThan(players.x)
     expect(Math.abs(players.x + players.width - (column.x + column.width))).toBeLessThan(1)
   })
 
-  test('at 900px wide the column wraps under the board', async ({ page }) => {
+  test('at 900px wide the column wraps under the board and the controls return to the header', async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 900 })
     await page.goto('')
+    await expect(page.locator(`${header} ${controls}`)).toBeVisible()
+    await expect(page.locator(`.right-rail ${controls}`)).toHaveCount(0)
     const board = (await page.locator('.board-canvas').boundingBox())!
     const column = (await page.locator('.analysis-panel').boundingBox())!
     expect(column.y).toBeGreaterThanOrEqual(board.y + board.height)

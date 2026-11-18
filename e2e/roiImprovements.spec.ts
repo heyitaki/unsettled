@@ -19,7 +19,7 @@ async function randomize(page: Page) {
 
 test('screenshot import contains keyboard focus and Escape restores the opener', async ({ page }) => {
   await page.goto('')
-  const opener = page.locator('.site-header .head-title')
+  const opener = page.locator('.head-controls .head-title')
   await opener.click()
   await page.locator('.maps-panel').getByRole('button', { name: 'Import screenshot', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })

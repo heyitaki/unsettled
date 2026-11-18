@@ -26,7 +26,7 @@ test('a shared screenshot opens as a new board, and sharing it again updates tha
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('')
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
-  const title = page.locator('.site-header').getByRole('button', { name: IMPORT_TITLE, exact: true })
+  const title = page.locator('.head-controls').getByRole('button', { name: IMPORT_TITLE, exact: true })
 
   await share(page)
   await expect(title).toBeVisible({ timeout: 30_000 })

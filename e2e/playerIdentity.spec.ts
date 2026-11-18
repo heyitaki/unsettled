@@ -5,7 +5,7 @@ import { PLAYER_PALETTE } from '../src/model/types'
 test('remembers a face across Settled screenshot imports', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('')
-  const header = page.locator('.site-header')
+  const header = page.locator('.head-controls')
   const dialog = page.getByRole('dialog', { name: 'Import screenshot' })
   const players = page.locator('.player-panel')
 

@@ -36,10 +36,11 @@ function Workspace() {
   const togglePanel = (panel: HeaderPanel, trigger: HTMLButtonElement) => {
     setOpen((current) => current?.panel === panel ? null : { panel, trigger })
   }
-  const maps = <MapsPanel onImport={() => { setOpen(null); setImporting(true) }} />
+  // Focus moves to the title first, so the dialog returns it there: the Import button unmounts with the panel.
+  const maps = <MapsPanel onImport={() => { open?.trigger.focus(); setOpen(null); setImporting(true) }} />
   const controls = (
     <div className="head-controls">
-      <HeaderControls building={building} onToggleMode={toggle} onOpen={togglePanel} openPanel={open?.panel ?? null} />
+      <HeaderControls building={building} onToggleMode={() => { setOpen(null); toggle() }} onOpen={togglePanel} openPanel={open?.panel ?? null} />
     </div>
   )
   return (
@@ -59,7 +60,17 @@ function Workspace() {
           <BoardCanvas restMarks={restMarks} />
           {!building && <HistoryControls />}
         </div>
-        <aside className="right-rail" ref={rail}>
+        <aside
+          className="right-rail"
+          ref={rail}
+          // Escape closes a column panel as it closes a popover, unless a field, menu or dialog inside handled it.
+          onKeyDown={(event) => {
+            if (stacked || !open || event.key !== 'Escape' || event.defaultPrevented) return
+            if (event.target instanceof Element && event.target.closest('dialog, [popover]')) return
+            open.trigger.focus()
+            setOpen(null)
+          }}
+        >
           {!stacked && controls}
           {/* Side by side, Maps takes the column like Board tools and Players joins it above the other cards. */}
           {!stacked && open?.panel === 'players' && <PlayerPanel />}

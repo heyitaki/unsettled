@@ -89,7 +89,7 @@ button.danger { color: var(--danger); }
 .icon-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-control); }
 .icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
 .head-popover { display: flex; flex-direction: column; position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + 8px); margin: 0; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); bottom: 16px; height: fit-content; overflow-y: auto; overscroll-behavior: contain; }
-.head-popover .menu-wrap > .menu-popup { position: fixed; }
+:is(.head-popover, .right-rail) .menu-wrap > .menu-popup { position: fixed; }
 .head-maps { left: anchor(left); width: 400px; }
 .head-players { right: anchor(right); width: 372px; }
 .tools-panel { padding: 0; overflow: hidden; }

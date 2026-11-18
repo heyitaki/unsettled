@@ -20,18 +20,23 @@ import { seedBoard, seedSavedMaps, seedUnclaimedRoster, todayTitle, UNCLAIMED_RO
 const snap = (page: Page, name: string, fullPage = false) =>
   page.screenshot({ path: `test-results/phone/${name}.png`, fullPage, animations: 'disabled' })
 
-const pencil = (page: Page) => page.locator('.site-header').getByRole('button', { name: 'Edit the board' })
+const pencil = (page: Page) => page.locator('.head-controls').getByRole('button', { name: 'Edit the board' })
 
 async function openBuild(page: Page) {
   if (await pencil(page).getAttribute('aria-pressed') !== 'true') await pencil(page).click()
 }
 
 async function openMaps(page: Page) {
-  if (!await page.locator('.maps-panel').isVisible()) await page.locator('.site-header .head-title').click()
+  if (!await page.locator('.maps-panel').isVisible()) await page.locator('.head-controls .head-title').click()
 }
 
+// The desktop column glides its cards into place; measure them once they land. Only the unclaimed pill's nudge loops forever.
+const columnSettled = (page: Page) => page.evaluate(() => Promise.all((document.querySelector('.right-rail')?.getAnimations({ subtree: true }) ?? [])
+  .filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished)))
+
 async function openPlayers(page: Page) {
-  if (!await page.locator('.player-panel').isVisible()) await page.locator('.site-header').getByRole('button', { name: 'Players' }).click()
+  if (!await page.locator('.player-panel').isVisible()) await page.locator('.head-controls').getByRole('button', { name: 'Players' }).click()
+  await columnSettled(page)
 }
 
 async function randomize(page: Page) {

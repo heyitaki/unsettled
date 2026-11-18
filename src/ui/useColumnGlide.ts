@@ -5,6 +5,8 @@ const EASING = 'cubic-bezier(.2, .8, .2, 1)'
 // Clip insets this far outside the card leave its focus rings and overhangs unclipped while the reveal runs.
 const BLEED = 60
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
+// A roster row drag in progress, during which the column holds still.
+const HOLD = '.reordering'
 
 type Box = { top: number; height: number }
 
@@ -19,6 +21,11 @@ type Box = { top: number; height: number }
  * cards' animations touch only transform, opacity, clip-path and shadow, and the
  * surfaces and ghosts are absolutely positioned outside the observed cards, so
  * an animation never changes the column's layout or re-triggers the observers.
+ *
+ * While a row is dragged the column holds still: a drag adds a trash row, and
+ * re-centring would carry the grabbed row out from under the pointer, which
+ * makes Chromium cancel the drag. Pinned by a translate, the column grows
+ * downward instead and glides back to centre when the drag ends.
  */
 export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: boolean) {
   useLayoutEffect(() => {
@@ -29,9 +36,15 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
     const surfaces = new WeakMap<Element, { backdrop: HTMLElement; animations: Animation[] }>()
     let boxes = new Map<HTMLElement, Box>()
     let width = column.offsetWidth
+    // The column's layout top at the last settle, and how far a hold draws it from its layout.
+    let top = column.offsetTop
+    let pin = 0
+    let holding = false
 
     const cards = () => [...column.children].filter((child): child is HTMLElement => child instanceof HTMLElement && child.dataset.ghost === undefined)
-    const boxOf = (card: HTMLElement): Box => ({ top: column.offsetTop + card.offsetTop, height: card.offsetHeight })
+    // Where the column is drawn, so boxes taken before and during a hold compare as drawn.
+    const origin = () => column.offsetTop + pin
+    const boxOf = (card: HTMLElement): Box => ({ top: origin() + card.offsetTop, height: card.offsetHeight })
     // How far a glide still in flight draws its card from its old layout box. The easing is the effect's own, so the progress is already eased.
     const drawnOffset = (card: HTMLElement) => {
       const glide = glides.get(card)
@@ -44,7 +57,7 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       copy.dataset.ghost = ''
       copy.inert = true
       copy.setAttribute('aria-hidden', 'true')
-      Object.assign(copy.style, { position: 'absolute', left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px`, top: `${box.top - column.offsetTop}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '-1' })
+      Object.assign(copy.style, { position: 'absolute', left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px`, top: `${box.top - origin()}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '-1' })
       column.append(copy)
       // Under the cards, so the card replacing it fades in on top: a crossfade with no empty frame between them.
       copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DURATION, easing: 'ease-in' }).finished.finally(() => copy.remove())
@@ -65,7 +78,7 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       const backdrop = document.createElement('div')
       backdrop.dataset.ghost = ''
       backdrop.setAttribute('aria-hidden', 'true')
-      Object.assign(backdrop.style, { position: 'absolute', left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px`, top: `${box.top - column.offsetTop}px`, background: style.backgroundColor, borderRadius: style.borderRadius, boxShadow: style.boxShadow, pointerEvents: 'none', zIndex: '-1' })
+      Object.assign(backdrop.style, { position: 'absolute', left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px`, top: `${card.offsetTop}px`, background: style.backgroundColor, borderRadius: style.borderRadius, boxShadow: style.boxShadow, pointerEvents: 'none', zIndex: '-1' })
       column.append(backdrop)
       const timing = { duration: DURATION, easing: EASING }
       const animations = [
@@ -109,6 +122,15 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       }
       if (animate) for (const [card, box] of boxes) if (!next.has(card)) ghost(card, box)
       boxes = next
+      top = column.offsetTop
+    }
+
+    // Runs as a microtask after the commit that starts or ends a drag, before Chromium hit-tests the drag origin or the frame paints.
+    const hold = () => {
+      if (holding === (column.querySelector(HOLD) !== null)) return
+      holding = !holding
+      pin = holding ? top - column.offsetTop : 0
+      column.style.translate = holding ? `0 ${pin}px` : ''
     }
 
     const resize = new ResizeObserver(settle)
@@ -121,6 +143,8 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
     boxes = new Map(cards().map((card) => [card, boxOf(card)]))
     watch()
     mutations.observe(column, { childList: true })
-    return () => { resize.disconnect(); mutations.disconnect() }
+    const holds = new MutationObserver(hold)
+    holds.observe(column, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
+    return () => { resize.disconnect(); mutations.disconnect(); holds.disconnect(); column.style.translate = '' }
   }, [ref, enabled])
 }
