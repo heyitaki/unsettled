@@ -31,17 +31,18 @@ button { color: inherit; }
 button, input, select, label.drop-zone { touch-action: manipulation; }
 
 /* 950 = 494 + 16 + 440 for the grid, and 456 = 440 + 16 for the column and gap, so the board is 75% of the window height wide. */
-.app-shell { --shell-max: max(950px, calc(75vh + 456px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
+:root { --shell-top: max(clamp(16px, 4vh, 48px), env(safe-area-inset-top)); }
+.app-shell { --shell-max: max(950px, calc(75vh + 456px)); --shell-gutter: min(clamp(16px, 3%, 44px), calc((100% - 950px) / 2)); min-height: 100vh; min-height: 100dvh; padding: var(--shell-top) max(var(--shell-gutter), env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(var(--shell-gutter), env(safe-area-inset-left)); }
 .site-header { position: relative; z-index: 3; pointer-events: none; max-width: var(--shell-max); margin: 12px auto 12px; display: flex; align-items: center; gap: 10px 13px; }
 .site-header > .head-popover, .head-controls > * { pointer-events: auto; }
 .site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 31px/1 Georgia, serif; letter-spacing: -.04em; color: var(--surface); }
-.site-header h1 { font-size: 38px; }
+.site-header h1 { font-size: 44px; }
 .brand-mark { flex: none; width: 30px; height: 30px; }
-.site-header .brand-mark { width: 44px; height: 44px; }
+.site-header .brand-mark { width: 52px; height: 52px; }
 
 .workspace { max-width: var(--shell-max); margin: auto; display: grid; grid-template-columns: minmax(494px, 1fr) 440px; gap: 16px; align-items: start; }
-/* The 34px controls end 5px above the 44px header row's bottom, leaving a 12px card gap. */
-.right-rail { min-width: 0; margin-top: -5px; }
+/* The 34px controls end 9px above the 52px header row's bottom, leaving a 12px card gap. */
+.right-rail { min-width: 0; margin-top: -9px; }
 .maps-panel { display: flex; flex-direction: column; gap: 14px; flex: 0 1 auto; min-height: 0; }
 .maps-panel > :not(.library-boards) { flex: none; }
 .maps-panel .panel-heading { margin-bottom: 0; }
@@ -49,8 +50,7 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 /* Pulls the forward arrow's tip, not its tap box, to the content edge. */
 .analysis-panel .panel-actions { margin-right: -9.5px; }
 .panel-dots { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--glyph); }
-/* Lift through the 44px header row and its 12px gap so the board starts at the header's top. */
-.center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; margin-top: -56px; }
+.center-column { position: sticky; top: 16px; min-width: 0; display: grid; gap: 8px; }
 .panel { padding: 17px; background: var(--surface); border: 0; border-radius: var(--radius); box-shadow: var(--shadow-card); }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; margin-bottom: 11px; }
 .panel-heading h2 { margin: 0; font: 700 21px/1.1 Georgia, serif; }
@@ -84,7 +84,7 @@ button.danger { color: var(--danger); }
 @keyframes head-nudge { 0%, 82%, 100% { box-shadow: var(--shadow-control), 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 88% { box-shadow: var(--shadow-control), 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); } }
 .icon-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-control); }
 .icon-btn[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
-.head-popover { display: flex; flex-direction: column; position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + 8px); margin: 0; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); max-height: calc(100dvh - 89px); overflow-y: auto; overscroll-behavior: contain; }
+.head-popover { display: flex; flex-direction: column; position: fixed; position-anchor: auto; inset: auto; top: calc(anchor(bottom) + 8px); margin: 0; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); max-height: calc(100dvh - var(--shell-top) - 81px); overflow-y: auto; overscroll-behavior: contain; }
 .head-popover .menu-wrap > .menu-popup { position: fixed; }
 .head-maps { left: anchor(left); width: 400px; }
 .head-players { right: anchor(right); width: 372px; }
@@ -153,8 +153,8 @@ button.danger { color: var(--danger); }
 .sheet-menu > button:hover, .sheet-menu > button:focus-visible { color: var(--ink); background: var(--tint); }
 .sheet-menu .menu-icon { flex: none; width: 17px; height: 17px; display: grid; place-items: center; color: var(--glyph); }
 .sheet-menu-narrow { width: 186px; }
-/* From the header row's top (shell padding plus its 12px margin) to the shell's bottom padding, which grow with the safe-area insets on an iPad, so the board never makes the page scroll. */
-.board-canvas { width: 100%; display: block; height: calc(100vh - max(16px, env(safe-area-inset-top)) - 12px - max(18px, env(safe-area-inset-bottom))); padding: 28px; border-radius: var(--radius); background: #3c7fbf; }
+/* From below the header (shell padding, then its 52px row between 12px margins) to the shell's bottom padding, which grow with the safe-area insets on an iPad, so the board is centred under the header and never makes the page scroll. */
+.board-canvas { width: 100%; display: block; height: calc(100vh - var(--shell-top) - 76px - max(18px, env(safe-area-inset-bottom))); padding: 28px; border-radius: var(--radius); background: #3c7fbf; }
 /* The sea is the SVG's own box, so the frame keeps its radius at any zoom; the rect inside would only repaint it. */
 .board-sea { display: none; }
 /* Lining/tabular figures keep every digit on the baseline so the pip gaps stay
@@ -383,7 +383,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .import-question-player { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 18px; font-size: 12.5px; }
 .import-player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.global-notice { position: fixed; z-index: 30; right: 20px; top: 79px; max-width: min(440px, calc(100vw - 40px)); display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--surface); background: var(--ink); box-shadow: var(--shadow-float); }
+.global-notice { position: fixed; z-index: 30; right: 20px; top: calc(var(--shell-top) + 71px); max-width: min(440px, calc(100vw - 40px)); display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--surface); background: var(--ink); box-shadow: var(--shadow-float); }
 .global-notice-text { flex: 1; font-size: 13px; line-height: 1.4; user-select: text; -webkit-user-select: text; }
 .global-notice-close { flex: none; margin-top: -1px; padding: 0 3px; border: 0; border-radius: var(--radius); background: transparent; color: var(--surface); font-size: 15px; line-height: 1.3; }
 
@@ -691,7 +691,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .history-controls .history-now-button:disabled { color: var(--faint); }
 .history-controls .history-now-button { width: auto; padding: 0 10px; font: 600 12px/1 Inter, sans-serif; color: var(--accent-dark); }
 .phone-shell .history-controls { margin-top: 8px; }
-.history-open .board-canvas { height: calc(100vh - max(16px, env(safe-area-inset-top)) - 12px - max(18px, env(safe-area-inset-bottom)) - 48px); }
+.history-open .board-canvas { height: calc(100vh - var(--shell-top) - 76px - max(18px, env(safe-area-inset-bottom)) - 48px); }
 /* Hangs below the board outside the grid row, so History beside it ends level with the board. */
 .workspace .history-controls { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); margin: 0; }
 .ledger-panel .history-toggle[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
@@ -766,7 +766,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
   .app-shell { --shell-gutter: clamp(16px, 3vw, 44px); }
   .site-header { flex-wrap: wrap; margin-bottom: 14px; }
   .head-controls { flex: 0 0 100%; margin-left: 0; }
-  .head-popover { max-height: calc(100dvh - 138px); }
+  .head-popover { max-height: calc(100dvh - var(--shell-top) - 130px); }
   .global-notice { top: 18px; }
   .workspace { grid-template-columns: minmax(0, 1fr); }
   .center-column { position: static; margin-top: 0; }

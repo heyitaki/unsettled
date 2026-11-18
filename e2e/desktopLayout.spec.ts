@@ -147,7 +147,8 @@ test.describe('desktop layout', () => {
     const brand = (await page.locator(`${header} .brand-mark`).boundingBox())!
     const board = (await canvas.boundingBox())!
     const bottomPadding = await page.locator('.app-shell').evaluate((element) => parseFloat(getComputedStyle(element).paddingBottom))
-    expect(Math.abs(board.y - brand.y)).toBeLessThan(1)
+    // The board starts under the header's 12px bottom margin, so it centres below the header.
+    expect(Math.abs(board.y - (brand.y + brand.height + 12))).toBeLessThan(1)
     expect(Math.abs(board.y + board.height + bottomPadding - 800)).toBeLessThan(1)
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800)
   })
