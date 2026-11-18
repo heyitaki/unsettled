@@ -2,7 +2,7 @@
 
 Go through every component of Unsettled one at a time, show 3 to 4 radically different options as live screenshots on an artifact, collect the owner's pick, then build every pick into `src/ui/editor.css` in one pass. Baseline is the Island look on `main` at `cff05598`.
 
-Harness: `.claude/mock/radical/` (git-excluded). `comp.spec.ts` walks the app once per tree and, at every state a component lists in `components.json`, screenshots the viewport and a crop of the component under the baseline and each option skin, always on top of `skins/picks.css`. Run one component with `COMP=<id> npx playwright test -c playwright.config.ts comp.spec.ts`, then `node pub/build.mjs <id>` writes `pub/<id>.html` and its file map.
+Harness: `.claude/mock/radical/` (git-excluded) was deleted on 2026-11-17 after row 15 landed. The published artifacts keep every round of screenshots.
 
 Rules every option keeps: same controls, actions, order, labels, copy and click or tap targets; viewport screenshots only; no new characters outside the Inter subset; icons only from `glyphs.tsx`.
 
