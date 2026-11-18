@@ -519,11 +519,12 @@ test.describe('desktop', () => {
       const points = parseVertexId(ref).map((coord) => axialToPixel(coord, 58))
       return { ref, x: points.reduce((sum, point) => sum + point.x, 0) / 3, y: points.reduce((sum, point) => sum + point.y, 0) / 3 }
     })
+    const cornerPoint = (corner: typeof corners[number]) => svg.evaluate((element, corner) => {
+      const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
+      return { x: point.x, y: point.y }
+    }, corner)
     const clickCorner = async (corner: typeof corners[number]) => {
-      const point = await svg.evaluate((element, corner) => {
-        const point = new DOMPoint(corner.x, corner.y).matrixTransform((element as SVGSVGElement).getScreenCTM()!)
-        return { x: point.x, y: point.y }
-      }, corner)
+      const point = await cornerPoint(corner)
       await page.mouse.click(point.x, point.y)
     }
     // A legal corner out of reach of every circle: nothing is placed there.
@@ -531,6 +532,12 @@ test.describe('desktop', () => {
     await clickCorner(corners.find((corner) => legal.has(corner.ref) &&
       marked.every((mark) => Math.hypot(mark.x - corner.x, mark.y - corner.y) > 58))!)
     const first = corners.find((corner) => corner.x === marked[0].x && corner.y === marked[0].y)!
+    // Hovering a circle swaps it for the planned settlement rather than drawing the two over each other.
+    const hovered = await cornerPoint(first)
+    await page.mouse.move(hovered.x, hovered.y)
+    await expect(svg.locator('path.placement-hover.planned-piece')).toHaveCount(1)
+    await expect(marks).toHaveCount(LISTED_PICKS - 1)
+    await expect(svg).toHaveCSS('cursor', 'pointer')
     await clickCorner(first)
     board = tapPlaced(board, first.ref, player.id)
     await expect(buildings).toHaveCount(1)

@@ -38,6 +38,7 @@ export function PlayerPanel() {
           <PlusGlyph />
         </button>
       </div>
+      <p className="tool-hint">Assign yourself a player by selecting the corresponding row. Drag rows to reassign turn order. Click on a player name to rename them across all games with the same imported profile picture.</p>
       <div
         className={dragId !== null ? 'player-list roster reordering' : 'player-list roster'}
         ref={listRef}

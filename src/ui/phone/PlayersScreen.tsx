@@ -43,6 +43,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
       onClose={onClose}
     >
       {roster.confirm && <ConfirmDialog {...roster.confirm} />}
+      <p className="tool-hint">Assign yourself a player by selecting the corresponding row. Drag rows to reassign turn order. Tap on a player name to rename them across all games with the same imported profile picture.</p>
       <div>
         <div className="group-label">
           <span>Roster</span>

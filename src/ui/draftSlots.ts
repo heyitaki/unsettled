@@ -1,8 +1,16 @@
 import { draftIsComplete, inferDraftState, type DraftState } from '../engine/draft'
+import { setMe } from '../model/board'
 import type { Board } from '../model/types'
+import type { StoreAction } from './store'
 
 export function viewedPlayerId(board: Board, viewedPick: number | null | undefined): string | null {
   return viewedPick == null ? board.mePlayerId : inferDraftState(board).sequence[viewedPick] ?? null
+}
+
+/** Views a pick in Best picks, claiming its player first while nobody is claimed, since Best picks ranks only for a claimed player. */
+export function viewPick(board: Board, dispatch: (action: StoreAction) => void, pick: number): void {
+  if (board.mePlayerId === null) dispatch({ type: 'commit', board: setMe(board, inferDraftState(board).sequence[pick]) })
+  dispatch({ type: 'view-pick', slot: pick })
 }
 
 /** One pick of the snake draft, as the draft grid and the ribbon draw it. */

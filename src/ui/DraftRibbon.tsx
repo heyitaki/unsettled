@@ -1,8 +1,7 @@
 import type { CSSProperties } from 'react'
 import { inferDraftState } from '../engine/draft'
-import { setMe } from '../model/board'
 import { readableInk } from './colors'
-import { draftSlots, viewedPlayerId } from './draftSlots'
+import { draftSlots, viewedPlayerId, viewPick } from './draftSlots'
 import { activeTab, useStore } from './store'
 
 /**
@@ -31,7 +30,7 @@ export function DraftRibbon() {
             type="button"
             key={`${slot.playerId}:${index}`}
             className={slot.viewed ? 'draft-ribbon-slot viewing' : 'draft-ribbon-slot'}
-            style={{ background: tone(player.color), color: tone(readableInk(player.color)), borderColor: tone('var(--ink)') }}
+            style={{ background: tone(player.color), color: tone(readableInk(player.color)), borderColor: slot.viewed ? 'var(--ink)' : tone('color-mix(in srgb, var(--ink) 55%, transparent)') }}
             title={label}
             aria-label={label}
             aria-pressed={slot.playerId === playerId}
@@ -39,9 +38,7 @@ export function DraftRibbon() {
               const pick = draft.remainingPickIndices.includes(index)
                 ? index
                 : draft.remainingPickIndices.find((pick) => draft.sequence[pick] === slot.playerId)
-              if (pick === undefined) return
-              if (board.mePlayerId === null) dispatch({ type: 'commit', board: setMe(board, slot.playerId) })
-              dispatch({ type: 'view-pick', slot: pick })
+              if (pick !== undefined) viewPick(board, dispatch, pick)
             }}
           >
             {index + 1}

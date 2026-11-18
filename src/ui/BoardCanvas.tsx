@@ -491,6 +491,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     : null
   const preview = hover && hoverPort === null && !hoverBuilding && !hoverRoad ? hover : undefined
   const previewRoad = preview?.ref.startsWith('e:') ? preview.ref as EdgeId : undefined
+  // The planned settlement replaces any pick circle under it, number included.
+  const previewVertex = preview && !previewRoad ? preview.ref : undefined
   useEffect(() => {
     lastClick.current = null
     finePointer.current = null
@@ -870,7 +872,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     ) : null), [highlight, gridEdgeSet])
   const markLayer = useMemo(() => highlight
-    .filter((mark) => mark.kind !== 'road' && (mark.kind === 'hex' ? grid.landKeys : gridVertexSet).has(mark.ref))
+    .filter((mark) => mark.kind !== 'road' && mark.ref !== previewVertex && (mark.kind === 'hex' ? grid.landKeys : gridVertexSet).has(mark.ref))
     .map((mark) => {
       if (mark.kind === 'hex') return <polygon key={`hl:${mark.ref}`} className="hex-highlight" points={hexPoints(parseAxialKey(mark.ref), SIZE - 6)} fill="none" stroke={mark.color ?? INK_COLOR} strokeWidth="3.5" strokeDasharray="7 4" pointerEvents="none" />
       const point = vertexPoint(mark.ref as VertexId)
@@ -912,7 +914,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           )}
         </g>
       )
-    }), [highlight, grid, gridVertexSet, markedBuildings])
+    }), [highlight, grid, gridVertexSet, markedBuildings, previewVertex])
   return (
     // The fitted box's proportions, for the phone arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.
@@ -925,7 +927,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       <svg
         ref={svgRef}
         className="board-canvas"
-        style={{ touchAction: 'pan-y' }}
+        // Any hovered target (a pick circle, a legal corner or edge, a piece, a port) takes the click.
+        style={{ touchAction: 'pan-y', cursor: hover ? 'pointer' : undefined }}
         viewBox={`${renderedViewBox.x} ${renderedViewBox.y} ${renderedViewBox.width} ${renderedViewBox.height}`}
         aria-label={readOnly ? 'Catan board history' : 'Editable Catan board'}
         onPointerDownCapture={() => {

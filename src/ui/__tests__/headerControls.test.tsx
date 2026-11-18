@@ -43,11 +43,18 @@ beforeEach(async () => {
 })
 afterEach(() => act(() => root.unmount()))
 
-it('keeps the claim and brush rings before recording a turn', async () => {
-  expect(container.querySelector('.head-dots')?.tagName).toBe('BUTTON')
+it('views a player\'s next pick from their dot during the draft, and keeps the brush ring in build mode', async () => {
+  expect(container.querySelector('.head-dots')?.tagName).toBe('DIV')
   expect(container.querySelector('.head-dot-chip')).toBeNull()
   expect(container.querySelectorAll('.head-dot.me')).toHaveLength(1)
-  expect(container.querySelectorAll('.head-dot-cell')[0].querySelector('.head-dot.me')).not.toBeNull()
+  expect(button("View aki's next pick").querySelector('.head-dot.me')).not.toBeNull()
+  await act(async () => button("View Bee's next pick").click())
+  expect(store.state.viewedPick).toBe(1)
+  expect(button("View Bee's next pick").querySelector('.head-dot.me')).not.toBeNull()
+  expect(button("View Bee's next pick").getAttribute('aria-pressed')).toBe('true')
+  expect(activeTab(store.state).game.board.mePlayerId).toBe('aki')
+  await act(async () => button('Players').click())
+  expect(onOpen).toHaveBeenCalledWith('players', button('Players'))
   await render(true)
   await act(async () => button('Place pieces for Bee').click())
   expect(button('Place pieces for Bee').querySelector('.head-dot.me')).not.toBeNull()
@@ -84,13 +91,12 @@ it('rings the turn and chips the brush in build mode without changing the view o
   expect(button("View aki's best moves").querySelector('.head-dot-chip')).not.toBeNull()
 })
 
-it('keeps the pre-game header during an unfinished draft even with a recorded turn', async () => {
+it('keeps the draft header during an unfinished draft even with a recorded turn', async () => {
   await act(async () => store.dispatch({ type: 'commit-game', game: setActivePlayer(activeTab(store.state).game, 'b') }))
-  expect(container.querySelector('.head-dots')?.tagName).toBe('BUTTON')
-  expect(container.querySelector('button[aria-label^="View "]')).toBeNull()
+  expect(container.querySelector('button[aria-label$="best moves"]')).toBeNull()
   expect(container.querySelector('.head-dot-chip')).toBeNull()
   expect(container.querySelectorAll('.head-dot.me')).toHaveLength(1)
-  expect(container.querySelectorAll('.head-dot-cell')[0].querySelector('.head-dot.me')).not.toBeNull()
+  expect(button("View aki's next pick").querySelector('.head-dot.me')).not.toBeNull()
   await render(true)
   expect(button('Place pieces for aki').querySelector('.head-dot.me')).not.toBeNull()
   expect(button('Place pieces for Bee').querySelector('.head-dot.me')).toBeNull()
@@ -112,4 +118,13 @@ it('keeps the full name in the chip and its accessible view button label', async
   const viewButton = button(`View ${name}'s best moves`)
   expect(viewButton).not.toBeNull()
   expect(viewButton.querySelector('.head-dot-chip')?.textContent).toBe(name)
+})
+
+it('opens Players from the whole pill once the draft is over and before a turn is recorded', async () => {
+  let { board } = activeTab(store.state).game
+  for (const id of draftOrder(board)) board = placeBuilding(board, buildingSlots(board, id, 'settlement', 'edit')[0], id, 'settlement')
+  await act(async () => store.dispatch({ type: 'commit', board }))
+  expect(container.querySelector('.head-dots')?.tagName).toBe('BUTTON')
+  expect(container.querySelector('button[aria-label^="View "]')).toBeNull()
+  expect(container.querySelectorAll('.head-dot-cell')[0].querySelector('.head-dot.me')).not.toBeNull()
 })
