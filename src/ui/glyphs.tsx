@@ -1,7 +1,8 @@
 import { isRedToken, pips } from '../model/board'
 import type { DevKind } from '../model/game'
+import type { GameStage } from '../engine/gameStage'
 import type { Resource } from '../model/types'
-import { INK_COLOR, TILE_COLORS, TOKEN_COLOR } from './colors'
+import { INK_COLOR, readableInk, TILE_COLORS, TOKEN_COLOR } from './colors'
 
 // Shared inline icons on a 20-unit grid. The board keeps its own piece shapes.
 
@@ -266,10 +267,26 @@ export function DevCardGlyph({ kind }: { kind: DevKind }) {
 }
 
 /** The colour hex that stands for a board wherever it is named; see boardColor.ts. */
-export function BoardHexGlyph({ color, className }: { color: string; className?: string }) {
+export function BoardHexGlyph({ color, className, stage }: { color: string; className?: string; stage?: GameStage }) {
+  const unstarted = stage === 'not-started'
+  const hex = <polygon points="10,1 18.7,6 18.7,16 10,21 1.3,16 1.3,6"
+    fill={unstarted ? 'none' : color} stroke={unstarted ? 'var(--glyph)' : PIECE_INK} strokeWidth="1.4"
+    strokeLinejoin={unstarted ? 'miter' : 'round'}
+    strokeDasharray={unstarted ? '3.3 1.9615 2.8 1.9615' : undefined} strokeDashoffset={unstarted ? 1.65 : undefined} />
+
+  const mark = readableInk(color) === INK_COLOR ? 'var(--ink)' : 'var(--surface)'
+  // Stage text and the check stay in CSS pixels while the hex scales to the row.
   return (
-    <svg className={className} viewBox="0 0 20 22" aria-hidden="true">
-      <polygon points="10,1 18.7,6 18.7,16 10,21 1.3,16 1.3,6" fill={color} stroke={PIECE_INK} strokeWidth="1.4" strokeLinejoin="round" />
+    <svg className={className} viewBox={stage === undefined ? '0 0 20 22' : undefined} aria-hidden="true">
+      {stage === undefined ? hex : <svg viewBox="0 0 20 22" width="100%" height="100%">{hex}</svg>}
+      {typeof stage === 'number' && <text className="board-hex-turn" x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+        fill={mark}>{stage}</text>}
+      {/* WebKit ignores a transform on a nested svg, so the centring offset sits on a group. */}
+      {stage === 'finished' && <g transform="translate(-7.5 -7.5)">
+        <svg {...LINE_ART} x="50%" y="50%" width="15" height="15" viewBox={GRID} stroke={mark} strokeWidth="2.6">
+          <path d="M5.5 10.5l3 3 6-6.5" />
+        </svg>
+      </g>}
     </svg>
   )
 }

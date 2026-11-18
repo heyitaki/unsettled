@@ -1,6 +1,8 @@
 import type { Game, GameHistory, PlayerStats, Position, TurnRecord, TurnState } from './game'
 import { RESOURCES, type Board, type EdgeId, type Player, type VertexId } from './types'
 
+export const currentTurnNumber = (game: Game): number => (game.history?.turns.length ?? 0) + 1
+
 const REMOVED_PLAYER = { name: 'Removed player', color: '#c5bfb5' }
 
 /** A recorded turn can name a player since removed from the roster. */

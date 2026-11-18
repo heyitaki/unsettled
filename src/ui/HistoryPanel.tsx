@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { pips } from '../model/board'
-import { historyPlayer, turnSummary } from '../model/history'
+import { currentTurnNumber, historyPlayer, turnSummary } from '../model/history'
 import { PLAYER_PALETTE } from '../model/types'
 import { ProductionPlayer } from './BestMovesTrays'
 import { readableInk } from './colors'
@@ -19,7 +19,7 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
   const { state, dispatch } = useStore()
   const { game } = activeTab(state)
   const turns = game.history?.turns ?? []
-  const now = turns.length + 1
+  const now = currentTurnNumber(game)
   // A game saved before history existed has no recorded start, so its earliest view is now.
   const first = game.history ? 0 : now
   const selected = state.viewedTurn ?? now

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
+import { gameStage, type GameStage } from '../engine/gameStage'
 import { boardColor } from './boardColor'
 import { SortGlyph, TrashGlyph } from './glyphs'
 import { ListRow } from './ListRow'
 import { SORT_MENU_LABEL, SORT_OPTIONS, type SortKey, relativeTime, sortMaps, stampFor } from './library'
 import { MenuSelect } from './MenuSelect'
-import { activeTab, useStore } from './store'
+import { activeTab, useStore, type TabState } from './store'
 import { useLibrary } from './useLibrary'
 import { useRenameTab } from './useRenameTab'
 import { useScrollEdges } from './useScrollEdges'
@@ -47,8 +48,18 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
     onCancel: () => setEditing(null),
   })
   const maps = useMemo(() => sortMaps(listed.maps, sortKey), [listed, sortKey])
-  const listedIds = new Set(listed.maps.map((map) => map.id))
-  const unlisted = state.tabs.filter((tab) => tab.mapId === null || !listedIds.has(tab.mapId))
+  // An open map's row takes its tab's live stage, which the stored copy trails by the autosave.
+  const { unlisted, liveStages } = useMemo(() => {
+    const listedIds = new Set(listed.maps.map((map) => map.id))
+    const liveStages = new Map<string, GameStage>()
+    const unlisted: { tab: TabState; stage: GameStage }[] = []
+    for (const tab of state.tabs) {
+      const stage = gameStage(tab.game)
+      if (tab.mapId !== null) liveStages.set(tab.mapId, stage)
+      if (tab.mapId === null || !listedIds.has(tab.mapId)) unlisted.push({ tab, stage })
+    }
+    return { unlisted, liveStages }
+  }, [state.tabs, listed])
   const current = activeTab(state)
   // Legacy data can repeat an id, so the first map wearing the active tab's
   // link is the one current row, by identity.
@@ -85,13 +96,14 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
         className={`list board-list ${fades.top ? 'fade-top' : ''} ${fades.bottom ? 'fade-bottom' : ''}`}
         onScroll={fades.onScroll}
       >
-        {unlisted.map((tab) => {
+        {unlisted.map(({ tab, stage }) => {
           const key = `tab:${tab.id}`
           return (
             <ListRow
               key={key}
               current={tab.id === current.id}
               color={boardColor(tab.title)}
+              stage={stage}
               name={tab.title}
               selectLabel={`Switch to ${tab.title}`}
               onSelect={() => {
@@ -120,6 +132,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
               key={key}
               current={map === currentMap}
               color={boardColor(map.name)}
+              stage={map.stage === undefined || map.id === null ? undefined : liveStages.get(map.id) ?? map.stage}
               name={map.name || 'empty name'}
               meta={!map.valid ? 'Corrupt' : stamp === undefined ? '' : relativeTime(stamp)}
               selectLabel={`Switch to ${map.name}`}

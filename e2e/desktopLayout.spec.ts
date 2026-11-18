@@ -19,7 +19,7 @@ test.describe('desktop layout', () => {
     for (const hidden of ['.tools-panel', '.maps-panel', '.player-panel']) await expect(page.locator(hidden)).toBeHidden()
 
     const brand = (await page.locator(`${header} .brand-mark`).boundingBox())!
-    const controls = [title(page), page.locator(`${header} .head-dots`), pencil(page)]
+    const controls = [title(page), pencil(page), page.locator(`${header} .head-dots`)]
     const boxes = []
     for (const control of controls) boxes.push((await control.boundingBox())!)
     for (const box of boxes) expect(Math.abs(box.y + box.height / 2 - (brand.y + brand.height / 2))).toBeLessThanOrEqual(1)
@@ -99,7 +99,7 @@ test.describe('desktop layout', () => {
     const panel = (await maps.boundingBox())!
     expect(panel.y).toBeGreaterThanOrEqual(button.y + button.height)
     expect(Math.abs(panel.x - button.x)).toBeLessThan(2)
-    expect(Math.round(panel.width)).toBe(320)
+    expect(Math.round(panel.width)).toBe(400)
     await maps.getByRole('button', { name: 'New board' }).click()
     await expect(title(page)).toHaveText('Board 2')
     await expect(maps).toBeVisible()

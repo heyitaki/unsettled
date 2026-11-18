@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { draftIsComplete, inferDraftState } from '../engine/draft'
+import { gameStarted } from '../engine/gameStage'
 import { boardColor } from './boardColor'
 import { readableInk } from './colors'
 import { BoardHexGlyph, ChevronGlyph, DotsGlyph, PencilGlyph } from './glyphs'
@@ -20,17 +20,17 @@ export function HeaderControls({ building, onToggleMode, onOpen, openPanel }: {
   const { state, dispatch } = useStore()
   const tab = activeTab(state)
   const { board, turn } = tab.game
-  const inGame = turn !== undefined && draftIsComplete(board, inferDraftState(board))
+  const inGame = gameStarted(tab.game)
   const viewedId = board.players.find((player) => player.id === state.viewedPlayer)?.id ?? turn?.playerId
   const opener = (panel: HeaderPanel) => ({
     'aria-haspopup': 'dialog' as const,
     'aria-expanded': openPanel === undefined ? undefined : openPanel === panel,
     onClick: (event: MouseEvent<HTMLButtonElement>) => onOpen(panel, event.currentTarget),
   })
-  const pillClass = `head-dots${board.mePlayerId ? '' : ' unclaimed'}${inGame ? ' in-game' : ''}`
+  const pillClass = `head-dots${inGame ? ' in-game' : ''}`
   const dots = board.players.map((player) => {
     const selected = player.id === (building ? tab.activePlayerId : inGame ? viewedId : board.mePlayerId)
-    const ring = inGame ? player.id === turn.playerId : selected
+    const ring = inGame ? player.id === turn?.playerId : selected
     const chip = inGame && selected
     const dot = <span className={`head-dot${ring ? ' me' : ''}${chip ? ' head-dot-chip' : ''}`}
       style={{ background: player.color, color: chip ? readableInk(player.color) : undefined }}>{chip ? player.name : null}</span>
@@ -55,28 +55,30 @@ export function HeaderControls({ building, onToggleMode, onOpen, openPanel }: {
         <ChevronGlyph className="menu-chevron" />
       </button>
       <span className="head-spacer" />
-      {building || inGame ? (
-        <div className={pillClass}>
-          {dots}
-          <button type="button" className="head-dots-more" aria-label="Players" {...opener('players')}>
-            <DotsGlyph />
-          </button>
-        </div>
-      ) : (
-        <button type="button" className={pillClass} aria-label="Players" {...opener('players')}>
-          {dots}
-          <span className="head-dots-more"><DotsGlyph /></span>
+      <div className={`head-player-controls${board.mePlayerId ? '' : ' unclaimed'}`}>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Edit the board"
+          aria-pressed={building}
+          onClick={onToggleMode}
+        >
+          <PencilGlyph />
         </button>
-      )}
-      <button
-        type="button"
-        className="icon-btn"
-        aria-label="Edit the board"
-        aria-pressed={building}
-        onClick={onToggleMode}
-      >
-        <PencilGlyph />
-      </button>
+        {building || inGame ? (
+          <div className={pillClass}>
+            {dots}
+            <button type="button" className="head-dots-more" aria-label="Players" {...opener('players')}>
+              <DotsGlyph />
+            </button>
+          </div>
+        ) : (
+          <button type="button" className={pillClass} aria-label="Players" {...opener('players')}>
+            {dots}
+            <span className="head-dots-more"><DotsGlyph /></span>
+          </button>
+        )}
+      </div>
     </>
   )
 }

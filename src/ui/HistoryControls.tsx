@@ -1,4 +1,4 @@
-import { historyPlayer } from '../model/history'
+import { currentTurnNumber, historyPlayer } from '../model/history'
 import { ChevronGlyph } from './glyphs'
 import { activeTab, useStore } from './store'
 
@@ -6,7 +6,7 @@ export function HistoryControls() {
   const { state, dispatch } = useStore()
   const { game } = activeTab(state)
   if (!state.historyOpen || !game.turn || state.tool.kind !== 'none') return null
-  const now = (game.history?.turns.length ?? 0) + 1
+  const now = currentTurnNumber(game)
   const index = state.viewedTurn ?? now
   const turn = index === now ? game.turn : game.history?.turns[index - 1]
   const player = historyPlayer(game.board, turn?.playerId)

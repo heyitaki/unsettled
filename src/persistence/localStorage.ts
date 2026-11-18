@@ -1,4 +1,5 @@
 import type { Game } from '../model/game'
+import { gameStage, type GameStage } from '../engine/gameStage'
 import { isRecord, parseGame, type ParseGameResult } from '../model/serialization'
 import { newId } from '../model/ids'
 import { isDefaultName, isPrint, nameKey, type Person } from '../model/people'
@@ -26,6 +27,7 @@ export interface ListedMap {
   index: number
   name: string
   valid: boolean
+  stage?: GameStage
   errors?: string[]
   createdAt?: number
   modifiedAt?: number
@@ -243,7 +245,7 @@ function buildListing(rawText: string | null): Listing {
     }
     const parsed = parseGame(entry.game)
     const base = parsed.ok
-      ? { id: mapEntryId(entry), index, name, valid: true, ...timestamps }
+      ? { id: mapEntryId(entry), index, name, valid: true, ...(hasName ? { stage: gameStage(parsed.game) } : {}), ...timestamps }
       : { id: mapEntryId(entry), index, name, valid: false, errors: parsed.errors, ...timestamps }
     return hasName ? base : { ...base, synthetic: true }
   })

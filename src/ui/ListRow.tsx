@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { GameStage } from '../engine/gameStage'
 import { BoardHexGlyph } from './glyphs'
 import { InlineRename } from './InlineRename'
 
@@ -7,9 +8,10 @@ import { InlineRename } from './InlineRename'
  * under the name, which renames in place, and the trailing button. The name field
  * takes only the width of its text, so the rest of the row still selects (O3).
  */
-export function ListRow({ current, color, name, meta, selectLabel, selectDisabled, onSelect, draft, onDraft, onStartRename, onCommit, onCancel, action }: {
+export function ListRow({ current, color, stage, name, meta, selectLabel, selectDisabled, onSelect, draft, onDraft, onStartRename, onCommit, onCancel, action }: {
   current?: boolean
   color: string
+  stage?: GameStage
   name: string
   meta?: string
   selectLabel: string
@@ -27,7 +29,7 @@ export function ListRow({ current, color, name, meta, selectLabel, selectDisable
   return (
     <div className={current ? 'list-row current' : 'list-row'}>
       <button type="button" className="list-row-select" aria-label={selectLabel} disabled={selectDisabled} onClick={onSelect} />
-      <BoardHexGlyph color={color} className="list-row-hex" />
+      <BoardHexGlyph color={color} stage={stage} className="list-row-hex" />
       <span className="list-row-main">
         <InlineRename name={name} draft={draft} onDraft={onDraft} onStart={onStartRename} onCommit={onCommit} onCancel={onCancel} />
       </span>

@@ -17,7 +17,8 @@ import { isEmptyCorrection, newGame, withBoard, type Game } from '../model/game'
 import { newId } from '../model/ids'
 import { initializeAwards, trackAwards } from '../engine/stats'
 import { closeCorrection } from '../model/turn'
-import { draftIsComplete, inferDraftState } from '../engine/draft'
+import { inferDraftState } from '../engine/draft'
+import { gameStarted } from '../engine/gameStage'
 import type {
   Board,
   EdgeId,
@@ -346,9 +347,8 @@ export function reducer(state: StoreState, action: StoreAction): StoreState {
 
 function withViewedPlayer(state: StoreState, playerId: string | null): StoreState {
   const { game } = activeTab(state)
-  const viewedPlayer = game.turn && playerId !== game.turn.playerId &&
-    game.board.players.some((player) => player.id === playerId) &&
-    draftIsComplete(game.board, inferDraftState(game.board)) ? playerId : null
+  const viewedPlayer = gameStarted(game) && playerId !== game.turn?.playerId &&
+    game.board.players.some((player) => player.id === playerId) ? playerId : null
   return viewedPlayer === (state.viewedPlayer ?? null) ? state : { ...state, viewedPlayer }
 }
 
