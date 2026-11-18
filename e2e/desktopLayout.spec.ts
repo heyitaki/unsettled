@@ -185,7 +185,16 @@ test.describe('desktop layout', () => {
     expect(Math.abs(panel.y - (button.y + button.height + 12))).toBeLessThanOrEqual(1)
     expect(Math.abs(analysis.y - (panel.y + panel.height + 12))).toBeLessThanOrEqual(1)
     expect(Math.round(panel.width)).toBe(440)
-    await pill.click()
+    // The card fades out where it stood: its copy keeps the card's box, read before the card left the page.
+    const ghost = await pill.evaluate(async (button) => {
+      (button as HTMLElement).click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const copy = document.querySelector('.right-rail > .player-panel[data-ghost]')
+      return copy && JSON.parse(JSON.stringify(copy.getBoundingClientRect()))
+    })
+    expect(ghost).not.toBeNull()
+    expect(Math.abs(ghost.x - panel.x)).toBeLessThan(1)
+    expect(Math.abs(ghost.width - panel.width)).toBeLessThan(1)
     await expect(players).toBeHidden()
   })
 

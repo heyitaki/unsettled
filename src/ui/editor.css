@@ -43,8 +43,8 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 
 .workspace { max-width: var(--shell-max); margin: auto; display: grid; grid-template-columns: minmax(494px, 1fr) 440px; grid-template-rows: var(--board-height); gap: 16px; align-items: start; }
 /* Centred on the board, and so on the window, with the controls on top. The header row holds only the logo, so the column may reach past the board into it and the room below, keeping the shell's top margin at both ends; History or Best moves shrink and scroll inside first. */
-/* Past that height the whole column scrolls. Padding as deep as the card shadows reach, cancelled by negative margins, keeps the scroll box from clipping them without moving any card. */
-.right-rail { position: relative; isolation: isolate; min-width: 0; align-self: center; max-height: calc(100vh - var(--shell-top) + 12px); padding: 12px 16px var(--shell-top); margin: -12px -16px calc(-1 * var(--shell-top)); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+/* Past that height the whole column scrolls. Padding as deep as the card shadows reach, cancelled by negative margins, keeps the scroll box from clipping them without moving any card, and a stable gutter keeps a space-taking scrollbar from narrowing the cards when it appears. */
+.right-rail { position: relative; isolation: isolate; min-width: 0; align-self: center; max-height: calc(100vh - var(--shell-top) + 12px); padding: 12px 16px var(--shell-top); margin: -12px -16px calc(-1 * var(--shell-top)); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; display: flex; flex-direction: column; }
 .right-rail > .head-controls { flex: none; margin: 0 0 12px; }
 .right-rail > .player-panel { flex: none; margin-bottom: 12px; }
 .maps-panel { display: flex; flex-direction: column; gap: 14px; flex: 0 1 auto; min-height: 0; }

@@ -8,7 +8,8 @@ const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 // A roster row drag in progress, during which the column holds still.
 const HOLD = '.reordering'
 
-type Box = { top: number; height: number }
+// Read while the card is in the page: a removed card reports zero for all four.
+type Box = { top: number; left: number; width: number; height: number }
 
 /**
  * Animates the cards of a column whose layout shifts as they change: the desktop
@@ -44,7 +45,7 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
     const cards = () => [...column.children].filter((child): child is HTMLElement => child instanceof HTMLElement && child.dataset.ghost === undefined)
     // Where the column is drawn, so boxes taken before and during a hold compare as drawn.
     const origin = () => column.offsetTop + pin
-    const boxOf = (card: HTMLElement): Box => ({ top: origin() + card.offsetTop, height: card.offsetHeight })
+    const boxOf = (card: HTMLElement): Box => ({ top: origin() + card.offsetTop, left: card.offsetLeft, width: card.offsetWidth, height: card.offsetHeight })
     // How far a glide still in flight draws its card from its old layout box. The easing is the effect's own, so the progress is already eased.
     const drawnOffset = (card: HTMLElement) => {
       const glide = glides.get(card)
@@ -57,7 +58,7 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       copy.dataset.ghost = ''
       copy.inert = true
       copy.setAttribute('aria-hidden', 'true')
-      Object.assign(copy.style, { position: 'absolute', left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px`, top: `${box.top - origin()}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '-1' })
+      Object.assign(copy.style, { position: 'absolute', left: `${box.left}px`, width: `${box.width}px`, top: `${box.top - origin()}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '-1' })
       column.append(copy)
       // Under the cards, so the card replacing it fades in on top: a crossfade with no empty frame between them.
       copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DURATION, easing: 'ease-in' }).finished.finally(() => copy.remove())
