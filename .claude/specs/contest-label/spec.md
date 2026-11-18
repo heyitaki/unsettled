@@ -2,6 +2,8 @@
 
 Vet: 7/10 full-build 2026-10-12 pair: .claude/pairs/contest-label sha: e860de0a
 
+Removed in 4f6b7535 at the owner's request: Best picks shows no contest notes or rings, and `src/engine/contest.ts` is gone. This spec is a record of what was built.
+
 ## Summary
 
 During the draft a rival's road can point at the spot a settlement planned to expand to, and the rival then settles it first. Best picks prices that spot as if nobody else wanted it and says nothing. This spec marks, on the board and on the row, each spot a pick's setup road leads to that a rival's road already ends on or ends one road short of. No score, ranking or road changes.
