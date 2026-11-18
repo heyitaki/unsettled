@@ -171,7 +171,6 @@ button.danger { color: var(--danger); }
 .vertex-highlight { r: 9.5px; fill: rgba(187,76,50,.22); stroke: #8f3425; stroke-width: 2.4; }
 .vertex-highlight-label, .settlement-ordinal { font: 700 11px var(--token-face); font-variant-numeric: lining-nums tabular-nums; }
 .vertex-highlight.faded, .vertex-highlight-label.faded { opacity: .55; }
-.edge-highlight { stroke: #e72525; stroke-width: 7; stroke-linecap: round; opacity: .85; filter: drop-shadow(0 1px 2px rgba(18,14,8,.45)); }
 
 .player-list { display: grid; --row-gap: 10px; --card-pad: 6px; }
 /* The row hangs left by its own inset (7px pad, 1px border, 2px to centre the
@@ -308,8 +307,6 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .pick-ledger .analysis-follow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .pick-ledger .analysis-follow-spot { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .pick-ledger .analysis-follow-spot > span:first-child { color: var(--glyph); font-size: 11px; }
-.analysis-contest { color: var(--muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
-.pick-ledger .analysis-contest { grid-column: 2 / -1; }
 .pick-ledger .analysis-factors { grid-column: 2 / -1; gap: 1px 10px; margin-top: 5px; line-height: 1.45; }
 .pick-ledger .analysis-factors > span { padding: 0; background: transparent; border-radius: 0; font-weight: 400; }
 .pick-ledger .analysis-factors b { color: var(--ink); font-weight: 600; }
@@ -331,7 +328,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .analysis-loading span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes analysis-loading-in { from { opacity: 0; } }
 .analysis-body .analysis-stale * { color: transparent !important; transition: color .2s .12s, background-color .2s .12s, border-color .2s .12s, opacity .2s .12s, fill .2s .12s, stroke .2s .12s; }
-.analysis-stale :is(.analysis-score, .analysis-availability, .analysis-contest, .analysis-touch-select), .analysis-stale .pick-ledger :is(.analysis-follow-spot > span:first-child, .analysis-factors > span) { border-radius: var(--radius); background-color: var(--tint); }
+.analysis-stale :is(.analysis-score, .analysis-availability, .analysis-touch-select), .analysis-stale .pick-ledger :is(.analysis-follow-spot > span:first-child, .analysis-factors > span) { border-radius: var(--radius); background-color: var(--tint); }
 .analysis-stale .spot-tiles :is(polygon, .spot-port > circle) { fill: var(--tint); stroke: transparent; }
 .analysis-stale .spot-tiles :is(circle, text), .analysis-stale .spot-tile > g { opacity: 0; }
 .analysis-stale .analysis-placeholder :is(p, p + span) { border-radius: var(--radius); background-color: var(--line); }

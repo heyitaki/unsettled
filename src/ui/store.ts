@@ -56,14 +56,15 @@ export type Tool =
  * A board mark surfaced from analysis: a highlighted ref (vertex/hex/port id)
  * optionally tinted to a player's colour and stamped with a short label (a pick
  * number). Drives the coloured, numbered circles the AnalysisPanel draws. A
- * faded mark sits back from the others: a planned follow-up pick or its road.
+ * faded vertex mark sits back from the others: a planned follow-up pick.
+ * Every road mark is a faded full road.
  * A `placeable` mark is a Best picks first pick, the one mark a draft tap
  * places on while the tools are closed.
  *
  * `kind: 'road'` names a direction rather than a place, and it exists because a
  * road and a port are both keyed by the edge they sit on: without it the canvas
  * cannot tell a recommended road from a port an import issue is pointing at, and
- * would draw a road stub over the port and light the port up under the road.
+ * would draw a faded road over the port and light the port up under the road.
  */
 export interface HighlightMark {
   ref: string
@@ -71,7 +72,7 @@ export interface HighlightMark {
   label?: string
   faded?: boolean
   placeable?: boolean
-  kind?: 'road' | 'hex' | 'ring'
+  kind?: 'road' | 'hex'
 }
 
 export type PickTarget =

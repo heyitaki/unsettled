@@ -1,30 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Recommendation } from '../../engine/analysisProtocol'
 import type { EdgeId, VertexId } from '../../model/types'
-import { contestMarks, recommendationMarks } from '../analysisMarks'
+import { recommendationMarks } from '../analysisMarks'
 
 const FIRST = 'v:-1,0;-1,1;0,0' as VertexId
 const SECOND = 'v:0,0;0,1;1,0' as VertexId
 const ROAD = 'e:-1,1;0,0' as EdgeId
 const SECOND_ROAD = 'e:0,1;1,0' as EdgeId
-
-describe('contestMarks', () => {
-  it('draws one ring per spot in the first listed rival colour, in spot order', () => {
-    const colors: Record<string, string> = { b: '#3063ba', c: '#ffffff' }
-    expect(contestMarks([
-      { vertexId: FIRST, playerId: 'b' },
-      { vertexId: FIRST, playerId: 'c' },
-      { vertexId: SECOND, playerId: 'c' },
-    ], (id) => colors[id])).toEqual([
-      { ref: FIRST, color: '#3063ba', kind: 'ring' },
-      { ref: SECOND, color: '#ffffff', kind: 'ring' },
-    ])
-  })
-
-  it('draws nothing without a contest', () => {
-    expect(contestMarks([], () => '#ffffff')).toEqual([])
-  })
-})
 
 const recommendation = (firstRoad: EdgeId | null, secondRoad: EdgeId | null = null): Recommendation => ({
   firstPick: FIRST,

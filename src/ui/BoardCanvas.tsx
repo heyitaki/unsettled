@@ -83,9 +83,6 @@ const ROAD_CORE = 6
 // Corner rounding on the road's rectangular ends (SVG rx on the casing/core
 // rects). Small enough to read as a squared-off plank, not a capsule.
 const ROAD_RADIUS = 1.95
-// Fraction of an edge trimmed from each end of a highlighted road direction, so the stub sits
-// between the vertex circles the same recommendation draws rather than running under them.
-const MARK_EDGE_INSET = 0.26
 const SETTLEMENT_PATH = 'M-12.5,13 V-3 L0,-15 L12.5,-3 V13 Z'
 // Render scale per tier, and the y of each silhouette's base in its own
 // unscaled path units — a highlight number sits just above that footing.
@@ -175,6 +172,32 @@ function roadGeometry(edgeId: EdgeId) {
   const mid = { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }
   const angle = (Math.atan2(b2.y - a2.y, b2.x - a2.x) * 180) / Math.PI
   return { roadLength, mid, angle }
+}
+
+// A slim rounded rectangle rather than a round-capped stroke, so the ends read as a plank. The
+// casing is the core grown by PIECE_STROKE on every side, matching the buildings' outline.
+function Road({ edgeId, color }: { edgeId: EdgeId; color: string }) {
+  const { roadLength, mid, angle } = roadGeometry(edgeId)
+  return (
+    <g transform={`translate(${mid.x} ${mid.y}) rotate(${angle})`}>
+      <rect
+        x={-roadLength / 2 - PIECE_STROKE}
+        y={-(ROAD_CORE / 2 + PIECE_STROKE)}
+        width={roadLength + PIECE_STROKE * 2}
+        height={ROAD_CORE + PIECE_STROKE * 2}
+        rx={ROAD_RADIUS + PIECE_STROKE}
+        fill="#30271f"
+      />
+      <rect
+        x={-roadLength / 2}
+        y={-ROAD_CORE / 2}
+        width={roadLength}
+        height={ROAD_CORE}
+        rx={ROAD_RADIUS}
+        fill={color}
+      />
+    </g>
+  )
 }
 
 function hexPoints(coord: AxialCoord, radius = SIZE): string {
@@ -334,7 +357,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []
     if (state.tool.kind !== 'piece' && draftPlayer === null) return []
     const occupied = new Set(board.buildings.map((building) => building.vertexId))
-    // Not a planned second pick, a contest ring or a likely-gone pick: only a mark that says so.
+    // Planned second picks and likely-gone picks are previews only: a tap places on a placeable mark alone.
     const circles = draftPlayer === null ? null
       : new Set(highlight.filter((mark) => mark.placeable).map((mark) => mark.ref))
     return buildingSlots(board, placementPlayer, 'settlement', 'edit')
@@ -765,34 +788,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     )
   }), [ports, highlightSet])
-  const roadLayer = useMemo(() => board.roads.map((road) => {
-    // Draw the road as a slim rounded rectangle rather than a round-capped
-    // stroke: squarer ends read as a plank, not a capsule. Rotate a
-    // midpoint-centred rect to the edge's angle; the casing is the same
-    // rect grown by PIECE_STROKE on every side.
-    const { roadLength, mid, angle } = roadGeometry(road.edgeId)
-    return (
-      <g key={`road:${road.edgeId}`} transform={`translate(${mid.x} ${mid.y}) rotate(${angle})`}>
-        {/* Casing = colored core + PIECE_STROKE outline on each side, matching buildings. */}
-        <rect
-          x={-roadLength / 2 - PIECE_STROKE}
-          y={-(ROAD_CORE / 2 + PIECE_STROKE)}
-          width={roadLength + PIECE_STROKE * 2}
-          height={ROAD_CORE + PIECE_STROKE * 2}
-          rx={ROAD_RADIUS + PIECE_STROKE}
-          fill="#30271f"
-        />
-        <rect
-          x={-roadLength / 2}
-          y={-ROAD_CORE / 2}
-          width={roadLength}
-          height={ROAD_CORE}
-          rx={ROAD_RADIUS}
-          fill={playerColor(road.playerId)}
-        />
-      </g>
-    )
-  }), [board.roads, playerColor])
+  const roadLayer = useMemo(() => board.roads.map((road) => (
+    <Road key={`road:${road.edgeId}`} edgeId={road.edgeId} color={playerColor(road.playerId)} />
+  )), [board.roads, playerColor])
 
   const ordinals = useMemo(() =>
     draftComplete ? new Map<VertexId, 1 | 2>() : settlementOrdinals(board), [board, draftComplete])
@@ -841,42 +839,20 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     )
   }), [board.buildings, highlight, markedBuildings, ordinals, playerColor])
+  // A road mark is a recommended road, drawn as a faded road piece under the buildings and the
+  // pick circles it joins, like a placed road. Every other edge ref names a port, which
+  // `portLayer` lights up instead.
+  const roadMarkLayer = useMemo(() => highlight.map((mark, index) =>
+    mark.kind === 'road' && gridEdgeSet.has(mark.ref) ? (
+      <g key={`hl:${mark.ref}:${index}`} className="road-highlight" pointerEvents="none" opacity={0.55}>
+        <Road edgeId={mark.ref as EdgeId} color={mark.color ?? '#e72525'} />
+      </g>
+    ) : null), [highlight, gridEdgeSet])
   const markLayer = useMemo(() => highlight
-    .filter((mark) => (mark.kind === 'hex' ? grid.landKeys : mark.kind === 'road' ? gridEdgeSet : gridVertexSet).has(mark.ref))
-    .map((mark, index) => {
+    .filter((mark) => mark.kind !== 'road' && (mark.kind === 'hex' ? grid.landKeys : gridVertexSet).has(mark.ref))
+    .map((mark) => {
       if (mark.kind === 'hex') return <polygon key={`hl:${mark.ref}`} className="hex-highlight" points={hexPoints(parseAxialKey(mark.ref), SIZE - 6)} fill="none" stroke={mark.color ?? INK_COLOR} strokeWidth="3.5" strokeDasharray="7 4" pointerEvents="none" />
-      // A road mark is a direction, not a place: the analysis panel's road recommendation.
-      // Draw it as a stub of road along the edge, short enough to leave both endpoints clear of
-      // the vertex circles the same recommendation puts there. Every other mark is a place, and
-      // an edge ref among them names a port, which `portLayer` lights up instead.
-      if (mark.kind === 'road') {
-        const [a, b] = edgeEndpointVertexIds(mark.ref as EdgeId).map(vertexPoint)
-        const from = { x: a.x + (b.x - a.x) * MARK_EDGE_INSET, y: a.y + (b.y - a.y) * MARK_EDGE_INSET }
-        const to = { x: b.x - (b.x - a.x) * MARK_EDGE_INSET, y: b.y - (b.y - a.y) * MARK_EDGE_INSET }
-        return (
-          <g key={`hl:${mark.ref}:${index}`} pointerEvents="none" opacity={mark.faded ? 0.55 : undefined}>
-            <line
-              className="edge-highlight"
-              x1={from.x}
-              y1={from.y}
-              x2={to.x}
-              y2={to.y}
-              style={mark.color ? { stroke: mark.color } : undefined}
-            />
-          </g>
-        )
-      }
       const point = vertexPoint(mark.ref as VertexId)
-      if (mark.kind === 'ring') {
-        const radius = highlight.some((other) => other.kind === undefined && other.ref === mark.ref) ? 19 : 16
-        return (
-          <g key={`hl:ring:${mark.ref}`} pointerEvents="none">
-            <circle className="vertex-ring-edge" cx={point.x} cy={point.y} r={radius} fill="none" stroke="#30271f" strokeWidth="5" />
-            <circle className="vertex-ring" cx={point.x} cy={point.y} r={radius} fill="none" stroke={mark.color} strokeWidth="3" />
-          </g>
-        )
-      }
-
       // A player-tinted circle names who takes the spot; a plain circle
       // (default accent) is the generic "look here". A label stamps the
       // pick number, in ink or paper for contrast against the fill.
@@ -915,7 +891,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           )}
         </g>
       )
-    }), [highlight, grid, gridEdgeSet, gridVertexSet, markedBuildings])
+    }), [highlight, grid, gridVertexSet, markedBuildings])
   return (
     // The fitted box's proportions, for the phone arm's sea frame (spec S3):
     // square when the content is wider than tall, the content's own ratio otherwise.
@@ -998,6 +974,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {robberTokenLayer}
           {portLayer}
           {roadLayer}
+          {roadMarkLayer}
           {buildingLayer}
           {markLayer}
           <g className="hit-layers">

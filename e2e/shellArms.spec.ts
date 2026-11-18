@@ -8,7 +8,7 @@ import { boardGrid } from '../src/model/layouts'
 import type { Board, VertexId } from '../src/model/types'
 import { LISTED_PICKS } from '../src/ui/restMarks'
 import { buildingSlots } from '../src/ui/placementSlots'
-import { contestFixture, seedBoard, seedSavedMaps, seedUnclaimedRoster, todayTitle, UNCLAIMED_ROSTER } from './seed'
+import { seedBoard, seedSavedMaps, seedUnclaimedRoster, todayTitle, UNCLAIMED_ROSTER } from './seed'
 
 /**
  * The `Workspace` tree, which every viewport wider than 760px gets (spec B8),
@@ -42,37 +42,6 @@ async function randomize(page: Page) {
 
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 900 } })
-
-  test('lists every contest and previews rings with no placement dots inside them', async ({ page }) => {
-    const { board, contests, notes } = await contestFixture()
-    await page.goto('')
-    await seedBoard(page, board)
-    const rows = page.locator('.analysis-row-select')
-    await expect(rows).toHaveCount(LISTED_PICKS)
-    await expect(rows.locator('.analysis-contest')).toHaveText(notes)
-    const rings = page.locator('.vertex-ring')
-    const sharedCorners = new Set<boolean>()
-    for (const [index, contest] of contests.entries()) {
-      await rows.nth(index).hover()
-      await expect(rings).toHaveCount(contest.spots.length)
-      const countFromNote = notes[index].includes('the only spot') ? 1 : Number(/of (\d+) spots/.exec(notes[index])![1])
-      await expect(rings).toHaveCount(countFromNote)
-      for (const ring of await rings.all()) {
-        await expect(ring).toHaveAttribute('stroke', board.players[1].color)
-        const cx = await ring.getAttribute('cx')
-        const cy = await ring.getAttribute('cy')
-        const at = `[cx="${cx}"][cy="${cy}"]`
-        const shared = await page.locator(`.vertex-highlight${at}`).count() > 0
-        sharedCorners.add(shared)
-        await expect(page.locator(`.placement-slot${at}`)).toHaveCount(0)
-        await expect(ring).toHaveAttribute('r', shared ? '19' : '16')
-      }
-    }
-    expect(sharedCorners.has(true)).toBe(true)
-    expect(sharedCorners.has(false)).toBe(true)
-    await page.mouse.move(0, 0)
-    await expect(rings).toHaveCount(0)
-  })
 
   test('switches boards from the Library panel, with no tab strip and no save UI', async ({ page }) => {
     let nativeDialogs = 0
@@ -808,7 +777,8 @@ test.describe('desktop', () => {
 
     // Clearing drops back to the resting marks, and nothing was placed on the way.
     const buildings = page.locator('.board-canvas g[transform*="scale("]')
-    const roads = page.locator('.board-canvas g[transform*="rotate("]')
+    // A road mark draws the same piece inside .road-highlight, so count only placed roads.
+    const roads = page.locator('.board-canvas g:not(.road-highlight) > g[transform*="rotate("]')
     await expect(buildings).toHaveCount(0)
     await expect(roads).toHaveCount(0)
     await cards.first().getByRole('button', { name: 'Clear' }).click()
@@ -845,7 +815,7 @@ test.describe('desktop', () => {
     await expect(panel.locator('.analysis-factors')).toHaveCount(1)
     await expect(panel.locator('.analysis-factors > span').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
-    // Survival only renders on a spot the rollouts expect to be contested, and a
+    // Survival only renders on a spot the rollouts expect another player may take, and a
     // random board holds none more often than not, so the rule is read off a
     // probe put in a real card body and taken straight back out. The second read
     // resolves `--accent-dark` through the same element, so the assertion tracks

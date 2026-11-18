@@ -5,13 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DraftAnalysis, TakenVertex } from '../../engine/analysisProtocol'
 import type { AnalysisRequest } from '../../engine/analysisProtocol'
 import { inferDraftState } from '../../engine/draft'
-import { vertexAdjacency } from '../../engine/legality'
 import { emptyBreakdown } from './emptyBreakdown'
-import { addPlayer, createBoard, placeRoad, setHexTile, upsertPort } from '../../model/board'
-import { axialKey, axialToPixel, edgeEndpointVertexIds, parseVertexId, vertexIncidentEdgeIds } from '../../model/coords'
+import { addPlayer, createBoard, setHexTile, upsertPort } from '../../model/board'
+import { axialKey, axialToPixel, edgeEndpointVertexIds, parseVertexId } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { setTile } from '../../model/__tests__/helpers'
-import type { AxialCoord, Board, EdgeId, VertexId } from '../../model/types'
+import type { AxialCoord, Board, VertexId } from '../../model/types'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { AnalysisProvider } from '../AnalysisProvider'
 import { INK_COLOR, TILE_COLORS, TOKEN_COLOR } from '../colors'
@@ -58,10 +57,6 @@ function Commit({ report }: { report(dispatch: ReturnType<typeof useStore>['disp
   return null
 }
 
-function Highlights() {
-  return <output data-highlights>{JSON.stringify(useStore().state.highlight)}</output>
-}
-
 describe('Best picks rows', () => {
   let root: Root
   let container: HTMLDivElement
@@ -71,13 +66,13 @@ describe('Best picks rows', () => {
     await act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   }
   const reply = async (takenBeforeFirstPick: TakenVertex[] = [], firstPicks: VertexId[] = [INLAND], {
-    plannedSecond = [ANY_PORT, ORE_PORT, TWO_HEX], survival = 1, status = 'ready', firstRoad = null,
-  }: { plannedSecond?: VertexId[]; survival?: number; status?: DraftAnalysis['status']; firstRoad?: EdgeId | null } = {}) => {
+    plannedSecond = [ANY_PORT, ORE_PORT, TWO_HEX], survival = 1, status = 'ready',
+  }: { plannedSecond?: VertexId[]; survival?: number; status?: DraftAnalysis['status'] } = {}) => {
     const job = jobs.at(-1)!
     await act(async () => job.reply({
       status, draft: inferDraftState(job.request.board), warnings: [], takenBeforeFirstPick,
       recommendations: firstPicks.map((firstPick) => ({
-        firstPick, firstRoad, secondRoad: null, plannedSecond,
+        firstPick, firstRoad: null, secondRoad: null, plannedSecond,
         survival, score: 0.5, rankScore: 0.5,
         breakdown: { ...emptyBreakdown(), production: 0.7, robber: -0.2 },
       })),
@@ -383,167 +378,4 @@ describe('Best picks rows', () => {
     expect(container.querySelector('.analysis-factors')).toBeNull()
   })
 
-  describe('contest notes', () => {
-    const adjacency = vertexAdjacency('standard4')
-    const near = (vertexId: VertexId) => adjacency.get(vertexId)!
-    const edge = (a: VertexId, b: VertexId): EdgeId =>
-      vertexIncidentEdgeIds(a).find((edgeId) => edgeEndpointVertexIds(edgeId).includes(b))!
-    const pick = [...adjacency.keys()].find((vertexId) => near(vertexId).length === 3
-      && near(vertexId).every((n) => near(n).length === 3 && near(n).every((s) => near(s).length === 3
-        && near(s).every((t) => near(t).length === 3))))!
-    const far = near(pick)[0]
-    const firstRoad = edge(pick, far)
-    const [s1, s2] = near(far).filter((vertexId) => vertexId !== pick)
-    const [t1, t2] = near(s1).filter((vertexId) => vertexId !== far)
-    const u1 = near(t1).find((vertexId) => vertexId !== s1)!
-    const u2 = near(t2).find((vertexId) => vertexId !== s1 && vertexId !== u1 && !near(u1).includes(vertexId))!
-    const thirdRoad = edge(t1, near(t1).find((vertexId) => vertexId !== s1 && vertexId !== u1)!)
-    const v = near(s2).find((vertexId) => vertexId !== far)!
-    const w = near(v).find((vertexId) => vertexId !== s2)!
-    const roster = () => addPlayer(addPlayer(opening(), { id: 'c', name: 'White', color: '#ffffff' }),
-      { id: 'd', name: 'Orange', color: '#e58331' })
-    const commit = async (board: Board) => act(async () => dispatch({ type: 'commit', board }))
-    const show = () => reply([], [pick], { firstRoad })
-    const notes = () => [...container.querySelectorAll('.analysis-contest')].map((note) => note.textContent)
-
-    it('names one rival and places the note below the score and above selected factors', async () => {
-      await commit(placeRoad(roster(), edge(u1, t1), 'b'))
-      await show()
-      expect(notes()).toEqual(['Blue can reach 1 of 2 spots'])
-      const row = container.querySelector('.analysis-row-select')!
-      const note = row.querySelector('.analysis-contest')!
-      expect(note.parentElement).toBe(row)
-      expect(note.previousElementSibling?.className).toBe('analysis-score')
-      expect(row.querySelector('.analysis-row-body .analysis-contest')).toBeNull()
-      await click(row)
-      expect(note.nextElementSibling?.className).toBe('analysis-factors')
-    })
-
-    it('combines two rivals with the same count in roster order', async () => {
-      await commit(placeRoad(placeRoad(roster(), edge(u1, t1), 'c'), edge(u2, t2), 'b'))
-      await show()
-      expect(notes()).toEqual(['Blue and White can reach 1 of 2 spots'])
-    })
-
-    it('combines three rivals with commas and a final and', async () => {
-      const board = placeRoad(placeRoad(roster(), edge(u1, t1), 'c'), edge(u2, t2), 'b')
-      await commit(placeRoad(board, thirdRoad, 'd'))
-      await show()
-      expect(notes()).toEqual(['Blue, White and Orange can reach 1 of 2 spots'])
-    })
-
-    it('separates different counts with a semicolon in roster group order', async () => {
-      const board = placeRoad(placeRoad(roster(), edge(u1, t1), 'c'), edge(u2, t2), 'b')
-      await commit(placeRoad(board, edge(v, w), 'c'))
-      await show()
-      expect(notes()).toEqual(['Blue can reach 1 of 2 spots; White can reach 2 of 2 spots'])
-    })
-
-    it('keeps the earlier rival first when that rival contests more spots', async () => {
-      const board = placeRoad(placeRoad(roster(), edge(u1, t1), 'b'), edge(u2, t2), 'c')
-      await commit(placeRoad(board, edge(v, w), 'b'))
-      await show()
-      expect(notes()).toEqual(['Blue can reach 2 of 2 spots; White can reach 1 of 2 spots'])
-    })
-
-    it('keeps a group together when another count occurs between its rivals', async () => {
-      let board = placeRoad(placeRoad(roster(), edge(u1, t1), 'c'), edge(u2, t2), 'b')
-      board = placeRoad(placeRoad(board, edge(v, w), 'c'), thirdRoad, 'd')
-      await commit(board)
-      await show()
-      expect(notes()).toEqual(['Blue and Orange can reach 1 of 2 spots; White can reach 2 of 2 spots'])
-    })
-
-    it('names the only spot when a rival road removes the other spot', async () => {
-      await commit(placeRoad(roster(), edge(far, s2), 'b'))
-      await show()
-      expect(notes()).toEqual(['Blue can reach the only spot'])
-    })
-
-    it('omits the note when no rival contests or the row has no road', async () => {
-      await commit(roster())
-      await show()
-      expect(notes()).toEqual([])
-      await commit(placeRoad(roster(), edge(u1, t1), 'b'))
-      await reply([], [pick])
-      expect(notes()).toEqual([])
-    })
-
-    it('appends one ring per contested spot when the row is selected or hovered', async () => {
-      await act(async () => root.render(<StoreProvider><AnalysisProvider>
-        <Commit report={(value) => { dispatch = value }} /><AnalysisPanel /><Highlights />
-      </AnalysisProvider></StoreProvider>))
-      await commit(placeRoad(placeRoad(roster(), edge(u1, t1), 'b'), edge(v, w), 'b'))
-      await show()
-      expect(notes()).toEqual(['Blue can reach 2 of 2 spots'])
-      const row = container.querySelector('.analysis-row-select')!
-      const spots = [s1, s2].sort((a, b) => edge(far, a) < edge(far, b) ? -1 : 1)
-      const expected = spots.map((ref) => ({ ref, color: '#3063ba', kind: 'ring' }))
-      const marks = () => JSON.parse(container.querySelector('[data-highlights]')!.textContent!)
-      await act(async () => row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
-      expect(marks().slice(-2)).toEqual(expected)
-      await click(row)
-      expect(marks().filter((mark: { kind?: string }) => mark.kind === 'ring')).toEqual(expected)
-      expect(marks().slice(-2)).toEqual(expected)
-    })
-
-    it('keeps each row note and selected rings tied to that row', async () => {
-      await act(async () => root.render(<StoreProvider><AnalysisProvider>
-        <Commit report={(value) => { dispatch = value }} /><AnalysisPanel /><Highlights />
-      </AnalysisProvider></StoreProvider>))
-      await commit(placeRoad(roster(), edge(u1, t1), 'b'))
-      expect(edgeEndpointVertexIds(firstRoad)).not.toContain(INLAND)
-      await reply([], [INLAND, pick], { firstRoad })
-      const rows = container.querySelectorAll('.analysis-row-select')
-      expect(rows).toHaveLength(2)
-      expect(rows[0].querySelector('.analysis-contest')).toBeNull()
-      expect(rows[1].querySelector('.analysis-contest')?.textContent).toBe('Blue can reach 1 of 2 spots')
-      const rings = () => JSON.parse(container.querySelector('[data-highlights]')!.textContent!)
-        .filter((mark: { kind?: string }) => mark.kind === 'ring')
-      await click(rows[1])
-      expect(rings()).toEqual([{ ref: s1, color: '#3063ba', kind: 'ring' }])
-      await click(rows[0])
-      expect(rings()).toEqual([])
-    })
-
-    it('holds the old board and names until the next ranking arrives', async () => {
-      const board = placeRoad(roster(), edge(u1, t1), 'b')
-      await commit(board)
-      await show()
-      expect(notes()).toEqual(['Blue can reach 1 of 2 spots'])
-      await commit({ ...board, roads: [], players: board.players.map((player) => ({ ...player, name: 'Renamed' })) })
-      expect(container.querySelector('.analysis-stale .analysis-contest')?.textContent).toBe('Blue can reach 1 of 2 spots')
-      await show()
-      expect(container.querySelector('.analysis-stale')).toBeNull()
-      expect(notes()).toEqual([])
-    })
-
-    it.each(['b', 'aki'])('uses the viewed seat with a road owned by %s', async (owner) => {
-      await commit(placeRoad(roster(), edge(u1, t1), owner))
-      await act(async () => dispatch({ type: 'view-pick', slot: 1 }))
-      expect(jobs.at(-1)!.request.board.mePlayerId).toBe('b')
-      await show()
-      expect(notes()).toEqual(owner === 'b' ? [] : ['aki can reach 1 of 2 spots'])
-    })
-
-    it('holds the ranked seat when the viewed seat changes during a pending ranking', async () => {
-      await commit(placeRoad(roster(), edge(u1, t1), 'aki'))
-      await act(async () => dispatch({ type: 'view-pick', slot: 1 }))
-      await show()
-      expect(notes()).toEqual(['aki can reach 1 of 2 spots'])
-      await act(async () => dispatch({ type: 'view-pick', slot: 0 }))
-      expect(container.querySelector('.analysis-stale .analysis-contest')?.textContent).toBe('aki can reach 1 of 2 spots')
-      await show()
-      expect(notes()).toEqual([])
-    })
-
-    it('ignores a likely-gone road until it is placed on the board', async () => {
-      await commit(roster())
-      await reply([{ playerId: 'b', vertexId: u1, road: edge(u1, t1), frequency: 1 }], [pick], { firstRoad })
-      expect(notes()).toEqual([])
-      await commit(placeRoad(roster(), edge(u1, t1), 'b'))
-      await show()
-      expect(notes()).toEqual(['Blue can reach 1 of 2 spots'])
-    })
-  })
 })

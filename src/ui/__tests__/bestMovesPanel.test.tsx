@@ -1457,7 +1457,7 @@ describe('Best moves recording', () => {
     await click('Retry advice')
     await click('Play', container.querySelector('.analysis-row')!)
     expect(container.querySelectorAll('.hex-highlight')).toHaveLength(1)
-    expect(container.querySelectorAll('.highlighted, .vertex-highlight, .edge-highlight')).toHaveLength(0)
+    expect(container.querySelectorAll('.highlighted, .vertex-highlight, g[pointer-events="none"][opacity="0.55"] > g > rect')).toHaveLength(0)
     expect(container.textContent).toContain('Suggested:')
     expect(container.textContent).toContain('steal from Bee')
     expect(seen.state.pick?.want).toBe('hex')
