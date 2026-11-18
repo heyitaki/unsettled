@@ -62,10 +62,10 @@ describe('settlement order badges', () => {
     expect(badges().map((badge) => badge.textContent)).toEqual(['1'])
   })
 
-  it('fades roads and buildings to 70% only while the draft is unfinished', () => {
+  it('draws roads and buildings at full strength during and after the draft', () => {
     const piece = () => container.querySelector('[filter="url(#piece-shadow)"]')!
     draw(imported as Board)
-    expect(piece().closest('[opacity]')?.getAttribute('opacity')).toBe('0.7')
+    expect(piece().closest('[opacity]')).toBeNull()
     let board = createBoard('standard4')
     const vertices = boardGrid(board.layout).vertexIds
     for (const [index, player] of board.players.entries()) {

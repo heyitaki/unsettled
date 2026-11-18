@@ -887,7 +887,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       // silhouette is widest; on a bare circle it stays centred.
       const labelY = marked
         ? point.y + TIER_BASE_Y[marked.tier] * TIER_SCALE[marked.tier] - LABEL_LIFT
-        : point.y + 4.73
+        : point.y + 3.8
       const fill = mark.color
       const ink = mark.color ? readableInk(mark.color) : undefined
       const faded = mark.faded ? ' faded' : ''
@@ -898,7 +898,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               className={`vertex-highlight${faded}`}
               cx={point.x}
               cy={point.y}
-              r="11"
+              r="9.5"
               style={fill ? { fill, stroke: '#30271f' } : undefined}
             />
           )}
@@ -907,7 +907,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               x={point.x}
               y={labelY}
               textAnchor="middle"
-              className={`vertex-highlight-label${marked ? ' on-piece' : ''}${faded}`}
+              className={`vertex-highlight-label${faded}`}
               fill={ink}
             >
               {mark.label}
@@ -997,11 +997,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {robberLayer}
           {robberTokenLayer}
           {portLayer}
-          {/* Pieces step back during the draft so the Best picks circles lead. */}
-          <g opacity={draftComplete ? undefined : 0.7}>
-            {roadLayer}
-            {buildingLayer}
-          </g>
+          {roadLayer}
+          {buildingLayer}
           {markLayer}
           <g className="hit-layers">
             {hexActive && board.hexes.map((hex) => (
