@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnalysisProvider } from './AnalysisProvider'
 import { AdviceProvider } from './AdviceProvider'
 import { AnalysisPanel } from './AnalysisPanel'
@@ -16,7 +16,8 @@ import { MapsPanel } from './MapsPanel'
 import { PhoneShell } from './phone/PhoneShell'
 import { PlayerPanel } from './PlayerPanel'
 import { activeTab, StoreProvider, useStore } from './store'
-import { usePhone } from './useMediaQuery'
+import { usePhone, useStacked } from './useMediaQuery'
+import { useColumnGlide } from './useColumnGlide'
 import './editor.css'
 
 function Workspace() {
@@ -25,17 +26,24 @@ function Workspace() {
   const { building, enter, done, cancel, toggle, restMarks } = useBuildMode()
   const [open, setOpen] = useState<{ panel: HeaderPanel; trigger: HTMLButtonElement } | null>(null)
   const [importing, setImporting] = useState(false)
+  // Side by side, the controls head the column, which centres on the board and glides as its cards change.
+  const stacked = useStacked()
+  const rail = useRef<HTMLElement>(null)
+  useColumnGlide(rail, !stacked)
   useEffect(() => setOpen((current) => current?.panel === 'players' ? null : current), [building])
   const togglePanel = (panel: HeaderPanel, trigger: HTMLButtonElement) => {
     setOpen((current) => current?.panel === panel ? null : { panel, trigger })
   }
+  const controls = (
+    <div className="head-controls">
+      <HeaderControls building={building} onToggleMode={toggle} onOpen={togglePanel} openPanel={open?.panel ?? null} />
+    </div>
+  )
   return (
     <div className="app-shell">
       <header className="site-header">
         <Brand />
-        <div className="head-controls">
-          <HeaderControls building={building} onToggleMode={toggle} onOpen={togglePanel} openPanel={open?.panel ?? null} />
-        </div>
+        {stacked && controls}
         {open && (
           <HeaderPopover key={open.panel} label={open.panel === 'maps' ? 'Maps' : 'Players'} className={open.panel === 'maps' ? 'head-maps' : 'head-players'} trigger={open.trigger} onClose={() => setOpen((current) => current === open ? null : current)}>
             {open.panel === 'maps' ? <MapsPanel onImport={() => { setOpen(null); setImporting(true) }} /> : <PlayerPanel />}
@@ -48,7 +56,8 @@ function Workspace() {
           <BoardCanvas restMarks={restMarks} />
           {!building && <HistoryControls />}
         </div>
-        <aside className="right-rail">
+        <aside className="right-rail" ref={rail}>
+          {!stacked && controls}
           {building ? <BoardTools actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel onBuild={enter} />}
         </aside>
       </main>

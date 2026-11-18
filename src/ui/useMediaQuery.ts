@@ -28,3 +28,5 @@ function useMediaQuery(query: string): boolean {
 export const useCoarsePointer = (): boolean => useMediaQuery('(pointer: coarse)')
 /** The phone arm, where App mounts PhoneShell instead of Workspace (spec B8). */
 export const usePhone = (): boolean => useMediaQuery('(max-width: 760px)')
+/** The stacked desktop arm, where the column wraps under the board and the controls stay in the header. */
+export const useStacked = (): boolean => useMediaQuery('(max-width: 980px)')
