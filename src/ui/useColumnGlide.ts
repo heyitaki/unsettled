@@ -44,7 +44,7 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       copy.dataset.ghost = ''
       copy.inert = true
       copy.setAttribute('aria-hidden', 'true')
-      Object.assign(copy.style, { position: 'absolute', left: '0', right: '0', top: `${box.top - column.offsetTop}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '-1' })
+      Object.assign(copy.style, { position: 'absolute', left: `${card.offsetLeft}px`, width: `${card.offsetWidth}px`, top: `${box.top - column.offsetTop}px`, height: `${box.height}px`, margin: '0', pointerEvents: 'none', zIndex: '-1' })
       column.append(copy)
       // Under the cards, so the card replacing it fades in on top: a crossfade with no empty frame between them.
       copy.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DURATION, easing: 'ease-in' }).finished.finally(() => copy.remove())

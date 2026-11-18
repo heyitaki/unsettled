@@ -31,9 +31,12 @@ function Workspace() {
   const rail = useRef<HTMLElement>(null)
   useColumnGlide(rail, !stacked)
   useEffect(() => setOpen((current) => current?.panel === 'players' ? null : current), [building])
+  // The open panel lives in the header when stacked and in the column side by side, so a switch closes it.
+  useEffect(() => setOpen(null), [stacked])
   const togglePanel = (panel: HeaderPanel, trigger: HTMLButtonElement) => {
     setOpen((current) => current?.panel === panel ? null : { panel, trigger })
   }
+  const maps = <MapsPanel onImport={() => { setOpen(null); setImporting(true) }} />
   const controls = (
     <div className="head-controls">
       <HeaderControls building={building} onToggleMode={toggle} onOpen={togglePanel} openPanel={open?.panel ?? null} />
@@ -44,9 +47,9 @@ function Workspace() {
       <header className="site-header">
         <Brand />
         {stacked && controls}
-        {open && (
+        {open && stacked && (
           <HeaderPopover key={open.panel} label={open.panel === 'maps' ? 'Maps' : 'Players'} className={open.panel === 'maps' ? 'head-maps' : 'head-players'} trigger={open.trigger} onClose={() => setOpen((current) => current === open ? null : current)}>
-            {open.panel === 'maps' ? <MapsPanel onImport={() => { setOpen(null); setImporting(true) }} /> : <PlayerPanel />}
+            {open.panel === 'maps' ? maps : <PlayerPanel />}
           </HeaderPopover>
         )}
       </header>
@@ -58,12 +61,15 @@ function Workspace() {
         </div>
         <aside className="right-rail" ref={rail}>
           {!stacked && controls}
-          {building ? <BoardTools actions={actions} onDone={done} onCancel={cancel} /> : <AnalysisPanel onBuild={enter} />}
+          {/* Side by side, Maps takes the column like Board tools and Players joins it above the other cards. */}
+          {!stacked && open?.panel === 'players' && <PlayerPanel />}
+          {!stacked && open?.panel === 'maps' ? maps
+            : building ? <BoardTools actions={actions} onDone={done} onCancel={cancel} />
+            : <AnalysisPanel onBuild={enter} />}
         </aside>
       </main>
       {actions.confirm}
-      {/* The dialog outlives the Maps popover that opens it. Closing Maps first returns
-          focus to the title button, which the dialog then restores on close. */}
+      {/* The dialog outlives the Maps panel that opens it, and restores focus on close. */}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}
       <SharedImport />
     </div>
