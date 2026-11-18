@@ -85,12 +85,9 @@ describe('Best picks setup roads', () => {
       { ref: ROAD, color: board().players[0].color, label: 'R', kind: 'road' },
     ])
     expect(seen.state.highlight?.filter(({ kind }) => kind !== 'road')).toHaveLength(2)
-    const roads = container.querySelectorAll('g[pointer-events="none"][opacity="0.55"] > g')
+    const roads = container.querySelectorAll('.road-highlight > rect.planned-piece')
     expect(roads).toHaveLength(1)
-    const rects = roads[0].querySelectorAll('rect')
-    expect(rects).toHaveLength(2)
-    expect(rects[0].getAttribute('fill')).toBe('#30271f')
-    expect(rects[1].getAttribute('fill')).toBe(board().players[0].color)
+    expect(roads[0].getAttribute('fill')).toBe(board().players[0].color)
   })
 
   it.each(['Play these out', 'Place settlement'])('%s lays the roads and settlements in one undoable commit', async (action) => {
@@ -132,19 +129,13 @@ describe('Best picks setup roads', () => {
     expect(board().roads).toEqual([{ edgeId: ROAD, playerId: 'aki' }])
   })
 
-  it('fades both roads and gives overlapping road marks distinct keys', async () => {
+  it('draws both roads as planned roads and gives overlapping road marks distinct keys', async () => {
     const errors = vi.spyOn(console, 'error')
     await render({ ...pick, secondRoad: FIRST_ROAD })
     await click(container.querySelector('.analysis-row-select'))
-    const roads = container.querySelectorAll('g[pointer-events="none"][opacity="0.55"] > g')
+    const roads = container.querySelectorAll('.road-highlight > rect.planned-piece')
     expect(roads).toHaveLength(2)
-    for (const road of roads) {
-      expect(road.parentElement?.getAttribute('opacity')).toBe('0.55')
-      const rects = road.querySelectorAll('rect')
-      expect(rects).toHaveLength(2)
-      expect(rects[0].getAttribute('fill')).toBe('#30271f')
-      expect(rects[1].getAttribute('fill')).toBe(board().players[1].color)
-    }
+    for (const road of roads) expect(road.getAttribute('fill')).toBe(board().players[1].color)
     expect(errors).not.toHaveBeenCalled()
   })
 })

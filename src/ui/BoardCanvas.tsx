@@ -200,6 +200,25 @@ function Road({ edgeId, color }: { edgeId: EdgeId; color: string }) {
   )
 }
 
+// A piece not placed yet (a build-mode hover preview or a suggested road): its outline and fill
+// strength come from `.planned-piece` in editor.css, so it reads apart from placed pieces.
+function PlannedRoad({ edgeId, color, className = '' }: { edgeId: EdgeId; color: string; className?: string }) {
+  const { roadLength, mid, angle } = roadGeometry(edgeId)
+  return (
+    <rect
+      className={`planned-piece${className && ` ${className}`}`}
+      x={-roadLength / 2}
+      y={-ROAD_CORE / 2}
+      width={roadLength}
+      height={ROAD_CORE}
+      rx={ROAD_RADIUS}
+      transform={`translate(${mid.x} ${mid.y}) rotate(${angle})`}
+      fill={color}
+      color={color}
+    />
+  )
+}
+
 function hexPoints(coord: AxialCoord, radius = SIZE): string {
   const point = center(coord)
   return Array.from({ length: 6 }, (_, index) => {
@@ -471,7 +490,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     ? hoverBuilding?.playerId ?? hoverRoad?.playerId ?? placementPlayer
     : null
   const preview = hover && hoverPort === null && !hoverBuilding && !hoverRoad ? hover : undefined
-  const previewRoad = preview?.ref.startsWith('e:') ? roadGeometry(preview.ref as EdgeId) : undefined
+  const previewRoad = preview?.ref.startsWith('e:') ? preview.ref as EdgeId : undefined
   useEffect(() => {
     lastClick.current = null
     finePointer.current = null
@@ -841,13 +860,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       </g>
     )
   }), [board.buildings, highlight, markedBuildings, ordinals, playerColor])
-  // A road mark is a recommended road, drawn as a faded road piece under the buildings and the
-  // pick circles it joins, like a placed road. Every other edge ref names a port, which
-  // `portLayer` lights up instead.
+  // A road mark is a recommended road, drawn as a planned road under the buildings and the pick
+  // circles it joins, like a placed road. Every other edge ref names a port, which `portLayer`
+  // lights up instead.
   const roadMarkLayer = useMemo(() => highlight.map((mark, index) =>
     mark.kind === 'road' && gridEdgeSet.has(mark.ref) ? (
-      <g key={`hl:${mark.ref}:${index}`} className="road-highlight" pointerEvents="none" opacity={0.55}>
-        <Road edgeId={mark.ref as EdgeId} color={mark.color ?? '#e72525'} />
+      <g key={`hl:${mark.ref}:${index}`} className="road-highlight" pointerEvents="none">
+        <PlannedRoad edgeId={mark.ref as EdgeId} color={mark.color ?? '#e72525'} />
       </g>
     ) : null), [highlight, gridEdgeSet])
   const markLayer = useMemo(() => highlight
@@ -977,6 +996,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           {portLayer}
           {roadLayer}
           {roadMarkLayer}
+          {/* The build-mode road preview sits with the roads, so a settlement or city always covers its end. */}
+          {previewRoad && <g pointerEvents="none"><PlannedRoad edgeId={previewRoad} color={playerColor(hoverPlayer)} className="placement-hover" /></g>}
           {buildingLayer}
           {markLayer}
           <g className="hit-layers">
@@ -1005,29 +1026,13 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
               <circle key={slot.ref} className="placement-slot" cx={slot.x} cy={slot.y} r={coarse ? PORT_DOT_COARSE : PORT_DOT_FINE} fill={TOKEN_COLOR} fillOpacity={0.85} onClick={(event) => onSlotClick(event, slot)} />
             ))}
             {preview && !previewRoad && <path
-              className="placement-hover"
+              className="placement-hover planned-piece"
               d={SETTLEMENT_PATH}
               transform={`translate(${preview.x} ${preview.y}) scale(${TIER_SCALE.settlement})`}
+              // The outline and dashes are drawn in board units, so undo the piece's scale.
+              style={{ '--k': 1 / TIER_SCALE.settlement } as CSSProperties}
               fill={playerColor(hoverPlayer)}
-              fillOpacity={0.7}
-              stroke="#30271f"
-              strokeOpacity={0.75}
-              strokeWidth={PIECE_STROKE / TIER_SCALE.settlement}
-              strokeLinejoin="round"
-            />}
-            {previewRoad && <rect
-              className="placement-hover"
-              x={-previewRoad.roadLength / 2}
-              y={-ROAD_CORE / 2}
-              width={previewRoad.roadLength}
-              height={ROAD_CORE}
-              rx={ROAD_RADIUS}
-              transform={`translate(${previewRoad.mid.x} ${previewRoad.mid.y}) rotate(${previewRoad.angle})`}
-              fill={playerColor(hoverPlayer)}
-              fillOpacity={0.7}
-              stroke="#30271f"
-              strokeOpacity={0.75}
-              strokeWidth={PIECE_STROKE}
+              color={playerColor(hoverPlayer)}
             />}
             {hover && !preview && <circle className="placement-hover" cx={hover.x} cy={hover.y} r={hoverPort ? PORT_HOVER_RADIUS : 16} fill="none" stroke={playerColor(hoverPlayer)} strokeWidth={2.5} />}
           </g>

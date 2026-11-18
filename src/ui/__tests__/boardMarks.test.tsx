@@ -81,34 +81,27 @@ describe('board mark layer', () => {
     actEnvironment(false)
   })
 
-  it.each([undefined, false, true])('draws a full road like a placed road at 0.55 opacity (faded: %s)', (faded) => {
+  it.each([undefined, false, true])("draws a planned road on the placed road's core geometry (faded: %s)", (faded) => {
     const board = { ...createBoard('standard4'), players: [{ id: 'b', name: 'Blue', color: COLOR }] }
     draw([{ ref: EDGE, color: COLOR, label: 'R', kind: 'road', faded }], placeRoad(board, EDGE, 'b'))
 
-    const roads = container.querySelectorAll('g[transform] > rect[fill="#30271f"]')
-    expect(roads).toHaveLength(2)
-    const placed = roads[0].parentElement!
-    const preview = roads[1].parentElement!
-    expect(preview.outerHTML).toBe(placed.outerHTML)
-    expect(placed.parentElement?.getAttribute('opacity')).toBeNull()
-    expect(preview.parentElement?.getAttribute('opacity')).toBe('0.55')
-    expect(preview.parentElement?.getAttribute('pointer-events')).toBe('none')
-    const rects = preview.querySelectorAll('rect')
-    expect(rects).toHaveLength(2)
-    expect(rects[0].getAttribute('fill')).toBe('#30271f')
-    expect(rects[1].getAttribute('fill')).toBe(COLOR)
-    expect(Number(rects[1].getAttribute('width'))).toBeCloseTo(50.88)
-    expect(rects[1].getAttribute('height')).toBe('6')
-    expect(rects[1].getAttribute('rx')).toBe('1.95')
-    expect(preview.querySelector('line, text')).toBeNull()
+    const core = container.querySelector(`g[transform] > rect[fill="${COLOR}"]`)!
+    const planned = container.querySelectorAll('.road-highlight > rect.planned-piece')
+    expect(planned).toHaveLength(1)
+    const road = planned[0]
+    expect(road.parentElement?.getAttribute('pointer-events')).toBe('none')
+    expect(road.getAttribute('fill')).toBe(COLOR)
+    for (const name of ['x', 'y', 'width', 'height', 'rx']) expect(road.getAttribute(name)).toBe(core.getAttribute(name))
+    expect(road.getAttribute('transform')).toBe(core.parentElement!.getAttribute('transform'))
+    expect(Number(road.getAttribute('width'))).toBeCloseTo(50.88)
+    expect(road.parentElement?.querySelector('line, text')).toBeNull()
     expect(container.querySelectorAll('.vertex-highlight')).toHaveLength(0)
   })
 
   it('uses highlight red for a road mark without a colour', () => {
     draw([{ ref: EDGE, kind: 'road' }])
-    const road = container.querySelector('g[pointer-events="none"][opacity="0.55"] > g')!
-    expect(road.querySelectorAll('rect')).toHaveLength(2)
-    expect(road.lastElementChild?.getAttribute('fill')).toBe('#e72525')
+    const road = container.querySelector('.road-highlight > rect.planned-piece')!
+    expect(road.getAttribute('fill')).toBe('#e72525')
   })
 
   it('draws no draft dots outside edit mode', () => {
@@ -144,22 +137,22 @@ describe('board mark layer', () => {
     draw([{ ref: VERTEX, color: COLOR, label: '1' }])
 
     expect(container.querySelectorAll('.vertex-highlight')).toHaveLength(1)
-    expect(container.querySelectorAll('g[pointer-events="none"][opacity="0.55"] > g > rect')).toHaveLength(0)
+    expect(container.querySelectorAll('.road-highlight > rect')).toHaveLength(0)
   })
 
   it('ignores a road mark the layout has no edge for', () => {
     draw([{ ref: 'e:9,9;9,10', color: COLOR, label: 'R', kind: 'road' }])
 
-    expect(container.querySelectorAll('g[pointer-events="none"][opacity="0.55"] > g > rect')).toHaveLength(0)
+    expect(container.querySelectorAll('.road-highlight > rect')).toHaveLength(0)
   })
 
   it('lights the port up for a plain edge mark and lays a road for a road mark', () => {
     draw([{ ref: PORT_EDGE }])
     expect(container.querySelectorAll('g.highlighted')).toHaveLength(1)
-    expect(container.querySelectorAll('g[pointer-events="none"][opacity="0.55"] > g > rect')).toHaveLength(0)
+    expect(container.querySelectorAll('.road-highlight > rect')).toHaveLength(0)
 
     draw([{ ref: PORT_EDGE, color: COLOR, label: 'R', kind: 'road' }])
     expect(container.querySelectorAll('g.highlighted')).toHaveLength(0)
-    expect(container.querySelectorAll('g[pointer-events="none"][opacity="0.55"] > g > rect')).toHaveLength(2)
+    expect(container.querySelectorAll('.road-highlight > rect.planned-piece')).toHaveLength(1)
   })
 })

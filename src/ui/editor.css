@@ -170,6 +170,7 @@ button.danger { color: var(--danger); }
 .vertex-highlight { r: 9.5px; fill: rgba(187,76,50,.22); stroke: #8f3425; stroke-width: 1.8; }
 .vertex-highlight-label, .settlement-ordinal { font: 700 11px var(--token-face); font-variant-numeric: lining-nums tabular-nums; }
 .vertex-highlight.faded, .vertex-highlight-label.faded { opacity: .55; }
+.planned-piece { --k: 1; fill-opacity: .6; stroke: #30271f; stroke-width: calc(1.8px * var(--k)); stroke-dasharray: calc(5px * var(--k)) calc(2.5px * var(--k)); stroke-linejoin: round; }
 
 .player-list { display: grid; --row-gap: 10px; --card-pad: 6px; }
 /* The row hangs left by its own inset (7px pad, 1px border, 2px to centre the
