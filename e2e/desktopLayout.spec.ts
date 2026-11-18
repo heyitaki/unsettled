@@ -5,7 +5,7 @@ import { edgeEndpointVertexIds } from '../src/model/coords'
 import { boardGrid } from '../src/model/layouts'
 import { awaitingFirstTurn, setActivePlayer } from '../src/model/turn'
 import { finishedDraft } from '../src/ui/__tests__/finishedDraft'
-import { seedBoard, seedUnclaimedRoster } from './seed'
+import { seedBoard, seedSavedMaps, seedUnclaimedRoster } from './seed'
 
 /**
  * The desktop layout (desktop spec, The model and D3): the board beside one
@@ -132,6 +132,49 @@ test.describe('desktop layout', () => {
     await expect(maps).toBeVisible()
     await expect(maps.getByRole('button', { name: 'Rename Board 1' })).toBeVisible()
     await expect(title(page)).toHaveText('Board 1')
+  })
+
+  test('hovering a Maps row previews its board, and leaving the list or hovering the current row restores it', async ({ page }) => {
+    await page.goto('')
+    await seedBoard(page, finishedDraft(0).board)
+    // A saved copy no tab has loaded, previewed from storage.
+    await seedSavedMaps(page, 1)
+    const board = page.locator('.board-canvas')
+    const pieces = board.locator('g[filter="url(#piece-shadow)"]')
+    await expect(pieces).toHaveCount(8)
+    const drafted = (await title(page).textContent())!
+    await title(page).click()
+    const maps = page.locator('.maps-panel')
+    await maps.getByRole('button', { name: 'New board' }).click()
+    await expect(title(page)).not.toHaveText(drafted)
+    const fresh = (await title(page).textContent())!
+    await expect(pieces).toHaveCount(0)
+    const row = (name: string) => maps.locator('.list-row').filter({ has: page.getByRole('button', { name: `Switch to ${name}`, exact: true }) })
+    await row(drafted).hover()
+    await expect(board).toHaveAttribute('aria-label', 'Catan board preview')
+    await expect(pieces).toHaveCount(8)
+    await row(fresh).hover()
+    await expect(board).toHaveAttribute('aria-label', 'Editable Catan board')
+    await expect(pieces).toHaveCount(0)
+    await row('Map 1').hover()
+    await expect(pieces).toHaveCount(8)
+    await row(fresh).hover()
+    await expect(pieces).toHaveCount(0)
+    await row(drafted).hover()
+    await expect(pieces).toHaveCount(8)
+    await page.mouse.move(10, 450)
+    await expect(pieces).toHaveCount(0)
+    await row(drafted).hover()
+    await expect(pieces).toHaveCount(8)
+    await page.keyboard.press('Escape')
+    await expect(maps).toBeHidden()
+    await expect(board).toHaveAttribute('aria-label', 'Editable Catan board')
+    await expect(pieces).toHaveCount(0)
+    await title(page).click()
+    await maps.getByRole('button', { name: `Switch to ${drafted}`, exact: true }).click()
+    await expect(title(page)).toHaveText(drafted)
+    await expect(board).toHaveAttribute('aria-label', 'Editable Catan board')
+    await expect(pieces).toHaveCount(8)
   })
 
   test('switching boards from Maps ends build mode', async ({ page }) => {

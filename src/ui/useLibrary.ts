@@ -9,6 +9,7 @@ import {
   readLibrary,
   renameMap,
 } from '../persistence/localStorage'
+import type { Game } from '../model/game'
 import { loadWarnings } from './boardFiles'
 import { useStore } from './store'
 
@@ -72,6 +73,17 @@ export function useLibrary() {
     return true
   }
   /**
+   * The game a hover over the map's row previews: its tab's live game when it
+   * is loaded, else the stored copy, or null when it has none that reads.
+   */
+  const previewOf = (map: ListedMap): Game | null => {
+    if (map.id === null || !map.valid) return null
+    const tab = tabOf(map.id)
+    if (tab) return tab.game
+    const loaded = loadMap(map.id)
+    return loaded.ok ? loaded.game : null
+  }
+  /**
    * Deletes the map and drops the board loaded from it, which is the same row.
    * The board goes only once the delete has landed: a refused write leaves the
    * map, and must leave the board and its pending edit with it.
@@ -110,5 +122,5 @@ export function useLibrary() {
     refresh()
     return result.ok
   }
-  return { listed, openMap, deleteSavedMap, renameSavedMap }
+  return { listed, openMap, previewOf, deleteSavedMap, renameSavedMap }
 }

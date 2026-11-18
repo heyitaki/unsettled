@@ -8,7 +8,7 @@ import { InlineRename } from './InlineRename'
  * under the name, which renames in place, and the trailing button. The name field
  * takes only the width of its text, so the rest of the row still selects (O3).
  */
-export function ListRow({ current, color, stage, name, meta, selectLabel, selectDisabled, onSelect, draft, onDraft, onStartRename, onCommit, onCancel, action }: {
+export function ListRow({ current, color, stage, name, meta, selectLabel, selectDisabled, onSelect, onHover, draft, onDraft, onStartRename, onCommit, onCancel, action }: {
   current?: boolean
   color: string
   stage?: GameStage
@@ -17,6 +17,8 @@ export function ListRow({ current, color, stage, name, meta, selectLabel, select
   selectLabel: string
   selectDisabled?: boolean
   onSelect: () => void
+  /** A mouse entering the row, for the desktop's board preview. */
+  onHover?: () => void
   /** The rename field's text while renaming, or null when the name is at rest. */
   draft: string | null
   onDraft: (next: string) => void
@@ -27,7 +29,7 @@ export function ListRow({ current, color, stage, name, meta, selectLabel, select
   action: { label: string; icon: ReactNode; onClick: () => void }
 }) {
   return (
-    <div className={current ? 'list-row current' : 'list-row'}>
+    <div className={current ? 'list-row current' : 'list-row'} onPointerEnter={onHover && ((event) => { if (event.pointerType === 'mouse') onHover() })}>
       <button type="button" className="list-row-select" aria-label={selectLabel} disabled={selectDisabled} onClick={onSelect} />
       <BoardHexGlyph color={color} stage={stage} className="list-row-hex" />
       <span className="list-row-main">

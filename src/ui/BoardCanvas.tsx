@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -20,6 +21,7 @@ import { setupRoad } from '../engine/setupRoad'
 import { draftIsComplete, inferDraftState, restoreDraftPick } from '../engine/draft'
 import { activePlayerId } from '../model/turn'
 import { historyGame } from '../model/history'
+import type { Game } from '../model/game'
 import { boardGrid, defaultPortEdges } from '../model/layouts'
 import {
   placeBuilding,
@@ -242,12 +244,20 @@ interface PortLayout {
  */
 const NO_MARKS: readonly HighlightMark[] = []
 
-export function BoardCanvas({ restMarks = null }: { restMarks?: readonly HighlightMark[] | null } = {}) {
+/**
+ * `previewGame` is another board shown read-only in place of the current one (a
+ * hovered Maps row), without the current board's marks or pick.
+ */
+export function BoardCanvas({ restMarks = null, previewGame = null }: { restMarks?: readonly HighlightMark[] | null; previewGame?: Game | null } = {}) {
   const { state, dispatch } = useStore()
   const coarse = useCoarsePointer()
   const tab = activeTab(state)
-  const readOnly = !!state.historyOpen && state.viewedTurn != null
-  const game = useMemo(() => readOnly ? historyGame(tab.game, state.viewedTurn!) : tab.game, [tab.game, readOnly, state.viewedTurn])
+  const viewingTurn = !!state.historyOpen && state.viewedTurn != null
+  const readOnly = viewingTurn || previewGame !== null
+  const game = useMemo(
+    () => previewGame ?? (viewingTurn ? historyGame(tab.game, state.viewedTurn!) : tab.game),
+    [previewGame, tab.game, viewingTurn, state.viewedTurn],
+  )
   const { board } = game
   const [transform, setTransformState] = useState<ViewTransform>(IDENTITY)
   const [hoveredTarget, setHoveredTarget] = useState<string | null>(null)
@@ -262,6 +272,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const finePointer = useRef<Point | null>(null)
   const finePointerDown = useRef<Point | null>(null)
   const draftTapPending = useRef(false)
+  // The current tab's board as of the last render, which a draft tap checks once the engine answers.
+  const liveBoard = useRef(tab.game.board)
+  useEffect(() => { liveBoard.current = tab.game.board })
   const setTransform = (next: ViewTransform) => {
     transformRef.current = next
     setTransformState(next)
@@ -273,7 +286,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     ...grid.edgeIds.map((ref) => ({ ref, ...midpoint(edgeEndpointVertexIds(ref).map(vertexPoint)) })),
   ], [grid])
   const gridVertexSet = useMemo<ReadonlySet<string>>(() => new Set(grid.vertexIds), [grid])
-  const highlight = state.historyOpen ? NO_MARKS : state.highlight ?? restMarks ?? NO_MARKS
+  const highlight = state.historyOpen || previewGame ? NO_MARKS : state.highlight ?? restMarks ?? NO_MARKS
   const gridEdgeSet = useMemo<ReadonlySet<string>>(() => new Set(grid.edgeIds), [grid])
   // Road marks are left out: they share the edge-id namespace with ports, and a recommended road
   // that happens to run along a port edge must not light the port up.
@@ -343,22 +356,24 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
   const fittedLayout = useRef(board.layout)
   // A tab switch is a different board too, and one whose fitted box can be
   // numerically identical (same layout), so the box numbers alone would neither
-  // re-run this effect nor read as a switch.
-  const fittedTabId = useRef(state.activeTabId)
+  // re-run this effect nor read as a switch. A preview, and its end, are switches too.
+  const shown: Game | string = previewGame ?? state.activeTabId
+  const fittedShown = useRef(shown)
   // Depends on the fitted box's numbers, never the object: the memo above
   // rebuilds on every piece placement, so an object dependency would re-run
   // this on edits that did not move the box at all.
   const { x: fitX, y: fitY, width: fitWidth, height: fitHeight } = viewBox
-  useEffect(() => {
-    const switched = fittedLayout.current !== board.layout || fittedTabId.current !== state.activeTabId
+  // Before paint, or a switched board shows for a frame at the old board's zoom.
+  useLayoutEffect(() => {
+    const switched = fittedLayout.current !== board.layout || fittedShown.current !== shown
     fittedLayout.current = board.layout
-    fittedTabId.current = state.activeTabId
+    fittedShown.current = shown
     setTransform(switched
       ? IDENTITY
       : clampTransform(transformRef.current, { x: fitX, y: fitY, width: fitWidth, height: fitHeight }))
-  }, [state.activeTabId, board.layout, fitX, fitY, fitWidth, fitHeight])
+  }, [shown, board.layout, fitX, fitY, fitWidth, fitHeight])
   const renderedViewBox = transformedViewBox(viewBox, transform)
-  const pick = state.historyOpen ? null : state.pick
+  const pick = state.historyOpen || previewGame ? null : state.pick
   const pieceMode = !readOnly && !pick && state.tool.kind === 'piece'
   const portTerrain = !readOnly && !pick && state.tool.kind === 'tile' && state.tool.tile !== 'desert' ? state.tool.tile : null
   const portsTappable = pieceMode || portTerrain !== null
@@ -461,6 +476,8 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
       // Chosen before the settlement lands, as a ranking of this seat would choose it. With no engine the settlement lands without a road.
       void setupRoad(board, draftPlayer, vertexId).catch(() => null).then((road) => {
         draftTapPending.current = false
+        // A board switched or edited meanwhile would be overwritten with this one.
+        if (liveBoard.current !== board) return
         const nextBoard = restoreDraftPick(board, { vertexId, playerId: draftPlayer, roads: road === null ? [] : [road] })
         commit(nextBoard)
         dispatch({ type: 'view-pick', slot: inferDraftState(nextBoard).remainingPickIndices[0] ?? null })
@@ -930,7 +947,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
         // Any hovered target (a pick circle, a legal corner or edge, a piece, a port) takes the click.
         style={{ touchAction: 'pan-y', cursor: hover ? 'pointer' : undefined }}
         viewBox={`${renderedViewBox.x} ${renderedViewBox.y} ${renderedViewBox.width} ${renderedViewBox.height}`}
-        aria-label={readOnly ? 'Catan board history' : 'Editable Catan board'}
+        aria-label={previewGame ? 'Catan board preview' : readOnly ? 'Catan board history' : 'Editable Catan board'}
         onPointerDownCapture={() => {
           if (overlayOpen()) suppressClick.current = true
         }}

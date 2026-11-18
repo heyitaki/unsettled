@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { gameStage, type GameStage } from '../engine/gameStage'
+import type { Game } from '../model/game'
 import { boardColor } from './boardColor'
 import { SortGlyph, TrashGlyph } from './glyphs'
 import { ListRow } from './ListRow'
@@ -24,12 +25,14 @@ type Editing = { key: string; draft: string }
  * loaded and unloaded maps: opening one that already is just switches.
  * The desktop's Library panel and the phone's Maps screen both render this
  * and differ only in the chrome around it, plus `onNavigate`: on the phone,
- * opening a board takes the screen away with it.
+ * opening a board takes the screen away with it, and `onPreview`: on the
+ * desktop, a mouse over a row shows that board in place of the current one
+ * until it leaves the list or reaches the current row.
  */
-export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
+export function LibraryLists({ onNavigate, onPreview }: { onNavigate?: () => void; onPreview?: (game: Game | null) => void }) {
   const { state, dispatch } = useStore()
   const renameTab = useRenameTab()
-  const { listed, openMap, deleteSavedMap, renameSavedMap } = useLibrary()
+  const { listed, openMap, previewOf, deleteSavedMap, renameSavedMap } = useLibrary()
   const { storageFull, plan, description, promptOpen, cleanUp, error } = useStorageCleanup()
   const [sortKey, setSortKey] = useState<SortKey>('modifiedAt')
   const [editing, setEditing] = useState<Editing | null>(null)
@@ -48,6 +51,8 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
     onCancel: () => setEditing(null),
   })
   const maps = useMemo(() => sortMaps(listed.maps, sortKey), [listed, sortKey])
+  // A reorder or removal moves rows under a still pointer, which enters none, so the preview would name the wrong row.
+  useEffect(() => onPreview?.(null), [maps, onPreview])
   // An open map's row takes its tab's live stage, which the stored copy trails by the autosave.
   const { unlisted, liveStages } = useMemo(() => {
     const listedIds = new Set(listed.maps.map((map) => map.id))
@@ -95,6 +100,7 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
         ref={fades.ref}
         className={`list board-list ${fades.top ? 'fade-top' : ''} ${fades.bottom ? 'fade-bottom' : ''}`}
         onScroll={fades.onScroll}
+        onPointerLeave={() => onPreview?.(null)}
       >
         {unlisted.map(({ tab, stage }) => {
           const key = `tab:${tab.id}`
@@ -107,9 +113,11 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
               name={tab.title}
               selectLabel={`Switch to ${tab.title}`}
               onSelect={() => {
+                onPreview?.(null)
                 dispatch({ type: 'tab-select', id: tab.id })
                 onNavigate?.()
               }}
+              onHover={onPreview && (() => onPreview(tab.id === current.id ? null : tab.game))}
               {...rename(key, tab.title, (draft) => renameTab(tab, draft))}
               action={{
                 label: `Delete ${tab.title}`,
@@ -117,7 +125,10 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
                 // Discarded, not closed: an edit still inside the debounce
                 // would otherwise be rescued into a new map, and the row the
                 // user just deleted would come straight back as a saved one.
-                onClick: () => dispatch({ type: 'tab-close', id: tab.id, discard: true }),
+                onClick: () => {
+                  onPreview?.(null)
+                  dispatch({ type: 'tab-close', id: tab.id, discard: true })
+                },
               }}
             />
           )
@@ -139,15 +150,20 @@ export function LibraryLists({ onNavigate }: { onNavigate?: () => void }) {
               selectDisabled={!map.valid}
               // A refused open has toasted why; the list stays for a retry.
               onSelect={() => {
+                onPreview?.(null)
                 if (openMap(map)) onNavigate?.()
               }}
+              onHover={onPreview && (() => onPreview(map.id !== null && map.id === current.mapId ? null : previewOf(map)))}
               {...rename(key, map.name, (draft) => renameSavedMap(map, draft))}
               // An entry with no name has none to edit.
               onStartRename={map.synthetic === true ? undefined : () => setEditing({ key, draft: map.name })}
               action={{
                 label: `Delete ${map.name}`,
                 icon: <TrashGlyph />,
-                onClick: () => deleteSavedMap(map),
+                onClick: () => {
+                  onPreview?.(null)
+                  deleteSavedMap(map)
+                },
               }}
             />
           )

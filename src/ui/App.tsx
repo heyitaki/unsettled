@@ -6,6 +6,7 @@ import { BoardCanvas } from './BoardCanvas'
 import { Brand } from './Brand'
 import { BoardTools } from './BoardTools'
 import { useBoardActions } from './boardActions'
+import type { Game } from '../model/game'
 import { HeaderControls, type HeaderPanel } from './HeaderControls'
 import { HeaderPopover } from './HeaderPopover'
 import { HistoryControls } from './HistoryControls'
@@ -26,6 +27,10 @@ function Workspace() {
   const { building, enter, done, cancel, toggle, restMarks } = useBuildMode()
   const [open, setOpen] = useState<{ panel: HeaderPanel; trigger: HTMLButtonElement } | null>(null)
   const [importing, setImporting] = useState(false)
+  // The board a hovered Maps row shows in place of the current one. Closing Maps hides it at once and clears it for the next open.
+  const [preview, setPreview] = useState<Game | null>(null)
+  const mapsOpen = open?.panel === 'maps'
+  useEffect(() => { if (!mapsOpen) setPreview(null) }, [mapsOpen])
   // Side by side, the controls head the column, which centres on the board and glides as its cards change.
   const stacked = useStacked()
   const rail = useRef<HTMLElement>(null)
@@ -37,7 +42,7 @@ function Workspace() {
     setOpen((current) => current?.panel === panel ? null : { panel, trigger })
   }
   // Focus moves to the title first, so the dialog returns it there: the Import button unmounts with the panel.
-  const maps = <MapsPanel onImport={() => { open?.trigger.focus(); setOpen(null); setImporting(true) }} />
+  const maps = <MapsPanel onImport={() => { open?.trigger.focus(); setOpen(null); setImporting(true) }} onPreview={setPreview} />
   const controls = (
     <div className="head-controls">
       <HeaderControls building={building} onToggleMode={() => { setOpen(null); toggle() }} onOpen={togglePanel} openPanel={open?.panel ?? null} />
@@ -57,7 +62,7 @@ function Workspace() {
       <GlobalNotice />
       <main className={`workspace${state.historyOpen && !building ? ' history-open' : ''}`}>
         <div className="center-column">
-          <BoardCanvas restMarks={restMarks} />
+          <BoardCanvas restMarks={restMarks} previewGame={mapsOpen ? preview : null} />
           {!building && <HistoryControls />}
         </div>
         <aside

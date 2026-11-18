@@ -8,10 +8,12 @@ import { legalSettlementVertices } from '../../engine/legality'
 import { boardGrid, defaultPortEdges } from '../../model/layouts'
 import type { Board } from '../../model/types'
 import { BoardCanvas } from '../BoardCanvas'
-import { StoreProvider, useStore, type HighlightMark } from '../store'
+import { StoreProvider, useStore, type HighlightMark, type StoreAction, type StoreState } from '../store'
 
 // The draft tap asks the engine for a setup road; none is needed to see where a tap lands.
-vi.mock('../../engine/setupRoad', () => ({ setupRoad: async () => null }))
+// A test can swap in a slower answer to act while the engine is loading.
+const engine = vi.hoisted(() => ({ road: (): Promise<null> => Promise.resolve(null) }))
+vi.mock('../../engine/setupRoad', () => ({ setupRoad: () => engine.road() }))
 
 const grid = boardGrid('standard4')
 const EDGE = grid.edgeIds[0]
@@ -109,10 +111,8 @@ describe('board mark layer', () => {
     expect(container.querySelectorAll('.placement-slot')).toHaveLength(0)
   })
 
-  it('takes a draft tap on a placeable circle and on no other mark', async () => {
-    // A likely-gone circle is solid like a first pick, and only the flag tells them apart.
-    const marks: HighlightMark[] = [...PLANNED_MARKS, { ref: UNRANKED, color: COLOR, label: '1' }, { ref: RANKED, color: COLOR, label: '1', placeable: true }]
-    act(() => root.render(<StoreProvider><DraftBoard marks={marks} /></StoreProvider>))
+  /** Taps on the drawn canvas by vertex, and counts its pieces. */
+  const canvasTaps = () => {
     const svg = container.querySelector<SVGSVGElement>('.board-canvas')!
     // Laid over its own view box, so a client point is a board point.
     const [x, y, width, height] = svg.getAttribute('viewBox')!.split(' ').map(Number)
@@ -124,6 +124,14 @@ describe('board mark layer', () => {
       const clientY = points.reduce((sum, p) => sum + p.y, 0) / 3
       await act(async () => { svg.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX, clientY })) })
     }
+    return { tap, buildings }
+  }
+
+  it('takes a draft tap on a placeable circle and on no other mark', async () => {
+    // A likely-gone circle is solid like a first pick, and only the flag tells them apart.
+    const marks: HighlightMark[] = [...PLANNED_MARKS, { ref: UNRANKED, color: COLOR, label: '1' }, { ref: RANKED, color: COLOR, label: '1', placeable: true }]
+    act(() => root.render(<StoreProvider><DraftBoard marks={marks} /></StoreProvider>))
+    const { tap, buildings } = canvasTaps()
     expect(buildings()).toBe(1)
     for (const vertex of [PLANNED, UNMARKED, UNRANKED]) {
       await tap(vertex)
@@ -131,6 +139,28 @@ describe('board mark layer', () => {
     }
     await tap(RANKED)
     expect(buildings()).toBe(2)
+  })
+
+  it('drops a draft tap whose board changed while the engine was loading', async () => {
+    let answer!: (road: null) => void
+    engine.road = () => new Promise((resolve) => { answer = resolve })
+    let store!: { state: StoreState; dispatch: (action: StoreAction) => void }
+    function Capture() {
+      store = useStore()
+      return null
+    }
+    act(() => root.render(<StoreProvider><DraftBoard marks={[{ ref: RANKED, color: COLOR, label: '1', placeable: true }]} /><Capture /></StoreProvider>))
+    try {
+      await canvasTaps().tap(RANKED)
+      act(() => store.dispatch({ type: 'tab-add', title: 'Other' }))
+      await act(async () => answer(null))
+      const [drafted, other] = store.state.tabs
+      expect(store.state.activeTabId).toBe(other.id)
+      expect(other.game.board.buildings).toHaveLength(0)
+      expect(drafted.game.board.buildings).toHaveLength(1)
+    } finally {
+      engine.road = () => Promise.resolve(null)
+    }
   })
 
   it('draws a vertex mark as a circle and no road', () => {
