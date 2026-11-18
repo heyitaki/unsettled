@@ -179,6 +179,27 @@ test.describe('desktop layout', () => {
     await expect(players).toBeHidden()
   })
 
+  test('a long title truncates beside six players and the title stays aligned with the column', async ({ page }) => {
+    await page.goto('')
+    await seedBoard(page, { players: ['#c23f38', '#3063ba', '#e58331', '#ffffff', '#5b9a4f', '#7b4f9a']
+      .map((color, index) => ({ id: `p${index + 1}`, name: `Player ${index + 1}`, color })), mePlayerId: 'p2' })
+    await title(page).click()
+    await page.locator('.maps-panel').getByRole('button', { name: 'Rename Board 1' }).click()
+    await page.keyboard.press('ControlOrMeta+a')
+    await page.keyboard.type('Screenshot 2026-07-23 at 12.41.07 with a much longer name')
+    await page.keyboard.press('Enter')
+    await title(page).click()
+    const name = page.locator(`${header} .head-title-name`)
+    await expect(name).toHaveText(/much longer name/)
+    expect(await name.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true)
+    const titleBox = (await title(page).boundingBox())!
+    const players = (await page.locator(`${header} .head-player-controls`).boundingBox())!
+    const column = (await page.locator('.analysis-panel').boundingBox())!
+    expect(Math.abs(titleBox.x - column.x)).toBeLessThan(1)
+    expect(titleBox.x + titleBox.width).toBeLessThan(players.x)
+    expect(Math.abs(players.x + players.width - (column.x + column.width))).toBeLessThan(1)
+  })
+
   test('at 900px wide the column wraps under the board', async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 900 })
     await page.goto('')
