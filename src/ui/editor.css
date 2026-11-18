@@ -37,7 +37,6 @@ button, input, select, label.drop-zone { touch-action: manipulation; }
 .site-header h1, .phone-brand h1 { margin: -2px 0 0; font: 800 31px/1 Georgia, serif; letter-spacing: -.04em; color: var(--surface); }
 .site-header h1 { font-size: 38px; }
 .brand-mark { flex: none; width: 30px; height: 30px; }
-.brand-mark polygon { stroke: var(--surface); }
 .site-header .brand-mark { width: 44px; height: 44px; }
 
 .workspace { max-width: var(--shell-max); margin: auto; display: grid; grid-template-columns: minmax(494px, 1fr) 440px; gap: 16px; align-items: start; }
