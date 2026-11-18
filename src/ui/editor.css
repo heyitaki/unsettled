@@ -644,8 +644,10 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .history-panel .history-list { --edge-bottom: 8px; margin-bottom: calc(-1 * var(--history-pad)); padding-bottom: 0; border-radius: 0 0 var(--radius) var(--radius); }
 .history-row.current .history-select { padding-bottom: 2px; }
 .history-list { position: relative; display: grid; align-content: start; overflow: auto; overscroll-behavior: contain; min-height: 0; }
-.workspace :is(.history-panel, .moves-panel) { flex: 1 1 0; max-height: max-content; min-height: 0; min-height: calc-size(max-content, min(size, 280px)); display: flex; flex-direction: column; }
+.workspace :is(.history-panel, .moves-panel) { flex: 0 1 auto; max-height: max-content; min-height: 0; min-height: calc-size(max-content, min(size, 280px)); display: flex; flex-direction: column; }
 .workspace .history-list { flex: 1; }
+/* Shrinking them to their floors still overflows the column, so they keep their full height and the column scrolls instead (`useColumnGlide`). */
+.right-rail.overfull :is(.history-panel, .moves-panel) { flex: none; }
 /* Below Ledger and Record your turn there is less room than History gets, so the floor is about two moves. */
 .workspace .moves-panel { min-height: calc-size(max-content, min(size, 160px)); }
 /* Everything under the heading scrolls, out to the panel border. The 8px top space (`--edge-top`) matches History's first round label and leaves room for the ranked list's 6px pull. */

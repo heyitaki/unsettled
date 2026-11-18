@@ -7,6 +7,8 @@ const BLEED = 60
 const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 // A roster row drag in progress, during which the column holds still.
 const HOLD = '.reordering'
+// On the column while its cards overflow it even with Best moves and History shrunk to their floors.
+const OVERFULL = 'overfull'
 
 // Read while the card is in the page: a removed card reports zero for all four.
 type Box = { top: number; left: number; width: number; height: number }
@@ -23,6 +25,11 @@ type Box = { top: number; left: number; width: number; height: number }
  * cards' animations touch only transform, opacity, clip-path and shadow, and the
  * surfaces and ghosts are absolutely positioned outside the observed cards, so
  * an animation never changes the column's layout or re-triggers the observers.
+ *
+ * Best moves and History shrink toward their floors to fit the column. When even
+ * that overflows, shrinking only hides rows in two scrollers, so each settle first
+ * marks the column overfull and the lists take their full height while the column
+ * scrolls. The check runs on layout offsets, so ghosts and glides never count.
  *
  * While a row is dragged the column holds still: a drag adds a trash row, and
  * re-centring would carry the grabbed row out from under the pointer, which
@@ -117,7 +124,16 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       animations[0].finished.then(() => { backdrop.remove(); surfaces.delete(card) }, () => {})
     }
 
+    const fit = () => {
+      column.classList.remove(OVERFULL)
+      const last = cards().at(-1)
+      if (!last) return
+      const end = last.offsetTop + last.offsetHeight + parseFloat(getComputedStyle(last).marginBottom) + parseFloat(getComputedStyle(column).paddingBottom)
+      column.classList.toggle(OVERFULL, end > column.clientHeight + 1)
+    }
+
     const settle = () => {
+      fit()
       const animate = !reducedMotion.matches && column.offsetWidth === width
       width = column.offsetWidth
       const now = cards()
@@ -171,11 +187,12 @@ export function useColumnGlide(ref: RefObject<HTMLElement | null>, enabled: bool
       watch()
       settle()
     })
+    fit()
     boxes = new Map(cards().map((card) => [card, boxOf(card)]))
     watch()
     mutations.observe(column, { childList: true })
     const holds = new MutationObserver(hold)
     holds.observe(column, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] })
-    return () => { resize.disconnect(); mutations.disconnect(); holds.disconnect(); column.style.translate = '' }
+    return () => { resize.disconnect(); mutations.disconnect(); holds.disconnect(); column.style.translate = ''; column.classList.remove(OVERFULL) }
   }, [ref, enabled])
 }

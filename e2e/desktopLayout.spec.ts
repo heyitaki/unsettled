@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
+import { placeRoad } from '../src/model/board'
+import { edgeEndpointVertexIds } from '../src/model/coords'
+import { boardGrid } from '../src/model/layouts'
+import { awaitingFirstTurn, setActivePlayer } from '../src/model/turn'
+import { finishedDraft } from '../src/ui/__tests__/finishedDraft'
 import { seedBoard, seedUnclaimedRoster } from './seed'
 
 /**
@@ -225,6 +230,47 @@ test.describe('desktop layout', () => {
     await page.locator('.right-rail').evaluate((node) => { node.scrollTop = node.scrollHeight })
     const analysis = (await page.locator('.analysis-panel').boundingBox())!
     expect(analysis.y + analysis.height).toBeLessThanOrEqual(560)
+  })
+
+  // Best moves is as tall as its rows while the column has room, shrinks toward its floor when the column
+  // would overflow, and takes its full height again once even the floor overflows, the column scrolling instead.
+  test('Best moves grows into the column, shrinks to fit it, and gives way to the column scrolling', async ({ page }) => {
+    await page.goto('')
+    const game = finishedDraft(0)
+    let board = game.board
+    const grid = boardGrid(board.layout)
+    for (const { vertexId, playerId } of board.buildings) {
+      const edge = grid.edgeIds.find((id) => edgeEndpointVertexIds(id).includes(vertexId) && !board.roads.some((road) => road.edgeId === id))!
+      board = placeRoad(board, edge, playerId)
+    }
+    const seeded = { ...game, board }
+    await seedBoard(page, board, {}, awaitingFirstTurn(seeded) ? setActivePlayer(seeded, board.players[0].id).turn : undefined)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.getByRole('group', { name: 'Dice total' }).getByRole('button', { name: '8', exact: true }).click()
+    await expect(page.locator('.moves-panel .analysis-row').first()).toBeVisible({ timeout: 60_000 })
+    const hidden = (selector: string) => page.locator(selector).evaluate((node) => node.scrollHeight - node.clientHeight)
+    const body = '.moves-panel > .moves-body'
+    const rail = page.locator('.right-rail')
+    await expect.poll(() => hidden(body)).toBeLessThanOrEqual(1)
+    expect(await hidden('.right-rail')).toBeLessThanOrEqual(1)
+    const full = await page.locator('.moves-panel').evaluate((node) => node.getBoundingClientRect().height)
+    expect(full).toBeGreaterThan(165)
+
+    // A window 10px short of the column: the rail's max height is 100vh - 4vh + 12px here, so Best moves gives up 10px.
+    const column = await rail.evaluate((node) => node.clientHeight)
+    await page.setViewportSize({ width: 1440, height: Math.ceil((column - 10 - 12) / .96) })
+    await expect.poll(() => hidden(body)).toBeGreaterThan(5)
+    expect(await hidden('.right-rail')).toBeLessThanOrEqual(1)
+    await expect(rail).not.toHaveClass(/overfull/)
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.locator(controls).getByRole('button', { name: 'Players' }).click()
+    await expect(rail).toHaveClass(/overfull/)
+    expect(await hidden(body)).toBeLessThanOrEqual(1)
+    expect(await hidden('.right-rail')).toBeGreaterThan(1)
+    await page.locator(controls).getByRole('button', { name: 'Players' }).click()
+    await expect(rail).not.toHaveClass(/overfull/)
+    expect(await hidden(body)).toBeLessThanOrEqual(1)
   })
 
   test('a long title truncates beside six players and the title stays aligned with the column', async ({ page }) => {
