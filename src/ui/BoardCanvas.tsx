@@ -64,8 +64,8 @@ const PORT_EXTENT = PORT_RADIUS + PORT_RIM / 2
 const PORT_OFFSET = 31
 // The hover ring clears a port token's rim instead of sitting on it.
 const PORT_HOVER_RADIUS = PORT_EXTENT + 4
-// A pier starts this far from its corner, under where a building would sit.
-const PIER_CORNER_GAP = 7
+// A pier starts this far from its corner, so its faded-out tip reaches right up to the coast.
+const PIER_CORNER_GAP = 1
 const PORT_DOT_COARSE = 3.6
 const PORT_DOT_FINE = 2.8
 // Sea margin kept around the outermost drawn content on every side.
@@ -743,7 +743,7 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
     )
   }, [board.robber, board.hexes])
   // A resource port is a token in its terrain colour with the icon in paper, and a port for any
-  // resource is an open paper ring with its rate. Each pier fades out toward its corner.
+  // resource is an open paper ring with its rate. Each pier fades to nothing toward its corner.
   const portLayer = useMemo(() => ports.map(({ port, a, b, point }, index) => {
     const rate = `${port.rate}:1`
     return (
@@ -760,7 +760,9 @@ export function BoardCanvas({ restMarks = null }: { restMarks?: readonly Highlig
           return (
             <g key={end}>
               <linearGradient id={gradient} gradientUnits="userSpaceOnUse" x1={start.x} y1={start.y} x2={stop.x} y2={stop.y}>
-                <stop offset="0" stopColor={TOKEN_COLOR} stopOpacity="0.1" />
+                {/* Eased to zero so the pier dissolves rather than showing where it stops. */}
+                <stop offset="0" stopColor={TOKEN_COLOR} stopOpacity="0" />
+                <stop offset="0.5" stopColor={TOKEN_COLOR} stopOpacity="0.35" />
                 <stop offset="1" stopColor={TOKEN_COLOR} />
               </linearGradient>
               <line x1={start.x} y1={start.y} x2={stop.x} y2={stop.y} stroke={`url(#${gradient})`} strokeWidth="3.2" strokeLinecap="round" />
