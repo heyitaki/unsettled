@@ -14,6 +14,8 @@ import { activeTab, StoreProvider, useSaveRecovery, useStore, type TabState } fr
 import { useLibrary } from '../useLibrary'
 
 const NOW = 400 * 24 * 60 * 60 * 1000
+// The automatic board title uses the local date, so derive it rather than pin one timezone's day.
+const NOW_TITLE = `${new Date(NOW).getMonth() + 1}/${new Date(NOW).getDate()} aki`
 const quota = () => new DOMException('Storage full', 'QuotaExceededError')
 const game = newGame(createBoard('standard4'))
 const entry = (id: string, age: number) => ({
@@ -213,7 +215,7 @@ describe('storage full recovery', () => {
     expect(operations[0]).toBe('recent')
     expect(operations[1].split(',')).toHaveLength(2)
     expect(store.state.mapsRevision).toBeGreaterThan(revision)
-    expect(library.listed.maps.map(({ name }) => name)).toEqual(['recent', '2/4 aki'])
+    expect(library.listed.maps.map(({ name }) => name)).toEqual(['recent', NOW_TITLE])
     expect(recovery.failures).toEqual({})
     expect(dialog()).toBeNull()
     expect(container.querySelector('.save-failure')).toBeNull()
@@ -250,7 +252,7 @@ describe('storage full recovery', () => {
     const deleted = vi.spyOn(storage, 'deleteMaps')
     click('Clean up')
     expect(deleted).toHaveBeenCalledExactlyOnceWith(entries.slice(0, 5).map(({ id }) => id))
-    expect(storage.listMaps().maps.map(({ name }) => name)).toEqual(['recent-5', 'recent-6', '2/4 aki'])
+    expect(storage.listMaps().maps.map(({ name }) => name)).toEqual(['recent-5', 'recent-6', NOW_TITLE])
     expect(recovery.failures).toEqual({})
   })
 
