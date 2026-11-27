@@ -17,7 +17,6 @@ const mix = (a, b, t) =>
     .map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * t + parseInt(b.slice(i, i + 2), 16) * (1 - t)).toString(16).padStart(2, "0"))
     .join("");
 const FIELD = mix(ACCENT, CREAM, 0.15);
-const TILE = mix(ACCENT, CREAM, 0.4); // the hex under the squat settler, between the ground and the body // the icon ground: 15% Ember over the app's cream, as Set's 15% green over card white
 
 // Spotter's eye: cream white with an ink pupil up and to the right.
 const eye = (x, y, r) =>
@@ -64,17 +63,6 @@ const options = [
       body("M14 50 L32 18.8 H68 L86 50 L68 81.2 H32 Z") + eye(38.6, 44, 9) + eye(61.4, 44, 9) + smile(44.6, 61, 16.8) + `</g>`,
     mark: "9 13 82 74",
     icon: "-14 -14 128 128",
-  },
-  {
-    id: "tile-settler",
-    tag: "B2",
-    name: "Settler on a tile",
-    why: "The squat settler, face and all, standing in the middle of a hex tile drawn in a paler Ember. The piece and the board together.",
-    art: `<g transform="rotate(-6 50 52)">` +
-      body("M10 52 L30 17.4 H70 L90 52 L70 86.6 H30 Z", TILE) +
-      body("M30 77 V56 L50 33 L70 56 V77 Z", ACCENT, 5) + eye(42.5, 59.5, 6.2) + eye(57.5, 59.5, 6.2) + smile(45.6, 70, 10.5) + `</g>`,
-    mark: "6 12 88 80",
-    icon: "-14 -12 128 128",
   },
   {
     id: "robber",
