@@ -36,12 +36,12 @@ const options = [
   {
     id: "settler",
     name: "Settler",
-    why: "A settlement piece that is, well, unsettled: peeking up and glancing sideways with a wobbly mouth. The name's pun as a character.",
+    why: "A settlement piece that is, well, unsettled: peeking up and glancing sideways. The name's pun as a character.",
     art: lean(
       body("M21 108 V46 L50 15 L79 46 V108 Z") + eye(39, 58, 9) + eye(61, 58, 9) +
-        `<path d="M40 78 q5 -4 10 0 t10 0" ${stroke(3)}/>`,
+        smile(44.6, 76, 16.8),
     ),
-    mark: MARK,
+    mark: "14 6 72 82", // taller than MARK: the roof puts the face lower, and MARK's bottom edge cut the mouth
     icon: ICON,
   },
   {
