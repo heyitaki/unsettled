@@ -15,6 +15,9 @@ export function PlayerDisc({ color, className = '', children }: { color: string;
   return <span className={`history-disc${light ? ' light' : ''}${className && ` ${className}`}`} style={{ background: color, color: readableInk(color) }}>{children}</span>
 }
 
+// MOCK (special build phase): a log line another player recorded between turns.
+export const betweenTurns = (line: string) => line.endsWith(' between turns')
+
 export function HistoryPanel({ className = 'panel analysis-panel' }: { className?: string }) {
   const { state, dispatch } = useStore()
   const { game } = activeTab(state)
@@ -58,7 +61,10 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
           const round = Math.ceil(index / game.board.players.length)
           const player = historyPlayer(game.board, turn.playerId)
           const current = selected === index
-          const log = turn.log ?? []
+          const log = (turn.log ?? []).filter((line) => !betweenTurns(line))
+          const across = (turn.log ?? []).filter(betweenTurns)
+          const builders = game.board.players.filter((p) => across.some((line) => line.startsWith(`${p.name} `)))
+          const summary = [turnSummary(log), builders.length > 0 && `${builders.map((p) => p.name).join(' and ')} built after`].filter(Boolean).join(' · ')
           const produced = Object.entries(turn.gains ?? {})
           return <Fragment key={index}>
             {(index === now || round !== Math.ceil((index + 1) / game.board.players.length)) && <div className="history-round" role="presentation">Round {round}</div>}
@@ -68,7 +74,7 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
                 <PlayerDisc color={player.color}>{index}</PlayerDisc>
                 <span className="history-main">
                   <span className="history-title">{player.name}{index === now && <span className="history-now">Now</span>}</span>
-                  {!current && <span className="history-summary">{turnSummary(log) || (index === now ? 'Nothing recorded yet' : 'No actions')}</span>}
+                  {!current && <span className="history-summary">{summary || (index === now ? 'Nothing recorded yet' : 'No actions')}</span>}
                 </span>
                 {turn.rolled !== null && <span className={`history-roll${turn.rolled === 7 ? ' seven' : ''}`} aria-label={`Rolled ${turn.rolled}`}>
                   <b>{turn.rolled}</b>{turn.rolled === 7 ? <RobberGlyph /> : <span className="history-pips" aria-hidden="true">
@@ -81,6 +87,13 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
                   {produced.map(([id, cards]) => <ProductionPlayer key={id} player={historyPlayer(game.board, id)} cards={cards} />)}
                 </div> : <div className="history-quiet">Nobody produces</div>)}
                 {log.length > 0 && <ul className="move-log">{log.map((line, i) => <li key={i}><TickGlyph /><span>{line}</span></li>)}</ul>}
+                {across.length > 0 && <>
+                  <div className="history-quiet">Special build</div>
+                  <ul className="move-log">{across.map((line, i) => {
+                    const builder = game.board.players.find((p) => line.startsWith(`${p.name} `))
+                    return <li key={i}><span className="move-player-dot" style={{ background: builder?.color }} /><span>{line.replace(/ between turns$/, '')}</span></li>
+                  })}</ul>
+                </>}
               </div>}
             </div>
           </Fragment>

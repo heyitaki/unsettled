@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { revealBoardIfScrolledPast } from './revealBoard'
-import { useStore, type BoardPick, type PickTarget } from './store'
+import { useStore, type BoardPick, type PlayerPick } from './store'
 
-export function useBoardPick(target: PickTarget | null, consume: (ref: string) => void) {
+export function useBoardPick(target: PlayerPick | null, consume: (ref: string) => void) {
   const { state, dispatch } = useStore()
   const consumed = useRef<BoardPick | null>(null)
   useEffect(() => () => dispatch({ type: 'pick-clear' }), [dispatch])
@@ -12,7 +12,7 @@ export function useBoardPick(target: PickTarget | null, consume: (ref: string) =
       if (pick) dispatch({ type: 'pick-clear' })
       return
     }
-    const matches = pick?.want === target.want &&
+    const matches = pick?.want === target.want && pick.playerId === target.playerId &&
       (target.want !== 'vertex' || (pick.want === 'vertex' && pick.piece === target.piece)) &&
       (target.want !== 'edge' || (pick.want === 'edge' && pick.edges === target.edges))
     if (!matches) {

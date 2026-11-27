@@ -5,12 +5,12 @@ import { activePlayerId, appendLog, currentTurnHistory, endTurn, recordBuyDev, s
 import { RESOURCES, type Resource } from '../model/types'
 import { adviceResponse, useAdvice } from './useAdvice'
 import {
-  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
+  actionLabel, adviceBlockers, buildablePieces, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
 import { LedgerPanel } from './LedgerPanel'
-import { HistoryPanel, PlayerDisc } from './HistoryPanel'
-import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
+import { betweenTurns, HistoryPanel, PlayerDisc } from './HistoryPanel'
+import { AdviceFeedback, BestMovesTray, BuildTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { SpotTiles } from './SpotTiles'
 import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
@@ -73,6 +73,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const [, refreshRecords] = useState(0)
   const pendingRecord = useRef<{ previous: Game; roll: RecordedRoll } | null>(null)
   const [knight, setKnight] = useState<{ game: Game; initial?: KnightPlay } | null>(null)
+  // MOCK (special build phase): the other player whose build tray is open.
+  const [across, setAcross] = useState<string | null>(null)
   const inHistory = (entry: Game) => entry === game || tab.past.includes(entry)
   const seven = robberPending(game)
   const playingKnight = knight !== null && inHistory(knight.game)
@@ -112,6 +114,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const close = useCallback(() => {
     setTray(null)
     setKnight(null)
+    setAcross(null)
     setSelected(null)
     dispatch({ type: 'pick-clear' })
     mark(null)
@@ -246,6 +249,15 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   // An open correction group's line takes back one tap, not the line, so it gets no Undo.
   const undoLog = !turn?.correction && previousTurn?.playerId === turn?.playerId && (previousTurn?.log?.length ?? 0) === actions.length - 1
     && (previousTurn?.log ?? []).every((line, index) => line === actions[index])
+  // MOCK (special build phase): five and six seats only, others in turn order from the next player.
+  const seat = board.players.findIndex((player) => player.id === activeId)
+  const others = board.players.length >= 5 ? [...board.players.slice(seat + 1), ...board.players.slice(0, seat)] : []
+  const acrossPlayer = others.find((player) => player.id === across)
+  const lines = actions.map((text, index) => ({ text, index }))
+  const logList = (entries: typeof lines) => entries.length > 0 && <ul className="move-log">{entries.map(({ text, index }) => <li key={index}>
+    <TickGlyph /><span>{text}</span>
+    {index === actions.length - 1 && undoLog && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
+  </li>)}</ul>
   const rollIndex = turnGames.findIndex((entry) => turnState(entry)?.rolled != null)
   const rollGame = turnGames[rollIndex]
   // Change roll recommits the pre-roll snapshot as a new step, so Undo brings the roll and its actions back.
@@ -276,10 +288,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <span className="move-step-dot" aria-hidden="true">{noActions ? <StepDoneGlyph /> : '2'}</span>
             <div className="move-step-body">
               <div className="move-step-title">{noActions ? 'No actions possible' : 'Actions'}</div>
-              {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}>
-                <TickGlyph /><span>{text}</span>
-                {index === actions.length - 1 && undoLog && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
-              </li>)}</ul>}
+              {logList(lines.filter(({ text }) => !betweenTurns(text)))}
               {tiles.length > 0 && <div className="move-tiles">
                 {tiles.map(({ kind, label, Glyph }) => (
                   <button type="button" className="move-tile" key={kind} aria-pressed={tray?.kind === kind} onClick={() => toggleTray(kind)}>
@@ -293,8 +302,28 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                 commit={record} finish={close} knight initial={knight.initial} />}
             </div>
           </li>
-          <li className={`move-step ${before ? 'later' : 'now'}`}>
+          {others.length > 0 && <li className={`move-step ${before ? 'later' : 'now'}`}>
             <span className="move-step-dot" aria-hidden="true">3</span>
+            <div className="move-step-body">
+              <div className="move-step-title">Special build<span className="mock-badge">Mock</span></div>
+              <p>Others may build in turn order before {others[0].name} rolls.</p>
+              {logList(lines.filter(({ text }) => betweenTurns(text)))}
+              <div className="move-partners" role="group" aria-label="Who built">
+                {others.map((player) => {
+                  const none = buildablePieces(game, player.id).length === 0
+                  return <button type="button" key={player.id} aria-pressed={across === player.id} disabled={before || none}
+                    title={none ? `${player.name} cannot afford a piece` : undefined}
+                    onClick={() => { const open = across !== player.id; close(); if (open) setAcross(player.id) }}>
+                    <span className="move-player-dot" style={{ background: player.color }} />{player.name}
+                  </button>
+                })}
+              </div>
+              {acrossPlayer && <BuildTray key={acrossPlayer.id} game={game} active={acrossPlayer} close={close}
+                commit={(next, text) => record(next, `${acrossPlayer.name} ${text[0].toLowerCase()}${text.slice(1)} between turns`)} />}
+            </div>
+          </li>}
+          <li className={`move-step ${before ? 'later' : 'now'}`}>
+            <span className="move-step-dot" aria-hidden="true">{others.length > 0 ? 4 : 3}</span>
             <div className="move-step-body"><button type="button" className="primary move-end-turn" onClick={finishTurn}>End turn</button></div>
           </li>
         </ol>

@@ -4,7 +4,7 @@ import { pips } from '../model/board'
 import { axialKey, parseAxialKey } from '../model/coords'
 import { DEV_KINDS, emptyStats, type DevKind, type Game } from '../model/game'
 import {
-  bankPorts, bankRate, CARD_COSTS, handTotal, isValidBankTrade, recordBankTrade, recordBuild, recordBuyDev, recordDiscard,
+  activePlayerId, bankPorts, bankRate, CARD_COSTS, handTotal, isValidBankTrade, recordBankTrade, recordBuild, recordBuyDev, recordDiscard,
   recordPlayDev, recordPlayerTrade, recordRobber, recordRoll, turnState, type DevPlay,
 } from '../model/turn'
 import { RESOURCES, type AxialCoord, type EdgeId, type Player, type Resource, type VertexId } from '../model/types'
@@ -410,12 +410,14 @@ function TradeTray({ game, active, tray, adviceEnabled, commit, close }: TrayPro
   )
 }
 
-function BuildTray({ game, active, commit, close }: TrayProps) {
+export function BuildTray({ game, active, commit, close }: Pick<TrayProps, 'game' | 'active' | 'commit' | 'close'>) {
   const [piece, setPiece] = useState<'road' | 'settlement' | 'city' | null>(null)
   const pieces = useMemo(() => buildablePieces(game, active.id), [game, active.id])
-  useBoardPick(piece === null ? null : piece === 'road' ? { want: 'edge' } : { want: 'vertex', piece }, (ref) => {
+  // MOCK (special build phase): a pick names its player only for a build outside the turn.
+  const pickFor = active.id === activePlayerId(game) ? {} : { playerId: active.id }
+  useBoardPick(piece === null ? null : piece === 'road' ? { want: 'edge', ...pickFor } : { want: 'vertex', piece, ...pickFor }, (ref) => {
     if (!piece) return
-    commit(recordBuild(game, piece, ref as EdgeId | VertexId), `Built a ${piece}`)
+    commit(recordBuild(game, piece, ref as EdgeId | VertexId, { playerId: active.id }), `Built a ${piece}`)
     close()
   })
   const who = active.id === game.board.mePlayerId ? 'you' : active.name

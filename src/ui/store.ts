@@ -79,7 +79,9 @@ export type PickTarget =
   | { want: 'vertex'; piece: 'settlement' | 'city' }
   | { want: 'edge'; edges?: readonly EdgeId[] }
   | { want: 'hex' }
-export type BoardPick = PickTarget & { ref?: string }
+// MOCK (special build phase): whose slots a vertex or edge pick offers, when not the turn's player.
+export type PlayerPick = PickTarget & { playerId?: string }
+export type BoardPick = PlayerPick & { ref?: string }
 
 export interface TabState {
   id: string
@@ -133,7 +135,7 @@ export type StoreAction =
   | { type: 'redo' }
   | { type: 'notice'; message: string | null }
   | { type: 'highlight'; marks: readonly HighlightMark[] | null }
-  | { type: 'pick'; target: PickTarget }
+  | { type: 'pick'; target: PlayerPick }
   | { type: 'pick-clear' }
   | { type: 'picked'; ref: string }
   | { type: 'view-pick'; slot: number | null }

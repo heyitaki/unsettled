@@ -385,7 +385,7 @@ export function BoardCanvas({ restMarks = null, previewGame = null }: { restMark
   const draftPlayer = !readOnly && !pick && state.tool.kind === 'none' && !draftComplete &&
     board.hexes.some((hex) => hex.tile !== null) && draft.remainingPickIndices.includes(viewedSlot)
     ? draft.sequence[viewedSlot] : null
-  const placementPlayer = pick ? activePlayerId(tab.game) : draftPlayer ?? tab.activePlayerId
+  const placementPlayer = pick ? pick.playerId ?? activePlayerId(tab.game) : draftPlayer ?? tab.activePlayerId
   const placeableVertices = useMemo<VertexId[]>(() => {
     if (readOnly) return []
     if (pick) return pick.want === 'vertex' ? buildingSlots(board, placementPlayer, pick.piece, 'build') : []

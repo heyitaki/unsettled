@@ -197,8 +197,9 @@ export function recordPlayerTrade(game: Game, otherId: string, gives: Cards, get
   return gain(next, otherId, gives)
 }
 
-export function recordBuild(game: Game, piece: 'road' | 'settlement' | 'city', id: EdgeId | VertexId, options?: { free?: boolean }): Game {
-  const { playerId } = requireTurn(game)
+// MOCK (special build phase): `playerId` lets a player other than the turn's build between turns.
+export function recordBuild(game: Game, piece: 'road' | 'settlement' | 'city', id: EdgeId | VertexId, options?: { free?: boolean; playerId?: string }): Game {
+  const playerId = options?.playerId ?? requireTurn(game).playerId
   const board = piece === 'road'
     ? placeRoad(game.board, id as EdgeId, playerId)
     : placeBuilding(game.board, id as VertexId, playerId, piece)
