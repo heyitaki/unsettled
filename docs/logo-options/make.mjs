@@ -16,7 +16,8 @@ const mix = (a, b, t) =>
   [1, 3, 5]
     .map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * t + parseInt(b.slice(i, i + 2), 16) * (1 - t)).toString(16).padStart(2, "0"))
     .join("");
-const FIELD = mix(ACCENT, CREAM, 0.15); // the icon ground: 15% Ember over the app's cream, as Set's 15% green over card white
+const FIELD = mix(ACCENT, CREAM, 0.15);
+const TILE = mix(ACCENT, CREAM, 0.4); // the hex under the squat settler, between the ground and the body // the icon ground: 15% Ember over the app's cream, as Set's 15% green over card white
 
 // Spotter's eye: cream white with an ink pupil up and to the right.
 const eye = (x, y, r) =>
@@ -32,6 +33,7 @@ const smile = (x0, y0, w) => `<path d="M${x0} ${y0} Q${x0 + w * 0.53} ${y0 + w *
 // Each option: id, name, rationale, mark (100-unit frame, base at y=108), header box, icon box.
 const MARK = "16 2 68 74";
 const ICON = "-15.4 -30.3 130.7 130.7";
+// An option with a tag is a variant of the lettered option above it; the rest take letters in order.
 const options = [
   {
     id: "settler",
@@ -45,6 +47,16 @@ const options = [
     icon: ICON,
   },
   {
+    id: "settler-squat",
+    tag: "A2",
+    name: "Squat settler",
+    why: "The Settler at the game piece's proportions: a short, wide house, whole and centred in the frame instead of running off the bottom.",
+    art: `<g transform="rotate(-6 50 52)">` +
+      body("M22 80 V52 L50 22 L78 52 V80 Z") + eye(40, 57, 8.5) + eye(60, 57, 8.5) + smile(45.2, 71, 15) + `</g>`,
+    mark: "12 18 76 68",
+    icon: "-14 -12 128 128",
+  },
+  {
     id: "tile",
     name: "Tile",
     why: "A whole hex tile with a face, tipped a little off true. The board in one shape.",
@@ -52,6 +64,17 @@ const options = [
       body("M14 50 L32 18.8 H68 L86 50 L68 81.2 H32 Z") + eye(38.6, 44, 9) + eye(61.4, 44, 9) + smile(44.6, 61, 16.8) + `</g>`,
     mark: "9 13 82 74",
     icon: "-14 -14 128 128",
+  },
+  {
+    id: "tile-settler",
+    tag: "B2",
+    name: "Settler on a tile",
+    why: "The squat settler, face and all, standing in the middle of a hex tile drawn in a paler Ember. The piece and the board together.",
+    art: `<g transform="rotate(-6 50 52)">` +
+      body("M10 52 L30 17.4 H70 L90 52 L70 86.6 H30 Z", TILE) +
+      body("M30 77 V56 L50 33 L70 56 V77 Z", ACCENT, 5) + eye(42.5, 59.5, 6.2) + eye(57.5, 59.5, 6.2) + smile(45.6, 70, 10.5) + `</g>`,
+    mark: "6 12 88 80",
+    icon: "-14 -12 128 128",
   },
   {
     id: "robber",
@@ -110,6 +133,8 @@ const svg = (art, box, backdrop) => {
 };
 const sized = (s, w, h) => s.replace("<svg ", `<svg width="${w}" height="${h}" aria-hidden="true" `);
 
+let letter = 65;
+for (const o of options) o.tag ??= String.fromCharCode(letter++);
 for (const o of options) {
   writeFileSync(new URL(`${o.id}-mark.svg`, dir), svg(o.art, o.mark) + "\n");
   writeFileSync(new URL(`${o.id}-icon.svg`, dir), svg(o.art, o.icon, FIELD) + "\n");
@@ -188,17 +213,17 @@ h3 { font-size: 20px; margin: 36px 0 4px; }
 </style></head><body>
 <section class="top">
   <h1>Unsettled logo options</h1>
-  <p>Six characters in the style of Set's Spotter (two-tone): one solid shape in the app's Ember accent <span class="sw" style="background:${ACCENT}"></span> <code>${ACCENT}</code>, cream eyes glancing sideways, an ink face, leaning slightly, and (for the pieces) cropped flat by whatever they sit on. The icon ground is 15% Ember over the app's cream <span class="sw" style="background:${FIELD}"></span> <code>${FIELD}</code>, as Spotter sits on 15% of its green. Each column shows the app icon, the icon at home-screen size on a light and a dark wallpaper, with the headers at real size below.</p>
+  <p>Characters in the style of Set's Spotter (two-tone): one solid shape in the app's Ember accent <span class="sw" style="background:${ACCENT}"></span> <code>${ACCENT}</code>, cream eyes glancing sideways, an ink face, leaning slightly, and (for the pieces) cropped flat by whatever they sit on. The icon ground is 15% Ember over the app's cream <span class="sw" style="background:${FIELD}"></span> <code>${FIELD}</code>, as Spotter sits on 15% of its green. Each column shows the app icon, the icon at home-screen size on a light and a dark wallpaper, with the headers at real size below.</p>
 </section>
 <main class="grid">
 ${col("Today", "Wax seal", "The shipping mark for reference: the deep red seal with a cream house.", () => seal.icon, seal.mark, true)}
-${options.map((o, i) => col(`Option ${String.fromCharCode(65 + i)}`, o.name, o.why, (px) => sized(svg(o.art, o.icon, FIELD), px, px), (px) => markAt(o, px))).join("")}
+${options.map((o) => col(`Option ${o.tag}`, o.name, o.why, (px) => sized(svg(o.art, o.icon, FIELD), px, px), (px) => markAt(o, px))).join("")}
 </main>
 <h3>Header at real size</h3>
 <p class="sub">The desktop header (52 px mark, 44 px title) and the phone brand row (30 px mark, 31 px title) on the sea blue they sit on, then the phone row on light and dark.</p>
 <section class="hrows">
 ${row("Today: Wax seal", seal.mark)}
-${options.map((o, i) => row(`${String.fromCharCode(65 + i)}: ${o.name}`, (px) => markAt(o, px))).join("")}
+${options.map((o) => row(`${o.tag}: ${o.name}`, (px) => markAt(o, px))).join("")}
 </section>
 </body></html>
 `;
