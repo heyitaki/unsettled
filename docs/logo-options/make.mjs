@@ -128,15 +128,13 @@ for (const o of options) {
   writeFileSync(new URL(`${o.id}-icon.svg`, dir), svg(o.art, o.icon, FIELD) + "\n");
 }
 
-// The page: today's seal, then one column per option with the same four views.
-const b64 = (p) => "data:image/png;base64," + readFileSync(new URL(`../../public/${p}`, import.meta.url)).toString("base64");
-const seal = { icon: `<img src="${b64("icon-512.png")}" alt="">`, mark: (px) => `<img src="${b64("favicon.png")}" width="${px}" height="${px}" alt="">` };
+// The page: one column per option with the same four views.
 const markAt = (o, px) => {
   const [, , w, h] = o.mark.split(" ").map(Number);
   return sized(svg(o.art, o.mark), Math.round((px * w) / h), px);
 };
-const col = (tag, name, why, icon, mark, ref = false) => `
-<article class="col${ref ? " ref" : ""}">
+const col = (tag, name, why, icon) => `
+<article class="col">
   <header><p class="tag">${tag}</p><h2>${name}</h2></header>
   <p class="why">${why}</p>
   <figure><div class="squircle big">${icon(1024)}</div><figcaption>App icon, iOS mask</figcaption></figure>
@@ -156,11 +154,11 @@ const row = (name, mark) => `
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Unsettled Logo Options</title>
 <style>
-:root { --bg: #ece7dc; --surface: #fffdf8; --fg: #2d2924; --muted: #776f64; --line: #e3d9c5; --ref: #f5f1e8;
+:root { --bg: #ece7dc; --surface: #fffdf8; --fg: #2d2924; --muted: #776f64; --line: #e3d9c5;
   --sans: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue", Arial, sans-serif; color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #14120f; --surface: #1f1c18; --fg: #f1ece3; --muted: #a39b8f; --line: #36312a; --ref: #191714; color-scheme: dark } }
-:root[data-theme="dark"] { --bg: #14120f; --surface: #1f1c18; --fg: #f1ece3; --muted: #a39b8f; --line: #36312a; --ref: #191714; color-scheme: dark }
+  --bg: #14120f; --surface: #1f1c18; --fg: #f1ece3; --muted: #a39b8f; --line: #36312a; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #14120f; --surface: #1f1c18; --fg: #f1ece3; --muted: #a39b8f; --line: #36312a; color-scheme: dark }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); padding: 28px 16px 48px; }
 .top { max-width: 72ch; display: grid; gap: 6px; margin-bottom: 24px; }
 h1 { font-size: 28px; line-height: 1.15; margin: 0; letter-spacing: -0.01em; }
@@ -168,7 +166,6 @@ h1 { font-size: 28px; line-height: 1.15; margin: 0; letter-spacing: -0.01em; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; align-items: start; }
 .col { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 14px; min-width: 0; grid-template-rows: auto 6.2em auto auto; }
-.col.ref { background: var(--ref); border-style: dashed; }
 .col header { display: grid; gap: 2px; }
 .tag { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 h2 { margin: 0; font-size: 17px; line-height: 1.25; }
@@ -204,13 +201,11 @@ h3 { font-size: 20px; margin: 36px 0 4px; }
   <p>Characters in the style of Set's Spotter (two-tone): one solid shape in the app's Ember accent <span class="sw" style="background:${ACCENT}"></span> <code>${ACCENT}</code>, cream eyes glancing sideways, an ink face, leaning slightly, and (for the pieces) cropped flat by whatever they sit on. The icon ground is 15% Ember over the app's cream <span class="sw" style="background:${FIELD}"></span> <code>${FIELD}</code>, as Spotter sits on 15% of its green. Each column shows the app icon, the icon at home-screen size on a light and a dark wallpaper, with the headers at real size below.</p>
 </section>
 <main class="grid">
-${col("Today", "Wax seal", "The shipping mark for reference: the deep red seal with a cream house.", () => seal.icon, seal.mark, true)}
-${options.map((o) => col(`Option ${o.tag}`, o.name, o.why, (px) => sized(svg(o.art, o.icon, FIELD), px, px), (px) => markAt(o, px))).join("")}
+${options.map((o) => col(`Option ${o.tag}`, o.name, o.why, (px) => sized(svg(o.art, o.icon, FIELD), px, px))).join("")}
 </main>
 <h3>Header at real size</h3>
 <p class="sub">The desktop header (52 px mark, 44 px title) and the phone brand row (30 px mark, 31 px title) on the sea blue they sit on, then the phone row on light and dark.</p>
 <section class="hrows">
-${row("Today: Wax seal", seal.mark)}
 ${options.map((o) => row(`${o.tag}: ${o.name}`, (px) => markAt(o, px))).join("")}
 </section>
 </body></html>

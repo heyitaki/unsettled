@@ -1,15 +1,19 @@
 {
   "fill": {
-    "automatic-gradient": "srgb:0.94510,0.93725,0.91765,1.00000"
+    "automatic-gradient": "srgb:0.95686,0.87451,0.83529,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "seal.png",
-          "name": "seal"
+          "image-name": "settler.svg",
+          "name": "settler"
         }
-      ]
+      ],
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
     }
   ],
   "supported-platforms": {
