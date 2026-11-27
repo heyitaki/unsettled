@@ -12,7 +12,7 @@ import { adviceResponse, useAdvice, useAdviceClient, type AdviceState } from './
 import {
   adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, knightTheft, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
-import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
+import { CardAmounts, ResourcePicker } from './MoveInputs'
 import { CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'
@@ -191,6 +191,7 @@ function DiscardLine({ game, playerId, total, count, adviceEnabled, commit, skip
   const selected = manual ? cards : response?.cards
   const sum = selected ? RESOURCES.reduce((sum, resource) => sum + selected[resource], 0) : 0
   const name = game.board.players.find((player) => player.id === playerId)?.name ?? playerId
+  const stats = statsFor(game, playerId)
   const record = () => commit(recordDiscard(game, playerId, me || manual ? selected ?? {} : count), `${name} discarded ${count} cards`)
   const enterTypes = () => {
     setCards(discardInputCards(me, response?.cards))
@@ -198,29 +199,25 @@ function DiscardLine({ game, playerId, total, count, adviceEnabled, commit, skip
   }
   return (
     <div className="move-discard" role="group" aria-label={`${name}'s discard`}>
-      <div className="move-pick">
-        <span><b>{name}</b> · {total} cards</span>
-        {!me && !manual ? <span>discards {count}, types not seen</span> : <span>Discard {count}</span>}
-        {me && !manual && response && <CardAmounts cards={response.cards} />}
-        <button type="button" className="primary" disabled={(me || manual) && sum !== count} onClick={record}>
-          Record
-        </button>
-        {!manual && <button type="button" onClick={enterTypes}>Enter types</button>}
-        <button type="button" onClick={skip}>Skip</button>
+      <div className="move-discard-head">
+        <span className="move-discard-text">
+          <span><b>{name}</b> · {total} cards</span>
+          <span>· {!me && !manual ? `Discards ${count}, types not seen` : manual ? `Discard ${sum} / ${count}` : `Discard ${count}`}</span>
+          {me && !manual && response && <CardAmounts cards={response.cards} />}
+        </span>
+        <span className="move-discard-actions">
+          {!manual && <button type="button" onClick={enterTypes}>Enter types</button>}
+          <button type="button" onClick={skip}>Skip</button>
+          <button type="button" className="primary" disabled={(me || manual) && sum !== count} onClick={record}>
+            Record
+          </button>
+        </span>
       </div>
       {manual && (
-        <div className="move-chips">
-          {RESOURCES.map((resource) => (
-            <MoveStepper
-              key={resource}
-              label={resource}
-              value={cards[resource]}
-              max={count}
-              onChange={(value) => setCards({ ...cards, [resource]: value })}
-            />
-          ))}
-          <span>{sum} / {count}</span>
-        </div>
+        <ResourcePicker label="Discard" cards={cards}
+          disabled={(resource) => sum >= count || !canCover(stats, { ...cards, [resource]: cards[resource] + 1 })}
+          onChange={(resource) => setCards({ ...cards, [resource]: cards[resource] + 1 })}
+          onRemove={(resource) => setCards({ ...cards, [resource]: cards[resource] - 1 })} />
       )}
       {me && adviceEnabled && <AdviceFeedback advice={advice} />}
       {me && response?.reason && !manual && <p>{response.reason}</p>}

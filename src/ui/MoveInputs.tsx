@@ -1,26 +1,5 @@
-import type { ReactNode } from 'react'
 import { RESOURCES, type Resource } from '../model/types'
 import { MinusGlyph, ResourceGlyph } from './glyphs'
-
-export function MoveStepper({ label, value, onChange, max = Infinity, children }: {
-  label: string
-  value: number
-  onChange(value: number): void
-  max?: number
-  children?: ReactNode
-}) {
-  return (
-    <span className="move-chip">
-      <button type="button" aria-label={`Fewer ${label}`} disabled={value <= 0} onClick={() => onChange(value - 1)}>
-        −
-      </button>
-      <span>{children ?? label} {value}</span>
-      <button type="button" aria-label={`More ${label}`} disabled={value >= max} onClick={() => onChange(value + 1)}>
-        +
-      </button>
-    </span>
-  )
-}
 
 export function ResourcePicker({ label, value, cards, available, disabled, onChange, onRemove }: {
   label?: string

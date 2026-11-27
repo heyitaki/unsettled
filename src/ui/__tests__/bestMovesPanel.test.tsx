@@ -1002,7 +1002,7 @@ describe('Best moves recording', () => {
     await click('Undo')
     await click('7')
     expect(rollStep().querySelectorAll('.move-discard')).toHaveLength(2)
-    expect(button('More wood', rollStep()).disabled).toBe(false)
+    expect(button('Discard wood', rollStep()).disabled).toBe(false)
     expect(seen.state.pick).toBeNull()
     await skipDiscards()
     expect(seen.state.pick?.want).toBe('hex')
@@ -1233,7 +1233,7 @@ describe('Best moves recording', () => {
     await click('7')
     const own = rollStep().querySelector('[aria-label="aki\'s discard"]')!
     for (const [resource, count] of [['wood', 5], ['sheep', 5], ['wheat', 2]] as const) {
-      for (let index = 0; index < count; index += 1) await click(`More ${resource}`, own)
+      for (let index = 0; index < count; index += 1) await click(`Discard ${resource}`, own)
     }
     await click('Record', own)
     expect(rollStep().querySelectorAll('.move-discard')).toHaveLength(1)
@@ -1320,7 +1320,7 @@ describe('Best moves recording', () => {
     await click('Enter types', rival)
     expect(rival.textContent).toContain('0 / 12')
     expect(button('Record', rival).disabled).toBe(true)
-    for (const resource of RESOURCES) expect(button(`Fewer ${resource}`, rival).disabled).toBe(true)
+    expect(rival.querySelector('.move-minus')).toBeNull()
   })
 
   it('shows only the active player dev defaults and counts bought cards as typed', async () => {
