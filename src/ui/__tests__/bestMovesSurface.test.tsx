@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { addPlayer, createBoard } from '../../model/board'
-import { adjustCounter, adjustHand, newGame } from '../../model/game'
+import { adjustCounter, adjustHand, newGame, withUnseenCards } from '../../model/game'
 import { adjustDevHand, CARD_COSTS } from '../../model/turn'
 import { Ledger } from '../Ledger'
 import { CardAmounts, ResourcePicker } from '../MoveInputs'
@@ -26,6 +26,20 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   style.remove()
+})
+
+it('shows a narrowed unseen card as the types it could be, beside plain unseen cards', async () => {
+  const game = newGame(createBoard('standard4'))
+  game.stats.aki = withUnseenCards(game.stats.aki, { ...game.stats.aki.hand, wood: 1 },
+    [['wood', 'brick'], ['wood', 'brick'], ['sheep', 'wheat', 'ore'], ['wood', 'sheep', 'wheat', 'brick', 'ore']])
+  await act(async () => root.render(<Ledger game={game} activeId="aki" previous={undefined} commit={() => {}} onUndo={() => {}} />))
+  const chips = [...container.querySelectorAll('.ledger-hand [aria-label]')]
+  expect(chips.map((chip) => chip.getAttribute('aria-label'))).toEqual(
+    ['1 wood', '2 unseen cards, wood or brick', '1 unseen card, sheep, wheat or ore', '1 unseen card'])
+  expect(chips[1].querySelectorAll('.ledger-among .stat-icon')).toHaveLength(2)
+  expect(chips[1].textContent).toBe('2')
+  expect(chips[3].querySelector('.ledger-among')).toBeNull()
+  expect(container.querySelector('.ledger-cards')?.textContent).toBe('5')
 })
 
 it('renders the Ledger hands, dev pills and awards, with one inline row editor', async () => {

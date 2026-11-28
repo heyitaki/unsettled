@@ -1,7 +1,7 @@
 import { placeBuilding, placeRoad, setRobber, setupGrants } from './board'
 import { edgeEndpointVertexIds } from './coords'
 import {
-  adjustCounter, DEV_KINDS, devHandTotal, ensureStats, withBoard,
+  adjustCounter, DEV_KINDS, devHandTotal, ensureStats, unseenCards, withBoard, withUnseenCards,
   isEmptyCorrection, type AwardKind, type Correction, type CorrectionField, type DevHand, type DevKind, type Game, type PlayerStats, type TurnState,
 } from './game'
 import { RESOURCES, type AxialCoord, type Board, type EdgeId, type Resource, type VertexId } from './types'
@@ -152,8 +152,11 @@ export function recordRobber(game: Game, hex: AxialCoord, victimId: string | nul
   const { playerId } = requireTurn(game)
   if (handTotal(ensureStats(game, victimId)) === 0) return next
   if (stolen === null) {
+    // The thief's card is one of the types the victim could have held.
+    const types = possibleTypes(ensureStats(game, victimId))
     next = loseUnseen(next, victimId, 1)
-    return adjustCounter(next, playerId, 'handUnknown', 1)
+    const thief = ensureStats(next, playerId)
+    return withStats(next, playerId, withUnseenCards(thief, thief.hand, [...unseenCards(thief), types]))
   }
   next = spend(next, victimId, { [stolen]: 1 })
   return gain(next, playerId, { [stolen]: 1 })
@@ -244,6 +247,13 @@ export function recordPlayDev(game: Game, play: DevPlay): Game {
         next = spend(next, otherId, { [play.resource]: count })
         total += count
       }
+      // Monopoly takes every card of the named type, so no other player's unseen card can be one.
+      for (const { id } of next.board.players) {
+        const stats = ensureStats(next, id)
+        if (id !== playerId && stats.handUnknown > 0) {
+          next = withStats(next, id, withUnseenCards(stats, stats.hand, unseenCards(stats).map((card) => card.filter((type) => type !== play.resource))))
+        }
+      }
       next = gain(next, playerId, { [play.resource]: total })
       break
     }
@@ -296,23 +306,32 @@ export function handTotal(stats: PlayerStats): number {
   return RESOURCES.reduce((sum, resource) => sum + stats.hand[resource], stats.handUnknown)
 }
 
-function loseUnseen(game: Game, playerId: string, count: number): Game {
-  const stats = ensureStats(game, playerId)
-  const hand = { ...stats.hand }
-  let total = handTotal(stats)
-  let handUnknown = stats.handUnknown
-  for (let lost = 0; lost < count && total > 0; lost += 1) {
-    let known = 0
+/** The types a player's hand could hold: known ones and any an unseen card could be. */
+export function possibleTypes(stats: PlayerStats): Resource[] {
+  const cards = unseenCards(stats)
+  return RESOURCES.filter((resource) => stats.hand[resource] > 0 || cards.some((card) => card.includes(resource)))
+}
 
-    // Any resource could be the missing card, so every known lower bound falls.
-    for (const resource of RESOURCES) {
-      hand[resource] = Math.max(0, hand[resource] - 1)
-      known += hand[resource]
+/**
+ * Loses `count` cards without seeing them. Each lost card is one of the types the hand could
+ * hold, so every known type falls by one, and those cards rejoin the unseen ones, now any of
+ * those types, one fewer than before. A hand of wood and brick that loses a card keeps one
+ * card that is wood or brick.
+ */
+function loseUnseen(game: Game, playerId: string, count: number): Game {
+  let stats = ensureStats(game, playerId)
+  for (let lost = 0; lost < count && handTotal(stats) > 0; lost += 1) {
+    const types = possibleTypes(stats)
+    const hand = { ...stats.hand }
+    let pool = stats.handUnknown - 1
+    for (const resource of types) {
+      if (hand[resource] === 0) continue
+      hand[resource] -= 1
+      pool += 1
     }
-    total -= 1
-    handUnknown = total - known
+    stats = withUnseenCards(stats, hand, Array.from({ length: pool }, () => types))
   }
-  return withStats(game, playerId, { ...stats, hand, handUnknown })
+  return withStats(game, playerId, stats)
 }
 
 function promoteBought(game: Game): Game {
@@ -335,16 +354,28 @@ function requireTurn(game: Game): TurnState {
   return turn
 }
 
+/**
+ * Spends `cards`, known ones first. A shortfall reveals an unseen card of that type. When more
+ * than one unseen card could be it, the ones left could each be any type the candidates could.
+ */
 function spend(game: Game, playerId: string, cards: Cards): Game {
   const stats = ensureStats(game, playerId)
   const hand = { ...stats.hand }
-  let handUnknown = stats.handUnknown
+  let unseen = unseenCards(stats)
   for (const resource of RESOURCES) {
     const count = cards[resource] ?? 0
-    handUnknown = Math.max(0, handUnknown - Math.max(0, count - hand[resource]))
+    for (let short = count - hand[resource]; short > 0 && unseen.length > 0; short -= 1) {
+      const candidates = unseen.filter((card) => card.includes(resource))
+      // None fits when the ledger was wrong: drop the widest card, as a plain count would.
+      if (candidates.length === 0) unseen = unseen.toSorted((a, b) => a.length - b.length).slice(0, -1)
+      else {
+        const types = RESOURCES.filter((type) => candidates.some((card) => card.includes(type)))
+        unseen = [...unseen.filter((card) => !card.includes(resource)), ...candidates.slice(1).map(() => types)]
+      }
+    }
     hand[resource] = Math.max(0, hand[resource] - count)
   }
-  return withStats(game, playerId, { ...stats, hand, handUnknown })
+  return withStats(game, playerId, withUnseenCards(stats, hand, unseen))
 }
 
 function withStats(game: Game, playerId: string, stats: PlayerStats): Game {
