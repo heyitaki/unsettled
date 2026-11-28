@@ -13,7 +13,7 @@ import {
   adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, knightTheft, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
 import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
-import { CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
+import { BuyDevGlyph, CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'
 import { useBoardPick } from './useBoardPick'
@@ -410,20 +410,34 @@ function TradeTray({ game, active, tray, adviceEnabled, commit, close }: TrayPro
   )
 }
 
-export function BuildTray({ game, active, commit, close }: Pick<TrayProps, 'game' | 'active' | 'commit' | 'close'>) {
-  const [piece, setPiece] = useState<'road' | 'settlement' | 'city' | null>(null)
+type Piece = 'road' | 'settlement' | 'city'
+
+export function BuildTray({ game, active, commit, close, buy = false, drawing = false }: Pick<TrayProps, 'game' | 'active' | 'commit' | 'close'> & {
+  /** Offers a dev card beside the pieces, for a special build. */
+  buy?: boolean
+  /** Opens on the drawn card question, for an advised special build buy. */
+  drawing?: boolean
+}) {
+  const [piece, setPiece] = useState<Piece | 'dev' | null>(drawing ? 'dev' : null)
+  const place = piece === 'dev' ? null : piece
   const pieces = useMemo(() => buildablePieces(game, active.id), [game, active.id])
-  // MOCK (special build phase): a pick names its player only for a build outside the turn.
+  // A pick names its player only for a special build, so the board offers that player's spots.
   const pickFor = active.id === activePlayerId(game) ? {} : { playerId: active.id }
-  useBoardPick(piece === null ? null : piece === 'road' ? { want: 'edge', ...pickFor } : { want: 'vertex', piece, ...pickFor }, (ref) => {
-    if (!piece) return
-    commit(recordBuild(game, piece, ref as EdgeId | VertexId, { playerId: active.id }), `Built a ${piece}`)
+  useBoardPick(place === null ? null : place === 'road' ? { want: 'edge', ...pickFor } : { want: 'vertex', piece: place, ...pickFor }, (ref) => {
+    if (!place) return
+    commit(recordBuild(game, place, ref as EdgeId | VertexId, { playerId: active.id }), `Built a ${place}`)
     close()
   })
-  const who = active.id === game.board.mePlayerId ? 'you' : active.name
+  const mine = active.id === game.board.mePlayerId
+  const who = mine ? 'you' : active.name
+  const buyDev = () => {
+    if (mine) return setPiece('dev')
+    commit(recordBuyDev(game, null, { playerId: active.id }), recordedMoveLabel({ type: 'buyDev' }))
+    close()
+  }
   return (
     <div className="move-tray">
-      <div className="move-question">What did {who} build?</div>
+      <div className="move-question">What did {who} {buy ? 'build or buy' : 'build'}?</div>
       <div className="move-card-choices move-build-choices" role="group" aria-label="Piece">
         {pieces.map((kind) => (
           <button type="button" className={`move-build-${kind}`} key={kind} aria-pressed={piece === kind} onClick={() => setPiece(kind)}>
@@ -433,25 +447,34 @@ export function BuildTray({ game, active, commit, close }: Pick<TrayProps, 'game
             </span>
           </button>
         ))}
+        {buy && <button type="button" className="move-build-dev" aria-pressed={piece === 'dev'} onClick={buyDev}>
+          <BuyDevGlyph />
+          <span className="move-piece-text"><span className="move-piece-name">Dev card</span>
+            <span className="move-piece-cost"><CardAmounts cards={CARD_COSTS.devCard} /></span>
+          </span>
+        </button>}
       </div>
-      {piece && <div className="move-question">Where is the new {piece}?<span>Tap its spot on the board</span></div>}
+      {piece === 'dev' ? <DrawnCard game={game} active={active} commit={commit} close={close} />
+        : piece && <div className="move-question">Where is the new {piece}?<span>Tap its spot on the board</span></div>}
     </div>
   )
 }
 
-function BuyTray({ game, commit, close }: TrayProps) {
-  return (
-    <div className="move-tray">
-      <div className="move-question">Which card did you draw?</div>
-      <div className="move-card-choices" role="group" aria-label="Drawn card">
-        {[...DEV_KINDS, 'vp' as const].map((kind) => (
-          <button type="button" key={kind} onClick={() => { commit(recordBuyDev(game, kind), recordedMoveLabel({ type: 'buyDev' })); close() }}>
-            <DevChipGlyph kind={kind} /><span>{kind === 'vp' ? 'Victory point' : DEV_LABELS[kind]}</span>
-          </button>
-        ))}
-      </div>
+function DrawnCard({ game, active, commit, close }: Pick<TrayProps, 'game' | 'active' | 'commit' | 'close'>) {
+  return <>
+    <div className="move-question">Which card did you draw?</div>
+    <div className="move-card-choices" role="group" aria-label="Drawn card">
+      {[...DEV_KINDS, 'vp' as const].map((kind) => (
+        <button type="button" key={kind} onClick={() => { commit(recordBuyDev(game, kind, { playerId: active.id }), recordedMoveLabel({ type: 'buyDev' })); close() }}>
+          <DevChipGlyph kind={kind} /><span>{kind === 'vp' ? 'Victory point' : DEV_LABELS[kind]}</span>
+        </button>
+      ))}
     </div>
-  )
+  </>
+}
+
+function BuyTray(props: TrayProps) {
+  return <div className="move-tray"><DrawnCard {...props} /></div>
 }
 
 function PlayTray({ game, active, tray, commit, close, knight }: TrayProps) {

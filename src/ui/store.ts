@@ -79,7 +79,7 @@ export type PickTarget =
   | { want: 'vertex'; piece: 'settlement' | 'city' }
   | { want: 'edge'; edges?: readonly EdgeId[] }
   | { want: 'hex' }
-// MOCK (special build phase): whose slots a vertex or edge pick offers, when not the turn's player.
+// A special build names the player whose slots a vertex or edge pick offers.
 export type PlayerPick = PickTarget & { playerId?: string }
 export type BoardPick = PlayerPick & { ref?: string }
 

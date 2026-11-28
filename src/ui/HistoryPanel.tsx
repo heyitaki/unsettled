@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { pips } from '../model/board'
-import { currentTurnNumber, historyPlayer, turnSummary } from '../model/history'
+import { currentTurnNumber, historyPlayer, specialBuildText, turnSummary } from '../model/history'
 import { PLAYER_PALETTE } from '../model/types'
 import { ProductionPlayer } from './BestMovesTrays'
 import { readableInk } from './colors'
@@ -14,9 +14,6 @@ export function PlayerDisc({ color, className = '', children }: { color: string;
   const light = color.toLowerCase() === PLAYER_PALETTE.white
   return <span className={`history-disc${light ? ' light' : ''}${className && ` ${className}`}`} style={{ background: color, color: readableInk(color) }}>{children}</span>
 }
-
-// MOCK (special build phase): a log line another player recorded between turns.
-export const betweenTurns = (line: string) => line.endsWith(' between turns')
 
 export function HistoryPanel({ className = 'panel analysis-panel' }: { className?: string }) {
   const { state, dispatch } = useStore()
@@ -61,10 +58,10 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
           const round = Math.ceil(index / game.board.players.length)
           const player = historyPlayer(game.board, turn.playerId)
           const current = selected === index
-          const log = (turn.log ?? []).filter((line) => !betweenTurns(line))
-          const across = (turn.log ?? []).filter(betweenTurns)
-          const builders = game.board.players.filter((p) => across.some((line) => line.startsWith(`${p.name} `)))
-          const summary = [turnSummary(log), builders.length > 0 && `${builders.map((p) => p.name).join(' and ')} built after`].filter(Boolean).join(' · ')
+          const log = turn.log ?? []
+          const special = turn.specialBuilds ?? []
+          const builders = [...new Set(special.map((line) => historyPlayer(game.board, line.playerId).name))]
+          const summary = [turnSummary(log), builders.length > 0 && `${builders.join(' and ')} built after`].filter(Boolean).join(' · ')
           const produced = Object.entries(turn.gains ?? {})
           return <Fragment key={index}>
             {(index === now || round !== Math.ceil((index + 1) / game.board.players.length)) && <div className="history-round" role="presentation">Round {round}</div>}
@@ -87,12 +84,12 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
                   {produced.map(([id, cards]) => <ProductionPlayer key={id} player={historyPlayer(game.board, id)} cards={cards} />)}
                 </div> : <div className="history-quiet">Nobody produces</div>)}
                 {log.length > 0 && <ul className="move-log">{log.map((line, i) => <li key={i}><TickGlyph /><span>{line}</span></li>)}</ul>}
-                {across.length > 0 && <>
+                {special.length > 0 && <>
                   <div className="history-quiet">Special build</div>
-                  <ul className="move-log">{across.map((line, i) => {
-                    const builder = game.board.players.find((p) => line.startsWith(`${p.name} `))
-                    return <li key={i}><span className="move-player-dot" style={{ background: builder?.color }} /><span>{line.replace(/ between turns$/, '')}</span></li>
-                  })}</ul>
+                  <ul className="move-log">{special.map((line, i) => <li key={i}>
+                    <span className="move-player-dot" style={{ background: historyPlayer(game.board, line.playerId).color }} />
+                    <span>{specialBuildText(game.board, line)}</span>
+                  </li>)}</ul>
                 </>}
               </div>}
             </div>

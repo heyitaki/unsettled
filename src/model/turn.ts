@@ -2,7 +2,7 @@ import { placeBuilding, placeRoad, setRobber, setupGrants } from './board'
 import { edgeEndpointVertexIds } from './coords'
 import {
   adjustCounter, DEV_KINDS, devHandTotal, ensureStats, withBoard,
-  isEmptyCorrection, type AwardKind, type Correction, type CorrectionField, type DevHand, type DevKind, type Game, type PlayerStats, type TurnState,
+  isEmptyCorrection, type AwardKind, type SpecialBuildLine, type Correction, type CorrectionField, type DevHand, type DevKind, type Game, type PlayerStats, type TurnState,
 } from './game'
 import { RESOURCES, type AxialCoord, type Board, type EdgeId, type Resource, type VertexId } from './types'
 import { positionOf, turnRecord } from './history'
@@ -197,7 +197,7 @@ export function recordPlayerTrade(game: Game, otherId: string, gives: Cards, get
   return gain(next, otherId, gives)
 }
 
-// MOCK (special build phase): `playerId` lets a player other than the turn's build between turns.
+/** `playerId` records a special build by another player after the turn player finished. */
 export function recordBuild(game: Game, piece: 'road' | 'settlement' | 'city', id: EdgeId | VertexId, options?: { free?: boolean; playerId?: string }): Game {
   const playerId = options?.playerId ?? requireTurn(game).playerId
   const board = piece === 'road'
@@ -208,19 +208,48 @@ export function recordBuild(game: Game, piece: 'road' | 'settlement' | 'city', i
   return options?.free ? next : spend(next, playerId, CARD_COSTS[piece])
 }
 
-export function recordBuyDev(game: Game, drawn: DevKind | 'vp' | null): Game {
+/** `playerId` records a special build purchase by another player, whose card is playable on their next turn. */
+export function recordBuyDev(game: Game, drawn: DevKind | 'vp' | null, options?: { playerId?: string }): Game {
   game = begin(game)
   const turn = requireTurn(game)
-  const { playerId } = turn
+  const playerId = options?.playerId ?? turn.playerId
+  const special = playerId !== turn.playerId
   let next = spend(game, playerId, CARD_COSTS.devCard)
-  next = { ...next, turn: { ...turn, devBought: (turn.devBought ?? 0) + 1 } }
+  if (!special) next = { ...next, turn: { ...turn, devBought: (turn.devBought ?? 0) + 1 } }
   if (drawn === 'vp') return adjustCounter(next, playerId, 'vpCards', 1)
   next = adjustCounter(next, playerId, 'devCards', 1)
   if (playerId === game.board.mePlayerId && drawn !== null) {
     const devHand = devHandFor(game, playerId)
-    next = { ...next, devHand: { ...devHand, bought: { ...devHand.bought, [drawn]: devHand.bought[drawn] + 1 } } }
+    const list = special ? 'playable' : 'bought'
+    next = { ...next, devHand: { ...devHand, [list]: { ...devHand[list], [drawn]: devHand[list][drawn] + 1 } } }
   }
   return next
+}
+
+/**
+ * Who may build after the turn player finishes under the game's special build rule, in building order.
+ * `across` is the player three seats back, applied from the first turn on. Under `overSeven` a player who
+ * already built this phase stays eligible, so spending below eight cards does not cut a build short.
+ */
+export function specialBuilders(game: Game): string[] {
+  const rule = game.specialBuild
+  const turn = game.turn
+  const { players } = game.board
+  if (!rule || !turn || players.length < 5) return []
+  const seat = players.findIndex((player) => player.id === turn.playerId)
+  if (seat < 0) return []
+  const count = players.length
+  const seats = rule.timing === 'across' ? [(seat + count - 3) % count] : Array.from({ length: count - 1 }, (_, i) => (seat + 1 + i) % count)
+  const built = new Set((turn.specialBuilds ?? []).map((line) => line.playerId))
+  return seats.map((index) => players[index].id)
+    .filter((id) => rule.who === 'always' || built.has(id) || handTotal(ensureStats(game, id)) > 7)
+}
+
+export function appendSpecialBuild(game: Game, playerId: string, text: string): Game {
+  game = closeCorrection(game)
+  const turn = requireTurn(game)
+  const line: SpecialBuildLine = { playerId, text }
+  return { ...game, turn: { ...turn, specialBuilds: [...turn.specialBuilds ?? [], line] } }
 }
 
 export function recordPlayDev(game: Game, play: DevPlay): Game {

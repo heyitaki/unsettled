@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Cards, KnightPlay } from '../engine/advice/protocol'
 import type { Game } from '../model/game'
-import { activePlayerId, appendLog, currentTurnHistory, endTurn, recordBuyDev, setActivePlayer, turnState } from '../model/turn'
-import { RESOURCES, type Resource } from '../model/types'
+import { historyPlayer, specialBuildText } from '../model/history'
+import { activePlayerId, appendLog, appendSpecialBuild, currentTurnHistory, endTurn, recordBuild, recordBuyDev, setActivePlayer, specialBuilders, turnState } from '../model/turn'
+import { RESOURCES, type Player, type Resource } from '../model/types'
 import { adviceResponse, useAdvice } from './useAdvice'
 import {
-  actionLabel, adviceBlockers, buildablePieces, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
+  actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
 import { LedgerPanel } from './LedgerPanel'
-import { betweenTurns, HistoryPanel, PlayerDisc } from './HistoryPanel'
+import { HistoryPanel, PlayerDisc } from './HistoryPanel'
 import { AdviceFeedback, BestMovesTray, BuildTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { SpotTiles } from './SpotTiles'
 import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
@@ -26,6 +27,8 @@ const ACTION_TILES = [
   { kind: 'play', label: 'Play card', Glyph: PlayDevGlyph },
   { kind: 'build', label: 'Build', Glyph: BuildGlyph },
 ] as const
+// A special build allows only building and buying a dev card; pass is the advice to build nothing.
+const SPECIAL_ACTIONS: readonly Move['type'][] = ['buildRoad', 'buildSettlement', 'upgradeCity', 'buyDev', 'pass']
 const RESOURCE_WORDS = new RegExp(`\\b(${RESOURCES.join('|')})\\b`, 'g')
 
 interface MoveCard {
@@ -60,7 +63,14 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const turn = turnState(game)
   const active = board.players.find((player) => player.id === activeId)
   const mine = activeId === board.mePlayerId
-  const viewed = board.players.find((player) => player.id === state.viewedPlayer) ?? active
+  const seven = robberPending(game)
+  const before = turn?.rolled === null
+  // The special builder whose tray is open; `drawing` opens it on the drawn card question.
+  const [builder, setBuilder] = useState<{ id: string; drawing?: boolean } | null>(null)
+  const eligible = useMemo(() => before || seven ? [] : specialBuilders(game), [game, before, seven])
+  const building = builder && eligible.includes(builder.id) ? board.players.find((player) => player.id === builder.id) : undefined
+  // A special builder's advice takes the place of the viewed hand's.
+  const viewed = building ?? board.players.find((player) => player.id === state.viewedPlayer) ?? active
   const viewedId = viewed?.id ?? null
   const viewingTurn = viewedId === activeId
   const viewingMine = viewedId === board.mePlayerId
@@ -73,12 +83,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const [, refreshRecords] = useState(0)
   const pendingRecord = useRef<{ previous: Game; roll: RecordedRoll } | null>(null)
   const [knight, setKnight] = useState<{ game: Game; initial?: KnightPlay } | null>(null)
-  // MOCK (special build phase): the other player whose build tray is open.
-  const [across, setAcross] = useState<string | null>(null)
   const inHistory = (entry: Game) => entry === game || tab.past.includes(entry)
-  const seven = robberPending(game)
   const playingKnight = knight !== null && inHistory(knight.game)
-  const before = turn?.rolled === null
   const blockers = useMemo(() => adviceBlockers(board), [board])
   const adviceEnabled = blockers.length === 0 && !state.historyOpen
   const moves = useAdvice(
@@ -114,7 +120,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const close = useCallback(() => {
     setTray(null)
     setKnight(null)
-    setAcross(null)
+    setBuilder(null)
     setSelected(null)
     dispatch({ type: 'pick-clear' })
     mark(null)
@@ -169,7 +175,23 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
     mark(next && card.move ? adviceMarks(card.move, color) : null)
     if (next) revealBoardIfScrolledPast()
   }
+  const recordSpecial = (next: Game, playerId: string, text: string) => {
+    if (next !== game) commit(appendSpecialBuild(next, playerId, text))
+  }
+  const applySpecial = (move: Move, player: Player) => {
+    clear()
+    close()
+    const playerId = player.id
+    switch (move.type) {
+      case 'buildRoad': return recordSpecial(recordBuild(game, 'road', move.edgeId, { playerId }), playerId, recordedMoveLabel(move))
+      case 'buildSettlement': return recordSpecial(recordBuild(game, 'settlement', move.vertexId, { playerId }), playerId, recordedMoveLabel(move))
+      case 'upgradeCity': return recordSpecial(recordBuild(game, 'city', move.vertexId, { playerId }), playerId, recordedMoveLabel(move))
+      case 'buyDev': return playerId === board.mePlayerId ? setBuilder({ id: playerId, drawing: true })
+        : recordSpecial(recordBuyDev(game, null, { playerId }), playerId, recordedMoveLabel(move))
+    }
+  }
   const apply = (move: Move) => {
+    if (building) return applySpecial(move, building)
     const result = applyAdvice(game, move)
     clear()
     close()
@@ -204,13 +226,15 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
       reason: preRoll.reason,
     })
   }
-  for (const [index, advice] of limitTradeOffers(ranked?.actions ?? []).entries()) {
+  const advised = building ? (ranked?.actions ?? []).filter(({ action }) => SPECIAL_ACTIONS.includes(action.type)) : limitTradeOffers(ranked?.actions ?? [])
+  for (const [index, advice] of advised.entries()) {
     cards.push({
       id: `move:${index}`,
       rank: index + 1,
       move: advice.action,
-      label: actionLabel(advice.action, board),
-      reason: advice.reason,
+      label: building && advice.action.type === 'pass' ? 'Build nothing' : actionLabel(advice.action, board),
+      // The engine's pass reason speaks of ending a turn, which a special build does not.
+      reason: building && advice.action.type === 'pass' ? 'Keeps the cards' : advice.reason,
       score: advice.score,
       handDelta: advice.handDelta,
     })
@@ -233,7 +257,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const devCards = statsFor(game, viewedId).devCards
   // One paragraph above the advice: the not-your-turn line, then each note that applies.
   const intro = [
-    !viewingTurn && (viewingMine
+    building ? `Special build: ${viewingMine ? 'you' : viewed.name} may only build or buy a dev card.` : !viewingTurn && (viewingMine
       ? 'Not your turn. These are the moves you would make with this hand if your turn started now.'
       : `Not ${viewed.name}'s turn. These are the moves ${viewed.name} would make with this hand if their turn started now.`),
     claimNote,
@@ -249,15 +273,17 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   // An open correction group's line takes back one tap, not the line, so it gets no Undo.
   const undoLog = !turn?.correction && previousTurn?.playerId === turn?.playerId && (previousTurn?.log?.length ?? 0) === actions.length - 1
     && (previousTurn?.log ?? []).every((line, index) => line === actions[index])
-  // MOCK (special build phase): five and six seats only, others in turn order from the next player.
-  const seat = board.players.findIndex((player) => player.id === activeId)
-  const others = board.players.length >= 5 ? [...board.players.slice(seat + 1), ...board.players.slice(0, seat)] : []
-  const acrossPlayer = others.find((player) => player.id === across)
-  const lines = actions.map((text, index) => ({ text, index }))
-  const logList = (entries: typeof lines) => entries.length > 0 && <ul className="move-log">{entries.map(({ text, index }) => <li key={index}>
-    <TickGlyph /><span>{text}</span>
-    {index === actions.length - 1 && undoLog && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
-  </li>)}</ul>
+  // Special builders who can afford a piece or a dev card; a chip for anyone else would offer nothing.
+  const chips = eligible.flatMap((id) => {
+    const can = availableActions(game, id, deckRemaining)
+    const player = board.players.find((candidate) => candidate.id === id)
+    return player && (can.build || can.buy) ? [{ player, buy: can.buy }] : []
+  })
+  const specialLines = turn?.specialBuilds ?? []
+  const undoSpecial = previousTurn?.playerId === turn?.playerId && (previousTurn?.specialBuilds?.length ?? 0) === specialLines.length - 1
+  const showSpecial = specialLines.length > 0 || chips.length > 0
+  const nextPlayer = board.players[(board.players.findIndex((player) => player.id === activeId) + 1) % board.players.length]
+  const special = chips.find(({ player }) => player.id === building?.id)
   const rollIndex = turnGames.findIndex((entry) => turnState(entry)?.rolled != null)
   const rollGame = turnGames[rollIndex]
   // Change roll recommits the pre-roll snapshot as a new step, so Undo brings the roll and its actions back.
@@ -288,7 +314,10 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <span className="move-step-dot" aria-hidden="true">{noActions ? <StepDoneGlyph /> : '2'}</span>
             <div className="move-step-body">
               <div className="move-step-title">{noActions ? 'No actions possible' : 'Actions'}</div>
-              {logList(lines.filter(({ text }) => !betweenTurns(text)))}
+              {actions.length > 0 && <ul className="move-log">{actions.map((text, index) => <li key={index}>
+                <TickGlyph /><span>{text}</span>
+                {index === actions.length - 1 && undoLog && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
+              </li>)}</ul>}
               {tiles.length > 0 && <div className="move-tiles">
                 {tiles.map(({ kind, label, Glyph }) => (
                   <button type="button" className="move-tile" key={kind} aria-pressed={tray?.kind === kind} onClick={() => toggleTray(kind)}>
@@ -302,28 +331,30 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                 commit={record} finish={close} knight initial={knight.initial} />}
             </div>
           </li>
-          {others.length > 0 && <li className={`move-step ${before ? 'later' : 'now'}`}>
+          {showSpecial && <li className="move-step now">
             <span className="move-step-dot" aria-hidden="true">3</span>
             <div className="move-step-body">
-              <div className="move-step-title">Special build<span className="mock-badge">Mock</span></div>
-              <p>Others may build in turn order before {others[0].name} rolls.</p>
-              {logList(lines.filter(({ text }) => betweenTurns(text)))}
-              <div className="move-partners" role="group" aria-label="Who built">
-                {others.map((player) => {
-                  const none = buildablePieces(game, player.id).length === 0
-                  return <button type="button" key={player.id} aria-pressed={across === player.id} disabled={before || none}
-                    title={none ? `${player.name} cannot afford a piece` : undefined}
-                    onClick={() => { const open = across !== player.id; close(); if (open) setAcross(player.id) }}>
-                    <span className="move-player-dot" style={{ background: player.color }} />{player.name}
-                  </button>
-                })}
-              </div>
-              {acrossPlayer && <BuildTray key={acrossPlayer.id} game={game} active={acrossPlayer} close={close}
-                commit={(next, text) => record(next, `${acrossPlayer.name} ${text[0].toLowerCase()}${text.slice(1)} between turns`)} />}
+              <div className="move-step-title">Special build</div>
+              <p>May build or buy a dev card before {nextPlayer.id === board.mePlayerId ? 'you roll' : `${nextPlayer.name} rolls`}.</p>
+              {specialLines.length > 0 && <ul className="move-log">{specialLines.map((line, index) => {
+                const player = historyPlayer(board, line.playerId)
+                return <li key={index}>
+                  <span className="move-player-dot" style={{ background: player.color }} /><span>{specialBuildText(board, line)}</span>
+                  {index === specialLines.length - 1 && undoSpecial && <button type="button" className="move-log-undo" onClick={() => dispatch({ type: 'undo' })}><UndoGlyph />Undo</button>}
+                </li>
+              })}</ul>}
+              {chips.length > 0 && <div className="move-partners" role="group" aria-label="Special builder">
+                {chips.map(({ player }) => <button type="button" key={player.id} aria-pressed={building?.id === player.id}
+                  onClick={() => { const open = building?.id !== player.id; close(); if (open) setBuilder({ id: player.id }) }}>
+                  <span className="move-player-dot" style={{ background: player.color }} />{player.id === board.mePlayerId ? 'You' : player.name}
+                </button>)}
+              </div>}
+              {building && special && <BuildTray key={`${building.id}:${builder?.drawing ?? false}`} game={game} active={building} buy={special.buy}
+                drawing={builder?.drawing} close={close} commit={(next, text) => recordSpecial(next, building.id, text)} />}
             </div>
           </li>}
           <li className={`move-step ${before ? 'later' : 'now'}`}>
-            <span className="move-step-dot" aria-hidden="true">{others.length > 0 ? 4 : 3}</span>
+            <span className="move-step-dot" aria-hidden="true">{showSpecial ? 4 : 3}</span>
             <div className="move-step-body"><button type="button" className="primary move-end-turn" onClick={finishTurn}>End turn</button></div>
           </li>
         </ol>
@@ -390,8 +421,8 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
                       {card.title && !current && <button type="button" className="move-play" aria-label={card.label} onClick={applyCard}>Play</button>}
                       {current && (
                         <div className="analysis-touch-actions">
-                          {viewingTurn && card.move && <button type="button" className="primary" onClick={applyCard}>
-                            {card.move.type === 'pass' ? 'End turn' : 'Play'}
+                          {(viewingTurn || building) && card.move && <button type="button" className="primary" onClick={applyCard}>
+                            {card.move.type === 'pass' ? building ? 'Done' : 'End turn' : 'Play'}
                           </button>}
                           <button type="button" onClick={clear}>Clear</button>
                         </div>

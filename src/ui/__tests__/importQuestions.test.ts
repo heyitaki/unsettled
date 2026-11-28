@@ -246,3 +246,30 @@ describe('import questions', () => {
     expect(hasQuestions(importQuestions(settled, shot))).toBe(false)
   })
 })
+
+describe('special build question', () => {
+  const seated = (count: number) => {
+    let board = createBoard('extension6')
+    for (const [index, color] of ['#3063ba', '#008800', '#884400', '#aa00aa', '#00aaaa'].entries()) {
+      if (board.players.length < count) board = addPlayer(board, { id: `s${index}`, name: `S${index}`, color })
+    }
+    return newGame(board)
+  }
+  const rule = { timing: 'across', who: 'overSeven' } as const
+
+  it('is asked at five and six seats before the game starts, and never blocks on its own', () => {
+    expect(importQuestions(seated(4), read()).specialBuild).toBeUndefined()
+    expect(importQuestions(seated(5), read()).specialBuild).toBe(true)
+    expect(hasQuestions(importQuestions(seated(6), read()))).toBe(true)
+    expect(importQuestions({ ...seated(5), specialBuild: rule }, read()).specialBuild).toBeUndefined()
+    expect(importQuestions({ ...seated(5), turn: { playerId: 'aki', rolled: null, devPlayed: false,
+      progressPlayed: { roadBuilding: 0, yearOfPlenty: 0, monopoly: 0 } } }, read()).specialBuild).toBeUndefined()
+  })
+
+  it('stores the answered rule, and leaves it off when unanswered or answered off', () => {
+    expect(settleImport(seated(5), read(), { specialBuild: rule }).specialBuild).toEqual(rule)
+    expect(settleImport(seated(5), read(), {}).specialBuild).toBeUndefined()
+    expect(settleImport(seated(5), read(), { specialBuild: null }).specialBuild).toBeUndefined()
+    expect(settleImport(seated(4), read(), { specialBuild: rule }).specialBuild).toBeUndefined()
+  })
+})

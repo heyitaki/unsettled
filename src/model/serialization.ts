@@ -1,7 +1,7 @@
 import { createBoard, validateBoard } from './board'
 import { isPrint } from './people'
 import { parseEdgeId, parseVertexId } from './coords'
-import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type ScreenshotRead, type TurnState } from './game'
+import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type ScreenshotRead, type SpecialBuildLine, type SpecialBuildRule, type TurnState } from './game'
 import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
 
 type ParseBoardResult =
@@ -22,6 +22,7 @@ export const serializeGame = (game: Game): string => JSON.stringify({
   avatars: game.avatars,
   history: game.history,
   pendingImport: game.pendingImport,
+  specialBuild: game.specialBuild,
 }, null, 2)
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -150,6 +151,10 @@ function normalizePlayerStats(value: unknown): PlayerStats | null {
 }
 
 const isLog = (value: unknown): value is string[] => Array.isArray(value) && value.every((line) => typeof line === 'string')
+const isSpecialBuilds = (value: unknown): value is SpecialBuildLine[] => Array.isArray(value) && value.length > 0 &&
+  value.every((line) => isRecord(line) && exactKeys(line, ['playerId', 'text']) && typeof line.playerId === 'string' && typeof line.text === 'string')
+const isSpecialBuildRule = (value: unknown): value is SpecialBuildRule => isRecord(value) && exactKeys(value, ['timing', 'who']) &&
+  ['everyTurn', 'across'].includes(String(value.timing)) && ['overSeven', 'always'].includes(String(value.who))
 const isRoll = (value: unknown): value is number | null => value === null || isCount(value) && value >= 2 && value <= 12
 const isGains = (value: unknown): value is NonNullable<TurnState['gains']> =>
   isRecord(value) && Object.values(value).every((cards) => isRecord(cards) &&
@@ -188,9 +193,10 @@ function isHistory(value: unknown): value is GameHistory {
     !Array.isArray(start.roads) || !start.roads.every(isRoad)) return false
   return Array.isArray(value.turns) && value.turns.every((record: unknown) => {
     if (!isRecord(record) || !exactKeys(record, ['playerId', 'rolled', 'log', 'robber',
-      ...['gains', 'buildings', 'roads', 'stats', 'awards', 'devHand'].filter((key) => Object.hasOwn(record, key))]) ||
+      ...['gains', 'specialBuilds', 'buildings', 'roads', 'stats', 'awards', 'devHand'].filter((key) => Object.hasOwn(record, key))]) ||
       typeof record.playerId !== 'string' || !isRoll(record.rolled) || !isLog(record.log) || !isHistoryPosition(record, true)) return false
     if (Object.hasOwn(record, 'gains') && !isGains(record.gains)) return false
+    if (Object.hasOwn(record, 'specialBuilds') && !isSpecialBuilds(record.specialBuilds)) return false
     if (Object.hasOwn(record, 'buildings') && (!isRecord(record.buildings) ||
       !Object.entries(record.buildings).every(([id, piece]) => isCanonicalId(id, parseVertexId) &&
         (piece === null || isBuilding(piece) && piece.vertexId === id)))) return false
@@ -214,7 +220,7 @@ export function parseGame(data: unknown): ParseGameResult {
   if (!isRecord(value)) return { ok: false, errors: ['Game must be an object'] }
   if (value.schemaVersion !== 1) return { ok: false, errors: ['Unsupported game schemaVersion, expected 1'] }
   if (!['schemaVersion', 'board', 'stats'].every((key) => Object.hasOwn(value, key)) ||
-    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history', 'pendingImport', 'avatars'].includes(key))) {
+    !Object.keys(value).every((key) => ['schemaVersion', 'board', 'stats', 'awards', 'turn', 'devHand', 'history', 'pendingImport', 'avatars', 'specialBuild'].includes(key))) {
     return { ok: false, errors: ['Game contains missing or unknown top-level fields'] }
   }
   const parsedBoard = parseBoard(value.board)
@@ -233,6 +239,7 @@ export function parseGame(data: unknown): ParseGameResult {
     }
     avatars = { ...value.avatars } as Record<string, string>
   }
+  if (Object.hasOwn(value, 'specialBuild') && !isSpecialBuildRule(value.specialBuild)) return { ok: false, errors: ['Invalid special build rule'] }
   let awards: AwardHolders | undefined
   if (Object.hasOwn(value, 'awards')) {
     if (!isRecord(value.awards) || !exactKeys(value.awards, ['longestRoad', 'largestArmy'])) {
@@ -247,7 +254,7 @@ export function parseGame(data: unknown): ParseGameResult {
   if (Object.hasOwn(value, 'turn')) {
     const savedTurn = value.turn
     if (!isRecord(savedTurn) || !exactKeys(savedTurn, ['playerId', 'rolled', 'devPlayed', 'progressPlayed',
-      ...['robberMoved', 'devBought', 'log', 'gains', 'correction'].filter((key) => Object.hasOwn(savedTurn, key))])) {
+      ...['robberMoved', 'devBought', 'log', 'gains', 'correction', 'specialBuilds'].filter((key) => Object.hasOwn(savedTurn, key))])) {
       return { ok: false, errors: ['Invalid turn state'] }
     }
     const { playerId, rolled, devPlayed, progressPlayed } = savedTurn
@@ -272,6 +279,11 @@ export function parseGame(data: unknown): ParseGameResult {
     if (Object.hasOwn(savedTurn, 'log')) {
       if (!isLog(savedTurn.log)) return { ok: false, errors: ['Invalid turn log'] }
       turn.log = [...savedTurn.log]
+    }
+    if (Object.hasOwn(savedTurn, 'specialBuilds')) {
+      // A builder removed from the roster mid-turn keeps their line, as history keeps removed players.
+      if (!isSpecialBuilds(savedTurn.specialBuilds)) return { ok: false, errors: ['Invalid special builds'] }
+      turn.specialBuilds = structuredClone(savedTurn.specialBuilds)
     }
     if (Object.hasOwn(savedTurn, 'gains')) {
       if (!isGains(savedTurn.gains)) return { ok: false, errors: ['Invalid turn gains'] }
@@ -318,6 +330,7 @@ export function parseGame(data: unknown): ParseGameResult {
     ...(avatars === undefined ? {} : { avatars }),
     ...(isHistory(value.history) ? { history: structuredClone(value.history) } : {}),
     ...(pendingImport === undefined ? {} : { pendingImport }),
+    ...(isSpecialBuildRule(value.specialBuild) ? { specialBuild: { timing: value.specialBuild.timing, who: value.specialBuild.who } } : {}),
   }
   // reconcileStats zero-fills missing entries, so any surviving issue is a
   // stats key pointing at a player outside the roster.

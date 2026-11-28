@@ -31,6 +31,20 @@ export function isEmptyCorrection(correction: Correction): boolean {
   return Object.keys(correction.changes).length === 0 && correction.awards === undefined
 }
 
+/** The five and six player special building phase, asked when a screenshot import starts a game. Absent means off. */
+export interface SpecialBuildRule {
+  /** `everyTurn`: after each turn every other player may build. `across`: after a turn, only the player three seats back builds, so each player gets one build where their turn would fall on a four player board. */
+  timing: 'everyTurn' | 'across'
+  /** `overSeven`: only a player holding more than seven cards may build. */
+  who: 'overSeven' | 'always'
+}
+
+/** A build or dev card buy recorded for another player after the turn player finished. */
+export interface SpecialBuildLine {
+  playerId: string
+  text: string
+}
+
 export interface TurnState {
   /** Whose turn it is. Advice and recorded actions are for this player. */
   playerId: string
@@ -47,6 +61,7 @@ export interface TurnState {
   devPlayed: boolean
   /** Progress cards (not knights) recorded as played over the whole game: they have left the dev deck. */
   progressPlayed: Record<Exclude<DevKind, 'knight'>, number>
+  specialBuilds?: SpecialBuildLine[]
 }
 
 /** The claimed player's dev cards by type. VP cards stay in PlayerStats.vpCards. */
@@ -71,6 +86,7 @@ export interface Game {
   /** The screenshot read behind this game's open import questions, in this game's player ids; absent once answered or skipped. */
   pendingImport?: ScreenshotRead
   avatars?: Record<string, string>
+  specialBuild?: SpecialBuildRule
 }
 
 export interface Position {
@@ -87,6 +103,7 @@ export interface TurnRecord {
   rolled: number | null
   gains?: TurnState['gains']
   log: string[]
+  specialBuilds?: SpecialBuildLine[]
   buildings?: Record<string, Building | null>
   roads?: Record<string, string | null>
   robber: AxialCoord | null
