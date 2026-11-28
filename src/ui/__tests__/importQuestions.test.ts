@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { addPlayer, createBoard, placeBuilding, placeRoad, setHexTile, setupGrants } from '../../model/board'
+import { addPlayer, createBoard, placeBuilding, placeRoad, setHexTile, setRobber, setupGrants } from '../../model/board'
 import { hexEdgeIds, hexVertexIds } from '../../model/coords'
-import { adjustCounter, newGame, withBoard, type Game, type ScreenshotRead } from '../../model/game'
+import { adjustCounter, mergeScreenshot, newGame, withBoard, type Game, type ScreenshotRead } from '../../model/game'
 import { boardGrid } from '../../model/layouts'
 import type { Board } from '../../model/types'
 import { setAwardHolder } from '../../engine/stats'
@@ -244,5 +244,87 @@ describe('import questions', () => {
     expect(settled.awards?.longestRoad ?? null).toBeNull()
     expect(settled.stats).toEqual(game.stats)
     expect(hasQuestions(importQuestions(settled, shot))).toBe(false)
+  })
+})
+
+describe('first-round import', () => {
+  const hex = (q: number, r: number) => ({ q, r })
+  const NONE = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
+  const ORE = { ...NONE, ore: 3 }
+  const IDS = ['aki', 'b', 'c', 'd']
+
+  // A four-player draft on an all-ore board, except Aki's second settlement touches wood, brick and sheep.
+  function fourPlayerBoard(): Board {
+    let board = addPlayer(addPlayer(twoPlayers(), { id: 'c', name: 'Cee', color: '#008800' }), { id: 'd', name: 'Dee', color: '#884400' })
+    for (const { coord } of board.hexes) board = setHexTile(board, coord, 'ore')
+    for (const [coord, tile] of [[hex(0, 0), 'wood'], [hex(0, 1), 'brick'], [hex(1, 0), 'sheep'], [hex(1, 1), 'desert']] as const) {
+      board = setHexTile(board, coord, tile)
+    }
+    const firsts = [hexVertexIds(hex(0, 2))[0], hexVertexIds(hex(2, 0))[0], hexVertexIds(hex(-2, 0))[2], hexVertexIds(hex(0, -2))[4]]
+    const seconds = [hexVertexIds(hex(0, 0))[0], hexVertexIds(hex(0, -2))[1], hexVertexIds(hex(2, -2))[1], hexVertexIds(hex(-2, 2))[4]]
+    for (const [index, id] of [...IDS, ...[...IDS].reverse()].entries()) {
+      board = placeBuilding(board, (index < 4 ? firsts : seconds)[index < 4 ? index : 7 - index], id, 'settlement')
+    }
+    // The two starting roads each, on hexes far from the settlements that matter.
+    for (const [index, id] of IDS.entries()) {
+      for (const edge of hexEdgeIds(hex(index - 2, 2 - index)).slice(0, 2)) board = placeRoad(board, edge, id)
+    }
+    return setRobber(board, hex(1, 1))
+  }
+
+  // What a screenshot merge leaves: every hand only as a count.
+  function counted(board: Board, totals: number[]): Game {
+    let game = newGame(board)
+    for (const [index, id] of IDS.entries()) game = adjustCounter(game, id, 'handUnknown', totals[index])
+    return game
+  }
+  const hands = (game: Game) => Object.fromEntries(IDS.map((id) => [id, { ...game.stats[id].hand, unknown: game.stats[id].handUnknown }]))
+  const shot = read({ hands: IDS })
+
+  it('asks once the draft is finished and a hand has cards of unknown type, and not otherwise', () => {
+    const board = fourPlayerBoard()
+    expect(importQuestions(counted(board, [3, 3, 3, 3]), shot).firstRound).toBe(true)
+    expect(importQuestions(counted(board, [3, 3, 3, 3]), read()).firstRound).toBeUndefined()
+    const dealt = withBoard(newGame({ ...board, buildings: [] }), board)
+    expect(dealt.stats.d.hand).toEqual(ORE)
+    expect(importQuestions(dealt, shot).firstRound).toBeUndefined()
+    const unfinished = { ...board, buildings: board.buildings.slice(0, 7) }
+    expect(importQuestions(counted(unfinished, [3, 3, 3, 3]), shot).firstRound).toBeUndefined()
+  })
+
+  it('gives the players still to move their starting hands, and works out the rest from roads and counts', () => {
+    // Cee's turn: Aki built a road and rolled, Bee rolled nothing for anyone, Cee just rolled one card in.
+    let board = fourPlayerBoard()
+    board = placeRoad(board, hexEdgeIds(hex(0, 2))[3], 'aki')
+    const game = counted(board, [3, 3, 4, 3])
+    expect(hands(settleImport(game, shot, { firstRound: true }))).toEqual({
+      aki: { ...NONE, sheep: 1, unknown: 2 },
+      b: { ...ORE, unknown: 0 },
+      c: { ...ORE, unknown: 1 },
+      d: { ...ORE, unknown: 0 },
+    })
+    expect(hands(settleImport(game, shot, { firstRound: false }))).toEqual(hands(game))
+  })
+
+  it('keeps unknown the card the robber could have taken', () => {
+    // Bee rolled a 7 and robbed Dee, whose second settlement is the only piece on the robber's hex.
+    const board = setRobber(fourPlayerBoard(), hex(-2, 2))
+    const settled = settleImport(counted(board, [3, 4, 3, 2]), shot, { firstRound: true })
+    expect(hands(settled)).toEqual({
+      aki: { ...NONE, wood: 1, brick: 1, sheep: 1, unknown: 0 },
+      b: { ...ORE, unknown: 1 },
+      c: { ...ORE, unknown: 0 },
+      d: { ...NONE, ore: 2, unknown: 0 },
+    })
+    // A full count next to the robber may still hide a stolen card replaced by production.
+    expect(hands(settleImport(counted(board, [3, 4, 3, 3]), shot, { firstRound: true })).d).toEqual({ ...NONE, ore: 2, unknown: 1 })
+  })
+
+  it('names the starting cards a draft finished by screenshot never dealt', () => {
+    const board = fourPlayerBoard()
+    const saved = newGame({ ...board, buildings: board.buildings.slice(0, 7) })
+    const merged = mergeScreenshot(saved, counted(board, [3, 3, 3, 3]), shot)
+    expect(merged.stats.aki.hand).toEqual(NONE)
+    expect(hands(settleImport(merged, shot, { firstRound: true })).aki).toEqual({ ...NONE, wood: 1, brick: 1, sheep: 1, unknown: 0 })
   })
 })

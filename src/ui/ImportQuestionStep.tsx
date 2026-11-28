@@ -52,7 +52,8 @@ export function ImportQuestionStep({ game, read, onDone, onSkip, onMarks }: {
   // Done counts down the unanswered questions; the whole turn order is one question.
   const remaining = (questions.order && order.length !== board.players.length ? 1 : 0) +
     questions.picks.filter(({ playerId, settlements }) => !settlements.some((vertex) => vertex === answers.second?.[playerId])).length +
-    AWARDS.filter((kind) => questions[kind] !== null && !awardAnswered(kind)).length
+    AWARDS.filter((kind) => questions[kind] !== null && !awardAnswered(kind)).length +
+    (questions.firstRound && answers.firstRound === undefined ? 1 : 0)
   const playerLabel = (id: string | null) => {
     const player = board.players.find((player) => player.id === id)
     return player ? <><span className="swatch" style={{ background: player.color }} />{player.name}</> : 'Nobody'
@@ -104,6 +105,15 @@ export function ImportQuestionStep({ game, read, onDone, onSkip, onMarks }: {
             </div>
           })}
         </div>
+      </section>}
+      {questions.firstRound && <section role="group" aria-label="First round">
+        <div className="import-question-label">Is this the first round?</div>
+        <div className="import-choices">
+          {[true, false].map((yes) => <button key={String(yes)} type="button"
+            className={`choice-pill${answers.firstRound === yes ? ' selected' : ''}`} aria-pressed={answers.firstRound === yes}
+            onClick={() => setAnswers({ ...answers, firstRound: yes })}>{yes ? 'Yes' : 'No'}</button>)}
+        </div>
+        {answers.firstRound && <p className="hint">Hands start from the draft's starting cards, less any roads and dev cards bought. This assumes nobody traded, and a card the robber could have taken stays unknown.</p>}
       </section>}
       {AWARDS.map((kind) => {
         const options = questions[kind] && offered[kind]
