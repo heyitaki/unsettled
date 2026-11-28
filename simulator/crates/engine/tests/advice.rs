@@ -1689,3 +1689,41 @@ fn progress_played_requires_exact_kind_counts() {
         assert!(output["error"].is_string(), "{output}");
     }
 }
+
+#[test]
+fn an_ore_trade_needs_a_rival_who_could_hold_ore() {
+    let (mut game, topology) = fixture();
+    let vertices = independent_vertices(&topology, 3);
+    for (seat, vertex) in vertices.into_iter().enumerate() {
+        building(&mut game, &topology, seat, vertex, "settlement");
+    }
+    stats(&mut game, 0, [0, 0, 2, 0, 2]);
+    let rivals = [id(&game, 1), id(&game, 2)];
+    for (seat, rival) in [1, 2].into_iter().zip(&rivals) {
+        stats(&mut game, seat, [0; 5]);
+        game["stats"][rival]["handUnknown"] = json!(6);
+    }
+    let offer = turn(&game)["actions"][0].clone();
+    assert_eq!(offer["action"]["type"], "offerTrade", "{offer}");
+    assert_eq!(offer["action"]["get"], "ore", "{offer}");
+    // Every unseen card was stolen from hands without ore, so no rival can give one.
+    for rival in &rivals {
+        game["stats"][rival]["handUnknownAmong"] = json!([["wood", "sheep", "wheat", "brick"]].repeat(6));
+    }
+    let actions = turn(&game)["actions"].clone();
+    assert!(
+        actions.as_array().unwrap().iter().all(|entry| entry["action"]["get"] != "ore" || entry["action"]["type"] != "offerTrade"),
+        "{actions}"
+    );
+}
+
+#[test]
+fn narrowed_unseen_cards_must_fit_the_count() {
+    let (mut game, _) = fixture();
+    stats(&mut game, 1, [0; 5]);
+    let rival = id(&game, 1);
+    game["stats"][&rival]["handUnknown"] = json!(1);
+    game["stats"][&rival]["handUnknownAmong"] = json!([["wood", "brick"], ["wood", "brick"]]);
+    let output: Value = serde_json::from_str(&advise(&json!({"game":game,"decision":{"kind":"turn"}}).to_string())).unwrap();
+    assert!(output["error"].as_str().unwrap().contains("narrowed unseen cards"), "{output}");
+}

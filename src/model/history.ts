@@ -106,7 +106,8 @@ export function turnRecord(game: Game, history: GameHistory, turn: TurnState): T
 }
 
 function sameStats(a: PlayerStats | undefined, b: PlayerStats): boolean {
-  return a !== undefined && a.handUnknown === b.handUnknown && a.devCards === b.devCards && a.knights === b.knights &&
+  return a !== undefined && a.handUnknown === b.handUnknown &&
+    JSON.stringify(a.handUnknownAmong) === JSON.stringify(b.handUnknownAmong) && a.devCards === b.devCards && a.knights === b.knights &&
     a.vpCards === b.vpCards && RESOURCES.every((resource) => a.hand[resource] === b.hand[resource])
 }
 

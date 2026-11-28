@@ -1,27 +1,27 @@
 {
   "advise/extension6/discard": {
     "decisionHash": "9623d8a671a88da5",
-    "stateHash": "15df7a42c896cdad"
+    "stateHash": "83db2924e1d48cec"
   },
   "advise/extension6/pre_roll": {
     "decisionHash": "fb581d73da5fcc39",
-    "stateHash": "9b373b49d256e6fd"
+    "stateHash": "d58eae87c0685b35"
   },
   "advise/extension6/produce": {
     "decisionHash": "79d6b5db65fae53c",
-    "stateHash": "af0250ff6eaac71b"
+    "stateHash": "c0266351800b8bd6"
   },
   "advise/extension6/robber": {
     "decisionHash": "aa7313b3d2970792",
-    "stateHash": "34f2a7c30959faac"
+    "stateHash": "4f864adc4544c7fa"
   },
   "advise/extension6/trade_response": {
     "decisionHash": "25a73e08888d585e",
-    "stateHash": "7700817d27411c75"
+    "stateHash": "02747e4cdfe70460"
   },
   "advise/extension6/turn": {
     "decisionHash": "154bdcb7b31fcee6",
-    "stateHash": "20fa06f37267d6fd"
+    "stateHash": "7740426f88946b04"
   },
   "advise/standard4/discard": {
     "decisionHash": "e242a848388e7794",

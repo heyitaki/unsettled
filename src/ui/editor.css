@@ -435,6 +435,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .ledger-hand { display: flex; flex-wrap: wrap; gap: 3px 9px; min-width: 0; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ledger-hand-chip { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 .ledger-hand-chip.muted { color: var(--muted); font-weight: 500; }
+.ledger-among { display: inline-flex; align-items: center; gap: 1px; margin-right: 1px; padding: 1px 2px; border: 1px dashed color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 4px; }
 .ledger-divider { width: 1px; height: 12px; background: var(--line); }
 .ledger-empty { color: var(--faint); font-weight: 400; }
 .ledger-cards, .ledger-vp { font: 600 14.5px/20px Inter, sans-serif; font-variant-numeric: tabular-nums lining-nums; color: var(--muted); text-align: center; }

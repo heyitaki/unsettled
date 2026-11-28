@@ -10,7 +10,7 @@ import { axialKey, edgeEndpointVertexIds, hexVertexIds } from '../../model/coord
 import { boardGrid } from '../../model/layouts'
 import { adjustDevHand, recordPlayDev, recordRoll, setActivePlayer } from '../../model/turn'
 import * as turnModel from '../../model/turn'
-import { RESOURCES } from '../../model/types'
+import { RESOURCES, type Resource } from '../../model/types'
 import { AdviceProvider } from '../AdviceProvider'
 import { AnalysisPanel } from '../AnalysisPanel'
 import { BestMovesPanel } from '../BestMovesPanel'
@@ -829,6 +829,64 @@ describe('Best moves recording', () => {
     expect(container.querySelector('.move-log li > span')?.textContent).toContain('Stole from Bee')
     await click('Undo')
     expect(game()).toBe(before)
+  })
+
+  const setHand = async (id: string, cards: Partial<Record<Resource, number>>, among?: Resource[][]) => {
+    const stats = { ...emptyStats(), hand: { ...emptyStats().hand, ...cards }, handUnknown: among?.length ?? 0, ...(among && { handUnknownAmong: among }) }
+    await act(async () => seen.dispatch({ type: 'commit-game', game: { ...game(), stats: { ...game().stats, [id]: stats } } }))
+  }
+  const stealFrom = async (name: string) =>
+    clickElement([...popover().querySelectorAll('button')].find((button) => button.textContent?.includes(name))!)
+
+  it('offers only the types the victim could hold', async () => {
+    await setHand('b', { wood: 2 }, [['brick', 'ore']])
+    await click('7')
+    await skipDiscards()
+    await pickHex('b')
+    await stealFrom('Bee')
+    expect([...popover().querySelectorAll('.move-resource')].map((button) => button.getAttribute('aria-label'))).toEqual(['wood', 'brick', 'ore'])
+    await click('ore', popover())
+    expect(game().stats.aki.hand.ore).toBe(6)
+    expect(game().stats.b.hand.wood).toBe(2)
+    expect(game().stats.b.handUnknown).toBe(0)
+  })
+
+  it('records a steal from a one-type hand without asking which card', async () => {
+    await setHand('b', { wheat: 3 })
+    await click('7')
+    await skipDiscards()
+    const before = game()
+    await pickHex('b')
+    await stealFrom('Bee')
+    expect(popover()).toBeNull()
+    expect(game().stats.aki.hand.wheat).toBe(6)
+    expect(game().stats.b.hand.wheat).toBe(2)
+    expect(container.querySelector('.move-log li > span')?.textContent).toContain('Stole from Bee')
+    await click('Undo')
+    expect(game()).toBe(before)
+  })
+
+  it('records a rival steal from your one-type hand without asking', async () => {
+    await setHand('aki', { ore: 2 })
+    await act(async () => seen.dispatch({ type: 'commit-game', game: setActivePlayer(game(), 'b') }))
+    await click('7')
+    await skipDiscards()
+    await pickHex('aki')
+    await stealFrom('aki')
+    expect(popover()).toBeNull()
+    expect(game().stats.aki.hand.ore).toBe(1)
+    expect(game().stats.b.hand.ore).toBe(6)
+  })
+
+  it('says there is nothing to steal when the only neighbour has no cards', async () => {
+    await setHand('b', {})
+    await click('7')
+    await skipDiscards()
+    const before = game()
+    await pickHex('b')
+    expect(popover()).toBeNull()
+    expect(game().stats).toBe(before.stats)
+    expect(container.querySelector('.move-log li > span')?.textContent).toContain('Nothing to steal from Bee')
   })
 
   it('never brings back an undone change on the Ledger Undo line', async () => {

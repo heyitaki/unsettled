@@ -1,8 +1,8 @@
 import { createBoard, validateBoard } from './board'
 import { isPrint } from './people'
 import { parseEdgeId, parseVertexId } from './coords'
-import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type ScreenshotRead, type SpecialBuildLine, type SpecialBuildRule, type TurnState } from './game'
-import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Road } from './types'
+import { CORRECTION_FIELDS, DEV_KINDS, isEmptyCorrection, newGame, reconcileStats, validateGameStats, type AwardHolders, type Correction, type DevHand, type DevKind, type Game, type GameHistory, type PlayerStats, type ScreenshotRead, type SpecialBuildLine, type SpecialBuildRule, type TurnState, unseenCards, withUnseenCards } from './game'
+import { RESOURCES, type AxialCoord, type Board, type Building, type Hex, type LayoutId, type Player, type Port, type Resource, type Road } from './types'
 
 type ParseBoardResult =
   | { ok: true; board: Board }
@@ -130,24 +130,31 @@ function normalizeDevCounts(value: unknown): Record<DevKind, number> | null {
   return { knight: value.knight, roadBuilding: value.roadBuilding, yearOfPlenty: value.yearOfPlenty, monopoly: value.monopoly }
 }
 
+const isUnseenAmong = (value: unknown, handUnknown: number): value is Resource[][] =>
+  Array.isArray(value) && value.length > 0 && value.length <= handUnknown && value.every((card) => Array.isArray(card) &&
+    card.length >= 2 && card.length < RESOURCES.length && new Set(card).size === card.length &&
+    card.every((type) => (RESOURCES as readonly unknown[]).includes(type)))
+
 function normalizePlayerStats(value: unknown): PlayerStats | null {
   if (!isRecord(value)) return null
-  if (!exactKeys(value, ['hand', 'devCards', 'knights', 'vpCards', 'handUnknown'])) return null
+  const among = value.handUnknownAmong
+  if (!exactKeys(value, ['hand', 'devCards', 'knights', 'vpCards', 'handUnknown', ...among === undefined ? [] : ['handUnknownAmong']])) return null
   const hand = value.hand
   if (!isRecord(hand) || !exactKeys(hand, RESOURCES) ||
     !isCount(hand.wood) || !isCount(hand.sheep) || !isCount(hand.wheat) ||
     !isCount(hand.brick) || !isCount(hand.ore) ||
     !isCount(value.devCards) || !isCount(value.knights) || !isCount(value.vpCards) ||
-    !isCount(value.handUnknown)) {
+    !isCount(value.handUnknown) || among !== undefined && !isUnseenAmong(among, value.handUnknown)) {
     return null
   }
-  return {
+  const stats: PlayerStats = {
     hand: { wood: hand.wood, sheep: hand.sheep, wheat: hand.wheat, brick: hand.brick, ore: hand.ore },
     handUnknown: value.handUnknown,
     devCards: value.devCards,
     knights: value.knights,
     vpCards: value.vpCards,
   }
+  return among === undefined ? stats : withUnseenCards(stats, stats.hand, unseenCards({ ...stats, handUnknownAmong: among }))
 }
 
 const isLog = (value: unknown): value is string[] => Array.isArray(value) && value.every((line) => typeof line === 'string')

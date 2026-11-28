@@ -5,6 +5,7 @@ import { vertexAdjacentVertexIds } from '../../model/coords'
 import { boardGrid } from '../../model/layouts'
 import { setActivePlayer } from '../../model/turn'
 import type { AdviceAction, PreRollPlay } from '../../engine/advice/protocol'
+import type { Resource } from '../../model/types'
 import { actionLabel, adviceBlockers, adviceMarks, applyAdvice, canCover, cardRange, discardInputCards, moveSpot, playLabel, recordedMoveLabel, sevenDiscards, tradeVerdictRequest } from '../bestMoves'
 import { vertexDescription, vertexParts } from '../vertexParts'
 
@@ -56,6 +57,17 @@ describe('best moves', () => {
     expect(canCover(stats, { wood: 3, ore: 2 })).toBe(false)
     expect(canCover({ ...stats, handUnknown: 0 }, { wood: 2 })).toBe(true)
     expect(canCover({ ...stats, handUnknown: 0 }, { wood: 3 })).toBe(false)
+  })
+
+  it('narrowed unseen cards bound ranges and cover only the types they could be', () => {
+    const stats = { ...emptyStats(), handUnknown: 3, handUnknownAmong: [['wood', 'brick'], ['wood', 'brick']] as Resource[][] }
+    expect(cardRange(stats, 'wood', false)).toEqual({ lo: 0, hi: 3 })
+    expect(cardRange(stats, 'ore', false)).toEqual({ lo: 0, hi: 1 })
+    expect(canCover(stats, { wood: 1, brick: 1 })).toBe(true)
+    expect(canCover(stats, { wood: 1, brick: 1, ore: 1 })).toBe(true)
+    expect(canCover(stats, { ore: 2 })).toBe(false)
+    expect(canCover(stats, { sheep: 1, ore: 1 })).toBe(false)
+    expect(canCover({ ...stats, handUnknown: 2 }, { wood: 1, sheep: 1 })).toBe(false)
   })
 
   it('labels advised bank and port trades in the same order as manual entries', () => {

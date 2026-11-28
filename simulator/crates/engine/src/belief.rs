@@ -25,11 +25,16 @@ impl BeliefState {
         seat: usize,
         known: [u16; RESOURCE_COUNT],
         unknown: u16,
+        could_be: [u16; RESOURCE_COUNT],
     ) {
         self.totals[seat] =
             known.iter().map(|count| u32::from(*count)).sum::<u32>() + u32::from(unknown);
         self.lo[seat] = known;
-        self.hi[seat] = known.map(|count| count + unknown);
+        self.hi[seat] = std::array::from_fn(|resource| known[resource] + could_be[resource]);
+        // `could_be` counts the unseen cards that could be each type, so narrowed cards lower a
+        // ceiling; normalizing lifts any floor those ceilings force. Unnarrowed hands are unchanged.
+        self.normalize(seat);
+        self.repair(seat);
     }
 
     pub const fn total(&self, seat: usize) -> u32 {

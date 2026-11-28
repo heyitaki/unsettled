@@ -412,9 +412,9 @@ mod cache_tests {
                     arena.state.players[seat].bought_dev = [0; crate::state::DEV_KIND_COUNT];
                     arena.state.players[seat].pieces[1] = 4;
                     arena.state.players[seat].pieces[2] = 4;
-                    arena.state.belief.set_known_hand(seat, [1; crate::rules::RESOURCE_COUNT], seat as u16);
+                    arena.state.belief.set_known_hand(seat, [1; crate::rules::RESOURCE_COUNT], seat as u16, [seat as u16; crate::rules::RESOURCE_COUNT]);
                 }
-                arena.state.belief.set_known_hand(0, [0; crate::rules::RESOURCE_COUNT], held as u16);
+                arena.state.belief.set_known_hand(0, [0; crate::rules::RESOURCE_COUNT], held as u16, [held as u16; crate::rules::RESOURCE_COUNT]);
                 let view = arena.decision_view(&board, &topology, 0, DecisionPhase::Action);
                 let mut own = crate::etw::compute_inputs_for_seat(&view, view.observer());
                 let belief = own.belief_expected;
@@ -486,7 +486,7 @@ mod offer_memo_tests {
             arena.state.players[seat].pieces[1] = 4;
             arena.state.players[seat].pieces[2] = 4;
             arena.state.players[seat].resources = [3; 5];
-            arena.state.belief.set_known_hand(seat, [2; 5], 3);
+            arena.state.belief.set_known_hand(seat, [2; 5], 3, [3; 5]);
         }
         for variant in 0..48 {
             let seat = variant % board.seats();

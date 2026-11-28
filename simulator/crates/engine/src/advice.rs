@@ -46,6 +46,9 @@ struct Game<B> {
 struct Stats {
     hand: Resources<u16>,
     hand_unknown: u16,
+    /// Unseen cards narrowed to the types they could be, counted in `hand_unknown`.
+    #[serde(default)]
+    hand_unknown_among: Vec<Vec<Resource>>,
     dev_cards: u8,
     knights: u8,
     vp_cards: u8,
@@ -277,6 +280,21 @@ fn advise_game(
             stats.hand_unknown
         };
         let total = known.iter().map(|count| u32::from(*count)).sum::<u32>() + u32::from(unknown);
+        if stats.hand_unknown_among.len() > usize::from(stats.hand_unknown)
+            || stats.hand_unknown_among.iter().any(Vec::is_empty)
+        {
+            return Err(format!("narrowed unseen cards do not fit player {id}"));
+        }
+        // Unseen cards that could be each type: every plain one, plus the narrowed ones that name it.
+        let among: &[Vec<Resource>] = if seat == observer {
+            &[]
+        } else {
+            &stats.hand_unknown_among
+        };
+        let could_be = Resource::ALL.map(|resource| {
+            unknown - among.len() as u16
+                + among.iter().filter(|types| types.contains(&resource)).count() as u16
+        });
         // Leave room for production and hypothetical trades in the engine's i16 hands.
         if total > (i16::MAX as u32 - u32::from(u8::MAX)) {
             return Err(format!("hand is too large for player {id}"));
@@ -319,7 +337,7 @@ fn advise_game(
             return Err(format!("dev card count is too large for player {id}"));
         }
         removed += held + usize::from(stats.vp_cards) + usize::from(stats.knights);
-        arena.state.belief.set_known_hand(seat, known, unknown);
+        arena.state.belief.set_known_hand(seat, known, unknown, could_be);
         for resource in 0..RESOURCE_COUNT {
             arena.state.bank[resource] = arena.state.bank[resource].saturating_sub(known[resource]);
         }

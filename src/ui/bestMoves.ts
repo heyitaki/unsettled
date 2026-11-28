@@ -1,7 +1,7 @@
 import type { AdviceAction, Cards, Decision, KnightPlay, PreRollPlay, ScoredAdvice } from '../engine/advice/protocol'
 import { validateBoard } from '../model/board'
 import { axialKey, hexVertexIds, parseEdgeId, parseVertexId } from '../model/coords'
-import { DEV_KINDS, emptyStats, type Correction, type CorrectionField, type Game, type PlayerStats } from '../model/game'
+import { DEV_KINDS, emptyStats, unseenCards, type Correction, type CorrectionField, type Game, type PlayerStats } from '../model/game'
 import { historyPlayer } from '../model/history'
 import { activePlayerId, CARD_COSTS, endTurn, handTotal, recordBankTrade, recordBuild, recordBuyDev, recordPlayDev, turnState } from '../model/turn'
 import { RESOURCES, type AxialCoord, type Board, type Resource } from '../model/types'
@@ -105,19 +105,37 @@ export function robberPending(game: Game): boolean {
   return game.turn?.rolled === 7 && game.turn.robberMoved === false
 }
 
-export function robberCandidates(game: Game, hex: AxialCoord, moverId: string): string[] {
+/** Every rival with a building on `hex`, whether or not they hold a card to steal. */
+export function robberNeighbours(game: Game, hex: AxialCoord, moverId: string): string[] {
   const corners = new Set(hexVertexIds(hex))
-  return game.board.players.filter(({ id }) => id !== moverId && handTotal(statsFor(game, id)) > 0 &&
+  return game.board.players.filter(({ id }) => id !== moverId &&
     game.board.buildings.some((building) => building.playerId === id && corners.has(building.vertexId)))
     .map(({ id }) => id)
 }
 
-export function cardRange(stats: PlayerStats, resource: Resource, exact: boolean) {
-  return { lo: stats.hand[resource], hi: stats.hand[resource] + (exact ? 0 : stats.handUnknown) }
+export function robberCandidates(game: Game, hex: AxialCoord, moverId: string): string[] {
+  return robberNeighbours(game, hex, moverId).filter((id) => handTotal(statsFor(game, id)) > 0)
 }
 
+export function cardRange(stats: PlayerStats, resource: Resource, exact: boolean) {
+  const unseen = exact ? 0 : unseenCards(stats).filter((card) => card.includes(resource)).length
+  return { lo: stats.hand[resource], hi: stats.hand[resource] + unseen }
+}
+
+/**
+ * Whether the hand could hold `cards`: the unseen cards must cover every shortfall, each card one
+ * of its possible types. By Hall's theorem that holds when, for every set of short types, the
+ * cards that could be one of them are at least as many as the cards missing.
+ */
 export function canCover(stats: PlayerStats, cards: Partial<Cards>): boolean {
-  return RESOURCES.reduce((missing, resource) => missing + Math.max(0, (cards[resource] ?? 0) - stats.hand[resource]), 0) <= stats.handUnknown
+  const short = RESOURCES.map((resource) => Math.max(0, (cards[resource] ?? 0) - stats.hand[resource]))
+  const unseen = unseenCards(stats)
+  for (let mask = 1; mask < 1 << RESOURCES.length; mask += 1) {
+    const types = RESOURCES.filter((_, index) => mask & 1 << index)
+    const missing = types.reduce((sum, type) => sum + short[RESOURCES.indexOf(type)], 0)
+    if (missing > unseen.filter((card) => card.some((type) => types.includes(type))).length) return false
+  }
+  return true
 }
 
 export function discardInputCards(mine: boolean, advised?: Cards): Cards {

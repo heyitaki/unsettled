@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { awardCandidates, computeStandings, setAwardHolder, trackAwards } from '../engine/stats'
-import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type CorrectionField, type DevKind, type Game, type StatCounter } from '../model/game'
+import { adjustCounter, adjustHand, DEV_KINDS, devHandTotal, type AwardKind, type CorrectionField, type DevKind, type Game, type PlayerStats, type StatCounter } from '../model/game'
 import { adjustDevHand, handTotal, recordCorrection } from '../model/turn'
 import { historyGame } from '../model/history'
 import { RESOURCES, type Resource } from '../model/types'
@@ -113,11 +113,17 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
                     <ResourceGlyph resource={resource} />{stats.hand[resource]}
                   </span>
                 ))}
-                {stats.handUnknown > 0 && (
-                  <span className="ledger-hand-chip muted" role="img" title={`${stats.handUnknown} unseen card${stats.handUnknown === 1 ? '' : 's'}`} aria-label={`${stats.handUnknown} unseen card${stats.handUnknown === 1 ? '' : 's'}`}>
-                    <CounterGlyph shape="unknownCard" />{stats.handUnknown}
-                  </span>
-                )}
+                {unseenChips(stats).map(({ types, count }) => {
+                  const label = `${count} unseen card${count === 1 ? '' : 's'}${types ? `, ${types.slice(0, -1).join(', ')} or ${types.at(-1)}` : ''}`
+                  return (
+                    <span className="ledger-hand-chip muted" key={types?.join() ?? '?'} role="img" title={label} aria-label={label}>
+                      {types
+                        ? <span className="ledger-among">{types.map((type) => <ResourceGlyph key={type} resource={type} />)}</span>
+                        : <CounterGlyph shape="unknownCard" />}
+                      {count}
+                    </span>
+                  )
+                })}
                 {untyped > 0 && <>
                   <span className="ledger-divider" aria-hidden="true" />
                   <span className="ledger-hand-chip muted" role="img" title={`${untyped} dev cards`} aria-label={`${untyped} dev cards`}>
@@ -149,6 +155,18 @@ export function Ledger({ game: liveGame, activeId, previous, commit, onUndo, his
       })}
     </>
   )
+}
+
+/** Unseen cards grouped by the types they could be, narrowed ones first, then a plain `?` group. */
+function unseenChips(stats: PlayerStats): { types: Resource[] | null; count: number }[] {
+  const chips: { types: Resource[] | null; count: number }[] = []
+  for (const types of stats.handUnknownAmong ?? []) {
+    const chip = chips.find((entry) => entry.types?.join() === types.join())
+    if (chip) chip.count += 1
+    else chips.push({ types, count: 1 })
+  }
+  const plain = stats.handUnknown - (stats.handUnknownAmong?.length ?? 0)
+  return plain > 0 ? [...chips, { types: null, count: plain }] : chips
 }
 
 function DevPill({ kind, count, bought = false }: { kind: DevKind | 'vpCard'; count: number; bought?: boolean }) {

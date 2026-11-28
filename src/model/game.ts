@@ -11,6 +11,12 @@ export interface PlayerStats {
   hand: Record<Resource, number>
   /** Cards known to be held but not to be of a known resource. A screenshot import reads only the total. */
   handUnknown: number
+  /**
+   * Unseen cards narrowed to a few types, such as a card stolen from a hand of only wood and brick.
+   * Each entry is one card's possible types, two to four in RESOURCES order. They are counted in
+   * `handUnknown`, whose other cards could be anything. Absent when no card is narrowed.
+   */
+  handUnknownAmong?: Resource[][]
   devCards: number
   knights: number
   vpCards: number
@@ -130,6 +136,47 @@ export type StatCounter = 'handUnknown' | 'devCards' | 'knights' | 'vpCards'
 export function emptyStats(): PlayerStats {
   const hand = { wood: 0, sheep: 0, wheat: 0, brick: 0, ore: 0 }
   return { hand, handUnknown: 0, devCards: 0, knights: 0, vpCards: 0 }
+}
+
+/** Every unseen card as the types it could be: the narrowed ones, then a full set per card that could be anything. */
+export function unseenCards(stats: PlayerStats): Resource[][] {
+  const among = stats.handUnknownAmong ?? []
+  return [...among, ...Array.from({ length: stats.handUnknown - among.length }, () => [...RESOURCES])]
+}
+
+/**
+ * Stats holding `hand` plus one unseen card per entry of `cards`. A card with one possible type
+ * joins the known hand and a card that could be anything is a plain unseen card.
+ */
+export function withUnseenCards(stats: PlayerStats, hand: Record<Resource, number>, cards: readonly (readonly Resource[])[]): PlayerStats {
+  hand = { ...hand }
+  const among: Resource[][] = []
+  let handUnknown = 0
+  for (const card of cards) {
+    const types = RESOURCES.filter((resource) => card.includes(resource))
+    if (types.length === 1) hand[types[0]] += 1
+    else if (types.length > 0) {
+      handUnknown += 1
+      if (types.length < RESOURCES.length) among.push(types)
+    }
+  }
+  // One order for equal hands, so history and saves compare them by value: RESOURCES order, as the known chips.
+  const rank = (card: Resource[]) => card.map((type) => RESOURCES.indexOf(type))
+  among.sort((a, b) => {
+    const [x, y] = [rank(a), rank(b)]
+    const index = x.findIndex((value, i) => value !== y[i])
+    return index < 0 ? x.length - y.length : x[index] - (y[index] ?? -1)
+  })
+  const next = { ...stats, hand, handUnknown }
+  if (among.length) next.handUnknownAmong = among
+  else delete next.handUnknownAmong
+  return next
+}
+
+/** Stats with `count` unseen cards: added ones could be anything, and removing drops plain ones before narrowed ones. */
+export function withUnseenCount(stats: PlayerStats, count: number): PlayerStats {
+  const cards = unseenCards({ ...stats, handUnknown: Math.max(count, stats.handUnknown) })
+  return withUnseenCards(stats, stats.hand, cards.slice(0, count))
 }
 
 export function devHandTotal(hand: DevHand): number {
@@ -270,8 +317,8 @@ export function mergeScreenshot(saved: Game, shot: Game, read: ScreenshotRead): 
       const savedStats = saved.stats[id]
       const known = Object.values(savedStats.hand).reduce((sum, cards) => sum + cards, 0)
       stats.set(id, shotStats.handUnknown >= known
-        ? { ...savedStats, handUnknown: shotStats.handUnknown - known }
-        : { ...savedStats, hand: shotStats.hand, handUnknown: shotStats.handUnknown })
+        ? withUnseenCount(savedStats, shotStats.handUnknown - known)
+        : withUnseenCards(savedStats, shotStats.hand, unseenCards(shotStats)))
     }
     return merged
   })
@@ -342,6 +389,7 @@ export function adjustCounter(game: Game, playerId: string, counter: StatCounter
   const stats = ensureStats(game, playerId)
   const count = Math.max(0, stats[counter] + delta)
   if (count === stats[counter]) return game
+  if (counter === 'handUnknown') return withPlayerStats(game, playerId, withUnseenCount(stats, count))
   return withPlayerStats(game, playerId, { ...stats, [counter]: count })
 }
 
