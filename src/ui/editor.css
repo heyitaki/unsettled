@@ -378,6 +378,7 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .import-question-label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12.5px; line-height: 18px; }
 .import-choices { display: flex; flex-wrap: wrap; gap: 6px; }
 .import-choice-hint { margin-top: 6px; }
+.special-build-setting, .special-build-setting section { margin-top: 16px; }
 .import-settlements { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
 .import-settlement { display: grid; gap: 8px; min-width: 0; }
 .import-settlement-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

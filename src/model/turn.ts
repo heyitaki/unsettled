@@ -228,8 +228,8 @@ export function recordBuyDev(game: Game, drawn: DevKind | 'vp' | null, options?:
 
 /**
  * Who may build after the turn player finishes under the game's special build rule, in building order.
- * `across` is the player three seats back, applied from the first turn on. Under `overSeven` a player who
- * already built this phase stays eligible, so spending below eight cards does not cut a build short.
+ * `across` is the player three seats back, applied from the first turn on. Under `overSeven` a player drops
+ * out as soon as they hold seven or fewer cards, even mid-phase (owner 2026-11-27).
  */
 export function specialBuilders(game: Game): string[] {
   const rule = game.specialBuild
@@ -240,9 +240,8 @@ export function specialBuilders(game: Game): string[] {
   if (seat < 0) return []
   const count = players.length
   const seats = rule.timing === 'across' ? [(seat + count - 3) % count] : Array.from({ length: count - 1 }, (_, i) => (seat + 1 + i) % count)
-  const built = new Set((turn.specialBuilds ?? []).map((line) => line.playerId))
   return seats.map((index) => players[index].id)
-    .filter((id) => rule.who === 'always' || built.has(id) || handTotal(ensureStats(game, id)) > 7)
+    .filter((id) => rule.who === 'always' || handTotal(ensureStats(game, id)) > 7)
 }
 
 export function appendSpecialBuild(game: Game, playerId: string, text: string): Game {

@@ -55,12 +55,12 @@ describe('special build eligibility', () => {
     expect(specialBuilders(game(5, overSeven, 0, 8))).toEqual(['p2', 'p3', 'p4', 'p5'])
   })
 
-  it('a player who built stays eligible after spending below eight cards', () => {
+  it('a player who built drops out once at seven cards or fewer', () => {
     let start = game(5, overSeven, 0, 7)
     start = adjustHand(adjustHand(start, 'p2', 'sheep', 1), 'p2', 'ore', 1)
     const built = appendSpecialBuild(recordBuyDev(start, null, { playerId: 'p2' }), 'p2', 'Bought a dev card')
     expect(Object.values(built.stats.p2.hand).reduce((sum, count) => sum + count, 0)).toBe(6)
-    expect(specialBuilders(built)).toEqual(['p2'])
+    expect(specialBuilders(built)).toEqual([])
   })
 
   it('across with over seven needs the one eligible player to hold more than seven', () => {

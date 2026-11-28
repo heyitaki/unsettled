@@ -335,7 +335,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
             <span className="move-step-dot" aria-hidden="true">3</span>
             <div className="move-step-body">
               <div className="move-step-title">Special build</div>
-              <p>May build or buy a dev card before {nextPlayer.id === board.mePlayerId ? 'you roll' : `${nextPlayer.name} rolls`}.</p>
+              {chips.length > 0 && <p>May build or buy a dev card before {nextPlayer.id === board.mePlayerId ? 'you roll' : `${nextPlayer.name} rolls`}.</p>}
               {specialLines.length > 0 && <ul className="move-log">{specialLines.map((line, index) => {
                 const player = historyPlayer(board, line.playerId)
                 return <li key={index}>

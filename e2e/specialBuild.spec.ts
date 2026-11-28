@@ -163,6 +163,44 @@ for (const arm of [{ name: 'desktop', viewport: { width: 1440, height: 1000 } },
       await shot(page, '9-over-seven', step(page))
     })
 
+    test('over seven cards drops a builder who spends down to seven or fewer', async ({ page }) => {
+      const board = await started(page, { timing: 'everyTurn', who: 'overSeven' }, {
+        p1: hand({ wood: 1 }), p2: hand({ wood: 4, brick: 4 }), p3: hand({}), p4: hand({}), p5: hand({}),
+      })
+      await chips(page).filter({ hasText: 'Blue' }).click()
+      await step(page).getByRole('button', { name: /Road/ }).click()
+      await expect(page.locator('.board-canvas')).toBeInViewport({ ratio: 0.9 })
+      await clickEdge(page, roadSlots(board, 'p2')[0])
+      await expect(step(page).locator('.move-log li > span:nth-child(2)')).toHaveText(['Blue built a road'])
+      await expect(chips(page)).toHaveCount(0)
+      await shot(page, '11-over-seven-cutoff', step(page))
+    })
+
+    test('Players turns the rule on in a game already under way, at five or six seats only', async ({ page }) => {
+      const board = drafted()
+      const everyone = hand({ wood: 1, brick: 1 })
+      const turn = { ...setActivePlayer(newGame(board), 'p1').turn!, rolled: 8 }
+      await seedGame(page, { board, stats: { p1: everyone, p2: everyone, p3: everyone, p4: everyone, p5: everyone }, turn })
+      await expect(step(page)).toHaveCount(0)
+      await page.getByRole('button', { name: 'Players', exact: true }).first().click()
+      const setting = page.getByRole('group', { name: 'Special build', exact: true })
+      await expect(setting.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true')
+      await setting.getByRole('button', { name: 'On' }).click()
+      await setting.getByRole('button', { name: 'Across' }).click()
+      await shot(page, '12-players-setting', setting)
+      if (arm.name === 'phone') await page.getByRole('button', { name: 'Back to the board' }).click()
+      else await page.getByRole('button', { name: 'Players', exact: true }).first().click()
+      await expect(chips(page)).toHaveText(['Orange'])
+    })
+
+    test('Players has no special build setting below five seats', async ({ page }) => {
+      const board = { ...drafted(), players: drafted().players.slice(0, 4) }
+      await seedGame(page, { board: { ...board, buildings: board.buildings.filter((b) => b.playerId !== 'p5'), roads: board.roads.filter((r) => r.playerId !== 'p5') }, stats: {} })
+      await page.getByRole('button', { name: 'Players', exact: true }).first().click()
+      await expect(page.getByRole('button', { name: 'Add player' }).first()).toBeVisible()
+      await expect(page.getByRole('group', { name: 'Special build', exact: true })).toHaveCount(0)
+    })
+
     test('my special build dev card asks which card I drew', async ({ page }) => {
       await started(page, { timing: 'everyTurn', who: 'always' }, {
         p1: hand({ sheep: 1, wheat: 1, ore: 1 }), p2: hand({}), p3: hand({}), p4: hand({}), p5: hand({}),

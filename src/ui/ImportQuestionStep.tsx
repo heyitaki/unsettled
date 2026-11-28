@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { Game, ScreenshotRead, SpecialBuildRule } from '../model/game'
+import type { Game, ScreenshotRead } from '../model/game'
 import { RESOURCES, type Board, type VertexId } from '../model/types'
 import { CounterGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { AWARDS, importQuestions, otherAward, turnOrderFrom, type ImportAnswers } from './importQuestions'
+import { SpecialBuildSetting } from './SpecialBuildSetting'
 import { SpotTiles } from './SpotTiles'
 import type { HighlightMark } from './store'
 import { vertexDescription, vertexParts } from './vertexParts'
-
-const SPECIAL_TIMINGS = [
-  { value: 'everyTurn', label: 'Every turn', hint: 'After each turn, every other player may build.' },
-  { value: 'across', label: 'Across', hint: 'After each turn, the player three seats back may build, as if on a four player board.' },
-] as const
-const SPECIAL_WHO = [{ value: 'overSeven', label: 'Over 7 cards' }, { value: 'always', label: 'Anyone' }] as const
 
 /** The cards a second settlement on `vertexId` hands out: one per adjacent resource hex. */
 function startingCards(board: Board, vertexId: VertexId) {
@@ -135,7 +130,7 @@ export function ImportQuestionStep({ game, read, onDone, onSkip, onMarks }: {
           </div>
         </section>
       })}
-      {questions.specialBuild && <SpecialBuildQuestion rule={answers.specialBuild ?? null}
+      {questions.specialBuild && <SpecialBuildSetting rule={answers.specialBuild ?? null}
         choose={(specialBuild) => setAnswers({ ...answers, specialBuild })} />}
       <div className="confirm-actions">
         <button type="button" onClick={onSkip}>Skip</button>
@@ -143,31 +138,4 @@ export function ImportQuestionStep({ game, read, onDone, onSkip, onMarks }: {
       </div>
     </div>
   )
-}
-
-function SpecialBuildQuestion({ rule, choose }: { rule: SpecialBuildRule | null; choose(rule: SpecialBuildRule | null): void }) {
-  const pill = (selected: boolean, label: string, onClick: () => void) => <button key={label} type="button"
-    className={`choice-pill${selected ? ' selected' : ''}`} aria-pressed={selected} onClick={onClick}>{label}</button>
-  return <section role="group" aria-label="Special build">
-    <div className="import-question-label">Special build · Can others build between turns?</div>
-    <div className="import-choices">
-      {pill(rule === null, 'Off', () => choose(null))}
-      {pill(rule !== null, 'On', () => choose(rule ?? { timing: 'everyTurn', who: 'always' }))}
-    </div>
-    {rule && <>
-      <section role="group" aria-label="Special build timing">
-        <div className="import-question-label">When?</div>
-        <div className="import-choices">
-          {SPECIAL_TIMINGS.map(({ value, label }) => pill(rule.timing === value, label, () => choose({ ...rule, timing: value })))}
-        </div>
-        <p className="hint import-choice-hint">{SPECIAL_TIMINGS.find(({ value }) => value === rule.timing)?.hint}</p>
-      </section>
-      <section role="group" aria-label="Who can special build">
-        <div className="import-question-label">Who can build?</div>
-        <div className="import-choices">
-          {SPECIAL_WHO.map(({ value, label }) => pill(rule.who === value, label, () => choose({ ...rule, who: value })))}
-        </div>
-      </section>
-    </>}
-  </section>
 }
