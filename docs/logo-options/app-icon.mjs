@@ -1,9 +1,9 @@
 // Builds the shipped icons from the squat settler (option A2) in one of its shapes:
-// the iOS AppIcon.icon layer (a PNG, since Icon Composer drops the SVG's round joins) and fill,
-// the tab icon, and the four web install icons. The header mark in src/ui/Brand.tsx is drawn by hand.
+// the iOS app icon, the tab icon, and the four web install icons. The header mark in src/ui/Brand.tsx is drawn by hand.
+// The iOS icon is a single flat 1024 PNG in a legacy appiconset, as Set's is: Icon Composer (AppIcon.icon) always gives the tile a thin light edge.
 // Usage: node docs/logo-options/app-icon.mjs [current|upright|level|slant]   (needs rsvg-convert; oxipng if present)
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const root = new URL("../../", import.meta.url);
 const css = readFileSync(new URL("src/ui/editor.css", root), "utf8");
@@ -40,18 +40,16 @@ const png = (source, px, out) =>
   execFileSync("rsvg-convert", ["-w", String(px), "-h", String(px), "-o", new URL(out, root).pathname], { input: source });
 
 writeFileSync(new URL("public/favicon.svg", root), svg("12 18 76 68", art));
-// The iOS layer: the mark alone on a 1024 canvas, at the web icon's scale and place; the tile is the icon's fill.
-mkdirSync(new URL("ios/App/App/AppIcon.icon/Assets/", root), { recursive: true });
-png(svg("-14 -12 128 128", art), 1024, "ios/App/App/AppIcon.icon/Assets/settler.png");
-const iconJson = new URL("ios/App/App/AppIcon.icon/icon.json", root);
-const icon = JSON.parse(readFileSync(iconJson, "utf8"));
-icon.fill = { solid: `srgb:${[1, 3, 5].map((i) => (parseInt(TILE.slice(i, i + 2), 16) / 255).toFixed(5)).join(",")},1.00000` };
-writeFileSync(iconJson, JSON.stringify(icon, null, 2) + "\n");
-// The web icons carry the tile themselves. The mark sits inside the maskable safe circle as drawn.
+// The iOS icon and the web icons are the same tiled square. The mark sits inside the maskable safe circle as drawn.
 const tiled = svg("-14 -12 128 128", `<rect x="-14" y="-12" width="128" height="128" fill="${TILE}"/>${art}`);
-for (const [px, name] of [[180, "apple-touch-icon"], [192, "icon-192"], [512, "icon-512"], [512, "icon-maskable-512"]]) png(tiled, px, `public/${name}.png`);
+const pngs = [
+  [1024, "ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"],
+  [180, "public/apple-touch-icon.png"],
+  [192, "public/icon-192.png"],
+  [512, "public/icon-512.png"],
+  [512, "public/icon-maskable-512.png"],
+].map(([px, out]) => (png(tiled, px, out), out));
 
-const pngs = ["ios/App/App/AppIcon.icon/Assets/settler.png", "public/apple-touch-icon.png", "public/icon-192.png", "public/icon-512.png", "public/icon-maskable-512.png"];
 try {
   execFileSync("oxipng", ["-q", "-o", "4", "--strip", "safe", ...pngs.map((p) => new URL(p, root).pathname)]);
 } catch {
