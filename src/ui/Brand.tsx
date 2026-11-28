@@ -1,13 +1,13 @@
-/** Ember (--accent) is as bright as the sea-blue page, so on it the settler's body takes the deep red the owner tuned for the old wax seal, which reads against that blue. */
-const BODY = '#9c2f2b'
+const BODY = 'M22 80 V52 L50 22 L78 52 V80 Z'
 
-/** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is the app icon's squat settler (docs/logo-options/make.mjs, option A2); public/favicon.svg draws it in Ember. */
+/** The mark and the name; the desktop site header and the phone's brand row both render it. The mark is the app icon's squat settler in Ember (docs/logo-options/make.mjs, option A2, also public/favicon.svg). Ember is as bright as the sea-blue page, so here it wears a cream outline: a wider copy of the body drawn behind it. The square viewBox holds that outline after the lean: an SVG painting past its box delays the column's settling (desktopLayout.spec.ts, "Best moves grows"). */
 export function Brand() {
   return (
     <>
-      <svg className="brand-mark" viewBox="12 18 76 68" aria-hidden="true">
+      <svg className="brand-mark" viewBox="11.5 13.5 77.5 77.5" aria-hidden="true">
         <g transform="rotate(-6 50 52)">
-          <path d="M22 80 V52 L50 22 L78 52 V80 Z" fill={BODY} stroke={BODY} strokeWidth="6" strokeLinejoin="round" />
+          <path d={BODY} fill="#fbf8f1" stroke="#fbf8f1" strokeWidth="16" strokeLinejoin="round" />
+          <path d={BODY} fill="#cd5037" stroke="#cd5037" strokeWidth="6" strokeLinejoin="round" />
           <circle cx="40" cy="57" r="8.5" fill="#fbf8f1" />
           <circle cx="43.57" cy="54.62" r="4.42" fill="#2d2924" />
           <circle cx="60" cy="57" r="8.5" fill="#fbf8f1" />
