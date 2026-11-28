@@ -980,7 +980,7 @@ describe('Best moves recording', () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 0, unknownOwnCards: 0 } })
     await click('Retry advice')
-    expect([...container.querySelectorAll('.move-tile')].map((tile) => tile.textContent)).toEqual(['Trade', 'Play card', 'Build', 'Discard'])
+    expect([...container.querySelectorAll('.move-tile')].map((tile) => tile.textContent)).toEqual(['Trade', 'Play card', 'Build'])
   })
 
   it('blocks all advice on unfinished boards while keeping every recording tray usable', async () => {
@@ -1172,9 +1172,15 @@ describe('Best moves recording', () => {
     expect(tray()).toBeNull()
   })
 
-  it('records a voluntary discard by type for you and as unseen cards for a rival', async () => {
+  it('records a voluntary discard from the dots menu for any player, defaulting to the active one', async () => {
     await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(setActivePlayer(inGameSeed(), 'aki'), 'b', 'handUnknown', 2) }))
-    await click('Discard')
+    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Discard')).toBe(false)
+    const openDiscard = async () => {
+      await click('More turn actions')
+      await click('Record a discard', container.querySelector('[role="menu"]')!)
+    }
+    await openDiscard()
+    expect(button('aki', tray()).getAttribute('aria-pressed')).toBe('true')
     expect(tray().textContent).toContain('What did you discard?')
     expect(tray().textContent).not.toContain('Types not seen')
     expect(button('Record', tray()).disabled).toBe(true)
@@ -1185,16 +1191,20 @@ describe('Best moves recording', () => {
     expect(game().stats.aki.hand).toMatchObject({ wood: 3, brick: 4, sheep: 5 })
     expect(game().turn?.log?.at(-1)).toBe('Discarded 2 wood and 1 brick')
     expect(tray()).toBeNull()
-    await click('End turn')
-    await click('Discard')
+    await openDiscard()
+    await click('Discard sheep', tray())
+    await click('Bee', tray())
     expect(tray().textContent).toContain('What did Bee discard?')
+    expect(tray().textContent).toContain('Discards 0 cards')
     for (let count = 0; count < 3; count += 1) await click('Discard unseen', tray())
     await click('Discard ore', tray())
     await click('Record', tray())
+    expect(game().turn?.playerId).toBe('aki')
+    expect(game().stats.aki.hand.sheep).toBe(5)
     expect(game().stats.b.hand).toMatchObject({ wood: 2, ore: 1 })
     expect(game().stats.b.handUnknown).toBe(14)
     expect(RESOURCES.reduce((sum, resource) => sum + game().stats.b.hand[resource], game().stats.b.handUnknown)).toBe(23)
-    expect(game().turn?.log?.at(-1)).toBe('Discarded 1 ore and 3 unseen cards')
+    expect(game().turn?.log?.at(-1)).toBe('Bee discarded 1 ore and 3 unseen cards')
   })
 
   it('records a build through the canvas and undoes its piece and cost together', async () => {

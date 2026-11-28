@@ -508,16 +508,11 @@ input, select { border: 1px solid var(--line); border-radius: var(--radius); pad
 .move-piece-cost .hex-label .stat-icon { width: 11px; height: 11px; }
 .move-log-undo, .move-record { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; font-size: 11.5px; font-weight: 600; color: var(--ink); }
 .move-log-undo svg, .move-record svg { flex: none; display: block; width: 16px; height: 16px; }
-/* Chips stay on one row; where they would wrap (five need about 448px, four about 356px, three at most 279px) they become equal tiles, icon over label. */
-@container move-step (max-width: 453px) {
-  .move-tiles:has(> :nth-child(5)) { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .move-tiles:has(> :nth-child(5)) button { flex-direction: column; justify-content: center; gap: 5px; padding: 9px 2px 8px; font-size: 11.5px; }
-  .move-tiles:has(> :nth-child(5)) svg { width: 22px; height: 22px; }
-}
+/* Chips stay on one row; where they would wrap (four need about 356px, three at most 279px) they become equal tiles, icon over label. */
 @container move-step (max-width: 361px) {
-  .move-tiles:has(> :nth-child(4):last-child) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .move-tiles:has(> :nth-child(4):last-child) button { flex-direction: column; justify-content: center; gap: 5px; padding: 9px 4px 8px; font-size: 11.5px; }
-  .move-tiles:has(> :nth-child(4):last-child) svg { width: 22px; height: 22px; }
+  .move-tiles:has(> :nth-child(4)) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .move-tiles:has(> :nth-child(4)) button { flex-direction: column; justify-content: center; gap: 5px; padding: 9px 4px 8px; font-size: 11.5px; }
+  .move-tiles:has(> :nth-child(4)) svg { width: 22px; height: 22px; }
 }
 @container move-step (max-width: 284px) {
   .move-tiles:has(> :nth-child(3):last-child) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }

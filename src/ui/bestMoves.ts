@@ -98,8 +98,6 @@ export function availableActions(game: Game, playerId: string, devDeckRemaining?
     play: !turn?.devPlayed && (typed ? DEV_KINDS.some((kind) => typed.playable[kind] > 0)
       : stats.devCards - (turn?.devBought ?? 0) > 0),
     build: buildablePieces(game, playerId).length > 0,
-    // A house rule: a player may shed cards before a seven can come up.
-    discard: handTotal(stats) > 0,
   }
 }
 

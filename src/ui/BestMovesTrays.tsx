@@ -450,24 +450,39 @@ function BuyTray({ game, commit, close }: TrayProps) {
   )
 }
 
-/** A voluntary discard: types the table saw, plus a count of cards a rival shed face down. */
+/** A voluntary discard by any player during any turn: types the table saw, plus a count of cards a rival shed face down. */
 function DiscardTray({ game, active, commit, close }: TrayProps) {
+  const [playerId, setPlayerId] = useState(active.id)
   const [cards, setCards] = useState<Cards>(() => emptyStats().hand)
   const [unseen, setUnseen] = useState(0)
-  const stats = statsFor(game, active.id)
-  const mine = active.id === game.board.mePlayerId
+  const stats = statsFor(game, playerId)
+  const mine = playerId === game.board.mePlayerId
+  const name = game.board.players.find((player) => player.id === playerId)?.name ?? playerId
   const total = RESOURCES.reduce((sum, resource) => sum + cards[resource], unseen)
   const room = handTotal(stats) - total
+  const pick = (id: string) => {
+    setPlayerId(id)
+    setCards(emptyStats().hand)
+    setUnseen(0)
+  }
   const record = () => {
     const typed = RESOURCES.filter((resource) => cards[resource]).map((resource) => `${cards[resource]} ${resource}`)
     const hidden = `${unseen} ${typed.length ? 'unseen ' : ''}${unseen === 1 ? 'card' : 'cards'}`
-    const next = recordDiscard(game, active.id, cards)
-    commit(unseen ? recordDiscard(next, active.id, unseen) : next, `Discarded ${[...typed, ...unseen ? [hidden] : []].join(' and ')}`)
+    const next = recordDiscard(game, playerId, cards)
+    const what = [...typed, ...unseen ? [hidden] : []].join(' and ')
+    commit(unseen ? recordDiscard(next, playerId, unseen) : next, playerId === active.id ? `Discarded ${what}` : `${name} discarded ${what}`)
     close()
   }
   return (
     <div className="move-tray">
-      <div className="move-question">What did {mine ? 'you' : active.name} discard?</div>
+      <div className="move-question">Who discarded?</div>
+      <div className="move-partners" role="group" aria-label="Discarding player">
+        {game.board.players.map((player) => (
+          <button type="button" key={player.id} aria-pressed={player.id === playerId} disabled={handTotal(statsFor(game, player.id)) === 0}
+            onClick={() => pick(player.id)}><span className="move-player-dot" style={{ background: player.color }} />{player.name}</button>
+        ))}
+      </div>
+      <div className="move-question">What did {mine ? 'you' : name} discard?</div>
       <ResourcePicker label="Discard" cards={cards} available={stats.handUnknown === 0 ? stats.hand : undefined}
         disabled={(resource) => room === 0 || !canCover(stats, { ...cards, [resource]: cards[resource] + 1 })}
         onChange={(resource) => setCards({ ...cards, [resource]: cards[resource] + 1 })}
