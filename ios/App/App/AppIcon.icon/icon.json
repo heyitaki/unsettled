@@ -1,20 +1,25 @@
 {
   "fill": {
-    "solid": "srgb:0.98431,0.97255,0.94510,1.00000"
+    "solid": "srgb:0.98039,0.89412,0.87451,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "settler.svg",
-          "name": "settler"
+          "image-name": "settler.png",
+          "name": "settler",
+          "glass": false
         }
       ],
       "translucency": {
         "enabled": false,
         "value": 0
       },
-      "specular": false
+      "specular": false,
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      }
     }
   ],
   "supported-platforms": {
