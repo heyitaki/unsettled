@@ -1002,7 +1002,7 @@ describe('Best moves recording', () => {
     await click('Undo')
     await click('7')
     expect(rollStep().querySelectorAll('.move-discard')).toHaveLength(2)
-    expect(button('More wood', rollStep()).disabled).toBe(false)
+    expect(button('Discard wood', rollStep()).disabled).toBe(false)
     expect(seen.state.pick).toBeNull()
     await skipDiscards()
     expect(seen.state.pick?.want).toBe('hex')
@@ -1172,6 +1172,41 @@ describe('Best moves recording', () => {
     expect(tray()).toBeNull()
   })
 
+  it('records a voluntary discard from the dots menu for any player, defaulting to the active one', async () => {
+    await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(setActivePlayer(inGameSeed(), 'aki'), 'b', 'handUnknown', 2) }))
+    expect([...container.querySelectorAll('.move-tile')].some((tile) => tile.textContent === 'Discard')).toBe(false)
+    const openDiscard = async () => {
+      await click('More turn actions')
+      await click('Record a discard', container.querySelector('[role="menu"]')!)
+    }
+    await openDiscard()
+    expect(button('aki', tray()).getAttribute('aria-pressed')).toBe('true')
+    expect(tray().textContent).toContain('What did you discard?')
+    expect(tray().textContent).not.toContain('Types not seen')
+    expect(button('Record', tray()).disabled).toBe(true)
+    await click('Discard wood', tray())
+    await click('Discard wood', tray())
+    await click('Discard brick', tray())
+    await click('Record', tray())
+    expect(game().stats.aki.hand).toMatchObject({ wood: 3, brick: 4, sheep: 5 })
+    expect(game().turn?.log?.at(-1)).toBe('Discarded 2 wood and 1 brick')
+    expect(tray()).toBeNull()
+    await openDiscard()
+    await click('Discard sheep', tray())
+    await click('Bee', tray())
+    expect(tray().textContent).toContain('What did Bee discard?')
+    expect(tray().textContent).toContain('Discards 0 cards')
+    for (let count = 0; count < 3; count += 1) await click('Discard unseen', tray())
+    await click('Discard ore', tray())
+    await click('Record', tray())
+    expect(game().turn?.playerId).toBe('aki')
+    expect(game().stats.aki.hand.sheep).toBe(5)
+    expect(game().stats.b.hand).toMatchObject({ wood: 2, ore: 1 })
+    expect(game().stats.b.handUnknown).toBe(14)
+    expect(RESOURCES.reduce((sum, resource) => sum + game().stats.b.hand[resource], game().stats.b.handUnknown)).toBe(23)
+    expect(game().turn?.log?.at(-1)).toBe('Bee discarded 1 ore and 3 unseen cards')
+  })
+
   it('records a build through the canvas and undoes its piece and cost together', async () => {
     const before = game()
     await click('Build')
@@ -1233,7 +1268,7 @@ describe('Best moves recording', () => {
     await click('7')
     const own = rollStep().querySelector('[aria-label="aki\'s discard"]')!
     for (const [resource, count] of [['wood', 5], ['sheep', 5], ['wheat', 2]] as const) {
-      for (let index = 0; index < count; index += 1) await click(`More ${resource}`, own)
+      for (let index = 0; index < count; index += 1) await click(`Discard ${resource}`, own)
     }
     await click('Record', own)
     expect(rollStep().querySelectorAll('.move-discard')).toHaveLength(1)
@@ -1320,7 +1355,7 @@ describe('Best moves recording', () => {
     await click('Enter types', rival)
     expect(rival.textContent).toContain('0 / 12')
     expect(button('Record', rival).disabled).toBe(true)
-    for (const resource of RESOURCES) expect(button(`Fewer ${resource}`, rival).disabled).toBe(true)
+    expect(rival.querySelector('.move-minus')).toBeNull()
   })
 
   it('shows only the active player dev defaults and counts bought cards as typed', async () => {

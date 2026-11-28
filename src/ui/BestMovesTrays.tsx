@@ -12,13 +12,13 @@ import { adviceResponse, useAdvice, useAdviceClient, type AdviceState } from './
 import {
   adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, knightTheft, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
-import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
+import { CardAmounts, ResourcePicker } from './MoveInputs'
 import { CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
 import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'
 import { useBoardPick } from './useBoardPick'
 
-export type TrayKind = 'trade' | 'build' | 'buy' | 'play'
+export type TrayKind = 'trade' | 'build' | 'buy' | 'play' | 'discard'
 export interface MoveTray { kind: TrayKind; fill?: AdviceInput }
 export type Discards = ReturnType<typeof sevenDiscards>
 export interface RecordedRoll {
@@ -55,6 +55,7 @@ export function BestMovesTray(props: TrayProps) {
     case 'build': return <BuildTray {...props} />
     case 'buy': return <BuyTray {...props} />
     case 'play': return <PlayTray {...props} />
+    case 'discard': return <DiscardTray {...props} />
   }
 }
 
@@ -191,6 +192,7 @@ function DiscardLine({ game, playerId, total, count, adviceEnabled, commit, skip
   const selected = manual ? cards : response?.cards
   const sum = selected ? RESOURCES.reduce((sum, resource) => sum + selected[resource], 0) : 0
   const name = game.board.players.find((player) => player.id === playerId)?.name ?? playerId
+  const stats = statsFor(game, playerId)
   const record = () => commit(recordDiscard(game, playerId, me || manual ? selected ?? {} : count), `${name} discarded ${count} cards`)
   const enterTypes = () => {
     setCards(discardInputCards(me, response?.cards))
@@ -198,29 +200,25 @@ function DiscardLine({ game, playerId, total, count, adviceEnabled, commit, skip
   }
   return (
     <div className="move-discard" role="group" aria-label={`${name}'s discard`}>
-      <div className="move-pick">
-        <span><b>{name}</b> · {total} cards</span>
-        {!me && !manual ? <span>discards {count}, types not seen</span> : <span>Discard {count}</span>}
-        {me && !manual && response && <CardAmounts cards={response.cards} />}
-        <button type="button" className="primary" disabled={(me || manual) && sum !== count} onClick={record}>
-          Record
-        </button>
-        {!manual && <button type="button" onClick={enterTypes}>Enter types</button>}
-        <button type="button" onClick={skip}>Skip</button>
+      <div className="move-discard-head">
+        <span className="move-discard-text">
+          <span><b>{name}</b> · {total} cards</span>
+          <span>· {!me && !manual ? `Discards ${count}, types not seen` : manual ? `Discard ${sum} / ${count}` : `Discard ${count}`}</span>
+          {me && !manual && response && <CardAmounts cards={response.cards} />}
+        </span>
+        <span className="move-discard-actions">
+          {!manual && <button type="button" onClick={enterTypes}>Enter types</button>}
+          <button type="button" onClick={skip}>Skip</button>
+          <button type="button" className="primary" disabled={(me || manual) && sum !== count} onClick={record}>
+            Record
+          </button>
+        </span>
       </div>
       {manual && (
-        <div className="move-chips">
-          {RESOURCES.map((resource) => (
-            <MoveStepper
-              key={resource}
-              label={resource}
-              value={cards[resource]}
-              max={count}
-              onChange={(value) => setCards({ ...cards, [resource]: value })}
-            />
-          ))}
-          <span>{sum} / {count}</span>
-        </div>
+        <ResourcePicker label="Discard" cards={cards}
+          disabled={(resource) => sum >= count || !canCover(stats, { ...cards, [resource]: cards[resource] + 1 })}
+          onChange={(resource) => setCards({ ...cards, [resource]: cards[resource] + 1 })}
+          onRemove={(resource) => setCards({ ...cards, [resource]: cards[resource] - 1 })} />
       )}
       {me && adviceEnabled && <AdviceFeedback advice={advice} />}
       {me && response?.reason && !manual && <p>{response.reason}</p>}
@@ -447,6 +445,58 @@ function BuyTray({ game, commit, close }: TrayProps) {
             <DevChipGlyph kind={kind} /><span>{kind === 'vp' ? 'Victory point' : DEV_LABELS[kind]}</span>
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/** A voluntary discard by any player during any turn: types the table saw, plus a count of cards a rival shed face down. */
+function DiscardTray({ game, active, commit, close }: TrayProps) {
+  const [playerId, setPlayerId] = useState(active.id)
+  const [cards, setCards] = useState<Cards>(() => emptyStats().hand)
+  const [unseen, setUnseen] = useState(0)
+  const stats = statsFor(game, playerId)
+  const mine = playerId === game.board.mePlayerId
+  const name = game.board.players.find((player) => player.id === playerId)?.name ?? playerId
+  const total = RESOURCES.reduce((sum, resource) => sum + cards[resource], unseen)
+  const room = handTotal(stats) - total
+  const pick = (id: string) => {
+    setPlayerId(id)
+    setCards(emptyStats().hand)
+    setUnseen(0)
+  }
+  const record = () => {
+    const typed = RESOURCES.filter((resource) => cards[resource]).map((resource) => `${cards[resource]} ${resource}`)
+    const hidden = `${unseen} ${typed.length ? 'unseen ' : ''}${unseen === 1 ? 'card' : 'cards'}`
+    const next = recordDiscard(game, playerId, cards)
+    const what = [...typed, ...unseen ? [hidden] : []].join(' and ')
+    commit(unseen ? recordDiscard(next, playerId, unseen) : next, playerId === active.id ? `Discarded ${what}` : `${name} discarded ${what}`)
+    close()
+  }
+  return (
+    <div className="move-tray">
+      <div className="move-question">Who discarded?</div>
+      <div className="move-partners" role="group" aria-label="Discarding player">
+        {game.board.players.map((player) => (
+          <button type="button" key={player.id} aria-pressed={player.id === playerId} disabled={handTotal(statsFor(game, player.id)) === 0}
+            onClick={() => pick(player.id)}><span className="move-player-dot" style={{ background: player.color }} />{player.name}</button>
+        ))}
+      </div>
+      <div className="move-question">What did {mine ? 'you' : name} discard?</div>
+      <ResourcePicker label="Discard" cards={cards} available={stats.handUnknown === 0 ? stats.hand : undefined}
+        disabled={(resource) => room === 0 || !canCover(stats, { ...cards, [resource]: cards[resource] + 1 })}
+        onChange={(resource) => setCards({ ...cards, [resource]: cards[resource] + 1 })}
+        onRemove={(resource) => setCards({ ...cards, [resource]: cards[resource] - 1 })} />
+      {!mine && <div className="move-discard-unseen">
+        <span>Types not seen</span>
+        <div className="move-res-cell">
+          <button type="button" className="move-resource" aria-label="Discard unseen" aria-pressed={unseen > 0} disabled={room === 0}
+            onClick={() => setUnseen(unseen + 1)}><span className={`move-count${unseen === 0 ? ' zero' : ''}`}>{unseen}</span></button>
+          {unseen > 0 && <button type="button" className="move-minus" aria-label="One fewer unseen" onClick={() => setUnseen(unseen - 1)}><MinusGlyph /></button>}
+        </div>
+      </div>}
+      <div className="move-tray-footer"><span>Discards {total} {total === 1 ? 'card' : 'cards'}</span>
+        <button type="button" className="move-record" disabled={total === 0} onClick={record}><CheckGlyph />Record</button>
       </div>
     </div>
   )

@@ -8,11 +8,12 @@ import {
   actionLabel, adviceBlockers, adviceMarks, applyAdvice, availableActions, limitTradeOffers, moveSpot, playLabel, recordedMoveLabel, robberPending, sevenDiscards, statsFor, type Move,
 } from './bestMoves'
 import { CardAmounts } from './MoveInputs'
+import { ContextMenu } from './ContextMenu'
 import { LedgerPanel } from './LedgerPanel'
 import { HistoryPanel, PlayerDisc } from './HistoryPanel'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { SpotTiles } from './SpotTiles'
-import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
+import { BuildGlyph, BuyDevGlyph, DiscardGlyph, DotsGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
@@ -73,6 +74,7 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
   const [, refreshRecords] = useState(0)
   const pendingRecord = useRef<{ previous: Game; roll: RecordedRoll } | null>(null)
   const [knight, setKnight] = useState<{ game: Game; initial?: KnightPlay } | null>(null)
+  const [menuTrigger, setMenuTrigger] = useState<HTMLButtonElement | null>(null)
   const inHistory = (entry: Game) => entry === game || tab.past.includes(entry)
   const seven = robberPending(game)
   const playingKnight = knight !== null && inHistory(knight.game)
@@ -261,7 +263,15 @@ export function BestMovesPanel({ className = 'panel analysis-panel' }: { classNa
       <section className={`${className} best-moves-panel`}>
         <div className="panel-heading">
           <h2>{mine ? 'Record your turn' : `Record ${active.name}'s turn`}</h2>
-          <UndoRedoButtons />
+          <UndoRedoButtons>
+            {/* Rare actions sit behind the dots so the step rail stays short. */}
+            <button type="button" className="panel-dots" aria-label="More turn actions" data-label="More" aria-haspopup="menu"
+              aria-expanded={menuTrigger !== null} onClick={(event) => setMenuTrigger(menuTrigger ? null : event.currentTarget)}>
+              <DotsGlyph />
+            </button>
+          </UndoRedoButtons>
+          {menuTrigger && <ContextMenu ariaLabel="More turn actions" trigger={menuTrigger} onClose={() => setMenuTrigger(null)}
+            items={[{ label: 'Record a discard', icon: <DiscardGlyph />, onClick: () => { if (tray?.kind !== 'discard') toggleTray('discard') } }]} />}
         </div>
         <ol className="move-steps">
           <li className={`move-step ${before ? 'now' : 'done'}`}>

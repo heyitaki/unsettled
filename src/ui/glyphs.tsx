@@ -583,6 +583,16 @@ export function BuyDevGlyph() {
   )
 }
 
+export function DiscardGlyph() {
+  return (
+    <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
+      <path d="M6.6 2.6h7.6a1.8 1.8 0 0 1 1.8 1.8v9.6" />
+      <rect x="4" y="4.6" width="10" height="12.8" rx="1.8" />
+      <path d="M6 11.6h6" />
+    </svg>
+  )
+}
+
 export function PlayDevGlyph() {
   return (
     <svg {...LINE_ART} viewBox={GRID} strokeWidth="1.5">
