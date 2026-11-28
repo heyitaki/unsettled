@@ -3,6 +3,7 @@ import type { Game, ScreenshotRead } from '../model/game'
 import { RESOURCES, type Board, type VertexId } from '../model/types'
 import { CounterGlyph, ResourceGlyph, StructureGlyph } from './glyphs'
 import { AWARDS, importQuestions, otherAward, turnOrderFrom, type ImportAnswers } from './importQuestions'
+import { SpecialBuildSetting } from './SpecialBuildSetting'
 import { SpotTiles } from './SpotTiles'
 import type { HighlightMark } from './store'
 import { vertexDescription, vertexParts } from './vertexParts'
@@ -129,6 +130,8 @@ export function ImportQuestionStep({ game, read, onDone, onSkip, onMarks }: {
           </div>
         </section>
       })}
+      {questions.specialBuild && <SpecialBuildSetting rule={answers.specialBuild ?? null}
+        choose={(specialBuild) => setAnswers({ ...answers, specialBuild })} />}
       <div className="confirm-actions">
         <button type="button" onClick={onSkip}>Skip</button>
         <button type="button" className="primary" disabled={remaining > 0} onClick={() => onDone(answers)}>{remaining > 0 ? `${remaining} left` : 'Done'}</button>

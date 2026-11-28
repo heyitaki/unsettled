@@ -1,6 +1,6 @@
 import { awardCandidates, initializeAwards, LARGEST_ARMY_MIN, setAwardHolder } from '../engine/stats'
 import { AWARD_VP, buildingPoints, snakeOrder } from '../model/board'
-import { adjustCounter, withBoard, type AwardKind, type Game, type ScreenshotRead } from '../model/game'
+import { adjustCounter, withBoard, type AwardKind, type Game, type ScreenshotRead, type SpecialBuildRule } from '../model/game'
 import type { Board, VertexId } from '../model/types'
 
 export interface ImportQuestions {
@@ -9,6 +9,8 @@ export interface ImportQuestions {
   firstChoices: string[]
   longestRoad: (string | null)[] | null
   largestArmy: (string | null)[] | null
+  /** Present when the special build rule is asked; it defaults to off, so it never blocks Done. */
+  specialBuild?: true
 }
 
 export interface ImportAnswers {
@@ -16,7 +18,12 @@ export interface ImportAnswers {
   order?: string[]
   longestRoad?: string | null
   largestArmy?: string | null
+  /** Null turns the rule off. */
+  specialBuild?: SpecialBuildRule | null
 }
+
+/** Five and six player games get the special build question while the game has not started and has no rule yet. */
+const asksSpecialBuild = (game: Game) => game.board.players.length >= 5 && game.turn === undefined && game.specialBuild === undefined
 
 export const AWARDS = ['longestRoad', 'largestArmy'] as const
 export const otherAward = (kind: AwardKind): AwardKind => kind === 'longestRoad' ? 'largestArmy' : 'longestRoad'
@@ -107,6 +114,7 @@ export function importQuestions(game: Game, read: ScreenshotRead, answers: Impor
     firstChoices: choices.length === 1 ? [] : choices,
     longestRoad: null,
     largestArmy: null,
+    ...(asksSpecialBuild(game) ? { specialBuild: true } as const : {}),
   }
   if (draftShape(board)) {
     for (const player of board.players) {
@@ -122,7 +130,7 @@ export function importQuestions(game: Game, read: ScreenshotRead, answers: Impor
 }
 
 export function hasQuestions(questions: ImportQuestions): boolean {
-  return questions.picks.length > 0 || questions.order !== null || questions.longestRoad !== null || questions.largestArmy !== null
+  return questions.picks.length > 0 || questions.order !== null || questions.longestRoad !== null || questions.largestArmy !== null || questions.specialBuild === true
 }
 
 /** The questions the Finish import card asks for this game, or null when the card is not shown. */
@@ -157,6 +165,7 @@ export function settleImport(game: Game, read: ScreenshotRead, answers: ImportAn
     board = { ...board, buildings }
   }
   if (board !== game.board) game = withBoard(game, board)
+  if (questions.specialBuild && answers.specialBuild) game = { ...game, specialBuild: answers.specialBuild }
   for (const { kind, options } of awardOptions(game, read, answers)) {
     if (game.awards?.[kind] != null) continue
     const answer = answers[kind]

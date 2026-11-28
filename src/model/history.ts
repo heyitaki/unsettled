@@ -1,4 +1,4 @@
-import type { Game, GameHistory, PlayerStats, Position, TurnRecord, TurnState } from './game'
+import type { Game, GameHistory, PlayerStats, Position, SpecialBuildLine, TurnRecord, TurnState } from './game'
 import { RESOURCES, type Board, type EdgeId, type Player, type VertexId } from './types'
 
 export const currentTurnNumber = (game: Game): number => (game.history?.turns.length ?? 0) + 1
@@ -8,6 +8,11 @@ const REMOVED_PLAYER = { name: 'Removed player', color: '#c5bfb5' }
 /** A recorded turn can name a player since removed from the roster. */
 export function historyPlayer(board: Board, playerId: string | undefined): Pick<Player, 'name' | 'color'> {
   return board.players.find((player) => player.id === playerId) ?? REMOVED_PLAYER
+}
+
+/** A special build line with its player's name: "Blue built a road". */
+export function specialBuildText(board: Board, line: SpecialBuildLine): string {
+  return `${historyPlayer(board, line.playerId).name} ${line.text.charAt(0).toLowerCase()}${line.text.slice(1)}`
 }
 
 export function positionOf(game: Game): Position {
@@ -62,6 +67,7 @@ export function historyGame(game: Game, index: number): Game {
     next.turn = { ...game.turn, playerId: record.playerId, rolled: record.rolled }
     delete next.turn.log
     delete next.turn.gains
+    delete next.turn.specialBuilds
   }
   return next
 }
@@ -92,6 +98,7 @@ export function turnRecord(game: Game, history: GameHistory, turn: TurnState): T
   return {
     ...position, playerId: turn.playerId, rolled: turn.rolled, log: turn.log ?? [],
     ...(turn.gains === undefined ? {} : { gains: turn.gains }),
+    ...(turn.specialBuilds === undefined ? {} : { specialBuilds: turn.specialBuilds }),
     ...(Object.keys(buildingDiff).length ? { buildings: buildingDiff } : {}),
     ...(Object.keys(roadDiff).length ? { roads: roadDiff } : {}),
     ...(Object.keys(statsDiff).length ? { stats: statsDiff } : {}),

@@ -112,7 +112,9 @@ Full-screen overlay. Header: back chevron, `Players`, then in the right corner a
 - Renaming to a new identity name when the current identity holds several photos opens `Rename <A>?` with `<A> has <n> photos.` The actions are primary `Rename everywhere`, `Only this photo`, then `Cancel`, which takes focus. `Rename everywhere` keeps all the identity's photos under the new name. `Only this photo` moves the nearest stored print to a new identity. Both commit the player name in this game; Cancel leaves the game and people list unchanged and reverts the field.
 - **Press and hold, or drag the grip**, to move the row to another seat. The grip starts a drag immediately; anywhere else needs a hold, and movement past a slop threshold before the hold lands cancels it so a scroll still scrolls. The lifted row tracks the finger with no easing while the rows it passes ease out of the way.
 
-**Snake draft.** Below the roster, the pick grid, derived from seat order.
+**Special build.** At five and six seats only, between the roster and the snake draft, the Special build control of desktop D8 (owner 2026-11-27): `Off` / `On`, then `When?` and `Who can build?`, each change one undoable game commit.
+
+**Snake draft.** Below the roster (and Special build), the pick grid, derived from seat order.
 
 **Seat order is draft order (B3).** Dragging a row is not tidying a list: the snake is derived from it, so `Picking 3rd and 6th` changes with the drag and the ribbon repaints. The reorder must re-run the analysis, not only repaint the roster.
 

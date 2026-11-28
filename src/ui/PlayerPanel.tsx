@@ -3,6 +3,7 @@ import { PLAYER_PALETTE, type Board } from '../model/types'
 import { PlusGlyph } from './glyphs'
 import { ConfirmDialog } from './ConfirmDialog'
 import { RosterRow, RosterTrash } from './RosterRow'
+import { GameSpecialBuild } from './SpecialBuildSetting'
 import { activeTab, useStore } from './store'
 import { useRoster } from './useRoster'
 
@@ -70,6 +71,7 @@ export function PlayerPanel() {
         })}
         <RosterTrash roster={roster} playerCount={board.players.length} />
       </div>
+      <GameSpecialBuild />
     </section>
   )
 }

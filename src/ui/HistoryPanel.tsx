@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { pips } from '../model/board'
-import { currentTurnNumber, historyPlayer, turnSummary } from '../model/history'
+import { currentTurnNumber, historyPlayer, specialBuildText, turnSummary } from '../model/history'
 import { PLAYER_PALETTE } from '../model/types'
 import { ProductionPlayer } from './BestMovesTrays'
 import { readableInk } from './colors'
@@ -59,6 +59,9 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
           const player = historyPlayer(game.board, turn.playerId)
           const current = selected === index
           const log = turn.log ?? []
+          const special = turn.specialBuilds ?? []
+          const builders = [...new Set(special.map((line) => historyPlayer(game.board, line.playerId).name))]
+          const summary = [turnSummary(log), builders.length > 0 && `${builders.join(' and ')} built after`].filter(Boolean).join(' · ')
           const produced = Object.entries(turn.gains ?? {})
           return <Fragment key={index}>
             {(index === now || round !== Math.ceil((index + 1) / game.board.players.length)) && <div className="history-round" role="presentation">Round {round}</div>}
@@ -68,7 +71,7 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
                 <PlayerDisc color={player.color}>{index}</PlayerDisc>
                 <span className="history-main">
                   <span className="history-title">{player.name}{index === now && <span className="history-now">Now</span>}</span>
-                  {!current && <span className="history-summary">{turnSummary(log) || (index === now ? 'Nothing recorded yet' : 'No actions')}</span>}
+                  {!current && <span className="history-summary">{summary || (index === now ? 'Nothing recorded yet' : 'No actions')}</span>}
                 </span>
                 {turn.rolled !== null && <span className={`history-roll${turn.rolled === 7 ? ' seven' : ''}`} aria-label={`Rolled ${turn.rolled}`}>
                   <b>{turn.rolled}</b>{turn.rolled === 7 ? <RobberGlyph /> : <span className="history-pips" aria-hidden="true">
@@ -81,6 +84,13 @@ export function HistoryPanel({ className = 'panel analysis-panel' }: { className
                   {produced.map(([id, cards]) => <ProductionPlayer key={id} player={historyPlayer(game.board, id)} cards={cards} />)}
                 </div> : <div className="history-quiet">Nobody produces</div>)}
                 {log.length > 0 && <ul className="move-log">{log.map((line, i) => <li key={i}><TickGlyph /><span>{line}</span></li>)}</ul>}
+                {special.length > 0 && <>
+                  <div className="history-quiet">Special build</div>
+                  <ul className="move-log">{special.map((line, i) => <li key={i}>
+                    <span className="move-player-dot" style={{ background: historyPlayer(game.board, line.playerId).color }} />
+                    <span>{specialBuildText(game.board, line)}</span>
+                  </li>)}</ul>
+                </>}
               </div>}
             </div>
           </Fragment>

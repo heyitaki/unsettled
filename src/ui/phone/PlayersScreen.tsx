@@ -4,6 +4,7 @@ import { DraftGrid } from '../DraftGrid'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { PlusGlyph } from '../glyphs'
 import { RosterRow, RosterTrash } from '../RosterRow'
+import { GameSpecialBuild } from '../SpecialBuildSetting'
 import { activeTab, useStore } from '../store'
 import { useRoster } from '../useRoster'
 import { PhoneOverlay } from './PhoneOverlay'
@@ -59,6 +60,7 @@ export function PlayersScreen({ onClose }: { onClose: () => void }) {
           <RosterTrash roster={roster} playerCount={board.players.length} />
         </div>
       </div>
+      <GameSpecialBuild />
       <DraftGrid board={board} />
     </PhoneOverlay>
   )
