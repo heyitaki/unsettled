@@ -1,7 +1,9 @@
 import { awardCandidates, initializeAwards, LARGEST_ARMY_MIN, setAwardHolder } from '../engine/stats'
-import { AWARD_VP, buildingPoints, snakeOrder } from '../model/board'
-import { adjustCounter, withBoard, type AwardKind, type Game, type ScreenshotRead, type SpecialBuildRule } from '../model/game'
-import type { Board, VertexId } from '../model/types'
+import { AWARD_VP, buildingPoints, setupGrants, snakeOrder } from '../model/board'
+import { axialKey, parseVertexId } from '../model/coords'
+import { adjustCounter, withBoard, withUnseenCards, type AwardKind, type Game, type ScreenshotRead, type SpecialBuildRule } from '../model/game'
+import { CARD_COSTS } from '../model/turn'
+import { RESOURCES, type Board, type Resource, type VertexId } from '../model/types'
 
 export interface ImportQuestions {
   picks: { playerId: string; settlements: [VertexId, VertexId] }[]
@@ -11,6 +13,8 @@ export interface ImportQuestions {
   largestArmy: (string | null)[] | null
   /** Present when the special build rule is asked; it defaults to off, so it never blocks Done. */
   specialBuild?: true
+  /** Set when the draft is finished and a read hand has cards of unknown type, which the starting hands can name. */
+  firstRound?: true
 }
 
 export interface ImportAnswers {
@@ -20,6 +24,7 @@ export interface ImportAnswers {
   largestArmy?: string | null
   /** Null turns the rule off. */
   specialBuild?: SpecialBuildRule | null
+  firstRound?: boolean
 }
 
 /** Five and six player games get the special build question while the game has not started and has no rule yet. */
@@ -126,11 +131,51 @@ export function importQuestions(game: Game, read: ScreenshotRead, answers: Impor
   for (const { kind, ask, options } of awardOptions(game, read, answers)) {
     if (ask) questions[kind] = options
   }
+  if (setupGrants(board) !== null && read.hands.some((id) => game.stats[id].handUnknown > 0)) questions.firstRound = true
   return questions
 }
 
 export function hasQuestions(questions: ImportQuestions): boolean {
-  return questions.picks.length > 0 || questions.order !== null || questions.longestRoad !== null || questions.largestArmy !== null || questions.specialBuild === true
+  return questions.picks.length > 0 || questions.order !== null || questions.longestRoad !== null || questions.largestArmy !== null ||
+    questions.firstRound === true || questions.specialBuild === true
+}
+
+const ROAD_COST: Partial<Record<Resource, number>> = CARD_COSTS.road
+const DEV_CARD_COST: Partial<Record<Resource, number>> = CARD_COSTS.devCard
+
+/**
+ * Each read hand rebuilt from its starting cards, for a screenshot from the first
+ * round. A player keeps their starting cards less what their roads beyond the
+ * draft's two and their dev cards cost, and whatever more the screenshot counts
+ * stays unknown (production). Assumes no trades, and no 7 unless the robber has
+ * left the desert, when one card of anyone touching its hex may have been stolen.
+ * A hand smaller than its base, or one that may have been robbed, keeps only the
+ * cards that loss could not have taken.
+ */
+function firstRoundHands(game: Game, read: ScreenshotRead): Game {
+  const { board } = game
+  const grants = setupGrants(board)
+  if (grants === null) return game
+  const robberKey = board.robber && axialKey(board.robber)
+  const robberHex = board.hexes.find((hex) => axialKey(hex.coord) === robberKey)
+  const stealable = robberHex !== undefined && robberHex.tile !== 'desert'
+  const stats = { ...game.stats }
+  for (const { id } of board.players) {
+    if (!read.hands.includes(id)) continue
+    const current = stats[id]
+    const total = current.handUnknown + RESOURCES.reduce((sum, resource) => sum + current.hand[resource], 0)
+    const roads = Math.max(0, board.roads.filter((road) => road.playerId === id).length - 2)
+    const base = Object.fromEntries(RESOURCES.map((resource) => [resource, Math.max(0,
+      grants[id][resource] - roads * (ROAD_COST[resource] ?? 0) - current.devCards * (DEV_CARD_COST[resource] ?? 0))]))
+    const robbable = stealable && board.buildings.some((building) =>
+      building.playerId === id && parseVertexId(building.vertexId).some((coord) => axialKey(coord) === robberKey))
+    const lost = Math.max(RESOURCES.reduce((sum, resource) => sum + base[resource], 0) - total, robbable ? 1 : 0)
+    const hand = { ...current.hand }
+    for (const resource of RESOURCES) hand[resource] = Math.max(0, base[resource] - lost)
+    const unknown = total - RESOURCES.reduce((sum, resource) => sum + hand[resource], 0)
+    stats[id] = withUnseenCards(current, hand, Array.from({ length: unknown }, () => RESOURCES))
+  }
+  return { ...game, stats }
 }
 
 /** The questions the Finish import card asks for this game, or null when the card is not shown. */
@@ -166,6 +211,8 @@ export function settleImport(game: Game, read: ScreenshotRead, answers: ImportAn
   }
   if (board !== game.board) game = withBoard(game, board)
   if (questions.specialBuild && answers.specialBuild) game = { ...game, specialBuild: answers.specialBuild }
+  // After the board settles: an answered second settlement decides the starting hands.
+  if (questions.firstRound && answers.firstRound) game = firstRoundHands(game, read)
   for (const { kind, options } of awardOptions(game, read, answers)) {
     if (game.awards?.[kind] != null) continue
     const answer = answers[kind]
