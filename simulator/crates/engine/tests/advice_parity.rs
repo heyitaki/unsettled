@@ -86,6 +86,7 @@ fn assert_coverage(fixture: &Value) {
     let mut production = false;
     let mut progress = false;
     let mut rival_vp = false;
+    let mut narrowed = false;
     for case in fixture["cases"].as_array().unwrap() {
         assert!(names.insert(case["name"].as_str().unwrap()));
         let request = &case["request"];
@@ -128,6 +129,9 @@ fn assert_coverage(fixture: &Value) {
                 unknown += usize::from(game["stats"].as_object().unwrap().iter().any(
                     |(id, stats)| observer != id && stats["handUnknown"].as_u64().unwrap() > 0,
                 ));
+                narrowed |= game["stats"].as_object().unwrap().iter().any(|(id, stats)| {
+                    observer != id && stats.get("handUnknownAmong").is_some()
+                });
                 super_city |= board["buildings"]
                     .as_array()
                     .unwrap()
@@ -190,6 +194,7 @@ fn assert_coverage(fixture: &Value) {
         "missing played counts for all three progress kinds"
     );
     assert!(rival_vp, "missing rival VP cards");
+    assert!(narrowed, "missing a rival's narrowed unseen cards");
 }
 
 fn assert_midgame(board: &Value) {
@@ -440,6 +445,10 @@ fn position(layout: Layout, index: usize, seed: u64) -> Value {
         let knights = if seat == observer { 2 } else { rng.range(3) };
         stats.insert(id.clone(), json!({"hand":{"wood":hand[0],"sheep":hand[1],"wheat":hand[2],"brick":hand[3],"ore":hand[4]},
             "handUnknown":unknown,"devCards":rng.range(3),"knights":knights,"vpCards":0}));
+        // Some unseen cards narrowed to a few types, as after an unseen steal.
+        if unknown > 0 && index % 2 == 1 {
+            stats[id]["handUnknownAmong"] = json!([json!(["wood", "brick"]), json!(["sheep", "wheat", "ore"])][..seat % 2 + 1]);
+        }
     }
     let mut game = json!({"schemaVersion":1,"board":wire,"stats":stats});
     if index == 4 {

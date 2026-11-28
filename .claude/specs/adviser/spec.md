@@ -75,7 +75,7 @@ Optional, validated with exact keys and a roster check, carried by backups becau
 - A card lost unseen (a steal between two rivals, a rival's discard entered without types) lowers every `hand[r]` by one, floor zero, lowers the total by one, and puts the difference in `handUnknown`.
 - A steal that involves the claimed player names its resource.
 
-ponytail: the upper bound is always lower plus unknown. Storing an upper bound per resource would keep "nobody has wood after that Monopoly"; add it if the ranges prove too loose.
+An unseen card can also carry the types it could be (`handUnknownAmong`), so a resource's upper bound is `hand[r]` plus the unseen cards that could be `r`. The engine's `BeliefState` takes that bound per resource.
 
 ### Panel structure
 

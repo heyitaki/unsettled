@@ -3520,6 +3520,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -3533,6 +3539,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -4124,6 +4141,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -4137,6 +4160,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -4614,6 +4648,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -4627,6 +4667,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -5111,6 +5162,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -5124,6 +5181,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -5609,6 +5677,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -5622,6 +5696,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -6101,6 +6186,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -6114,6 +6205,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -9683,6 +9785,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -9696,6 +9804,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -10240,6 +10359,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -10253,6 +10378,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -10719,6 +10855,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -10732,6 +10874,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -11205,6 +11358,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -11218,6 +11377,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -11692,6 +11862,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -11705,6 +11881,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -12173,6 +12360,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -12186,6 +12379,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -15875,6 +16079,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -15888,6 +16098,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -16373,6 +16594,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -16386,6 +16613,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -16857,6 +17095,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -16870,6 +17114,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -17348,6 +17603,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -17361,6 +17622,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -17840,6 +18112,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -17853,6 +18131,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -18326,6 +18615,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -18339,6 +18634,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -22095,6 +22401,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -22108,6 +22420,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -22735,6 +23058,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -22748,6 +23077,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -23210,6 +23550,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -23223,6 +23569,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -23692,6 +24049,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -23705,6 +24068,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -24175,6 +24549,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -24188,6 +24568,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -24652,6 +25043,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -24665,6 +25062,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -28149,6 +28557,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -28162,6 +28576,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -28773,6 +29198,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -28786,6 +29217,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -29267,6 +29709,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -29280,6 +29728,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -29768,6 +30227,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -29781,6 +30246,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -30270,6 +30746,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -30283,6 +30765,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -30766,6 +31259,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -30779,6 +31278,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -34415,6 +34925,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -34428,6 +34944,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -34898,6 +35425,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -34911,6 +35444,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -35367,6 +35911,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -35380,6 +35930,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -35843,6 +36404,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -35856,6 +36423,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -36320,6 +36898,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -36333,6 +36917,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -36791,6 +37386,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -36804,6 +37405,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -41456,6 +42068,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -41469,6 +42087,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -41482,6 +42111,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -41495,6 +42130,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -42400,6 +43046,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -42413,6 +43065,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -42426,6 +43089,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -42439,6 +43108,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -43094,6 +43774,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -43107,6 +43793,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -43120,6 +43817,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -43133,6 +43836,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -43795,6 +44509,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -43808,6 +44528,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -43821,6 +44552,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -43834,6 +44571,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -44497,6 +45245,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -44510,6 +45264,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -44523,6 +45288,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -44536,6 +45307,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -45193,6 +45975,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -45206,6 +45994,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -45219,6 +46018,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -45232,6 +46037,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -49906,6 +50722,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -49919,6 +50741,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -49932,6 +50765,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -49945,6 +50784,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -50026,24 +50876,7 @@
               "wood": 0
             },
             "reason": "Moves you closer to a win; P3 is the safest partner",
-            "score": 339.7398986816406
-          },
-          {
-            "action": {
-              "count": 1,
-              "get": "sheep",
-              "give": "ore",
-              "type": "offerTrade"
-            },
-            "handDelta": {
-              "brick": 0,
-              "ore": 0,
-              "sheep": 0,
-              "wheat": 0,
-              "wood": 0
-            },
-            "reason": "Moves you closer to a win; P3 is the safest partner",
-            "score": 337.3994140625
+            "score": 338.76708984375
           },
           {
             "action": {
@@ -50066,6 +50899,23 @@
             "action": {
               "count": 1,
               "get": "sheep",
+              "give": "ore",
+              "type": "offerTrade"
+            },
+            "handDelta": {
+              "brick": 0,
+              "ore": 0,
+              "sheep": 0,
+              "wheat": 0,
+              "wood": 0
+            },
+            "reason": "Moves you closer to a win; P3 is the safest partner",
+            "score": 336.4266357421875
+          },
+          {
+            "action": {
+              "count": 1,
+              "get": "sheep",
               "give": "wood",
               "type": "offerTrade"
             },
@@ -50077,7 +50927,7 @@
               "wood": 0
             },
             "reason": "Moves you closer to a win; P3 is the safest partner",
-            "score": 334.89947509765625
+            "score": 334.97998046875
           },
           {
             "action": {
@@ -50718,6 +51568,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -50731,6 +51587,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -50744,6 +51611,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -50757,6 +51630,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -51401,6 +52285,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -51414,6 +52304,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -51427,6 +52328,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -51440,6 +52347,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -52091,6 +53009,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -52104,6 +53028,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -52117,6 +53052,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -52130,6 +53071,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -52782,6 +53734,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -52795,6 +53753,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -52808,6 +53777,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -52821,6 +53796,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -53467,6 +54453,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -53480,6 +54472,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -53493,6 +54496,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -53506,6 +54515,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -58266,6 +59286,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -58279,6 +59305,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -58292,6 +59329,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -58305,6 +59348,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -58968,6 +60022,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -58981,6 +60041,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -58994,6 +60065,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -59007,6 +60084,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -59656,6 +60744,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -59669,6 +60763,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -59682,6 +60787,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -59695,6 +60806,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -60351,6 +61473,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -60364,6 +61492,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -60377,6 +61516,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -60390,6 +61535,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -61047,6 +62203,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -61060,6 +62222,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -61073,6 +62246,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -61086,6 +62265,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -61737,6 +62927,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -61750,6 +62946,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -61763,6 +62970,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -61776,6 +62989,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -66603,6 +67827,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -66616,6 +67846,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -66629,6 +67870,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -66642,6 +67889,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -66674,7 +67932,7 @@
               "wood": -1
             },
             "reason": "Takes Longest Road",
-            "score": 7132.3193359375
+            "score": 7130.7431640625
           },
           {
             "action": {
@@ -67481,6 +68739,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -67494,6 +68758,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -67507,6 +68782,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -67520,6 +68801,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -68160,6 +69452,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -68173,6 +69471,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -68186,6 +69495,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -68199,6 +69514,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -68846,6 +70172,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -68859,6 +70191,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -68872,6 +70215,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -68885,6 +70234,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -69533,6 +70893,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -69546,6 +70912,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -69559,6 +70936,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -69572,6 +70955,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -70214,6 +71608,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -70227,6 +71627,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -70240,6 +71651,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -70253,6 +71670,17 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             }
@@ -74808,6 +76236,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -74821,6 +76255,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -74834,6 +76279,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -74847,6 +76298,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -75550,6 +77012,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -75563,6 +77031,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -75576,6 +77055,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -75589,6 +77074,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -76248,6 +77744,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -76261,6 +77763,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -76274,6 +77787,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -76287,6 +77806,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -76953,6 +78483,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -76966,6 +78502,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -76979,6 +78526,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -76992,6 +78545,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -77659,6 +79223,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -77672,6 +79242,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -77685,6 +79266,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -77698,6 +79285,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -78359,6 +79957,12 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -78372,6 +79976,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             },
@@ -78385,6 +80000,12 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 0,
               "vpCards": 0
             },
@@ -78398,6 +80019,17 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             }
@@ -83122,6 +84754,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -83135,6 +84773,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -83148,6 +84797,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -83161,6 +84816,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -83809,6 +85475,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -83822,6 +85494,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -83835,6 +85518,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -83848,6 +85537,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -84482,6 +86182,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -84495,6 +86201,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -84508,6 +86225,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -84521,6 +86244,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -85162,6 +86896,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -85175,6 +86915,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -85188,6 +86939,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -85201,6 +86958,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -85843,6 +87611,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -85856,6 +87630,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -85869,6 +87654,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -85882,6 +87673,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
@@ -86518,6 +88320,12 @@
                 "wood": 2
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -86531,6 +88339,17 @@
                 "wood": 1
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -86544,6 +88363,12 @@
                 "wood": 3
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ]
+              ],
               "knights": 2,
               "vpCards": 0
             },
@@ -86557,6 +88382,17 @@
                 "wood": 0
               },
               "handUnknown": 2,
+              "handUnknownAmong": [
+                [
+                  "wood",
+                  "brick"
+                ],
+                [
+                  "sheep",
+                  "wheat",
+                  "ore"
+                ]
+              ],
               "knights": 1,
               "vpCards": 0
             }
