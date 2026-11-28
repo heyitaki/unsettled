@@ -24,7 +24,7 @@ describe('move availability', () => {
   })
 
   it('hides all actions for an empty hand without dev cards', () => {
-    expect(availableActions(newGame(funded().board), 'aki')).toEqual({ trade: false, buy: false, play: false, build: false })
+    expect(availableActions(newGame(funded().board), 'aki')).toEqual({ trade: false, buy: false, play: false, build: false, discard: false })
   })
 
   it('allows trades with unseen cards and buys only when affordable and the deck is not known empty', () => {

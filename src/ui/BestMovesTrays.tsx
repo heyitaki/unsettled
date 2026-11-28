@@ -18,7 +18,7 @@ import { placeBelow } from './overlayPosition'
 import { useStore, type HighlightMark } from './store'
 import { useBoardPick } from './useBoardPick'
 
-export type TrayKind = 'trade' | 'build' | 'buy' | 'play'
+export type TrayKind = 'trade' | 'build' | 'buy' | 'play' | 'discard'
 export interface MoveTray { kind: TrayKind; fill?: AdviceInput }
 export type Discards = ReturnType<typeof sevenDiscards>
 export interface RecordedRoll {
@@ -55,6 +55,7 @@ export function BestMovesTray(props: TrayProps) {
     case 'build': return <BuildTray {...props} />
     case 'buy': return <BuyTray {...props} />
     case 'play': return <PlayTray {...props} />
+    case 'discard': return <DiscardTray {...props} />
   }
 }
 
@@ -444,6 +445,43 @@ function BuyTray({ game, commit, close }: TrayProps) {
             <DevChipGlyph kind={kind} /><span>{kind === 'vp' ? 'Victory point' : DEV_LABELS[kind]}</span>
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/** A voluntary discard: types the table saw, plus a count of cards a rival shed face down. */
+function DiscardTray({ game, active, commit, close }: TrayProps) {
+  const [cards, setCards] = useState<Cards>(() => emptyStats().hand)
+  const [unseen, setUnseen] = useState(0)
+  const stats = statsFor(game, active.id)
+  const mine = active.id === game.board.mePlayerId
+  const total = RESOURCES.reduce((sum, resource) => sum + cards[resource], unseen)
+  const room = handTotal(stats) - total
+  const record = () => {
+    const typed = RESOURCES.filter((resource) => cards[resource]).map((resource) => `${cards[resource]} ${resource}`)
+    const hidden = `${unseen} ${typed.length ? 'unseen ' : ''}${unseen === 1 ? 'card' : 'cards'}`
+    const next = recordDiscard(game, active.id, cards)
+    commit(unseen ? recordDiscard(next, active.id, unseen) : next, `Discarded ${[...typed, ...unseen ? [hidden] : []].join(' and ')}`)
+    close()
+  }
+  return (
+    <div className="move-tray">
+      <div className="move-question">What did {mine ? 'you' : active.name} discard?</div>
+      <ResourcePicker label="Discard" cards={cards} available={stats.handUnknown === 0 ? stats.hand : undefined}
+        disabled={(resource) => room === 0 || !canCover(stats, { ...cards, [resource]: cards[resource] + 1 })}
+        onChange={(resource) => setCards({ ...cards, [resource]: cards[resource] + 1 })}
+        onRemove={(resource) => setCards({ ...cards, [resource]: cards[resource] - 1 })} />
+      {!mine && <div className="move-discard-unseen">
+        <span>Types not seen</span>
+        <div className="move-res-cell">
+          <button type="button" className="move-resource" aria-label="Discard unseen" aria-pressed={unseen > 0} disabled={room === 0}
+            onClick={() => setUnseen(unseen + 1)}><span className={`move-count${unseen === 0 ? ' zero' : ''}`}>{unseen}</span></button>
+          {unseen > 0 && <button type="button" className="move-minus" aria-label="One fewer unseen" onClick={() => setUnseen(unseen - 1)}><MinusGlyph /></button>}
+        </div>
+      </div>}
+      <div className="move-tray-footer"><span>Discards {total} {total === 1 ? 'card' : 'cards'}</span>
+        <button type="button" className="move-record" disabled={total === 0} onClick={record}><CheckGlyph />Record</button>
       </div>
     </div>
   )

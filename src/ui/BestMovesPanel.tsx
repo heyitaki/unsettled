@@ -12,7 +12,7 @@ import { LedgerPanel } from './LedgerPanel'
 import { HistoryPanel, PlayerDisc } from './HistoryPanel'
 import { AdviceFeedback, BestMovesTray, RobberFlow, RollStep, type Discards, type RecordedRoll, type MoveTray, type TrayKind } from './BestMovesTrays'
 import { SpotTiles } from './SpotTiles'
-import { BuildGlyph, BuyDevGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
+import { BuildGlyph, BuyDevGlyph, DiscardGlyph, PlayDevGlyph, ResourceGlyph, StepDoneGlyph, TickGlyph, TradeGlyph, UndoGlyph } from './glyphs'
 import { revealBoardIfScrolledPast } from './revealBoard'
 import { activeTab, useStore, type HighlightMark } from './store'
 import { UndoRedoButtons } from './UndoRedoButtons'
@@ -25,6 +25,7 @@ const ACTION_TILES = [
   { kind: 'buy', label: 'Buy card', Glyph: BuyDevGlyph },
   { kind: 'play', label: 'Play card', Glyph: PlayDevGlyph },
   { kind: 'build', label: 'Build', Glyph: BuildGlyph },
+  { kind: 'discard', label: 'Discard', Glyph: DiscardGlyph },
 ] as const
 const RESOURCE_WORDS = new RegExp(`\\b(${RESOURCES.join('|')})\\b`, 'g')
 

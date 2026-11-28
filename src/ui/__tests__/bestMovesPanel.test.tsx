@@ -980,7 +980,7 @@ describe('Best moves recording', () => {
     const cards = emptyStats().hand
     respond = () => ({ kind: 'preRoll', play: null, reason: '', derived: { bank: cards, tradeRates: cards, devDeckRemaining: 0, unknownOwnCards: 0 } })
     await click('Retry advice')
-    expect([...container.querySelectorAll('.move-tile')].map((tile) => tile.textContent)).toEqual(['Trade', 'Play card', 'Build'])
+    expect([...container.querySelectorAll('.move-tile')].map((tile) => tile.textContent)).toEqual(['Trade', 'Play card', 'Build', 'Discard'])
   })
 
   it('blocks all advice on unfinished boards while keeping every recording tray usable', async () => {
@@ -1170,6 +1170,31 @@ describe('Best moves recording', () => {
     await click('Buy card')
     expect(game().stats.b.devCards).toBe(1)
     expect(tray()).toBeNull()
+  })
+
+  it('records a voluntary discard by type for you and as unseen cards for a rival', async () => {
+    await act(async () => seen.dispatch({ type: 'commit-game', game: adjustCounter(setActivePlayer(inGameSeed(), 'aki'), 'b', 'handUnknown', 2) }))
+    await click('Discard')
+    expect(tray().textContent).toContain('What did you discard?')
+    expect(tray().textContent).not.toContain('Types not seen')
+    expect(button('Record', tray()).disabled).toBe(true)
+    await click('Discard wood', tray())
+    await click('Discard wood', tray())
+    await click('Discard brick', tray())
+    await click('Record', tray())
+    expect(game().stats.aki.hand).toMatchObject({ wood: 3, brick: 4, sheep: 5 })
+    expect(game().turn?.log?.at(-1)).toBe('Discarded 2 wood and 1 brick')
+    expect(tray()).toBeNull()
+    await click('End turn')
+    await click('Discard')
+    expect(tray().textContent).toContain('What did Bee discard?')
+    for (let count = 0; count < 3; count += 1) await click('Discard unseen', tray())
+    await click('Discard ore', tray())
+    await click('Record', tray())
+    expect(game().stats.b.hand).toMatchObject({ wood: 2, ore: 1 })
+    expect(game().stats.b.handUnknown).toBe(14)
+    expect(RESOURCES.reduce((sum, resource) => sum + game().stats.b.hand[resource], game().stats.b.handUnknown)).toBe(23)
+    expect(game().turn?.log?.at(-1)).toBe('Discarded 1 ore and 3 unseen cards')
   })
 
   it('records a build through the canvas and undoes its piece and cost together', async () => {
