@@ -22,7 +22,7 @@ export function MoveStepper({ label, value, onChange, max = Infinity, children }
   )
 }
 
-export function ResourcePicker({ label, value, cards, available, disabled, onChange, onRemove }: {
+export function ResourcePicker({ label, value, cards, available, disabled, onChange, onRemove, resources = RESOURCES }: {
   label?: string
   value?: Resource | null
   cards?: Partial<Record<Resource, number>>
@@ -30,10 +30,12 @@ export function ResourcePicker({ label, value, cards, available, disabled, onCha
   disabled?(resource: Resource): boolean
   onChange(value: Resource): void
   onRemove?(value: Resource): void
+  /** The types to offer, in this order; every type by default. */
+  resources?: readonly Resource[]
 }) {
   return (
     <div className="move-res-row" role="group" aria-label={label}>
-      {RESOURCES.map((resource) => {
+      {resources.map((resource) => {
         const count = cards?.[resource] ?? 0
         return <div className="move-res-cell" key={resource}>
           <button

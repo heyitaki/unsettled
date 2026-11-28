@@ -105,11 +105,16 @@ export function robberPending(game: Game): boolean {
   return game.turn?.rolled === 7 && game.turn.robberMoved === false
 }
 
-export function robberCandidates(game: Game, hex: AxialCoord, moverId: string): string[] {
+/** Every rival with a building on `hex`, whether or not they hold a card to steal. */
+export function robberNeighbours(game: Game, hex: AxialCoord, moverId: string): string[] {
   const corners = new Set(hexVertexIds(hex))
-  return game.board.players.filter(({ id }) => id !== moverId && handTotal(statsFor(game, id)) > 0 &&
+  return game.board.players.filter(({ id }) => id !== moverId &&
     game.board.buildings.some((building) => building.playerId === id && corners.has(building.vertexId)))
     .map(({ id }) => id)
+}
+
+export function robberCandidates(game: Game, hex: AxialCoord, moverId: string): string[] {
+  return robberNeighbours(game, hex, moverId).filter((id) => handTotal(statsFor(game, id)) > 0)
 }
 
 export function cardRange(stats: PlayerStats, resource: Resource, exact: boolean) {

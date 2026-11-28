@@ -5,12 +5,12 @@ import { axialKey, parseAxialKey } from '../model/coords'
 import { DEV_KINDS, emptyStats, type DevKind, type Game } from '../model/game'
 import {
   bankPorts, bankRate, CARD_COSTS, handTotal, isValidBankTrade, recordBankTrade, recordBuild, recordBuyDev, recordDiscard,
-  recordPlayDev, recordPlayerTrade, recordRobber, recordRoll, turnState, type DevPlay,
+  possibleTypes, recordPlayDev, recordPlayerTrade, recordRobber, recordRoll, turnState, type DevPlay,
 } from '../model/turn'
 import { RESOURCES, type AxialCoord, type EdgeId, type Player, type Resource, type VertexId } from '../model/types'
 import { adviceResponse, useAdvice, useAdviceClient, type AdviceState } from './useAdvice'
 import {
-  adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, knightTheft, recordedMoveLabel, robberCandidates, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
+  adviceMarks, buildablePieces, canCover, cardRange, DEV_LABELS, discardInputCards, hexLabel, knightTheft, recordedMoveLabel, robberCandidates, robberNeighbours, robberPending, sevenDiscards, statsFor, tradeVerdictRequest, typedDevHand, type AdviceInput,
 } from './bestMoves'
 import { CardAmounts, MoveStepper, ResourcePicker } from './MoveInputs'
 import { CheckGlyph, DevChipGlyph, EraserGlyph, MinusGlyph, PencilGlyph, ResourceGlyph, RobberGlyph, StructureGlyph } from './glyphs'
@@ -259,10 +259,15 @@ export function RobberFlow({ game, active, adviceEnabled, initial, mark, commit,
     const destination = game.board.hexes.find((tile) => axialKey(tile.coord) === axialKey(hex))
     const label = destination?.numberToken ? `the ${destination.numberToken}` : 'the desert'
     const victim = game.board.players.find((player) => player.id === victimId)
-    commit(next, `${knight ? 'Played Knight · Robber' : 'Robber'} to ${label}${victim ? `${knight ? ', stole' : ' · Stole'} from ${victim.name}` : ' · Nobody robbed'}`)
+    // Neighbours but no candidates: every rival on the hex is out of cards, so say so rather than "Nobody robbed".
+    const empty = robberCandidates(game, hex, active.id).length === 0
+      ? robberNeighbours(game, hex, active.id).map((id) => game.board.players.find((player) => player.id === id)!.name) : []
+    const outcome = victim ? `${knight ? ', stole' : ' · Stole'} from ${victim.name}`
+      : empty.length ? ` · Nothing to steal from ${new Intl.ListFormat('en').format(empty)}` : ' · Nobody robbed'
+    commit(next, `${knight ? 'Played Knight · Robber' : 'Robber'} to ${label}${outcome}`)
     finish()
   }
-  const candidates = hex ? robberCandidates(game, hex, active.id) : []
+  const neighbours = hex ? robberNeighbours(game, hex, active.id) : []
   return (
     <div className="move-robber">
       {adviceEnabled && active.id === me && initial === undefined && <AdviceFeedback advice={advice} />}
@@ -277,7 +282,7 @@ export function RobberFlow({ game, active, adviceEnabled, initial, mark, commit,
         if (robberCandidates(game, hex, active.id).length === 0) record(hex, null, null)
         else setPicked({ hex, id })
       }} />
-      {hex && <RobberPopover key={picked?.id} game={game} active={active} hex={hex} candidates={candidates}
+      {hex && <RobberPopover key={picked?.id} game={game} active={active} hex={hex} neighbours={neighbours}
         onRecord={(victim, stolen) => record(hex, victim, stolen)} close={() => setPicked(null)} />}
     </div>
   )
@@ -288,11 +293,11 @@ function RobberPick({ onPick }: { onPick(hex: AxialCoord): void }) {
   return null
 }
 
-function RobberPopover({ game, active, hex, candidates, onRecord, close }: {
+function RobberPopover({ game, active, hex, neighbours, onRecord, close }: {
   game: Game
   active: Player
   hex: AxialCoord
-  candidates: string[]
+  neighbours: string[]
   onRecord(victim: string | null, stolen: Resource | null): void
   close(): void
 }) {
@@ -312,7 +317,7 @@ function RobberPopover({ game, active, hex, candidates, onRecord, close }: {
     const position = placeBelow(anchor.getBoundingClientRect(), popover.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight })
     popover.style.left = `${position.left}px`
     popover.style.top = `${position.top}px`
-    popover.querySelector('button')?.focus({ preventScroll: true })
+    popover.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
   }, [hex, victim])
   const victimName = game.board.players.find((player) => player.id === victim)?.name
   return (
@@ -321,21 +326,26 @@ function RobberPopover({ game, active, hex, candidates, onRecord, close }: {
       {victim ? (
         <>
           <h3>{mine ? `What did you take from ${victimName}?` : `What did ${active.name} take from you?`}</h3>
-          <ResourcePicker onChange={(resource) => onRecord(victim, resource)} />
+          <ResourcePicker resources={possibleTypes(statsFor(game, victim))} onChange={(resource) => onRecord(victim, resource)} />
           <button type="button" onClick={() => setVictim(null)}>Back</button>
         </>
       ) : (
         <>
           <h3>Robber to {hexLabel(hex, game.board)}. {mine ? 'Steal from' : `${active.name} stole from`}</h3>
           <div className="move-robber-list">
-            {candidates.map((id) => {
+            {neighbours.map((id) => {
               const player = game.board.players.find((player) => player.id === id)!
-              return <button type="button" key={id} onClick={() => {
-                if (mine || id === game.board.mePlayerId) setVictim(id)
-                else onRecord(id, null)
+              const cards = handTotal(statsFor(game, id))
+              return <button type="button" key={id} disabled={cards === 0} onClick={() => {
+                // A rival-on-rival steal stays unseen; the model narrows it to the victim's possible types.
+                if (!mine && id !== game.board.mePlayerId) return onRecord(id, null)
+                // Only one type the card could be: record it without asking.
+                const types = possibleTypes(statsFor(game, id))
+                if (types.length === 1) onRecord(id, types[0])
+                else setVictim(id)
               }}>
                 <span className="swatch" style={{ background: player.color }} />
-                {player.name}<small>{handTotal(statsFor(game, id))} cards</small>
+                {player.name}<small>{cards === 0 ? 'No cards' : `${cards} cards`}</small>
               </button>
             })}
             <button type="button" onClick={() => onRecord(null, null)}>Nobody</button>
